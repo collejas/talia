@@ -1,0 +1,25 @@
+# Archivos temporales del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Configuraciones locales de editores/IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Dependencias y artefactos comunes
+node_modules/
+vendor/
+.env
+.env.*
+*.log
+dist/
+build/
+coverage/
+
+# Archivos de Git
+*.orig
+# Entornos virtuales de Python
+venv/
+.venv/
