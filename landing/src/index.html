@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="TalIA es tu asistente inteligente para equipos legales y de negocio. Descubre cómo puede potenciar la productividad de tu organización."
+    />
+    <title>TalIA · Inteligencia aplicada a tu negocio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./assets/css/styles.css" />
+  </head>
+  <body class="theme-aurora">
+    <header class="site-header">
+      <div class="container header-content">
+        <a class="logo" href="#">TalIA</a>
+        <nav class="nav">
+          <a href="#features">Capacidades</a>
+          <a href="#casos">Casos de uso</a>
+          <a href="#chat">Conóceme</a>
+          <a href="#planes">Planes</a>
+        </nav>
+        <div class="theme-switcher">
+          <label class="sr-only" for="theme-select">Selecciona un tema</label>
+          <select id="theme-select" name="theme-select" aria-label="Seleccionar tema visual">
+            <option value="theme-aurora">Aurora violeta</option>
+            <option value="theme-ice">Espectro vibrante</option>
+            <option value="theme-void">Nocturno</option>
+          </select>
+        </div>
+        <a class="cta" href="#contacto">Únete a la lista</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div>
+            <p class="tag">Presentamos TalIA · talia.mx</p>
+            <h1>La inteligencia que entiende tu lenguaje de negocio.</h1>
+            <p class="hero-copy">
+              TalIA acompaña a tus equipos con respuestas precisas, contextuales y seguras.
+              Inspirada en las mejores interfaces conversacionales, te ayuda a documentar,
+              analizar y decidir con confianza.
+            </p>
+            <div class="hero-actions">
+              <a class="cta" href="#contacto">Solicitar acceso</a>
+              <a class="secondary" href="#chat">Conocer a TalIA</a>
+            </div>
+            <p class="hero-note">
+              Integraciones seguras · Cumplimiento regulatorio · Español nativo
+            </p>
+          </div>
+          <div class="hero-preview">
+            <div class="preview-card">
+              <div class="preview-header">
+                <span>Sesión con TalIA</span>
+                <span class="status">Disponible</span>
+              </div>
+              <div class="preview-body">
+                <div class="message bot">
+                  <span class="avatar">🤖</span>
+                  <p>
+                    ¡Hola! Soy TalIA. Puedo analizar contratos, generar resúmenes ejecutivos
+                    y asistirte con flujos de trabajo legales y financieros.
+                  </p>
+                </div>
+                <div class="message user">
+                  <span class="avatar">👩🏻‍💼</span>
+                  <p>¿Puedes conectarte con mis herramientas actuales?</p>
+                </div>
+                <div class="message bot">
+                  <span class="avatar">🤖</span>
+                  <p>
+                    Sí. Me integro con Slack, Google Drive y sistemas CRM mediante API para
+                    acelerar la colaboración.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="container">
+          <h2>Un copiloto confiable para operaciones críticas</h2>
+          <p class="section-lead">
+            Diseñada para equipos que necesitan velocidad sin sacrificar precisión ni seguridad.
+          </p>
+          <div class="features-grid">
+            <article>
+              <h3>Respuestas contextualizadas</h3>
+              <p>
+                Comprende tu base documental y entrega conclusiones accionables en segundos, con
+                referencias claras a las fuentes originales.
+              </p>
+            </article>
+            <article>
+              <h3>Automatización de flujos</h3>
+              <p>
+                Orquesta tareas repetibles como revisión de contratos, reportes regulatorios y
+                seguimiento de compromisos clave.
+              </p>
+            </article>
+            <article>
+              <h3>Protección de datos</h3>
+              <p>
+                Infraestructura dedicada, cifrado punto a punto y trazabilidad completa de cada
+                interacción para mantener el control.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="casos" class="section alt">
+        <div class="container casos-grid">
+          <div>
+            <h2>TalIA se adapta a tu equipo</h2>
+            <p class="section-lead">
+              Desde firmas de consultoría hasta áreas corporativas internas, TalIA reduce tiempos
+              de análisis y mejora la toma de decisiones.
+            </p>
+          </div>
+          <ul class="casos-list">
+            <li>
+              <h3>Legal & Compliance</h3>
+              <p>Verifica cláusulas sensibles, genera minutas y destaca riesgos emergentes.</p>
+            </li>
+            <li>
+              <h3>Finanzas</h3>
+              <p>Elabora proyecciones, cruza escenarios y prepara reportes para comité.</p>
+            </li>
+            <li>
+              <h3>Operaciones</h3>
+              <p>Estandariza scripts de atención, documenta procesos y monitorea SLAs.</p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="chat" class="section chat-section">
+        <div class="container chat-grid">
+          <div>
+            <h2>Habla con TalIA</h2>
+            <p class="section-lead">
+              Pregúntame qué puedo hacer por tu equipo. Usa el chat para explorar mis capacidades y límites.
+            </p>
+            <div class="chat-window" aria-live="polite">
+              <div id="chat-messages" class="chat-messages"></div>
+              <form id="chat-form" class="chat-form" autocomplete="off">
+                <input
+                  id="chat-input"
+                  type="text"
+                  name="message"
+                  placeholder="Escribe tu pregunta..."
+                  required
+                />
+                <button type="submit">Enviar</button>
+              </form>
+            </div>
+            <p class="chat-disclaimer">
+              TalIA responde con información de la versión demo. La conexión a datos privados se habilita en entornos productivos.
+            </p>
+          </div>
+          <div class="pillars">
+            <h3>Pilares del servicio</h3>
+            <ul>
+              <li>
+                <strong>Disponibilidad</strong> · hospedaje dedicado en infraestructura premium.
+              </li>
+              <li><strong>Privacidad</strong> · aislamiento por cliente y auditorías continuas.</li>
+              <li><strong>Gobernanza</strong> · políticas personalizadas y registros exportables.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="planes" class="section">
+        <div class="container planes-grid">
+          <div class="plan-card">
+            <h3>Starter</h3>
+            <p class="price">Desde $299 USD / mes</p>
+            <ul>
+              <li>Acceso a TalIA para 5 usuarios</li>
+              <li>Integración con Slack y Google Drive</li>
+              <li>Soporte en horario hábil</li>
+            </ul>
+            <a href="#contacto" class="cta secondary">Solicitar demo</a>
+          </div>
+          <div class="plan-card destacado">
+            <div class="badge">Popular</div>
+            <h3>Business</h3>
+            <p class="price">Desde $899 USD / mes</p>
+            <ul>
+              <li>Usuarios ilimitados</li>
+              <li>API dedicada y SSO</li>
+              <li>Soporte 24/7 y capacitación</li>
+            </ul>
+            <a href="#contacto" class="cta">Hablar con ventas</a>
+          </div>
+          <div class="plan-card">
+            <h3>Enterprise</h3>
+            <p class="price">Plan a medida</p>
+            <ul>
+              <li>Implementación en nube privada o on-premise</li>
+              <li>Controles avanzados de cumplimiento</li>
+              <li>Acuerdos de confidencialidad reforzados</li>
+            </ul>
+            <a href="#contacto" class="cta secondary">Agendar discovery</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="contacto" class="section alt">
+        <div class="container contacto-grid">
+          <div>
+            <h2>Conversemos</h2>
+            <p class="section-lead">
+              Déjanos tus datos y agenda una sesión personalizada para evaluar TalIA en tu organización.
+            </p>
+          </div>
+          <form class="contact-form">
+            <label>
+              Nombre
+              <input type="text" name="name" placeholder="Nombre completo" required />
+            </label>
+            <label>
+              Email corporativo
+              <input type="email" name="email" placeholder="nombre@empresa.com" required />
+            </label>
+            <label>
+              Interés principal
+              <select name="interest">
+                <option value="legal">Automatización legal</option>
+                <option value="finanzas">Análisis financiero</option>
+                <option value="operaciones">Optimización operativa</option>
+                <option value="otro">Otro</option>
+              </select>
+            </label>
+            <label>
+              Mensaje
+              <textarea name="message" rows="3" placeholder="Cuéntanos sobre tu equipo"></textarea>
+            </label>
+            <button type="submit" disabled>Próximamente</button>
+            <span class="form-note">Formulario disponible en el lanzamiento.</span>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-content">
+        <div>
+          <span class="logo">TalIA</span>
+          <p>© <span id="current-year"></span> talia.mx · Todos los derechos reservados.</p>
+        </div>
+        <div class="footer-links">
+          <a href="#">Privacidad</a>
+          <a href="#">Términos</a>
+          <a href="mailto:hola@talia.mx">hola@talia.mx</a>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="./assets/js/main.js"></script>
+  </body>
+</html>
