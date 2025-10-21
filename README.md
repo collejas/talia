@@ -2,7 +2,7 @@
 
 Panorama general
 
-TalIA es una plataforma FastAPI que unifica WhatsApp, voz (Twilio), Instagram y webchat en un mismo backend impulsado por OpenAI, con almacenamiento opcional en Postgres/Supabase y un sitio web estático incluido.
+TalIA es una plataforma FastAPI que unifica WhatsApp, voz (Twilio), Instagram y webchat en un mismo backend impulsado por OpenAI, con almacenamiento en supabase en Postgres/Supabase y un sitio web estático incluido alojado en neubox  talia.mx.
 El servicio levanta middleware de trazabilidad, prepara CORS abierto para despliegues multi-origen y monta routers específicos para cada canal desde un núcleo único en main.py.
 Capacidades clave
 Automatización multicanal
