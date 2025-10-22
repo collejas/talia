@@ -17,6 +17,10 @@ Analítica y operación
 
 Los endpoints /api/dashboard/* calculan KPIs, embudos y actividad por agente en ventanas de tiempo configurables, reutilizando consultas agregadas de la base de datos para ofrecer métricas de leads, tiempos de respuesta y carga operativa.
 La base de datos registra conversaciones, mensajes, adjuntos y eventos de auditoría, mientras que el panel web existente consume estas métricas de forma inmediata.
+Landing conversacional
+
+El sitio público se simplificará a una interfaz tipo ChatGPT: un campo de conversación y las respuestas de TalIA. Este flujo se conectará a un prompt alojado en OpenAI que explica el producto, presenta precios y recopila nombre, correo y teléfono para iniciar el proceso comercial.
+
 Integraciones y despliegue
 
 El sistema integra Google Places para enriquecer búsquedas de prospectos, manejando paginación y deduplicación automática desde la API oficial.
