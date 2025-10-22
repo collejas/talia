@@ -51,3 +51,46 @@ La preferencia se guarda en `localStorage`, por lo que la página recuerda el te
   - Acepta la redirección automática a HTTPS; Certbot añadirá un bloque listen 443 ssl con los certificados en /etc/letsencrypt/live/talia.mx/.
   - Comprueba el resultado con sudo nginx -t, sudo systemctl reload nginx, curl -I https://talia.mx y revisa el log /var/log/letsencrypt/letsencrypt.log.
   - Renueva en seco (sudo certbot renew --dry-run); el timer systemd se encargará de reacondicionar el certificado cada ~60 días.
+
+
+### Configuracion de Certificado de SSL en nginx en puerto 8004 (LISTO)
+  server {
+      listen 443 ssl http2;
+      listen [::]:443 ssl http2;
+      server_name talia.mx www.talia.mx;
+
+      root /var/www/talia-landing;
+      index index.html;
+
+      add_header Cache-Control "public, max-age=300";
+      add_header X-Content-Type-Options "nosniff";
+
+      # FastAPI (puerto 8004)
+      location /api/ {
+          proxy_pass http://127.0.0.1:8004/;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_redirect off;
+      }
+
+      location ~* \.(css|js|svg|png|jpg|jpeg|gif|webp|ico)$ {
+          expires 12h;
+          add_header Cache-Control "public, max-age=43200";
+          try_files $uri =404;
+      }
+
+      location / {
+          try_files $uri $uri/ =404;
+      }
+
+      ssl_certificate /etc/letsencrypt/live/talia.mx/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/talia.mx/privkey.pem;
+      include /etc/letsencrypt/options-ssl-nginx.conf;
+      ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+      listen 80;
+      listen [::]:80;
+      server_name talia.mx www.talia.mx;
+      return 301 https://$host$request_uri;
+  }
