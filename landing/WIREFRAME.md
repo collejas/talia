@@ -2,13 +2,11 @@
 
 ## Vista general
 - **Background**: degradado `theme-aurora` (oscuro) con ligera textura; versión alternativa clara reutilizando `theme-ice` si se expone selector en el futuro.
-- **Anchura máxima**: 720px centrada vertical/horizontalmente; márgenes `clamp(1.5rem, 4vw, 3rem)`.
+- **Anchura máxima**: 760px centrada vertical/horizontalmente; márgenes `clamp(1.5rem, 4vw, 3rem)`.
 - **Tipografía**: Inter (ya cargada). Tamaños base 16px, encabezados 28–32px.
 
 ## Encabezado
-- Logo tipográfico "TalIA" en la esquina superior izquierda (link a `#`).
-- Enlace secundario arriba a la derecha (opcional): `mailto:hola@talia.mx` o CTA "Hablar con equipo".
-- Sin navegación adicional.
+- Barra fija con logo "TalIA", selector de tema y CTA `Únete a la lista`.
 
 ## Contenedor principal
 ```

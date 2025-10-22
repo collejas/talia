@@ -17,17 +17,20 @@
     <link rel="stylesheet" href="./assets/css/styles.css" />
   </head>
   <body class="theme-aurora">
-    <header class="top-bar">
-      <a class="brand" href="#">TalIA</a>
-      <div class="theme-switcher">
-        <label class="sr-only" for="theme-select">Selecciona un tema</label>
-        <select id="theme-select" name="theme-select" aria-label="Seleccionar tema visual">
-          <option value="theme-aurora">Aurora violeta</option>
-          <option value="theme-ice">Espectro vibrante</option>
-          <option value="theme-void">Nocturno</option>
-        </select>
+    <header class="site-header">
+      <div class="container header-content">
+        <a class="logo" href="#">TalIA</a>
+
+        <div class="theme-switcher">
+          <label class="sr-only" for="theme-select">Selecciona un tema</label>
+          <select id="theme-select" name="theme-select" aria-label="Seleccionar tema visual">
+            <option value="theme-aurora">Aurora violeta</option>
+            <option value="theme-ice">Espectro vibrante</option>
+            <option value="theme-void">Nocturno</option>
+          </select>
+        </div>
+        <a class="cta" href="#contacto">Únete a la lista</a>
       </div>
-      <a class="contact-link" href="mailto:hola@talia.mx">Hablar con equipo</a>
     </header>
 
     <main class="layout" aria-live="polite">
@@ -59,6 +62,20 @@
           />
           <button type="submit">Enviar</button>
         </form>
+      </div>
+    </footer>
+
+    <footer class="site-footer">
+      <div class="container footer-content">
+        <div class="footer-left">
+          <span class="logo">TalIA</span>
+          <span class="footer-copy">© <span id="current-year"></span> talia.mx · Todos los derechos reservados.</span>
+        </div>
+        <div class="footer-links">
+          <a href="#">Privacidad</a>
+          <a href="#">Términos</a>
+          <a href="mailto:hola@talia.mx">hola@talia.mx</a>
+        </div>
       </div>
     </footer>
 

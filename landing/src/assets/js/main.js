@@ -8,6 +8,7 @@ const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
 const chatLog = document.getElementById('chat-log');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
+const currentYearEl = document.getElementById('current-year');
 
 let typingBubble = null;
 let hasActivatedComposer = body.classList.contains('chat-active');
@@ -135,3 +136,7 @@ if (themeSelect) {
 
 initialiseTheme();
 initialiseChat();
+
+if (currentYearEl) {
+  currentYearEl.textContent = new Date().getFullYear();
+}
