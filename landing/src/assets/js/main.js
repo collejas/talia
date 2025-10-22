@@ -12,14 +12,26 @@ const currentYearEl = document.getElementById('current-year');
 
 let typingBubble = null;
 
-function scrollConversationToBottom(behavior = 'smooth') {
-  const target = document.scrollingElement || document.documentElement;
-  if (!target) return;
+function getScrollContainer() {
+  return document.scrollingElement || document.documentElement;
+}
+
+function isNearViewportBottom(container, tolerance = 160) {
+  if (!container) return false;
+  const viewportHeight = window.innerHeight || container.clientHeight || 0;
+  const distanceToBottom = container.scrollHeight - (container.scrollTop + viewportHeight);
+  return distanceToBottom <= tolerance;
+}
+
+function maintainViewportBottom(behavior = 'auto', tolerance) {
+  const container = getScrollContainer();
+  const shouldStick = isNearViewportBottom(container, tolerance);
+  if (!container || !shouldStick) return;
   requestAnimationFrame(() => {
-    if (typeof target.scrollTo === 'function') {
-      target.scrollTo({ top: target.scrollHeight, behavior });
+    if (typeof container.scrollTo === 'function') {
+      container.scrollTo({ top: container.scrollHeight, behavior });
     } else {
-      target.scrollTop = target.scrollHeight;
+      container.scrollTop = container.scrollHeight;
     }
   });
 }
@@ -58,11 +70,15 @@ function createMessageElement(text, role = 'assistant') {
   return wrapper;
 }
 
-function appendMessage(text, role = 'assistant', scrollBehavior = 'smooth') {
+function appendMessage(text, role = 'assistant', scrollBehavior = 'auto') {
   if (!chatLog) return;
+  const container = getScrollContainer();
+  const shouldStick = isNearViewportBottom(container);
   const element = createMessageElement(text, role);
   chatLog.appendChild(element);
-  scrollConversationToBottom(scrollBehavior);
+  if (shouldStick) {
+    maintainViewportBottom(scrollBehavior);
+  }
 }
 
 function renderTypingIndicator() {
@@ -76,8 +92,12 @@ function renderTypingIndicator() {
   indicator.innerHTML = '<span></span><span></span><span></span>';
 
   bubble.appendChild(indicator);
+  const container = getScrollContainer();
+  const shouldStick = isNearViewportBottom(container);
   chatLog.appendChild(bubble);
-  scrollConversationToBottom();
+  if (shouldStick) {
+    maintainViewportBottom('auto');
+  }
   typingBubble = bubble;
 }
 

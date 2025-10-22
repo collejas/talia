@@ -4,7 +4,7 @@
 - [ ] Registrar credenciales de Twilio, OpenAI, Supabase/Postgres y servicios asociados.
 - [ ] Definir estrategia de despliegue (Docker/Compose, systemd, etc.) y flujo CI/CD.
 - [ ] Diseñar el prompt conversacional de landing (guion de ventas, captación de nombre/correo/teléfono, handoff).
-- [ ] Documentar wireframe y estados UI basados en la vista 'sin sesión' de ChatGPT (layout, tipografía, degradados, estados typing/error).
+- [x] Documentar wireframe y estados UI basados en la vista 'sin sesión' de ChatGPT (layout, tipografía, degradados, estados typing/error).
 - [ ] Crear repositorio/base para backend FastAPI con linters y tests iniciales.
 
 ## Fase 1 · Núcleo FastAPI
