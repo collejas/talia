@@ -179,10 +179,19 @@ a:hover {
 }
 
 .intro p {
-  margin: 0.75rem 0 1.5rem;
+  margin: 1.4rem 0 1.8rem;
   color: var(--text-muted);
   line-height: 1.6;
   max-width: 34rem;
+}
+
+.intro p span + span {
+  margin-left: 0.75rem;
+}
+
+.intro p .callout {
+  font-weight: 600;
+  color: var(--text);
 }
 
 
@@ -328,16 +337,6 @@ a:hover {
   transform: translateY(-1px);
 }
 
-.secondary-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.secondary-link {
-  font-size: 0.9rem;
-  color: var(--accent);
-  font-weight: 500;
-}
 
 body.chat-active .composer {
   position: fixed;
@@ -359,9 +358,6 @@ body.chat-active .composer-content {
   margin: 0 auto;
 }
 
-body.chat-active .secondary-actions {
-  justify-content: flex-end;
-}
 
 body.chat-active .layout {
   margin-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
@@ -396,9 +392,5 @@ body.chat-active .layout {
 
   .composer-form button {
     width: 100%;
-  }
-
-  .secondary-actions {
-    justify-content: flex-start;
   }
 }
