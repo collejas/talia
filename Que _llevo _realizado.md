@@ -75,9 +75,15 @@ La preferencia se guarda en `localStorage`, por lo que la página recuerda el te
           proxy_redirect off;
       }
 
-      location ~* \.(css|js|svg|png|jpg|jpeg|gif|webp|ico)$ {
-          expires 12h;
-          add_header Cache-Control "public, max-age=43200";
+      location ~* \.(css|js)$ {
+          add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+          add_header Pragma "no-cache" always;
+          add_header Expires "0" always;
+          try_files $uri =404;
+      }
+
+      location ~* \.(svg|png|jpg|jpeg|gif|webp|ico)$ {
+          add_header Cache-Control "public, max-age=86400";
           try_files $uri =404;
       }
 
@@ -89,8 +95,7 @@ La preferencia se guarda en `localStorage`, por lo que la página recuerda el te
       ssl_certificate_key /etc/letsencrypt/live/talia.mx/privkey.pem;
       include /etc/letsencrypt/options-ssl-nginx.conf;
       ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-      listen 80;
-      listen [::]:80;
-      server_name talia.mx www.talia.mx;
-      return 301 https://$host$request_uri;
   }
+
+
+

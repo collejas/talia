@@ -2,7 +2,7 @@ import { TALIA_INTRO, chatResponses, fallbackMessage } from '../../data/chat-res
 
 const themeSelect = document.getElementById('theme-select');
 const body = document.body;
-const THEME_STORAGE_KEY = 'talia-theme-preference';
+const THEME_STORAGE_KEY = 'talia-theme-preference-v2';
 const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
 
 const chatLog = document.getElementById('chat-log');
