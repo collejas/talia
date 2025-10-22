@@ -279,7 +279,7 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
-  margin: clamp(4rem, 6vw, 6rem) auto 2.5rem;
+  margin: clamp(4rem, 6vw, 6rem) auto 0.65rem;
 }
 
 .sr-only {
@@ -302,7 +302,7 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
-  margin-bottom: 2.5rem;
+  margin-bottom: 0.65rem;
 }
 
 .intro h1 {
