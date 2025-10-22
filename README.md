@@ -1,46 +1,27 @@
-# Proyecto TalIA
+# Proyecto Talia
 
-Este repositorio contiene los activos iniciales de TalIA, incluyendo el landing page público y la futura API alojada en DigitalOcean.
+Panorama general
 
-## Landing page (talia.mx)
+TalIA es una plataforma FastAPI que unifica WhatsApp, voz (Twilio), Instagram y webchat en un mismo backend impulsado por OpenAI, con almacenamiento opcional en Postgres/Supabase y un sitio web estático incluido.
+El servicio levanta middleware de trazabilidad, prepara CORS abierto para despliegues multi-origen y monta routers específicos para cada canal desde un núcleo único en main.py.
+Capacidades clave
+Automatización multicanal
 
-El sitio está inspirado en la experiencia conversacional de OpenAI. Incluye:
-- Sección hero con propuesta de valor y vista previa de una conversación.
-- Desglose de capacidades, casos de uso y planes de servicio.
-- Chat interactivo donde TalIA explica qué puede y qué no puede hacer en la versión demo.
-- Formulario de contacto deshabilitado hasta el lanzamiento.
+El backend expone webhooks listos para conectar Twilio WhatsApp (recepción, adjuntos, envíos, callbacks), flujo de voz en tiempo real con <Connect><Stream>, y placeholders activos para Instagram y webchat, permitiendo que un mismo agente atienda clientes sin importar el canal de entrada.
+Inteligencia y personalización
 
-### Estructura
+La capa assistant/ abstrae agentes, prompts y versiones en base de datos, resolviendo configuraciones en tiempo de ejecución y habilitando un “prompt wizard” que genera instrucciones, variables, herramientas y guardrails personalizados por industria, tono y objetivos comerciales.
 
-```
-landing/
-└── src/
-    ├── index.html           # Página principal con la estructura de la landing.
-    ├── assets/
-    │   ├── css/styles.css   # Estilos base, layout y variantes responsivas.
-    │   └── js/main.js       # Lógica del chat simulado y utilidades de UI.
-    └── data/chat-responses.js # Respuestas y textos reutilizables para el chat.
-```
+Esto permite adaptar la experiencia conversacional a cualquier negocio sin reescribir código.
+Analítica y operación
 
-Puedes añadir carpetas hermanas dentro de `assets/` (por ejemplo `img/` o `fonts/`) manteniendo la separación de responsabilidades.
+Los endpoints /api/dashboard/* calculan KPIs, embudos y actividad por agente en ventanas de tiempo configurables, reutilizando consultas agregadas de la base de datos para ofrecer métricas de leads, tiempos de respuesta y carga operativa.
+La base de datos registra conversaciones, mensajes, adjuntos y eventos de auditoría, mientras que el panel web existente consume estas métricas de forma inmediata.
+Integraciones y despliegue
 
-### Cómo previsualizar
+El sistema integra Google Places para enriquecer búsquedas de prospectos, manejando paginación y deduplicación automática desde la API oficial.
+La configuración centraliza credenciales de OpenAI, Twilio y Supabase, incluyendo soporte para tokens efímeros de streaming de voz y validación de firmas entrantes, lo que facilita escalar con seguridad en entornos productivos.
+Descripción sugerida para la landing
 
-1. Abre el archivo `landing/src/index.html` directamente en tu navegador **o** levanta un servidor local:
-   ```bash
-   cd landing/src
-   python3 -m http.server 5173
-   ```
-2. Visita `http://localhost:5173` para navegar el landing y probar el chat.
-
-Si necesitas adaptar el contenido a otro stack (por ejemplo, Next.js o un generador estático), puedes usar estos archivos como punto de partida.
-
-### Temas de color
-
-Desde el encabezado puedes alternar entre tres combinaciones preconfiguradas:
-- `Aurora violeta`: tema oscuro original con un acento violeta añadido.
-- `Espectro vibrante`: tema claro con acentos fuertes en naranja, verde y violeta/morado.
-- `Nocturno`: esquema negro al estilo OpenAI con acento verde.
-
-La preferencia se guarda en `localStorage`, por lo que la página recuerda el tema elegido en visitas futuras.
+“TalIA es el asistente de IA omnicanal para negocios que quieren convertir más leads sin crecer su equipo. Atiende WhatsApp, llamadas, Instagram y webchat desde un solo backend, personaliza prompts para cada vertical y enriquece conversaciones con datos externos como Google Places. Tus agentes obtienen embudos, KPIs y actividad en vivo, mientras la infraestructura se encarga de adjuntos, seguridad y despliegue listo para producción.”
 
