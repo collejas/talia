@@ -5,6 +5,13 @@ const body = document.body;
 const THEME_STORAGE_KEY = 'talia-theme-preference';
 const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
 
+const chatLog = document.getElementById('chat-log');
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+
+let typingBubble = null;
+let hasActivatedComposer = body.classList.contains('chat-active');
+
 function applyTheme(theme) {
   const selected = THEMES.includes(theme) ? theme : THEMES[0];
   body.classList.remove(...THEMES);
@@ -26,80 +33,105 @@ function initialiseTheme() {
   } catch (error) {
     console.warn('No se pudo leer la preferencia de tema.', error);
   }
-  const defaultTheme =
-    body.className.split(' ').find((cls) => THEMES.includes(cls)) || THEMES[0];
+  const defaultTheme = body.className
+    .split(' ')
+    .find((cls) => THEMES.includes(cls)) || THEMES[0];
   applyTheme(storedTheme || defaultTheme);
 }
 
-if (themeSelect) {
-  themeSelect.addEventListener('change', (event) => {
-    applyTheme(event.target.value);
-  });
+function createMessageElement(text, role = 'assistant') {
+  const wrapper = document.createElement('div');
+  wrapper.className = `message message--${role}`;
+  wrapper.innerText = text;
+  return wrapper;
 }
 
-initialiseTheme();
+function appendMessage(text, role = 'assistant') {
+  if (!chatLog) return;
+  const element = createMessageElement(text, role);
+  chatLog.appendChild(element);
+  chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
+}
 
-const chatMessages = document.getElementById('chat-messages');
-const chatForm = document.getElementById('chat-form');
-const chatInput = document.getElementById('chat-input');
-const currentYear = document.getElementById('current-year');
+function renderTypingIndicator() {
+  if (!chatLog) return;
+  const bubble = document.createElement('div');
+  bubble.className = 'message message--assistant';
+  bubble.setAttribute('data-typing', 'true');
 
-function appendMessage(text, sender = 'bot') {
-  const wrapper = document.createElement('div');
-  wrapper.className = `chat-message ${sender}`;
+  const indicator = document.createElement('div');
+  indicator.className = 'typing-indicator';
+  indicator.innerHTML = '<span></span><span></span><span></span>';
 
-  const avatar = document.createElement('span');
-  avatar.className = 'avatar';
-  avatar.textContent = sender === 'bot' ? '🤖' : '🧑';
+  bubble.appendChild(indicator);
+  chatLog.appendChild(bubble);
+  chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
+  typingBubble = bubble;
+}
 
-  const content = document.createElement('p');
-  content.textContent = text;
-
-  wrapper.appendChild(avatar);
-  wrapper.appendChild(content);
-  chatMessages.appendChild(wrapper);
-  chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+function removeTypingIndicator() {
+  if (typingBubble && typingBubble.parentNode) {
+    typingBubble.parentNode.removeChild(typingBubble);
+  }
+  typingBubble = null;
 }
 
 function getTalIAResponse(rawInput) {
   const input = rawInput.toLowerCase();
-
   const matched = chatResponses.find(({ keywords }) =>
     keywords.some((keyword) => input.includes(keyword))
   );
-
   return matched?.message ?? fallbackMessage;
 }
 
-function handleSubmit(event) {
+function sendToAssistant(message) {
+  return new Promise((resolve) => {
+    const response = getTalIAResponse(message);
+    const latency = 500 + Math.random() * 500;
+    setTimeout(() => resolve(response), latency);
+  });
+}
+
+async function handleSubmit(event) {
   event.preventDefault();
-  const message = chatInput.value.trim();
-  if (!message) return;
+  if (!chatInput || !chatInput.value.trim()) return;
 
-  appendMessage(message, 'user');
+  const userMessage = chatInput.value.trim();
   chatInput.value = '';
+  if (!hasActivatedComposer) {
+    body.classList.add('chat-active');
+    hasActivatedComposer = true;
+  }
+  appendMessage(userMessage, 'user');
+
+  renderTypingIndicator();
+  try {
+    const assistantMessage = await sendToAssistant(userMessage);
+    removeTypingIndicator();
+    appendMessage(assistantMessage, 'assistant');
+  } catch (error) {
+    removeTypingIndicator();
+    appendMessage('Hubo un error procesando tu mensaje. Intenta nuevamente.', 'assistant');
+    console.error('Error simulando respuesta:', error);
+  }
   chatInput.focus();
-
-  const thinking = document.createElement('div');
-  thinking.className = 'chat-message bot';
-  thinking.innerHTML = '<span class="avatar">🤖</span><p>TalIA está pensando…</p>';
-  chatMessages.appendChild(thinking);
-  chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
-
-  setTimeout(() => {
-    thinking.remove();
-    appendMessage(getTalIAResponse(message));
-  }, 600 + Math.random() * 400);
 }
 
-if (chatMessages) {
-  appendMessage(TALIA_INTRO);
+function initialiseChat() {
+  if (chatLog) {
+    appendMessage(TALIA_INTRO, 'assistant');
+  }
+  if (chatForm) {
+    chatForm.addEventListener('submit', handleSubmit);
+  }
 }
 
-if (chatForm) {
-  chatForm.addEventListener('submit', handleSubmit);
+if (themeSelect) {
+  themeSelect.addEventListener('change', (event) => {
+    const selectedTheme = event.target.value;
+    applyTheme(selectedTheme);
+  });
 }
 
-if (currentYear) {
-  currentYear.textContent = new Date().getFullYear();
-}
+initialiseTheme();
+initialiseChat();
