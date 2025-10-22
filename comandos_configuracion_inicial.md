@@ -34,3 +34,8 @@ curl -I http://talia.mx
   - Acepta la redirección automática a HTTPS; Certbot añadirá un bloque listen 443 ssl con los certificados en /etc/letsencrypt/live/talia.mx/.
   - Comprueba el resultado con sudo nginx -t, sudo systemctl reload nginx, curl -I https://talia.mx y revisa el log /var/log/letsencrypt/letsencrypt.log.
   - Renueva en seco (sudo certbot renew --dry-run); el timer systemd se encargará de reacondicionar el certificado cada ~60 días.
+
+
+# Sncronizar despues de cambios:
+sudo rsync -av --delete ~/talia/landing/src/ /var/www/talia-landing/
+sudo chown -R www-data:www-data /var/www/talia-landing
