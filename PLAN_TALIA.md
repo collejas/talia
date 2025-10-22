@@ -14,11 +14,20 @@
 4. Proveer analítica en tiempo real (KPIs, embudos, actividad por agente) consumida por un dashboard web.
 5. Garantizar operación segura: aislamiento de datos, cumplimiento y observabilidad.
 
+## Diseño de la landing conversacional
+- Mantener un layout centrado tipo ‘logged out’ de ChatGPT: logo/firma TalIA discreto arriba, contenedor principal con saludo, sugerencias (chips opcionales) y área de mensajes.
+- Fondo minimal (degradado suave) reutilizando variables del tema `theme-aurora`, con posibilidad de tema oscuro/ligero si mantenemos selector.
+- Pie fijo con campo de entrada redondeado, botón principal y mensajes de estado ("TalIA está escribiendo", validaciones).
+- Definir estados iniciales: pantalla en blanco, primer mensaje automático del asistente, burbuja typing y errores.
+- Incorporar copy de venta (beneficios, planes, garantías) dentro de respuestas guiadas del prompt.
+- Añadir CTA secundario (por ejemplo "Hablar con un humano" o enlace a correo) fuera del chat para usuarios que no completan el flujo.
+
 ## Fases de trabajo
 ### Fase 0 · Preparación
 - Inventariar credenciales (Twilio, OpenAI, Supabase/Postgres, SendGrid u otros).
 - Definir estrategia de despliegue (Docker/Compose vs. servicios gestionados) y flujo CI/CD.
 - Diseñar el guion conversacional del landing (prompt en OpenAI) y las métricas de captación (nombre, correo, teléfono).
+- Documentar wireframe y estados UI basados en la vista 'sin sesión' de ChatGPT (layout, tipografía, degradados, estados typing/error).
 - Configurar repositorio para backend (estructura FastAPI, linters, tests).
 
 ### Fase 1 · Núcleo FastAPI
@@ -44,7 +53,7 @@
 - Asegurar migraciones reproducibles (Alembic) y tests de integridad de datos.
 
 ### Fase 5 · Frontend operativa y observabilidad
-- Reemplazar la landing por la interfaz tipo ChatGPT conectada al prompt de ventas y a un pipeline de captura de leads.
+- Reemplazar la landing por la interfaz tipo ChatGPT conectada al prompt de ventas y a un pipeline de captura de leads, respetando el wireframe definido (contenedor central, pie fijo, estados typing/error).
 - Construir dashboard web que consuma las métricas; integrar autenticación.
 - Añadir monitoreo (logs centralizados, alertas, tracing) y políticas de retención.
 - Formalizar playbooks de operación, rollback y renovación de certificados.

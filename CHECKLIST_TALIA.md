@@ -4,6 +4,7 @@
 - [ ] Registrar credenciales de Twilio, OpenAI, Supabase/Postgres y servicios asociados.
 - [ ] Definir estrategia de despliegue (Docker/Compose, systemd, etc.) y flujo CI/CD.
 - [ ] Diseñar el prompt conversacional de landing (guion de ventas, captación de nombre/correo/teléfono, handoff).
+- [ ] Documentar wireframe y estados UI basados en la vista 'sin sesión' de ChatGPT (layout, tipografía, degradados, estados typing/error).
 - [ ] Crear repositorio/base para backend FastAPI con linters y tests iniciales.
 
 ## Fase 1 · Núcleo FastAPI
@@ -37,4 +38,5 @@
 - [ ] Afinar microcopys y assets del landing conversacional acorde al guion de ventas.
 - [ ] Instrumentar la conexión con el prompt de OpenAI y registrar leads (nombre, correo, teléfono).
 - [ ] Automatizar sincronización `landing/src` → `/var/www/talia-landing` (deploy script/CI).
+- [ ] Validar en QA que la UI final respete wireframe, estados y copy definidos.
 - [ ] Verificar `certbot renew --dry-run` y programar revisiones periódicas.

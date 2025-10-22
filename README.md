@@ -19,7 +19,7 @@ Los endpoints /api/dashboard/* calculan KPIs, embudos y actividad por agente en 
 La base de datos registra conversaciones, mensajes, adjuntos y eventos de auditoría, mientras que el panel web existente consume estas métricas de forma inmediata.
 Landing conversacional
 
-El sitio público se simplificará a una interfaz tipo ChatGPT: un campo de conversación y las respuestas de TalIA. Este flujo se conectará a un prompt alojado en OpenAI que explica el producto, presenta precios y recopila nombre, correo y teléfono para iniciar el proceso comercial.
+El sitio público se simplificará a una interfaz tipo ChatGPT: un campo de conversación y las respuestas de TalIA. El layout replica la vista ‘logged out’ (sin sesión) de ChatGPT: fondo limpio, logo discreto, sugerencias opcionales y un único cuadro de texto centrado sobre el pie fijo. Este flujo se conectará a un prompt alojado en OpenAI que explica el producto, presenta precios y recopila nombre, correo y teléfono para iniciar el proceso comercial.
 
 Integraciones y despliegue
 
