@@ -11,7 +11,18 @@ const chatInput = document.getElementById('chat-input');
 const currentYearEl = document.getElementById('current-year');
 
 let typingBubble = null;
-let hasActivatedComposer = body.classList.contains('chat-active');
+
+function scrollConversationToBottom(behavior = 'smooth') {
+  const target = document.scrollingElement || document.documentElement;
+  if (!target) return;
+  requestAnimationFrame(() => {
+    if (typeof target.scrollTo === 'function') {
+      target.scrollTo({ top: target.scrollHeight, behavior });
+    } else {
+      target.scrollTop = target.scrollHeight;
+    }
+  });
+}
 
 function applyTheme(theme) {
   const selected = THEMES.includes(theme) ? theme : THEMES[0];
@@ -47,11 +58,11 @@ function createMessageElement(text, role = 'assistant') {
   return wrapper;
 }
 
-function appendMessage(text, role = 'assistant') {
+function appendMessage(text, role = 'assistant', scrollBehavior = 'smooth') {
   if (!chatLog) return;
   const element = createMessageElement(text, role);
   chatLog.appendChild(element);
-  chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
+  scrollConversationToBottom(scrollBehavior);
 }
 
 function renderTypingIndicator() {
@@ -66,7 +77,7 @@ function renderTypingIndicator() {
 
   bubble.appendChild(indicator);
   chatLog.appendChild(bubble);
-  chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
+  scrollConversationToBottom();
   typingBubble = bubble;
 }
 
@@ -99,10 +110,6 @@ async function handleSubmit(event) {
 
   const userMessage = chatInput.value.trim();
   chatInput.value = '';
-  if (!hasActivatedComposer) {
-    body.classList.add('chat-active');
-    hasActivatedComposer = true;
-  }
   appendMessage(userMessage, 'user');
 
   renderTypingIndicator();
@@ -120,7 +127,7 @@ async function handleSubmit(event) {
 
 function initialiseChat() {
   if (chatLog) {
-    appendMessage(TALIA_INTRO, 'assistant');
+    appendMessage(TALIA_INTRO, 'assistant', 'auto');
   }
   if (chatForm) {
     chatForm.addEventListener('submit', handleSubmit);
