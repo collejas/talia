@@ -99,3 +99,16 @@ La preferencia se guarda en `localStorage`, por lo que la página recuerda el te
 
 
 
+## Avances adicionales
+- Se añadió infraestructura backend bajo `backend/` con FastAPI, routers por canal (WhatsApp, webchat, voz) y configuración centralizada (`app/core/`).
+- El canal webchat consume el asistente de OpenAI: `app/channels/webchat/service.py` resuelve `TALIA_OPENAI_ASSISTANT_ID`, llama al SDK asíncrono y responde al frontend.
+- Servicios compartidos encapsulan clientes de OpenAI y Twilio (`app/services/openai.py`, `app/services/twilio.py`) reutilizando el prefijo `TALIA_` en `.env`.
+- Se documentó el prompt comercial en `docs/prompt_landing.md` para capturar nombre, correo y teléfono en menos de seis turnos.
+- `docs/despliegue_ci_cd.md` detalla la estrategia de CI/CD (GitHub Actions, build Docker, deploy vía SSH) y coexistencia con Nginx.
+- El inventario de credenciales (`docs/credenciales.md`) centraliza Twilio, OpenAI, Supabase y otros servicios con responsables y políticas de rotación.
+
+## Próximos pasos sugeridos
+1. Implementar la lógica real de Twilio WhatsApp (webhook, adjuntos y callbacks) aprovechando los stubs existentes.
+2. Completar el flujo de voz en tiempo real usando `<Connect><Stream>` y definir persistencia de transcripts.
+3. Persistir conversaciones y leads en Supabase/Postgres integrando repositorios y modelos.
+4. Automatizar despliegues con los workflows descritos y sincronización de la landing mediante `rsync`.
