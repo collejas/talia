@@ -36,7 +36,7 @@
 
 ## Landing & operaciones
 - [ ] Afinar microcopys y assets del landing conversacional acorde al guion de ventas.
-- [ ] Instrumentar la conexión con el prompt de OpenAI y registrar leads (nombre, correo, teléfono).
+- [x] Instrumentar la conexión con el prompt de OpenAI y registrar leads (nombre, correo, teléfono).
 - [ ] Automatizar sincronización `landing/src` → `/var/www/talia-landing` (deploy script/CI).
 - [ ] Validar en QA que la UI final respete wireframe, estados y copy definidos.
 - [ ] Verificar `certbot renew --dry-run` y programar revisiones periódicas.

@@ -1,5 +1,3 @@
-import { TALIA_INTRO, chatResponses, fallbackMessage } from '../../data/chat-responses.js';
-
 const themeSelect = document.getElementById('theme-select');
 const body = document.body;
 const THEME_STORAGE_KEY = 'talia-theme-preference-v2';
@@ -11,6 +9,8 @@ const chatInput = document.getElementById('chat-input');
 const currentYearEl = document.getElementById('current-year');
 
 let typingBubble = null;
+
+const FALLBACK_MESSAGE = 'TalIA tuvo un inconveniente momentáneo. Intenta nuevamente en unos segundos.';
 
 function getScrollContainer() {
   return document.scrollingElement || document.documentElement;
@@ -108,20 +108,68 @@ function removeTypingIndicator() {
   typingBubble = null;
 }
 
-function getTalIAResponse(rawInput) {
-  const input = rawInput.toLowerCase();
-  const matched = chatResponses.find(({ keywords }) =>
-    keywords.some((keyword) => input.includes(keyword))
-  );
-  return matched?.message ?? fallbackMessage;
+const API_BASE_URL = '/api/webchat';
+const STORAGE_SESSION_KEY = 'talia-webchat-session';
+
+function getFallbackResponse() {
+  return FALLBACK_MESSAGE;
 }
 
-function sendToAssistant(message) {
-  return new Promise((resolve) => {
-    const response = getTalIAResponse(message);
-    const latency = 500 + Math.random() * 500;
-    setTimeout(() => resolve(response), latency);
-  });
+function generateSessionId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  const random = Math.random().toString(16).slice(2);
+  return `sess-${Date.now()}-${random}`;
+}
+
+function loadSessionId() {
+  try {
+    const stored = localStorage.getItem(STORAGE_SESSION_KEY);
+    if (stored) return stored;
+  } catch (error) {
+    console.warn('No se pudo leer el session_id del almacenamiento.', error);
+  }
+  const fresh = generateSessionId();
+  try {
+    localStorage.setItem(STORAGE_SESSION_KEY, fresh);
+  } catch (error) {
+    console.warn('No se pudo guardar el session_id.', error);
+  }
+  return fresh;
+}
+
+const sessionId = loadSessionId();
+
+async function sendToAssistant(message) {
+  const payload = {
+    session_id: sessionId,
+    author: 'user',
+    content: message,
+    locale: navigator.language || 'es-MX',
+  };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data?.reply) {
+      throw new Error('Respuesta vacía del asistente');
+    }
+
+    return data.reply;
+  } catch (error) {
+    console.error('Error al consultar al asistente:', error);
+    return getFallbackResponse();
+  }
 }
 
 async function handleSubmit(event) {
@@ -139,16 +187,13 @@ async function handleSubmit(event) {
     appendMessage(assistantMessage, 'assistant');
   } catch (error) {
     removeTypingIndicator();
-    appendMessage('Hubo un error procesando tu mensaje. Intenta nuevamente.', 'assistant');
-    console.error('Error simulando respuesta:', error);
+    appendMessage(getFallbackResponse(), 'assistant');
+    console.error('Error obteniendo respuesta de TalIA:', error);
   }
   chatInput.focus();
 }
 
 function initialiseChat() {
-  if (chatLog) {
-    appendMessage(TALIA_INTRO, 'assistant', 'auto');
-  }
   if (chatForm) {
     chatForm.addEventListener('submit', handleSubmit);
   }

@@ -39,3 +39,6 @@ curl -I http://talia.mx
 # Sncronizar despues de cambios:
 sudo rsync -av --delete ~/talia/landing/src/ /var/www/talia-landing/
 sudo chown -R www-data:www-data /var/www/talia-landing
+
+# levantar servicio:
+poetry run uvicorn app.main:app --reload --port 8004

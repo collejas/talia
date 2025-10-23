@@ -15,7 +15,7 @@ def create_app() -> FastAPI:
     """Crea y configura la instancia de FastAPI."""
     configure_logging()
 
-    app = FastAPI(title="TalIA API", version="0.1.0")
+    app = FastAPI(title="TalIA API", version="0.1.0", root_path="/api")
 
     app.add_middleware(
         CORSMiddleware,
@@ -25,12 +25,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(health_router, prefix="/api")
-    app.include_router(whatsapp_router, prefix="/api")
-    app.include_router(webchat_router, prefix="/api")
-    app.include_router(voice_router, prefix="/api")
+    app.include_router(health_router)
+    app.include_router(whatsapp_router)
+    app.include_router(webchat_router)
+    app.include_router(voice_router)
 
-    @app.get("/api/info", tags=["info"])
+    @app.get("/info", tags=["info"])
     def info() -> dict[str, str | None]:  # pragma: no cover - ruta simple de apoyo
         return {
             "environment": settings.environment,
