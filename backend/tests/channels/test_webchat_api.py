@@ -1,4 +1,5 @@
 """Pruebas placeholder para webchat."""
+
 import pytest
 from httpx import AsyncClient
 

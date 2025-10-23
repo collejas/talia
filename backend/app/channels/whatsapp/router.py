@@ -1,4 +1,5 @@
 """Endpoints del canal WhatsApp (Twilio)."""
+
 from fastapi import APIRouter, Depends, Request
 
 from . import service

@@ -1,4 +1,5 @@
 """Operaciones de persistencia relacionadas con leads."""
+
 from typing import Any
 
 

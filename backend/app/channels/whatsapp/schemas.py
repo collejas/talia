@@ -1,4 +1,5 @@
 """Esquemas Pydantic para payloads de WhatsApp."""
+
 from pydantic import BaseModel
 
 

@@ -1,6 +1,7 @@
 """Helpers de validación común para webhooks y firmas."""
-from hashlib import sha256
+
 import hmac
+from hashlib import sha256
 from typing import Optional
 
 
@@ -8,7 +9,9 @@ class SignatureError(Exception):
     """Excepción genérica para firmas inválidas."""
 
 
-def verify_signature(secret: str, payload: bytes, signature: str, *, header_prefix: str = "sha256=") -> None:
+def verify_signature(
+    secret: str, payload: bytes, signature: str, *, header_prefix: str = "sha256="
+) -> None:
     """Verifica firmas HMAC-SHA256.
 
     Args:

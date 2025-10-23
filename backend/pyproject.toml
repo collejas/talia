@@ -23,6 +23,9 @@ pre-commit = "^3.7.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:Please use `import python_multipart`:PendingDeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100

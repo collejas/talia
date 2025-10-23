@@ -1,4 +1,5 @@
 """Esquemas Pydantic para webchat."""
+
 from pydantic import BaseModel, Field
 
 

@@ -1,4 +1,5 @@
 """Pruebas placeholder para voz."""
+
 import pytest
 from httpx import AsyncClient
 

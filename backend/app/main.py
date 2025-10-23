@@ -1,11 +1,12 @@
 """Punto de entrada principal para la aplicación FastAPI."""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.health import router as health_router
-from app.channels.whatsapp.router import router as whatsapp_router
-from app.channels.webchat.router import router as webchat_router
 from app.channels.voice.router import router as voice_router
+from app.channels.webchat.router import router as webchat_router
+from app.channels.whatsapp.router import router as whatsapp_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 

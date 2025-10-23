@@ -1,4 +1,5 @@
 """Endpoint de salud mínimo para validaciones rápidas."""
+
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/health", tags=["health"])

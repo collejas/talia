@@ -1,4 +1,5 @@
 """Cliente centralizado para interactuar con OpenAI."""
+
 from functools import lru_cache
 
 from openai import AsyncOpenAI

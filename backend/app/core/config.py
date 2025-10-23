@@ -1,4 +1,5 @@
 """Configuración central basada en variables de entorno."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

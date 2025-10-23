@@ -1,4 +1,5 @@
 """Punto de entrada para acceso a almacenamiento (Supabase/Postgres)."""
+
 from typing import Any
 
 

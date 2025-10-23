@@ -37,3 +37,6 @@ pip-wheel-metadata/
 *.egg-info/
 *.eggs/
 .ipynb_checkpoints/
+# Caché local de pre-commit
+.pre-commit-cache/
+**/.pre-commit-cache/

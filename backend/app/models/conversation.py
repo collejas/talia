@@ -1,5 +1,7 @@
 """Modelos base para conversaciones y leads."""
+
 from datetime import datetime
+
 from pydantic import BaseModel
 
 

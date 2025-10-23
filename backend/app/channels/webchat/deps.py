@@ -1,4 +1,5 @@
 """Dependencias comunes para el canal webchat."""
+
 from fastapi import Header
 
 

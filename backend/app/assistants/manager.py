@@ -1,4 +1,5 @@
 """Gestiona la resolución de asistentes conversacionales configurados en OpenAI."""
+
 from dataclasses import dataclass
 
 from app.core.config import settings

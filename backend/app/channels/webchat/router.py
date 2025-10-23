@@ -1,4 +1,5 @@
 """Endpoints del canal Webchat."""
+
 from fastapi import APIRouter
 
 from . import service

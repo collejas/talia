@@ -1,4 +1,5 @@
 """Dependencias reutilizables para rutas de WhatsApp."""
+
 from fastapi import Header
 
 from app.core.config import settings

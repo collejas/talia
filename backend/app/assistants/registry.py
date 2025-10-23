@@ -1,4 +1,5 @@
 """Registro liviano de asistentes disponibles."""
+
 from collections.abc import Callable
 
 from . import manager

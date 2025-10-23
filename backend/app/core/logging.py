@@ -1,4 +1,5 @@
 """Configuración de logging estructurado para la aplicación."""
+
 import logging
 from typing import Any
 

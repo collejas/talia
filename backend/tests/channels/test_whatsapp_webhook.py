@@ -1,4 +1,5 @@
 """Cobertura básica para el webhook de WhatsApp."""
+
 import pytest
 from httpx import AsyncClient
 

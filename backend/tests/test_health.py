@@ -1,4 +1,5 @@
 """Pruebas del endpoint `/health`."""
+
 from httpx import AsyncClient
 
 

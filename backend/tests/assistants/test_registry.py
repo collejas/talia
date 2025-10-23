@@ -1,4 +1,5 @@
 """Pruebas del registro de asistentes."""
+
 import pytest
 
 from app.assistants import registry
