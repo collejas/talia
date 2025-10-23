@@ -34,6 +34,7 @@ Registro de interacciones
 
 - La migración `supabase/migrations/20251024_170500_webchat_persistence.sql` expone la función RPC `registrar_mensaje_webchat`, encargada de crear contactos/identidades webchat, abrir conversaciones activas y persistir mensajes con metadatos.
 - El servicio `backend/app/channels/webchat/service.py` consume esa RPC para guardar tanto el turno del visitante como la respuesta de OpenAI, devolviendo `conversation_id`/`message_id` al frontend.
+- Cada request adjunta metadata contextual (locale, IP, user-agent y geolocalización aproximada vía `TALIA_GEOLOCATION_API_URL`/`TALIA_GEOLOCATION_API_TOKEN`); la primera interacción se almacena en `contacto_datos` del lead.
 - Las pruebas (`poetry run pytest`) validan los escenarios existentes; actualmente 8 casos pasan y 2 quedan marcados como `skip` (placeholders de canales pendientes).
 Descripción sugerida para la landing
 

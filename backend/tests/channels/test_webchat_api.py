@@ -13,9 +13,14 @@ async def test_webchat_message_returns_assistant_reply(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_response = WebchatResponse(session_id="abc", reply="Hola, soy TalIA")
+
+    async def fake_handle(message, *, request=None):
+        assert request is not None
+        return fake_response
+
     monkeypatch.setattr(
         "app.channels.webchat.service.handle_webchat_message",
-        AsyncMock(return_value=fake_response),
+        AsyncMock(side_effect=fake_handle),
     )
 
     response = await async_client.post(
@@ -33,7 +38,7 @@ async def test_webchat_returns_502_when_service_fails(
 ) -> None:
     from app.channels.webchat import service
 
-    async def fail(_message):
+    async def fail(_message, *, request=None):
         raise service.AssistantServiceError("boom")
 
     monkeypatch.setattr(

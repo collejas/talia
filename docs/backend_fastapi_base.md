@@ -73,7 +73,7 @@ backend/
 ### Organización por canal
 - Cada carpeta bajo `app/channels/` contiene **router**, **schemas**, **service** y dependencias propias.
 - `app/main.py` importa los routers de cada canal y los monta con prefijos (`/api/whatsapp`, `/api/webchat`, `/api/voice`).
-- Lógica compartida (clientes Twilio, validación de firmas, acceso a OpenAI/Supabase) vive en `app/services/` y `app/core/security.py`. El módulo `app/services/storage.py` llama a la RPC `registrar_mensaje_webchat` para persistir interacciones.
+- Lógica compartida (clientes Twilio, validación de firmas, acceso a OpenAI/Supabase) vive en `app/services/` y `app/core/security.py`. El módulo `app/services/storage.py` llama a la RPC `registrar_mensaje_webchat` para persistir interacciones y `app/services/geolocation.py` resuelve metadata IP → localización cuando se habilita.
 - La interacción con OpenAI usa únicamente `ASSISTANT_ID`/`THREAD_ID` almacenados en variables de entorno o base de datos; no se incluye el prompt en código.
 - Tests espejan la estructura para mantener cobertura independiente por canal.
 

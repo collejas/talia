@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from fastapi import Request
+
 from app.assistants import manager
 from app.channels.webchat.schemas import WebchatMessage, WebchatResponse
 from app.core.logging import get_logger
+from app.services import geolocation, storage
 from app.services import openai as openai_service
-from app.services import storage
 
 
 class AssistantConfigError(RuntimeError):
@@ -31,9 +33,12 @@ class AssistantReply:
     response_id: str | None = None
 
 
-async def handle_webchat_message(message: WebchatMessage) -> WebchatResponse:
+async def handle_webchat_message(
+    message: WebchatMessage, *, request: Request | None = None
+) -> WebchatResponse:
     """Orquesta la conversación con el asistente y formatea la respuesta."""
     metadata: dict[str, Any] = {}
+    request_context = await _extract_request_context(request)
 
     try:
         record = await storage.record_webchat_message(
@@ -44,6 +49,7 @@ async def handle_webchat_message(message: WebchatMessage) -> WebchatResponse:
                 key: value
                 for key, value in {
                     "locale": message.locale,
+                    **request_context,
                 }.items()
                 if value is not None
             },
@@ -59,6 +65,7 @@ async def handle_webchat_message(message: WebchatMessage) -> WebchatResponse:
         out_metadata = {
             "locale": message.locale,
             "in_reply_to": metadata.get("last_message_id"),
+            **request_context,
         }
         record = await storage.record_webchat_message(
             session_id=message.session_id,
@@ -184,6 +191,35 @@ def _extract_response_id(response: Any) -> str | None:
         return str(response["id"])
 
     return None
+
+
+async def _extract_request_context(request: Request | None) -> dict[str, Any]:
+    """Construye metadata con IP, user-agent y geolocalización aproximada."""
+
+    if request is None:
+        return {}
+
+    headers = request.headers or {}
+    user_agent = headers.get("user-agent")
+
+    ip = None
+    forwarded = headers.get("x-forwarded-for")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+    elif request.client:
+        ip = request.client.host
+
+    geo = await geolocation.lookup_ip(ip)
+
+    context: dict[str, Any] = {}
+    if ip:
+        context["ip"] = ip
+    if user_agent:
+        context["user_agent"] = user_agent
+    if geo:
+        context["geo"] = geo
+
+    return context
 
 
 def _safe_dump(response: Any) -> dict[str, Any]:

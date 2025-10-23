@@ -13,6 +13,7 @@
 | Supabase / Postgres | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`, `SUPABASE_ANON_KEY`, `DATABASE_URL` | Persistencia de conversaciones, eventos, leads. | Datos | Guardar `SERVICE_ROLE` sólo en servidor; comprobar políticas RLS cuando se regenere. |
 | SendGrid / mailer | `SENDGRID_API_KEY` o servicio equivalente | Envío de notificaciones y resumen de leads. | Marketing | Configurar API Key con permisos mínimos y activar alertas de rebote. |
 | Nginx / Servidor | `DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY_PATH` | Scripts de deploy automatizado y sincronización landing. | Infra | Mantener llaves en gestor de secretos (1Password, Vault). Rotar al rotar llaves del servidor. |
+| Geolocalización IP (ipapi/ipinfo) | `TALIA_GEOLOCATION_API_URL`, `TALIA_GEOLOCATION_API_TOKEN` (opcional) | Enriquecer leads con ciudad/país aproximados. | Datos | Revisar límites del proveedor y políticas de privacidad al almacenar ubicación. |
 
 ## Gestión y almacenamiento
 - Utilizar un gestor central (1Password Business / Vault) con acceso por roles: `Infra`, `Backend`, `IA`, `Marketing`.

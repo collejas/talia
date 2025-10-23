@@ -22,12 +22,21 @@ async def test_handle_webchat_message_persists_and_returns_metadata(
     async def fake_generate(_: WebchatMessage) -> service.AssistantReply:
         return service.AssistantReply(text="Hola desde TalIA", response_id="resp-999")
 
+    async def fake_geo(_: str | None) -> dict[str, str]:
+        return {"country": "MX", "city": "CDMX"}
+
     monkeypatch.setattr("app.services.storage.record_webchat_message", fake_record)
     monkeypatch.setattr("app.channels.webchat.service._generate_assistant_reply", fake_generate)
+    monkeypatch.setattr("app.services.geolocation.lookup_ip", fake_geo)
 
     message = WebchatMessage(session_id="sess-1", author="user", content="hola", locale="es-MX")
 
-    response = await service.handle_webchat_message(message)
+    fake_request = SimpleNamespace(
+        headers={"user-agent": "Mozilla", "x-forwarded-for": "203.0.113.1"},
+        client=SimpleNamespace(host="203.0.113.1"),
+    )
+
+    response = await service.handle_webchat_message(message, request=fake_request)
 
     assert response.reply == "Hola desde TalIA"
     assert response.metadata is not None
@@ -38,6 +47,8 @@ async def test_handle_webchat_message_persists_and_returns_metadata(
     assert len(calls) == 2
     assert calls[0]["author"] == "user"
     assert calls[1]["author"] == "assistant"
+    assert calls[0]["metadata"]["ip"] == "203.0.113.1"
+    assert "geo" in calls[0]["metadata"]
 
 
 def test_extract_response_id_prefers_attribute() -> None:

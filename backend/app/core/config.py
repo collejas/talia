@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     twilio_auth_token: str | None = None
     supabase_url: str | None = None
     supabase_service_role: str | None = None
+    geolocation_api_url: str | None = None
+    geolocation_api_token: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 
