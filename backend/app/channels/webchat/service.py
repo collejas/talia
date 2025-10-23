@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from app.assistants import manager
 from app.channels.webchat.schemas import WebchatMessage, WebchatResponse
 from app.core.logging import get_logger
 from app.services import openai as openai_service
+from app.services import storage
 
 
 class AssistantConfigError(RuntimeError):
@@ -21,13 +23,65 @@ class AssistantServiceError(RuntimeError):
 logger = get_logger(__name__)
 
 
+@dataclass(slots=True)
+class AssistantReply:
+    """Modelo interno con la respuesta del asistente y metadatos."""
+
+    text: str
+    response_id: str | None = None
+
+
 async def handle_webchat_message(message: WebchatMessage) -> WebchatResponse:
     """Orquesta la conversación con el asistente y formatea la respuesta."""
+    metadata: dict[str, Any] = {}
+
+    try:
+        record = await storage.record_webchat_message(
+            session_id=message.session_id,
+            author=message.author or "user",
+            content=message.content,
+            metadata={
+                key: value
+                for key, value in {
+                    "locale": message.locale,
+                }.items()
+                if value is not None
+            },
+        )
+        metadata["conversation_id"] = record.conversation_id
+        metadata["last_message_id"] = record.message_id
+    except storage.StorageError:
+        logger.exception("No se pudo registrar el mensaje entrante en Supabase")
+
     reply = await _generate_assistant_reply(message)
-    return WebchatResponse(session_id=message.session_id, reply=reply)
+
+    try:
+        out_metadata = {
+            "locale": message.locale,
+            "in_reply_to": metadata.get("last_message_id"),
+        }
+        record = await storage.record_webchat_message(
+            session_id=message.session_id,
+            author="assistant",
+            content=reply.text,
+            response_id=reply.response_id,
+            metadata={key: value for key, value in out_metadata.items() if value is not None},
+        )
+        metadata["assistant_message_id"] = record.message_id
+        metadata.setdefault("conversation_id", record.conversation_id)
+        if reply.response_id:
+            metadata["assistant_response_id"] = reply.response_id
+    except storage.StorageError:
+        logger.exception("No se pudo registrar la respuesta del asistente en Supabase")
+
+    return WebchatResponse(
+        session_id=message.session_id,
+        reply=reply.text,
+        metadata=metadata or None,
+    )
 
 
-async def _generate_assistant_reply(message: WebchatMessage) -> str:
+async def _generate_assistant_reply(message: WebchatMessage) -> AssistantReply:
     """Genera una respuesta del asistente usando OpenAI."""
     try:
         assistant_cfg = manager.get_landing_assistant()
@@ -75,7 +129,8 @@ async def _generate_assistant_reply(message: WebchatMessage) -> str:
         logger.warning("Respuesta sin texto", extra={"response": _safe_dump(response)})
     if not reply_text:
         raise AssistantServiceError("El asistente respondió sin contenido de texto")
-    return reply_text
+    response_id = _extract_response_id(response)
+    return AssistantReply(text=reply_text, response_id=response_id)
 
 
 def _extract_text_from_response(response: Any) -> str | None:
@@ -107,6 +162,27 @@ def _extract_text_from_response(response: Any) -> str | None:
                     value = text_value
                 if value:
                     return value
+    return None
+
+
+def _extract_response_id(response: Any) -> str | None:
+    """Intenta obtener el identificador único de la respuesta generada."""
+
+    response_id = getattr(response, "id", None)
+    if response_id:
+        return str(response_id)
+
+    if hasattr(response, "model_dump"):
+        try:
+            data = response.model_dump()
+            if isinstance(data, dict) and data.get("id"):
+                return str(data["id"])
+        except Exception:  # pragma: no cover - best effort
+            return None
+
+    if isinstance(response, dict) and response.get("id"):
+        return str(response["id"])
+
     return None
 
 

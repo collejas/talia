@@ -46,8 +46,9 @@
 - Integrar OpenAI (o proveedor equivalente) con caching, límites de uso y logs de auditoría.
 - Crear “prompt wizard” configurable por vertical, tono y objetivos comerciales.
 
-### Fase 4 · Persistencia y analítica
+- ### Fase 4 · Persistencia y analítica
 - ✅ Esquema base creado en Supabase/Postgres (conversaciones, mensajes, eventos, leads) + políticas RLS aplicadas vía migración `20251023_160500_rls_policies.sql`.
+- ✅ Función RPC `registrar_mensaje_webchat` en Supabase (migración `20251024_170500_webchat_persistence.sql`) y servicio FastAPI registrando mensajes.
 - Construir consultas agregadas para KPIs (leads, tiempos de respuesta, carga por agente).
 - Exponer endpoints `/api/dashboard/*` reutilizando agregaciones.
 - Asegurar migraciones reproducibles (Alembic) y tests de integridad de datos.

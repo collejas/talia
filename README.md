@@ -29,6 +29,12 @@ La configuración centraliza credenciales de OpenAI, Twilio y Supabase, incluyen
 Base de datos y seguridad
 
 El proyecto opera sobre Supabase/Postgres con un esquema normalizado para contactos, conversaciones, mensajes, adjuntos y eventos. La migración `supabase/migrations/20251023_160500_rls_policies.sql` agrega funciones helper (`puede_ver_conversacion`, `puede_ver_mensaje`) y políticas RLS que aíslan la información por usuario (propietario del contacto o agente asignado) manteniendo privilegios de administración. Para respaldos iniciales y automáticos se incluye `backend/scripts/backup_db.py`, que genera dumps completos y de sólo esquema usando `pg_dump` y las credenciales definidas en `backend/.env`.
+
+Registro de interacciones
+
+- La migración `supabase/migrations/20251024_170500_webchat_persistence.sql` expone la función RPC `registrar_mensaje_webchat`, encargada de crear contactos/identidades webchat, abrir conversaciones activas y persistir mensajes con metadatos.
+- El servicio `backend/app/channels/webchat/service.py` consume esa RPC para guardar tanto el turno del visitante como la respuesta de OpenAI, devolviendo `conversation_id`/`message_id` al frontend.
+- Las pruebas (`poetry run pytest`) validan los escenarios existentes; actualmente 8 casos pasan y 2 quedan marcados como `skip` (placeholders de canales pendientes).
 Descripción sugerida para la landing
 
 “TalIA es el asistente de IA omnicanal para negocios que quieren convertir más leads sin crecer su equipo. Atiende WhatsApp, llamadas, Instagram y webchat desde un solo backend, personaliza prompts para cada vertical y enriquece conversaciones con datos externos como Google Places. Tus agentes obtienen embudos, KPIs y actividad en vivo, mientras la infraestructura se encarga de adjuntos, seguridad y despliegue listo para producción.”

@@ -21,6 +21,7 @@ GitHub (main/pr) → GitHub Actions → build & test → push image (ghcr.io/tal
   2. Correr `ruff` (lint) y `pytest` (tests).
   3. Construir imagen Docker (`docker build`).
 - Artefactos: reporte `coverage.xml` (para sonar/quality después).
+- Al día de hoy, la suite `poetry run pytest` pasa 8 pruebas y mantiene 2 `skip` correspondientes a integraciones pendientes (Twilio voz/WhatsApp).
 
 ## CD (deploy)
 - Workflow `deploy.yml` disparado en `push` a `main` con tag `deploy-backend` o al crear release.

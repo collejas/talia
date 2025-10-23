@@ -7,11 +7,12 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - **Frontend**: widget/chat en `landing/src` que envía mensajes al backend via REST (Fase 0/1) o WebSocket (Fase 2+).
 - **Backend**: endpoints en `app/channels/webchat/` que orquestan la conversación con OpenAI.
 - **OpenAI**: asistente configurado en dashboard, identificado por `TALIA_OPENAI_ASSISTANT_ID`.
+- **Persistencia**: la función RPC `public.registrar_mensaje_webchat` (migración `20251024_170500_webchat_persistence.sql`) crea contactos, abre conversaciones y guarda cada turno en Supabase.
 
 ## Endpoints planificados
 - `POST /api/webchat/messages`
   - Body (`WebchatMessage`): `{ session_id, author, content, locale? }`.
-  - Respuesta temporal: `{ status: "queued" }` (Fase 1). Posteriormente devolverá la respuesta del asistente.
+  - Respuesta actual: `{ reply, metadata }` donde `metadata` incluye `conversation_id`, `last_message_id`, `assistant_message_id` y opcionalmente `assistant_response_id`.
 - `GET /api/webchat/history/{session_id}` (pendiente): recupera historial desde BD.
 - `WS /api/webchat/stream` (pendiente): streaming en tiempo real.
 
@@ -33,23 +34,25 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
   - `assistant_thread_id`
   - `created_at`
   - `last_activity`
-- Tabla `messages`
+- Tabla `mensajes`
   - `id`
-  - `session_id`
-  - `role`
-  - `content`
-  - `created_at`
-- Tabla `leads`
+  - `conversacion_id`
+  - `direccion`
+  - `tipo_contenido`
+  - `texto`
+  - `datos` (incluye `session_id`, `author`, metadata extra)
+  - `estado`
+  - `creado_en`
+- Tabla `contactos`
   - `id`
-  - `session_id`
-  - `name`, `email`, `phone`
-  - `source` (`"webchat"`)
+  - `nombre_completo`
+  - `contacto_datos` (`session_id`, datos opcionales)
+  - `origen` (`"webchat"`)
 
 ## Eventos clave
-- `webchat_started`
-- `webchat_message_sent`
-- `webchat_message_received`
-- `lead_captured`
+- `webchat_started` → detección via creación de conversación/identidad.
+- `webchat_message_sent` / `webchat_message_received` → almacenados en `public.mensajes` con `direccion` `entrante/saliente`.
+- `lead_captured` → completar datos en `contactos` y `conversaciones`.
 
 ## Consideraciones
 - Implementar rate limiting básico por `session_id`/IP.

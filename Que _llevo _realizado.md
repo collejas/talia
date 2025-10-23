@@ -108,6 +108,8 @@ La preferencia se guarda en `localStorage`, por lo que la página recuerda el te
 - El inventario de credenciales (`docs/credenciales.md`) centraliza Twilio, OpenAI, Supabase y otros servicios con responsables y políticas de rotación.
 - Se normalizó el esquema operativo en Supabase (contactos, conversaciones, mensajes, eventos) y se aplicaron políticas RLS específicas mediante la migración `supabase/migrations/20251023_160500_rls_policies.sql`.
 - El script `backend/scripts/backup_db.py` genera respaldos automáticos (dump completo y sólo esquema) tomando credenciales desde `backend/.env`.
+- Nueva migración `supabase/migrations/20251024_170500_webchat_persistence.sql` añade la función `registrar_mensaje_webchat` para crear contactos/identidades webchat y guardar mensajes desde el backend/conversación.
+- El servicio `backend/app/channels/webchat/service.py` ahora persiste mensajes entrantes y salientes en Supabase; los tests (`poetry run pytest`) pasan 8 suites y mantienen 2 marcadas como `skip`.
 
 ## Próximos pasos sugeridos
 1. Implementar la lógica real de Twilio WhatsApp (webhook, adjuntos y callbacks) aprovechando los stubs existentes.
