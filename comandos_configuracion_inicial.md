@@ -42,3 +42,15 @@ sudo chown -R www-data:www-data /var/www/talia-landing
 
 # levantar servicio:
 poetry run uvicorn app.main:app --reload --port 8004
+
+# Bse de datos
+
+## hacer un respaldo
+
+## exportar url
+export SUPABASE_DB_URL="postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
+
+## HAcer el restore de algun archivo *.dump
+pg_restore --clean --if-exists --no-owner --no-acl \
+  --dbname "$SUPABASE_DB_URL" \
+  supabase/migrations/20251023_131845_full.dump
