@@ -13,10 +13,10 @@
 - [ ] Definir modelos de datos y migraciones iniciales (Alembic).
 
 ## Fase 2 · Integraciones de canales
-- [ ] Implementar webhooks de Twilio WhatsApp (mensajes, adjuntos, callbacks).
-- [ ] Implementar flujo de voz en tiempo real con `<Connect><Stream>`.
-- [ ] Definir endpoints para Instagram y webchat (placeholders + validaciones).
-- [ ] Configurar verificación de firmas y reintentos para cada canal.
+- [ ] Implementar webhooks de Twilio WhatsApp (mensajes, adjuntos, callbacks). Referencia: `docs/canales/whatsapp.md`.
+- [ ] Implementar flujo de voz en tiempo real con `<Connect><Stream>`. Referencia: `docs/canales/voz.md`.
+- [ ] Definir endpoints para Instagram y webchat (placeholders + validaciones). Referencia: `docs/canales/webchat.md`.
+- [ ] Configurar verificación de firmas y reintentos para cada canal. Referencia: `docs/canales/whatsapp.md`, `docs/canales/voz.md`.
 
 ## Fase 3 · Inteligencia conversacional
 - [ ] Crear módulo de asistentes con prompts versionados y variables dinámicas.
