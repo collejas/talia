@@ -10,7 +10,7 @@ from fastapi import Request
 from app.assistants import manager
 from app.channels.webchat.schemas import WebchatMessage, WebchatResponse
 from app.core.logging import get_logger, log_event
-from app.services import geolocation, storage
+from app.services import geolocation, storage, user_agent
 from app.services import openai as openai_service
 
 
@@ -216,7 +216,7 @@ async def _extract_request_context(request: Request | None) -> dict[str, Any]:
         return {}
 
     headers = request.headers or {}
-    user_agent = headers.get("user-agent")
+    ua_string = headers.get("user-agent")
 
     ip = None
     forwarded = headers.get("x-forwarded-for")
@@ -226,14 +226,17 @@ async def _extract_request_context(request: Request | None) -> dict[str, Any]:
         ip = request.client.host
 
     geo = await geolocation.lookup_ip(ip)
+    device_type = user_agent.infer_device_type(ua_string)
 
     context: dict[str, Any] = {}
     if ip:
         context["ip"] = ip
-    if user_agent:
-        context["user_agent"] = user_agent
+    if ua_string:
+        context["user_agent"] = ua_string
     if geo:
         context["geo"] = geo
+    if device_type:
+        context["device_type"] = device_type
 
     return context
 

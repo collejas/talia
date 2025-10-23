@@ -7,7 +7,7 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - **Frontend**: widget/chat en `landing/src` que envía mensajes al backend via REST (Fase 0/1) o WebSocket (Fase 2+).
 - **Backend**: endpoints en `app/channels/webchat/` que orquestan la conversación con OpenAI.
 - **OpenAI**: asistente configurado en dashboard, identificado por `TALIA_OPENAI_ASSISTANT_ID`.
-- **Persistencia**: la función RPC `public.registrar_mensaje_webchat` (migración `20251024_170500_webchat_persistence.sql`) crea contactos, abre conversaciones y guarda cada turno en Supabase, adjuntando metadata (locale, IP, user-agent, geolocalización si está disponible).
+- **Persistencia**: la función RPC `public.registrar_mensaje_webchat` (migración `20251024_170500_webchat_persistence.sql`) crea contactos, abre conversaciones y guarda cada turno en Supabase, adjuntando metadata (locale, IP, user-agent, tipo de dispositivo, geolocalización si está disponible).
 
 ## Endpoints planificados
 - `POST /api/webchat/messages`

@@ -32,7 +32,10 @@ async def test_handle_webchat_message_persists_and_returns_metadata(
     message = WebchatMessage(session_id="sess-1", author="user", content="hola", locale="es-MX")
 
     fake_request = SimpleNamespace(
-        headers={"user-agent": "Mozilla", "x-forwarded-for": "203.0.113.1"},
+        headers={
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "x-forwarded-for": "203.0.113.1",
+        },
         client=SimpleNamespace(host="203.0.113.1"),
     )
 
@@ -49,6 +52,7 @@ async def test_handle_webchat_message_persists_and_returns_metadata(
     assert calls[1]["author"] == "assistant"
     assert calls[0]["metadata"]["ip"] == "203.0.113.1"
     assert "geo" in calls[0]["metadata"]
+    assert calls[0]["metadata"]["device_type"] == "desktop"
 
 
 def test_extract_response_id_prefers_attribute() -> None:

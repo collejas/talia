@@ -2,7 +2,6 @@
 
 import hmac
 from hashlib import sha256
-from typing import Optional
 
 
 class SignatureError(Exception):
@@ -31,7 +30,7 @@ def _build_signature(secret: str, payload: bytes) -> str:
     return digest.hexdigest()
 
 
-def mask_secret(value: Optional[str]) -> Optional[str]:
+def mask_secret(value: str | None) -> str | None:
     """Enmascara secretos para logging seguro."""
     if not value:
         return value
