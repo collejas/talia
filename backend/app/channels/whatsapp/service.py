@@ -1,7 +1,10 @@
 """Servicios específicos para WhatsApp via Twilio."""
 
+from app.core.logging import get_logger, log_event
 from app.services import openai as openai_service
 from app.services import twilio as twilio_service
+
+logger = get_logger(__name__)
 
 
 async def handle_incoming_message(payload: bytes) -> None:
@@ -11,4 +14,4 @@ async def handle_incoming_message(payload: bytes) -> None:
     """
     twilio_service.get_twilio_client()  # placeholder para validar import
     openai_service.get_assistant_client()  # placeholder para validar import
-    _ = payload  # evitar warning
+    log_event(logger, "whatsapp.webhook_stub", payload_size=len(payload))

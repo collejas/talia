@@ -36,6 +36,13 @@ Registro de interacciones
 - El servicio `backend/app/channels/webchat/service.py` consume esa RPC para guardar tanto el turno del visitante como la respuesta de OpenAI, devolviendo `conversation_id`/`message_id` al frontend.
 - Cada request adjunta metadata contextual (locale, IP, user-agent y geolocalización aproximada vía `TALIA_GEOLOCATION_API_URL`/`TALIA_GEOLOCATION_API_TOKEN`); la primera interacción se almacena en `contacto_datos` del lead.
 - Las pruebas (`poetry run pytest`) validan los escenarios existentes; actualmente 8 casos pasan y 2 quedan marcados como `skip` (placeholders de canales pendientes).
+
+Logging y depuración
+
+- El backend emite logs JSON con nivel `DEBUG` en ambientes que no sean producción (`app/core/logging.py`).
+- Middleware `RequestLoggingMiddleware` registra cada request con `request_id`, estado HTTP, duración e IP cliente (cabecera `x-forwarded-for` cuando existe).
+- Los canales escriben eventos estructurados (`webchat.message_received`, `webchat.message_sent`) que facilitan correlacionar turnos con IDs de Supabase usando `journalctl -u talia-api.service -f`.
+- Además de stdout, los logs rotan en `/home/devuser/talia/logs/api.log` (5 archivos de 10 MB) y se generan trazas específicas en `/home/devuser/talia/logs/request.log`, `/home/devuser/talia/logs/webchat.log`, `/home/devuser/talia/logs/whatsapp.log` y `/home/devuser/talia/logs/voice.log` para depurar peticiones y cada canal.
 Descripción sugerida para la landing
 
 “TalIA es el asistente de IA omnicanal para negocios que quieren convertir más leads sin crecer su equipo. Atiende WhatsApp, llamadas, Instagram y webchat desde un solo backend, personaliza prompts para cada vertical y enriquece conversaciones con datos externos como Google Places. Tus agentes obtienen embudos, KPIs y actividad en vivo, mientras la infraestructura se encarga de adjuntos, seguridad y despliegue listo para producción.”

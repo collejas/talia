@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     supabase_service_role: str | None = None
     geolocation_api_url: str | None = None
     geolocation_api_token: str | None = None
+    log_file_path: str = "/home/devuser/talia/logs/api.log"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 

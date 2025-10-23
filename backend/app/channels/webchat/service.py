@@ -9,7 +9,7 @@ from fastapi import Request
 
 from app.assistants import manager
 from app.channels.webchat.schemas import WebchatMessage, WebchatResponse
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_event
 from app.services import geolocation, storage
 from app.services import openai as openai_service
 
@@ -56,6 +56,14 @@ async def handle_webchat_message(
         )
         metadata["conversation_id"] = record.conversation_id
         metadata["last_message_id"] = record.message_id
+        log_event(
+            logger,
+            "webchat.message_received",
+            conversation_id=record.conversation_id,
+            message_id=record.message_id,
+            session_id=message.session_id,
+            author=message.author or "user",
+        )
     except storage.StorageError:
         logger.exception("No se pudo registrar el mensaje entrante en Supabase")
 
@@ -78,6 +86,14 @@ async def handle_webchat_message(
         metadata.setdefault("conversation_id", record.conversation_id)
         if reply.response_id:
             metadata["assistant_response_id"] = reply.response_id
+        log_event(
+            logger,
+            "webchat.message_sent",
+            conversation_id=record.conversation_id,
+            message_id=record.message_id,
+            session_id=message.session_id,
+            response_id=reply.response_id,
+        )
     except storage.StorageError:
         logger.exception("No se pudo registrar la respuesta del asistente en Supabase")
 

@@ -47,6 +47,10 @@ GitHub (main/pr) → GitHub Actions → build & test → push image (ghcr.io/tal
 ## Backups
 - Script `backend/scripts/backup_db.py` genera dumps completos (`.dump`) y de sólo esquema (`.sql`) usando `pg_dump`. Toma credenciales de `backend/.env` o de `DATABASE_URL` y debe integrarse a cron/CI antes de cada despliegue.
 
+## Observabilidad local
+- `backend/app/core/logging.py` emite JSON a stdout y a `/home/devuser/talia/logs/api.log` (rotación automática 5×10 MB) más archivos separados (`request.log`, `webchat.log`, `whatsapp.log`, `voice.log`).
+- `backend/app/core/middleware.py` agrega `RequestLoggingMiddleware` con `request_id`. Ver registros recientes con `journalctl -u talia-api.service -f`.
+
 ## Próximos pasos
 1. Definir si se usará Kubernetes/Supabase hosting en el futuro; de momento se conserva `docker compose` para velocidad.
 2. Preparar `infra/` en el repo con plantillas (`docker-compose.yml`, `deploy.sh`, `github/workflows/ci.yml`, `github/workflows/deploy.yml`).
