@@ -1,11 +1,11 @@
 # Checklist TalIA
 
 ## Fase 0 · Preparación
-- [ ] Registrar credenciales de Twilio, OpenAI, Supabase/Postgres y servicios asociados.
-- [ ] Definir estrategia de despliegue (Docker/Compose, systemd, etc.) y flujo CI/CD.
-- [ ] Diseñar el prompt conversacional de landing (guion de ventas, captación de nombre/correo/teléfono, handoff).
+- [ ] Registrar credenciales de Twilio, OpenAI, Supabase/Postgres y servicios asociados. Referencia: `docs/credenciales.md`.
+- [ ] Definir estrategia de despliegue (Docker/Compose, systemd, etc.) y flujo CI/CD. Referencia: `docs/despliegue_ci_cd.md`.
+- [ ] Diseñar el prompt conversacional de landing (guion de ventas, captación de nombre/correo/teléfono, handoff). Referencia: `docs/prompt_landing.md`.
 - [x] Documentar wireframe y estados UI basados en la vista 'sin sesión' de ChatGPT (layout, tipografía, degradados, estados typing/error).
-- [ ] Crear repositorio/base para backend FastAPI con linters y tests iniciales.
+- [ ] Crear repositorio/base para backend FastAPI con linters y tests iniciales. Referencia: `docs/backend_fastapi_base.md`.
 
 ## Fase 1 · Núcleo FastAPI
 - [ ] Estructurar proyecto (`app/main.py`, routers, configuración, dependencias).
