@@ -9,8 +9,9 @@ REQUEST_LOG="$LOG_DIR/request.log"
 WEBCHAT_LOG="$LOG_DIR/webchat.log"
 
 if [ -d "$LANDING_SRC" ]; then
-  rsync -av --delete "$LANDING_SRC" "$LANDING_DEST"
-  chown -R www-data:www-data "$LANDING_DEST"
+  # Sin preservar owner/group para evitar errores, y asignando propiedad al vuelo
+  rsync -av --delete --no-owner --no-group --chown=www-data:www-data \
+    "$LANDING_SRC" "$LANDING_DEST"
 fi
 
 mkdir -p "$LOG_DIR"
@@ -23,4 +24,5 @@ done
 export PATH="/home/devuser/.local/bin:$PATH"
 cd /home/devuser/talia/backend
 
-exec /usr/sbin/runuser -u devuser -- poetry run uvicorn app.main:app --host 0.0.0.0 --port 8004
+exec /usr/sbin/runuser -u devuser -- /home/devuser/.local/bin/poetry run \
+  uvicorn app.main:app --host 0.0.0.0 --port 8004 --proxy-headers

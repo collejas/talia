@@ -19,7 +19,9 @@ async def test_handle_webchat_message_persists_and_returns_metadata(
         calls.append(kwargs)
         return storage.WebchatRecord(conversation_id="conv-123", message_id=f"msg-{len(calls)}")
 
-    async def fake_generate(_: WebchatMessage) -> service.AssistantReply:
+    async def fake_generate(
+        _: WebchatMessage, *, conversation_id: str | None = None
+    ) -> service.AssistantReply:
         return service.AssistantReply(text="Hola desde TalIA", response_id="resp-999")
 
     async def fake_geo(_: str | None) -> dict[str, str]:
