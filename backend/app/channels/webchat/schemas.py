@@ -10,3 +10,11 @@ class WebchatMessage(BaseModel):
     author: str = Field(..., description="`user` o `assistant`")
     content: str
     locale: str | None = None
+
+
+class WebchatResponse(BaseModel):
+    """Respuesta del backend para un mensaje del usuario."""
+
+    session_id: str
+    reply: str
+    metadata: dict[str, str] | None = None

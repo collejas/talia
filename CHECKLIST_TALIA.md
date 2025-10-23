@@ -8,8 +8,8 @@
 - [x] Crear repositorio/base para backend FastAPI con linters y tests iniciales. Referencia: `docs/backend_fastapi_base.md`.
 
 ## Fase 1 · Núcleo FastAPI
-- [ ] Estructurar proyecto (`app/main.py`, routers, configuración, dependencias).
-- [ ] Implementar middlewares (CORS, logging/trazabilidad, manejo de errores).
+- [x] Estructurar proyecto (`app/main.py`, routers, configuración, dependencias).
+- [x] Implementar middlewares (CORS, logging/trazabilidad, manejo de errores).
 - [ ] Definir modelos de datos y migraciones iniciales (Alembic).
 
 ## Fase 2 · Integraciones de canales

@@ -1,15 +1,21 @@
 """Endpoints del canal Webchat."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from . import service
-from .schemas import WebchatMessage
+from .schemas import WebchatMessage, WebchatResponse
 
 router = APIRouter(prefix="/webchat", tags=["webchat"])
 
 
-@router.post("/messages", summary="Publica un mensaje desde el widget web")
-async def receive_webchat_message(message: WebchatMessage) -> dict[str, str]:
-    """Recibe mensajes del widget en el sitio web."""
-    await service.handle_webchat_message(message)
-    return {"status": "queued"}
+@router.post(
+    "/messages", summary="Envía un mensaje desde el widget web", response_model=WebchatResponse
+)
+async def receive_webchat_message(message: WebchatMessage) -> WebchatResponse:
+    """Recibe mensajes del widget y devuelve la respuesta generada por TalIA."""
+    try:
+        return await service.handle_webchat_message(message)
+    except service.AssistantConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except service.AssistantServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
