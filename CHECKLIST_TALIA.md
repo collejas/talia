@@ -24,7 +24,7 @@
 - [ ] Generar “prompt wizard” configurable por industria y tono.
 
 ## Fase 4 · Persistencia y analítica
-- [ ] Diseñar schema relacional (conversaciones, mensajes, adjuntos, eventos).
+- [x] Diseñar schema relacional (conversaciones, mensajes, adjuntos, eventos).
 - [ ] Construir consultas agregadas para KPIs y embudos.
 - [ ] Exponer endpoints `/api/dashboard/*` y escribir tests para ellos.
 

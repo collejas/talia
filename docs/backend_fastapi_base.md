@@ -3,6 +3,8 @@
 ## Objetivo
 Definir la estructura inicial del backend para facilitar la implementación en Fase 1, con separación modular por canal (WhatsApp, webchat y voz) y sin hardcodear prompts ni scripts conversacionales.
 
+> Estado: el esquema operativo en Supabase (contactos, conversaciones, mensajes, eventos) ya fue creado y protegido con RLS mediante la migración `supabase/migrations/20251023_160500_rls_policies.sql`. Las siguientes fases deben consumir ese modelo desde los repositorios FastAPI.
+
 ## Estructura propuesta
 ```
 backend/

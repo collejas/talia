@@ -43,6 +43,9 @@ GitHub (main/pr) → GitHub Actions → build & test → push image (ghcr.io/tal
 - Mantener TLS vía Let's Encrypt ya configurado en Nginx.
 - Añadir cabeceras de seguridad en Nginx (`Strict-Transport-Security`, `Content-Security-Policy` básica) en fase posterior.
 
+## Backups
+- Script `backend/scripts/backup_db.py` genera dumps completos (`.dump`) y de sólo esquema (`.sql`) usando `pg_dump`. Toma credenciales de `backend/.env` o de `DATABASE_URL` y debe integrarse a cron/CI antes de cada despliegue.
+
 ## Próximos pasos
 1. Definir si se usará Kubernetes/Supabase hosting en el futuro; de momento se conserva `docker compose` para velocidad.
 2. Preparar `infra/` en el repo con plantillas (`docker-compose.yml`, `deploy.sh`, `github/workflows/ci.yml`, `github/workflows/deploy.yml`).

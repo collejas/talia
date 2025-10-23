@@ -25,7 +25,10 @@ Integraciones y despliegue
 
 El sistema integra Google Places para enriquecer búsquedas de prospectos, manejando paginación y deduplicación automática desde la API oficial.
 La configuración centraliza credenciales de OpenAI, Twilio y Supabase, incluyendo soporte para tokens efímeros de streaming de voz y validación de firmas entrantes, lo que facilita escalar con seguridad en entornos productivos.
+
+Base de datos y seguridad
+
+El proyecto opera sobre Supabase/Postgres con un esquema normalizado para contactos, conversaciones, mensajes, adjuntos y eventos. La migración `supabase/migrations/20251023_160500_rls_policies.sql` agrega funciones helper (`puede_ver_conversacion`, `puede_ver_mensaje`) y políticas RLS que aíslan la información por usuario (propietario del contacto o agente asignado) manteniendo privilegios de administración. Para respaldos iniciales y automáticos se incluye `backend/scripts/backup_db.py`, que genera dumps completos y de sólo esquema usando `pg_dump` y las credenciales definidas en `backend/.env`.
 Descripción sugerida para la landing
 
 “TalIA es el asistente de IA omnicanal para negocios que quieren convertir más leads sin crecer su equipo. Atiende WhatsApp, llamadas, Instagram y webchat desde un solo backend, personaliza prompts para cada vertical y enriquece conversaciones con datos externos como Google Places. Tus agentes obtienen embudos, KPIs y actividad en vivo, mientras la infraestructura se encarga de adjuntos, seguridad y despliegue listo para producción.”
-

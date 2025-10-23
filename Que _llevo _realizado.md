@@ -106,9 +106,11 @@ La preferencia se guarda en `localStorage`, por lo que la página recuerda el te
 - Se documentó el prompt comercial en `docs/prompt_landing.md` para capturar nombre, correo y teléfono en menos de seis turnos.
 - `docs/despliegue_ci_cd.md` detalla la estrategia de CI/CD (GitHub Actions, build Docker, deploy vía SSH) y coexistencia con Nginx.
 - El inventario de credenciales (`docs/credenciales.md`) centraliza Twilio, OpenAI, Supabase y otros servicios con responsables y políticas de rotación.
+- Se normalizó el esquema operativo en Supabase (contactos, conversaciones, mensajes, eventos) y se aplicaron políticas RLS específicas mediante la migración `supabase/migrations/20251023_160500_rls_policies.sql`.
+- El script `backend/scripts/backup_db.py` genera respaldos automáticos (dump completo y sólo esquema) tomando credenciales desde `backend/.env`.
 
 ## Próximos pasos sugeridos
 1. Implementar la lógica real de Twilio WhatsApp (webhook, adjuntos y callbacks) aprovechando los stubs existentes.
 2. Completar el flujo de voz en tiempo real usando `<Connect><Stream>` y definir persistencia de transcripts.
-3. Persistir conversaciones y leads en Supabase/Postgres integrando repositorios y modelos.
+3. Construir agregados/consultas para KPIs y exponer endpoints `/api/dashboard/*` basados en el nuevo esquema.
 4. Automatizar despliegues con los workflows descritos y sincronización de la landing mediante `rsync`.

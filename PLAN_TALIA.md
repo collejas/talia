@@ -47,7 +47,7 @@
 - Crear “prompt wizard” configurable por vertical, tono y objetivos comerciales.
 
 ### Fase 4 · Persistencia y analítica
-- Diseñar esquema en Supabase/Postgres para conversaciones, eventos y métricas.
+- ✅ Esquema base creado en Supabase/Postgres (conversaciones, mensajes, eventos, leads) + políticas RLS aplicadas vía migración `20251023_160500_rls_policies.sql`.
 - Construir consultas agregadas para KPIs (leads, tiempos de respuesta, carga por agente).
 - Exponer endpoints `/api/dashboard/*` reutilizando agregaciones.
 - Asegurar migraciones reproducibles (Alembic) y tests de integridad de datos.
