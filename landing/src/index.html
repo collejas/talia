@@ -30,8 +30,32 @@
           </select>
         </div>
         <a class="cta" href="#contacto">Únete a la lista</a>
+
+        <button id="menu-toggle" class="hamburger" aria-label="Abrir menú"
+          aria-controls="mobile-menu" aria-expanded="false">
+          <span class="hamburger-box" aria-hidden="true">
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+          </span>
+        </button>
       </div>
     </header>
+
+    <!-- Menú móvil: recibe theme-switcher y CTA cuando el viewport es pequeño -->
+    <nav id="mobile-menu" class="mobile-menu" hidden>
+      <div class="mobile-menu-panel container">
+        <ul class="mobile-menu-list" role="menu" aria-label="Menú móvil">
+          <!-- Aquí se insertan dinámicamente el selector de tema y el CTA -->
+        </ul>
+        <div class="mobile-menu-sep" role="separator" aria-hidden="true"></div>
+        <ul class="mobile-menu-links" role="menu" aria-label="Enlaces legales y contacto">
+          <li role="none"><a role="menuitem" href="#">Privacidad</a></li>
+          <li role="none"><a role="menuitem" href="#">Términos</a></li>
+          <li role="none"><a role="menuitem" href="mailto:hola@talia.mx">hola@talia.mx</a></li>
+        </ul>
+      </div>
+    </nav>
 
     <main class="layout" aria-live="polite">
       <section class="chat-shell">

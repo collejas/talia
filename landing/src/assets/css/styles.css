@@ -270,6 +270,69 @@ button:hover {
   transform: translateY(-2px);
 }
 
+/* Botón hamburger (oculto por defecto) */
+.hamburger {
+  display: none;
+  appearance: none;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+}
+
+.hamburger-box {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hamburger-line {
+  width: 20px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+}
+
+/* Menú móvil (oculto por defecto) */
+.mobile-menu {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0; /* se ajusta en JS al abrir */
+  z-index: 40;
+}
+
+.mobile-menu-panel {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-elevated);
+  border-radius: 16px;
+  margin-top: 0.5rem;
+  padding: 0.9rem;
+}
+
+.mobile-menu-list,
+.mobile-menu-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.mobile-menu-links a {
+  color: var(--text-muted);
+}
+
+.mobile-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 0.75rem 0;
+}
+
 .layout {
   width: min(760px, 92vw);
   background: var(--surface-strong);
@@ -539,6 +602,19 @@ button:hover {
     justify-content: space-between;
   }
 
+  /* Mostrar botón hamburger en tablet/móvil */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Ocultar acciones del header (se moverán al menú móvil) */
+  .site-header .header-content .theme-switcher,
+  .site-header .header-content .cta {
+    display: none;
+  }
+
   /* Ocultar footer también en tablets pequeñas */
   .site-footer {
     display: none;
@@ -548,6 +624,19 @@ button:hover {
 @media (max-width: 720px) {
   body {
     gap: 1rem;
+  }
+
+  /* Mostrar botón hamburger en móvil */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Ocultar acciones del header (se moverán al menú móvil) */
+  .site-header .header-content .theme-switcher,
+  .site-header .header-content .cta {
+    display: none;
   }
 
   .layout {
@@ -628,6 +717,17 @@ button:hover {
 @media (max-width: 1024px) {
   /* Ocultar footer en iPads vertical y similares */
   .site-footer {
+    display: none;
+  }
+
+  /* Mostrar hamburger y ocultar acciones del header hasta 1024px */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .site-header .header-content .theme-switcher,
+  .site-header .header-content .cta {
     display: none;
   }
 }

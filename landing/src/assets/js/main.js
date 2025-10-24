@@ -1,5 +1,27 @@
 const themeSelect = document.getElementById('theme-select');
 const body = document.body;
+const menuToggle = document.getElementById('menu-toggle');
+const mobileMenu = document.getElementById('mobile-menu');
+
+// Contenedor donde insertaremos elementos en el menú móvil
+const mobileMenuList = mobileMenu ? mobileMenu.querySelector('.mobile-menu-list') : null;
+
+// Media query para detectar móvil/tablet (hasta 1024px)
+const MQ_MOBILE = window.matchMedia('(max-width: 1024px)');
+
+// Guardar posiciones originales para restaurar en escritorio
+const originalPositions = new Map();
+
+function rememberPosition(node) {
+  if (!node || originalPositions.has(node)) return;
+  originalPositions.set(node, { parent: node.parentNode, next: node.nextSibling });
+}
+
+function restorePosition(node) {
+  const pos = originalPositions.get(node);
+  if (!pos) return;
+  pos.parent.insertBefore(node, pos.next);
+}
 const THEME_STORAGE_KEY = 'talia-theme-preference-v2';
 const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
 
@@ -199,6 +221,124 @@ function initialiseChat() {
   }
 }
 
+function openMobileMenu() {
+  if (!mobileMenu) return;
+  // Calcular la parte inferior del header para colocar el menú justo debajo
+  const header = document.querySelector('.site-header');
+  const rect = header ? header.getBoundingClientRect() : { bottom: 0 };
+  const top = rect.bottom + window.scrollY + 8; // 8px de margen
+  mobileMenu.style.top = `${top}px`;
+  mobileMenu.hidden = false;
+  menuToggle?.setAttribute('aria-expanded', 'true');
+
+  // Cierre con Escape
+  document.addEventListener('keydown', escHandler);
+  // Cierre al hacer clic fuera
+  document.addEventListener('click', outsideClickHandler, { capture: true });
+}
+
+function closeMobileMenu() {
+  if (!mobileMenu) return;
+  mobileMenu.hidden = true;
+  menuToggle?.setAttribute('aria-expanded', 'false');
+  document.removeEventListener('keydown', escHandler);
+  document.removeEventListener('click', outsideClickHandler, { capture: true });
+}
+
+function escHandler(e) {
+  if (e.key === 'Escape') closeMobileMenu();
+}
+
+function outsideClickHandler(e) {
+  const panel = mobileMenu?.querySelector('.mobile-menu-panel');
+  if (!panel) return;
+  // Ignorar clics dentro del panel o sobre el botón hamburguesa (o sus hijos)
+  const clickOnToggle = menuToggle && (e.target === menuToggle || menuToggle.contains(e.target));
+  if (panel.contains(e.target) || clickOnToggle) return;
+  closeMobileMenu();
+}
+
+function setupMobileMenu() {
+  if (!mobileMenuList) return;
+  // Limpiar la lista antes de reinsertar elementos
+  while (mobileMenuList.firstChild) {
+    mobileMenuList.removeChild(mobileMenuList.firstChild);
+  }
+  // Mover theme-switcher y CTA al menú móvil
+  const themeSwitcher = document.querySelector('.theme-switcher');
+  const cta = document.querySelector('.cta');
+
+  rememberPosition(themeSwitcher);
+  rememberPosition(cta);
+
+  // Limpiar anteriores si fuese necesario
+  // y agregar en orden dentro de la lista
+  if (themeSwitcher) {
+    const li = document.createElement('li');
+    li.role = 'none';
+    li.appendChild(themeSwitcher);
+    mobileMenuList.appendChild(li);
+  }
+  if (cta) {
+    const li = document.createElement('li');
+    li.role = 'none';
+    li.appendChild(cta);
+    mobileMenuList.appendChild(li);
+  }
+}
+
+function teardownMobileMenu() {
+  if (!mobileMenuList) return;
+  // Restaurar contenidos y limpiar lista
+  const themeSwitcher = document.querySelector('#theme-select')?.closest('.theme-switcher');
+  const cta = mobileMenuList.querySelector('.cta');
+  if (themeSwitcher) restorePosition(themeSwitcher);
+  if (cta) restorePosition(cta);
+  while (mobileMenuList.firstChild) {
+    mobileMenuList.removeChild(mobileMenuList.firstChild);
+  }
+}
+
+function handleViewportChange(e) {
+  if (e.matches) {
+    setupMobileMenu();
+  } else {
+    closeMobileMenu();
+    teardownMobileMenu();
+  }
+}
+
+function initialiseMobileNav() {
+  if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+      if (mobileMenu?.hidden) openMobileMenu();
+      else closeMobileMenu();
+    });
+  }
+  // Cerrar al seleccionar cualquier enlace o CTA dentro del menú
+  if (mobileMenu) {
+    mobileMenu.addEventListener('click', (e) => {
+      const actionable = e.target.closest('a, .cta');
+      if (actionable && !mobileMenu.hidden) {
+        closeMobileMenu();
+      }
+    });
+    // Cerrar al enviar cualquier formulario dentro del menú (p.ej., versión futura de la CTA)
+    mobileMenu.addEventListener('submit', () => {
+      if (!mobileMenu.hidden) closeMobileMenu();
+    });
+  }
+  // Cerrar al cambiar el selector de tema cuando está dentro del menú
+  if (themeSelect) {
+    themeSelect.addEventListener('change', () => {
+      if (mobileMenu && !mobileMenu.hidden) closeMobileMenu();
+    });
+  }
+  // Inicializar según el viewport actual y escuchar cambios
+  handleViewportChange(MQ_MOBILE);
+  MQ_MOBILE.addEventListener('change', handleViewportChange);
+}
+
 if (themeSelect) {
   themeSelect.addEventListener('change', (event) => {
     const selectedTheme = event.target.value;
@@ -208,6 +348,7 @@ if (themeSelect) {
 
 initialiseTheme();
 initialiseChat();
+initialiseMobileNav();
 
 if (currentYearEl) {
   currentYearEl.textContent = new Date().getFullYear();
