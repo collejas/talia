@@ -361,10 +361,7 @@ button:hover {
   margin: 0;
 }
 
-/* Ocultar solo el selector de tema en el header; la CTA queda visible */
-.site-header .header-content .theme-switcher {
-  display: none;
-}
+/* El selector de tema se muestra en desktop; se oculta solo en móvil via media queries */
 
 /* Centrar la CTA en el header */
 .site-header .cta {

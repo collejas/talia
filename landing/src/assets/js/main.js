@@ -1,5 +1,6 @@
 const themeSelect = document.getElementById('theme-select');
 const body = document.body;
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const menuToggle = document.getElementById('menu-toggle');
 const mobileMenu = document.getElementById('mobile-menu');
 
@@ -24,6 +25,11 @@ function restorePosition(node) {
 }
 const THEME_STORAGE_KEY = 'talia-theme-preference-v2';
 const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
+const THEME_META = {
+  'theme-aurora': { themeColor: '#060414' },
+  'theme-ice': { themeColor: '#fdf4ff' },
+  'theme-void': { themeColor: '#050505' },
+};
 
 const chatLog = document.getElementById('chat-log');
 const chatForm = document.getElementById('chat-form');
@@ -64,6 +70,11 @@ function applyTheme(theme) {
   body.classList.add(selected);
   if (themeSelect) {
     themeSelect.value = selected;
+  }
+  // Actualizar meta theme-color para status bars
+  const metaCfg = THEME_META[selected];
+  if (themeColorMeta && metaCfg?.themeColor) {
+    themeColorMeta.setAttribute('content', metaCfg.themeColor);
   }
   try {
     localStorage.setItem(THEME_STORAGE_KEY, selected);
@@ -264,17 +275,14 @@ function setupMobileMenu() {
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
   }
-  // Solo en móvil movemos elementos al menú
-  if (!MQ_MOBILE.matches) return;
-
   const cta = document.querySelector('.site-header .cta');
   const themeSwitcher = document.querySelector('.theme-switcher');
 
   rememberPosition(cta);
   rememberPosition(themeSwitcher);
 
-  // Insertar en orden: 1) CTA  2) Selector de tema
-  if (cta) {
+  // Insertar en orden: 1) CTA (solo móvil)  2) Selector de tema (siempre en menú)
+  if (MQ_MOBILE.matches && cta) {
     const liCta = document.createElement('li');
     liCta.role = 'none';
     liCta.appendChild(cta);
@@ -294,7 +302,7 @@ function teardownMobileMenu() {
   // Restaurar contenidos y limpiar lista
   const themeSwitcher = document.querySelector('#theme-select')?.closest('.theme-switcher');
   const cta = document.querySelector('.mobile-menu .cta') || document.querySelector('.site-header .cta');
-  if (themeSwitcher) restorePosition(themeSwitcher);
+  // El selector de tema permanece en el menú siempre; restauramos solo la CTA
   if (cta) restorePosition(cta);
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
