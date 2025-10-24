@@ -194,6 +194,7 @@ button:hover {
   justify-content: space-between;
   gap: 1.25rem;
   padding: 0.65rem 0;
+  position: relative;
 }
 
 .logo {
@@ -272,7 +273,9 @@ button:hover {
 
 /* Botón hamburger (oculto por defecto) */
 .hamburger {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   appearance: none;
   background: var(--surface);
   color: var(--text);
@@ -342,6 +345,23 @@ button:hover {
   width: 100%;
   text-align: left;
   margin: 0;
+}
+
+/* Ocultar solo el selector de tema en el header; la CTA queda visible */
+.site-header .header-content .theme-switcher {
+  display: none;
+}
+
+/* Centrar la CTA en el header */
+.site-header .cta {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Mantener el efecto hover sin perder el centrado */
+.site-header .cta:hover {
+  transform: translate(-50%, -2px);
 }
 
 .layout {
@@ -620,9 +640,8 @@ button:hover {
     justify-content: center;
   }
 
-  /* Ocultar acciones del header (se moverán al menú móvil) */
-  .site-header .header-content .theme-switcher,
-  .site-header .header-content .cta {
+  /* Ocultar selector de tema en header (se mueve al menú) */
+  .site-header .header-content .theme-switcher {
     display: none;
   }
 
@@ -644,9 +663,8 @@ button:hover {
     justify-content: center;
   }
 
-  /* Ocultar acciones del header (se moverán al menú móvil) */
-  .site-header .header-content .theme-switcher,
-  .site-header .header-content .cta {
+  /* Ocultar selector de tema en header (se mueve al menú móvil) */
+  .site-header .header-content .theme-switcher {
     display: none;
   }
 
@@ -737,8 +755,7 @@ button:hover {
     align-items: center;
     justify-content: center;
   }
-  .site-header .header-content .theme-switcher,
-  .site-header .header-content .cta {
+  .site-header .header-content .theme-switcher {
     display: none;
   }
 }

@@ -6,8 +6,8 @@ const mobileMenu = document.getElementById('mobile-menu');
 // Contenedor donde insertaremos elementos en el menú móvil
 const mobileMenuList = mobileMenu ? mobileMenu.querySelector('.mobile-menu-list') : null;
 
-// Media query para detectar móvil/tablet (hasta 1024px)
-const MQ_MOBILE = window.matchMedia('(max-width: 1024px)');
+// Menú siempre activo (también en desktop)
+const MQ_MOBILE = null;
 
 // Guardar posiciones originales para restaurar en escritorio
 const originalPositions = new Map();
@@ -264,21 +264,13 @@ function setupMobileMenu() {
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
   }
-  // Mover CTA y theme-switcher al menú móvil (CTA primero)
+  // Mover solo theme-switcher al menú; la CTA se queda en el header
   const themeSwitcher = document.querySelector('.theme-switcher');
-  const cta = document.querySelector('.cta');
 
   rememberPosition(themeSwitcher);
-  rememberPosition(cta);
 
   // Limpiar anteriores si fuese necesario
   // y agregar en orden dentro de la lista
-  if (cta) {
-    const liCta = document.createElement('li');
-    liCta.role = 'none';
-    liCta.appendChild(cta);
-    mobileMenuList.appendChild(liCta);
-  }
   if (themeSwitcher) {
     const liTheme = document.createElement('li');
     liTheme.role = 'none';
@@ -291,9 +283,7 @@ function teardownMobileMenu() {
   if (!mobileMenuList) return;
   // Restaurar contenidos y limpiar lista
   const themeSwitcher = document.querySelector('#theme-select')?.closest('.theme-switcher');
-  const cta = mobileMenuList.querySelector('.cta');
   if (themeSwitcher) restorePosition(themeSwitcher);
-  if (cta) restorePosition(cta);
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
   }
@@ -309,6 +299,8 @@ function handleViewportChange(e) {
 }
 
 function initialiseMobileNav() {
+  // Siempre mover acciones al menú desplegable
+  setupMobileMenu();
   if (menuToggle) {
     menuToggle.addEventListener('click', () => {
       if (mobileMenu?.hidden) openMobileMenu();
@@ -334,9 +326,7 @@ function initialiseMobileNav() {
       if (mobileMenu && !mobileMenu.hidden) closeMobileMenu();
     });
   }
-  // Inicializar según el viewport actual y escuchar cambios
-  handleViewportChange(MQ_MOBILE);
-  MQ_MOBILE.addEventListener('change', handleViewportChange);
+  // No dependemos de breakpoints: menú disponible en todas las resoluciones
 }
 
 if (themeSelect) {
