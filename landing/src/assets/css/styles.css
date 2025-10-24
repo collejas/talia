@@ -333,6 +333,17 @@ button:hover {
   margin: 0.75rem 0;
 }
 
+/* Alineación consistente del selector de tema dentro del menú móvil */
+.mobile-menu .theme-switcher {
+  width: 100%;
+  justify-content: flex-start;
+}
+.mobile-menu .theme-switcher select {
+  width: 100%;
+  text-align: left;
+  margin: 0;
+}
+
 .layout {
   width: min(760px, 92vw);
   background: var(--surface-strong);

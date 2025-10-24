@@ -264,7 +264,7 @@ function setupMobileMenu() {
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
   }
-  // Mover theme-switcher y CTA al menú móvil
+  // Mover CTA y theme-switcher al menú móvil (CTA primero)
   const themeSwitcher = document.querySelector('.theme-switcher');
   const cta = document.querySelector('.cta');
 
@@ -273,17 +273,17 @@ function setupMobileMenu() {
 
   // Limpiar anteriores si fuese necesario
   // y agregar en orden dentro de la lista
-  if (themeSwitcher) {
-    const li = document.createElement('li');
-    li.role = 'none';
-    li.appendChild(themeSwitcher);
-    mobileMenuList.appendChild(li);
-  }
   if (cta) {
-    const li = document.createElement('li');
-    li.role = 'none';
-    li.appendChild(cta);
-    mobileMenuList.appendChild(li);
+    const liCta = document.createElement('li');
+    liCta.role = 'none';
+    liCta.appendChild(cta);
+    mobileMenuList.appendChild(liCta);
+  }
+  if (themeSwitcher) {
+    const liTheme = document.createElement('li');
+    liTheme.role = 'none';
+    liTheme.appendChild(themeSwitcher);
+    mobileMenuList.appendChild(liTheme);
   }
 }
 
