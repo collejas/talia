@@ -38,7 +38,7 @@ const currentYearEl = document.getElementById('current-year');
 
 let typingBubble = null;
 
-const FALLBACK_MESSAGE = 'TalIA tuvo un inconveniente momentáneo. Intenta nuevamente en unos segundos.';
+const FALLBACK_MESSAGE = 'Tu mensaje llegó, pero tuve un problema momentáneo al responder. Intentemos de nuevo en unos segundos o envíame otra línea.';
 
 function getScrollContainer() {
   return document.scrollingElement || document.documentElement;
@@ -175,33 +175,44 @@ function loadSessionId() {
 const sessionId = loadSessionId();
 
 async function sendToAssistant(message) {
-  const payload = {
-    session_id: sessionId,
-    author: 'user',
-    content: message,
-    locale: navigator.language || 'es-MX',
-  };
+  const MAX_RETRIES = 2;
+  const RETRY_DELAYS_MS = [1000, 2000]; // backoff simple
 
-  try {
+  async function doFetch() {
+    const payload = {
+      session_id: sessionId,
+      author: 'user',
+      content: message,
+      locale: navigator.language || 'es-MX',
+    };
+
     const response = await fetch(`${API_BASE_URL}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ''}`);
     }
-
     const data = await response.json();
     if (!data?.reply) {
       throw new Error('Respuesta vacía del asistente');
     }
-
     return data.reply;
-  } catch (error) {
-    console.error('Error al consultar al asistente:', error);
-    return getFallbackResponse();
+  }
+
+  // Intentos con reintentos y backoff
+  let attempt = 0;
+  while (true) {
+    try {
+      return await doFetch();
+    } catch (err) {
+      if (attempt >= MAX_RETRIES) throw err;
+      const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)] || 1500;
+      await new Promise((r) => setTimeout(r, delay));
+      attempt += 1;
+    }
   }
 }
 
@@ -212,18 +223,10 @@ async function handleSubmit(event) {
   const userMessage = chatInput.value.trim();
   chatInput.value = '';
   appendMessage(userMessage, 'user');
-
-  renderTypingIndicator();
-  try {
-    const assistantMessage = await sendToAssistant(userMessage);
-    removeTypingIndicator();
-    appendMessage(assistantMessage, 'assistant');
-  } catch (error) {
-    removeTypingIndicator();
-    appendMessage(getFallbackResponse(), 'assistant');
-    console.error('Error obteniendo respuesta de TalIA:', error);
-  }
   chatInput.focus();
+
+  // En lugar de enviar inmediatamente, agregamos al buffer por tiempo.
+  aggregator.push(userMessage);
 }
 
 function initialiseChat() {
@@ -391,3 +394,53 @@ initialiseMobileNav();
 if (currentYearEl) {
   currentYearEl.textContent = new Date().getFullYear();
 }
+
+// --- Agregación por tiempo (buffer de mensajes) ---
+
+function createAggregator({ idleMs = 3000, maxWaitMs = 15000, delimiter = '\n', onFlush }) {
+  let buffer = '';
+  let idleTimer = null;
+  let maxTimer = null;
+
+  const clearTimers = () => {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    if (maxTimer) { clearTimeout(maxTimer); maxTimer = null; }
+  };
+
+  const flush = async () => {
+    if (!buffer) return;
+    const text = buffer;
+    buffer = '';
+    clearTimers();
+    try {
+      renderTypingIndicator();
+      const reply = await sendToAssistant(text);
+      removeTypingIndicator();
+      appendMessage(reply, 'assistant');
+    } catch (error) {
+      removeTypingIndicator();
+      appendMessage(getFallbackResponse(), 'assistant');
+      console.error('Error obteniendo respuesta de TalIA:', error);
+    }
+  };
+
+  const schedule = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(flush, idleMs);
+    if (!maxTimer) maxTimer = setTimeout(flush, maxWaitMs);
+  };
+
+  const push = (chunk) => {
+    buffer += (buffer ? delimiter : '') + chunk;
+    schedule();
+  };
+
+  return { push, flush };
+}
+
+// Instancia global del agregador para el chat del landing
+const aggregator = createAggregator({
+  idleMs: 3000,      // envía tras 3s sin nuevos trozos
+  maxWaitMs: 15000,  // o a los 15s como máximo
+  delimiter: '\n',
+});

@@ -64,8 +64,6 @@ pg_restore --clean --if-exists --no-owner --no-acl \
 sudo nano /etc/systemd/system/talia-api.service
 
 sudo systemctl stop talia-api.service
-
-
 sudo systemctl enable talia-api.service
 sudo systemctl restart talia-api.service
 sudo systemctl start talia-api.service
