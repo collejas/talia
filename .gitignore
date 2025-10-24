@@ -40,3 +40,5 @@ pip-wheel-metadata/
 # Caché local de pre-commit
 .pre-commit-cache/
 **/.pre-commit-cache/
+
+*.zip

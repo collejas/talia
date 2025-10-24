@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TalIA • Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .muted{color:var(--muted)}
+    .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+    .card{padding:16px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#0f1730}
+    .kpi-value{font-size:28px;font-weight:800}
+    .nav-local{display:flex;gap:10px}
+  </style>
+  <script src="./assets/js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="panel.html">
+        <span class="logo">AI</span>
+        <span class="brand-text">TalIA Panel</span>
+      </a>
+      <nav class="menu">
+        <a href="panel.html" data-nav="dashboard" class="btn">Dashboard</a>
+        <a href="inbox.html" data-nav="inbox" class="btn btn-outline">Inbox</a>
+        <a href="configuracion.html" data-nav="config" class="btn btn-outline">Configuración</a>
+        <span class="muted" id="user-email"></span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding:24px 0 40px;">
+    <h1 style="margin:0 0 8px;">Dashboard</h1>
+    <p class="muted" style="margin:0 0 18px;">Indicadores operativos.</p>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <select id="dashboard-range" class="btn btn-outline" style="padding:8px 10px;">
+        <option value="hoy">Hoy</option>
+        <option value="ayer">Ayer</option>
+        <option value="7d" selected>Últimos 7 días</option>
+        <option value="30d">Últimos 30 días</option>
+      </select>
+    </div>
+
+    <section class="kpi-grid">
+      <div class="card">
+        <div class="muted">Conversaciones hoy</div>
+        <div id="kpi-conv" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Contactos nuevos</div>
+        <div id="kpi-contacts" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Canales activos</div>
+        <div id="kpi-channels" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Diálogos generados</div>
+        <div id="kpi-dialogos-gen" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Sin réplica</div>
+        <div id="kpi-dialogos-sr" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Tiempo respuesta</div>
+        <div class="kpi-value"><span id="kpi-lapso-medio">—</span> <small class="muted">(máx <span id="kpi-lapso-max">—</span>)</small></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { setActiveNav } from './assets/js/common.js';
+    setActiveNav('dashboard');
+  </script>
+  <script type="module" src="./assets/js/common.js"></script>
+  <script type="module" src="./assets/js/panel.js"></script>
+</body>
+</html>

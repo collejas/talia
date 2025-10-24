@@ -1,5 +1,6 @@
 """Configuración central basada en variables de entorno."""
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,13 @@ class Settings(BaseSettings):
     twilio_auth_token: str | None = None
     supabase_url: str | None = None
     supabase_service_role: str | None = None
+    # Acepta varias variantes comunes del anon key para robustez
+    supabase_anon: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TALIA_SUPABASE_ANON", "SUPABASE_ANON_KEY", "SUPABASE_ANON"),
+    )
+    supabase_jwt_secret: str | None = None
+    supabase_legacy_jwt_secret: str | None = None
     geolocation_api_url: str | None = None
     geolocation_api_token: str | None = None
     log_file_path: str = "/home/devuser/talia/logs/api.log"

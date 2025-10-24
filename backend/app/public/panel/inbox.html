@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TalIA • Inbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .muted{color:var(--muted)}
+    .grid-2{display:grid;grid-template-columns:320px 1fr;gap:16px}
+    .card{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#0f1730}
+    .conv-list{list-style:none;margin:0;padding:0;max-height:70vh;overflow:auto}
+    .conv-item{margin:0 0 8px}
+    .conv-btn{width:100%;text-align:left;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:#0b132a;color:#fff;padding:10px}
+    .conv-title{font-weight:700}
+    .messages{min-height:50vh;max-height:70vh;overflow:auto;background:#0b132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px}
+    .msg-row{display:flex;margin:8px 0}
+    .msg-row.in{justify-content:flex-start}
+    .msg-row.out{justify-content:flex-end}
+    .bubble{max-width:70%;padding:10px 12px;border-radius:14px;background:#141c33;border:1px solid rgba(255,255,255,.06)}
+    .msg-row.out .bubble{background:#1a2a4f}
+    .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:#ff5d5d;color:#0b1020;font-size:11px;font-weight:800;margin-left:6px}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;font-size:11px;border:1px solid rgba(255,255,255,.14);background:#0b132a;color:#fff;margin-right:6px}
+    .chip.state-abierta{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)}
+    .chip.state-pendiente{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.35)}
+    .chip.state-cerrada{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.35)}
+    .chip.canal-webchat{background:rgba(14,165,233,.12);border-color:rgba(14,165,233,.35)}
+    .chip.canal-whatsapp{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.35)}
+    .chip.canal-voz{background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.35)}
+    .chip.canal-instagram{background:rgba(236,72,153,.12);border-color:rgba(236,72,153,.35)}
+  </style>
+  <script src="./assets/js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="panel.html">
+        <span class="logo">AI</span>
+        <span class="brand-text">TalIA Panel</span>
+      </a>
+      <nav class="menu">
+        <a href="panel.html" data-nav="dashboard" class="btn btn-outline">Dashboard</a>
+        <a href="inbox.html" data-nav="inbox" class="btn">Inbox</a>
+        <a href="configuracion.html" data-nav="config" class="btn btn-outline">Configuración</a>
+        <span class="muted" id="user-email"></span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding:24px 0 40px;">
+    <h1 style="margin:0 0 8px;">Inbox</h1>
+    <p class="muted" style="margin:0 0 18px;">Conversaciones en curso.</p>
+
+    <div class="card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <label>
+        <span class="muted" style="font-size:12px;">Canal</span><br />
+        <select id="filter-canal" class="btn btn-outline" style="padding:6px 10px;">
+          <option value="">Todos</option>
+          <option value="webchat">Webchat</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="voz">Voz</option>
+          <option value="instagram">Instagram</option>
+        </select>
+      </label>
+      <label>
+        <span class="muted" style="font-size:12px;">Estado</span><br />
+        <select id="filter-estado" class="btn btn-outline" style="padding:6px 10px;">
+          <option value="">Todos</option>
+          <option value="abierta">Abierta</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="cerrada">Cerrada</option>
+        </select>
+      </label>
+      <button id="btn-refrescar" class="btn">Actualizar</button>
+    </div>
+
+    <div class="grid-2">
+      <section class="card">
+        <ul id="conv-list" class="conv-list" aria-label="Conversaciones"></ul>
+      </section>
+      <section class="card">
+        <div id="conv-details" style="margin:0 0 10px; display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div id="cd-name" style="font-weight:800; font-size:16px;">—</div>
+              <div id="cd-meta" class="muted" style="font-size:12px;">—</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button id="btn-cerrar" class="btn btn-outline" title="Cerrar conversación">Cerrar</button>
+              <select id="sel-estado" class="btn btn-outline" title="Cambiar estado" style="padding:6px 10px;">
+                <option value="abierta">Abierta</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="cerrada">Cerrada</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="msg-list" class="messages" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { setActiveNav } from './assets/js/common.js';
+    setActiveNav('inbox');
+  </script>
+  <script type="module" src="./assets/js/common.js"></script>
+  <script type="module" src="./assets/js/inbox.js"></script>
+</body>
+</html>

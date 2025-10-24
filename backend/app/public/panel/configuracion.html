@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TalIA • Configuración</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .muted{color:var(--muted)}
+    .tabs{display:flex;gap:8px;margin-bottom:12px}
+    .tabs .btn{padding:8px 12px}
+    pre{margin:0;background:#0b132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;overflow:auto}
+  </style>
+  <script src="./assets/js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="panel.html">
+        <span class="logo">AI</span>
+        <span class="brand-text">TalIA Panel</span>
+      </a>
+      <nav class="menu">
+        <a href="panel.html" data-nav="dashboard" class="btn btn-outline">Dashboard</a>
+        <a href="inbox.html" data-nav="inbox" class="btn btn-outline">Inbox</a>
+        <a href="configuracion.html" data-nav="config" class="btn">Configuración</a>
+        <span class="muted" id="user-email"></span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding:24px 0 40px;">
+    <h1 style="margin:0 0 8px;">Configuración</h1>
+    <p class="muted" style="margin:0 0 18px;">Administra agentes, canales y roles.</p>
+
+    <div class="tabs">
+      <button class="btn btn-outline" data-tab-btn="agentes">Agentes</button>
+      <button class="btn btn-outline" data-tab-btn="canales">Canales</button>
+      <button class="btn btn-outline" data-tab-btn="roles">Roles/Permisos</button>
+    </div>
+
+    <section data-tab="agentes" style="display:none">
+      <h3>Agentes</h3>
+      <pre id="agentes-json">cargando...</pre>
+    </section>
+
+    <section data-tab="canales" style="display:none">
+      <h3>Canales</h3>
+      <pre id="canales-json">cargando...</pre>
+    </section>
+
+    <section data-tab="roles" style="display:none">
+      <h3>Roles/Permisos</h3>
+      <pre id="roles-json">cargando...</pre>
+    </section>
+  </main>
+
+  <script type="module">
+    import { setActiveNav } from './assets/js/common.js';
+    setActiveNav('config');
+  </script>
+  <script type="module" src="./assets/js/common.js"></script>
+  <script type="module" src="./assets/js/configuracion.js"></script>
+</body>
+</html>

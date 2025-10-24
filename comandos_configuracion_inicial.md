@@ -74,3 +74,26 @@ sudo systemctl status talia-api.service
 
 
 
+- Dashboard (panel.html)
+- Inbox (inbox.html)
+- Configuración (configuracion.html)
+
+
+export SUPABASE_URL="https://qnimyamtczbbwmlrlejc.supabase.co"
+export SERVICE_ROLE="<<eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuaW15YW10Y3piYndtbHJsZWpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIyODg1NSwiZXhwIjoyMDc2ODA0ODU1fQ.MNUm-C1W7-pPTD6dR6_HlBq_J9nTLf2WNXy8-Z0t4KM>>"
+Nombre: J
+EMAIL: administracion@gmail.com
+contrasena: DE_se479156376421
+
+
+sudo journalctl -u talia-api.service -n 50 --no-pager
+
+
+
+
+TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:xxxxxxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+TALIA_SUPABASE_SERVICE_ROLE=eyJxxxxxxxxx
+SUPABASE_ANON_KEY=eyJhbGxxxxxx
+TALIA_SUPABASE_LEGACY_JWT_SECRET=z9bDxxxxx
+TALIA_SUPABASE_ACCES_TOKEN=sbp_a3xxxx

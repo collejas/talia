@@ -1,0 +1,51 @@
+// Utilidades mínimas comunes para el panel
+
+export function $(id) { return document.getElementById(id); }
+
+export async function fetchJSON(url, options) {
+  const opts = { ...(options || {}) };
+  const baseHeaders = { 'cache-control': 'no-cache' };
+  const extraHeaders = (options && options.headers) || {};
+  opts.headers = { ...baseHeaders, ...extraHeaders };
+  const r = await fetch(url, opts);
+  const text = await r.text();
+  let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+  return { ok: r.ok, status: r.status, json };
+}
+
+let _sb = null;
+export function createSupabase() {
+  if (_sb) return _sb;
+  if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+    _sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  }
+  return _sb;
+}
+
+export async function getSession() {
+  const sb = createSupabase();
+  if (!sb) return null;
+  const { data } = await sb.auth.getSession();
+  return data?.session || null;
+}
+
+export async function fetchJSONWithAuth(url, options) {
+  const session = await getSession();
+  const token = session?.access_token || null;
+  if (!token) return { ok: false, status: 401, json: { error: 'auth_required' } };
+  const headers = { ...(options?.headers || {}), Authorization: `Bearer ${token}` };
+  return fetchJSON(url, { ...(options || {}), headers });
+}
+
+export async function ensureSession({ redirectTo = '/panel/auth/login.html', emailElId = 'user-email' } = {}) {
+  const session = await getSession();
+  if (!session) { window.location.href = redirectTo; return null; }
+  const el = $(emailElId); if (el) el.textContent = session.user?.email || 'usuario';
+  return session;
+}
+
+export function setActiveNav(section) {
+  const cur = document.querySelector(`[data-nav='${section}']`);
+  if (cur) cur.classList.add('is-active');
+}
+

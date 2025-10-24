@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TalIA • Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <style>
+    .card{max-width:420px;margin:80px auto 0;padding:18px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#0f1730}
+    .row{display:flex;flex-direction:column;gap:10px}
+    .input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0b132a;color:#fff}
+    .muted{color:var(--muted)}
+  </style>
+  <script src="../assets/js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="../panel.html">
+        <span class="logo">AI</span>
+        <span class="brand-text">TalIA Panel</span>
+      </a>
+      <nav class="menu">
+        <a href="../panel.html" class="btn btn-outline">Dashboard</a>
+        <a href="../inbox.html" class="btn btn-outline">Inbox</a>
+        <a href="../configuracion.html" class="btn btn-outline">Configuración</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container" style="padding:24px 0 40px;">
+    <div class="card">
+      <h2 style="margin:6px 0 12px">Accede a tu panel</h2>
+      <div class="row">
+        <input id="email" class="input" type="email" placeholder="Email" />
+        <input id="password" class="input" type="password" placeholder="Contraseña" />
+        <button id="login" class="btn">Ingresar</button>
+        <div id="msg" class="muted"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Fallback ESM: carga cliente directo por import si CDN global falla -->
+  <script type="module">
+    const msgEl = document.getElementById('msg');
+    try {
+      const url = window.SUPABASE_URL || '';
+      const anon = window.SUPABASE_ANON_KEY || '';
+      if (!url || !anon) {
+        if (msgEl) msgEl.textContent = 'Falta configuración de Supabase (URL/ANON)';
+      } else {
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+        const sb = createClient(url, anon);
+        const onLogin = async () => {
+          const email = document.getElementById('email').value.trim();
+          const password = document.getElementById('password').value;
+          if (!email || !password) { if (msgEl) msgEl.textContent = 'Completa usuario y contraseña'; return; }
+          if (msgEl) msgEl.textContent = 'Ingresando...';
+          try {
+            const { error } = await sb.auth.signInWithPassword({ email, password });
+            if (error) { if (msgEl) msgEl.textContent = error.message || 'Error de autenticación'; return; }
+            if (msgEl) msgEl.textContent = 'Listo, redirigiendo...';
+            window.location.href = '../panel.html';
+          } catch (e) {
+            console.error('[Panel][ESM] login error', e);
+            if (msgEl) msgEl.textContent = 'Error de red al iniciar sesión';
+          }
+        };
+        const btn = document.getElementById('login');
+        if (btn) btn.addEventListener('click', onLogin);
+        document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') onLogin(); });
+      }
+    } catch (e) {
+      // En algunos entornos ESM puede estar bloqueado; el script inline no-módulo actúa como backup
+      console.warn('[Panel] ESM fallback no disponible', e);
+    }
+  </script>
+
+  <script>
+    (function(){
+      const msgEl = document.getElementById('msg');
+      try {
+        console.debug('[Panel] login init', {
+          hasSupabase: !!window.supabase,
+          url: window.SUPABASE_URL,
+          hasAnon: !!window.SUPABASE_ANON_KEY,
+        });
+
+        if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+          if (msgEl) msgEl.textContent = 'Configura SUPABASE_URL y SUPABASE_ANON_KEY';
+          return;
+        }
+
+        const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+        const onLogin = async () => {
+          const email = document.getElementById('email').value.trim();
+          const password = document.getElementById('password').value;
+          if (!email || !password) { if (msgEl) msgEl.textContent = 'Completa usuario y contraseña'; return; }
+          if (msgEl) msgEl.textContent = 'Ingresando...';
+          try {
+            const { data, error } = await sb.auth.signInWithPassword({ email, password });
+            if (error) { if (msgEl) msgEl.textContent = error.message || 'Error de autenticación'; return; }
+            if (msgEl) msgEl.textContent = 'Listo, redirigiendo...';
+            window.location.href = '../panel.html';
+          } catch (e) {
+            console.error('[Panel] login error', e);
+            if (msgEl) msgEl.textContent = 'Error de red al iniciar sesión';
+          }
+        };
+
+        const btn = document.getElementById('login');
+        if (btn) btn.addEventListener('click', onLogin);
+        document.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') onLogin();
+        });
+      } catch (e) {
+        console.error('[Panel] init error', e);
+        if (msgEl) msgEl.textContent = 'Error cargando login';
+      }
+    })();
+  </script>
+</body>
+</html>

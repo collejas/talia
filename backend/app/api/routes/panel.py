@@ -1,0 +1,444 @@
+"""Rutas del panel: permisos, KPIs, inbox y mensajes.
+
+Nota: Para resultados sujetos a RLS, se reenvía el JWT del usuario en la
+cabecera Authorization hacia Supabase REST. Para resolver permisos/roles, se
+usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import httpx
+from fastapi import APIRouter, Header, HTTPException, Query, Response
+
+from app.core.config import settings
+from app.core.logging import get_logger
+
+router = APIRouter(prefix="", tags=["panel"])
+
+logger = get_logger(__name__)
+
+
+def _supabase_base_url() -> str:
+    if not settings.supabase_url:
+        raise HTTPException(status_code=500, detail="Supabase no está configurado")
+    return settings.supabase_url.rstrip("/")
+
+
+async def _sb_get(
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+    token: str | None = None,
+) -> httpx.Response:
+    base_url = _supabase_base_url()
+    url = f"{base_url}{path}"
+    headers: dict[str, str] = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        # Añade apikey pública si está disponible para pasar por el gateway de Supabase
+        anon = getattr(settings, "supabase_anon", None)
+        if anon:
+            headers["apikey"] = anon  # type: ignore[assignment]
+    elif settings.supabase_service_role:
+        headers["apikey"] = settings.supabase_service_role
+        headers["Authorization"] = f"Bearer {settings.supabase_service_role}"
+    else:
+        raise HTTPException(status_code=500, detail="Falta SUPABASE_SERVICE_ROLE")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.get(url, headers=headers, params=params)
+    except httpx.RequestError:
+        logger.exception("Error al conectar a Supabase")
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+
+
+def _parse_bearer(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    if authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip() or None
+    return None
+
+
+def _jwt_sub(jwt_token: str | None) -> str | None:
+    """Extrae el `sub` del JWT (sin verificar firma; TODO: verificar HS256)."""
+    if not jwt_token:
+        return None
+
+
+def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
+    """Verifica HS256 con el secret de Supabase (si está configurado) y retorna `sub`.
+
+    Si no hay secret disponible, cae en la extracción sin verificación.
+    """
+    secret: str | None = (
+        getattr(settings, "supabase_jwt_secret", None)  # type: ignore[attr-defined]
+        or getattr(settings, "supabase_legacy_jwt_secret", None)  # type: ignore[attr-defined]
+    )
+    if not jwt_token:
+        return None
+    if not secret:
+        return _jwt_sub(jwt_token)
+    try:
+        import base64
+        import hashlib
+        import hmac
+        import json
+
+        header_b64, payload_b64, signature_b64 = jwt_token.split(".")
+
+        def b64url_decode(s: str) -> bytes:
+            rem = len(s) % 4
+            if rem:
+                s += "=" * (4 - rem)
+            return base64.urlsafe_b64decode(s.encode())
+
+        signing_input = f"{header_b64}.{payload_b64}".encode()
+        expected = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+        provided = b64url_decode(signature_b64)
+        if not hmac.compare_digest(expected, provided):
+            return None
+
+        payload = json.loads(b64url_decode(payload_b64).decode("utf-8"))
+        sub = payload.get("sub")
+        return str(sub) if sub else None
+    except Exception:  # pragma: no cover - best effort
+        return None
+    try:
+        parts = jwt_token.split(".")
+        if len(parts) != 3:
+            return None
+        import base64
+        import json
+
+        def b64url_decode(s: str) -> bytes:
+            rem = len(s) % 4
+            if rem:
+                s += "=" * (4 - rem)
+            return base64.urlsafe_b64decode(s.encode())
+
+        payload = json.loads(b64url_decode(parts[1]).decode("utf-8"))
+        sub = payload.get("sub")
+        return str(sub) if sub else None
+    except Exception:  # pragma: no cover - best effort
+        return None
+
+
+@router.get("/auth/permisos")
+async def get_permissions(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    user_id = _jwt_verify_and_sub(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    # Consulta roles del usuario via service_role
+    params = {
+        "select": "rol:roles(codigo,nombre)",
+        "usuario_id": f"eq.{user_id}",
+    }
+    resp = await _sb_get("/rest/v1/usuarios_roles", params=params, token=None)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando permisos")
+    data = resp.json() or []
+    roles = [row.get("rol", {}).get("codigo") for row in data if isinstance(row, dict)]
+    return {"ok": True, "roles": [r for r in roles if r]}
+
+
+def _range_to_since(rango: str) -> datetime:
+    now = datetime.now(timezone.utc)
+    if rango == "hoy":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if rango == "ayer":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        return start
+    if rango == "30d":
+        return now - timedelta(days=30)
+    # default 7d
+    return now - timedelta(days=7)
+
+
+@router.get("/kpis")
+async def get_kpis(
+    rango: str = Query(default="7d", pattern="^(hoy|ayer|7d|30d)$"),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    since = _range_to_since(rango).isoformat()
+
+    # Conversaciones en rango
+    conv_params = {
+        "select": "id",
+        "ultimo_mensaje_en": f"gte.{since}",
+    }
+    conv_resp = await _sb_get("/rest/v1/conversaciones", params=conv_params, token=token)
+    conv_items = conv_resp.json() if conv_resp.status_code < 400 else []
+
+    # Contactos nuevos en rango
+    ctc_params = {"select": "id", "creado_en": f"gte.{since}"}
+    ctc_resp = await _sb_get("/rest/v1/contactos", params=ctc_params, token=token)
+    ctc_items = ctc_resp.json() if ctc_resp.status_code < 400 else []
+
+    # Canales activos (dedupe cliente)
+    ch_params = {
+        "select": "canal,ultimo_mensaje_en",
+        "ultimo_mensaje_en": f"gte.{since}",
+    }
+    ch_resp = await _sb_get("/rest/v1/conversaciones", params=ch_params, token=token)
+    canales = set()
+    if ch_resp.status_code < 400:
+        for row in ch_resp.json() or []:
+            canal = row.get("canal")
+            if canal:
+                canales.add(canal)
+
+    # Métricas placeholder (se puede refinar con RPC)
+    gen_params = {
+        "select": "id",
+        "direccion": "eq.saliente",
+        "creado_en": f"gte.{since}",
+    }
+    gen_resp = await _sb_get("/rest/v1/mensajes", params=gen_params, token=token)
+    dialogos_generados = len(gen_resp.json() or []) if gen_resp.status_code < 400 else 0
+
+    return {
+        "ok": True,
+        "conversaciones_hoy": len(conv_items or []),
+        "contactos_nuevos": len(ctc_items or []),
+        "canales_activos": len(canales),
+        "dialogos_generados": dialogos_generados,
+        "dialogos_sin_replica": 0,
+        "lapso_medio_replica": None,
+        "lapso_mayor_replica": None,
+    }
+
+
+async def _require_admin(authorization: str | None) -> str:
+    token = _parse_bearer(authorization)
+    user_id = _jwt_verify_and_sub(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="auth_required")
+    # Consulta roles del usuario via service_role
+    params = {
+        "select": "rol:roles(codigo)",
+        "usuario_id": f"eq.{user_id}",
+    }
+    resp = await _sb_get("/rest/v1/usuarios_roles", params=params)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error validando roles")
+    data = resp.json() or []
+    is_admin = any((row.get("rol") or {}).get("codigo") == "admin" for row in data)
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="forbidden")
+    return user_id
+
+
+@router.get("/config/agentes")
+async def cfg_agentes(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    await _require_admin(authorization)
+    params = {
+        "select": "id,nombre,canal,modelo,temperatura,max_output_tokens,activo,creado_en",
+        "order": "creado_en.desc",
+        "limit": "200",
+    }
+    resp = await _sb_get("/rest/v1/agentes", params=params)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando agentes")
+    return {"ok": True, "items": resp.json() or []}
+
+
+@router.get("/config/canales")
+async def cfg_canales(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    await _require_admin(authorization)
+    # Recuento por canal a partir de conversaciones recientes (últimos 30 días)
+    since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    params = {"select": "canal", "ultimo_mensaje_en": f"gte.{since}", "limit": "10000"}
+    resp = await _sb_get("/rest/v1/conversaciones", params=params)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando canales")
+    counts: dict[str, int] = {}
+    for row in resp.json() or []:
+        c = row.get("canal")
+        if c:
+            counts[c] = counts.get(c, 0) + 1
+    activos = sorted(counts.keys())
+    return {"ok": True, "activos": activos, "conteo": counts}
+
+
+@router.get("/inbox")
+async def get_inbox(
+    limit: int = Query(default=25, ge=1, le=200),
+    canal: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    # Consultamos desde conversaciones para poder incluir el último mensaje y datos del contacto.
+    select = (
+        "id,canal,estado,prioridad,iniciada_en,ultimo_mensaje_en,no_leidos,"
+        "contacto:contactos(nombre_completo,telefono_e164,correo),"
+        "ultimo_mensaje:mensajes!conversaciones_ultimo_mensaje_fk(texto,direccion,creado_en)"
+    )
+    params: dict[str, str] = {
+        "select": select,
+        "order": "ultimo_mensaje_en.desc",
+        "limit": str(limit),
+    }
+    if canal:
+        params["canal"] = f"eq.{canal}"
+    # Si no se especifica estado, mostramos abiertas o pendientes (como la vista en_curso)
+    if estado:
+        params["estado"] = f"eq.{estado}"
+    else:
+        params["estado"] = "in.(abierta,pendiente)"
+
+    resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando inbox")
+    raw = resp.json() or []
+    items: list[dict[str, Any]] = []
+    for row in raw:
+        contacto = row.get("contacto") or {}
+        ultimo = row.get("ultimo_mensaje") or {}
+        items.append(
+            {
+                "id": row.get("id"),
+                "canal": row.get("canal"),
+                "estado": row.get("estado"),
+                "prioridad": row.get("prioridad"),
+                "iniciada_en": row.get("iniciada_en"),
+                "ultimo_mensaje_en": row.get("ultimo_mensaje_en"),
+                "no_leidos": row.get("no_leidos"),
+                "contacto_nombre": contacto.get("nombre_completo"),
+                "contacto_correo": contacto.get("correo"),
+                "contacto_telefono": contacto.get("telefono_e164"),
+                "preview": (ultimo.get("texto") or "")[:160],
+                "preview_direccion": ultimo.get("direccion"),
+                "preview_ts": ultimo.get("creado_en"),
+            }
+        )
+    return {"ok": True, "items": items}
+
+
+@router.post("/conversaciones/{conversacion_id}/marcar_leida")
+async def mark_conversation_read(
+    conversacion_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    # Intenta poner no_leidos = 0 (RLS aplica)
+    base = _supabase_base_url()
+    url = f"{base}/rest/v1/conversaciones?id=eq.{conversacion_id}"
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    anon = getattr(settings, "supabase_anon", None)
+    if anon:
+        headers["apikey"] = anon
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.patch(url, headers=headers, json={"no_leidos": 0})
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail="No fue posible marcar como leída")
+    return {"ok": True}
+
+
+def _auth_headers_for_user(token: str) -> dict[str, str]:
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    anon = getattr(settings, "supabase_anon", None)
+    if anon:
+        headers["apikey"] = anon
+    return headers
+
+
+@router.post("/conversaciones/{conversacion_id}/cerrar")
+async def close_conversation(
+    conversacion_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    base = _supabase_base_url()
+    url = f"{base}/rest/v1/conversaciones?id=eq.{conversacion_id}"
+    headers = _auth_headers_for_user(token)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.patch(url, headers=headers, json={"estado": "cerrada"})
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code, detail="No fue posible cerrar la conversación"
+        )
+    return {"ok": True}
+
+
+@router.post("/conversaciones/{conversacion_id}/estado")
+async def set_conversation_state(
+    conversacion_id: str,
+    new_estado: str = Query(..., pattern="^(abierta|pendiente|cerrada)$"),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    base = _supabase_base_url()
+    url = f"{base}/rest/v1/conversaciones?id=eq.{conversacion_id}"
+    headers = _auth_headers_for_user(token)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.patch(url, headers=headers, json={"estado": new_estado})
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail="No fue posible cambiar el estado")
+    return {"ok": True, "estado": new_estado}
+
+
+@router.get("/conversaciones/{conversacion_id}/mensajes")
+async def get_messages(
+    conversacion_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    params = {
+        "select": "id,direccion,tipo_contenido,texto,creado_en",
+        "conversacion_id": f"eq.{conversacion_id}",
+        "order": "creado_en.asc",
+        "limit": str(limit),
+    }
+    resp = await _sb_get("/rest/v1/mensajes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando mensajes")
+    return {"ok": True, "items": resp.json() or []}
+
+
+@router.get("/panel/env.js")
+async def panel_env_js() -> Response:
+    """Expone configuración pública mínima para el panel.
+
+    Usa variables del backend para evitar editar archivos estáticos en producción.
+    """
+    url = (settings.supabase_url or "").rstrip("/")
+    anon = getattr(settings, "supabase_anon", None) or ""
+    body = "window.SUPABASE_URL = '" + url + "';\n" "window.SUPABASE_ANON_KEY = '" + anon + "';\n"
+    return Response(content=body, media_type="application/javascript")
