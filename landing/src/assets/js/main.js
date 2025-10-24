@@ -271,51 +271,78 @@ function outsideClickHandler(e) {
 
 function setupMobileMenu() {
   if (!mobileMenuList) return;
-  // Limpiar la lista antes de reinsertar elementos
-  while (mobileMenuList.firstChild) {
-    mobileMenuList.removeChild(mobileMenuList.firstChild);
-  }
+
   const cta = document.querySelector('.site-header .cta');
   const themeSwitcher = document.querySelector('.theme-switcher');
 
+  // Asegurar recordatorio de posiciones iniciales
   rememberPosition(cta);
   rememberPosition(themeSwitcher);
 
-  // Insertar en orden: 1) CTA (solo móvil)  2) Selector de tema (siempre en menú)
-  if (MQ_MOBILE.matches && cta) {
-    const liCta = document.createElement('li');
+  // Obtener o crear los contenedores fijos dentro del menú
+  let liCta = mobileMenuList.querySelector('[data-menu-item="cta"]');
+  let liTheme = mobileMenuList.querySelector('[data-menu-item="theme"]');
+  if (!liTheme) {
+    liTheme = document.createElement('li');
+    liTheme.setAttribute('data-menu-item', 'theme');
+    liTheme.role = 'none';
+  }
+  if (!liCta) {
+    liCta = document.createElement('li');
+    liCta.setAttribute('data-menu-item', 'cta');
     liCta.role = 'none';
-    liCta.appendChild(cta);
-    mobileMenuList.appendChild(liCta);
   }
 
-  if (themeSwitcher) {
-    const liTheme = document.createElement('li');
-    liTheme.role = 'none';
+  // Mover SIEMPRE el selector de tema al menú
+  if (themeSwitcher && themeSwitcher.parentElement !== liTheme) {
+    liTheme.innerHTML = '';
     liTheme.appendChild(themeSwitcher);
+  }
+
+  // En móvil, mover CTA al menú; en desktop, restaurarla al header
+  if (MQ_MOBILE.matches) {
+    if (cta && cta.parentElement !== liCta) {
+      liCta.innerHTML = '';
+      liCta.appendChild(cta);
+    }
+    // Insertar en orden: CTA primero, luego selector
+    if (liCta.parentElement !== mobileMenuList) {
+      mobileMenuList.insertBefore(liCta, mobileMenuList.firstChild);
+    }
+  } else {
+    // Restaurar CTA al header si procede
+    if (cta && cta.parentElement === liCta) {
+      restorePosition(cta);
+      liCta.innerHTML = '';
+    }
+    // Asegurar que el contenedor CTA no quede en la lista si está vacío
+    if (liCta.parentElement === mobileMenuList && !liCta.firstChild) {
+      mobileMenuList.removeChild(liCta);
+    }
+  }
+
+  // Asegurar que el elemento de tema esté en la lista y después del CTA
+  if (liTheme.parentElement !== mobileMenuList) {
     mobileMenuList.appendChild(liTheme);
+  } else {
+    // Si CTA está, garantizar orden
+    if (mobileMenuList.firstChild !== liCta && liCta.parentElement === mobileMenuList) {
+      mobileMenuList.insertBefore(liCta, liTheme);
+    }
   }
 }
 
 function teardownMobileMenu() {
   if (!mobileMenuList) return;
-  // Restaurar contenidos y limpiar lista
-  const themeSwitcher = document.querySelector('#theme-select')?.closest('.theme-switcher');
+  // Solo restauramos la CTA (el selector se queda en el menú)
   const cta = document.querySelector('.mobile-menu .cta') || document.querySelector('.site-header .cta');
-  // El selector de tema permanece en el menú siempre; restauramos solo la CTA
   if (cta) restorePosition(cta);
-  while (mobileMenuList.firstChild) {
-    mobileMenuList.removeChild(mobileMenuList.firstChild);
-  }
 }
 
 function handleViewportChange(e) {
-  if (e.matches) {
-    setupMobileMenu();
-  } else {
-    closeMobileMenu();
-    teardownMobileMenu();
-  }
+  // Siempre reconfiguramos el menú; CTA depende de e.matches
+  setupMobileMenu();
+  if (!e.matches) closeMobileMenu();
 }
 
 function initialiseMobileNav() {
