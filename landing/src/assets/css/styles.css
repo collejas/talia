@@ -538,6 +538,11 @@ button:hover {
   .header-content {
     justify-content: space-between;
   }
+
+  /* Ocultar footer también en tablets pequeñas */
+  .site-footer {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -596,6 +601,11 @@ button:hover {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 
+  /* Ocultar el footer del sitio en móviles */
+  .site-footer {
+    display: none;
+  }
+
   .footer-content {
     flex-direction: column;
     gap: 0.6rem;
@@ -613,5 +623,11 @@ button:hover {
   .theme-switcher {
     width: 100%;
     justify-content: flex-end;
+  }
+}
+@media (max-width: 1024px) {
+  /* Ocultar footer en iPads vertical y similares */
+  .site-footer {
+    display: none;
   }
 }
