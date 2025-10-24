@@ -6,8 +6,8 @@ const mobileMenu = document.getElementById('mobile-menu');
 // Contenedor donde insertaremos elementos en el menú móvil
 const mobileMenuList = mobileMenu ? mobileMenu.querySelector('.mobile-menu-list') : null;
 
-// Menú siempre activo (también en desktop)
-const MQ_MOBILE = null;
+// Breakpoint para tratar como "móvil"
+const MQ_MOBILE = window.matchMedia('(max-width: 960px)');
 
 // Guardar posiciones originales para restaurar en escritorio
 const originalPositions = new Map();
@@ -264,13 +264,23 @@ function setupMobileMenu() {
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
   }
-  // Mover solo theme-switcher al menú; la CTA se queda en el header
+  // Solo en móvil movemos elementos al menú
+  if (!MQ_MOBILE.matches) return;
+
+  const cta = document.querySelector('.site-header .cta');
   const themeSwitcher = document.querySelector('.theme-switcher');
 
+  rememberPosition(cta);
   rememberPosition(themeSwitcher);
 
-  // Limpiar anteriores si fuese necesario
-  // y agregar en orden dentro de la lista
+  // Insertar en orden: 1) CTA  2) Selector de tema
+  if (cta) {
+    const liCta = document.createElement('li');
+    liCta.role = 'none';
+    liCta.appendChild(cta);
+    mobileMenuList.appendChild(liCta);
+  }
+
   if (themeSwitcher) {
     const liTheme = document.createElement('li');
     liTheme.role = 'none';
@@ -283,7 +293,9 @@ function teardownMobileMenu() {
   if (!mobileMenuList) return;
   // Restaurar contenidos y limpiar lista
   const themeSwitcher = document.querySelector('#theme-select')?.closest('.theme-switcher');
+  const cta = document.querySelector('.mobile-menu .cta') || document.querySelector('.site-header .cta');
   if (themeSwitcher) restorePosition(themeSwitcher);
+  if (cta) restorePosition(cta);
   while (mobileMenuList.firstChild) {
     mobileMenuList.removeChild(mobileMenuList.firstChild);
   }
@@ -299,8 +311,9 @@ function handleViewportChange(e) {
 }
 
 function initialiseMobileNav() {
-  // Siempre mover acciones al menú desplegable
-  setupMobileMenu();
+  // Inicial según viewport + suscripción a cambios
+  handleViewportChange(MQ_MOBILE);
+  MQ_MOBILE.addEventListener('change', handleViewportChange);
   if (menuToggle) {
     menuToggle.addEventListener('click', () => {
       if (mobileMenu?.hidden) openMobileMenu();
