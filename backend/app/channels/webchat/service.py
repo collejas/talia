@@ -73,8 +73,28 @@ async def handle_webchat_message(
     except storage.StorageError:
         logger.exception("No se pudo registrar el mensaje entrante en Supabase")
 
-    # Recupera conversation_id de OpenAI desde cache por session (si existe)
-    conversation_for_ai = _CONVERSATION_CACHE.get(message.session_id) or conversation_id or None
+    # Recupera conversation_id de OpenAI desde cache/BD (si existe)
+    conversation_for_ai = (
+        record.conversation_openai_id
+        if (
+            "record" in locals()
+            and record.conversation_openai_id
+            and record.conversation_openai_id.startswith("conv")
+        )
+        else _CONVERSATION_CACHE.get(message.session_id)
+    )
+
+    # Si aún no hay conv_..., intenta crearlo explícitamente en OpenAI
+    if not conversation_for_ai:
+        try:
+            client = openai_service.get_assistant_client()
+            conversation_for_ai = await _create_openai_conversation_id(client)
+            if conversation_for_ai:
+                _CONVERSATION_CACHE[message.session_id] = conversation_for_ai
+        except Exception:
+            # Continuamos sin conversation; el modelo responderá sin memoria
+            conversation_for_ai = None
+
     reply = await _generate_assistant_reply(message, conversation_id=conversation_for_ai)
 
     try:
@@ -330,3 +350,16 @@ def _to_dict(item: Any) -> dict[str, Any]:
     if hasattr(item, "__dict__"):
         return dict(item.__dict__)
     return {}
+
+
+async def _create_openai_conversation_id(client: Any) -> str | None:
+    """Crea un nuevo conversation en OpenAI y retorna su id (conv_...)."""
+    try:
+        # Algunos SDKs exponen `client.conversations.create()`
+        conv = await client.conversations.create()  # type: ignore[attr-defined]
+        conv_id = getattr(conv, "id", None) or (conv.get("id") if isinstance(conv, dict) else None)
+        if isinstance(conv_id, str) and conv_id.startswith("conv"):
+            return conv_id
+    except Exception:
+        return None
+    return None

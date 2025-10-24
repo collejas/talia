@@ -21,11 +21,12 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - `.env`:
   - `TALIA_OPENAI_ASSISTANT_ID`
   - `TALIA_OPENAI_API_KEY`
+  - `TALIA_WEBCHAT_INACTIVITY_HOURS` (por defecto 24)
 - Posible token corto para asegurar el widget (`TALIA_WEBCHAT_PUBLIC_TOKEN`).
 
 ## Flujo Conversacional
 1. Usuario escribe en el widget → se envía `POST /messages`.
-2. Backend crea/usa un thread de OpenAI (usando `session_id`).
+2. Backend crea/usa un identificador de conversación de OpenAI (Chat Prompts: `conv_...`, Assistants Threads: `thread.id`). Con Chat Prompts usamos `conversacion_openai_id` persistido; si pasan `TALIA_WEBCHAT_INACTIVITY_HOURS` sin actividad, se inicia una nueva conversación.
 3. Respuesta se entrega al frontend (pull o push en WebSocket).
 4. Se registran eventos y datos de lead cuando el asistente confirma nombre/correo/teléfono.
 
@@ -59,3 +60,4 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - Implementar rate limiting básico por `session_id`/IP.
 - Guardar consentimiento antes de enviar datos personales.
 - Preparar pruebas de snapshots para asegurar la conversación base.
+ - Persistir el `conversacion_openai_id` (ID `conv_...` de OpenAI) asociado al hilo para conservar memoria entre reinicios y réplicas. Si pasan 24 horas sin actividad, se inicia una nueva conversación y se reinicia el `conversacion_openai_id`.

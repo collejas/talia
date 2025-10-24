@@ -23,6 +23,47 @@ class WebchatRecord:
 
     conversation_id: str
     message_id: str
+    conversation_openai_id: str | None = None
+
+
+async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Obtiene los últimos mensajes de una conversación para construir historial.
+
+    Retorna elementos con claves: direccion (entrante/saliente), texto, creado_en.
+    """
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/mensajes"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+    }
+    params = {
+        "select": "direccion,texto,creado_en",
+        "conversacion_id": f"eq.{conversation_id}",
+        "order": "creado_en.asc",
+        "limit": str(limit),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:  # pragma: no cover
+        msg = f"Error de red al consultar mensajes: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener mensajes"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+    data = response.json() or []
+    if not isinstance(data, list):
+        return []
+    return data  # type: ignore[return-value]
 
 
 async def record_webchat_message(
@@ -65,6 +106,9 @@ async def record_webchat_message(
         payload["p_response_id"] = response_id
     if metadata:
         payload["p_metadata"] = metadata
+    # Reglas de inactividad (horas) provenientes de variable de entorno
+    if settings.webchat_inactivity_hours:
+        payload["p_inactivity_hours"] = int(settings.webchat_inactivity_hours)
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -75,12 +119,34 @@ async def record_webchat_message(
         raise StorageError(msg) from exc
 
     if response.status_code >= 400:
-        msg = (
+        body_text = response.text
+        base_msg = (
             "Supabase RPC respondió con error"
-            f" (status={response.status_code}, body={response.text!r})"
+            f" (status={response.status_code}, body={body_text!r})"
         )
-        logger.error(msg)
-        raise StorageError(msg)
+        # Fallback: si la función aún no acepta p_inactivity_hours, reintenta sin él
+        if (
+            response.status_code == 404
+            and "p_inactivity_hours" in body_text
+            and "registrar_mensaje_webchat" in body_text
+        ):
+            payload_retry = {k: v for k, v in payload.items() if k != "p_inactivity_hours"}
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(url, headers=headers, json=payload_retry)
+            except httpx.RequestError as exc:  # pragma: no cover
+                logger.error(base_msg)
+                raise StorageError(base_msg) from exc
+            if response.status_code >= 400:
+                msg = (
+                    "Supabase RPC respondió con error (reintento sin p_inactivity_hours)"
+                    f" (status={response.status_code}, body={response.text!r})"
+                )
+                logger.error(msg)
+                raise StorageError(msg)
+        else:
+            logger.error(base_msg)
+            raise StorageError(base_msg)
 
     data = response.json() if response.text else None
     record: dict[str, Any] | None
@@ -94,7 +160,9 @@ async def record_webchat_message(
         logger.error(msg)
         raise StorageError(msg)
 
+    openai_conv_id = record.get("conversacion_openai_id") or record.get("openai_conversation_id")
     return WebchatRecord(
         conversation_id=str(record["conversacion_id"]),
         message_id=str(record["mensaje_id"]),
+        conversation_openai_id=str(openai_conv_id) if openai_conv_id else None,
     )
