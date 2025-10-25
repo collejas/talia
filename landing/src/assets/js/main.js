@@ -114,12 +114,40 @@ function maintainViewportBottom(behavior = 'auto', tolerance, force = false) {
   const container = getScrollContainer();
   if (!container) return;
   if (!force && !isNearViewportBottom(container, tolerance)) return;
+  const target = container.scrollHeight;
+  const isDocumentContainer =
+    container === document.documentElement || container === document.body;
+
+  const fallbackScroll = () => {
+    if (isDocumentContainer && typeof window !== 'undefined') {
+      window.scrollTo(0, target);
+      document.documentElement.scrollTop = target;
+      document.body.scrollTop = target;
+    } else {
+      container.scrollTop = target;
+    }
+  };
+
   requestAnimationFrame(() => {
     if (typeof container.scrollTo === 'function') {
-      container.scrollTo({ top: container.scrollHeight, behavior });
-    } else {
-      container.scrollTop = container.scrollHeight;
+      try {
+        if (behavior === 'auto') {
+          container.scrollTo(0, target);
+        } else {
+          container.scrollTo({ top: target, behavior });
+        }
+        return;
+      } catch (error) {
+        try {
+          container.scrollTo(0, target);
+          return;
+        } catch (legacyError) {
+          fallbackScroll();
+          return;
+        }
+      }
     }
+    fallbackScroll();
   });
 }
 
