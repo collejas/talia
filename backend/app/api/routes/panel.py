@@ -548,32 +548,75 @@ async def get_messages(
     return {"ok": True, "items": items}
 
 
-async def _fetch_whatsapp_contact_locations(token: str) -> list[ContactLocation]:
+ALLOWED_CHANNELS: set[str] = {"whatsapp", "webchat"}
+
+
+def _parse_channels_param(raw: str | None) -> list[str]:
+    if not raw:
+        return ["whatsapp"]
+    channels: list[str] = []
+    for chunk in raw.split(","):
+        name = chunk.strip().lower()
+        if not name:
+            continue
+        if name not in ALLOWED_CHANNELS:
+            raise HTTPException(status_code=400, detail="canal_no_soportado")
+        if name not in channels:
+            channels.append(name)
+    if not channels:
+        raise HTTPException(status_code=400, detail="canal_no_soportado")
+    return channels
+
+
+async def _fetch_contact_locations(token: str, channels: list[str]) -> list[ContactLocation]:
     params = {
-        "select": "contacto_id,contacto:contactos(id,telefono_e164,contacto_datos)",
-        "canal": "eq.whatsapp",
+        "select": "canal,contacto_id,metadatos,contacto:contactos(id,telefono_e164,contacto_datos)",
         "limit": "20000",
     }
+    if len(channels) == 1:
+        params["canal"] = f"eq.{channels[0]}"
+    else:
+        params["canal"] = f"in.({','.join(channels)})"
     resp = await _sb_get("/rest/v1/identidades_canal", params=params, token=token)
     if resp.status_code >= 400:
-        raise HTTPException(status_code=502, detail="Error consultando contactos WhatsApp")
+        raise HTTPException(status_code=502, detail="Error consultando contactos")
+
     rows = resp.json() or []
     contacts: dict[str, dict[str, Any]] = {}
     for row in rows:
+        channel = str(row.get("canal") or "").lower()
         contacto = row.get("contacto") or {}
         contacto_id = row.get("contacto_id") or contacto.get("id")
-        if not contacto_id:
+        if not contacto_id or channel not in ALLOWED_CHANNELS:
             continue
-        contacto_id = str(contacto_id)
-        if contacto_id in contacts:
-            continue
-        contacts[contacto_id] = {
-            "telefono_e164": contacto.get("telefono_e164"),
-            "contacto_datos": contacto.get("contacto_datos"),
-        }
+        contacto_key = str(contacto_id)
+        entry = contacts.setdefault(
+            contacto_key,
+            {"contacto": {}, "identities": [], "channels": set()},
+        )
+        if contacto:
+            existing = entry.get("contacto") or {}
+            telefono = contacto.get("telefono_e164") or existing.get("telefono_e164")
+            datos = contacto.get("contacto_datos") or existing.get("contacto_datos")
+            entry["contacto"] = {
+                "telefono_e164": telefono,
+                "contacto_datos": datos,
+            }
+        entry["channels"].add(channel)
+        metadata = row.get("metadatos")
+        if metadata is not None:
+            entry["identities"].append(metadata)
+
     locations: list[ContactLocation] = []
-    for contacto_id, data in sorted(contacts.items(), key=lambda item: item[0]):
-        locations.append(infer_contact_location(contacto_id, data))
+    for contacto_id in sorted(contacts.keys()):
+        payload = contacts[contacto_id]
+        location = infer_contact_location(
+            contacto_id,
+            payload.get("contacto", {}),
+            channels=payload.get("channels", []),
+            identities=payload.get("identities") or [],
+        )
+        locations.append(location)
     return locations
 
 
@@ -633,14 +676,19 @@ def _summarize_municipios(
 
 
 @router.get("/kpis/leads/estados")
-async def leads_by_state(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def leads_by_state(
+    canales: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     token = _parse_bearer(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
-    locations = await _fetch_whatsapp_contact_locations(token)
+    channels = _parse_channels_param(canales)
+    locations = await _fetch_contact_locations(token, channels)
     items, total_located, unknown, total_contacts = _summarize_states(locations)
     return {
         "ok": True,
+        "canales": channels,
         "total_contactos": total_contacts,
         "total_ubicados": total_located,
         "sin_ubicacion": unknown,
@@ -651,17 +699,20 @@ async def leads_by_state(authorization: str | None = Header(default=None)) -> di
 @router.get("/kpis/leads/estados/{cve_ent}/municipios")
 async def leads_by_municipality(
     cve_ent: str,
+    canales: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
     state_code = str(cve_ent).zfill(2)
-    locations = await _fetch_whatsapp_contact_locations(token)
+    channels = _parse_channels_param(canales)
+    locations = await _fetch_contact_locations(token, channels)
     items, total_located, unknown, total_contacts = _summarize_municipios(locations, state_code)
     estado_nombre = state_display_name(state_code)
     return {
         "ok": True,
+        "canales": channels,
         "estado": {"cve_ent": state_code, "nombre": estado_nombre or state_code},
         "total_contactos": total_contacts,
         "total_ubicados": total_located,

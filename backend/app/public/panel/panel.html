@@ -70,9 +70,17 @@
       <div class="map-card-header">
         <div>
           <h2 id="leads-map-title" class="map-card-title">Leads por estado</h2>
-          <p class="muted map-card-subtitle">Distribución de contactos WhatsApp por entidad federativa y municipio.</p>
+          <p class="muted map-card-subtitle">Distribución de contactos por entidad federativa y municipio.</p>
         </div>
         <div class="map-card-controls" role="group" aria-label="Controles del mapa">
+          <label class="map-control">
+            <span>Canal</span>
+            <select id="leads-map-channel" class="btn btn-outline" aria-label="Cambiar canal">
+              <option value="whatsapp" selected>WhatsApp</option>
+              <option value="webchat">Webchat</option>
+              <option value="todos">Todos</option>
+            </select>
+          </label>
           <button id="leads-map-reset" class="btn btn-ghost" type="button" disabled>
             Ver estados
           </button>

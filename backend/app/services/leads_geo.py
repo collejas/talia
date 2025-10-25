@@ -3,14 +3,23 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from app.core.logging import get_logger
 from app.data import data_path
 
 logger = get_logger(__name__)
+
+
+def _normalize_key(text: str | None) -> str:
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    stripped = "".join(ch for ch in normalized if ch.isalnum())
+    return stripped.lower()
 
 
 @lru_cache(maxsize=None)
@@ -56,6 +65,61 @@ def _municipios_manifest() -> dict[str, dict[str, str]]:
     if isinstance(manifest, dict):
         return {str(k).zfill(2): v for k, v in manifest.items() if isinstance(v, dict)}
     return {}
+
+
+@lru_cache(maxsize=1)
+def _state_name_index() -> dict[str, str]:
+    manifest = _municipios_manifest()
+    index: dict[str, str] = {}
+    for code, entry in manifest.items():
+        name = entry.get("name")
+        if not name:
+            continue
+        index[_normalize_key(str(name))] = code
+    return index
+
+
+def _state_code_from_name(name: str | None) -> tuple[str | None, str | None]:
+    if not name:
+        return None, None
+    normalized = _normalize_key(name)
+    index = _state_name_index()
+    code = index.get(normalized)
+    if code:
+        return code, state_display_name(code)
+    aliases = {
+        "mexicocity": "09",
+        "ciudaddemexico": "09",
+        "cdmx": "09",
+    }
+    code = aliases.get(normalized)
+    if code:
+        return code, state_display_name(code)
+    return None, None
+
+
+@lru_cache(maxsize=None)
+def _municipality_name_index(cve_ent: str) -> dict[str, tuple[str, str]]:
+    geojson = load_state_municipalities_geojson(cve_ent)
+    mapping: dict[str, tuple[str, str]] = {}
+    for feature in geojson.get("features", []):
+        props = feature.get("properties") or {}
+        cve_mun = str(props.get("cve_mun") or "").zfill(3)
+        nombre = props.get("nom_mun")
+        if not cve_mun or not nombre:
+            continue
+        mapping[_normalize_key(str(nombre))] = (cve_mun, str(nombre))
+    return mapping
+
+
+def _clean_city_name(name: str | None) -> str | None:
+    if not name:
+        return None
+    lowered = name.strip()
+    for suffix in (" city", " City", " municipio", " Municipio"):
+        if lowered.endswith(suffix):
+            lowered = lowered[: -len(suffix)]
+    return lowered.strip() or name
 
 
 @lru_cache(maxsize=None)
@@ -130,11 +194,38 @@ def _lada_from_phone(phone_e164: str | None) -> str | None:
     return None
 
 
+def _location_from_metadata(
+    metadata: dict[str, Any],
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Intenta resolver estado/municipio a partir de metadatos de identidad."""
+    geo = _normalized_dict(metadata.get("geo"))
+    if not geo:
+        return None, None, None, None
+    country = str(geo.get("country") or "").upper()
+    if country and country not in {"MX", "MEX", "MEXICO"}:
+        return None, None, None, None
+    state_name = geo.get("nom_ent") or geo.get("state") or geo.get("region")
+    estado, estado_nombre = _state_code_from_name(state_name)
+    municipio = None
+    municipio_nombre = None
+    if estado:
+        city_raw = geo.get("nom_mun") or geo.get("city")
+        city_clean = _clean_city_name(city_raw)
+        if city_clean:
+            muni_mapping = _municipality_name_index(estado)
+            muni_key = _normalize_key(city_clean)
+            result = muni_mapping.get(muni_key)
+            if result:
+                municipio, municipio_nombre = result
+    return estado, estado_nombre, municipio, municipio_nombre
+
+
 @dataclass(slots=True)
 class ContactLocation:
     """Ubicación inferida para un contacto."""
 
     contacto_id: str
+    channels: tuple[str, ...]
     lada: str | None = None
     estado_clave: str | None = None
     estado_nombre: str | None = None
@@ -143,8 +234,17 @@ class ContactLocation:
     municipio_cvegeo: str | None = None
 
 
-def infer_contact_location(contacto_id: str, data: dict[str, Any]) -> ContactLocation:
+def infer_contact_location(
+    contacto_id: str,
+    data: dict[str, Any],
+    *,
+    channels: Iterable[str],
+    identities: Sequence[dict[str, Any]] | None = None,
+) -> ContactLocation:
     """Construye la ubicación conocida (si la hay) para un contacto."""
+
+    channels_tuple = tuple(sorted({str(ch) for ch in channels if ch}))
+
     meta = _normalized_dict(data.get("contacto_datos"))
     location_meta = _normalized_dict(meta.get("ubicacion")) or _normalized_dict(meta.get("lada"))
     estado = location_meta.get("cve_ent") or meta.get("cve_ent")
@@ -170,6 +270,15 @@ def infer_contact_location(contacto_id: str, data: dict[str, Any]) -> ContactLoc
                 estado = None
                 estado_nombre = None
 
+    if not estado and identities:
+        for raw_meta in identities:
+            identity_meta = _normalized_dict(raw_meta)
+            estado, estado_nombre, municipio, municipio_nombre = _location_from_metadata(
+                identity_meta
+            )
+            if estado:
+                break
+
     if estado:
         estado = str(estado).zfill(2)
         if not estado_nombre:
@@ -187,6 +296,7 @@ def infer_contact_location(contacto_id: str, data: dict[str, Any]) -> ContactLoc
 
     return ContactLocation(
         contacto_id=str(contacto_id),
+        channels=channels_tuple,
         lada=str(lada) if lada else None,
         estado_clave=estado,
         estado_nombre=estado_nombre,

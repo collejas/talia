@@ -6,7 +6,12 @@ const LEAFLET_JS =
   'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
 
 const SCALE_OPTIONS = ['quantile', 'equal', 'log'];
-const DEFAULT_BUCKETS = 5;
+
+const CHANNEL_OPTIONS = {
+  whatsapp: 'WhatsApp',
+  webchat: 'Webchat',
+  todos: 'Todos',
+};
 
 const PALETTES = {
   dusk: ['#fde68a', '#f59e0b', '#f97316', '#ea580c', '#c026d3'],
@@ -198,9 +203,21 @@ const state = {
   selectedState: null,
   scale: 'quantile',
   palette: 'dusk',
-  statesPromise: null,
-  municipalityPromises: new Map(),
+  channelKey: 'whatsapp',
+  statesCache: new Map(),
+  municipalityCache: new Map(),
 };
+
+function getChannelParam(key) {
+  if (key === 'todos') {
+    return 'whatsapp,webchat';
+  }
+  return key || 'whatsapp';
+}
+
+function channelLabel(key) {
+  return CHANNEL_OPTIONS[key] || 'Leads';
+}
 
 function setLoading(isLoading) {
   const el = $('leads-map-loading');
@@ -281,12 +298,13 @@ function attachFeatureInteractions(layer, tooltip, onClick) {
   }
 }
 
-async function getStatesData() {
-  if (!state.statesPromise) {
-    state.statesPromise = (async () => {
+async function getStatesData(channelParam) {
+  const cacheKey = channelParam;
+  if (!state.statesCache.has(cacheKey)) {
+    const promise = (async () => {
       const [geo, metrics] = await Promise.all([
         fetchJSON('/api/kpis/leads/geo/estados'),
-        fetchJSONWithAuth('/api/kpis/leads/estados'),
+        fetchJSONWithAuth(`/api/kpis/leads/estados?canales=${encodeURIComponent(channelParam)}`),
       ]);
       if (!geo.ok || !geo.json?.geojson) {
         throw new Error('geo_states_failed');
@@ -296,20 +314,24 @@ async function getStatesData() {
       }
       return { geojson: geo.json.geojson, metrics: metrics.json };
     })();
-    state.statesPromise.catch(() => {
-      state.statesPromise = null;
+    promise.catch(() => {
+      state.statesCache.delete(cacheKey);
     });
+    state.statesCache.set(cacheKey, promise);
   }
-  return state.statesPromise;
+  return state.statesCache.get(cacheKey);
 }
 
-async function getMunicipalityData(stateCode) {
+async function getMunicipalityData(channelParam, stateCode) {
   const code = String(stateCode).padStart(2, '0');
-  if (!state.municipalityPromises.has(code)) {
+  const cacheKey = `${channelParam}:${code}`;
+  if (!state.municipalityCache.has(cacheKey)) {
     const promise = (async () => {
       const [geo, metrics] = await Promise.all([
         fetchJSON(`/api/kpis/leads/geo/municipios/${code}`),
-        fetchJSONWithAuth(`/api/kpis/leads/estados/${code}/municipios`),
+        fetchJSONWithAuth(
+          `/api/kpis/leads/estados/${code}/municipios?canales=${encodeURIComponent(channelParam)}`,
+        ),
       ]);
       if (!geo.ok || !geo.json?.geojson) {
         throw new Error('geo_muni_failed');
@@ -320,11 +342,11 @@ async function getMunicipalityData(stateCode) {
       return { geojson: geo.json.geojson, metrics: metrics.json };
     })();
     promise.catch(() => {
-      state.municipalityPromises.delete(code);
+      state.municipalityCache.delete(cacheKey);
     });
-    state.municipalityPromises.set(code, promise);
+    state.municipalityCache.set(cacheKey, promise);
   }
-  return state.municipalityPromises.get(code);
+  return state.municipalityCache.get(cacheKey);
 }
 
 function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureClick }) {
@@ -388,7 +410,8 @@ async function renderStates() {
   setLoading(true);
   setError(false);
   try {
-    const resources = await getStatesData();
+    const channelParam = getChannelParam(state.channelKey);
+    const resources = await getStatesData(channelParam);
     drawPolygons({
       geojson: resources.geojson,
       metrics: resources.metrics,
@@ -405,7 +428,10 @@ async function renderStates() {
     const ubicados = formatNumber(resources.metrics.total_ubicados || 0);
     const total = formatNumber(resources.metrics.total_contactos || 0);
     const sinUbicacion = formatNumber(resources.metrics.sin_ubicacion || 0);
-    updateSummary(`Total leads: ${total}. Ubicados: ${ubicados}. Sin ubicación: ${sinUbicacion}.`);
+    const channelName = channelLabel(state.channelKey);
+    updateSummary(
+      `${channelName}: Total ${total} lead(s). Ubicados: ${ubicados}. Sin ubicación: ${sinUbicacion}.`,
+    );
   } catch (error) {
     console.error('[leads-map] estados', error);
     setError(true, 'No fue posible cargar los estados.');
@@ -419,7 +445,8 @@ async function renderMunicipalities(stateCode) {
   setError(false);
   const code = String(stateCode).padStart(2, '0');
   try {
-    const resources = await getMunicipalityData(code);
+    const channelParam = getChannelParam(state.channelKey);
+    const resources = await getMunicipalityData(channelParam, code);
     drawPolygons({
       geojson: resources.geojson,
       metrics: resources.metrics,
@@ -432,8 +459,9 @@ async function renderMunicipalities(stateCode) {
     const total = formatNumber(resources.metrics.total_contactos || 0);
     const sinUbicacion = formatNumber(resources.metrics.sin_ubicacion || 0);
     const nombre = resources.metrics.estado?.nombre || `Estado ${code}`;
+    const channelName = channelLabel(state.channelKey);
     updateSummary(
-      `${nombre}: ${ubicados} lead(s) ubicados de ${total}. Sin ubicación: ${sinUbicacion}.`,
+      `${channelName} · ${nombre}: ${ubicados} lead(s) ubicados de ${total}. Sin ubicación: ${sinUbicacion}.`,
     );
   } catch (error) {
     console.error('[leads-map] municipios', error);
@@ -503,6 +531,7 @@ export function setupLeadsMap() {
   const paletteSelect = $('leads-map-palette');
   const scaleSelect = $('leads-map-scale');
   const resetButton = $('leads-map-reset');
+  const channelSelect = $('leads-map-channel');
 
   if (paletteSelect) {
     paletteSelect.addEventListener('change', (event) => {
@@ -522,6 +551,24 @@ export function setupLeadsMap() {
       state.selectedState = null;
       resetButton.setAttribute('disabled', 'true');
       void renderStates();
+    });
+  }
+
+  if (channelSelect) {
+    channelSelect.addEventListener('change', (event) => {
+      const key = event.target.value;
+      if (!CHANNEL_OPTIONS[key]) {
+        return;
+      }
+      state.channelKey = key;
+      state.view = 'states';
+      state.selectedState = null;
+      if (resetButton) {
+        resetButton.setAttribute('disabled', 'true');
+      }
+      if (state.initialized) {
+        void renderStates();
+      }
     });
   }
 
