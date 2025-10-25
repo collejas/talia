@@ -127,12 +127,15 @@ async def test_leads_by_state_groups_contacts(
     assert payload["total_contactos"] == 4  # Contacto duplicado y uno sin ubicación
     assert payload["total_ubicados"] == 3
     assert payload["sin_ubicacion"] == 1
+    assert payload["totales_por_canal"] == {"whatsapp": 4}
+    assert payload["sin_ubicacion_por_canal"] == {"whatsapp": 1}
 
-    estados = {item["cve_ent"]: item["total"] for item in payload["items"]}
+    estados = {item["cve_ent"]: item for item in payload["items"]}
     # Ciudad de México, Nuevo León, Jalisco
-    assert estados["09"] == 1
-    assert estados["19"] == 1
-    assert estados["14"] == 1
+    assert estados["09"]["total"] == 1
+    assert estados["19"]["total"] == 1
+    assert estados["14"]["total"] == 1
+    assert estados["09"]["por_canal"] == {"whatsapp": 1}
 
 
 @pytest.mark.asyncio
@@ -158,9 +161,12 @@ async def test_leads_by_municipality_filters_state(
     assert payload["total_ubicados"] == 1
     assert payload["total_contactos"] == 1
     assert payload["sin_ubicacion"] == 0
+    assert payload["totales_por_canal"] == {"whatsapp": 1}
+    assert payload["sin_ubicacion_por_canal"] == {}
     municipios = payload["items"]
     assert municipios[0]["cvegeo"].startswith("14")
     assert municipios[0]["total"] == 1
+    assert municipios[0]["por_canal"] == {"whatsapp": 1}
 
 
 @pytest.mark.asyncio
@@ -194,8 +200,10 @@ async def test_leads_by_state_accepts_webchat_channel(
     assert payload["canales"] == ["webchat"]
     assert payload["total_ubicados"] == 1
     assert payload["total_contactos"] == 1
+    assert payload["totales_por_canal"] == {"webchat": 1}
     assert payload["items"][0]["cve_ent"] == "24"
     assert payload["items"][0]["nombre"] == "San Luis Potosí"
+    assert payload["items"][0]["por_canal"] == {"webchat": 1}
 
 
 @pytest.mark.asyncio
@@ -221,3 +229,8 @@ async def test_leads_by_state_all_channels(
     assert payload["total_contactos"] == 5
     assert payload["total_ubicados"] == 4
     assert payload["sin_ubicacion"] == 1
+    assert payload["totales_por_canal"] == {"whatsapp": 4, "webchat": 1}
+    assert payload["sin_ubicacion_por_canal"] == {"whatsapp": 1}
+    by_state = {item["cve_ent"]: item for item in payload["items"]}
+    assert by_state["09"]["por_canal"] == {"whatsapp": 1}
+    assert by_state["24"]["por_canal"] == {"webchat": 1}

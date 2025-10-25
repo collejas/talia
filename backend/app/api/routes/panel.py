@@ -622,57 +622,114 @@ async def _fetch_contact_locations(token: str, channels: list[str]) -> list[Cont
 
 def _summarize_states(
     locations: list[ContactLocation],
-) -> tuple[list[dict[str, Any]], int, int, int]:
+) -> tuple[list[dict[str, Any]], int, int, int, dict[str, int], dict[str, int]]:
     counts: dict[str, int] = defaultdict(int)
     names: dict[str, str] = {}
+    per_state_channels: dict[str, dict[str, int]] = {}
+    totals_by_channel: dict[str, int] = defaultdict(int)
+    unknown_by_channel: dict[str, int] = defaultdict(int)
     unknown = 0
+
     for location in locations:
-        if location.estado_clave:
-            counts[location.estado_clave] += 1
+        has_state = bool(location.estado_clave)
+        for channel in location.channels or ():
+            totals_by_channel[channel] += 1
+
+        if has_state:
+            code = location.estado_clave or ""
+            counts[code] += 1
             if location.estado_nombre:
-                names[location.estado_clave] = location.estado_nombre
+                names[code] = location.estado_nombre
+            state_channels = per_state_channels.setdefault(code, {})
+            for channel in location.channels or ():
+                state_channels[channel] = state_channels.get(channel, 0) + 1
         else:
             unknown += 1
+            for channel in location.channels or ():
+                unknown_by_channel[channel] += 1
+
     items: list[dict[str, Any]] = []
     for code, total in counts.items():
         display = names.get(code) or state_display_name(code) or code
-        items.append({"cve_ent": code, "nombre": display, "total": total})
+        items.append(
+            {
+                "cve_ent": code,
+                "nombre": display,
+                "total": total,
+                "por_canal": per_state_channels.get(code, {}),
+            }
+        )
     items.sort(key=lambda row: row["total"], reverse=True)
     total_located = sum(counts.values())
     total_contacts = total_located + unknown
-    return items, total_located, unknown, total_contacts
+    return (
+        items,
+        total_located,
+        unknown,
+        total_contacts,
+        dict(totals_by_channel),
+        dict(unknown_by_channel),
+    )
 
 
 def _summarize_municipios(
     locations: list[ContactLocation], state_code: str
-) -> tuple[list[dict[str, Any]], int, int, int]:
+) -> tuple[list[dict[str, Any]], int, int, int, dict[str, int], dict[str, int]]:
     target_state = str(state_code).zfill(2)
     counts: dict[str, int] = defaultdict(int)
     metadata: dict[str, dict[str, str]] = {}
+    per_muni_channels: dict[str, dict[str, int]] = {}
+    totals_by_channel: dict[str, int] = defaultdict(int)
+    unknown_by_channel: dict[str, int] = defaultdict(int)
     unknown = 0
     total_contacts = 0
+
     for location in locations:
         if location.estado_clave != target_state:
             continue
         total_contacts += 1
-        if location.municipio_clave:
+        has_municipio = bool(location.municipio_clave)
+        for channel in location.channels or ():
+            totals_by_channel[channel] += 1
+        if has_municipio:
             cvegeo = location.municipio_cvegeo or f"{target_state}{location.municipio_clave}"
             counts[cvegeo] += 1
             metadata[cvegeo] = {
                 "cve_mun": location.municipio_clave,
                 "nombre": location.municipio_nombre or location.municipio_clave,
             }
+            muni_channels = per_muni_channels.setdefault(cvegeo, {})
+            for channel in location.channels or ():
+                muni_channels[channel] = muni_channels.get(channel, 0) + 1
         else:
             unknown += 1
+            for channel in location.channels or ():
+                unknown_by_channel[channel] += 1
+
     items: list[dict[str, Any]] = []
     for cvegeo, total in counts.items():
         info = metadata.get(cvegeo, {})
         cve_mun = info.get("cve_mun") or (cvegeo[-3:] if len(cvegeo) >= 3 else cvegeo)
         nombre = info.get("nombre") or cve_mun
-        items.append({"cvegeo": cvegeo, "cve_mun": cve_mun, "nombre": nombre, "total": total})
+        items.append(
+            {
+                "cvegeo": cvegeo,
+                "cve_mun": cve_mun,
+                "nombre": nombre,
+                "total": total,
+                "por_canal": per_muni_channels.get(cvegeo, {}),
+            }
+        )
     items.sort(key=lambda row: row["total"], reverse=True)
     total_located = sum(counts.values())
-    return items, total_located, unknown, total_contacts
+    return (
+        items,
+        total_located,
+        unknown,
+        total_contacts,
+        dict(totals_by_channel),
+        dict(unknown_by_channel),
+    )
 
 
 @router.get("/kpis/leads/estados")
@@ -685,13 +742,22 @@ async def leads_by_state(
         raise HTTPException(status_code=401, detail="auth_required")
     channels = _parse_channels_param(canales)
     locations = await _fetch_contact_locations(token, channels)
-    items, total_located, unknown, total_contacts = _summarize_states(locations)
+    (
+        items,
+        total_located,
+        unknown,
+        total_contacts,
+        totals_by_channel,
+        unknown_by_channel,
+    ) = _summarize_states(locations)
     return {
         "ok": True,
         "canales": channels,
         "total_contactos": total_contacts,
         "total_ubicados": total_located,
         "sin_ubicacion": unknown,
+        "totales_por_canal": totals_by_channel,
+        "sin_ubicacion_por_canal": unknown_by_channel,
         "items": items,
     }
 
@@ -708,7 +774,14 @@ async def leads_by_municipality(
     state_code = str(cve_ent).zfill(2)
     channels = _parse_channels_param(canales)
     locations = await _fetch_contact_locations(token, channels)
-    items, total_located, unknown, total_contacts = _summarize_municipios(locations, state_code)
+    (
+        items,
+        total_located,
+        unknown,
+        total_contacts,
+        totals_by_channel,
+        unknown_by_channel,
+    ) = _summarize_municipios(locations, state_code)
     estado_nombre = state_display_name(state_code)
     return {
         "ok": True,
@@ -717,6 +790,8 @@ async def leads_by_municipality(
         "total_contactos": total_contacts,
         "total_ubicados": total_located,
         "sin_ubicacion": unknown,
+        "totales_por_canal": totals_by_channel,
+        "sin_ubicacion_por_canal": unknown_by_channel,
         "items": items,
     }
 

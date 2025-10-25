@@ -219,6 +219,27 @@ function channelLabel(key) {
   return CHANNEL_OPTIONS[key] || 'Leads';
 }
 
+function channelName(key) {
+  if (CHANNEL_OPTIONS[key] && key !== 'todos') {
+    return CHANNEL_OPTIONS[key];
+  }
+  if (!key) return '—';
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function buildTooltip(label, total, breakdown) {
+  const totalLabel = `${formatNumber(total)} lead${total === 1 ? '' : 's'}`;
+  const entries = Object.entries(breakdown || {}).filter(([, value]) => Number(value) > 0);
+  if (!entries.length) {
+    return `${label}: ${totalLabel}`;
+  }
+  const lines = entries
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([channel, value]) => `${channelName(channel)}: ${formatNumber(value)}`)
+    .join('<br>');
+  return `<strong>${label}</strong><br>${lines}<br><span>Total: ${totalLabel}</span>`;
+}
+
 function setLoading(isLoading) {
   const el = $('leads-map-loading');
   if (el) {
@@ -354,6 +375,7 @@ function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureC
   const valuesByKey = new Map();
   const labelsByKey = new Map();
   const totals = [];
+  const channelsByKey = new Map();
 
   for (const item of metrics.items || []) {
     const key =
@@ -367,6 +389,7 @@ function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureC
         ? item.nombre || key
         : item.nombre || item.cve_mun || key,
     );
+    channelsByKey.set(key, item.por_canal || {});
     totals.push(Number(item.total || 0));
   }
 
@@ -389,7 +412,8 @@ function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureC
       const key = keyForFeature(feature, keyProperty, pad);
       const total = key ? valuesByKey.get(key) || 0 : 0;
       const label = key ? labelsByKey.get(key) || key : 'Sin nombre';
-      const tooltip = `${label}: ${formatNumber(total)} lead${total === 1 ? '' : 's'}`;
+      const breakdown = key ? channelsByKey.get(key) || {} : {};
+      const tooltip = buildTooltip(label, total, breakdown);
       attachFeatureInteractions(layer, tooltip, () => {
         if (onFeatureClick && key) {
           onFeatureClick({ code: key, name: label, total });
