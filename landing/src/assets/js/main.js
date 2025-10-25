@@ -252,8 +252,7 @@ async function handleSubmit(event) {
   appendMessage(userMessage, 'user');
   chatInput.focus();
 
-  // En lugar de enviar inmediatamente, agregamos al buffer por tiempo.
-  aggregator.push(userMessage);
+  enqueueAssistantReply(userMessage);
 }
 
 function initialiseChat() {
@@ -415,52 +414,25 @@ if (currentYearEl) {
   currentYearEl.textContent = new Date().getFullYear();
 }
 
-// --- Agregación por tiempo (buffer de mensajes) ---
+let assistantQueue = Promise.resolve();
 
-function createAggregator({ idleMs = 3000, maxWaitMs = 15000, delimiter = '\n', onFlush }) {
-  let buffer = '';
-  let idleTimer = null;
-  let maxTimer = null;
-
-  const clearTimers = () => {
-    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-    if (maxTimer) { clearTimeout(maxTimer); maxTimer = null; }
-  };
-
-  const flush = async () => {
-    if (!buffer) return;
-    const text = buffer;
-    buffer = '';
-    clearTimers();
-    try {
-      renderTypingIndicator();
-      const reply = await sendToAssistant(text);
-      removeTypingIndicator();
-      appendMessage(reply, 'assistant');
-    } catch (error) {
-      removeTypingIndicator();
-      appendMessage(getFallbackResponse(), 'assistant');
-      console.error('Error obteniendo respuesta de TalIA:', error);
-    }
-  };
-
-  const schedule = () => {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(flush, idleMs);
-    if (!maxTimer) maxTimer = setTimeout(flush, maxWaitMs);
-  };
-
-  const push = (chunk) => {
-    buffer += (buffer ? delimiter : '') + chunk;
-    schedule();
-  };
-
-  return { push, flush };
+function enqueueAssistantReply(message) {
+  assistantQueue = assistantQueue
+    .then(() => handleAssistantReply(message))
+    .catch((error) => {
+      console.error('[landing] Error en la cola de respuestas:', error);
+    });
 }
 
-// Instancia global del agregador para el chat del landing
-const aggregator = createAggregator({
-  idleMs: 3000,      // envía tras 3s sin nuevos trozos
-  maxWaitMs: 15000,  // o a los 15s como máximo
-  delimiter: '\n',
-});
+async function handleAssistantReply(message) {
+  try {
+    renderTypingIndicator();
+    const reply = await sendToAssistant(message);
+    removeTypingIndicator();
+    appendMessage(reply, 'assistant');
+  } catch (error) {
+    removeTypingIndicator();
+    appendMessage(getFallbackResponse(), 'assistant');
+    console.error('Error obteniendo respuesta de TalIA:', error);
+  }
+}
