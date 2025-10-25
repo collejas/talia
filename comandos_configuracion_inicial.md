@@ -70,7 +70,7 @@ sudo systemctl start talia-api.service
 
 sudo systemctl status talia-api.service
 
-
+poetry run pytest
 
 
 

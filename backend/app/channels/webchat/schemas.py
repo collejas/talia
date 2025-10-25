@@ -20,7 +20,7 @@ class WebchatResponse(BaseModel):
 
     session_id: str
     reply: str
-    metadata: dict[str, str] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class WebchatHistoryItem(BaseModel):

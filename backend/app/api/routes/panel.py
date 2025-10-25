@@ -30,6 +30,12 @@ class PanelSendMessagePayload(BaseModel):
     metadata: dict[str, Any] | None = Field(default=None, description="Metadatos opcionales")
 
 
+class ManualOverridePayload(BaseModel):
+    """Payload para activar/desactivar modo manual."""
+
+    manual: bool = Field(..., description="True para pausar al asistente")
+
+
 def _supabase_base_url() -> str:
     if not settings.supabase_url:
         raise HTTPException(status_code=500, detail="Supabase no está configurado")
@@ -313,13 +319,21 @@ async def get_inbox(
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail="Error consultando inbox")
     raw = resp.json() or []
+    ids = [row.get("id") for row in raw if row.get("id")]
+    manual_lookup: dict[str, bool] = {}
+    if ids:
+        try:
+            manual_lookup = await storage.fetch_manual_overrides(ids)
+        except storage.StorageError:
+            logger.exception("No se pudo recuperar estado manual de conversaciones")
     items: list[dict[str, Any]] = []
     for row in raw:
         contacto = row.get("contacto") or {}
         ultimo = row.get("ultimo_mensaje") or {}
+        conv_id = row.get("id")
         items.append(
             {
-                "id": row.get("id"),
+                "id": conv_id,
                 "canal": row.get("canal"),
                 "estado": row.get("estado"),
                 "prioridad": row.get("prioridad"),
@@ -332,6 +346,7 @@ async def get_inbox(
                 "preview": (ultimo.get("texto") or "")[:160],
                 "preview_direccion": ultimo.get("direccion"),
                 "preview_ts": ultimo.get("creado_en"),
+                "manual_override": bool(manual_lookup.get(conv_id or "")),
             }
         )
     return {"ok": True, "items": items}
@@ -419,6 +434,25 @@ async def set_conversation_state(
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail="No fue posible cambiar el estado")
     return {"ok": True, "estado": new_estado}
+
+
+@router.post("/conversaciones/{conversacion_id}/manual")
+async def set_manual_mode(
+    conversacion_id: str,
+    payload: ManualOverridePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    try:
+        await storage.set_manual_override(conversacion_id, payload.manual)
+    except storage.StorageError as exc:
+        detail = str(exc) or "No se pudo actualizar el modo manual"
+        lowered = detail.lower()
+        status = 502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+    return {"ok": True, "manual": payload.manual}
 
 
 @router.post("/conversaciones/{conversacion_id}/mensajes")

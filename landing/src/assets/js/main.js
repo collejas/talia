@@ -321,7 +321,8 @@ async function sendToAssistant(message) {
       throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ''}`);
     }
     const data = await response.json();
-    if (!data?.reply) {
+    const metadata = data?.metadata || {};
+    if (!data?.reply && !metadata.manual_mode) {
       throw new Error('Respuesta vacía del asistente');
     }
     return data;
@@ -542,9 +543,11 @@ async function handleAssistantReply(message) {
     renderTypingIndicator();
     const data = await sendToAssistant(message);
     const reply = data.reply;
-    const metadata = data.metadata || null;
+    const metadata = (data && typeof data.metadata === 'object') ? data.metadata : {};
     removeTypingIndicator();
-    appendMessage(reply, 'assistant', metadata);
+    if (!metadata.manual_mode) {
+      appendMessage(reply, 'assistant', metadata);
+    }
     void syncHistory({ force: true });
   } catch (error) {
     removeTypingIndicator();

@@ -116,6 +116,126 @@ async def fetch_webchat_conversation_info(conversation_id: str) -> WebchatConver
     )
 
 
+async def get_manual_override(conversation_id: str) -> bool:
+    """Indica si la conversación está en modo manual (sin asistente)."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/conversaciones_controles"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "manual_override",
+        "conversacion_id": f"eq.{conversation_id}",
+        "limit": "1",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar controles de conversación: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar controles de conversación"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json() or []
+    if not isinstance(data, list) or not data:
+        return False
+    row = data[0]
+    return bool(row.get("manual_override"))
+
+
+async def fetch_manual_overrides(conversation_ids: list[str]) -> dict[str, bool]:
+    """Obtiene flags manual_override para un conjunto de conversaciones."""
+    if not conversation_ids:
+        return {}
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/conversaciones_controles"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    ids = ",".join(str(cid) for cid in conversation_ids)
+    params = {
+        "select": "conversacion_id,manual_override",
+        "conversacion_id": f"in.({ids})",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar controles de conversación: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar controles de conversación"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json() or []
+    if not isinstance(data, list):
+        return {}
+    result: dict[str, bool] = {}
+    for row in data:
+        cid = row.get("conversacion_id")
+        if cid:
+            result[str(cid)] = bool(row.get("manual_override"))
+    return result
+
+
+async def set_manual_override(conversation_id: str, manual: bool) -> None:
+    """Activa o desactiva el modo manual para una conversación."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/conversaciones_controles"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation,resolution=merge-duplicates",
+    }
+    payload = {
+        "conversacion_id": conversation_id,
+        "manual_override": manual,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al actualizar controles de conversación: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al actualizar controles de conversación"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+
 async def fetch_webchat_history(
     *, session_id: str, limit: int = 50, since: str | None = None
 ) -> list[dict[str, Any]]:

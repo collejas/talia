@@ -166,7 +166,28 @@ const sendForm = document.getElementById('send-form');
 const sendInput = document.getElementById('send-input');
 const sendStatus = document.getElementById('send-status');
 const sendButton = sendForm ? sendForm.querySelector('button[type="submit"]') : null;
+const manualToggle = document.getElementById('manual-toggle');
+const manualStatus = document.getElementById('manual-status');
 let _session = null;
+let _manualOverride = false;
+
+function updateManualDisplay(state) {
+  if (manualToggle) manualToggle.checked = Boolean(state);
+  if (manualStatus) manualStatus.textContent = state ? 'Modo humano activo' : 'Modo automático';
+}
+
+function setManualToggleAvailability(enabled) {
+  if (manualToggle) {
+    manualToggle.disabled = !enabled;
+    if (!enabled) {
+      _manualOverride = false;
+      updateManualDisplay(false);
+    }
+  }
+  if (!enabled && manualStatus) {
+    manualStatus.textContent = 'Modo automático';
+  }
+}
 
 function setComposerEnabled(enabled) {
   if (sendInput) sendInput.disabled = !enabled;
@@ -236,6 +257,7 @@ function setupRealtime(convId) {
 
 async function main() {
   _session = await ensureSession();
+  setManualToggleAvailability(false);
   await loadConversations();
   // Suscripción global para refrescar lista cuando lleguen mensajes nuevos
   const sb = createSupabase();
@@ -278,6 +300,11 @@ async function main() {
             metaEl.textContent = [canal, phone, email].filter(Boolean).join(' • ');
             estadoSel2.value = item.estado || 'abierta';
           }
+          _manualOverride = Boolean(item.manual_override);
+          updateManualDisplay(_manualOverride);
+          setManualToggleAvailability(true);
+        } else {
+          setManualToggleAvailability(false);
         }
         void loadMessages(id);
         setupRealtime(id);
@@ -340,6 +367,48 @@ async function main() {
       scheduleRefreshList(1000);
     }
   });
+
+  if (manualToggle) {
+    manualToggle.addEventListener('change', async () => {
+      if (!_currentConv) {
+        manualToggle.checked = false;
+        return;
+      }
+      const desired = manualToggle.checked;
+      if (manualStatus) {
+        manualStatus.textContent = desired
+          ? 'Activando modo humano…'
+          : 'Reanudando asistente…';
+      }
+      manualToggle.disabled = true;
+      const url = `/api/conversaciones/${encodeURIComponent(_currentConv)}/manual`;
+      try {
+        const res = await fetchJSONWithAuth(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ manual: desired }),
+        });
+        if (!res.ok) {
+          if (manualStatus) manualStatus.textContent = 'No se pudo actualizar el modo.';
+          manualToggle.checked = _manualOverride;
+          return;
+        }
+        _manualOverride = desired;
+        updateManualDisplay(_manualOverride);
+        const idx = (_lastList || []).findIndex((x) => String(x.id) === String(_currentConv));
+        if (idx >= 0) {
+          _lastList[idx].manual_override = _manualOverride;
+        }
+        scheduleRefreshList(800);
+      } catch (error) {
+        console.error('[panel] Error actualizando modo manual:', error);
+        if (manualStatus) manualStatus.textContent = 'Error de red al actualizar.';
+        manualToggle.checked = _manualOverride;
+      } finally {
+        manualToggle.disabled = false;
+      }
+    });
+  }
 
   if (sendForm) {
     setComposerEnabled(false);

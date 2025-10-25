@@ -45,6 +45,10 @@
     .composer{margin-top:12px;display:flex;flex-direction:column;gap:8px}
     .composer textarea{width:100%;min-height:80px;border-radius:12px;padding:10px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg);resize:vertical;font-family:inherit}
     .composer textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+    .composer-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .composer-toggle label{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+    .composer-toggle input[type="checkbox"]{width:18px;height:18px;border-radius:4px;border:1px solid var(--border-soft);accent-color:var(--accent)}
+    .composer-toggle input[type="checkbox"]:disabled{cursor:not-allowed;opacity:0.5}
     .composer-actions{display:flex;justify-content:flex-end;gap:8px;align-items:center}
     .composer .muted{font-size:12px}
     .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:#ff5d5d;color:#0b1020;font-size:11px;font-weight:800;margin-left:6px}
@@ -116,6 +120,13 @@
         <form id="send-form" class="composer" autocomplete="off">
           <label class="muted" for="send-input">Responder al cliente</label>
           <textarea id="send-input" name="content" placeholder="Escribe un mensaje para el cliente…" maxlength="2000"></textarea>
+          <div class="composer-toggle">
+            <label for="manual-toggle">
+              <input type="checkbox" id="manual-toggle" />
+              <span>Pausar asistente (modo humano)</span>
+            </label>
+            <span class="muted" id="manual-status">Modo automático</span>
+          </div>
           <div class="composer-actions">
             <span class="muted" id="send-status" role="status" aria-live="polite"></span>
             <button type="submit" class="btn">Enviar</button>

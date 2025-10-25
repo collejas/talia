@@ -77,6 +77,21 @@ async def handle_webchat_message(
     except storage.StorageError:
         logger.exception("No se pudo registrar el mensaje entrante en Supabase")
 
+    manual_override = False
+    if conversation_id:
+        try:
+            manual_override = await storage.get_manual_override(conversation_id)
+        except storage.StorageError:
+            logger.exception("No se pudo consultar el modo manual de la conversación")
+
+    if manual_override:
+        metadata["manual_mode"] = True
+        return WebchatResponse(
+            session_id=message.session_id,
+            reply="",
+            metadata=metadata or None,
+        )
+
     # Recupera conversation_id de OpenAI desde cache/BD (si existe)
     conversation_for_ai = (
         record.conversation_openai_id
