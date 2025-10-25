@@ -110,10 +110,10 @@ function isNearViewportBottom(container, tolerance = 160) {
   return distanceToBottom <= tolerance;
 }
 
-function maintainViewportBottom(behavior = 'auto', tolerance) {
+function maintainViewportBottom(behavior = 'auto', tolerance, force = false) {
   const container = getScrollContainer();
-  const shouldStick = isNearViewportBottom(container, tolerance);
-  if (!container || !shouldStick) return;
+  if (!container) return;
+  if (!force && !isNearViewportBottom(container, tolerance)) return;
   requestAnimationFrame(() => {
     if (typeof container.scrollTo === 'function') {
       container.scrollTo({ top: container.scrollHeight, behavior });
@@ -143,14 +143,22 @@ function createMessageElement(text, role = 'assistant', metadata = null) {
   return wrapper;
 }
 
-function appendMessage(text, role = 'assistant', metadata = null, scrollBehavior = 'auto') {
+function normalizeScrollOptions(options) {
+  if (typeof options === 'string') {
+    return { behavior: options };
+  }
+  return options || {};
+}
+
+function appendMessage(text, role = 'assistant', metadata = null, scrollOptions = {}) {
   if (!chatLog) return;
+  const { behavior = 'auto', force = false, tolerance } = normalizeScrollOptions(scrollOptions);
   const container = getScrollContainer();
-  const shouldStick = isNearViewportBottom(container);
+  const shouldStick = force || isNearViewportBottom(container, tolerance);
   const element = createMessageElement(text, role, metadata);
   chatLog.appendChild(element);
   if (shouldStick) {
-    maintainViewportBottom(scrollBehavior);
+    maintainViewportBottom(behavior, tolerance, force);
   }
 }
 
@@ -204,11 +212,12 @@ function historyIdsEqual(messages) {
   return !changed;
 }
 
-function renderHistoryMessages(messages) {
+function renderHistoryMessages(messages, options = {}) {
   if (!chatLog) return;
+  const { force = false, behavior = 'auto', tolerance } = normalizeScrollOptions(options);
   removeTypingIndicator();
   const container = getScrollContainer();
-  const shouldStick = isNearViewportBottom(container);
+  const shouldStick = force || isNearViewportBottom(container, tolerance);
   chatLog.textContent = '';
   for (const item of messages || []) {
     const role = mapHistoryRole(item);
@@ -217,7 +226,7 @@ function renderHistoryMessages(messages) {
     chatLog.appendChild(el);
   }
   if (shouldStick) {
-    maintainViewportBottom('auto');
+    maintainViewportBottom(behavior, tolerance, force);
   }
 }
 
@@ -239,7 +248,7 @@ async function syncHistory({ force = false } = {}) {
     const data = await response.json();
     const messages = Array.isArray(data?.messages) ? data.messages : [];
     if (!force && historyIdsEqual(messages)) return;
-    renderHistoryMessages(messages);
+    renderHistoryMessages(messages, { force, behavior: force ? 'smooth' : 'auto' });
   } catch (error) {
     console.error('[landing] No se pudo sincronizar historial del webchat:', error);
   } finally {
@@ -348,7 +357,7 @@ async function handleSubmit(event) {
 
   const userMessage = chatInput.value.trim();
   chatInput.value = '';
-  appendMessage(userMessage, 'user');
+  appendMessage(userMessage, 'user', null, { behavior: 'smooth', force: true });
   chatInput.focus();
 
   enqueueAssistantReply(userMessage);
@@ -546,12 +555,12 @@ async function handleAssistantReply(message) {
     const metadata = (data && typeof data.metadata === 'object') ? data.metadata : {};
     removeTypingIndicator();
     if (!metadata.manual_mode) {
-      appendMessage(reply, 'assistant', metadata);
+      appendMessage(reply, 'assistant', metadata, { behavior: 'smooth', force: true });
     }
     void syncHistory({ force: true });
   } catch (error) {
     removeTypingIndicator();
-    appendMessage(getFallbackResponse(), 'assistant');
+    appendMessage(getFallbackResponse(), 'assistant', null, { behavior: 'smooth', force: true });
     console.error('Error obteniendo respuesta de TalIA:', error);
     void syncHistory({ force: true });
   }
