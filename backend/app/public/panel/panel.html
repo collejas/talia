@@ -65,6 +65,47 @@
         <div class="kpi-value"><span id="kpi-lapso-medio">—</span> <small class="muted">(máx <span id="kpi-lapso-max">—</span>)</small></div>
       </div>
     </section>
+
+    <section class="card map-card" aria-labelledby="leads-map-title">
+      <div class="map-card-header">
+        <div>
+          <h2 id="leads-map-title" class="map-card-title">Leads por estado</h2>
+          <p class="muted map-card-subtitle">Distribución de contactos WhatsApp por entidad federativa y municipio.</p>
+        </div>
+        <div class="map-card-controls" role="group" aria-label="Controles del mapa">
+          <button id="leads-map-reset" class="btn btn-ghost" type="button" disabled>
+            Ver estados
+          </button>
+          <label class="map-control">
+            <span>Escala</span>
+            <select id="leads-map-scale" class="btn btn-outline" aria-label="Cambiar modo de escala">
+              <option value="quantile" selected>Cuantiles</option>
+              <option value="equal">Intervalos iguales</option>
+              <option value="log">Logarítmica</option>
+            </select>
+          </label>
+          <label class="map-control">
+            <span>Paleta</span>
+            <select id="leads-map-palette" class="btn btn-outline" aria-label="Cambiar paleta de colores">
+              <option value="dusk" selected>Atardecer</option>
+              <option value="viridis">Viridis</option>
+              <option value="blues">Azules</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="leads-map-summary" class="map-summary muted">Cargando totales…</div>
+      <div id="leads-map-wrapper">
+        <div id="leads-map-loading" class="map-loading" role="status" aria-live="polite">
+          Preparando mapa…
+        </div>
+        <div id="leads-map-error" class="map-error" hidden>
+          No fue posible cargar la información geográfica. Intenta nuevamente más tarde.
+        </div>
+        <div id="leads-map" class="map-container" aria-hidden="true"></div>
+        <div id="leads-map-legend" class="map-legend" aria-hidden="true"></div>
+      </div>
+    </section>
   </main>
 
   <script type="module">

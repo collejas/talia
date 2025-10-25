@@ -7,6 +7,7 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -17,6 +18,13 @@ from pydantic import BaseModel, Field
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.services import storage
+from app.services.leads_geo import (
+    ContactLocation,
+    infer_contact_location,
+    load_state_municipalities_geojson,
+    load_states_geojson,
+    state_display_name,
+)
 
 router = APIRouter(prefix="", tags=["panel"])
 
@@ -538,6 +546,149 @@ async def get_messages(
             }
         )
     return {"ok": True, "items": items}
+
+
+async def _fetch_whatsapp_contact_locations(token: str) -> list[ContactLocation]:
+    params = {
+        "select": "contacto_id,contacto:contactos(id,telefono_e164,contacto_datos)",
+        "canal": "eq.whatsapp",
+        "limit": "20000",
+    }
+    resp = await _sb_get("/rest/v1/identidades_canal", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando contactos WhatsApp")
+    rows = resp.json() or []
+    contacts: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        contacto = row.get("contacto") or {}
+        contacto_id = row.get("contacto_id") or contacto.get("id")
+        if not contacto_id:
+            continue
+        contacto_id = str(contacto_id)
+        if contacto_id in contacts:
+            continue
+        contacts[contacto_id] = {
+            "telefono_e164": contacto.get("telefono_e164"),
+            "contacto_datos": contacto.get("contacto_datos"),
+        }
+    locations: list[ContactLocation] = []
+    for contacto_id, data in sorted(contacts.items(), key=lambda item: item[0]):
+        locations.append(infer_contact_location(contacto_id, data))
+    return locations
+
+
+def _summarize_states(
+    locations: list[ContactLocation],
+) -> tuple[list[dict[str, Any]], int, int, int]:
+    counts: dict[str, int] = defaultdict(int)
+    names: dict[str, str] = {}
+    unknown = 0
+    for location in locations:
+        if location.estado_clave:
+            counts[location.estado_clave] += 1
+            if location.estado_nombre:
+                names[location.estado_clave] = location.estado_nombre
+        else:
+            unknown += 1
+    items: list[dict[str, Any]] = []
+    for code, total in counts.items():
+        display = names.get(code) or state_display_name(code) or code
+        items.append({"cve_ent": code, "nombre": display, "total": total})
+    items.sort(key=lambda row: row["total"], reverse=True)
+    total_located = sum(counts.values())
+    total_contacts = total_located + unknown
+    return items, total_located, unknown, total_contacts
+
+
+def _summarize_municipios(
+    locations: list[ContactLocation], state_code: str
+) -> tuple[list[dict[str, Any]], int, int, int]:
+    target_state = str(state_code).zfill(2)
+    counts: dict[str, int] = defaultdict(int)
+    metadata: dict[str, dict[str, str]] = {}
+    unknown = 0
+    total_contacts = 0
+    for location in locations:
+        if location.estado_clave != target_state:
+            continue
+        total_contacts += 1
+        if location.municipio_clave:
+            cvegeo = location.municipio_cvegeo or f"{target_state}{location.municipio_clave}"
+            counts[cvegeo] += 1
+            metadata[cvegeo] = {
+                "cve_mun": location.municipio_clave,
+                "nombre": location.municipio_nombre or location.municipio_clave,
+            }
+        else:
+            unknown += 1
+    items: list[dict[str, Any]] = []
+    for cvegeo, total in counts.items():
+        info = metadata.get(cvegeo, {})
+        cve_mun = info.get("cve_mun") or (cvegeo[-3:] if len(cvegeo) >= 3 else cvegeo)
+        nombre = info.get("nombre") or cve_mun
+        items.append({"cvegeo": cvegeo, "cve_mun": cve_mun, "nombre": nombre, "total": total})
+    items.sort(key=lambda row: row["total"], reverse=True)
+    total_located = sum(counts.values())
+    return items, total_located, unknown, total_contacts
+
+
+@router.get("/kpis/leads/estados")
+async def leads_by_state(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    locations = await _fetch_whatsapp_contact_locations(token)
+    items, total_located, unknown, total_contacts = _summarize_states(locations)
+    return {
+        "ok": True,
+        "total_contactos": total_contacts,
+        "total_ubicados": total_located,
+        "sin_ubicacion": unknown,
+        "items": items,
+    }
+
+
+@router.get("/kpis/leads/estados/{cve_ent}/municipios")
+async def leads_by_municipality(
+    cve_ent: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    state_code = str(cve_ent).zfill(2)
+    locations = await _fetch_whatsapp_contact_locations(token)
+    items, total_located, unknown, total_contacts = _summarize_municipios(locations, state_code)
+    estado_nombre = state_display_name(state_code)
+    return {
+        "ok": True,
+        "estado": {"cve_ent": state_code, "nombre": estado_nombre or state_code},
+        "total_contactos": total_contacts,
+        "total_ubicados": total_located,
+        "sin_ubicacion": unknown,
+        "items": items,
+    }
+
+
+@router.get("/kpis/leads/geo/estados")
+async def leads_geo_states() -> dict[str, Any]:
+    try:
+        geojson = load_states_geojson()
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        raise HTTPException(status_code=500, detail="geo_catalog_missing") from exc
+    return {"ok": True, "geojson": geojson}
+
+
+@router.get("/kpis/leads/geo/municipios/{cve_ent}")
+async def leads_geo_municipios(cve_ent: str) -> dict[str, Any]:
+    code = str(cve_ent).zfill(2)
+    try:
+        geojson = load_state_municipalities_geojson(code)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="estado_no_encontrado") from exc
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        raise HTTPException(status_code=500, detail="geo_catalog_missing") from exc
+    return {"ok": True, "geojson": geojson}
 
 
 @router.get("/panel/env.js")

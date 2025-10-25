@@ -82,3 +82,35 @@ body.theme-void .nav{background:rgba(8,8,12,.75);border-bottom:1px solid var(--b
 
 /* Utilidades básicas */
 .w100{width:100%}
+
+.map-card{margin-top:20px;display:flex;flex-direction:column;gap:16px}
+.map-card-header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px}
+.map-card-title{margin:0;font-size:20px;font-weight:700}
+.map-card-subtitle{margin:4px 0 0;font-size:13px;max-width:520px}
+.map-card-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.map-card-controls .btn{padding:8px 12px;font-size:13px}
+.map-card-controls select{min-width:150px}
+.map-control{display:flex;flex-direction:column;font-size:12px;gap:4px;color:var(--muted)}
+.map-summary{font-size:13px}
+.map-summary strong{color:var(--fg)}
+.map-card .btn[disabled]{opacity:.5;pointer-events:none}
+
+#leads-map-wrapper{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border-soft);background:var(--surface-alt)}
+.map-container{min-height:420px}
+.map-container.leaflet-container{height:100%;width:100%}
+.map-loading,.map-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-size:15px;background:rgba(11,16,32,.65);color:var(--fg);z-index:5}
+.map-error{background:rgba(176,34,78,.15);color:#ffccd5}
+.map-legend{position:absolute;bottom:16px;right:16px;background:rgba(11,16,32,.82);border-radius:10px;padding:10px 12px;font-size:12px;display:flex;flex-direction:column;gap:6px;border:1px solid rgba(255,255,255,.08);min-width:140px}
+.map-legend[hidden]{display:none}
+.map-legend-title{font-weight:600;font-size:12px}
+.map-legend-scale{display:grid;grid-template-columns:repeat(auto-fit,minmax(60px,1fr));gap:8px}
+.map-legend-item{display:flex;align-items:center;gap:6px}
+.map-legend-swatch{width:14px;height:14px;border-radius:4px;border:1px solid rgba(255,255,255,.4)}
+.map-legend-range{font-size:11px}
+
+@media (max-width:768px){
+  .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .map-card-controls{width:100%;justify-content:flex-start}
+  #leads-map-wrapper{border-radius:10px}
+  .map-container{min-height:320px}
+}
