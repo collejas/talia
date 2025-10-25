@@ -1,0 +1,130 @@
+{
+  "01": {
+    "name": "Aguascalientes",
+    "path": "municipios_01_clean.geojson"
+  },
+  "02": {
+    "name": "Baja California",
+    "path": "municipios_02_clean.geojson"
+  },
+  "03": {
+    "name": "Baja California Sur",
+    "path": "municipios_03_clean.geojson"
+  },
+  "04": {
+    "name": "Campeche",
+    "path": "municipios_04_clean.geojson"
+  },
+  "05": {
+    "name": "Coahuila de Zaragoza",
+    "path": "municipios_05_clean.geojson"
+  },
+  "06": {
+    "name": "Colima",
+    "path": "municipios_06_clean.geojson"
+  },
+  "07": {
+    "name": "Chiapas",
+    "path": "municipios_07_clean.geojson"
+  },
+  "08": {
+    "name": "Chihuahua",
+    "path": "municipios_08_clean.geojson"
+  },
+  "09": {
+    "name": "Ciudad de México",
+    "path": "municipios_09_clean.geojson"
+  },
+  "10": {
+    "name": "Durango",
+    "path": "municipios_10_clean.geojson"
+  },
+  "11": {
+    "name": "Guanajuato",
+    "path": "municipios_11_clean.geojson"
+  },
+  "12": {
+    "name": "Guerrero",
+    "path": "municipios_12_clean.geojson"
+  },
+  "13": {
+    "name": "Hidalgo",
+    "path": "municipios_13_clean.geojson"
+  },
+  "14": {
+    "name": "Jalisco",
+    "path": "municipios_14_clean.geojson"
+  },
+  "15": {
+    "name": "México",
+    "path": "municipios_15_clean.geojson"
+  },
+  "16": {
+    "name": "Michoacán de Ocampo",
+    "path": "municipios_16_clean.geojson"
+  },
+  "17": {
+    "name": "Morelos",
+    "path": "municipios_17_clean.geojson"
+  },
+  "18": {
+    "name": "Nayarit",
+    "path": "municipios_18_clean.geojson"
+  },
+  "19": {
+    "name": "Nuevo León",
+    "path": "municipios_19_clean.geojson"
+  },
+  "20": {
+    "name": "Oaxaca",
+    "path": "municipios_20_clean.geojson"
+  },
+  "21": {
+    "name": "Puebla",
+    "path": "municipios_21_clean.geojson"
+  },
+  "22": {
+    "name": "Querétaro",
+    "path": "municipios_22_clean.geojson"
+  },
+  "23": {
+    "name": "Quintana Roo",
+    "path": "municipios_23_clean.geojson"
+  },
+  "24": {
+    "name": "San Luis Potosí",
+    "path": "municipios_24_clean.geojson"
+  },
+  "25": {
+    "name": "Sinaloa",
+    "path": "municipios_25_clean.geojson"
+  },
+  "26": {
+    "name": "Sonora",
+    "path": "municipios_26_clean.geojson"
+  },
+  "27": {
+    "name": "Tabasco",
+    "path": "municipios_27_clean.geojson"
+  },
+  "28": {
+    "name": "Tamaulipas",
+    "path": "municipios_28_clean.geojson"
+  },
+  "29": {
+    "name": "Tlaxcala",
+    "path": "municipios_29_clean.geojson"
+  },
+  "30": {
+    "name": "Veracruz de Ignacio de la Llave",
+    "path": "municipios_30_clean.geojson"
+  },
+  "31": {
+    "name": "Yucatán",
+    "path": "municipios_31_clean.geojson"
+  },
+  "32": {
+    "name": "Zacatecas",
+    "path": "municipios_32_clean.geojson"
+  }
+}
