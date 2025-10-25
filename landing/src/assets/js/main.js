@@ -23,13 +23,72 @@ function restorePosition(node) {
   if (!pos) return;
   pos.parent.insertBefore(node, pos.next);
 }
-const THEME_STORAGE_KEY = 'talia-theme-preference-v2';
-const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
-const THEME_META = {
-  'theme-aurora': { themeColor: '#060414' },
-  'theme-ice': { themeColor: '#fdf4ff' },
-  'theme-void': { themeColor: '#050505' },
-};
+let themeManager = null;
+
+async function initialiseTheme() {
+  if (!body) return;
+  try {
+    const module = await import('/api/panel/assets/js/theme.js');
+    themeManager = module.createThemeManager({
+      selectEl: themeSelect,
+      bodyEl: body,
+      metaEl: themeColorMeta,
+      storageKey: 'talia-theme-preference-v2',
+    });
+  } catch (error) {
+    console.warn('[landing] No se pudo cargar el gestor de temas compartido, usando fallback.', error);
+    fallbackInitialiseTheme();
+  }
+}
+
+function fallbackInitialiseTheme() {
+  if (!body) return;
+  const THEMES = ['theme-aurora', 'theme-ice', 'theme-void'];
+  const THEME_META = {
+    'theme-aurora': { themeColor: '#060414' },
+    'theme-ice': { themeColor: '#fdf4ff' },
+    'theme-void': { themeColor: '#050505' },
+  };
+  const storageKey = 'talia-theme-preference-v2';
+
+  const defaultTheme =
+    body.className.split(' ').find((cls) => THEMES.includes(cls)) || THEMES[0];
+
+  let storedTheme = null;
+  try {
+    storedTheme = window.localStorage.getItem(storageKey);
+  } catch (error) {
+    console.warn('[landing] No se pudo leer preferencia de tema.', error);
+  }
+
+  const applyTheme = (theme, { persist = true } = {}) => {
+    const selected = THEMES.includes(theme) ? theme : THEMES[0];
+    body.classList.remove(...THEMES);
+    body.classList.add(selected);
+    if (themeSelect) {
+      themeSelect.value = selected;
+    }
+    const metaCfg = THEME_META[selected];
+    if (themeColorMeta && metaCfg?.themeColor) {
+      themeColorMeta.setAttribute('content', metaCfg.themeColor);
+    }
+    if (persist) {
+      try {
+        window.localStorage.setItem(storageKey, selected);
+      } catch (error) {
+        console.warn('[landing] No se pudo guardar la preferencia de tema.', error);
+      }
+    }
+  };
+
+  applyTheme(storedTheme || defaultTheme, { persist: false });
+
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (event) => {
+      applyTheme(event.target.value);
+    });
+  }
+}
 
 const chatLog = document.getElementById('chat-log');
 const chatForm = document.getElementById('chat-form');
@@ -62,38 +121,6 @@ function maintainViewportBottom(behavior = 'auto', tolerance) {
       container.scrollTop = container.scrollHeight;
     }
   });
-}
-
-function applyTheme(theme) {
-  const selected = THEMES.includes(theme) ? theme : THEMES[0];
-  body.classList.remove(...THEMES);
-  body.classList.add(selected);
-  if (themeSelect) {
-    themeSelect.value = selected;
-  }
-  // Actualizar meta theme-color para status bars
-  const metaCfg = THEME_META[selected];
-  if (themeColorMeta && metaCfg?.themeColor) {
-    themeColorMeta.setAttribute('content', metaCfg.themeColor);
-  }
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, selected);
-  } catch (error) {
-    console.warn('No se pudo guardar la preferencia de tema.', error);
-  }
-}
-
-function initialiseTheme() {
-  let storedTheme = null;
-  try {
-    storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-  } catch (error) {
-    console.warn('No se pudo leer la preferencia de tema.', error);
-  }
-  const defaultTheme = body.className
-    .split(' ')
-    .find((cls) => THEMES.includes(cls)) || THEMES[0];
-  applyTheme(storedTheme || defaultTheme);
 }
 
 function createMessageElement(text, role = 'assistant') {
@@ -378,13 +405,6 @@ function initialiseMobileNav() {
     });
   }
   // No dependemos de breakpoints: menú disponible en todas las resoluciones
-}
-
-if (themeSelect) {
-  themeSelect.addEventListener('change', (event) => {
-    const selectedTheme = event.target.value;
-    applyTheme(selectedTheme);
-  });
 }
 
 initialiseTheme();

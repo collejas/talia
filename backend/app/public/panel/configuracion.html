@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
   <title>TalIA • Configuración</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,12 +15,12 @@
     .muted{color:var(--muted)}
     .tabs{display:flex;gap:8px;margin-bottom:12px}
     .tabs .btn{padding:8px 12px}
-    pre{margin:0;background:#0b132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;overflow:auto}
+    pre{margin:0;background:var(--surface-alt);border:1px solid var(--border-soft);border-radius:12px;padding:12px;overflow:auto;color:var(--fg)}
   </style>
   <script src="./assets/js/config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="theme-aurora">
   <header class="nav">
     <div class="container nav-inner">
       <a class="brand" href="panel.html">
@@ -30,6 +31,13 @@
         <a href="panel.html" data-nav="dashboard" class="btn btn-outline">Dashboard</a>
         <a href="inbox.html" data-nav="inbox" class="btn btn-outline">Inbox</a>
         <a href="configuracion.html" data-nav="config" class="btn">Configuración</a>
+        <div class="theme-switcher">
+          <select id="panel-theme-select" class="btn btn-outline" aria-label="Cambiar tema visual">
+            <option value="theme-aurora">Aurora violeta</option>
+            <option value="theme-ice">Espectro vibrante</option>
+            <option value="theme-void">Nocturno</option>
+          </select>
+        </div>
         <span class="muted" id="user-email"></span>
       </nav>
     </div>

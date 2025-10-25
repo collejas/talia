@@ -1,3 +1,21 @@
+import { createThemeManager } from './theme.js';
+
+// Inicializa tema compartido si existe selector en la vista
+const _themeSelect = typeof document !== 'undefined' ? document.getElementById('panel-theme-select') : null;
+const _themeMeta = typeof document !== 'undefined' ? document.querySelector('meta[name="theme-color"]') : null;
+if (_themeSelect) {
+  try {
+    createThemeManager({
+      selectEl: _themeSelect,
+      bodyEl: document.body,
+      metaEl: _themeMeta,
+      storageKey: 'talia-panel-theme-preference',
+    });
+  } catch (error) {
+    console.warn('[panel] No se pudo inicializar el gestor de temas.', error);
+  }
+}
+
 // Utilidades mínimas comunes para el panel
 
 export function $(id) { return document.getElementById(id); }
@@ -48,4 +66,3 @@ export function setActiveNav(section) {
   const cur = document.querySelector(`[data-nav='${section}']`);
   if (cur) cur.classList.add('is-active');
 }
-
