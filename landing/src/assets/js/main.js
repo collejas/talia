@@ -389,7 +389,7 @@ async function handleSubmit(event) {
   chatInput.focus();
 
   enqueueAssistantReply(userMessage);
-  void syncHistory({ force: true });
+  void syncHistory();
 }
 
 function initialiseChat() {
