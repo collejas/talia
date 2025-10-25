@@ -491,6 +491,7 @@ async def get_messages(
     for row in raw:
         datos = row.get("datos") or {}
         sender_type = datos.get("sender_type")
+        metadata = datos if isinstance(datos, dict) else {}
         items.append(
             {
                 "id": row.get("id"),
@@ -499,6 +500,7 @@ async def get_messages(
                 "texto": row.get("texto"),
                 "creado_en": row.get("creado_en"),
                 "sender_type": sender_type,
+                "metadata": metadata or None,
             }
         )
     return {"ok": True, "items": items}

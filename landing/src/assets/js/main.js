@@ -123,13 +123,17 @@ function maintainViewportBottom(behavior = 'auto', tolerance) {
   });
 }
 
-function createMessageElement(text, role = 'assistant') {
+function createMessageElement(text, role = 'assistant', metadata = null) {
   const wrapper = document.createElement('div');
   wrapper.className = `message message--${role}`;
   if (role === 'human') {
     const label = document.createElement('span');
     label.className = 'message__label';
-    label.textContent = 'Agente humano';
+    const agentName =
+      metadata && typeof metadata.agent_name === 'string' && metadata.agent_name.trim()
+        ? metadata.agent_name.trim()
+        : 'sin nombre';
+    label.textContent = `Este mensaje es de 'humano': '${agentName}', ya no hablas con Tal-IA`;
     wrapper.appendChild(label);
   }
   const body = document.createElement('div');
@@ -139,11 +143,11 @@ function createMessageElement(text, role = 'assistant') {
   return wrapper;
 }
 
-function appendMessage(text, role = 'assistant', scrollBehavior = 'auto') {
+function appendMessage(text, role = 'assistant', metadata = null, scrollBehavior = 'auto') {
   if (!chatLog) return;
   const container = getScrollContainer();
   const shouldStick = isNearViewportBottom(container);
-  const element = createMessageElement(text, role);
+  const element = createMessageElement(text, role, metadata);
   chatLog.appendChild(element);
   if (shouldStick) {
     maintainViewportBottom(scrollBehavior);
@@ -209,7 +213,7 @@ function renderHistoryMessages(messages) {
   for (const item of messages || []) {
     const role = mapHistoryRole(item);
     const text = typeof item.content === 'string' ? item.content : '';
-    const el = createMessageElement(text, role);
+    const el = createMessageElement(text, role, item.metadata || null);
     chatLog.appendChild(el);
   }
   if (shouldStick) {
@@ -538,8 +542,9 @@ async function handleAssistantReply(message) {
     renderTypingIndicator();
     const data = await sendToAssistant(message);
     const reply = data.reply;
+    const metadata = data.metadata || null;
     removeTypingIndicator();
-    appendMessage(reply, 'assistant');
+    appendMessage(reply, 'assistant', metadata);
     void syncHistory({ force: true });
   } catch (error) {
     removeTypingIndicator();

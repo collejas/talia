@@ -83,8 +83,14 @@ function resolveSenderLabel(it) {
     return { label: 'Usuario', senderType: 'user' };
   }
   const normalised = normaliseSenderType(it);
+  const meta = it.metadata || {};
+  const agentName =
+    typeof meta.agent_name === 'string' && meta.agent_name.trim()
+      ? meta.agent_name.trim()
+      : 'sin nombre';
   if (normalised && normalised.startsWith('human')) {
-    return { label: 'Humano', senderType: 'human_agent' };
+    const label = `Este mensaje es de 'humano': '${agentName}', ya no hablas con Tal-IA`;
+    return { label, senderType: 'human_agent' };
   }
   return { label: 'TalIA', senderType: 'assistant' };
 }
@@ -160,6 +166,7 @@ const sendForm = document.getElementById('send-form');
 const sendInput = document.getElementById('send-input');
 const sendStatus = document.getElementById('send-status');
 const sendButton = sendForm ? sendForm.querySelector('button[type="submit"]') : null;
+let _session = null;
 
 function setComposerEnabled(enabled) {
   if (sendInput) sendInput.disabled = !enabled;
@@ -218,6 +225,7 @@ function setupRealtime(convId) {
           texto: rec.texto,
           creado_en: rec.creado_en,
           sender_type: meta?.sender_type,
+          metadata: meta || null,
         });
         const list = $('msg-list');
         if (list) list.scrollTop = list.scrollHeight;
@@ -227,7 +235,7 @@ function setupRealtime(convId) {
 }
 
 async function main() {
-  await ensureSession();
+  _session = await ensureSession();
   await loadConversations();
   // Suscripción global para refrescar lista cuando lleguen mensajes nuevos
   const sb = createSupabase();
@@ -341,13 +349,22 @@ async function main() {
       if (!_currentConv) return;
       const content = sendInput.value.trim();
       const url = `/api/conversaciones/${encodeURIComponent(_currentConv)}/mensajes`;
+      const user = _session?.user || {};
+      const metadata = {
+        agent_name:
+          (user.user_metadata &&
+            (user.user_metadata.full_name || user.user_metadata.name || user.user_metadata.display_name)) ||
+          user.email ||
+          'Operador',
+        agent_email: user.email || null,
+      };
       try {
         setComposerEnabled(false);
         if (sendStatus) sendStatus.textContent = 'Enviando…';
         const res = await fetchJSONWithAuth(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, metadata }),
         });
         if (!res.ok) {
           if (sendStatus) sendStatus.textContent = 'No se pudo enviar el mensaje.';
