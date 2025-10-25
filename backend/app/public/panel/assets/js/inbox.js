@@ -56,6 +56,7 @@ function renderConversations(items) {
     previewWrap.className = 'muted';
     previewWrap.style.fontSize = '12px';
     previewWrap.style.marginTop = '4px';
+    previewWrap.dataset.role = 'preview';
     const who = it.preview_direccion === 'saliente' ? 'Agente' : (it.preview_direccion ? 'Usuario' : '');
     const preview = typeof it.preview === 'string' ? it.preview : '';
     const previewText = `${who ? `${who}: ` : ''}${preview}`;
@@ -136,7 +137,15 @@ function renderMessages(items) {
   list.scrollTop = list.scrollHeight;
 }
 
+let _isLoadingList = false;
+let _isLoadingMessages = false;
+let _loadingMessagesFor = null;
+let _listPollTimer = null;
+let _messagePollTimer = null;
+
 async function loadConversations() {
+  if (_isLoadingList) return;
+  _isLoadingList = true;
   const canalSel = document.getElementById('filter-canal');
   const estadoSel = document.getElementById('filter-estado');
   const canal = canalSel ? (canalSel.value || '') : '';
@@ -145,16 +154,33 @@ async function loadConversations() {
   qs.set('limit', '25');
   if (canal) qs.set('canal', canal);
   if (estado) qs.set('estado', estado);
-  const r = await fetchJSONWithAuth(`/api/inbox?${qs.toString()}`);
-  if (r.ok) {
-    _lastList = r.json?.items || [];
-    renderConversations(_lastList);
+  try {
+    const r = await fetchJSONWithAuth(`/api/inbox?${qs.toString()}`);
+    if (r.ok) {
+      _lastList = r.json?.items || [];
+      renderConversations(_lastList);
+    }
+  } finally {
+    _isLoadingList = false;
   }
 }
 
 async function loadMessages(convId) {
-  const r = await fetchJSONWithAuth(`/api/conversaciones/${encodeURIComponent(convId)}/mensajes?limit=50`);
-  if (r.ok) renderMessages(r.json?.items || []);
+  if (!convId) return;
+  if (_isLoadingMessages && _loadingMessagesFor === convId) return;
+  _isLoadingMessages = true;
+  _loadingMessagesFor = convId;
+  try {
+    const r = await fetchJSONWithAuth(
+      `/api/conversaciones/${encodeURIComponent(convId)}/mensajes?limit=50`
+    );
+    if (r.ok && String(_currentConv || '') === String(convId)) {
+      renderMessages(r.json?.items || []);
+    }
+  } finally {
+    _isLoadingMessages = false;
+    if (_loadingMessagesFor === convId) _loadingMessagesFor = null;
+  }
 }
 
 let _rtChannel = null;
@@ -201,6 +227,23 @@ function setComposerEnabled(enabled) {
 function scheduleRefreshList(delayMs = 600) {
   if (_refreshTimer) window.clearTimeout(_refreshTimer);
   _refreshTimer = window.setTimeout(() => { void loadConversations(); }, delayMs);
+}
+
+function ensurePolling() {
+  if (!_listPollTimer) {
+    _listPollTimer = window.setInterval(() => {
+      if (document.hidden) return;
+      void loadConversations();
+    }, 12000);
+  }
+  if (!_messagePollTimer) {
+    _messagePollTimer = window.setInterval(() => {
+      if (document.hidden) return;
+      if (_currentConv) {
+        void loadMessages(_currentConv);
+      }
+    }, 7000);
+  }
 }
 
 function updateBadge(convId, delta = 1) {
@@ -259,6 +302,7 @@ async function main() {
   _session = await ensureSession();
   setManualToggleAvailability(false);
   await loadConversations();
+  ensurePolling();
   // Suscripción global para refrescar lista cuando lleguen mensajes nuevos
   const sb = createSupabase();
   if (sb) {
@@ -269,6 +313,9 @@ async function main() {
         const rec = payload?.new || {};
         const convId = rec.conversacion_id;
         const dir = rec.direccion;
+        if (convId && String(convId) === String(_currentConv || '')) {
+          void loadMessages(convId);
+        }
         // Si llega un mensaje entrante a una conversación distinta a la activa, incrementa badge local
         if (convId && dir === 'entrante' && String(convId) !== String(_currentConv || '')) {
           updateBadge(convId, 1);
@@ -440,7 +487,34 @@ async function main() {
           sendInput.value = content;
         } else {
           if (sendStatus) sendStatus.textContent = 'Mensaje enviado';
+          void loadMessages(_currentConv);
           scheduleRefreshList(500);
+          if (_currentConv) {
+            updateBadge(_currentConv, -999);
+            const idx = (_lastList || []).findIndex(
+              (x) => String(x.id) === String(_currentConv)
+            );
+            if (idx >= 0) {
+              const nowIso = new Date().toISOString();
+              const updated = {
+                ..._lastList[idx],
+                preview: content,
+                preview_direccion: 'saliente',
+                ultimo_mensaje_en: nowIso,
+                no_leidos: 0,
+              };
+              _lastList[idx] = updated;
+              const btn = document.querySelector(
+                `button.conv-btn[data-id="${_currentConv}"]`
+              );
+              if (btn) {
+                const previewWrap = btn.querySelector('[data-role="preview"]');
+                if (previewWrap) {
+                  previewWrap.textContent = `Agente: ${content}`;
+                }
+              }
+            }
+          }
           window.setTimeout(() => {
             if (sendStatus) sendStatus.textContent = '';
           }, 2500);
