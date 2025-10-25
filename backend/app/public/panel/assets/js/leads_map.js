@@ -203,7 +203,7 @@ const state = {
   selectedState: null,
   scale: 'quantile',
   palette: 'dusk',
-  channelKey: 'whatsapp',
+  channelKey: 'todos',
   statesCache: new Map(),
   municipalityCache: new Map(),
 };

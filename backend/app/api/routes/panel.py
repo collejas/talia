@@ -548,18 +548,19 @@ async def get_messages(
     return {"ok": True, "items": items}
 
 
-ALLOWED_CHANNELS: set[str] = {"whatsapp", "webchat"}
+ALLOWED_CHANNELS: tuple[str, ...] = ("whatsapp", "webchat")
+_ALLOWED_CHANNELS_SET = set(ALLOWED_CHANNELS)
 
 
 def _parse_channels_param(raw: str | None) -> list[str]:
     if not raw:
-        return ["whatsapp"]
+        return list(ALLOWED_CHANNELS)
     channels: list[str] = []
     for chunk in raw.split(","):
         name = chunk.strip().lower()
         if not name:
             continue
-        if name not in ALLOWED_CHANNELS:
+        if name not in _ALLOWED_CHANNELS_SET:
             raise HTTPException(status_code=400, detail="canal_no_soportado")
         if name not in channels:
             channels.append(name)
@@ -587,7 +588,7 @@ async def _fetch_contact_locations(token: str, channels: list[str]) -> list[Cont
         channel = str(row.get("canal") or "").lower()
         contacto = row.get("contacto") or {}
         contacto_id = row.get("contacto_id") or contacto.get("id")
-        if not contacto_id or channel not in ALLOWED_CHANNELS:
+        if not contacto_id or channel not in _ALLOWED_CHANNELS_SET:
             continue
         contacto_key = str(contacto_id)
         entry = contacts.setdefault(

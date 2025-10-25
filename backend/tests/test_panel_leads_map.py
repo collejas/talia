@@ -111,7 +111,7 @@ async def test_leads_by_state_groups_contacts(
 ) -> None:
     async def fake_sb_get(path: str, *, params=None, token=None):
         assert "/identidades_canal" in path
-        assert params and params.get("canal") == "eq.whatsapp"
+        assert params and params.get("canal") == "in.(whatsapp,webchat)"
         return httpx.Response(200, json=_sample_contacts_payload())
 
     monkeypatch.setattr(panel, "_sb_get", fake_sb_get)
@@ -123,7 +123,7 @@ async def test_leads_by_state_groups_contacts(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["canales"] == ["whatsapp"]
+    assert payload["canales"] == ["whatsapp", "webchat"]
     assert payload["total_contactos"] == 4  # Contacto duplicado y uno sin ubicación
     assert payload["total_ubicados"] == 3
     assert payload["sin_ubicacion"] == 1
@@ -144,7 +144,7 @@ async def test_leads_by_municipality_filters_state(
 ) -> None:
     async def fake_sb_get(path: str, *, params=None, token=None):
         assert "/identidades_canal" in path
-        assert params and params.get("canal") == "eq.whatsapp"
+        assert params and params.get("canal") == "in.(whatsapp,webchat)"
         return httpx.Response(200, json=_sample_contacts_payload())
 
     monkeypatch.setattr(panel, "_sb_get", fake_sb_get)
@@ -156,7 +156,7 @@ async def test_leads_by_municipality_filters_state(
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["canales"] == ["whatsapp"]
+    assert payload["canales"] == ["whatsapp", "webchat"]
     assert payload["estado"]["cve_ent"] == "14"
     assert payload["total_ubicados"] == 1
     assert payload["total_contactos"] == 1
