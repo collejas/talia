@@ -63,7 +63,9 @@ def create_app() -> FastAPI:
     # Monta archivos estáticos del panel en /panel
     log = get_logger("app")
     try:
-        packaged = Path(__file__).resolve().parent / "public" / "panel"
+        public_root = Path(__file__).resolve().parent / "public"
+        packaged = public_root / "panel"
+        shared = public_root / "shared"
         if packaged.exists():
             static = StaticFiles(directory=str(packaged), html=True)
             # Monta en /panel (cuando el proxy pasa root_path correctamente)
@@ -73,6 +75,14 @@ def create_app() -> FastAPI:
             log.info("panel.static_mounted", extra={"path": str(packaged)})
         else:
             log.warning("panel.static_missing", extra={"expected_path": str(packaged)})
+
+        if shared.exists():
+            shared_static = StaticFiles(directory=str(shared), html=False)
+            app.mount("/shared", shared_static, name="shared")
+            app.mount("/api/shared", shared_static, name="shared_alt")
+            log.info("shared.static_mounted", extra={"path": str(shared)})
+        else:
+            log.warning("shared.static_missing", extra={"expected_path": str(shared)})
     except Exception as exc:  # pragma: no cover - best effort
         log.exception("panel.static_mount_failed", extra={"error": str(exc)})
 
