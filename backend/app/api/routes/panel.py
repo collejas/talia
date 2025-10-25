@@ -12,13 +12,22 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services import storage
 
 router = APIRouter(prefix="", tags=["panel"])
 
 logger = get_logger(__name__)
+
+
+class PanelSendMessagePayload(BaseModel):
+    """Payload para que un operador envíe un mensaje a un cliente."""
+
+    content: str = Field(..., min_length=1, max_length=2000, description="Contenido del mensaje")
+    metadata: dict[str, Any] | None = Field(default=None, description="Metadatos opcionales")
 
 
 def _supabase_base_url() -> str:
@@ -412,6 +421,53 @@ async def set_conversation_state(
     return {"ok": True, "estado": new_estado}
 
 
+@router.post("/conversaciones/{conversacion_id}/mensajes")
+async def send_panel_message(
+    conversacion_id: str,
+    payload: PanelSendMessagePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    if not payload.content or not payload.content.strip():
+        raise HTTPException(status_code=400, detail="content_required")
+
+    try:
+        info = await storage.fetch_webchat_conversation_info(conversacion_id)
+    except storage.StorageError as exc:
+        detail = str(exc) or "No se pudo recuperar la conversación"
+        lowered = detail.lower()
+        if "error de red" in lowered or "respondió error" in lowered:
+            raise HTTPException(status_code=502, detail=detail) from exc
+        if "no se encontró" in lowered or "no encontrada" in lowered:
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+    metadata = {"sender_type": "human_agent", "source": "panel"}
+    if payload.metadata:
+        metadata.update(payload.metadata)
+
+    try:
+        record = await storage.record_webchat_message(
+            session_id=info.session_id,
+            author="human_agent",
+            content=payload.content.strip(),
+            metadata=metadata,
+        )
+    except storage.StorageError as exc:
+        detail = str(exc) or "No se pudo enviar el mensaje"
+        lowered = detail.lower()
+        status = 502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        raise HTTPException(status_code=status, detail=detail) from exc
+
+    return {
+        "ok": True,
+        "conversation_id": record.conversation_id,
+        "message_id": record.message_id,
+    }
+
+
 @router.get("/conversaciones/{conversacion_id}/mensajes")
 async def get_messages(
     conversacion_id: str,
@@ -422,7 +478,7 @@ async def get_messages(
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
     params = {
-        "select": "id,direccion,tipo_contenido,texto,creado_en",
+        "select": "id,direccion,tipo_contenido,texto,creado_en,datos",
         "conversacion_id": f"eq.{conversacion_id}",
         "order": "creado_en.asc",
         "limit": str(limit),
@@ -430,7 +486,22 @@ async def get_messages(
     resp = await _sb_get("/rest/v1/mensajes", params=params, token=token)
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail="Error consultando mensajes")
-    return {"ok": True, "items": resp.json() or []}
+    raw = resp.json() or []
+    items: list[dict[str, Any]] = []
+    for row in raw:
+        datos = row.get("datos") or {}
+        sender_type = datos.get("sender_type")
+        items.append(
+            {
+                "id": row.get("id"),
+                "direccion": row.get("direccion"),
+                "tipo_contenido": row.get("tipo_contenido"),
+                "texto": row.get("texto"),
+                "creado_en": row.get("creado_en"),
+                "sender_type": sender_type,
+            }
+        )
+    return {"ok": True, "items": items}
 
 
 @router.get("/panel/env.js")

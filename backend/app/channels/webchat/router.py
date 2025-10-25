@@ -1,11 +1,28 @@
 """Endpoints del canal Webchat."""
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from . import service
-from .schemas import WebchatMessage, WebchatResponse
+from .schemas import WebchatHistoryResponse, WebchatMessage, WebchatResponse
 
 router = APIRouter(prefix="/webchat", tags=["webchat"])
+
+
+@router.get(
+    "/messages",
+    summary="Obtiene historial de mensajes para un session_id",
+    response_model=WebchatHistoryResponse,
+)
+async def fetch_webchat_history(
+    session_id: str = Query(..., min_length=4),
+    limit: int = Query(default=50, ge=1, le=200),
+    since: str | None = Query(default=None),
+) -> WebchatHistoryResponse:
+    """Devuelve mensajes ordenados cronológicamente para el widget webchat."""
+    try:
+        return await service.get_webchat_history(session_id=session_id, limit=limit, since=since)
+    except service.AssistantServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post(

@@ -67,6 +67,28 @@ function renderConversations(items) {
   }
 }
 
+function normaliseSenderType(it) {
+  if (!it) return null;
+  const raw =
+    typeof it.sender_type === 'string'
+      ? it.sender_type
+      : typeof it === 'string'
+        ? it
+        : null;
+  return raw ? raw.toLowerCase() : null;
+}
+
+function resolveSenderLabel(it) {
+  if (it.direccion !== 'saliente') {
+    return { label: 'Usuario', senderType: 'user' };
+  }
+  const normalised = normaliseSenderType(it);
+  if (normalised && normalised.startsWith('human')) {
+    return { label: 'Humano', senderType: 'human_agent' };
+  }
+  return { label: 'TalIA', senderType: 'assistant' };
+}
+
 function appendMessage(it) {
   const list = $('msg-list');
   if (!list) return;
@@ -75,13 +97,20 @@ function appendMessage(it) {
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.appendChild(document.createTextNode(typeof it.texto === 'string' ? it.texto : ''));
+  const senderInfo = resolveSenderLabel(it);
+  const heading = document.createElement('strong');
+  heading.textContent = senderInfo.label;
+  bubble.appendChild(heading);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.textContent = typeof it.texto === 'string' ? it.texto : '';
+  bubble.appendChild(bodyEl);
 
   const metaEl = document.createElement('div');
   metaEl.className = 'muted';
   metaEl.style.fontSize = '11px';
   metaEl.style.marginTop = '6px';
-  const who = it.direccion === 'saliente' ? 'Agente' : 'Usuario';
+  const who = senderInfo.label;
   const when = it.creado_en ? new Date(it.creado_en) : null;
   const meta = `${who}${when && !Number.isNaN(when.getTime()) ? ' • ' + when.toLocaleString() : ''}`;
   metaEl.textContent = meta;
@@ -127,6 +156,19 @@ let _currentConv = null;
 let _rtInbox = null;
 let _refreshTimer = null;
 let _lastList = [];
+const sendForm = document.getElementById('send-form');
+const sendInput = document.getElementById('send-input');
+const sendStatus = document.getElementById('send-status');
+const sendButton = sendForm ? sendForm.querySelector('button[type="submit"]') : null;
+
+function setComposerEnabled(enabled) {
+  if (sendInput) sendInput.disabled = !enabled;
+  if (sendButton) sendButton.disabled = !enabled;
+  if (!enabled && sendInput) {
+    sendInput.value = '';
+  }
+  if (!enabled && sendStatus) sendStatus.textContent = '';
+}
 
 function scheduleRefreshList(delayMs = 600) {
   if (_refreshTimer) window.clearTimeout(_refreshTimer);
@@ -170,7 +212,13 @@ function setupRealtime(convId) {
       (payload) => {
         const rec = payload.new || {};
         if (String(rec.conversacion_id) !== String(_currentConv)) return;
-        appendMessage({ direccion: rec.direccion, texto: rec.texto });
+        const meta = rec.datos || {};
+        appendMessage({
+          direccion: rec.direccion,
+          texto: rec.texto,
+          creado_en: rec.creado_en,
+          sender_type: meta?.sender_type,
+        });
         const list = $('msg-list');
         if (list) list.scrollTop = list.scrollHeight;
       }
@@ -225,6 +273,8 @@ async function main() {
         }
         void loadMessages(id);
         setupRealtime(id);
+        setComposerEnabled(true);
+        if (sendInput) sendInput.focus();
         // Marca como leída en servidor (resetea no_leidos)
         void fetchJSONWithAuth(`/api/conversaciones/${encodeURIComponent(id)}/marcar_leida`, { method: 'POST' }).then(() => {
           // refresca lista para actualizar badges
@@ -282,6 +332,43 @@ async function main() {
       scheduleRefreshList(1000);
     }
   });
+
+  if (sendForm) {
+    setComposerEnabled(false);
+    sendForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!sendInput || !sendInput.value.trim()) return;
+      if (!_currentConv) return;
+      const content = sendInput.value.trim();
+      const url = `/api/conversaciones/${encodeURIComponent(_currentConv)}/mensajes`;
+      try {
+        setComposerEnabled(false);
+        if (sendStatus) sendStatus.textContent = 'Enviando…';
+        const res = await fetchJSONWithAuth(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) {
+          if (sendStatus) sendStatus.textContent = 'No se pudo enviar el mensaje.';
+          sendInput.value = content;
+        } else {
+          if (sendStatus) sendStatus.textContent = 'Mensaje enviado';
+          scheduleRefreshList(500);
+          window.setTimeout(() => {
+            if (sendStatus) sendStatus.textContent = '';
+          }, 2500);
+        }
+      } catch (error) {
+        console.error('[panel] Error enviando mensaje:', error);
+        if (sendStatus) sendStatus.textContent = 'Error de red';
+        sendInput.value = content;
+      } finally {
+        setComposerEnabled(Boolean(_currentConv));
+        if (sendInput) sendInput.focus();
+      }
+    });
+  }
 }
 
 void main();

@@ -8,7 +8,11 @@ from typing import Any
 from fastapi import Request
 
 from app.assistants import manager
-from app.channels.webchat.schemas import WebchatMessage, WebchatResponse
+from app.channels.webchat.schemas import (
+    WebchatHistoryResponse,
+    WebchatMessage,
+    WebchatResponse,
+)
 from app.core.logging import get_logger, log_event
 from app.services import geolocation, storage, user_agent
 from app.services import openai as openai_service
@@ -201,6 +205,42 @@ async def _generate_assistant_reply(
     response_conv_id = _extract_conversation_id(response)
     return AssistantReply(
         text=reply_text, response_id=response_id, response_conversation_id=response_conv_id
+    )
+
+
+async def get_webchat_history(
+    *, session_id: str, limit: int = 50, since: str | None = None
+) -> WebchatHistoryResponse:
+    """Obtiene historial de mensajes almacenados para un session_id de webchat."""
+    try:
+        rows = await storage.fetch_webchat_history(session_id=session_id, limit=limit, since=since)
+    except storage.StorageError as exc:
+        logger.exception("No se pudo obtener historial de webchat", exc_info=exc)
+        raise AssistantServiceError("No se pudo recuperar el historial") from exc
+
+    messages: list[dict[str, Any]] = []
+    for row in rows:
+        metadata = row.get("datos") or {}
+        messages.append(
+            {
+                "message_id": str(row.get("id")),
+                "direction": row.get("direccion") or "entrante",
+                "content": row.get("texto") or "",
+                "created_at": row.get("creado_en"),
+                "sender_type": metadata.get("sender_type"),
+                "metadata": metadata or None,
+            }
+        )
+
+    next_since = None
+    if rows:
+        # Usa timestamp del último mensaje como cursor simple
+        next_since = rows[-1].get("creado_en")
+
+    return WebchatHistoryResponse(
+        session_id=session_id,
+        messages=messages,
+        next_since=next_since,
     )
 
 

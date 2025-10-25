@@ -26,10 +26,145 @@ class WebchatRecord:
     conversation_openai_id: str | None = None
 
 
+@dataclass(slots=True)
+class WebchatConversationInfo:
+    """Información básica para operar una conversación webchat existente."""
+
+    conversation_id: str
+    session_id: str
+    contact_id: str | None = None
+
+
+async def fetch_webchat_conversation_info(conversation_id: str) -> WebchatConversationInfo:
+    """Obtiene session_id de webchat asociado a una conversación."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    conv_url = f"{base_url}/rest/v1/conversaciones"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "id,canal,contacto_id",
+        "id": f"eq.{conversation_id}",
+        "limit": "1",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            conv_resp = await client.get(conv_url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar conversación: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if conv_resp.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener conversación"
+            f" (status={conv_resp.status_code}, body={conv_resp.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = conv_resp.json() or []
+    if not rows:
+        raise StorageError("Conversación no encontrada")
+    row = rows[0]
+    canal = row.get("canal")
+    if canal != "webchat":
+        raise StorageError("La conversación no pertenece al canal webchat")
+    contacto_id = row.get("contacto_id")
+    if not contacto_id:
+        raise StorageError("La conversación no tiene contacto asociado")
+
+    ident_url = f"{base_url}/rest/v1/identidades_canal"
+    ident_params = {
+        "select": "id_externo",
+        "contacto_id": f"eq.{contacto_id}",
+        "canal": "eq.webchat",
+        "limit": "1",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            ident_resp = await client.get(ident_url, headers=headers, params=ident_params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar identidades: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if ident_resp.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener identidades"
+            f" (status={ident_resp.status_code}, body={ident_resp.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    ident_rows = ident_resp.json() or []
+    if not ident_rows:
+        raise StorageError("No se encontró identidad de canal webchat")
+    session_id = ident_rows[0].get("id_externo")
+    if not session_id:
+        raise StorageError("Identidad webchat sin session_id")
+
+    return WebchatConversationInfo(
+        conversation_id=str(conversation_id),
+        session_id=str(session_id),
+        contact_id=str(contacto_id),
+    )
+
+
+async def fetch_webchat_history(
+    *, session_id: str, limit: int = 50, since: str | None = None
+) -> list[dict[str, Any]]:
+    """Recupera mensajes de webchat asociados a una sesión."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/mensajes"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params: dict[str, str] = {
+        "select": "id,direccion,texto,creado_en,datos",
+        "order": "creado_en.asc",
+        "limit": str(limit),
+        "datos->>session_id": f"eq.{session_id}",
+    }
+    if since:
+        params["creado_en"] = f"gt.{since}"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:  # pragma: no cover
+        msg = f"Error de red al consultar historial webchat: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener historial webchat"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json() or []
+    if not isinstance(data, list):
+        return []
+    return data  # type: ignore[return-value]
+
+
 async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list[dict[str, Any]]:
     """Obtiene los últimos mensajes de una conversación para construir historial.
 
-    Retorna elementos con claves: direccion (entrante/saliente), texto, creado_en.
+    Retorna elementos con claves: direccion (entrante/saliente), texto, creado_en, datos.
     """
     if not settings.supabase_url or not settings.supabase_service_role:
         raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
@@ -41,7 +176,7 @@ async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list
         "Authorization": f"Bearer {settings.supabase_service_role}",
     }
     params = {
-        "select": "direccion,texto,creado_en",
+        "select": "direccion,texto,creado_en,datos",
         "conversacion_id": f"eq.{conversation_id}",
         "order": "creado_en.asc",
         "limit": str(limit),

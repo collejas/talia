@@ -41,6 +41,12 @@
     .msg-row.out{justify-content:flex-end}
     .bubble{max-width:70%;padding:10px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--border-soft)}
     .msg-row.out .bubble{background:rgba(106,163,255,.14)}
+    .bubble strong{display:block;font-size:12px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)}
+    .composer{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+    .composer textarea{width:100%;min-height:80px;border-radius:12px;padding:10px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg);resize:vertical;font-family:inherit}
+    .composer textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+    .composer-actions{display:flex;justify-content:flex-end;gap:8px;align-items:center}
+    .composer .muted{font-size:12px}
     .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:#ff5d5d;color:#0b1020;font-size:11px;font-weight:800;margin-left:6px}
     .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;font-size:11px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg);margin-right:6px}
     .chip.state-abierta{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)}
@@ -107,6 +113,14 @@
           </div>
         </div>
         <div id="msg-list" class="messages" aria-live="polite"></div>
+        <form id="send-form" class="composer" autocomplete="off">
+          <label class="muted" for="send-input">Responder al cliente</label>
+          <textarea id="send-input" name="content" placeholder="Escribe un mensaje para el cliente…" maxlength="2000"></textarea>
+          <div class="composer-actions">
+            <span class="muted" id="send-status" role="status" aria-live="polite"></span>
+            <button type="submit" class="btn">Enviar</button>
+          </div>
+        </form>
       </section>
     </div>
   </main>

@@ -1,5 +1,8 @@
 """Esquemas Pydantic para webchat."""
 
+from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -18,3 +21,22 @@ class WebchatResponse(BaseModel):
     session_id: str
     reply: str
     metadata: dict[str, str] | None = None
+
+
+class WebchatHistoryItem(BaseModel):
+    """Mensaje almacenado dentro del historial webchat."""
+
+    message_id: str
+    direction: str
+    content: str
+    created_at: datetime | str
+    sender_type: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class WebchatHistoryResponse(BaseModel):
+    """Respuesta al consultar historial de un session_id."""
+
+    session_id: str
+    messages: list[WebchatHistoryItem]
+    next_since: str | None = Field(default=None, description="Cursor para seguir consultando")

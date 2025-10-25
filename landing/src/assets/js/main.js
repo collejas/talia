@@ -126,7 +126,16 @@ function maintainViewportBottom(behavior = 'auto', tolerance) {
 function createMessageElement(text, role = 'assistant') {
   const wrapper = document.createElement('div');
   wrapper.className = `message message--${role}`;
-  wrapper.innerText = text;
+  if (role === 'human') {
+    const label = document.createElement('span');
+    label.className = 'message__label';
+    label.textContent = 'Agente humano';
+    wrapper.appendChild(label);
+  }
+  const body = document.createElement('div');
+  body.className = 'message__body';
+  body.innerText = text;
+  wrapper.appendChild(body);
   return wrapper;
 }
 
@@ -168,6 +177,86 @@ function removeTypingIndicator() {
   typingBubble = null;
 }
 
+function mapHistoryRole(message) {
+  if (!message || message.direction !== 'saliente') {
+    return 'user';
+  }
+  const senderType =
+    typeof message.sender_type === 'string' ? message.sender_type.toLowerCase() : '';
+  if (senderType.startsWith('human')) return 'human';
+  return 'assistant';
+}
+
+function historyIdsEqual(messages) {
+  const nextIds = (messages || []).map((msg) =>
+    String(msg?.message_id ?? `${msg?.direction}-${msg?.created_at}-${msg?.content || ''}`)
+  );
+  const changed =
+    nextIds.length !== lastHistoryIds.length ||
+    nextIds.some((id, index) => id !== lastHistoryIds[index]);
+  if (changed) {
+    lastHistoryIds = nextIds;
+  }
+  return !changed;
+}
+
+function renderHistoryMessages(messages) {
+  if (!chatLog) return;
+  removeTypingIndicator();
+  const container = getScrollContainer();
+  const shouldStick = isNearViewportBottom(container);
+  chatLog.textContent = '';
+  for (const item of messages || []) {
+    const role = mapHistoryRole(item);
+    const text = typeof item.content === 'string' ? item.content : '';
+    const el = createMessageElement(text, role);
+    chatLog.appendChild(el);
+  }
+  if (shouldStick) {
+    maintainViewportBottom('auto');
+  }
+}
+
+async function syncHistory({ force = false } = {}) {
+  if (syncingHistory) return;
+  syncingHistory = true;
+  try {
+    const qs = new URLSearchParams({
+      session_id: sessionId,
+      limit: String(HISTORY_LIMIT),
+    });
+    const response = await fetch(`${API_BASE_URL}/messages?${qs.toString()}`, {
+      method: 'GET',
+      headers: { 'cache-control': 'no-cache' },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const messages = Array.isArray(data?.messages) ? data.messages : [];
+    if (!force && historyIdsEqual(messages)) return;
+    renderHistoryMessages(messages);
+  } catch (error) {
+    console.error('[landing] No se pudo sincronizar historial del webchat:', error);
+  } finally {
+    syncingHistory = false;
+  }
+}
+
+function stopHistoryPolling() {
+  if (historyPollingTimer) {
+    window.clearInterval(historyPollingTimer);
+    historyPollingTimer = null;
+  }
+}
+
+function startHistoryPolling() {
+  stopHistoryPolling();
+  historyPollingTimer = window.setInterval(() => {
+    void syncHistory();
+  }, HISTORY_INTERVAL_MS);
+}
+
 const API_BASE_URL = '/api/webchat';
 const STORAGE_SESSION_KEY = 'talia-webchat-session';
 
@@ -200,6 +289,11 @@ function loadSessionId() {
 }
 
 const sessionId = loadSessionId();
+const HISTORY_LIMIT = 100;
+const HISTORY_INTERVAL_MS = 4000;
+let historyPollingTimer = null;
+let lastHistoryIds = [];
+let syncingHistory = false;
 
 async function sendToAssistant(message) {
   const MAX_RETRIES = 2;
@@ -226,7 +320,7 @@ async function sendToAssistant(message) {
     if (!data?.reply) {
       throw new Error('Respuesta vacía del asistente');
     }
-    return data.reply;
+    return data;
   }
 
   // Intentos con reintentos y backoff
@@ -253,12 +347,16 @@ async function handleSubmit(event) {
   chatInput.focus();
 
   enqueueAssistantReply(userMessage);
+  void syncHistory({ force: true });
 }
 
 function initialiseChat() {
   if (chatForm) {
     chatForm.addEventListener('submit', handleSubmit);
   }
+  void syncHistory({ force: true }).finally(() => {
+    startHistoryPolling();
+  });
 }
 
 function openMobileMenu() {
@@ -414,6 +512,17 @@ if (currentYearEl) {
   currentYearEl.textContent = new Date().getFullYear();
 }
 
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopHistoryPolling();
+    else startHistoryPolling();
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', stopHistoryPolling);
+}
+
 let assistantQueue = Promise.resolve();
 
 function enqueueAssistantReply(message) {
@@ -427,12 +536,15 @@ function enqueueAssistantReply(message) {
 async function handleAssistantReply(message) {
   try {
     renderTypingIndicator();
-    const reply = await sendToAssistant(message);
+    const data = await sendToAssistant(message);
+    const reply = data.reply;
     removeTypingIndicator();
     appendMessage(reply, 'assistant');
+    void syncHistory({ force: true });
   } catch (error) {
     removeTypingIndicator();
     appendMessage(getFallbackResponse(), 'assistant');
     console.error('Error obteniendo respuesta de TalIA:', error);
+    void syncHistory({ force: true });
   }
 }

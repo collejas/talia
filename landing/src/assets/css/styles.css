@@ -472,9 +472,27 @@ button:hover {
   background: var(--bubble-assistant);
 }
 
+.message--human {
+  align-self: flex-start;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
 .message--user {
   align-self: flex-end;
   background: var(--bubble-user);
+}
+
+.message__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.message__body {
+  white-space: pre-wrap;
 }
 
 .message strong {
