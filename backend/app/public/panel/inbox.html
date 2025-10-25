@@ -12,13 +12,24 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     .muted{color:var(--muted)}
-    .grid-2{display:grid;grid-template-columns:320px 1fr;gap:16px}
-    .card{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#0f1730}
-    .conv-list{list-style:none;margin:0;padding:0;max-height:70vh;overflow:auto}
+    .page-inbox{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg)}
+    .page-inbox main{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:20px 0;height:calc(100vh - 64px)}
+    .inbox-main{flex:1;display:flex;flex-direction:column;overflow:hidden;max-width:1280px;width:100%}
+    .grid-2{display:grid;grid-template-columns:minmax(300px,340px) minmax(0,1fr);gap:18px;flex:1;min-height:0}
+    .card{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#0f1730;min-height:0}
+    .filters-card{margin-bottom:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;flex:0 0 auto;padding:16px}
+    .filters-title{display:flex;flex-direction:column;gap:2px}
+    .filters-title h1{margin:0;font-size:1.4rem}
+    .filters-title .muted{font-size:0.9rem}
+    .filters-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-left:auto}
+    .filters-controls label{display:flex;flex-direction:column;gap:4px}
+    .filters-controls label span{font-size:12px}
+    .grid-2 .card{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+    .conv-list{list-style:none;margin:0;padding:0;flex:1;overflow-y:auto;min-height:0}
     .conv-item{margin:0 0 8px}
     .conv-btn{width:100%;text-align:left;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:#0b132a;color:#fff;padding:10px}
     .conv-title{font-weight:700}
-    .messages{min-height:50vh;max-height:70vh;overflow:auto;background:#0b132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px}
+    .messages{flex:1;overflow-y:auto;background:#0b132a;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;min-height:0}
     .msg-row{display:flex;margin:8px 0}
     .msg-row.in{justify-content:flex-start}
     .msg-row.out{justify-content:flex-end}
@@ -37,7 +48,7 @@
   <script src="./assets/js/config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="page-inbox">
   <header class="nav">
     <div class="container nav-inner">
       <a class="brand" href="panel.html">
@@ -53,31 +64,34 @@
     </div>
   </header>
 
-  <main class="container" style="padding:24px 0 40px;">
-    <h1 style="margin:0 0 8px;">Inbox</h1>
-    <p class="muted" style="margin:0 0 18px;">Conversaciones en curso.</p>
-
-    <div class="card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <label>
-        <span class="muted" style="font-size:12px;">Canal</span><br />
-        <select id="filter-canal" class="btn btn-outline" style="padding:6px 10px;">
-          <option value="">Todos</option>
-          <option value="webchat">Webchat</option>
-          <option value="whatsapp">WhatsApp</option>
-          <option value="voz">Voz</option>
-          <option value="instagram">Instagram</option>
-        </select>
-      </label>
-      <label>
-        <span class="muted" style="font-size:12px;">Estado</span><br />
-        <select id="filter-estado" class="btn btn-outline" style="padding:6px 10px;">
-          <option value="">Todos</option>
-          <option value="abierta">Abierta</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="cerrada">Cerrada</option>
-        </select>
-      </label>
-      <button id="btn-refrescar" class="btn">Actualizar</button>
+  <main class="container inbox-main">
+    <div class="card filters-card">
+      <div class="filters-title">
+        <h1>Inbox</h1>
+        <span class="muted">Conversaciones en curso.</span>
+      </div>
+      <div class="filters-controls">
+        <label>
+          <span class="muted">Canal</span>
+          <select id="filter-canal" class="btn btn-outline" style="padding:6px 10px;">
+            <option value="">Todos</option>
+            <option value="webchat">Webchat</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="voz">Voz</option>
+            <option value="instagram">Instagram</option>
+          </select>
+        </label>
+        <label>
+          <span class="muted">Estado</span>
+          <select id="filter-estado" class="btn btn-outline" style="padding:6px 10px;">
+            <option value="">Todos</option>
+            <option value="abierta">Abierta</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="cerrada">Cerrada</option>
+          </select>
+        </label>
+        <button id="btn-refrescar" class="btn">Actualizar</button>
+      </div>
     </div>
 
     <div class="grid-2">

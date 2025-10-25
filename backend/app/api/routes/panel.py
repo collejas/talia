@@ -67,6 +67,25 @@ def _jwt_sub(jwt_token: str | None) -> str | None:
     """Extrae el `sub` del JWT (sin verificar firma; TODO: verificar HS256)."""
     if not jwt_token:
         return None
+    try:
+        import base64
+        import json
+
+        parts = jwt_token.split(".")
+        if len(parts) != 3:
+            return None
+
+        def b64url_decode(segment: str) -> bytes:
+            rem = len(segment) % 4
+            if rem:
+                segment += "=" * (4 - rem)
+            return base64.urlsafe_b64decode(segment.encode())
+
+        payload = json.loads(b64url_decode(parts[1]).decode("utf-8"))
+        sub = payload.get("sub")
+        return str(sub) if sub else None
+    except Exception:  # pragma: no cover - best effort
+        return None
 
 
 def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
@@ -103,24 +122,6 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
             return None
 
         payload = json.loads(b64url_decode(payload_b64).decode("utf-8"))
-        sub = payload.get("sub")
-        return str(sub) if sub else None
-    except Exception:  # pragma: no cover - best effort
-        return None
-    try:
-        parts = jwt_token.split(".")
-        if len(parts) != 3:
-            return None
-        import base64
-        import json
-
-        def b64url_decode(s: str) -> bytes:
-            rem = len(s) % 4
-            if rem:
-                s += "=" * (4 - rem)
-            return base64.urlsafe_b64decode(s.encode())
-
-        payload = json.loads(b64url_decode(parts[1]).decode("utf-8"))
         sub = payload.get("sub")
         return str(sub) if sub else None
     except Exception:  # pragma: no cover - best effort

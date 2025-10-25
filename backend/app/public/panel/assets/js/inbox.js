@@ -3,26 +3,66 @@ import { $, ensureSession, fetchJSONWithAuth, createSupabase } from './common.js
 function renderConversations(items) {
   const list = $('conv-list');
   if (!list) return;
-  list.innerHTML = '';
+  list.textContent = '';
   for (const it of items || []) {
     const li = document.createElement('li');
     li.className = 'conv-item';
+
+    const button = document.createElement('button');
+    button.className = 'conv-btn';
+    button.dataset.id = it?.id == null ? '' : String(it.id);
+
+    const title = document.createElement('div');
+    title.className = 'conv-title';
+    title.textContent = it.contacto_nombre || 'Contacto';
+    button.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'conv-sub muted';
+    const canal = typeof it.canal === 'string' ? it.canal : '';
+    const estado = typeof it.estado === 'string' ? it.estado : '';
+    const canalSlug = canal.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const estadoSlug = estado.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+
+    if (canalSlug) {
+      const canalChip = document.createElement('span');
+      canalChip.className = `chip canal-${canalSlug}`;
+      canalChip.textContent = canal;
+      sub.appendChild(canalChip);
+    }
+    if (estadoSlug) {
+      const estadoChip = document.createElement('span');
+      estadoChip.className = `chip state-${estadoSlug}`;
+      estadoChip.textContent = estado;
+      sub.appendChild(estadoChip);
+    }
     const when = it.ultimo_mensaje_en ? new Date(it.ultimo_mensaje_en) : null;
-    const whenStr = when ? when.toLocaleString() : '';
-    const preview = it.preview ? String(it.preview) : '';
+    const whenText = when && !Number.isNaN(when.getTime()) ? when.toLocaleString() : '';
+    if (whenText) {
+      if (sub.childNodes.length) sub.appendChild(document.createTextNode(' '));
+      sub.appendChild(document.createTextNode(whenText));
+    }
+    if (typeof it.no_leidos === 'number' && it.no_leidos > 0) {
+      sub.appendChild(document.createTextNode(' '));
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.title = 'No leídos';
+      badge.textContent = String(it.no_leidos);
+      sub.appendChild(badge);
+    }
+    button.appendChild(sub);
+
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'muted';
+    previewWrap.style.fontSize = '12px';
+    previewWrap.style.marginTop = '4px';
     const who = it.preview_direccion === 'saliente' ? 'Agente' : (it.preview_direccion ? 'Usuario' : '');
-    const badge = (typeof it.no_leidos === 'number' && it.no_leidos > 0) ? `<span class="badge" title="No leídos">${it.no_leidos}</span>` : '';
-    const st = (it.estado || '').toLowerCase();
-    const ch = (it.canal || '').toLowerCase();
-    const stateChip = st ? `<span class="chip state-${st}">${it.estado}</span>` : '';
-    const chanChip = ch ? `<span class="chip canal-${ch}">${it.canal}</span>` : '';
-    li.innerHTML = `
-      <button class="conv-btn" data-id="${it.id}">
-        <div class="conv-title">${it.contacto_nombre || 'Contacto'}</div>
-        <div class="conv-sub muted">${chanChip}${stateChip}${whenStr} ${badge}</div>
-        <div class="muted" style="font-size:12px; margin-top:4px;">${who ? (who+': ') : ''}${preview}</div>
-      </button>
-    `;
+    const preview = typeof it.preview === 'string' ? it.preview : '';
+    const previewText = `${who ? `${who}: ` : ''}${preview}`;
+    previewWrap.textContent = previewText;
+    button.appendChild(previewWrap);
+
+    li.appendChild(button);
     list.appendChild(li);
   }
 }
@@ -32,16 +72,29 @@ function appendMessage(it) {
   if (!list) return;
   const row = document.createElement('div');
   row.className = `msg-row ${it.direccion === 'saliente' ? 'out' : 'in'}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.appendChild(document.createTextNode(typeof it.texto === 'string' ? it.texto : ''));
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'muted';
+  metaEl.style.fontSize = '11px';
+  metaEl.style.marginTop = '6px';
+  const who = it.direccion === 'saliente' ? 'Agente' : 'Usuario';
   const when = it.creado_en ? new Date(it.creado_en) : null;
-  const meta = `${it.direccion === 'saliente' ? 'Agente' : 'Usuario'}${when ? ' • ' + when.toLocaleString() : ''}`;
-  row.innerHTML = `<div class="bubble">${(it.texto || '').replace(/</g,'&lt;')}<div class="muted" style="font-size:11px;margin-top:6px;">${meta}</div></div>`;
+  const meta = `${who}${when && !Number.isNaN(when.getTime()) ? ' • ' + when.toLocaleString() : ''}`;
+  metaEl.textContent = meta;
+  bubble.appendChild(metaEl);
+
+  row.appendChild(bubble);
   list.appendChild(row);
 }
 
 function renderMessages(items) {
   const list = $('msg-list');
   if (!list) return;
-  list.innerHTML = '';
+  list.textContent = '';
   for (const it of items || []) {
     appendMessage(it);
   }
