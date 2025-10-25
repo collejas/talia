@@ -49,7 +49,7 @@ async def handle_webchat_message(
     message: WebchatMessage, *, request: Request | None = None
 ) -> WebchatResponse:
     """Orquesta la conversación con el asistente y formatea la respuesta."""
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = {"manual_mode": False}
     request_context = await _extract_request_context(request)
 
     conversation_id: str | None = None
@@ -96,12 +96,12 @@ async def handle_webchat_message(
         except storage.StorageError:
             logger.exception("No se pudo consultar el modo manual de la conversación")
 
+    metadata["manual_mode"] = manual_override
     if manual_override:
-        metadata["manual_mode"] = True
         return WebchatResponse(
             session_id=message.session_id,
             reply="",
-            metadata=metadata or None,
+            metadata=metadata,
         )
 
     # Recupera conversation_id de OpenAI desde cache/BD (si existe)
@@ -167,10 +167,11 @@ async def handle_webchat_message(
     except storage.StorageError:
         logger.exception("No se pudo registrar la respuesta del asistente en Supabase")
 
+    metadata["manual_mode"] = metadata.get("manual_mode", False)
     return WebchatResponse(
         session_id=message.session_id,
         reply=reply.text,
-        metadata=metadata or None,
+        metadata=metadata,
     )
 
 

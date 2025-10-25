@@ -21,6 +21,59 @@ $$;
 
 GRANT USAGE ON TYPE public.lead_categoria TO postgres, service_role, authenticated;
 
+CREATE TABLE IF NOT EXISTS public.identidades_canal (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    contacto_id uuid NOT NULL,
+    canal text NOT NULL,
+    id_externo text NOT NULL,
+    metadatos jsonb,
+    creado_en timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT identidades_canal_canal_check CHECK (
+        canal = ANY (ARRAY['whatsapp','instagram','webchat','voz'])
+    )
+);
+
+DO
+$$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'channel_identities_pkey'
+    ) THEN
+        ALTER TABLE ONLY public.identidades_canal
+            ADD CONSTRAINT channel_identities_pkey PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'channel_identities_channel_external_id_key'
+    ) THEN
+        ALTER TABLE ONLY public.identidades_canal
+            ADD CONSTRAINT channel_identities_channel_external_id_key UNIQUE (canal, id_externo);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'channel_identities_contact_id_channel_key'
+    ) THEN
+        ALTER TABLE ONLY public.identidades_canal
+            ADD CONSTRAINT channel_identities_contact_id_channel_key UNIQUE (contacto_id, canal);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'channel_identities_contact_id_fkey'
+    ) THEN
+        ALTER TABLE ONLY public.identidades_canal
+            ADD CONSTRAINT channel_identities_contact_id_fkey
+            FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
+    END IF;
+END;
+$$;
+
+CREATE INDEX IF NOT EXISTS idx_channel_identities_contact
+    ON public.identidades_canal USING btree (contacto_id);
+
+ALTER TABLE public.identidades_canal ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS identidades_canal_admin_todo ON public.identidades_canal;
+CREATE POLICY identidades_canal_admin_todo
+    ON public.identidades_canal
+    USING (public.es_admin(auth.uid()))
+    WITH CHECK (public.es_admin(auth.uid()));
+
 CREATE OR REPLACE FUNCTION public.tg_touch_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -38,7 +91,7 @@ COMMENT ON FUNCTION public.tg_touch_updated_at()
 -- Tablas del pipeline Kanban
 -- ======================================================================
 
-CREATE TABLE public.lead_tableros (
+CREATE TABLE IF NOT EXISTS public.lead_tableros (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     nombre text NOT NULL,
     slug text NOT NULL,
@@ -52,7 +105,7 @@ CREATE TABLE public.lead_tableros (
     CONSTRAINT lead_tableros_slug_key UNIQUE (slug)
 );
 
-CREATE TABLE public.lead_etapas (
+CREATE TABLE IF NOT EXISTS public.lead_etapas (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     tablero_id uuid NOT NULL REFERENCES public.lead_tableros(id) ON DELETE CASCADE,
     codigo text NOT NULL,
@@ -72,7 +125,7 @@ CREATE TABLE public.lead_etapas (
     CONSTRAINT lead_etapas_sla_check CHECK (sla_horas IS NULL OR sla_horas >= 0)
 );
 
-CREATE TABLE public.lead_tarjetas (
+CREATE TABLE IF NOT EXISTS public.lead_tarjetas (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     contacto_id uuid NOT NULL REFERENCES public.contactos(id) ON DELETE CASCADE,
     conversacion_id uuid REFERENCES public.conversaciones(id) ON DELETE SET NULL,
@@ -108,7 +161,7 @@ CREATE TABLE public.lead_tarjetas (
     CONSTRAINT lead_tarjetas_contacto_tablero_key UNIQUE (contacto_id, tablero_id)
 );
 
-CREATE TABLE public.lead_movimientos (
+CREATE TABLE IF NOT EXISTS public.lead_movimientos (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     tarjeta_id uuid NOT NULL REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE,
     etapa_origen_id uuid REFERENCES public.lead_etapas(id),
@@ -123,7 +176,7 @@ CREATE TABLE public.lead_movimientos (
     )
 );
 
-CREATE TABLE public.lead_recordatorios (
+CREATE TABLE IF NOT EXISTS public.lead_recordatorios (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     tarjeta_id uuid NOT NULL REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE,
     descripcion text NOT NULL,
@@ -138,15 +191,15 @@ CREATE TABLE public.lead_recordatorios (
 
 -- Índices
 
-CREATE INDEX lead_etapas_tablero_idx ON public.lead_etapas (tablero_id, orden);
-CREATE INDEX lead_tarjetas_tablero_etapa_idx ON public.lead_tarjetas (tablero_id, etapa_id);
-CREATE INDEX lead_tarjetas_asignado_idx ON public.lead_tarjetas (asignado_a_usuario_id);
-CREATE INDEX lead_tarjetas_conversacion_idx ON public.lead_tarjetas (conversacion_id);
-CREATE INDEX lead_tarjetas_categoria_idx
+CREATE INDEX IF NOT EXISTS lead_etapas_tablero_idx ON public.lead_etapas (tablero_id, orden);
+CREATE INDEX IF NOT EXISTS lead_tarjetas_tablero_etapa_idx ON public.lead_tarjetas (tablero_id, etapa_id);
+CREATE INDEX IF NOT EXISTS lead_tarjetas_asignado_idx ON public.lead_tarjetas (asignado_a_usuario_id);
+CREATE INDEX IF NOT EXISTS lead_tarjetas_conversacion_idx ON public.lead_tarjetas (conversacion_id);
+CREATE INDEX IF NOT EXISTS lead_tarjetas_categoria_idx
     ON public.lead_tarjetas USING btree ((metadata ->> 'categoria'));
-CREATE INDEX lead_movimientos_tarjeta_idx
+CREATE INDEX IF NOT EXISTS lead_movimientos_tarjeta_idx
     ON public.lead_movimientos (tarjeta_id, cambiado_en DESC);
-CREATE INDEX lead_recordatorios_due_idx
+CREATE INDEX IF NOT EXISTS lead_recordatorios_due_idx
     ON public.lead_recordatorios (due_at, completado);
 
 ALTER TABLE public.lead_tarjetas REPLICA IDENTITY FULL;
@@ -528,39 +581,48 @@ GRANT SELECT, INSERT, UPDATE ON public.lead_tarjetas TO authenticated;
 GRANT SELECT ON public.lead_movimientos TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.lead_recordatorios TO authenticated;
 
+DROP POLICY IF EXISTS lead_tableros_admin_all ON public.lead_tableros;
 CREATE POLICY lead_tableros_admin_all ON public.lead_tableros
     USING (public.es_admin(auth.uid()))
     WITH CHECK (public.es_admin(auth.uid()));
 
+DROP POLICY IF EXISTS lead_tableros_select_default ON public.lead_tableros;
 CREATE POLICY lead_tableros_select_default ON public.lead_tableros
     FOR SELECT TO authenticated
     USING (public.puede_ver_tablero(id));
 
+DROP POLICY IF EXISTS lead_etapas_admin_all ON public.lead_etapas;
 CREATE POLICY lead_etapas_admin_all ON public.lead_etapas
     USING (public.es_admin(auth.uid()))
     WITH CHECK (public.es_admin(auth.uid()));
 
+DROP POLICY IF EXISTS lead_etapas_select ON public.lead_etapas;
 CREATE POLICY lead_etapas_select ON public.lead_etapas
     FOR SELECT TO authenticated
     USING (public.puede_ver_tablero(tablero_id));
 
+DROP POLICY IF EXISTS lead_tarjetas_admin_all ON public.lead_tarjetas;
 CREATE POLICY lead_tarjetas_admin_all ON public.lead_tarjetas
     USING (public.es_admin(auth.uid()))
     WITH CHECK (public.es_admin(auth.uid()));
 
+DROP POLICY IF EXISTS lead_tarjetas_member_select ON public.lead_tarjetas;
 CREATE POLICY lead_tarjetas_member_select ON public.lead_tarjetas
     FOR SELECT TO authenticated
     USING (public.puede_ver_lead(id));
 
+DROP POLICY IF EXISTS lead_tarjetas_member_update ON public.lead_tarjetas;
 CREATE POLICY lead_tarjetas_member_update ON public.lead_tarjetas
     FOR UPDATE TO authenticated
     USING (public.puede_ver_lead(id))
     WITH CHECK (public.puede_ver_lead(id));
 
+DROP POLICY IF EXISTS lead_tarjetas_member_delete ON public.lead_tarjetas;
 CREATE POLICY lead_tarjetas_member_delete ON public.lead_tarjetas
     FOR DELETE TO authenticated
     USING (public.puede_ver_lead(id));
 
+DROP POLICY IF EXISTS lead_tarjetas_member_insert ON public.lead_tarjetas;
 CREATE POLICY lead_tarjetas_member_insert ON public.lead_tarjetas
     FOR INSERT TO authenticated
     WITH CHECK (
@@ -575,18 +637,22 @@ CREATE POLICY lead_tarjetas_member_insert ON public.lead_tarjetas
         )
     );
 
+DROP POLICY IF EXISTS lead_movimientos_admin_all ON public.lead_movimientos;
 CREATE POLICY lead_movimientos_admin_all ON public.lead_movimientos
     USING (public.es_admin(auth.uid()))
     WITH CHECK (public.es_admin(auth.uid()));
 
+DROP POLICY IF EXISTS lead_movimientos_select ON public.lead_movimientos;
 CREATE POLICY lead_movimientos_select ON public.lead_movimientos
     FOR SELECT TO authenticated
     USING (public.puede_ver_lead(tarjeta_id));
 
+DROP POLICY IF EXISTS lead_recordatorios_admin_all ON public.lead_recordatorios;
 CREATE POLICY lead_recordatorios_admin_all ON public.lead_recordatorios
     USING (public.es_admin(auth.uid()))
     WITH CHECK (public.es_admin(auth.uid()));
 
+DROP POLICY IF EXISTS lead_recordatorios_crud ON public.lead_recordatorios;
 CREATE POLICY lead_recordatorios_crud ON public.lead_recordatorios
     FOR ALL TO authenticated
     USING (public.puede_ver_lead(tarjeta_id))
