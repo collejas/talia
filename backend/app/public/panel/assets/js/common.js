@@ -1,9 +1,9 @@
 import { createThemeManager } from './theme.js';
 
 const NAV_LINKS = [
-  { id: 'dashboard', href: '/panel/panel.html', label: 'Dashboard' },
-  { id: 'inbox', href: '/panel/inbox.html', label: 'Inbox' },
-  { id: 'config', href: '/panel/configuracion.html', label: 'Configuración' },
+  { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
+  { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
+  { id: 'config', href: 'configuracion.html', label: 'Configuración' },
 ];
 
 const THEME_OPTIONS = [
@@ -31,9 +31,11 @@ function renderHeader() {
   header.setAttribute('data-panel-header', 'true');
   header.innerHTML = `
     <div class="container nav-inner">
-      <a class="brand" href="/panel/panel.html">
-        <span class="logo">AI</span>
-        <span class="brand-text">TalIA Panel</span>
+      <a class="brand" href="panel.html">
+        <img class="brand-icon" src="/api/shared/logos/Logo8.png" alt="TalIA logo" />
+        <span class="brand-text">
+          Tal-<span class="logo">IA</span><span class="brand-text-panel">Panel</span>
+        </span>
       </a>
       <nav class="menu">
         ${navLinks}
