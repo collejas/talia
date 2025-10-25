@@ -96,6 +96,7 @@ const chatInput = document.getElementById('chat-input');
 const currentYearEl = document.getElementById('current-year');
 
 let typingBubble = null;
+let assistantReplyPending = false;
 
 const FALLBACK_MESSAGE = 'Tu mensaje llegó, pero tuve un problema momentáneo al responder. Intentemos de nuevo en unos segundos o envíame otra línea.';
 
@@ -208,13 +209,17 @@ function renderTypingIndicator() {
     maintainViewportBottom('auto');
   }
   typingBubble = bubble;
+  assistantReplyPending = true;
 }
 
-function removeTypingIndicator() {
+function removeTypingIndicator({ preservePending = false } = {}) {
   if (typingBubble && typingBubble.parentNode) {
     typingBubble.parentNode.removeChild(typingBubble);
   }
   typingBubble = null;
+  if (!preservePending) {
+    assistantReplyPending = false;
+  }
 }
 
 function mapHistoryRole(message) {
@@ -243,7 +248,12 @@ function historyIdsEqual(messages) {
 function renderHistoryMessages(messages, options = {}) {
   if (!chatLog) return;
   const { force = false, behavior = 'auto', tolerance } = normalizeScrollOptions(options);
-  removeTypingIndicator();
+  const shouldRestoreTyping = assistantReplyPending;
+  if (shouldRestoreTyping) {
+    removeTypingIndicator({ preservePending: true });
+  } else {
+    removeTypingIndicator();
+  }
   const container = getScrollContainer();
   const shouldStick = force || isNearViewportBottom(container, tolerance);
   chatLog.textContent = '';
@@ -252,6 +262,9 @@ function renderHistoryMessages(messages, options = {}) {
     const text = typeof item.content === 'string' ? item.content : '';
     const el = createMessageElement(text, role, item.metadata || null);
     chatLog.appendChild(el);
+  }
+  if (shouldRestoreTyping) {
+    renderTypingIndicator();
   }
   if (shouldStick) {
     maintainViewportBottom(behavior, tolerance, force);
