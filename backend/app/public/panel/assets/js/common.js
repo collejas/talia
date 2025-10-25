@@ -1,8 +1,62 @@
 import { createThemeManager } from './theme.js';
 
-// Inicializa tema compartido si existe selector en la vista
-const _themeSelect = typeof document !== 'undefined' ? document.getElementById('panel-theme-select') : null;
-const _themeMeta = typeof document !== 'undefined' ? document.querySelector('meta[name="theme-color"]') : null;
+const NAV_LINKS = [
+  { id: 'dashboard', href: '/panel/panel.html', label: 'Dashboard' },
+  { id: 'inbox', href: '/panel/inbox.html', label: 'Inbox' },
+  { id: 'config', href: '/panel/configuracion.html', label: 'Configuración' },
+];
+
+const THEME_OPTIONS = [
+  { value: 'theme-aurora', label: 'Aurora violeta' },
+  { value: 'theme-ice', label: 'Espectro vibrante' },
+  { value: 'theme-void', label: 'Nocturno' },
+];
+
+function renderHeader() {
+  if (typeof document === 'undefined' || !document.body) return null;
+  let header = document.querySelector('header.nav[data-panel-header="true"]');
+  if (header) return header;
+
+  const navLinks = NAV_LINKS.map(
+    (link) =>
+      `<a class="btn btn-outline" data-nav="${link.id}" href="${link.href}">${link.label}</a>`
+  ).join('');
+
+  const themeOptions = THEME_OPTIONS.map(
+    (opt) => `<option value="${opt.value}">${opt.label}</option>`
+  ).join('');
+
+  header = document.createElement('header');
+  header.className = 'nav';
+  header.setAttribute('data-panel-header', 'true');
+  header.innerHTML = `
+    <div class="container nav-inner">
+      <a class="brand" href="/panel/panel.html">
+        <span class="logo">AI</span>
+        <span class="brand-text">TalIA Panel</span>
+      </a>
+      <nav class="menu">
+        ${navLinks}
+        <div class="theme-switcher">
+          <select id="panel-theme-select" class="btn btn-outline" aria-label="Cambiar tema visual">
+            ${themeOptions}
+          </select>
+        </div>
+        <span class="muted" id="user-email"></span>
+      </nav>
+    </div>
+  `;
+
+  document.body.insertBefore(header, document.body.firstChild);
+  return header;
+}
+
+renderHeader();
+const _themeSelect =
+  typeof document !== 'undefined' ? document.getElementById('panel-theme-select') : null;
+const _themeMeta =
+  typeof document !== 'undefined' ? document.querySelector('meta[name="theme-color"]') : null;
+
 if (_themeSelect) {
   try {
     createThemeManager({
@@ -18,7 +72,9 @@ if (_themeSelect) {
 
 // Utilidades mínimas comunes para el panel
 
-export function $(id) { return document.getElementById(id); }
+export function $(id) {
+  return document.getElementById(id);
+}
 
 export async function fetchJSON(url, options) {
   const opts = { ...(options || {}) };
@@ -63,6 +119,9 @@ export async function ensureSession({ redirectTo = '/panel/auth/login.html', ema
 }
 
 export function setActiveNav(section) {
-  const cur = document.querySelector(`[data-nav='${section}']`);
-  if (cur) cur.classList.add('is-active');
+  const links = document.querySelectorAll('[data-nav]');
+  links.forEach((link) => {
+    const isTarget = link.dataset.nav === section;
+    link.classList.toggle('is-active', Boolean(section) && isTarget);
+  });
 }
