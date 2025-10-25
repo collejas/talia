@@ -15,7 +15,7 @@ class LeadPipelineError(RuntimeError):
 
 
 class LeadPipelineService:
-    """Orquestra las operaciones recurrentes del kanban de leads."""
+    """Orquesta las operaciones recurrentes del embudo de leads."""
 
     def __init__(self, repository: LeadsRepository | None = None) -> None:
         self._repo = repository or LeadsRepository()

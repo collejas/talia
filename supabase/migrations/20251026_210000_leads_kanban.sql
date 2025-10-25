@@ -4,7 +4,20 @@ BEGIN;
 -- Tipos y funciones auxiliares
 -- ======================================================================
 
-CREATE TYPE public.lead_categoria AS ENUM ('abierta', 'ganada', 'perdida');
+DO
+$$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'lead_categoria'
+          AND n.nspname = 'public'
+    ) THEN
+        CREATE TYPE public.lead_categoria AS ENUM ('abierta', 'ganada', 'perdida');
+    END IF;
+END;
+$$;
 
 GRANT USAGE ON TYPE public.lead_categoria TO postgres, service_role, authenticated;
 
@@ -399,26 +412,31 @@ $$;
 COMMENT ON FUNCTION public.tg_lead_tarjetas_after_write()
     IS 'Registra movimientos y sincroniza estados de contacto tras cambios en la tarjeta.';
 
+DROP TRIGGER IF EXISTS lead_tableros_touch_updated_at ON public.lead_tableros;
 CREATE TRIGGER lead_tableros_touch_updated_at
     BEFORE UPDATE ON public.lead_tableros
     FOR EACH ROW
     EXECUTE FUNCTION public.tg_touch_updated_at();
 
+DROP TRIGGER IF EXISTS lead_etapas_touch_updated_at ON public.lead_etapas;
 CREATE TRIGGER lead_etapas_touch_updated_at
     BEFORE UPDATE ON public.lead_etapas
     FOR EACH ROW
     EXECUTE FUNCTION public.tg_touch_updated_at();
 
+DROP TRIGGER IF EXISTS lead_tarjetas_before_write ON public.lead_tarjetas;
 CREATE TRIGGER lead_tarjetas_before_write
     BEFORE INSERT OR UPDATE ON public.lead_tarjetas
     FOR EACH ROW
     EXECUTE FUNCTION public.tg_lead_tarjetas_before_write();
 
+DROP TRIGGER IF EXISTS lead_tarjetas_after_write ON public.lead_tarjetas;
 CREATE TRIGGER lead_tarjetas_after_write
     AFTER INSERT OR UPDATE ON public.lead_tarjetas
     FOR EACH ROW
     EXECUTE FUNCTION public.tg_lead_tarjetas_after_write();
 
+DROP TRIGGER IF EXISTS lead_recordatorios_touch_updated_at ON public.lead_recordatorios;
 CREATE TRIGGER lead_recordatorios_touch_updated_at
     BEFORE UPDATE ON public.lead_recordatorios
     FOR EACH ROW
@@ -437,6 +455,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS lead_tarjetas_sync_from_insights ON public.conversaciones_insights;
 CREATE TRIGGER lead_tarjetas_sync_from_insights
     AFTER INSERT OR UPDATE ON public.conversaciones_insights
     FOR EACH ROW
@@ -446,7 +465,7 @@ CREATE TRIGGER lead_tarjetas_sync_from_insights
 -- Vista consolidada
 -- ======================================================================
 
-CREATE OR REPLACE VIEW public.v_leads_kanban AS
+CREATE OR REPLACE VIEW public.embudo AS
 SELECT
     lt.id,
     lt.tablero_id,
@@ -485,7 +504,7 @@ LEFT JOIN public.conversaciones_insights ci ON ci.conversacion_id = lt.conversac
 LEFT JOIN public.usuarios usr ON usr.id = lt.asignado_a_usuario_id
 LEFT JOIN public.usuarios up ON up.id = lt.propietario_usuario_id;
 
-GRANT SELECT ON public.v_leads_kanban TO postgres, service_role, authenticated;
+GRANT SELECT ON public.embudo TO postgres, service_role, authenticated;
 
 -- ======================================================================
 -- Reglas de seguridad
@@ -648,6 +667,7 @@ $$;
 COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta()
     IS 'Crea una tarjeta de lead cuando inicia una conversación ligada a un lead.';
 
+DROP TRIGGER IF EXISTS conversaciones_auto_tarjeta ON public.conversaciones;
 CREATE TRIGGER conversaciones_auto_tarjeta
     AFTER INSERT ON public.conversaciones
     FOR EACH ROW

@@ -117,7 +117,7 @@ class StubPipeline:
 
 
 @pytest.mark.asyncio
-async def test_list_kanban_boards_returns_items(
+async def test_list_embudo_boards_returns_items(
     monkeypatch: pytest.MonkeyPatch, async_client: httpx.AsyncClient
 ) -> None:
     repo = StubRepo()
@@ -133,7 +133,7 @@ async def test_list_kanban_boards_returns_items(
     monkeypatch.setattr(panel, "_get_leads_repo", lambda: repo)
 
     response = await async_client.get(
-        "/api/kanban/boards",
+        "/api/embudo/tableros",
         headers={"Authorization": "Bearer token"},
     )
     assert response.status_code == 200
@@ -143,7 +143,7 @@ async def test_list_kanban_boards_returns_items(
 
 
 @pytest.mark.asyncio
-async def test_get_kanban_board_groups_cards(
+async def test_get_embudo_groups_cards(
     monkeypatch: pytest.MonkeyPatch, async_client: httpx.AsyncClient
 ) -> None:
     repo = StubRepo()
@@ -182,7 +182,7 @@ async def test_get_kanban_board_groups_cards(
     monkeypatch.setattr(panel, "_get_leads_repo", lambda: repo)
 
     response = await async_client.get(
-        "/api/kanban/board",
+        "/api/embudo",
         headers={"Authorization": "Bearer token"},
     )
     assert response.status_code == 200
@@ -195,7 +195,7 @@ async def test_get_kanban_board_groups_cards(
 
 
 @pytest.mark.asyncio
-async def test_create_kanban_lead_returns_serialized(
+async def test_create_embudo_lead_returns_serialized(
     monkeypatch: pytest.MonkeyPatch, async_client: httpx.AsyncClient
 ) -> None:
     repo = StubRepo()
@@ -223,7 +223,7 @@ async def test_create_kanban_lead_returns_serialized(
     monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-1")
 
     response = await async_client.post(
-        "/api/kanban/leads",
+        "/api/embudo/leads",
         headers={"Authorization": "Bearer token"},
         json={"contacto_id": "c1", "canal": "webchat"},
     )
@@ -235,7 +235,7 @@ async def test_create_kanban_lead_returns_serialized(
 
 
 @pytest.mark.asyncio
-async def test_move_kanban_lead_invokes_pipeline(
+async def test_move_embudo_lead_invokes_pipeline(
     monkeypatch: pytest.MonkeyPatch, async_client: httpx.AsyncClient
 ) -> None:
     repo = StubRepo()
@@ -270,7 +270,7 @@ async def test_move_kanban_lead_invokes_pipeline(
     monkeypatch.setattr(panel, "_get_lead_pipeline", lambda repo: pipeline)
 
     response = await async_client.patch(
-        "/api/kanban/leads/card-1/stage",
+        "/api/embudo/leads/card-1/etapa",
         headers={"Authorization": "Bearer token"},
         json={"etapa_id": "s2", "motivo": "Calificado", "metadata": {"nota": "cerrar pronto"}},
     )
@@ -281,7 +281,7 @@ async def test_move_kanban_lead_invokes_pipeline(
 
 
 @pytest.mark.asyncio
-async def test_assign_kanban_lead(
+async def test_assign_embudo_lead(
     monkeypatch: pytest.MonkeyPatch, async_client: httpx.AsyncClient
 ) -> None:
     repo = StubRepo()
@@ -309,7 +309,7 @@ async def test_assign_kanban_lead(
     monkeypatch.setattr(panel, "_get_lead_pipeline", lambda repo: pipeline)
 
     response = await async_client.patch(
-        "/api/kanban/leads/card-1/assign",
+        "/api/embudo/leads/card-1/asignacion",
         headers={"Authorization": "Bearer token"},
         json={"usuario_id": "user-2"},
     )

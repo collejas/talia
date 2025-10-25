@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>TalIA • Embudo de proceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/api/shared/logos/Logo8.svg" />
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./assets/js/config.js"></script>
+</head>
+<body class="theme-aurora" data-nav="embudo">
+  <main class="container" style="padding:24px 0 40px;">
+    <h1 style="margin:0 0 8px;">Embudo de proceso</h1>
+    <p class="muted" style="margin:0 0 18px;">Visualiza el estado de cada lead por etapa y canal.</p>
+
+    <section class="card embudo-card-section" aria-labelledby="embudo-title">
+      <div class="embudo-header">
+        <div>
+          <h2 id="embudo-title" class="map-card-title">Embudo de proceso</h2>
+          <p class="muted map-card-subtitle">Lead tracking multicanal organizado por etapas.</p>
+        </div>
+        <div class="embudo-controls" role="group" aria-label="Filtros del embudo">
+          <label class="map-control">
+            <span>Tablero</span>
+            <select id="embudo-board-select" class="btn btn-outline" aria-label="Seleccionar tablero">
+              <option value="">General</option>
+            </select>
+          </label>
+          <label class="map-control">
+            <span>Canal</span>
+            <select id="embudo-filter-channel" class="btn btn-outline" aria-label="Filtrar por canal">
+              <option value="">Todos</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="webchat">Webchat</option>
+              <option value="voz">Voz</option>
+              <option value="instagram">Instagram</option>
+              <option value="api">API</option>
+            </select>
+          </label>
+          <button id="embudo-refresh" class="btn btn-ghost" type="button">Actualizar</button>
+        </div>
+      </div>
+      <div class="embudo-summary">
+        <strong id="embudo-board-name">—</strong>
+        <span id="embudo-total" class="muted">0 leads</span>
+        <span id="embudo-categories" class="muted"></span>
+      </div>
+      <div id="embudo-loading" class="embudo-loading embudo-hidden">Actualizando embudo…</div>
+      <div id="embudo-error" class="embudo-error embudo-hidden">No fue posible cargar el embudo. Intenta nuevamente.</div>
+      <div id="embudo-empty" class="embudo-empty embudo-hidden">Aún no hay leads en el tablero seleccionado.</div>
+      <div id="embudo-board" class="embudo-board" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { setActiveNav, ensureSession } from './assets/js/common.js';
+    import { setupEmbudo } from './assets/js/embudo.js';
+
+    (async () => {
+      await ensureSession();
+      setActiveNav(document.body.dataset.nav || '');
+      setupEmbudo();
+    })();
+  </script>
+</body>
+</html>

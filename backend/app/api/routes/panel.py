@@ -46,8 +46,8 @@ class ManualOverridePayload(BaseModel):
     manual: bool = Field(..., description="True para pausar al asistente")
 
 
-class KanbanLeadCreatePayload(BaseModel):
-    """Campos mínimos para crear tarjetas en el tablero Kanban."""
+class EmbudoLeadCreatePayload(BaseModel):
+    """Campos mínimos para crear tarjetas en el embudo de proceso."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -95,8 +95,8 @@ class KanbanLeadCreatePayload(BaseModel):
         return seen or None
 
 
-class KanbanMovePayload(BaseModel):
-    """Actualiza la etapa de una tarjeta."""
+class EmbudoMovePayload(BaseModel):
+    """Actualiza la etapa de una tarjeta dentro del embudo."""
 
     etapa_id: str = Field(..., description="Etapa destino de la tarjeta")
     motivo: str | None = Field(default=None, description="Motivo opcional del movimiento")
@@ -104,7 +104,7 @@ class KanbanMovePayload(BaseModel):
     metadata: dict[str, Any] | None = Field(default=None)
 
 
-class KanbanAssignPayload(BaseModel):
+class EmbudoAssignPayload(BaseModel):
     """Asignación de responsables para una tarjeta."""
 
     usuario_id: str | None = Field(
@@ -638,11 +638,11 @@ def _parse_channels_param(raw: str | None) -> list[str]:
     return channels
 
 
-KANBAN_ALLOWED_CHANNELS: tuple[str, ...] = ("whatsapp", "webchat", "voz", "instagram", "api")
-_KANBAN_CHANNEL_SET = set(KANBAN_ALLOWED_CHANNELS)
+EMBUDO_ALLOWED_CHANNELS: tuple[str, ...] = ("whatsapp", "webchat", "voz", "instagram", "api")
+_EMBUDO_CHANNEL_SET = set(EMBUDO_ALLOWED_CHANNELS)
 
 
-def _parse_kanban_channels(raw: str | None) -> list[str] | None:
+def _parse_embudo_channels(raw: str | None) -> list[str] | None:
     if not raw:
         return None
     channels: list[str] = []
@@ -650,7 +650,7 @@ def _parse_kanban_channels(raw: str | None) -> list[str] | None:
         name = chunk.strip().lower()
         if not name:
             continue
-        if name not in _KANBAN_CHANNEL_SET:
+        if name not in _EMBUDO_CHANNEL_SET:
             raise HTTPException(status_code=400, detail="canal_no_soportado")
         if name not in channels:
             channels.append(name)
@@ -827,7 +827,7 @@ def _get_leads_repo() -> LeadsRepository:
     try:
         return LeadsRepository()
     except LeadsRepositoryError as exc:
-        logger.error("kanban.repo_init_failed", extra={"error": str(exc)})
+        logger.error("embudo.repo_init_failed", extra={"error": str(exc)})
         raise HTTPException(status_code=500, detail="supabase_not_configured") from exc
 
 
@@ -1043,8 +1043,8 @@ async def leads_geo_municipios(cve_ent: str) -> dict[str, Any]:
     return {"ok": True, "geojson": geojson}
 
 
-@router.get("/kanban/boards")
-async def list_kanban_boards(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+@router.get("/embudo/tableros")
+async def list_embudo_tableros(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     token = _parse_bearer(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
@@ -1067,8 +1067,8 @@ async def list_kanban_boards(authorization: str | None = Header(default=None)) -
     return {"ok": True, "items": items}
 
 
-@router.get("/kanban/board")
-async def get_kanban_board(
+@router.get("/embudo")
+async def get_embudo(
     tablero: str | None = Query(default=None, description="Slug o UUID del tablero"),
     canales: str | None = Query(default=None, description="Filtros de canal separados por coma"),
     limit: int = Query(default=400, ge=10, le=2000),
@@ -1079,7 +1079,7 @@ async def get_kanban_board(
         raise HTTPException(status_code=401, detail="auth_required")
 
     repo = _get_leads_repo()
-    channel_filter = _parse_kanban_channels(canales)
+    channel_filter = _parse_embudo_channels(canales)
     try:
         board = await repo.fetch_board(token=token, selector=tablero)
         stages = await repo.fetch_stages(board_id=board["id"], token=token)
@@ -1154,9 +1154,9 @@ async def get_kanban_board(
     }
 
 
-@router.post("/kanban/leads")
-async def create_kanban_lead(
-    payload: KanbanLeadCreatePayload,
+@router.post("/embudo/leads")
+async def create_embudo_lead(
+    payload: EmbudoLeadCreatePayload,
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)
@@ -1194,10 +1194,10 @@ async def create_kanban_lead(
     return {"ok": True, "lead": _serialize_card(detail, stage_map)}
 
 
-@router.patch("/kanban/leads/{lead_id}/stage")
-async def move_kanban_lead(
+@router.patch("/embudo/leads/{lead_id}/etapa")
+async def move_embudo_lead(
     lead_id: str,
-    payload: KanbanMovePayload,
+    payload: EmbudoMovePayload,
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)
@@ -1247,10 +1247,10 @@ async def move_kanban_lead(
     return {"ok": True, "lead": _serialize_card(detail, stage_map)}
 
 
-@router.patch("/kanban/leads/{lead_id}/assign")
-async def assign_kanban_lead(
+@router.patch("/embudo/leads/{lead_id}/asignacion")
+async def assign_embudo_lead(
     lead_id: str,
-    payload: KanbanAssignPayload,
+    payload: EmbudoAssignPayload,
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)

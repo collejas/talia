@@ -1,6 +1,5 @@
 import { $, ensureSession, fetchJSONWithAuth } from './common.js';
 import { setupLeadsMap } from './leads_map.js';
-import { setupKanban } from './kanban.js';
 
 async function loadKpis() {
   const rangeSel = $('dashboard-range');
@@ -40,7 +39,6 @@ async function main() {
   const rangeSel = $('dashboard-range');
   if (rangeSel) rangeSel.addEventListener('change', () => void loadKpis());
   setupLeadsMap();
-  setupKanban();
 }
 
 void main();

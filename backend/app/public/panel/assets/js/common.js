@@ -2,6 +2,7 @@ import { createThemeManager } from './theme.js';
 
 const NAV_LINKS = [
   { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
+  { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
   { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
   { id: 'config', href: 'configuracion.html', label: 'Configuración' },
 ];

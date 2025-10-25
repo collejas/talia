@@ -1,4 +1,4 @@
-"""Repositorio para operaciones Kanban de leads vía Supabase REST."""
+"""Repositorio para operaciones del embudo de leads vía Supabase REST."""
 
 from __future__ import annotations
 
@@ -113,7 +113,7 @@ class LeadsRepository:
             params["limit"] = str(limit)
         response = await self._request(
             "GET",
-            "/rest/v1/v_leads_kanban",
+            "/rest/v1/embudo",
             token=token,
             params=params,
         )
@@ -175,7 +175,7 @@ class LeadsRepository:
             "id": f"eq.{card_id}",
             "limit": "1",
         }
-        response = await self._request("GET", "/rest/v1/v_leads_kanban", token=token, params=params)
+        response = await self._request("GET", "/rest/v1/embudo", token=token, params=params)
         rows = self._json_list(response)
         return rows[0] if rows else None
 
