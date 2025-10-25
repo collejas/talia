@@ -9,15 +9,17 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.repositories.leads import LeadsRepository, LeadsRepositoryError
 from app.services import storage
+from app.services.lead_pipeline import LeadPipelineError, LeadPipelineService
 from app.services.leads_geo import (
     ContactLocation,
     infer_contact_location,
@@ -42,6 +44,73 @@ class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
     manual: bool = Field(..., description="True para pausar al asistente")
+
+
+class KanbanLeadCreatePayload(BaseModel):
+    """Campos mínimos para crear tarjetas en el tablero Kanban."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    contacto_id: str = Field(..., description="Contacto asociado a la tarjeta")
+    conversacion_id: str | None = Field(
+        default=None, description="Conversación origen cuando aplica"
+    )
+    tablero_id: str | None = Field(default=None, description="Tablero destino (opcional)")
+    etapa_id: str | None = Field(default=None, description="Etapa destino (opcional)")
+    canal: str | None = Field(default=None, description="Canal de origen del lead")
+    asignado_a_usuario_id: str | None = Field(
+        default=None, description="Usuario asignado responsable"
+    )
+    propietario_usuario_id: str | None = Field(
+        default=None, description="Propietario del contacto/lead"
+    )
+    monto_estimado: float | None = Field(default=None, ge=0, description="Monto esperado")
+    moneda: str | None = Field(
+        default=None, min_length=2, max_length=3, description="Código de moneda ISO-4217"
+    )
+    tags: list[str] | None = Field(default=None, description="Etiquetas libres")
+    metadata: dict[str, Any] | None = Field(default=None, description="Metadatos adicionales")
+    lead_score: int | None = Field(default=None, description="Valoración numérica del lead")
+    fuente: Literal["humano", "asistente", "api"] | None = Field(
+        default=None, description="Fuente de creación de la tarjeta"
+    )
+
+    @field_validator("moneda")
+    @classmethod
+    def _normalize_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper() or None
+
+    @field_validator("tags")
+    @classmethod
+    def _clean_tags(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return None
+        seen: list[str] = []
+        for tag in value:
+            text = str(tag).strip()
+            if text and text not in seen:
+                seen.append(text)
+        return seen or None
+
+
+class KanbanMovePayload(BaseModel):
+    """Actualiza la etapa de una tarjeta."""
+
+    etapa_id: str = Field(..., description="Etapa destino de la tarjeta")
+    motivo: str | None = Field(default=None, description="Motivo opcional del movimiento")
+    fuente: Literal["humano", "asistente", "api"] = Field(default="humano")
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class KanbanAssignPayload(BaseModel):
+    """Asignación de responsables para una tarjeta."""
+
+    usuario_id: str | None = Field(
+        default=None, description="UUID del usuario asignado, o null para desasignar"
+    )
+    fuente: Literal["humano", "asistente", "api"] = Field(default="humano")
 
 
 def _supabase_base_url() -> str:
@@ -569,6 +638,27 @@ def _parse_channels_param(raw: str | None) -> list[str]:
     return channels
 
 
+KANBAN_ALLOWED_CHANNELS: tuple[str, ...] = ("whatsapp", "webchat", "voz", "instagram", "api")
+_KANBAN_CHANNEL_SET = set(KANBAN_ALLOWED_CHANNELS)
+
+
+def _parse_kanban_channels(raw: str | None) -> list[str] | None:
+    if not raw:
+        return None
+    channels: list[str] = []
+    for chunk in raw.split(","):
+        name = chunk.strip().lower()
+        if not name:
+            continue
+        if name not in _KANBAN_CHANNEL_SET:
+            raise HTTPException(status_code=400, detail="canal_no_soportado")
+        if name not in channels:
+            channels.append(name)
+    if not channels:
+        raise HTTPException(status_code=400, detail="canal_no_soportado")
+    return channels
+
+
 async def _fetch_contact_locations(token: str, channels: list[str]) -> list[ContactLocation]:
     params = {
         "select": "canal,contacto_id,metadatos,contacto:contactos(id,telefono_e164,contacto_datos)",
@@ -733,6 +823,141 @@ def _summarize_municipios(
     )
 
 
+def _get_leads_repo() -> LeadsRepository:
+    try:
+        return LeadsRepository()
+    except LeadsRepositoryError as exc:
+        logger.error("kanban.repo_init_failed", extra={"error": str(exc)})
+        raise HTTPException(status_code=500, detail="supabase_not_configured") from exc
+
+
+def _get_lead_pipeline(repo: LeadsRepository) -> LeadPipelineService:
+    return LeadPipelineService(repository=repo)
+
+
+def _metadata_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _normalize_tags_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen: list[str] = []
+    for tag in value:
+        text = str(tag).strip()
+        if text and text not in seen:
+            seen.append(text)
+    return seen
+
+
+def _as_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _serialize_card(
+    card: dict[str, Any],
+    stage_lookup: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    stage_id = str(card.get("etapa_id") or "")
+    stage = stage_lookup.get(stage_id)
+    stage_prob = _as_float(stage.get("probabilidad")) if stage else None
+    override_prob = _as_float(card.get("probabilidad_override"))
+    final_prob = override_prob if override_prob is not None else stage_prob
+    prob_origin = (
+        "override" if override_prob is not None else ("etapa" if stage_prob is not None else None)
+    )
+
+    tags = _normalize_tags_list(card.get("tags"))
+    metadata = _metadata_dict(card.get("metadata"))
+    canal = card.get("canal")
+    if canal and "canal" not in metadata:
+        metadata["canal"] = canal
+
+    contacto = {
+        "id": card.get("contacto_id"),
+        "nombre": card.get("contacto_nombre"),
+        "estado": card.get("contacto_estado"),
+        "telefono": card.get("contacto_telefono"),
+        "correo": card.get("contacto_correo"),
+    }
+    conversacion = {
+        "id": card.get("conversacion_id"),
+        "estado": card.get("conversacion_estado"),
+        "ultimo_mensaje_en": card.get("ultimo_mensaje_en"),
+        "canal": canal,
+    }
+    asignado = {
+        "id": card.get("asignado_a_usuario_id"),
+        "nombre": card.get("asignado_nombre"),
+    }
+    propietario = {
+        "id": card.get("propietario_usuario_id"),
+        "nombre": card.get("propietario_nombre"),
+    }
+    insights = {
+        key: card.get(key)
+        for key in ("resumen", "intencion", "sentimiento", "siguiente_accion")
+        if card.get(key) is not None
+    }
+
+    stage_payload = (
+        {
+            "id": stage_id,
+            "codigo": stage.get("codigo"),
+            "nombre": stage.get("nombre"),
+            "categoria": stage.get("categoria"),
+            "orden": stage.get("orden"),
+            "probabilidad": stage_prob,
+            "metadatos": _metadata_dict(stage.get("metadatos")),
+        }
+        if stage
+        else None
+    )
+
+    return {
+        "id": card.get("id"),
+        "tablero_id": card.get("tablero_id"),
+        "etapa_id": stage_id or None,
+        "stage": stage_payload,
+        "canal": canal,
+        "monto_estimado": _as_float(card.get("monto_estimado")),
+        "moneda": (card.get("moneda") or "").upper() if card.get("moneda") else None,
+        "probabilidad": final_prob,
+        "probabilidad_origen": prob_origin,
+        "probabilidad_override": override_prob,
+        "lead_score": _as_int(card.get("lead_score")),
+        "tags": tags,
+        "metadata": metadata,
+        "contacto": contacto,
+        "conversacion": conversacion,
+        "asignado": asignado,
+        "propietario": propietario,
+        "cerrado_en": card.get("cerrado_en"),
+        "motivo_cierre": card.get("motivo_cierre"),
+        "creado_en": card.get("creado_en"),
+        "actualizado_en": card.get("actualizado_en"),
+        "insights": insights or None,
+    }
+
+
 @router.get("/kpis/leads/estados")
 async def leads_by_state(
     canales: str | None = Query(default=None),
@@ -816,6 +1041,253 @@ async def leads_geo_municipios(cve_ent: str) -> dict[str, Any]:
     except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
         raise HTTPException(status_code=500, detail="geo_catalog_missing") from exc
     return {"ok": True, "geojson": geojson}
+
+
+@router.get("/kanban/boards")
+async def list_kanban_boards(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    repo = _get_leads_repo()
+    try:
+        boards = await repo.list_boards(token=token)
+    except LeadsRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supabase_error") from exc
+    items: list[dict[str, Any]] = []
+    for board in boards:
+        items.append(
+            {
+                "id": board.get("id"),
+                "nombre": board.get("nombre"),
+                "slug": board.get("slug"),
+                "es_default": bool(board.get("es_default")),
+                "activo": bool(board.get("activo", True)),
+            }
+        )
+    return {"ok": True, "items": items}
+
+
+@router.get("/kanban/board")
+async def get_kanban_board(
+    tablero: str | None = Query(default=None, description="Slug o UUID del tablero"),
+    canales: str | None = Query(default=None, description="Filtros de canal separados por coma"),
+    limit: int = Query(default=400, ge=10, le=2000),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    repo = _get_leads_repo()
+    channel_filter = _parse_kanban_channels(canales)
+    try:
+        board = await repo.fetch_board(token=token, selector=tablero)
+        stages = await repo.fetch_stages(board_id=board["id"], token=token)
+        stage_lookup: dict[str, dict[str, Any]] = {
+            str(stage.get("id")): stage
+            for stage in stages
+            if isinstance(stage, dict) and stage.get("id")
+        }
+        cards = await repo.fetch_cards(
+            board_id=board["id"],
+            token=token,
+            channels=channel_filter,
+            limit=limit,
+        )
+    except LeadsRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supabase_error") from exc
+
+    stage_cards: dict[str, list[dict[str, Any]]] = {key: [] for key in stage_lookup}
+    category_totals: dict[str, int] = defaultdict(int)
+    for raw_card in cards:
+        stage_id = str(raw_card.get("etapa_id") or "")
+        serialized = _serialize_card(raw_card, stage_lookup)
+        stage_cards.setdefault(stage_id, []).append(serialized)
+
+    stage_payloads: list[dict[str, Any]] = []
+    for stage in stages:
+        stage_id = str(stage.get("id"))
+        cards_for_stage = stage_cards.get(stage_id, [])
+        categoria = stage.get("categoria") or "abierta"
+        category_totals[categoria] = category_totals.get(categoria, 0) + len(cards_for_stage)
+        stage_payloads.append(
+            {
+                "id": stage_id,
+                "codigo": stage.get("codigo"),
+                "nombre": stage.get("nombre"),
+                "categoria": categoria,
+                "orden": stage.get("orden"),
+                "probabilidad": _as_float(stage.get("probabilidad")),
+                "sla_horas": stage.get("sla_horas"),
+                "metadatos": _metadata_dict(stage.get("metadatos")),
+                "total": len(cards_for_stage),
+                "cards": cards_for_stage,
+            }
+        )
+
+    stage_payloads.sort(key=lambda item: item.get("orden") or 0)
+    cards_total = sum(len(items) for items in stage_cards.values())
+    channels_present = sorted(
+        {str(card.get("canal")).lower() for card in cards if card.get("canal")}
+    )
+
+    return {
+        "ok": True,
+        "board": {
+            "id": board.get("id"),
+            "nombre": board.get("nombre"),
+            "slug": board.get("slug"),
+            "es_default": bool(board.get("es_default")),
+            "activo": bool(board.get("activo", True)),
+        },
+        "stages": stage_payloads,
+        "filters": {
+            "tablero": tablero,
+            "canales": channel_filter,
+            "limit": limit,
+        },
+        "totals": {
+            "cards": cards_total,
+            "por_categoria": dict(category_totals),
+            "canales": channels_present,
+        },
+    }
+
+
+@router.post("/kanban/leads")
+async def create_kanban_lead(
+    payload: KanbanLeadCreatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    user_id = _jwt_verify_and_sub(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    repo = _get_leads_repo()
+    body = payload.model_dump(exclude_none=True)
+    if "metadata" in body and not isinstance(body["metadata"], dict):
+        body["metadata"] = {}
+    if "tags" in body:
+        body["tags"] = body["tags"] or None
+    if not body.get("propietario_usuario_id"):
+        body["propietario_usuario_id"] = user_id
+    if not body.get("fuente"):
+        body["fuente"] = "humano"
+
+    try:
+        created = await repo.create_card(payload=body, token=token)
+        detail = await repo.fetch_card_detail(card_id=str(created.get("id")), token=token)
+        stage_map: dict[str, dict[str, Any]] = {}
+        if detail and detail.get("etapa_id"):
+            stage = await repo.fetch_stage(stage_id=str(detail["etapa_id"]), token=token)
+            if stage:
+                stage_map[str(stage.get("id"))] = stage
+    except LeadsRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supabase_error") from exc
+
+    if not detail:
+        raise HTTPException(status_code=502, detail="lead_no_disponible")
+
+    return {"ok": True, "lead": _serialize_card(detail, stage_map)}
+
+
+@router.patch("/kanban/leads/{lead_id}/stage")
+async def move_kanban_lead(
+    lead_id: str,
+    payload: KanbanMovePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    repo = _get_leads_repo()
+    try:
+        card = await repo.fetch_card_by_id(card_id=lead_id, token=token)
+        if not card:
+            raise HTTPException(status_code=404, detail="lead_no_encontrado")
+        stage = await repo.fetch_stage(stage_id=payload.etapa_id, token=token)
+        if not stage:
+            raise HTTPException(status_code=404, detail="etapa_no_encontrada")
+        if stage.get("tablero_id") != card.get("tablero_id"):
+            raise HTTPException(status_code=400, detail="etapa_fuera_del_tablero")
+
+        merged_metadata = None
+        if payload.metadata:
+            current_meta = card.get("metadata") if isinstance(card.get("metadata"), dict) else {}
+            merged_metadata = dict(current_meta)
+            merged_metadata.update(payload.metadata)
+
+        service = _get_lead_pipeline(repo)
+        await service.move_lead(
+            card_id=lead_id,
+            stage_id=payload.etapa_id,
+            motivo=payload.motivo,
+            fuente=payload.fuente,
+            token=token,
+            metadata=merged_metadata,
+        )
+        detail = await repo.fetch_card_detail(card_id=lead_id, token=token)
+    except HTTPException:
+        raise
+    except LeadPipelineError as exc:
+        raise HTTPException(status_code=502, detail="lead_pipeline_error") from exc
+    except LeadsRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supabase_error") from exc
+
+    if not detail:
+        raise HTTPException(status_code=404, detail="lead_no_encontrado")
+
+    stage_map: dict[str, dict[str, Any]] = {}
+    if stage:
+        stage_map[str(stage.get("id"))] = stage
+    return {"ok": True, "lead": _serialize_card(detail, stage_map)}
+
+
+@router.patch("/kanban/leads/{lead_id}/assign")
+async def assign_kanban_lead(
+    lead_id: str,
+    payload: KanbanAssignPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    repo = _get_leads_repo()
+    try:
+        card = await repo.fetch_card_by_id(card_id=lead_id, token=token)
+        if not card:
+            raise HTTPException(status_code=404, detail="lead_no_encontrado")
+        stage = None
+        if card.get("etapa_id"):
+            stage = await repo.fetch_stage(stage_id=str(card["etapa_id"]), token=token)
+
+        service = _get_lead_pipeline(repo)
+        await service.assign_lead(
+            card_id=lead_id,
+            usuario_id=payload.usuario_id,
+            fuente=payload.fuente,
+            token=token,
+        )
+        detail = await repo.fetch_card_detail(card_id=lead_id, token=token)
+    except HTTPException:
+        raise
+    except LeadPipelineError as exc:
+        raise HTTPException(status_code=502, detail="lead_pipeline_error") from exc
+    except LeadsRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supabase_error") from exc
+
+    if not detail:
+        raise HTTPException(status_code=404, detail="lead_no_encontrado")
+
+    stage_map: dict[str, dict[str, Any]] = {}
+    if stage:
+        stage_map[str(stage.get("id"))] = stage
+    return {"ok": True, "lead": _serialize_card(detail, stage_map)}
 
 
 @router.get("/panel/env.js")

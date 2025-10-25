@@ -114,6 +114,44 @@
         <div id="leads-map-legend" class="map-legend" aria-hidden="true"></div>
       </div>
     </section>
+
+    <section class="card kanban-card-section" aria-labelledby="kanban-title">
+      <div class="kanban-header">
+        <div>
+          <h2 id="kanban-title" class="map-card-title">Pipeline comercial</h2>
+          <p class="muted map-card-subtitle">Vista Kanban de leads por etapa y responsable.</p>
+        </div>
+        <div class="kanban-controls" role="group" aria-label="Filtros del pipeline">
+          <label class="map-control">
+            <span>Tablero</span>
+            <select id="kanban-board-select" class="btn btn-outline" aria-label="Seleccionar tablero">
+              <option value="">General</option>
+            </select>
+          </label>
+          <label class="map-control">
+            <span>Canal</span>
+            <select id="kanban-filter-channel" class="btn btn-outline" aria-label="Filtrar por canal">
+              <option value="">Todos</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="webchat">Webchat</option>
+              <option value="voz">Voz</option>
+              <option value="instagram">Instagram</option>
+              <option value="api">API</option>
+            </select>
+          </label>
+          <button id="kanban-refresh" class="btn btn-ghost" type="button">Actualizar</button>
+        </div>
+      </div>
+      <div class="kanban-summary">
+        <strong id="kanban-board-name">—</strong>
+        <span id="kanban-total" class="muted">0 leads</span>
+        <span id="kanban-categories" class="muted"></span>
+      </div>
+      <div id="kanban-loading" class="kanban-loading kanban-hidden">Actualizando pipeline…</div>
+      <div id="kanban-error" class="kanban-error kanban-hidden">No fue posible cargar el tablero. Intenta nuevamente.</div>
+      <div id="kanban-empty" class="kanban-empty kanban-hidden">Aún no hay leads en el tablero seleccionado.</div>
+      <div id="kanban-board" class="kanban-board" aria-live="polite"></div>
+    </section>
   </main>
 
   <script type="module">

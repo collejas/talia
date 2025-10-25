@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +17,7 @@ from app.channels.webchat.schemas import (
 from app.core.logging import get_logger, log_event
 from app.services import geolocation, storage, user_agent
 from app.services import openai as openai_service
+from app.services.lead_pipeline import LeadPipelineError, LeadPipelineService
 
 
 class AssistantConfigError(RuntimeError):
@@ -30,6 +32,8 @@ logger = get_logger(__name__)
 
 # Cache en memoria para mapear session_id -> OpenAI conversation_id ("conv_...")
 _CONVERSATION_CACHE: dict[str, str] = {}
+
+_lead_pipeline = LeadPipelineService()
 
 
 @dataclass(slots=True)
@@ -74,6 +78,14 @@ async def handle_webchat_message(
             session_id=message.session_id,
             author=message.author or "user",
         )
+        if record.conversation_id:
+            asyncio.create_task(
+                _sync_pipeline(
+                    record.conversation_id,
+                    canal="webchat",
+                    metadata={"ultimo_autor": message.author or "user"},
+                )
+            )
     except storage.StorageError:
         logger.exception("No se pudo registrar el mensaje entrante en Supabase")
 
@@ -160,6 +172,20 @@ async def handle_webchat_message(
         reply=reply.text,
         metadata=metadata or None,
     )
+
+
+async def _sync_pipeline(conversation_id: str, *, canal: str, metadata: dict[str, Any]) -> None:
+    try:
+        await _lead_pipeline.ensure_card_for_conversation(
+            conversation_id=conversation_id,
+            canal=canal,
+            metadata=metadata,
+        )
+    except LeadPipelineError:
+        logger.exception(
+            "webchat.pipeline_sync_failed",
+            extra={"conversation_id": conversation_id, "canal": canal},
+        )
 
 
 async def _generate_assistant_reply(

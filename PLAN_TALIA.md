@@ -78,3 +78,58 @@
 - Procesos automatizados de despliegue y renovación de certificados válidos.
 - Dashboard con KPIs clave y reportes exportables.
 - Checklist de tareas actualizado y trazable.
+
+
+
+
+
+
+• Hallazgos
+
+  - backups/postgres_20251025_201958_schema.sql:3393 define public.contactos con origen, propietario_usuario_id, estado in
+    ('lead','activo','bloqueado') y contacto_datos jsonb; este es hoy el contenedor de leads.
+  - backups/postgres_20251025_201958_schema.sql:3411 define public.conversaciones enlazadas a contactos, con canal, estado,
+    asignado_a_usuario_id y soporte para último mensaje; es la pieza central multicanal.
+  - backups/postgres_20251025_201958_schema.sql:3487 aporta public.conversaciones_insights con lead_score, siguiente_accion,
+    tags; ya tienes analítica que conviene reutilizar en el tablero.
+  - backups/postgres_20251025_201958_schema.sql:3602 muestra public.identidades_canal que relaciona contactos con
+    identificadores externos por canal (whatsapp/webchat/voz/instagram).
+  - RLS existente (backups/postgres_20251025_201958_schema.sql:6306-6393) concede acceso a propietarios/usuarios asignados
+    usando helpers public.es_admin y public.puede_ver_conversacion; cualquier nueva tabla debe seguir este patrón.
+
+  Nueva Estructura
+
+  - public.lead_tableros: id uuid PK, nombre, slug, departamento_id uuid?, es_default boolean, propietario_usuario_id uuid,
+    creado_en/actualizado_en; permite futuros tableros por equipo sin romper la vista global.
+  - public.lead_etapas: id uuid PK, tablero_id uuid FK lead_tableros, codigo, nombre, orden smallint, probabilidad
+    numeric(5,2), categoria text CHECK ('abierta','ganada','perdida'), sla_horas integer, metadatos jsonb; así modelas columnas
+    kanban y SLA.
+  - public.lead_tarjetas: id uuid PK, contacto_id uuid FK contactos, conversacion_id uuid FK conversaciones, tablero_id
+    uuid, etapa_id uuid, canal text CHECK como conversaciones, propietario_usuario_id uuid (fallback a contacto),
+    asignado_a_usuario_id uuid, monto_estimado numeric(12,2), moneda char(3), probabilidad_override numeric(5,2), motivo_cierre
+    text, cerrado_en timestamptz, lead_score integer DEFAULT insights.lead_score, tags text[], metadata jsonb, timestamps; es
+    la tarjeta que el asistente crea/mueve.
+  - public.lead_movimientos: id uuid PK, tarjeta_id uuid FK lead_tarjetas, etapa_origen_id uuid, etapa_destino_id uuid,
+    cambiado_por uuid, cambiado_en timestamptz DEFAULT now(), motivo text, fuente text CHECK('asistente','humano','api');
+    conserva historial y habilita auditoría.
+  - public.lead_recordatorios opcional: tarjeta_id, due_at, descripcion, creado_por; cubre follow-ups en etapas específicas sin
+    mezclar con conversaciones.
+  - Vista public.v_leads_kanban: join de lead_tarjetas, contactos, conversaciones, conversaciones_insights para alimentar la UI
+    sin múltiples roundtrips (incluye conteos por etapa, últimos mensajes, asignado).
+
+  Integración
+
+  - Trigger AFTER INSERT en public.conversaciones que cree tarjeta en etapa inicial (categoria='abierta') para contactos
+    estado='lead' y propague canal y propietario_usuario_id.
+  - Trigger AFTER UPDATE en public.lead_tarjetas que sincronice contactos.estado ('activo' cuando etapa categoria='ganada',
+    'lead' si regresa a abiertas); ampliar el CHECK de contactos.estado si deseas guardar 'perdido'.
+  - Función public.puede_ver_lead(tarjeta_id uuid) siguiendo el patrón de public.puede_ver_conversacion: propietario del
+    contacto, asignado en la tarjeta o admin; úsala en políticas RLS (SELECT/UPDATE/DELETE/INSERT) de lead_*.
+  - Índices sugeridos: idx_lead_tarjetas_etapa (tablero_id, etapa_id, asignado_a_usuario_id), idx_lead_movimientos_tarjeta,
+    idx_lead_tarjetas_conversacion, idx_lead_tarjetas_estado_categoria para conteos rápidos por columna/estado.
+  - Habilita REPLICA IDENTITY FULL en lead_tarjetas y lead_movimientos para soportar Supabase Realtime; publica eventos en
+    public.eventos_auditoria mediante trigger para auditar cambios de etapa.
+  - Aprovecha conversaciones_insights.lead_score y siguiente_accion: copy-on-write al crear tarjeta y refrescar con trigger
+    cuando insights cambian (AFTER UPDATE ON conversaciones_insights).
+  - Define ENUM lead_categoria en lugar de TEXT check si prefieres tipos fuertes, siguiendo la convención de
+    public.fuente_resultado.
