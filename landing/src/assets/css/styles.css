@@ -11,6 +11,8 @@
   --shell-gap: clamp(16px, 2.25vw, 28px);
   /* Separación visible entre composer y footer */
   --footer-gap: clamp(10px, 1.75vw, 20px);
+  /* Margen interno del scroll para que el box-shadow del card no se recorte */
+  --shell-shadow-bleed: clamp(12px, 1.6vw, 24px);
 }
 
 body {
@@ -395,16 +397,19 @@ button:hover {
   top: var(--header-h);
   left: 0;
   right: 0;
-  bottom: calc(var(--composer-h) + var(--shell-gap) + var(--composer-b, 0px));
+  /* Reservar sólo la altura del composer; el gap se agrega como padding interno */
+  bottom: calc(var(--composer-h) + var(--composer-b, 0px));
   overflow-y: auto; /* Scrollbar a nivel viewport */
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 0; /* el espacio se crea fuera del card */
+  /* Evitar recorte del box-shadow: espacio arriba y abajo dentro del scroll */
+  padding-top: var(--shell-shadow-bleed);
+  padding-bottom: var(--shell-gap);
 }
 
 /* Card centrado dentro del contenedor scrolleable full-width */
 .layout > .chat-shell {
   width: min(760px, 92vw);
-  margin: 0.65rem auto 0; /* sin doble espacio, gap se maneja fuera */
+  margin: 0 auto; /* el espaciado vertical lo maneja el padding de .layout */
   background: var(--surface-strong);
   border-radius: 22px;
   padding: clamp(1.5rem, 4vw, 3rem);
