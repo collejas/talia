@@ -13,13 +13,14 @@ from app.channels.voice.router import router as voice_router
 from app.channels.webchat.router import router as webchat_router
 from app.channels.whatsapp.router import router as whatsapp_router
 from app.core.config import settings
-from app.core.logging import configure_logging, get_logger
+from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
 
 
 def create_app() -> FastAPI:
     """Crea y configura la instancia de FastAPI."""
-    log_level = logging.DEBUG if settings.environment != "production" else logging.INFO
+    default_log_level = logging.DEBUG if settings.environment != "production" else logging.INFO
+    log_level = resolve_log_level(settings.log_level, default=default_log_level)
     log_dir = Path(settings.log_file_path).parent
     per_logger_files = {
         "app.request": str(log_dir / "request.log"),

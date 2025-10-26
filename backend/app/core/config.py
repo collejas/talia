@@ -8,6 +8,31 @@ class Settings(BaseSettings):
     """Valores globales leídos desde `.env` o el entorno."""
 
     environment: str = "development"
+    log_level: str | None = Field(
+        default=None,
+        description="Nivel de logging global (ej. debug, info, warning). Cuando no se define, usa un valor por ambiente.",
+    )
+    request_log_level: str = Field(
+        default="info",
+        description=(
+            "Nivel mínimo para registrar solicitudes en middleware. "
+            "Valores más altos (warning/error) reducen registros de peticiones exitosas."
+        ),
+    )
+    request_log_skip_prefixes: tuple[str, ...] = Field(
+        default=(
+            "/panel",
+            "/api/panel",
+            "/shared",
+            "/api/shared",
+            "/favicon",
+            "/site",
+            "/robots.txt",
+            "/docs",
+            "/openapi",
+        ),
+        description="Prefijos de ruta para los que no se registrarán eventos de request.started/completed.",
+    )
     openai_api_key: str | None = None
     openai_assistant_id: str | None = None
     openai_project_id: str | None = None

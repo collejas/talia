@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from uuid import uuid4
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.logging import get_logger
+from app.core.config import settings
+from app.core.logging import get_logger, resolve_log_level
 
 logger = get_logger("app.request")
+
+_REQUEST_LOG_THRESHOLD = resolve_log_level(settings.request_log_level, default=logging.INFO)
+_REQUEST_SKIP_PREFIXES = tuple(prefix for prefix in settings.request_log_skip_prefixes if prefix)
+_START_EVENT_LEVEL = logging.DEBUG
+_COMPLETE_EVENT_LEVEL = logging.INFO
+
+
+def _should_log(level: int) -> bool:
+    """Indica si se debe emitir un evento según el umbral configurado."""
+    return level >= _REQUEST_LOG_THRESHOLD
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -19,6 +31,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = uuid4().hex
         start = time.perf_counter()
+        path = request.url.path
+        skip_transitions = any(path.startswith(prefix) for prefix in _REQUEST_SKIP_PREFIXES)
+
         client_ip = request.headers.get("x-forwarded-for")
         if client_ip:
             client_ip = client_ip.split(",")[0].strip()
@@ -27,16 +42,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         user_agent = request.headers.get("user-agent")
 
-        logger.info(
-            "request.started",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "client_ip": client_ip,
-                "user_agent": user_agent,
-            },
-        )
+        if not skip_transitions and _should_log(_START_EVENT_LEVEL):
+            logger.log(
+                _START_EVENT_LEVEL,
+                "request.started",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": path,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                },
+            )
 
         try:
             response = await call_next(request)
@@ -47,7 +64,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 extra={
                     "request_id": request_id,
                     "method": request.method,
-                    "path": request.url.path,
+                    "path": path,
                     "duration_ms": round(duration_ms, 2),
                     "client_ip": client_ip,
                 },
@@ -57,16 +74,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         duration_ms = (time.perf_counter() - start) * 1000
         response.headers["x-request-id"] = request_id
 
-        logger.info(
-            "request.completed",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": round(duration_ms, 2),
-                "client_ip": client_ip,
-            },
-        )
+        if not skip_transitions and _should_log(_COMPLETE_EVENT_LEVEL):
+            logger.log(
+                _COMPLETE_EVENT_LEVEL,
+                "request.completed",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": path,
+                    "status_code": response.status_code,
+                    "duration_ms": round(duration_ms, 2),
+                    "client_ip": client_ip,
+                },
+            )
 
         return response

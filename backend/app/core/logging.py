@@ -110,6 +110,24 @@ def configure_logging(
                 )
 
 
+def resolve_log_level(value: str | int | None, *, default: int = logging.INFO) -> int:
+    """Convierte valores configurables a constantes numéricas de logging."""
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default
+        try:
+            return int(candidate)
+        except ValueError:
+            upper = candidate.upper()
+            mapped = logging._nameToLevel.get(upper)  # type: ignore[attr-defined]
+            if isinstance(mapped, int):
+                return mapped
+    return default
+
+
 def get_logger(name: str) -> logging.Logger:
     """Retorna un logger hijo con el nombre solicitado."""
     return logging.getLogger(name)
