@@ -7,6 +7,8 @@
   --header-h: 64px;
   /* Altura total estimada de la capa inferior (composer + footer) en desktop */
   --composer-h: 180px;
+  /* Separación visible entre el card y el composer */
+  --shell-gap: clamp(10px, 1.5vw, 16px);
 }
 
 body {
@@ -394,12 +396,13 @@ button:hover {
   bottom: var(--composer-h);
   overflow-y: auto; /* Scrollbar a nivel viewport */
   -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--shell-gap); /* asegura separación visible respecto al composer */
 }
 
 /* Card centrado dentro del contenedor scrolleable full-width */
 .layout > .chat-shell {
   width: min(760px, 92vw);
-  margin: 0.65rem auto; /* pequeña separación del header y del composer */
+  margin: 0.65rem auto var(--shell-gap); /* separación clara respecto al composer */
   background: var(--surface-strong);
   border-radius: 22px;
   padding: clamp(1.5rem, 4vw, 3rem);
