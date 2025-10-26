@@ -236,13 +236,87 @@ function historyIdsEqual(messages) {
   const nextIds = (messages || []).map((msg) =>
     String(msg?.message_id ?? `${msg?.direction}-${msg?.created_at}-${msg?.content || ''}`)
   );
-  const changed =
-    nextIds.length !== lastHistoryIds.length ||
-    nextIds.some((id, index) => id !== lastHistoryIds[index]);
-  if (changed) {
-    lastHistoryIds = nextIds;
+  const unchanged =
+    nextIds.length === lastHistoryIds.length &&
+    nextIds.every((id, index) => id === lastHistoryIds[index]);
+  return unchanged;
+}
+
+function getMessageIds(messages) {
+  return (messages || []).map((msg) =>
+    String(msg?.message_id ?? `${msg?.direction}-${msg?.created_at}-${msg?.content || ''}`)
+  );
+}
+
+function getLastMessageElement() {
+  if (!chatLog) return null;
+  const nodes = chatLog.querySelectorAll('.message');
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const el = nodes[i];
+    if (!el.hasAttribute('data-typing')) return el;
   }
-  return !changed;
+  return null;
+}
+
+function getElementRole(el) {
+  if (!el) return null;
+  if (el.classList.contains('message--assistant')) return 'assistant';
+  if (el.classList.contains('message--user')) return 'user';
+  if (el.classList.contains('message--human')) return 'human';
+  return null;
+}
+
+function appendHistoryDelta(newItems, options = {}) {
+  if (!chatLog || !Array.isArray(newItems) || newItems.length === 0) return;
+  const { behavior = 'auto', tolerance } = normalizeScrollOptions(options);
+  const container = getScrollContainer();
+  const shouldStick = isNearViewportBottom(container, tolerance);
+
+  const hadTyping = !!typingBubble;
+  if (hadTyping) removeTypingIndicator({ preservePending: true });
+
+  // Deduplicación con eco local: si el primer elemento nuevo es el mismo texto y rol
+  // que el último mensaje renderizado marcado como local, lo reemplazamos.
+  const first = newItems[0];
+  const firstRole = mapHistoryRole(first);
+  const firstText = typeof first?.content === 'string' ? first.content : '';
+  const lastEl = getLastMessageElement();
+  if (lastEl && lastEl.getAttribute('data-local') === 'true') {
+    const lastBody = lastEl.querySelector('.message__body');
+    const lastText = lastBody ? lastBody.innerText : '';
+    const lastRole = getElementRole(lastEl);
+    if (lastText === firstText && lastRole === firstRole) {
+      lastEl.parentNode.removeChild(lastEl);
+    }
+  }
+
+  for (const item of newItems) {
+    const role = mapHistoryRole(item);
+    const text = typeof item.content === 'string' ? item.content : '';
+    const metadata = item.metadata || null;
+
+    // Evitar duplicados exactos consecutivos (p.ej., si ya fue eco local o ya se agregó)
+    const tail = getLastMessageElement();
+    if (tail) {
+      const tailBody = tail.querySelector('.message__body');
+      const tailText = tailBody ? tailBody.innerText : '';
+      const tailRole = getElementRole(tail);
+      if (tailText === text && tailRole === role) {
+        // Si lo último era eco local, reemplazar por la versión del servidor
+        if (tail.getAttribute('data-local') === 'true') {
+          tail.parentNode.removeChild(tail);
+        } else {
+          continue; // duplicado exacto; ignorar
+        }
+      }
+    }
+
+    const el = createMessageElement(text, role, metadata);
+    chatLog.appendChild(el);
+  }
+
+  if (hadTyping) renderTypingIndicator();
+  if (shouldStick) maintainViewportBottom(behavior, tolerance);
 }
 
 function renderHistoryMessages(messages, options = {}) {
@@ -288,8 +362,27 @@ async function syncHistory({ force = false } = {}) {
     }
     const data = await response.json();
     const messages = Array.isArray(data?.messages) ? data.messages : [];
-    if (!force && historyIdsEqual(messages)) return;
+    const nextIds = getMessageIds(messages);
+    if (!force) {
+      const unchanged =
+        nextIds.length === lastHistoryIds.length &&
+        nextIds.every((id, idx) => id === lastHistoryIds[idx]);
+      if (unchanged) return;
+
+      // Camino incremental: si el historial nuevo extiende al anterior, solo anexar delta
+      const isExtension =
+        nextIds.length >= lastHistoryIds.length &&
+        lastHistoryIds.every((id, idx) => id === nextIds[idx]);
+      if (isExtension) {
+        const delta = messages.slice(lastHistoryIds.length);
+        appendHistoryDelta(delta, { behavior: 'auto' });
+        lastHistoryIds = nextIds;
+        return;
+      }
+    }
+    // Fallback: re-render completo
     renderHistoryMessages(messages, { force, behavior: force ? 'smooth' : 'auto' });
+    lastHistoryIds = nextIds;
   } catch (error) {
     console.error('[landing] No se pudo sincronizar historial del webchat:', error);
   } finally {
@@ -399,10 +492,13 @@ async function handleSubmit(event) {
   const userMessage = chatInput.value.trim();
   chatInput.value = '';
   appendMessage(userMessage, 'user', null, { behavior: 'smooth', force: true });
+  // Marcar el último mensaje como eco local para deduplicar al sincronizar con el backend
+  const lastEl = getLastMessageElement();
+  if (lastEl) lastEl.setAttribute('data-local', 'true');
   chatInput.focus();
 
   enqueueAssistantReply(userMessage);
-  void syncHistory();
+  // Evitar sincronización inmediata; el polling incremental añadirá solo lo nuevo
 }
 
 function initialiseChat() {
@@ -598,11 +694,14 @@ async function handleAssistantReply(message) {
     if (!metadata.manual_mode) {
       appendMessage(reply, 'assistant', metadata, { behavior: 'smooth', force: true });
     }
-    void syncHistory({ force: true });
+    // Evitar re-render forzado inmediato del historial para prevenir jank/parpadeo.
+    // La sincronización periódica actualizará el historial sin duplicar scroll animado.
+    void syncHistory();
   } catch (error) {
     removeTypingIndicator();
     appendMessage(getFallbackResponse(), 'assistant', null, { behavior: 'smooth', force: true });
     console.error('Error obteniendo respuesta de TalIA:', error);
-    void syncHistory({ force: true });
+    // Evitar re-render forzado en errores también.
+    void syncHistory();
   }
 }
