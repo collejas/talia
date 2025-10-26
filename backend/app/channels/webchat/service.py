@@ -110,41 +110,67 @@ async def handle_webchat_message(
     request_context = await _extract_request_context(request)
 
     conversation_id: str | None = None
-    try:
-        record = await storage.record_webchat_message(
-            session_id=message.session_id,
-            author=message.author or "user",
-            content=message.content,
-            metadata={
-                key: value
-                for key, value in {
-                    "locale": message.locale,
-                    **request_context,
-                }.items()
-                if value is not None
-            },
-        )
-        metadata["conversation_id"] = record.conversation_id
-        conversation_id = record.conversation_id
-        metadata["last_message_id"] = record.message_id
+    incoming_record: storage.WebchatRecord | None = None
+    existing_message: storage.WebchatStoredMessage | None = None
+
+    if message.client_message_id:
+        metadata["client_message_id"] = message.client_message_id
+        try:
+            existing_message = await storage.find_webchat_message_by_client_id(
+                session_id=message.session_id,
+                client_message_id=message.client_message_id,
+            )
+        except storage.StorageError:
+            logger.exception("No se pudo verificar duplicados del mensaje entrante")
+
+    if existing_message:
+        conversation_id = existing_message.conversation_id
+        metadata["conversation_id"] = existing_message.conversation_id
+        metadata["last_message_id"] = existing_message.message_id
         log_event(
             logger,
-            "webchat.message_received",
-            conversation_id=record.conversation_id,
-            message_id=record.message_id,
+            "webchat.message_duplicate_detected",
+            conversation_id=existing_message.conversation_id,
+            message_id=existing_message.message_id,
             session_id=message.session_id,
-            author=message.author or "user",
         )
-        if record.conversation_id:
-            asyncio.create_task(
-                _sync_pipeline(
-                    record.conversation_id,
-                    canal="webchat",
-                    metadata={"ultimo_autor": message.author or "user"},
-                )
+    else:
+        try:
+            incoming_record = await storage.record_webchat_message(
+                session_id=message.session_id,
+                author=message.author or "user",
+                content=message.content,
+                metadata={
+                    key: value
+                    for key, value in {
+                        "locale": message.locale,
+                        "client_message_id": message.client_message_id,
+                        **request_context,
+                    }.items()
+                    if value is not None
+                },
             )
-    except storage.StorageError:
-        logger.exception("No se pudo registrar el mensaje entrante en Supabase")
+            metadata["conversation_id"] = incoming_record.conversation_id
+            conversation_id = incoming_record.conversation_id
+            metadata["last_message_id"] = incoming_record.message_id
+            log_event(
+                logger,
+                "webchat.message_received",
+                conversation_id=incoming_record.conversation_id,
+                message_id=incoming_record.message_id,
+                session_id=message.session_id,
+                author=message.author or "user",
+            )
+            if incoming_record.conversation_id:
+                asyncio.create_task(
+                    _sync_pipeline(
+                        incoming_record.conversation_id,
+                        canal="webchat",
+                        metadata={"ultimo_autor": message.author or "user"},
+                    )
+                )
+        except storage.StorageError:
+            logger.exception("No se pudo registrar el mensaje entrante en Supabase")
 
     manual_override = False
     if conversation_id:
@@ -161,16 +187,47 @@ async def handle_webchat_message(
             metadata=metadata,
         )
 
-    # Recupera conversation_id de OpenAI desde cache/BD (si existe)
-    conversation_for_ai = (
-        record.conversation_openai_id
-        if (
-            "record" in locals()
-            and record.conversation_openai_id
-            and record.conversation_openai_id.startswith("conv")
+    reuse_reply: storage.WebchatStoredMessage | None = None
+    if existing_message and conversation_id and metadata.get("last_message_id"):
+        try:
+            reuse_reply = await storage.fetch_webchat_reply_for_message(
+                conversation_id=conversation_id,
+                in_reply_to=str(metadata["last_message_id"]),
+            )
+        except storage.StorageError:
+            logger.exception("No se pudo recuperar respuesta previa para mensaje duplicado")
+
+    if reuse_reply and reuse_reply.content is not None:
+        stored_meta = reuse_reply.metadata or {}
+        if isinstance(stored_meta, dict):
+            response_id = stored_meta.get("assistant_response_id")
+            if isinstance(response_id, str):
+                metadata["assistant_response_id"] = response_id
+            conv_hint = stored_meta.get("openai_conversation_id")
+            if isinstance(conv_hint, str) and conv_hint.startswith("conv"):
+                _CONVERSATION_CACHE[message.session_id] = conv_hint
+        metadata["assistant_message_id"] = reuse_reply.message_id
+        metadata.setdefault("conversation_id", reuse_reply.conversation_id)
+        metadata["manual_mode"] = False
+        return WebchatResponse(
+            session_id=message.session_id,
+            reply=reuse_reply.content or "",
+            metadata=metadata,
         )
-        else _CONVERSATION_CACHE.get(message.session_id)
-    )
+
+    conversation_for_ai: str | None = None
+    if incoming_record and incoming_record.conversation_openai_id:
+        conv_candidate = incoming_record.conversation_openai_id
+        if isinstance(conv_candidate, str) and conv_candidate.startswith("conv"):
+            conversation_for_ai = conv_candidate
+    if not conversation_for_ai and existing_message and existing_message.metadata:
+        conv_candidate = existing_message.metadata.get("openai_conversation_id")
+        if isinstance(conv_candidate, str) and conv_candidate.startswith("conv"):
+            conversation_for_ai = conv_candidate
+
+    # Recupera conversation_id de OpenAI desde cache/BD (si existe)
+    if not conversation_for_ai:
+        conversation_for_ai = _CONVERSATION_CACHE.get(message.session_id)
 
     # Si aún no hay conv_..., intenta crearlo explícitamente en OpenAI
     if not conversation_for_ai:
@@ -199,7 +256,7 @@ async def handle_webchat_message(
         if reply.response_conversation_id:
             _CONVERSATION_CACHE[message.session_id] = reply.response_conversation_id
 
-        record = await storage.record_webchat_message(
+        response_record = await storage.record_webchat_message(
             session_id=message.session_id,
             author="assistant",
             content=reply.text,
@@ -213,15 +270,15 @@ async def handle_webchat_message(
                 if value is not None
             },
         )
-        metadata["assistant_message_id"] = record.message_id
-        metadata.setdefault("conversation_id", record.conversation_id)
+        metadata["assistant_message_id"] = response_record.message_id
+        metadata.setdefault("conversation_id", response_record.conversation_id)
         if reply.response_id:
             metadata["assistant_response_id"] = reply.response_id
         log_event(
             logger,
             "webchat.message_sent",
-            conversation_id=record.conversation_id,
-            message_id=record.message_id,
+            conversation_id=response_record.conversation_id,
+            message_id=response_record.message_id,
             session_id=message.session_id,
             response_id=reply.response_id,
         )
@@ -529,6 +586,15 @@ async def _handle_tool_calls(
         if not tool_calls:
             return response
 
+        log_event(
+            logger,
+            "webchat.tool_calls_detected",
+            tool_calls=[
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in tool_calls
+            ],
+        )
+
         tool_outputs: list[dict[str, Any]] = []
         for call in tool_calls:
             if call.name != "register_lead":
@@ -560,6 +626,12 @@ async def _handle_tool_calls(
             return response
 
         try:
+            log_event(
+                logger,
+                "webchat.tool_outputs_submitting",
+                response_id=response_id,
+                tool_outputs=tool_outputs,
+            )
             response = await client.responses.submit_tool_outputs(  # type: ignore[attr-defined]
                 response_id=str(response_id),
                 tool_outputs=tool_outputs,

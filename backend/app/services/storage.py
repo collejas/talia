@@ -36,6 +36,17 @@ class WebchatConversationInfo:
     contact_id: str | None = None
 
 
+@dataclass(slots=True)
+class WebchatStoredMessage:
+    """Mensaje persistido en Supabase con metadata adicional."""
+
+    conversation_id: str
+    message_id: str
+    direction: str | None = None
+    content: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
 async def fetch_webchat_conversation_info(conversation_id: str) -> WebchatConversationInfo:
     """Obtiene session_id de webchat asociado a una conversación."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -235,6 +246,141 @@ async def set_manual_override(conversation_id: str, manual: bool) -> None:
         )
         logger.error(msg)
         raise StorageError(msg)
+
+
+async def find_webchat_message_by_client_id(
+    *,
+    session_id: str,
+    client_message_id: str,
+) -> WebchatStoredMessage | None:
+    """Busca un mensaje previo usando el identificador generado en el cliente."""
+    if not client_message_id:
+        return None
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/mensajes"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "id,conversacion_id,direccion,texto,datos",
+        "order": "creado_en.desc",
+        "limit": "1",
+        "datos->>session_id": f"eq.{session_id}",
+        "datos->>client_message_id": f"eq.{client_message_id}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar mensajes por client_message_id: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al buscar mensajes por client_message_id"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = response.json() or []
+    if not rows:
+        return None
+    row = rows[0]
+    metadata = row.get("datos")
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = {}
+    elif metadata is None:
+        metadata = {}
+
+    conversation_id = row.get("conversacion_id")
+    message_id = row.get("id")
+    if not conversation_id or not message_id:
+        return None
+    return WebchatStoredMessage(
+        conversation_id=str(conversation_id),
+        message_id=str(message_id),
+        direction=row.get("direccion"),
+        content=row.get("texto"),
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
+
+
+async def fetch_webchat_reply_for_message(
+    *,
+    conversation_id: str,
+    in_reply_to: str,
+) -> WebchatStoredMessage | None:
+    """Obtiene el mensaje de salida asociado a un mensaje entrante previo."""
+    if not in_reply_to:
+        return None
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/mensajes"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "id,conversacion_id,direccion,texto,datos",
+        "conversacion_id": f"eq.{conversation_id}",
+        "direccion": "eq.saliente",
+        "datos->>in_reply_to": f"eq.{in_reply_to}",
+        "order": "creado_en.desc",
+        "limit": "1",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar respuesta asociada: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener respuesta asociada"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = response.json() or []
+    if not rows:
+        return None
+    row = rows[0]
+    metadata = row.get("datos")
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = {}
+    elif metadata is None:
+        metadata = {}
+
+    message_id = row.get("id")
+    text = row.get("texto")
+    if not message_id:
+        return None
+    return WebchatStoredMessage(
+        conversation_id=str(conversation_id),
+        message_id=str(message_id),
+        direction=row.get("direccion"),
+        content=text,
+        metadata=metadata if isinstance(metadata, dict) else {},
+    )
 
 
 async def fetch_webchat_history(

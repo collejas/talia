@@ -400,23 +400,25 @@ function generateSessionId() {
   return `sess-${Date.now()}-${random}`;
 }
 
-function loadSessionId(storageKey) {
-  try {
-    const stored = localStorage.getItem(storageKey);
-    if (stored) return stored;
-  } catch (error) {
-    console.warn('[chat] No se pudo leer el session_id del almacenamiento.', error);
+function generateClientMessageId() {
+  if (window.crypto?.randomUUID) {
+    return `msg-${window.crypto.randomUUID()}`;
   }
+  const random = Math.random().toString(16).slice(2);
+  return `msg-${Date.now()}-${random}`;
+}
+
+function loadSessionId(storageKey) {
   const fresh = generateSessionId();
   try {
-    localStorage.setItem(storageKey, fresh);
+    localStorage.removeItem(storageKey);
   } catch (error) {
-    console.warn('[chat] No se pudo guardar el session_id.', error);
+    console.warn('[chat] No se pudo limpiar el session_id previo.', error);
   }
   return fresh;
 }
 
-async function sendToAssistant(message) {
+async function sendToAssistant(message, clientMessageId) {
   if (!state.chatEnabled) return { reply: getFallbackResponse(), metadata: {} };
 
   const MAX_RETRIES = 2;
@@ -429,6 +431,9 @@ async function sendToAssistant(message) {
       content: message,
       locale: navigator.language || 'es-MX',
     };
+    if (clientMessageId) {
+      payload.client_message_id = clientMessageId;
+    }
 
     const response = await fetch(`${config.apiBaseUrl}/messages`, {
       method: 'POST',
@@ -471,23 +476,24 @@ async function handleSubmit(event) {
   if (lastEl) lastEl.setAttribute('data-local', 'true');
   elements.chatInput.focus();
 
-  enqueueAssistantReply(userMessage);
+  const clientMessageId = generateClientMessageId();
+  enqueueAssistantReply(userMessage, clientMessageId);
 }
 
-function enqueueAssistantReply(message) {
+function enqueueAssistantReply(message, clientMessageId) {
   if (!state.chatEnabled) return;
   state.assistantQueue = state.assistantQueue
-    .then(() => handleAssistantReply(message))
+    .then(() => handleAssistantReply(message, clientMessageId))
     .catch((error) => {
       console.error('[chat] Error en la cola de respuestas:', error);
     });
 }
 
-async function handleAssistantReply(message) {
+async function handleAssistantReply(message, clientMessageId) {
   if (!state.chatEnabled) return;
   try {
     renderTypingIndicator();
-    const data = await sendToAssistant(message);
+    const data = await sendToAssistant(message, clientMessageId);
     const reply = data.reply;
     const metadata = data && typeof data.metadata === 'object' ? data.metadata : {};
     removeTypingIndicator();

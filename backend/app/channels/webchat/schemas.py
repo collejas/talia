@@ -13,6 +13,11 @@ class WebchatMessage(BaseModel):
     author: str = Field(..., description="`user` o `assistant`")
     content: str
     locale: str | None = None
+    client_message_id: str | None = Field(
+        default=None,
+        description="Identificador único generado por el cliente para prevenir duplicados",
+        max_length=120,
+    )
 
 
 class WebchatResponse(BaseModel):
