@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -421,3 +422,98 @@ async def record_webchat_message(
         message_id=str(record["mensaje_id"]),
         conversation_openai_id=str(openai_conv_id) if openai_conv_id else None,
     )
+
+
+async def fetch_contact(contact_id: str) -> dict[str, Any]:
+    """Obtiene la representación del contacto indicado."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/contactos"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "id,nombre_completo,correo,telefono_e164,contacto_datos",
+        "id": f"eq.{contact_id}",
+        "limit": "1",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar contacto: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener contacto"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = response.json() or []
+    if not rows:
+        raise StorageError("Contacto no encontrado")
+    row = rows[0]
+    datos = row.get("contacto_datos")
+    if isinstance(datos, str):
+        try:
+            row["contacto_datos"] = json.loads(datos)
+        except json.JSONDecodeError:
+            row["contacto_datos"] = {}
+    elif datos is None:
+        row["contacto_datos"] = {}
+    return row
+
+
+async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+    """Actualiza campos del contacto indicado y devuelve la fila resultante."""
+    if not patch:
+        raise StorageError("No se proporcionaron datos para actualizar el contacto")
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/contactos"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    params = {"id": f"eq.{contact_id}", "limit": "1"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.patch(url, headers=headers, params=params, json=patch)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al actualizar contacto: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al actualizar contacto"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = response.json() or []
+    if not rows:
+        raise StorageError("Contacto no encontrado o sin cambios")
+    row = rows[0]
+    datos = row.get("contacto_datos")
+    if isinstance(datos, str):
+        try:
+            row["contacto_datos"] = json.loads(datos)
+        except json.JSONDecodeError:
+            row["contacto_datos"] = {}
+    elif datos is None:
+        row["contacto_datos"] = {}
+    return row

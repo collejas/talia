@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Request
@@ -30,6 +33,47 @@ class AssistantServiceError(RuntimeError):
 
 logger = get_logger(__name__)
 
+REGISTER_LEAD_TOOL: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "name": "register_lead",
+        "function": {
+            "name": "register_lead",
+            "description": (
+                "Registra en la base de datos los datos captados del prospecto cuando ya "
+                "cuentas con al menos correo o teléfono para contactarlo."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "full_name": {
+                        "type": "string",
+                        "description": "Nombre completo del cliente potencial.",
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Correo electrónico validado con formato estándar.",
+                    },
+                    "phone_number": {
+                        "type": "string",
+                        "description": "Teléfono en formato internacional (idealmente E.164).",
+                    },
+                    "company_name": {
+                        "type": "string",
+                        "description": "Nombre de la empresa o negocio del prospecto.",
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Notas adicionales relevantes sobre el cliente.",
+                    },
+                },
+                "required": [],
+                "additionalProperties": False,
+            },
+        },
+    }
+]
+
 # Cache en memoria para mapear session_id -> OpenAI conversation_id ("conv_...")
 _CONVERSATION_CACHE: dict[str, str] = {}
 
@@ -43,6 +87,19 @@ class AssistantReply:
     text: str
     response_id: str | None = None
     response_conversation_id: str | None = None
+
+
+@dataclass(slots=True)
+class ToolCall:
+    """Representa una invocación de herramienta emitida por el asistente."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MIN_PHONE_DIGITS = 8
 
 
 async def handle_webchat_message(
@@ -126,7 +183,11 @@ async def handle_webchat_message(
             # Continuamos sin conversation; el modelo responderá sin memoria
             conversation_for_ai = None
 
-    reply = await _generate_assistant_reply(message, conversation_id=conversation_for_ai)
+    reply = await _generate_assistant_reply(
+        message,
+        conversation_id=conversation_for_ai,
+        talia_conversation_id=metadata.get("conversation_id"),
+    )
 
     try:
         out_metadata = {
@@ -190,7 +251,10 @@ async def _sync_pipeline(conversation_id: str, *, canal: str, metadata: dict[str
 
 
 async def _generate_assistant_reply(
-    message: WebchatMessage, *, conversation_id: str | None = None
+    message: WebchatMessage,
+    *,
+    conversation_id: str | None = None,
+    talia_conversation_id: str | None = None,
 ) -> AssistantReply:
     """Genera una respuesta del asistente usando OpenAI."""
     try:
@@ -220,6 +284,7 @@ async def _generate_assistant_reply(
             "session_id": message.session_id,
             "locale": message.locale or "",
         },
+        "tools": REGISTER_LEAD_TOOL,
     }
 
     # Añadimos el identificador de conversación solo si parece válido (conv...)
@@ -234,6 +299,11 @@ async def _generate_assistant_reply(
 
     try:
         response = await client.responses.create(**request_payload)
+        response = await _handle_tool_calls(
+            client=client,
+            response=response,
+            talia_conversation_id=talia_conversation_id,
+        )
     except Exception as exc:  # pragma: no cover - dependerá de SDK
         logger.exception("Error llamando al asistente de OpenAI")
         raise AssistantServiceError("Error al llamar al asistente") from exc
@@ -445,3 +515,236 @@ async def _create_openai_conversation_id(client: Any) -> str | None:
     except Exception:
         return None
     return None
+
+
+async def _handle_tool_calls(
+    *,
+    client: Any,
+    response: Any,
+    talia_conversation_id: str | None,
+) -> Any:
+    """Gestiona los tool_calls devueltos por OpenAI (p.ej., register_lead)."""
+    while True:
+        tool_calls = _extract_tool_calls(response)
+        if not tool_calls:
+            return response
+
+        tool_outputs: list[dict[str, Any]] = []
+        for call in tool_calls:
+            if call.name != "register_lead":
+                tool_outputs.append(
+                    {
+                        "tool_call_id": call.id,
+                        "output": json.dumps(
+                            {"status": "ignored", "reason": "unsupported_tool", "name": call.name}
+                        ),
+                    }
+                )
+                continue
+            result = await _process_lead_capture_tool(
+                call=call,
+                talia_conversation_id=talia_conversation_id,
+            )
+            tool_outputs.append(
+                {"tool_call_id": call.id, "output": json.dumps(result, ensure_ascii=False)}
+            )
+
+        if not tool_outputs:
+            return response
+
+        response_id = getattr(response, "id", None)
+        if response_id is None and isinstance(response, dict):
+            response_id = response.get("id")
+        if not response_id:
+            logger.warning("Respuesta sin identificador, no se pueden enviar tool_outputs")
+            return response
+
+        try:
+            response = await client.responses.submit_tool_outputs(  # type: ignore[attr-defined]
+                response_id=str(response_id),
+                tool_outputs=tool_outputs,
+            )
+        except Exception:
+            logger.exception("No se pudieron enviar los resultados de herramienta a OpenAI")
+            return response
+
+
+def _extract_tool_calls(response: Any) -> list[ToolCall]:
+    """Obtiene tool_calls (function calls) presentes en la respuesta."""
+    output = getattr(response, "output", None)
+    if output is None and hasattr(response, "model_dump"):
+        try:
+            data = response.model_dump()
+            output = data.get("output")
+        except Exception:
+            output = None
+    if output is None and isinstance(response, dict):
+        output = response.get("output")
+    if not output:
+        return []
+
+    calls: list[ToolCall] = []
+
+    def _parse_call(data: dict[str, Any]) -> ToolCall | None:
+        tool_info = data.get("tool_call") or data
+        function_data = tool_info.get("function") or {}
+        name = function_data.get("name")
+        if not name:
+            return None
+        call_id = tool_info.get("id") or data.get("id")
+        arguments = function_data.get("arguments")
+        parsed_args: dict[str, Any]
+        if isinstance(arguments, str):
+            try:
+                parsed_args = json.loads(arguments)
+            except json.JSONDecodeError:
+                parsed_args = {}
+        elif isinstance(arguments, dict):
+            parsed_args = arguments
+        else:
+            parsed_args = {}
+        return ToolCall(id=str(call_id or name), name=str(name), arguments=parsed_args)
+
+    for item in output:
+        data = _to_dict(item)
+        item_type = data.get("type")
+        if item_type == "tool_call":
+            call = _parse_call(data)
+            if call:
+                calls.append(call)
+        elif item_type == "message":
+            message = data.get("message") or {}
+            tool_calls = message.get("tool_calls") or []
+            for raw_call in tool_calls:
+                call = _parse_call(_to_dict(raw_call))
+                if call:
+                    calls.append(call)
+    return calls
+
+
+async def _process_lead_capture_tool(
+    *,
+    call: ToolCall,
+    talia_conversation_id: str | None,
+) -> dict[str, Any]:
+    """Ejecuta el registro de lead solicitado por el asistente."""
+    if not talia_conversation_id:
+        return {"status": "error", "message": "conversation_not_available"}
+
+    args = call.arguments or {}
+    full_name = (args.get("full_name") or "").strip()
+    email_raw = (args.get("email") or "").strip()
+    phone_raw = (args.get("phone_number") or "").strip()
+    company = (args.get("company_name") or "").strip()
+    notes = (args.get("notes") or "").strip()
+
+    if not email_raw and not phone_raw:
+        return {"status": "error", "message": "contact_info_required"}
+
+    email = email_raw if email_raw and EMAIL_REGEX.match(email_raw) else ""
+    if email_raw and not email:
+        return {"status": "error", "message": "invalid_email"}
+
+    sanitized_phone = _sanitize_phone_number(phone_raw)
+
+    try:
+        info = await storage.fetch_webchat_conversation_info(str(talia_conversation_id))
+        if not info.contact_id:
+            return {"status": "error", "message": "contact_not_found"}
+        contact = await storage.fetch_contact(info.contact_id)
+    except storage.StorageError:
+        logger.exception("No se pudo obtener contacto para registrar lead")
+        return {"status": "error", "message": "storage_error"}
+
+    contacto_datos = contact.get("contacto_datos")
+    if not isinstance(contacto_datos, dict):
+        contacto_datos = {}
+    merged_datos = dict(contacto_datos)
+    if company:
+        merged_datos["company_name"] = company
+    merged_datos["lead_capture_source"] = merged_datos.get("lead_capture_source") or "webchat"
+    merged_datos["lead_capture_completed_at"] = datetime.now(timezone.utc).isoformat()
+    if email:
+        merged_datos["email"] = email
+    if phone_raw:
+        merged_datos["phone_number"] = sanitized_phone or phone_raw
+    if notes:
+        merged_datos["lead_capture_notes"] = notes
+
+    patch: dict[str, Any] = {"contacto_datos": merged_datos}
+    if full_name:
+        patch["nombre_completo"] = full_name
+    if email:
+        patch["correo"] = email
+    if sanitized_phone:
+        patch["telefono_e164"] = sanitized_phone
+    elif phone_raw:
+        patch["telefono_e164"] = phone_raw
+    if company and not contact.get("origen"):
+        patch.setdefault("origen", "webchat")
+
+    try:
+        updated_contact = await storage.update_contact(info.contact_id, patch)
+    except storage.StorageError:
+        logger.exception("No se pudo actualizar el contacto capturado")
+        return {"status": "error", "message": "contact_update_failed"}
+
+    log_event(
+        logger,
+        "webchat.lead_capture_stored",
+        conversation_id=talia_conversation_id,
+        contact_id=info.contact_id,
+        company=company,
+    )
+
+    try:
+        await _lead_pipeline.ensure_card_for_conversation(
+            conversation_id=str(talia_conversation_id),
+            canal="webchat",
+            metadata={
+                key: value
+                for key, value in {
+                    "empresa": company or merged_datos.get("company_name"),
+                    "lead_capture_completed": True,
+                    "lead_email": email or None,
+                    "lead_phone": sanitized_phone or phone_raw or None,
+                }.items()
+                if value not in (None, "")
+            },
+        )
+    except LeadPipelineError:
+        logger.exception(
+            "No se pudo sincronizar la tarjeta de lead tras la captura",
+            extra={"conversation_id": talia_conversation_id},
+        )
+
+    return {
+        "status": "success",
+        "contact_id": info.contact_id,
+        "updated_fields": {
+            key: value
+            for key, value in {
+                "nombre_completo": full_name or contact.get("nombre_completo"),
+                "correo": email or contact.get("correo"),
+                "telefono_e164": sanitized_phone or phone_raw or contact.get("telefono_e164"),
+                "company_name": company or merged_datos.get("company_name"),
+            }.items()
+            if value
+        },
+        "contacto_datos": updated_contact.get("contacto_datos"),
+    }
+
+
+def _sanitize_phone_number(value: str) -> str | None:
+    """Normaliza un teléfono a formato +E.164 básico."""
+    if not value:
+        return None
+    cleaned = re.sub(r"[^\d+]", "", value.strip())
+    if cleaned.startswith("00"):
+        cleaned = "+" + cleaned[2:]
+    digits_only = re.sub(r"\D", "", cleaned)
+    if len(digits_only) < MIN_PHONE_DIGITS:
+        return None
+    if cleaned.startswith("+"):
+        return "+" + digits_only
+    return "+" + digits_only

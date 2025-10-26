@@ -20,8 +20,13 @@ async def test_handle_webchat_message_persists_and_returns_metadata(
         return storage.WebchatRecord(conversation_id="conv-123", message_id=f"msg-{len(calls)}")
 
     async def fake_generate(
-        _: WebchatMessage, *, conversation_id: str | None = None
+        _: WebchatMessage,
+        *,
+        conversation_id: str | None = None,
+        talia_conversation_id: str | None = None,
     ) -> service.AssistantReply:
+        # Validar que se propaga el ID de conversación TalIA
+        assert talia_conversation_id == "conv-123"
         return service.AssistantReply(text="Hola desde TalIA", response_id="resp-999")
 
     async def fake_geo(_: str | None) -> dict[str, str]:
