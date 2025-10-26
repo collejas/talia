@@ -393,16 +393,16 @@ button:hover {
   top: var(--header-h);
   left: 0;
   right: 0;
-  bottom: var(--composer-h);
+  bottom: calc(var(--composer-h) + var(--shell-gap));
   overflow-y: auto; /* Scrollbar a nivel viewport */
   -webkit-overflow-scrolling: touch;
-  padding-bottom: var(--shell-gap); /* asegura separación visible respecto al composer */
+  padding-bottom: 0; /* el espacio se crea fuera del card */
 }
 
 /* Card centrado dentro del contenedor scrolleable full-width */
 .layout > .chat-shell {
   width: min(760px, 92vw);
-  margin: 0.65rem auto var(--shell-gap); /* separación clara respecto al composer */
+  margin: 0.65rem auto 0; /* sin doble espacio, gap se maneja fuera */
   background: var(--surface-strong);
   border-radius: 22px;
   padding: clamp(1.5rem, 4vw, 3rem);
