@@ -5,10 +5,12 @@
   --container-max: 1120px;
   /* Alturas fijas para layout con header + capa inferior */
   --header-h: 64px;
-  /* Altura total estimada de la capa inferior (composer + footer) en desktop */
+  /* Altura total estimada de la capa inferior (composer) en desktop */
   --composer-h: 180px;
   /* Separación visible entre el card y el composer */
-  --shell-gap: clamp(10px, 1.5vw, 16px);
+  --shell-gap: clamp(16px, 2.25vw, 28px);
+  /* Separación visible entre composer y footer */
+  --footer-gap: clamp(10px, 1.75vw, 20px);
 }
 
 body {
@@ -393,7 +395,7 @@ button:hover {
   top: var(--header-h);
   left: 0;
   right: 0;
-  bottom: calc(var(--composer-h) + var(--shell-gap));
+  bottom: calc(var(--composer-h) + var(--shell-gap) + var(--composer-b, 0px));
   overflow-y: auto; /* Scrollbar a nivel viewport */
   -webkit-overflow-scrolling: touch;
   padding-bottom: 0; /* el espacio se crea fuera del card */
@@ -563,7 +565,7 @@ button:hover {
   position: fixed;
   left: 50%;
   transform: translateX(-50%) translateZ(0);
-  bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--footer-h, 0px) + var(--footer-gap, 12px));
   z-index: 20;
 }
 
@@ -627,8 +629,13 @@ button:hover {
   background-color: var(--footer-background);
   padding: 0.6rem 0;
   width: 100%;
-  position: relative;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
+  z-index: 12;
+  /* Evitar solape con el indicador de iOS */
+  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* Footer incrustado dentro del composer: estilo integrado, sin fondo pleno */
@@ -847,6 +854,11 @@ button:hover {
   /* Ocultar footer en iPads vertical y similares */
   .site-footer {
     display: none;
+  }
+
+  /* En resoluciones medias, llevar el composer al borde seguro */
+  .composer {
+    bottom: env(safe-area-inset-bottom);
   }
 
   /* Mostrar hamburger y ocultar acciones del header hasta 1024px */

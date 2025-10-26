@@ -79,8 +79,8 @@
       </section>
     </main>
 
-    <!-- Capa fija inferior: compositor + legal/links en una sola capa -->
-    <section class="composer" role="region" aria-label="Área de composición y enlaces del sitio">
+    <!-- Capa fija inferior: compositor (separado del footer) -->
+    <section class="composer" role="region" aria-label="Área de composición">
       <div class="composer-content">
         <div class="composer-disclaimer">
           Talia Es La inteligencia que entiende tu lenguaje de negocio!!!
@@ -96,20 +96,22 @@
           <button type="submit">Enviar</button>
         </form>
       </div>
-      <footer class="site-footer" aria-label="Enlaces legales y contacto">
-        <div class="container footer-content">
-          <div class="footer-left">
-            <span class="logo">TalIA</span>
-            <span class="footer-copy">© <span id="current-year"></span> talia.mx · Todos los derechos reservados.</span>
-          </div>
-          <div class="footer-links">
-            <a href="#">Privacidad</a>
-            <a href="#">Términos</a>
-            <a href="mailto:hola@talia.mx">hola@talia.mx</a>
-          </div>
-        </div>
-      </footer>
     </section>
+
+    <!-- Footer fijo independiente, con separación del composer -->
+    <footer class="site-footer" aria-label="Enlaces legales y contacto">
+      <div class="container footer-content">
+        <div class="footer-left">
+          <span class="logo">TalIA</span>
+          <span class="footer-copy">© <span id="current-year"></span> talia.mx · Todos los derechos reservados.</span>
+        </div>
+        <div class="footer-links">
+          <a href="#">Privacidad</a>
+          <a href="#">Términos</a>
+          <a href="mailto:hola@talia.mx">hola@talia.mx</a>
+        </div>
+      </div>
+    </footer>
 
     <script type="module" src="./assets/js/main.js"></script>
   </body>

@@ -686,18 +686,27 @@ function updateLayoutInsets() {
     const root = document.documentElement;
     const header = document.querySelector('.site-header');
     const composer = document.querySelector('.composer');
+    const footer = document.querySelector('.site-footer');
     if (header) {
       const h = Math.round(header.getBoundingClientRect().height);
       if (h > 0) root.style.setProperty('--header-h', `${h}px`);
     }
+    if (footer) {
+      const csF = getComputedStyle(footer);
+      if (csF.display !== 'none') {
+        const f = Math.round(footer.getBoundingClientRect().height);
+        root.style.setProperty('--footer-h', `${f}px`);
+      } else {
+        root.style.setProperty('--footer-h', '0px');
+      }
+    }
     if (composer) {
       const rect = composer.getBoundingClientRect();
-      const cs = getComputedStyle(composer);
-      const padTop = parseFloat(cs.paddingTop) || 0;
-      // Distancia efectiva que debe reservar el layout: desde el borde inferior de la
-      // pantalla hasta el inicio del padding superior del composer.
-      const effective = Math.max(0, Math.round(rect.height - padTop));
-      root.style.setProperty('--composer-h', `${effective}px`);
+      // Reservar toda la altura del composer y su offset inferior real.
+      const h = Math.max(0, Math.round(rect.height));
+      root.style.setProperty('--composer-h', `${h}px`);
+      const b = Math.max(0, Math.round(window.innerHeight - rect.bottom));
+      root.style.setProperty('--composer-b', `${b}px`);
     }
   } catch (err) {
     // No bloquear en caso de error de medición.
