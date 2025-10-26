@@ -392,9 +392,14 @@ button:hover {
   left: 0;
   right: 0;
   bottom: var(--composer-h);
-  overflow-y: auto;
+  overflow-y: auto; /* Scrollbar a nivel viewport */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Card centrado dentro del contenedor scrolleable full-width */
+.layout > .chat-shell {
   width: min(760px, 92vw);
-  margin: 0 auto;
+  margin: 0.65rem auto; /* pequeña separación del header y del composer */
   background: var(--surface-strong);
   border-radius: 22px;
   padding: clamp(1.5rem, 4vw, 3rem);
@@ -740,7 +745,7 @@ button:hover {
     display: none;
   }
 
-  .layout {
+  .layout > .chat-shell {
     background: transparent;
     box-shadow: none;
     padding: 1.25rem;
