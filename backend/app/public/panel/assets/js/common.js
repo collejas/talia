@@ -1,5 +1,14 @@
 import { createThemeManager } from './theme.js';
 
+function getPanelBasePath() {
+  try {
+    const p = window.location?.pathname || '';
+    return p.startsWith('/api/panel') ? '/api/panel' : '/panel';
+  } catch {
+    return '/panel';
+  }
+}
+
 const NAV_LINKS = [
   { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
   { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
@@ -46,11 +55,31 @@ function renderHeader() {
           </select>
         </div>
         <span class="muted" id="user-email"></span>
+        <button id="panel-logout" class="btn btn-outline" type="button" title="Cerrar sesión">Cerrar sesión</button>
       </nav>
     </div>
   `;
 
   document.body.insertBefore(header, document.body.firstChild);
+  // Hook logout action
+  try {
+    const btn = document.getElementById('panel-logout');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        try {
+          const sb = createSupabase();
+          if (sb && sb.auth) await sb.auth.signOut();
+        } catch (e) {
+          console.warn('[panel] signOut error', e);
+        } finally {
+          const base = getPanelBasePath();
+          window.location.href = `${base}/auth/login.html`;
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('[panel] No se pudo inicializar el botón de logout.', e);
+  }
   return header;
 }
 
@@ -114,9 +143,13 @@ export async function fetchJSONWithAuth(url, options) {
   return fetchJSON(url, { ...(options || {}), headers });
 }
 
-export async function ensureSession({ redirectTo = '/panel/auth/login.html', emailElId = 'user-email' } = {}) {
+export async function ensureSession({ redirectTo, emailElId = 'user-email' } = {}) {
   const session = await getSession();
-  if (!session) { window.location.href = redirectTo; return null; }
+  if (!session) {
+    const base = getPanelBasePath();
+    window.location.href = redirectTo || `${base}/auth/login.html`;
+    return null;
+  }
   const el = $(emailElId); if (el) el.textContent = session.user?.email || 'usuario';
   return session;
 }
