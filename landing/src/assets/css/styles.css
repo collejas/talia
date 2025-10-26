@@ -3,17 +3,22 @@
   --transition-fast: 0.2s ease;
   --transition-medium: 0.3s ease;
   --container-max: 1120px;
+  /* Alturas fijas para layout con header + capa inferior */
+  --header-h: 64px;
+  /* Altura total estimada de la capa inferior (composer + footer) en desktop */
+  --composer-h: 180px;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
   font-family: var(--font-body);
   background-color: var(--bg);
   color: var(--text);
   transition: background-color var(--transition-medium), color var(--transition-medium);
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* Evita scroll de página, sólo scrollea .layout */
 }
 
 main {
@@ -21,8 +26,6 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Espacio para que el chat no quede oculto tras el composer fijo en escritorio */
-  padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
 }
 
 body.theme-aurora {
@@ -182,12 +185,15 @@ button:hover {
 }
 
 .site-header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
   background: var(--header-background);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
+  height: var(--header-h);
 }
 
 .header-content {
@@ -381,7 +387,14 @@ button:hover {
 }
 
 .layout {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  bottom: var(--composer-h);
+  overflow-y: auto;
   width: min(760px, 92vw);
+  margin: 0 auto;
   background: var(--surface-strong);
   border-radius: 22px;
   padding: clamp(1.5rem, 4vw, 3rem);
@@ -389,7 +402,6 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
-  margin: clamp(4rem, 6vw, 6rem) auto 0.65rem;
 }
 
 .sr-only {
@@ -403,17 +415,7 @@ button:hover {
   border: 0;
 }
 
-.layout {
-  width: min(760px, 92vw);
-  background: var(--surface-strong);
-  border-radius: 22px;
-  padding: clamp(1.5rem, 4vw, 3rem);
-  box-shadow: var(--shadow-elevated);
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
-  margin-bottom: 0.65rem;
-}
+/* (El bloque .layout duplicado se unifica en el bloque fijo superior) */
 
 .intro h1 {
   margin: 0;
@@ -544,16 +546,16 @@ button:hover {
 
 .composer {
   width: min(760px, 92vw);
-  margin: 0 auto 1.75rem;
+  margin: 0 auto 0.65rem;
   background: var(--surface-strong);
   border-radius: 22px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-elevated);
-  padding: 1.25rem;
+  padding: 1.25rem 1.25rem 0.25rem;
   position: fixed;
   left: 50%;
   transform: translateX(-50%) translateZ(0);
-  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
   z-index: 20;
 }
 
@@ -619,6 +621,18 @@ button:hover {
   width: 100%;
   position: relative;
   bottom: 0;
+}
+
+/* Footer incrustado dentro del composer: estilo integrado, sin fondo pleno */
+.composer .site-footer {
+  background: transparent;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  padding-bottom: 0.2rem;
+}
+.composer .site-footer .container {
+  width: min(760px, 92vw);
+  margin: 0 auto;
 }
 
 
@@ -730,7 +744,6 @@ button:hover {
     background: transparent;
     box-shadow: none;
     padding: 1.25rem;
-    margin-bottom: 1.5rem;
   }
 
   /* Compactar la CTA para igualar altura visual al logo */
@@ -750,7 +763,7 @@ button:hover {
     margin: 0;
     width: 100%;
     border-radius: 12px 12px 0 0;
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.75rem 0.25rem;
     z-index: 30;
     /* Anular centrado horizontal de escritorio */
     transform: translateZ(0);
@@ -782,9 +795,9 @@ button:hover {
     padding: 0.6rem 1rem;
   }
 
-  /* Espacio para que el chat no quede oculto tras el composer fijo */
-  main {
-    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  /* En móvil, el área legal se oculta y el alto efectivo del composer es menor */
+  :root {
+    --composer-h: 100px;
   }
 
   /* Ocultar el footer del sitio en móviles */

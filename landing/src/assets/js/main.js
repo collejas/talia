@@ -101,13 +101,19 @@ let assistantReplyPending = false;
 const FALLBACK_MESSAGE = 'Tu mensaje llegó, pero tuve un problema momentáneo al responder. Intentemos de nuevo en unos segundos o envíame otra línea.';
 
 function getScrollContainer() {
-  return document.scrollingElement || document.documentElement;
+  const layout = document.querySelector('.layout');
+  return layout || document.scrollingElement || document.documentElement;
 }
 
 function isNearViewportBottom(container, tolerance = 160) {
   if (!container) return false;
-  const viewportHeight = window.innerHeight || container.clientHeight || 0;
-  const distanceToBottom = container.scrollHeight - (container.scrollTop + viewportHeight);
+  const usesDocument =
+    container === document.documentElement || container === document.body;
+  const viewportHeight = usesDocument
+    ? (window.innerHeight || container.clientHeight || 0)
+    : container.clientHeight;
+  const scrollTop = usesDocument ? (window.scrollY || container.scrollTop) : container.scrollTop;
+  const distanceToBottom = container.scrollHeight - (scrollTop + viewportHeight);
   return distanceToBottom <= tolerance;
 }
 
@@ -672,6 +678,36 @@ if (typeof document !== 'undefined') {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', stopHistoryPolling);
+}
+
+// Ajusta variables CSS para respetar alturas reales de header y capa inferior
+function updateLayoutInsets() {
+  try {
+    const root = document.documentElement;
+    const header = document.querySelector('.site-header');
+    const composer = document.querySelector('.composer');
+    if (header) {
+      const h = Math.round(header.getBoundingClientRect().height);
+      if (h > 0) root.style.setProperty('--header-h', `${h}px`);
+    }
+    if (composer) {
+      const rect = composer.getBoundingClientRect();
+      const cs = getComputedStyle(composer);
+      const padTop = parseFloat(cs.paddingTop) || 0;
+      // Distancia efectiva que debe reservar el layout: desde el borde inferior de la
+      // pantalla hasta el inicio del padding superior del composer.
+      const effective = Math.max(0, Math.round(rect.height - padTop));
+      root.style.setProperty('--composer-h', `${effective}px`);
+    }
+  } catch (err) {
+    // No bloquear en caso de error de medición.
+    console.warn('[landing] No se pudo calcular insets del layout', err);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', updateLayoutInsets, { passive: true });
+  window.addEventListener('resize', updateLayoutInsets, { passive: true });
 }
 
 let assistantQueue = Promise.resolve();
