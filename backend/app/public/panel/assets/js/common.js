@@ -9,6 +9,15 @@ function getPanelBasePath() {
   }
 }
 
+function isAuthPage() {
+  try {
+    const p = window.location?.pathname || '';
+    return p.includes('/panel/auth/') || p.includes('/api/panel/auth/');
+  } catch {
+    return false;
+  }
+}
+
 const NAV_LINKS = [
   { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
   { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
@@ -24,6 +33,7 @@ const THEME_OPTIONS = [
 
 function renderHeader() {
   if (typeof document === 'undefined' || !document.body) return null;
+  if (isAuthPage()) return null; // No renderizar header en páginas de autenticación
   let header = document.querySelector('header.nav[data-panel-header="true"]');
   if (header) return header;
 
