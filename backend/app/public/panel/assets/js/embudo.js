@@ -102,19 +102,32 @@ function renderBoard(data) {
   const container = $('embudo-board');
   if (!container) return;
   const stages = data.stages || [];
-  const hasCards = stages.some((stage) => (stage.cards || []).length > 0);
-  if (!hasCards) {
+  if (!stages.length) {
     container.innerHTML = '';
     showState('empty');
     return;
   }
-
   const html = stages.map((stage) => renderStage(stage)).join('');
   container.innerHTML = html;
   showState('ready');
 }
 
 function renderStage(stage) {
+  if (stage.counter_only) {
+    const total = stage.total || 0;
+    return `
+      <div class="embudo-column embudo-column-counter">
+        <div class="embudo-column-header">
+          <div class="embudo-column-title">${escapeHtml(stage.nombre || 'Etapa')}</div>
+          <div class="embudo-column-count">${total} visita${total === 1 ? '' : 's'}</div>
+        </div>
+        <div class="embudo-column-body embudo-counter-body">
+          <p class="embudo-counter-copy">Visitas al webchat sin interacción registrada.</p>
+        </div>
+      </div>
+    `;
+  }
+
   const cards = (stage.cards || []).map((card) => renderCard(card)).join('');
   return `
     <div class="embudo-column">

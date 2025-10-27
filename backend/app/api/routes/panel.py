@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response
@@ -70,6 +71,39 @@ async def _sb_get(
             return await client.get(url, headers=headers, params=params)
     except httpx.RequestError:
         logger.exception("Error al conectar a Supabase")
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+
+
+async def _sb_post(
+    path: str,
+    *,
+    json: dict[str, Any] | None = None,
+    token: str | None = None,
+    prefer: str | None = None,
+) -> httpx.Response:
+    base_url = _supabase_base_url()
+    url = f"{base_url}{path}"
+    headers: dict[str, str] = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        anon = getattr(settings, "supabase_anon", None)
+        if anon:
+            headers["apikey"] = anon  # type: ignore[assignment]
+    elif settings.supabase_service_role:
+        headers["apikey"] = settings.supabase_service_role
+        headers["Authorization"] = f"Bearer {settings.supabase_service_role}"
+    else:
+        raise HTTPException(status_code=500, detail="Falta SUPABASE_SERVICE_ROLE")
+    if prefer:
+        headers["Prefer"] = prefer
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.post(url, headers=headers, json=json or {})
+    except httpx.RequestError:
+        logger.exception("Error al conectar a Supabase (POST)")
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
 
 
@@ -144,6 +178,16 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
         return str(sub) if sub else None
     except Exception:  # pragma: no cover - best effort
         return None
+
+
+def _looks_like_uuid(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        UUID(str(value))
+        return True
+    except Exception:
+        return False
 
 
 @router.get("/auth/permisos")
@@ -473,6 +517,261 @@ async def get_messages(
             }
         )
     return {"ok": True, "items": items}
+
+
+async def _fetch_tablero(token: str, tablero_hint: str | None) -> dict[str, Any]:
+    params = {
+        "select": "id,nombre,slug,descripcion,es_default,activo",
+        "limit": "1",
+    }
+    if tablero_hint:
+        params["slug"] = f"eq.{tablero_hint}"
+        resp = await _sb_get("/rest/v1/lead_tableros", params=params, token=token)
+        rows = resp.json() or []
+        if not rows and _looks_like_uuid(tablero_hint):
+            params.pop("slug", None)
+            params["id"] = f"eq.{tablero_hint}"
+            resp = await _sb_get("/rest/v1/lead_tableros", params=params, token=token)
+            rows = resp.json() or []
+        if not rows:
+            raise HTTPException(status_code=404, detail="tablero_not_found")
+        return rows[0]
+
+    params.pop("slug", None)
+    params["order"] = "es_default.desc,creado_en.asc"
+    resp = await _sb_get("/rest/v1/lead_tableros", params=params, token=token)
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="tablero_not_found")
+    return rows[0]
+
+
+async def _fetch_etapas(token: str, tablero_id: str) -> list[dict[str, Any]]:
+    params = {
+        "select": "id,tablero_id,codigo,nombre,orden,categoria,probabilidad,metadatos",
+        "tablero_id": f"eq.{tablero_id}",
+        "order": "orden.asc",
+        "limit": "200",
+    }
+    resp = await _sb_get("/rest/v1/lead_etapas", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando etapas")
+    raw = resp.json() or []
+    if not isinstance(raw, list):
+        return []
+    return raw
+
+
+async def _fetch_embudo_cards(
+    token: str,
+    tablero_id: str,
+    canales: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    params: dict[str, str] = {
+        "select": (
+            "id,tablero_id,etapa_id,contacto_id,contacto_nombre,contacto_estado,"
+            "contacto_telefono,contacto_correo,conversacion_id,canal,conversacion_estado,"
+            "ultimo_mensaje_en,lead_score,tags,metadata,probabilidad_override,resumen,intencion,"
+            "sentimiento,siguiente_accion"
+        ),
+        "tablero_id": f"eq.{tablero_id}",
+        "order": "ultimo_mensaje_en.desc",
+    }
+    if canales:
+        if len(canales) == 1:
+            params["canal"] = f"eq.{canales[0]}"
+        else:
+            valores = ",".join(sorted({c for c in canales if c}))
+            if valores:
+                params["canal"] = f"in.({valores})"
+    resp = await _sb_get("/rest/v1/embudo", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando embudo")
+    raw = resp.json() or []
+    if not isinstance(raw, list):
+        return []
+    return raw
+
+
+async def _fetch_visitantes_total(canales: list[str] | None = None) -> int:
+    canales = canales or []
+    if canales and all(c != "webchat" for c in canales):
+        return 0
+    resp = await _sb_post("/rest/v1/rpc/embudo_visitantes_contador", json=None, token=None)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando visitantes")
+    data = resp.json()
+    if isinstance(data, dict) and "total" in data:
+        return int(data.get("total") or 0)
+    if isinstance(data, list) and data:
+        first = data[0]
+        if isinstance(first, dict) and "total" in first:
+            return int(first.get("total") or 0)
+    return 0
+
+
+def _stage_is_counter(meta: dict[str, Any] | None) -> bool:
+    if not isinstance(meta, dict):
+        return False
+    value = str(meta.get("is_counter_only", "")).lower()
+    return value in {"true", "1", "yes"}
+
+
+def _stage_summary_key(stage: dict[str, Any]) -> str:
+    meta = stage.get("metadatos") if isinstance(stage, dict) else None
+    if isinstance(meta, dict):
+        value = meta.get("categoria_resumen")
+        if isinstance(value, str) and value:
+            return value
+    categoria = stage.get("categoria")
+    return str(categoria) if categoria else "abierta"
+
+
+def _map_card_payload(row: dict[str, Any]) -> dict[str, Any]:
+    contacto = {
+        "id": row.get("contacto_id"),
+        "nombre": row.get("contacto_nombre"),
+        "estado": row.get("contacto_estado"),
+        "telefono": row.get("contacto_telefono"),
+        "correo": row.get("contacto_correo"),
+    }
+    conversacion = {
+        "id": row.get("conversacion_id"),
+        "canal": row.get("canal"),
+        "estado": row.get("conversacion_estado"),
+        "ultimo_mensaje_en": row.get("ultimo_mensaje_en"),
+    }
+    insights = {
+        "resumen": row.get("resumen"),
+        "intencion": row.get("intencion"),
+        "sentimiento": row.get("sentimiento"),
+        "siguiente_accion": row.get("siguiente_accion"),
+    }
+    tags = row.get("tags")
+    if tags is None:
+        tags = []
+    metadata = row.get("metadata") or {}
+    return {
+        "id": row.get("id"),
+        "tablero_id": row.get("tablero_id"),
+        "etapa_id": row.get("etapa_id"),
+        "contacto": contacto,
+        "conversacion": conversacion,
+        "lead_score": row.get("lead_score"),
+        "probabilidad": row.get("probabilidad_override"),
+        "tags": tags,
+        "metadata": metadata,
+        "insights": insights,
+    }
+
+
+@router.get("/embudo/tableros")
+async def listar_embudo_tableros(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    params = {
+        "select": "id,nombre,slug,descripcion,es_default,activo",
+        "order": "es_default.desc,creado_en.asc",
+        "limit": "25",
+    }
+    resp = await _sb_get("/rest/v1/lead_tableros", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando tableros")
+    raw = resp.json() or []
+    items: list[dict[str, Any]] = []
+    for row in raw:
+        items.append(
+            {
+                "id": row.get("id"),
+                "nombre": row.get("nombre"),
+                "slug": row.get("slug"),
+                "descripcion": row.get("descripcion"),
+                "es_default": row.get("es_default"),
+                "activo": row.get("activo"),
+            }
+        )
+    return {"ok": True, "items": items}
+
+
+@router.get("/embudo")
+async def obtener_embudo(
+    tablero: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    board = await _fetch_tablero(token, tablero)
+    board_id = str(board.get("id"))
+
+    channel_values: list[str] = []
+    if canales:
+        channel_values = [c.strip().lower() for c in canales.split(",") if c.strip()]
+
+    etapas = await _fetch_etapas(token, board_id)
+    cards = await _fetch_embudo_cards(token, board_id, channel_values)
+    visitantes_total = await _fetch_visitantes_total(channel_values)
+
+    cards_by_stage: dict[str, list[dict[str, Any]]] = {}
+    for row in cards:
+        etapa_id = str(row.get("etapa_id"))
+        if not etapa_id:
+            continue
+        cards_by_stage.setdefault(etapa_id, []).append(_map_card_payload(row))
+
+    stages_payload: list[dict[str, Any]] = []
+    category_totals: dict[str, int] = {}
+    total_leads = 0
+
+    for etapa in sorted(etapas, key=lambda e: (e.get("orden") is None, e.get("orden", 0))):
+        etapa_id = str(etapa.get("id"))
+        meta_raw = etapa.get("metadatos")
+        meta_dict = meta_raw if isinstance(meta_raw, dict) else None
+        counter_only = _stage_is_counter(meta_dict)
+        etapa_cards = cards_by_stage.get(etapa_id, [])
+        total_stage = visitantes_total if counter_only else len(etapa_cards)
+        if not counter_only:
+            total_leads += total_stage
+        summary_key = _stage_summary_key(etapa)
+        category_totals[summary_key] = category_totals.get(summary_key, 0) + total_stage
+
+        stage_payload = {
+            "id": etapa_id,
+            "codigo": etapa.get("codigo"),
+            "nombre": etapa.get("nombre"),
+            "orden": etapa.get("orden"),
+            "categoria": etapa.get("categoria"),
+            "metadatos": meta_dict if meta_dict is not None else meta_raw,
+            "total": total_stage,
+            "cards": [] if counter_only else etapa_cards,
+            "counter_only": counter_only,
+        }
+        if counter_only or summary_key != etapa.get("categoria"):
+            stage_payload["categoria_resumen"] = summary_key
+        stages_payload.append(stage_payload)
+
+    totals = {
+        "cards": total_leads,
+        "por_categoria": category_totals,
+        "visitors": visitantes_total,
+    }
+
+    return {
+        "ok": True,
+        "board": {
+            "id": board.get("id"),
+            "nombre": board.get("nombre"),
+            "slug": board.get("slug"),
+            "descripcion": board.get("descripcion"),
+        },
+        "stages": stages_payload,
+        "totals": totals,
+    }
 
 
 @router.get("/panel/env.js")
