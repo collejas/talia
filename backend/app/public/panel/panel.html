@@ -18,7 +18,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     .muted{color:var(--muted)}
-    .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px}
     .card{padding:16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--surface)}
     .kpi-value{font-size:28px;font-weight:800}
     .nav-local{display:flex;gap:10px}
@@ -51,6 +51,18 @@
       <div class="card">
         <div class="muted">Canales activos</div>
         <div id="kpi-channels" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Visitas landing (sin chat)</div>
+        <div id="kpi-webchat-visitas" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Conversaciones webchat</div>
+        <div id="kpi-webchat-chats" class="kpi-value">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">Conversión visitas → chat</div>
+        <div id="kpi-webchat-conversion" class="kpi-value">—</div>
       </div>
       <div class="card">
         <div class="muted">Diálogos generados</div>

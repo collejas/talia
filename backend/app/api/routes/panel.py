@@ -7,6 +7,7 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
@@ -124,6 +125,7 @@ async def _sb_get(
     *,
     params: dict[str, str] | None = None,
     token: str | None = None,
+    prefer: str | None = None,
 ) -> httpx.Response:
     base_url = _supabase_base_url()
     url = f"{base_url}{path}"
@@ -139,12 +141,37 @@ async def _sb_get(
         headers["Authorization"] = f"Bearer {settings.supabase_service_role}"
     else:
         raise HTTPException(status_code=500, detail="Falta SUPABASE_SERVICE_ROLE")
+    if prefer:
+        headers["Prefer"] = prefer
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             return await client.get(url, headers=headers, params=params)
     except httpx.RequestError:
         logger.exception("Error al conectar a Supabase")
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+
+
+def _content_range_total(response: httpx.Response) -> int | None:
+    header = response.headers.get("content-range") or response.headers.get("Content-Range")
+    if not header or "/" not in header:
+        return None
+    try:
+        return int(header.split("/")[-1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _count_from_response(response: httpx.Response) -> int:
+    total = _content_range_total(response)
+    if total is not None:
+        return total
+    try:
+        data = response.json()
+    except ValueError:
+        return 0
+    if isinstance(data, list):
+        return len(data)
+    return 0
 
 
 def _parse_bearer(authorization: str | None) -> str | None:
@@ -266,11 +293,19 @@ async def get_kpis(
 
     # Conversaciones en rango
     conv_params = {
-        "select": "id",
-        "ultimo_mensaje_en": f"gte.{since}",
+        "select": "conversacion_id",
+        "direccion": "eq.entrante",
+        "creado_en": f"gte.{since}",
+        "distinct": "conversacion_id",
+        "limit": "0",
     }
-    conv_resp = await _sb_get("/rest/v1/conversaciones", params=conv_params, token=token)
-    conv_items = conv_resp.json() if conv_resp.status_code < 400 else []
+    conv_resp = await _sb_get(
+        "/rest/v1/mensajes",
+        params=conv_params,
+        token=token,
+        prefer="count=exact",
+    )
+    conversaciones_total = _count_from_response(conv_resp)
 
     # Contactos nuevos en rango
     ctc_params = {"select": "id", "creado_en": f"gte.{since}"}
@@ -295,19 +330,65 @@ async def get_kpis(
         "select": "id",
         "direccion": "eq.saliente",
         "creado_en": f"gte.{since}",
+        "datos->>author": "neq.system",
+        "datos->>event": "neq.session_closed",
+        "limit": "0",
     }
-    gen_resp = await _sb_get("/rest/v1/mensajes", params=gen_params, token=token)
-    dialogos_generados = len(gen_resp.json() or []) if gen_resp.status_code < 400 else 0
+    gen_resp = await _sb_get(
+        "/rest/v1/mensajes",
+        params=gen_params,
+        token=token,
+        prefer="count=exact",
+    )
+    dialogos_generados = _count_from_response(gen_resp)
+
+    # Webchat: visitas sin interacción y conversaciones con mensajes entrantes
+    total_params = {
+        "select": "id",
+        "canal": "eq.webchat",
+        "ultimo_mensaje_en": f"gte.{since}",
+        "limit": "0",
+    }
+    total_resp = await _sb_get(
+        "/rest/v1/conversaciones",
+        params=total_params,
+        token=token,
+        prefer="count=exact",
+    )
+    total_webchat = _count_from_response(total_resp)
+
+    chats_params = {
+        "select": "conversacion_id,conversacion:conversaciones!inner(id,canal,ultimo_mensaje_en)",
+        "direccion": "eq.entrante",
+        "creado_en": f"gte.{since}",
+        "conversacion.canal": "eq.webchat",
+        "conversacion.ultimo_mensaje_en": f"gte.{since}",
+        "distinct": "conversacion_id",
+        "limit": "0",
+    }
+    chats_resp = await _sb_get(
+        "/rest/v1/mensajes",
+        params=chats_params,
+        token=token,
+        prefer="count=exact",
+    )
+    conversaciones_webchat = _count_from_response(chats_resp)
+
+    visitas_webchat = max(total_webchat - conversaciones_webchat, 0)
+    conversion_webchat = (conversaciones_webchat / total_webchat) if total_webchat else None
 
     return {
         "ok": True,
-        "conversaciones_hoy": len(conv_items or []),
+        "conversaciones_hoy": conversaciones_total,
         "contactos_nuevos": len(ctc_items or []),
         "canales_activos": len(canales),
         "dialogos_generados": dialogos_generados,
         "dialogos_sin_replica": 0,
         "lapso_medio_replica": None,
         "lapso_mayor_replica": None,
+        "visitas_webchat": visitas_webchat,
+        "conversaciones_webchat": conversaciones_webchat,
+        "conversion_webchat": conversion_webchat,
     }
 
 
@@ -839,6 +920,19 @@ def _metadata_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _ensure_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
 def _normalize_tags_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -956,6 +1050,118 @@ def _serialize_card(
         "actualizado_en": card.get("actualizado_en"),
         "insights": insights or None,
     }
+
+
+async def _fetch_webchat_visit_cards(
+    *,
+    token: str,
+    exclude_conversation_ids: set[str],
+    limit: int,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    params = {
+        "select": (
+            "id,contacto_id,canal,estado,iniciada_en,ultimo_mensaje_en,"
+            "contacto:contactos(id,nombre_completo,correo,telefono_e164,contacto_datos)"
+        ),
+        "canal": "eq.webchat",
+        "order": "ultimo_mensaje_en.desc",
+        "limit": str(max(limit, 1)),
+    }
+    resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="supabase_error")
+
+    rows = resp.json() or []
+    cards: list[dict[str, Any]] = []
+    for row in rows:
+        conv_id = str(row.get("id") or "")
+        if not conv_id or conv_id in exclude_conversation_ids:
+            continue
+
+        contact = row.get("contacto") or {}
+        contacto_datos = contact.get("contacto_datos")
+        if isinstance(contacto_datos, str):
+            try:
+                contacto_datos = json.loads(contacto_datos)
+            except json.JSONDecodeError:
+                contacto_datos = {}
+        elif not isinstance(contacto_datos, dict):
+            contacto_datos = {}
+
+        metadata = {
+            "tipo": "visita_sin_chat",
+            "iniciada_en": row.get("iniciada_en"),
+            "ultimo_mensaje_en": row.get("ultimo_mensaje_en"),
+        }
+        session_id = contacto_datos.get("session_id")
+        if session_id:
+            metadata["session_id"] = session_id
+
+        nombre = (
+            contact.get("nombre_completo") or contacto_datos.get("nombre") or "Visitante webchat"
+        )
+
+        card_payload = {
+            "id": f"visit-{conv_id}",
+            "tablero_id": None,
+            "etapa_id": "visitas_webchat",
+            "stage": None,
+            "canal": "webchat",
+            "monto_estimado": None,
+            "moneda": None,
+            "probabilidad": None,
+            "probabilidad_origen": None,
+            "probabilidad_override": None,
+            "lead_score": None,
+            "tags": [],
+            "metadata": metadata,
+            "contacto": {
+                "id": contact.get("id") or row.get("contacto_id"),
+                "nombre": nombre,
+                "estado": None,
+                "telefono": contact.get("telefono_e164"),
+                "correo": contact.get("correo"),
+            },
+            "conversacion": {
+                "id": conv_id,
+                "estado": row.get("estado"),
+                "ultimo_mensaje_en": row.get("ultimo_mensaje_en"),
+                "canal": "webchat",
+            },
+            "asignado": {"id": None, "nombre": None},
+            "propietario": {"id": None, "nombre": None},
+            "cerrado_en": None,
+            "motivo_cierre": None,
+            "creado_en": row.get("iniciada_en"),
+            "actualizado_en": row.get("ultimo_mensaje_en"),
+            "insights": None,
+        }
+        cards.append(card_payload)
+        if len(cards) >= limit:
+            break
+
+    return cards
+
+
+async def _fetch_webchat_conversation_ids_with_chat(*, token: str) -> set[str]:
+    params = {
+        "select": "id",
+        "canal": "eq.webchat",
+        "ultimo_entrante_en": "not.is.null",
+        "limit": "20000",
+    }
+    resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="supabase_error")
+    rows = resp.json() or []
+    ids: set[str] = set()
+    for row in rows:
+        conv_id = row.get("id")
+        if conv_id:
+            ids.add(str(conv_id))
+    return ids
 
 
 @router.get("/kpis/leads/estados")
@@ -1097,12 +1303,58 @@ async def get_embudo(
     except LeadsRepositoryError as exc:
         raise HTTPException(status_code=502, detail="supabase_error") from exc
 
+    include_visit_stage = channel_filter is None or "webchat" in channel_filter
+    webchat_chat_ids: set[str] = set()
+    if include_visit_stage:
+        try:
+            webchat_chat_ids = await _fetch_webchat_conversation_ids_with_chat(token=token)
+        except HTTPException:
+            raise
+        except Exception:  # pragma: no cover
+            logger.exception("embudo.fetch_conversations_with_chat_failed")
+            webchat_chat_ids = set()
+
     stage_cards: dict[str, list[dict[str, Any]]] = {key: [] for key in stage_lookup}
     category_totals: dict[str, int] = defaultdict(int)
+    pipeline_conversation_ids: set[str] = set()
+    visitor_conversation_ids: set[str] = set()
+    visit_cards: list[dict[str, Any]] = []
+
     for raw_card in cards:
         stage_id = str(raw_card.get("etapa_id") or "")
         serialized = _serialize_card(raw_card, stage_lookup)
+        canal_value = serialized.get("conversacion", {}).get("canal")
+        if not canal_value:
+            canal_value = serialized.get("canal")
+        if not canal_value:
+            canal_value = raw_card.get("canal")
+        if not canal_value:
+            canal_value = _ensure_dict(serialized.get("metadata")).get("canal")
+        canal = (canal_value or "").lower()
+        conv_id = str(
+            serialized.get("conversacion", {}).get("id") or raw_card.get("conversacion_id") or ""
+        )
+
+        if (
+            include_visit_stage
+            and canal == "webchat"
+            and conv_id
+            and conv_id not in webchat_chat_ids
+        ):
+            metadata = dict(_ensure_dict(serialized.get("metadata")))
+            metadata["tipo"] = "visita_sin_chat"
+            serialized["metadata"] = metadata
+            serialized["etapa_id"] = "visitas_webchat"
+            serialized["stage"] = None
+            serialized["probabilidad"] = None
+            serialized["probabilidad_origen"] = None
+            visit_cards.append(serialized)
+            visitor_conversation_ids.add(conv_id)
+            continue
+
         stage_cards.setdefault(stage_id, []).append(serialized)
+        if conv_id:
+            pipeline_conversation_ids.add(conv_id)
 
     stage_payloads: list[dict[str, Any]] = []
     for stage in stages:
@@ -1125,11 +1377,49 @@ async def get_embudo(
             }
         )
 
+    if include_visit_stage:
+        try:
+            extra_visits = await _fetch_webchat_visit_cards(
+                token=token,
+                exclude_conversation_ids=pipeline_conversation_ids | visitor_conversation_ids,
+                limit=limit,
+            )
+            if extra_visits:
+                visit_cards.extend(extra_visits)
+                for card in extra_visits:
+                    conv_obj = card.get("conversacion", {})
+                    conv_id = conv_obj.get("id") or card.get("conversacion_id")
+                    if conv_id:
+                        visitor_conversation_ids.add(str(conv_id))
+        except HTTPException:
+            raise
+        except Exception:  # pragma: no cover
+            logger.exception("embudo.visits_fetch_failed")
+
+    if include_visit_stage:
+        stage_payloads.append(
+            {
+                "id": "visitas_webchat",
+                "codigo": "visitantes",
+                "nombre": "Visitantes (sin chat)",
+                "categoria": "visitantes",
+                "orden": -100,
+                "probabilidad": None,
+                "sla_horas": None,
+                "metadatos": {"descripcion": "Visitas a la landing sin mensajes entrantes"},
+                "total": len(visit_cards),
+                "cards": visit_cards,
+            }
+        )
+        category_totals["visitantes"] = category_totals.get("visitantes", 0) + len(visit_cards)
+
     stage_payloads.sort(key=lambda item: item.get("orden") or 0)
-    cards_total = sum(len(items) for items in stage_cards.values())
+    cards_total = sum(len(items) for items in stage_cards.values()) + len(visit_cards)
     channels_present = sorted(
         {str(card.get("canal")).lower() for card in cards if card.get("canal")}
     )
+    if include_visit_stage:
+        channels_present = sorted(set(channels_present) | {"webchat"})
 
     return {
         "ok": True,

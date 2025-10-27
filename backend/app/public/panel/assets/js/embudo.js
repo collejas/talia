@@ -208,6 +208,8 @@ function escapeHtml(value) {
 
 function formatLabel(label) {
   switch (label) {
+    case 'visitantes':
+      return 'Visitantes';
     case 'ganada':
       return 'Ganadas';
     case 'perdida':
