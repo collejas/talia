@@ -976,22 +976,14 @@ async def _process_lead_capture_tool(
     company = (args.get("company_name") or "").strip()
     notes = (args.get("notes") or "").strip()
 
-    # Validación estricta según schema requerido
-    missing: list[str] = []
-    for field, value in (
-        ("full_name", full_name),
-        ("email", email_raw),
-        ("phone_number", phone_raw),
-        ("company_name", company),
-        ("notes", notes),
-    ):
-        if not value:
-            missing.append(field)
-    if missing:
-        return {"status": "error", "message": "missing_fields", "fields": missing}
+    # Reglas: exigir al menos un dato de contacto (correo o teléfono)
+    has_email = bool(email_raw)
+    has_phone = bool(phone_raw)
+    if not (has_email or has_phone):
+        return {"status": "error", "message": "contact_info_required"}
 
-    email = email_raw if email_raw and EMAIL_REGEX.match(email_raw) else ""
-    if email_raw and not email:
+    email = email_raw if has_email and EMAIL_REGEX.match(email_raw) else ""
+    if has_email and not email:
         return {"status": "error", "message": "invalid_email"}
 
     sanitized_phone = _sanitize_phone_number(phone_raw)

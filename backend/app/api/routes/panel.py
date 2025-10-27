@@ -1069,7 +1069,22 @@ async def _fetch_webchat_visit_cards(
         "order": "ultimo_mensaje_en.desc",
         "limit": str(max(limit, 1)),
     }
-    resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    try:
+        resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    except HTTPException as exc:
+        if exc.status_code == 502:
+            logger.warning(
+                "embudo.visits_fetch_unavailable",
+                extra={"detail": exc.detail},
+            )
+            return []
+        raise
+    if resp.status_code in (401, 403):
+        logger.warning(
+            "embudo.visits_auth_failed",
+            extra={"status": resp.status_code, "body": resp.text[:200]},
+        )
+        return []
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail="supabase_error")
 
@@ -1152,7 +1167,22 @@ async def _fetch_webchat_conversation_ids_with_chat(*, token: str) -> set[str]:
         "ultimo_entrante_en": "not.is.null",
         "limit": "20000",
     }
-    resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    try:
+        resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    except HTTPException as exc:
+        if exc.status_code == 502:
+            logger.warning(
+                "embudo.conversations_fetch_unavailable",
+                extra={"detail": exc.detail},
+            )
+            return set()
+        raise
+    if resp.status_code == 401 or resp.status_code == 403:
+        logger.warning(
+            "embudo.conversations_auth_failed",
+            extra={"status": resp.status_code, "body": resp.text[:200]},
+        )
+        return set()
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail="supabase_error")
     rows = resp.json() or []
@@ -1377,6 +1407,7 @@ async def get_embudo(
             }
         )
 
+    visit_count = 0
     if include_visit_stage:
         try:
             extra_visits = await _fetch_webchat_visit_cards(
@@ -1396,7 +1427,8 @@ async def get_embudo(
         except Exception:  # pragma: no cover
             logger.exception("embudo.visits_fetch_failed")
 
-    if include_visit_stage:
+    if include_visit_stage and visit_cards:
+        visit_count = len(visit_cards)
         stage_payloads.append(
             {
                 "id": "visitas_webchat",
@@ -1414,11 +1446,11 @@ async def get_embudo(
         category_totals["visitantes"] = category_totals.get("visitantes", 0) + len(visit_cards)
 
     stage_payloads.sort(key=lambda item: item.get("orden") or 0)
-    cards_total = sum(len(items) for items in stage_cards.values()) + len(visit_cards)
+    cards_total = sum(len(items) for items in stage_cards.values()) + visit_count
     channels_present = sorted(
         {str(card.get("canal")).lower() for card in cards if card.get("canal")}
     )
-    if include_visit_stage:
+    if include_visit_stage and visit_cards:
         channels_present = sorted(set(channels_present) | {"webchat"})
 
     return {
