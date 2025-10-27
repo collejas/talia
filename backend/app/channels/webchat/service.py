@@ -20,7 +20,6 @@ from app.channels.webchat.schemas import (
 from app.core.logging import get_logger, log_event
 from app.services import geolocation, storage, user_agent
 from app.services import openai as openai_service
-from app.services.lead_pipeline import LeadPipelineError, LeadPipelineService
 
 
 class AssistantConfigError(RuntimeError):
@@ -87,8 +86,6 @@ REGISTER_LEAD_TOOL: list[dict[str, Any]] = [
 
 # Cache en memoria para mapear session_id -> OpenAI conversation_id ("conv_...")
 _CONVERSATION_CACHE: dict[str, str] = {}
-
-_lead_pipeline = LeadPipelineService()
 
 
 @dataclass(slots=True)
@@ -172,14 +169,6 @@ async def handle_webchat_message(
                 session_id=message.session_id,
                 author=message.author or "user",
             )
-            if incoming_record.conversation_id:
-                asyncio.create_task(
-                    _sync_pipeline(
-                        incoming_record.conversation_id,
-                        canal="webchat",
-                        metadata={"ultimo_autor": message.author or "user"},
-                    )
-                )
         except storage.StorageError:
             logger.exception("No se pudo registrar el mensaje entrante en Supabase")
 
@@ -360,20 +349,6 @@ async def close_session_conversation(session_id: str) -> None:
         # Propaga como error de servicio para que el caller decida ignorar o no
         log_event(logger, "webchat.session_closed_mark_failed", session_id=session_id)
         raise AssistantServiceError("No se pudo registrar cierre de conversación")
-
-
-async def _sync_pipeline(conversation_id: str, *, canal: str, metadata: dict[str, Any]) -> None:
-    try:
-        await _lead_pipeline.ensure_card_for_conversation(
-            conversation_id=conversation_id,
-            canal=canal,
-            metadata=metadata,
-        )
-    except LeadPipelineError:
-        logger.exception(
-            "webchat.pipeline_sync_failed",
-            extra={"conversation_id": conversation_id, "canal": canal},
-        )
 
 
 async def _generate_assistant_reply(
@@ -1057,29 +1032,6 @@ async def _process_lead_capture_tool(
         contact_id=info.contact_id,
         company=company,
     )
-
-    try:
-        await _lead_pipeline.ensure_card_for_conversation(
-            conversation_id=str(talia_conversation_id),
-            canal="webchat",
-            metadata={
-                key: value
-                for key, value in {
-                    "empresa": company
-                    or contact.get("company_name")
-                    or merged_datos.get("company_name"),
-                    "lead_capture_completed": True,
-                    "lead_email": email or None,
-                    "lead_phone": sanitized_phone or phone_raw or None,
-                }.items()
-                if value not in (None, "")
-            },
-        )
-    except LeadPipelineError:
-        logger.exception(
-            "No se pudo sincronizar la tarjeta de lead tras la captura",
-            extra={"conversation_id": talia_conversation_id},
-        )
 
     return {
         "status": "success",

@@ -32,19 +32,12 @@ async def test_process_lead_capture_success_with_email_only(
         calls["update_contact"] = {"contact_id": contact_id, "patch": patch}
         return {"id": contact_id, **patch}
 
-    async def fake_ensure_card(**kwargs) -> None:
-        calls["ensure_card"] = kwargs
-
     monkeypatch.setattr(
         "app.channels.webchat.service.storage.fetch_webchat_conversation_info",
         fake_fetch_conv,
     )
     monkeypatch.setattr("app.channels.webchat.service.storage.fetch_contact", fake_fetch_contact)
     monkeypatch.setattr("app.channels.webchat.service.storage.update_contact", fake_update_contact)
-    monkeypatch.setattr(
-        "app.channels.webchat.service._lead_pipeline.ensure_card_for_conversation",
-        fake_ensure_card,
-    )
 
     call = service.ToolCall(
         id="tool-1",
@@ -68,11 +61,6 @@ async def test_process_lead_capture_success_with_email_only(
     assert patch["correo"] == "ana@example.com"
     assert patch["contacto_datos"]["company_name"] == "Ejemplo SA"
     assert patch["company_name"] == "Ejemplo SA"
-    # No teléfono disponible, no se debe crear metadata lead_phone
-    ensure_kwargs = calls["ensure_card"]
-    assert ensure_kwargs["conversation_id"] == "00000000-0000-0000-0000-000000000001"
-    assert ensure_kwargs["metadata"]["lead_email"] == "ana@example.com"
-    assert "lead_phone" not in ensure_kwargs["metadata"]
 
 
 @pytest.mark.asyncio
