@@ -304,3 +304,18 @@ def infer_contact_location(
         municipio_nombre=municipio_nombre,
         municipio_cvegeo=cvegeo,
     )
+
+
+def location_from_geo_metadata(
+    geo: dict[str, Any] | None,
+) -> tuple[str | None, str | None, str | None, str | None, str | None]:
+    """Resuelve claves/nombres de estado y municipio a partir de metadata `geo`."""
+    if not isinstance(geo, dict) or not geo:
+        return None, None, None, None, None
+
+    estado, estado_nombre, municipio, municipio_nombre = _location_from_metadata({"geo": geo})
+    estado_clave = str(estado).zfill(2) if estado else None
+    municipio_clave = str(municipio).zfill(3) if municipio else None
+    cvegeo = f"{estado_clave}{municipio_clave}" if estado_clave and municipio_clave else None
+
+    return estado_clave, estado_nombre, municipio_clave, municipio_nombre, cvegeo

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services import storage
+from app.services import leads_geo, storage
 
 router = APIRouter(prefix="", tags=["panel"])
 
@@ -915,6 +915,456 @@ async def embudo_visitantes(
             "from": _format_utc(date_from) if date_from else None,
             "to": _format_utc(date_to) if date_to else None,
         },
+    }
+
+
+def _build_range_payload(
+    rango: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> dict[str, str | None]:
+    return {
+        "preset": (rango or "").strip().lower() or None,
+        "from": _format_utc(date_from) if date_from else None,
+        "to": _format_utc(date_to) if date_to else None,
+    }
+
+
+def _ensure_state_code(value: str) -> str:
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if not digits:
+        raise HTTPException(status_code=400, detail="estado_invalid")
+    return digits.zfill(2)
+
+
+def _parse_channels_param(canales: str | None) -> list[str]:
+    if not canales:
+        return []
+    values: list[str] = []
+    for chunk in canales.split(","):
+        val = chunk.strip().lower()
+        if val:
+            values.append(val)
+    return values
+
+
+@router.get("/kpis/leads/geo/estados")
+async def leads_geo_estados() -> dict[str, Any]:
+    try:
+        geojson = leads_geo.load_states_geojson()
+    except FileNotFoundError as exc:  # pragma: no cover - depende de despliegue
+        logger.exception("geo.states_missing")
+        raise HTTPException(status_code=500, detail="geojson_missing") from exc
+    return {"ok": True, "geojson": geojson}
+
+
+@router.get("/kpis/leads/geo/municipios/{estado}")
+async def leads_geo_municipios(estado: str) -> dict[str, Any]:
+    code = _ensure_state_code(estado)
+    try:
+        geojson = leads_geo.load_state_municipalities_geojson(code)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="estado_not_found") from exc
+    return {"ok": True, "geojson": geojson}
+
+
+@router.get("/kpis/visitantes/estados")
+async def visitantes_estado_metrics(
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    try:
+        payload = await storage.fetch_visitantes_estados(date_from=date_from, date_to=date_to)
+    except storage.StorageError as exc:
+        logger.exception("visitantes.estados_fetch_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando visitantes"
+        ) from exc
+
+    raw_items = payload.get("items") if isinstance(payload, dict) else []
+    raw_totals = payload.get("totals") if isinstance(payload, dict) else {}
+
+    items: list[dict[str, Any]] = []
+    if isinstance(raw_items, list):
+        for row in raw_items:
+            if not isinstance(row, dict):
+                continue
+            code = row.get("cve_ent")
+            if not code:
+                continue
+            total = int(row.get("total") or 0)
+            por_canal = row.get("por_canal")
+            if not isinstance(por_canal, dict):
+                por_canal = {"visitantes": total}
+            items.append(
+                {
+                    "cve_ent": str(code).zfill(2),
+                    "nombre": row.get("nombre"),
+                    "total": total,
+                    "por_canal": por_canal,
+                }
+            )
+
+    total = int((raw_totals or {}).get("total") or 0)
+    ubicados = int((raw_totals or {}).get("ubicados") or 0)
+    sin_ubicacion = int((raw_totals or {}).get("sin_ubicacion") or (total - ubicados))
+
+    return {
+        "ok": True,
+        "items": items,
+        "total_contactos": total,
+        "total_ubicados": ubicados,
+        "sin_ubicacion": sin_ubicacion,
+        "range": _build_range_payload(rango, date_from, date_to),
+    }
+
+
+@router.get("/kpis/visitantes/estados/{estado}/municipios")
+async def visitantes_municipios_metrics(
+    estado: str,
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    state_code = _ensure_state_code(estado)
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+
+    try:
+        payload = await storage.fetch_visitantes_municipios(
+            state_code, date_from=date_from, date_to=date_to
+        )
+    except storage.StorageError as exc:
+        logger.exception("visitantes.municipios_fetch_failed", extra={"estado": state_code})
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando visitantes"
+        ) from exc
+
+    raw_items = payload.get("items") if isinstance(payload, dict) else []
+    raw_totals = payload.get("totals") if isinstance(payload, dict) else {}
+    estado_info = payload.get("estado") if isinstance(payload, dict) else {}
+
+    items: list[dict[str, Any]] = []
+    if isinstance(raw_items, list):
+        for row in raw_items:
+            if not isinstance(row, dict):
+                continue
+            cvegeo = row.get("cvegeo")
+            if not cvegeo:
+                continue
+            total = int(row.get("total") or 0)
+            por_canal = row.get("por_canal")
+            if not isinstance(por_canal, dict):
+                por_canal = {"visitantes": total}
+            items.append(
+                {
+                    "cvegeo": str(cvegeo).zfill(5),
+                    "nombre": row.get("nombre"),
+                    "total": total,
+                    "por_canal": por_canal,
+                }
+            )
+
+    total = int((raw_totals or {}).get("total") or 0)
+    ubicados = int((raw_totals or {}).get("ubicados") or 0)
+    sin_ubicacion = int((raw_totals or {}).get("sin_ubicacion") or (total - ubicados))
+
+    estado_payload: dict[str, Any] | None = None
+    if isinstance(estado_info, dict) and estado_info:
+        nombre = estado_info.get("nombre") or estado_info.get("nom_ent")
+        estado_payload = {
+            "cve_ent": str(estado_info.get("cve_ent") or state_code).zfill(2),
+            "nombre": nombre or leads_geo.state_display_name(state_code),
+        }
+    else:
+        estado_payload = {
+            "cve_ent": state_code,
+            "nombre": leads_geo.state_display_name(state_code),
+        }
+
+    return {
+        "ok": True,
+        "estado": estado_payload,
+        "items": items,
+        "total_contactos": total,
+        "total_ubicados": ubicados,
+        "sin_ubicacion": sin_ubicacion,
+        "range": _build_range_payload(rango, date_from, date_to),
+    }
+
+
+@router.get("/kpis/leads/estados")
+async def leads_estado_metrics(
+    canales: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    channel_values = _parse_channels_param(canales)
+    include_visitantes = "visitantes" in channel_values
+    lead_channels = [value for value in channel_values if value != "visitantes"]
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+
+    leads_payload: dict[str, Any] = {"items": [], "totals": {}}
+    should_fetch_leads = not channel_values or bool(lead_channels)
+    if should_fetch_leads:
+        lead_filter = lead_channels if lead_channels else None
+        try:
+            leads_payload = await storage.fetch_leads_states(
+                channels=lead_filter,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except storage.StorageError as exc:
+            logger.exception("leads.estados_fetch_failed")
+            raise HTTPException(
+                status_code=502, detail=str(exc) or "Error consultando leads"
+            ) from exc
+
+    visitantes_payload: dict[str, Any] = {"items": [], "totals": {}}
+    if include_visitantes:
+        try:
+            visitantes_payload = await storage.fetch_visitantes_estados(
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except storage.StorageError as exc:
+            logger.exception("visitantes.estados_merge_failed")
+            raise HTTPException(
+                status_code=502, detail=str(exc) or "Error consultando visitantes"
+            ) from exc
+
+    def _to_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _extract_totals(payload: dict[str, Any]) -> tuple[int, int, int]:
+        totals = payload.get("totals") if isinstance(payload, dict) else {}
+        if not isinstance(totals, dict):
+            return 0, 0, 0
+        total_val = _to_int(totals.get("total"))
+        ubicados_val = _to_int(totals.get("ubicados"))
+        sin_raw = totals.get("sin_ubicacion")
+        sin_val = _to_int(sin_raw)
+        if sin_raw is None and total_val and ubicados_val:
+            sin_val = max(0, total_val - ubicados_val)
+        return total_val, ubicados_val, sin_val
+
+    items_map: dict[str, dict[str, Any]] = {}
+
+    def _merge_state_rows(rows: Any) -> None:
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            code = row.get("cve_ent")
+            if code is None:
+                continue
+            key = str(code).zfill(2)
+            total = _to_int(row.get("total"))
+            entry = items_map.setdefault(
+                key,
+                {"cve_ent": key, "nombre": row.get("nombre"), "total": 0, "por_canal": {}},
+            )
+            if not entry.get("nombre") and row.get("nombre"):
+                entry["nombre"] = row.get("nombre")
+            entry["total"] += total
+            breakdown = row.get("por_canal")
+            if isinstance(breakdown, dict):
+                for channel, value in breakdown.items():
+                    ch_key = str(channel)
+                    entry["por_canal"][ch_key] = entry["por_canal"].get(ch_key, 0) + _to_int(value)
+
+    _merge_state_rows(leads_payload.get("items"))
+    _merge_state_rows(visitantes_payload.get("items"))
+
+    items = [
+        {
+            "cve_ent": data["cve_ent"],
+            "nombre": data.get("nombre"),
+            "total": data["total"],
+            "por_canal": data["por_canal"],
+        }
+        for data in sorted(items_map.values(), key=lambda item: item["cve_ent"])
+    ]
+
+    lead_totals = _extract_totals(leads_payload)
+    visitante_totals = _extract_totals(visitantes_payload)
+
+    total_contactos = lead_totals[0] + visitante_totals[0]
+    total_ubicados = lead_totals[1] + visitante_totals[1]
+    sin_ubicacion = lead_totals[2] + visitante_totals[2]
+
+    return {
+        "ok": True,
+        "items": items,
+        "total_contactos": total_contactos,
+        "total_ubicados": total_ubicados,
+        "sin_ubicacion": sin_ubicacion,
+        "range": _build_range_payload(rango, date_from, date_to),
+    }
+
+
+@router.get("/kpis/leads/estados/{estado}/municipios")
+async def leads_municipios_metrics(
+    estado: str,
+    canales: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    state_code = _ensure_state_code(estado)
+    channel_values = _parse_channels_param(canales)
+    include_visitantes = "visitantes" in channel_values
+    lead_channels = [value for value in channel_values if value != "visitantes"]
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+
+    leads_payload: dict[str, Any] = {"items": [], "totals": {}, "estado": None}
+    should_fetch_leads = not channel_values or bool(lead_channels)
+    if should_fetch_leads:
+        lead_filter = lead_channels if lead_channels else None
+        try:
+            leads_payload = await storage.fetch_leads_municipios(
+                state_code,
+                channels=lead_filter,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except storage.StorageError as exc:
+            logger.exception("leads.municipios_fetch_failed", extra={"estado": state_code})
+            raise HTTPException(
+                status_code=502, detail=str(exc) or "Error consultando leads"
+            ) from exc
+
+    visitantes_payload: dict[str, Any] = {"items": [], "totals": {}, "estado": None}
+    if include_visitantes:
+        try:
+            visitantes_payload = await storage.fetch_visitantes_municipios(
+                state_code,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        except storage.StorageError as exc:
+            logger.exception("visitantes.municipios_merge_failed", extra={"estado": state_code})
+            raise HTTPException(
+                status_code=502, detail=str(exc) or "Error consultando visitantes"
+            ) from exc
+
+    def _to_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _extract_totals(payload: dict[str, Any]) -> tuple[int, int, int]:
+        totals = payload.get("totals") if isinstance(payload, dict) else {}
+        if not isinstance(totals, dict):
+            return 0, 0, 0
+        total_val = _to_int(totals.get("total"))
+        ubicados_val = _to_int(totals.get("ubicados"))
+        sin_raw = totals.get("sin_ubicacion")
+        sin_val = _to_int(sin_raw)
+        if sin_raw is None and total_val and ubicados_val:
+            sin_val = max(0, total_val - ubicados_val)
+        return total_val, ubicados_val, sin_val
+
+    items_map: dict[str, dict[str, Any]] = {}
+
+    def _merge_municipio_rows(rows: Any) -> None:
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            cvegeo = row.get("cvegeo")
+            if not cvegeo:
+                continue
+            key = str(cvegeo).zfill(5)
+            total = _to_int(row.get("total"))
+            entry = items_map.setdefault(
+                key,
+                {"cvegeo": key, "nombre": row.get("nombre"), "total": 0, "por_canal": {}},
+            )
+            if not entry.get("nombre") and row.get("nombre"):
+                entry["nombre"] = row.get("nombre")
+            entry["total"] += total
+            breakdown = row.get("por_canal")
+            if isinstance(breakdown, dict):
+                for channel, value in breakdown.items():
+                    ch_key = str(channel)
+                    entry["por_canal"][ch_key] = entry["por_canal"].get(ch_key, 0) + _to_int(value)
+
+    _merge_municipio_rows(leads_payload.get("items"))
+    _merge_municipio_rows(visitantes_payload.get("items"))
+
+    items = [
+        {
+            "cvegeo": data["cvegeo"],
+            "nombre": data.get("nombre"),
+            "total": data["total"],
+            "por_canal": data["por_canal"],
+        }
+        for data in sorted(items_map.values(), key=lambda item: item["cvegeo"])
+    ]
+
+    lead_totals = _extract_totals(leads_payload)
+    visitante_totals = _extract_totals(visitantes_payload)
+
+    total_contactos = lead_totals[0] + visitante_totals[0]
+    total_ubicados = lead_totals[1] + visitante_totals[1]
+    sin_ubicacion = lead_totals[2] + visitante_totals[2]
+
+    estado_info = leads_payload.get("estado")
+    if include_visitantes and (not isinstance(estado_info, dict) or not estado_info):
+        estado_info = visitantes_payload.get("estado")
+
+    if isinstance(estado_info, dict) and estado_info:
+        estado_payload = {
+            "cve_ent": str(estado_info.get("cve_ent") or state_code).zfill(2),
+            "nombre": estado_info.get("nombre")
+            or estado_info.get("nom_ent")
+            or leads_geo.state_display_name(state_code),
+        }
+    else:
+        estado_payload = {
+            "cve_ent": state_code,
+            "nombre": leads_geo.state_display_name(state_code),
+        }
+
+    return {
+        "ok": True,
+        "estado": estado_payload,
+        "items": items,
+        "total_contactos": total_contactos,
+        "total_ubicados": total_ubicados,
+        "sin_ubicacion": sin_ubicacion,
+        "range": _build_range_payload(rango, date_from, date_to),
     }
 
 

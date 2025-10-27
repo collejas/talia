@@ -47,10 +47,10 @@ async def receive_webchat_message(message: WebchatMessage, request: Request) -> 
     "/close",
     summary="Cierra la conversación asociada al session_id y resetea contexto",
 )
-async def close_webchat_conversation(payload: WebchatClosePayload) -> dict:
+async def close_webchat_conversation(payload: WebchatClosePayload, request: Request) -> dict:
     session_id = payload.session_id
     try:
-        await service.close_session_conversation(session_id)
+        await service.close_session_conversation(session_id, request=request)
     except service.AssistantServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True}

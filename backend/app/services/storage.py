@@ -75,6 +75,62 @@ async def mark_webchat_session_closed(session_id: str) -> None:
         )
 
 
+async def record_webchat_visitor_event(
+    session_id: str,
+    *,
+    ip: str | None = None,
+    device_type: str | None = None,
+    geo: dict[str, Any] | None = None,
+    estado_clave: str | None = None,
+    estado_nombre: str | None = None,
+    municipio_clave: str | None = None,
+    municipio_nombre: str | None = None,
+    cvegeo: str | None = None,
+) -> None:
+    """Registra/actualiza metadata geográfica asociada a un session_id de webchat."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/record_webchat_visitante"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+
+    payload: dict[str, Any] = {"p_session_id": session_id}
+    if ip:
+        payload["p_ip"] = ip
+    if device_type:
+        payload["p_device_type"] = device_type
+    if geo:
+        payload["p_geo"] = geo
+    if estado_clave:
+        payload["p_cve_ent"] = estado_clave
+    if estado_nombre:
+        payload["p_nom_ent"] = estado_nombre
+    if municipio_clave:
+        payload["p_cve_mun"] = municipio_clave
+    if municipio_nombre:
+        payload["p_nom_mun"] = municipio_nombre
+    if cvegeo:
+        payload["p_cvegeo"] = cvegeo
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        raise StorageError(f"Error de red al registrar visitante webchat: {exc}") from exc
+
+    if resp.status_code >= 400:
+        raise StorageError(
+            "Supabase respondió error al registrar visitante webchat "
+            f"(status={resp.status_code}, body={resp.text!r})"
+        )
+
+
 async def is_webchat_session_recently_closed(session_id: str, within_minutes: int = 10) -> bool:
     """Devuelve true si existe marca de cierre reciente para session_id."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -734,3 +790,187 @@ async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, An
     elif datos is None:
         row["contacto_datos"] = {}
     return row
+
+
+async def fetch_visitantes_estados(
+    *,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> dict[str, Any]:
+    """Recupera totales de visitantes sin chat agregados por estado."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/panel_visitantes_sin_chat_estados"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {}
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload or None)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar visitantes sin chat por estado: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar visitantes sin chat por estado"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json()
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada de visitantes por estado: {data!r}")
+    return data
+
+
+async def fetch_visitantes_municipios(
+    state_code: str,
+    *,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> dict[str, Any]:
+    """Recupera totales de visitantes sin chat agregados por municipio."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/panel_visitantes_sin_chat_municipios"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {"p_estado": state_code}
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar visitantes sin chat por municipio: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar visitantes sin chat por municipio"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json()
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada de visitantes por municipio: {data!r}")
+    return data
+
+
+async def fetch_leads_states(
+    *,
+    channels: list[str] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> dict[str, Any]:
+    """Recupera totales de leads agrupados por estado."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/panel_leads_geo_estados"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {}
+    if channels:
+        payload["p_canales"] = ",".join(channels)
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload or None)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar leads por estado: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar leads por estado"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json()
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada de leads por estado: {data!r}")
+    return data
+
+
+async def fetch_leads_municipios(
+    state_code: str,
+    *,
+    channels: list[str] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> dict[str, Any]:
+    """Recupera totales de leads agrupados por municipio."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/panel_leads_geo_municipios"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {"p_estado": state_code}
+    if channels:
+        payload["p_canales"] = ",".join(channels)
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar leads por municipio: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar leads por municipio"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json()
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada de leads por municipio: {data!r}")
+    return data

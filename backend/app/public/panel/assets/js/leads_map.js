@@ -10,6 +10,7 @@ const SCALE_OPTIONS = ['quantile', 'equal', 'log'];
 const CHANNEL_OPTIONS = {
   whatsapp: 'WhatsApp',
   webchat: 'Webchat',
+  visitantes: 'Visitantes (sin chat)',
   todos: 'Todos',
 };
 
@@ -210,7 +211,10 @@ const state = {
 
 function getChannelParam(key) {
   if (key === 'todos') {
-    return 'whatsapp,webchat';
+    return 'whatsapp,webchat,visitantes';
+  }
+  if (key === 'visitantes') {
+    return 'visitantes';
   }
   return key || 'whatsapp';
 }
@@ -228,7 +232,11 @@ function channelName(key) {
 }
 
 function buildTooltip(label, total, breakdown) {
-  const totalLabel = `${formatNumber(total)} lead${total === 1 ? '' : 's'}`;
+  const isVisitantes = state.channelKey === 'visitantes';
+  const isTodos = state.channelKey === 'todos';
+  const singular = isVisitantes ? 'visitante' : isTodos ? 'registro' : 'lead';
+  const plural = isVisitantes ? 'visitantes' : isTodos ? 'registros' : 'leads';
+  const totalLabel = `${formatNumber(total)} ${total === 1 ? singular : plural}`;
   const entries = Object.entries(breakdown || {}).filter(([, value]) => Number(value) > 0);
   if (!entries.length) {
     return `${label}: ${totalLabel}`;
@@ -283,8 +291,14 @@ function updateLegend(items) {
       `,
     )
     .join('');
+  const legendTitle =
+    state.channelKey === 'visitantes'
+      ? 'Visitantes'
+      : state.channelKey === 'todos'
+        ? 'Leads y visitantes'
+        : 'Leads';
   container.innerHTML = `
-    <div class="map-legend-title">Leads</div>
+    <div class="map-legend-title">${legendTitle}</div>
     <div class="map-legend-scale">${rows}</div>
   `;
   container.hidden = false;
@@ -323,9 +337,15 @@ async function getStatesData(channelParam) {
   const cacheKey = channelParam;
   if (!state.statesCache.has(cacheKey)) {
     const promise = (async () => {
+      const metricsPromise =
+        channelParam === 'visitantes'
+          ? fetchJSONWithAuth('/api/kpis/visitantes/estados')
+          : fetchJSONWithAuth(
+              `/api/kpis/leads/estados?canales=${encodeURIComponent(channelParam)}`,
+            );
       const [geo, metrics] = await Promise.all([
         fetchJSON('/api/kpis/leads/geo/estados'),
-        fetchJSONWithAuth(`/api/kpis/leads/estados?canales=${encodeURIComponent(channelParam)}`),
+        metricsPromise,
       ]);
       if (!geo.ok || !geo.json?.geojson) {
         throw new Error('geo_states_failed');
@@ -348,11 +368,17 @@ async function getMunicipalityData(channelParam, stateCode) {
   const cacheKey = `${channelParam}:${code}`;
   if (!state.municipalityCache.has(cacheKey)) {
     const promise = (async () => {
+      const metricsPromise =
+        channelParam === 'visitantes'
+          ? fetchJSONWithAuth(`/api/kpis/visitantes/estados/${code}/municipios`)
+          : fetchJSONWithAuth(
+              `/api/kpis/leads/estados/${code}/municipios?canales=${encodeURIComponent(
+                channelParam,
+              )}`,
+            );
       const [geo, metrics] = await Promise.all([
         fetchJSON(`/api/kpis/leads/geo/municipios/${code}`),
-        fetchJSONWithAuth(
-          `/api/kpis/leads/estados/${code}/municipios?canales=${encodeURIComponent(channelParam)}`,
-        ),
+        metricsPromise,
       ]);
       if (!geo.ok || !geo.json?.geojson) {
         throw new Error('geo_muni_failed');
@@ -450,11 +476,27 @@ async function renderStates() {
       },
     });
     const ubicados = formatNumber(resources.metrics.total_ubicados || 0);
-    const total = formatNumber(resources.metrics.total_contactos || 0);
-    const sinUbicacion = formatNumber(resources.metrics.sin_ubicacion || 0);
+    const totalValue = Number(resources.metrics.total_contactos || 0);
+    const sinValue = Number(resources.metrics.sin_ubicacion || 0);
+    const total = formatNumber(totalValue);
+    const sinUbicacion = formatNumber(sinValue);
     const channelName = channelLabel(state.channelKey);
+    const isVisitantes = state.channelKey === 'visitantes';
+    const isTodos = state.channelKey === 'todos';
+    const singular = isVisitantes ? 'visitante' : isTodos ? 'registro' : 'lead';
+    const plural = isVisitantes ? 'visitantes' : isTodos ? 'registros' : 'leads';
+    const ubicadosLabel = isVisitantes
+      ? 'Visitantes ubicados'
+      : isTodos
+        ? 'Registros ubicados'
+        : 'Leads ubicados';
+    const sinLabel = isVisitantes
+      ? 'Visitantes sin ubicación'
+      : isTodos
+        ? 'Registros sin ubicación'
+        : 'Sin ubicación';
     updateSummary(
-      `${channelName}: Total ${total} lead(s). Ubicados: ${ubicados}. Sin ubicación: ${sinUbicacion}.`,
+      `${channelName}: Total ${total} ${totalValue === 1 ? singular : plural}. ${ubicadosLabel}: ${ubicados}. ${sinLabel}: ${sinUbicacion}.`,
     );
   } catch (error) {
     console.error('[leads-map] estados', error);
@@ -479,13 +521,30 @@ async function renderMunicipalities(stateCode) {
       viewMode: 'municipalities',
       onFeatureClick: null,
     });
-    const ubicados = formatNumber(resources.metrics.total_ubicados || 0);
-    const total = formatNumber(resources.metrics.total_contactos || 0);
-    const sinUbicacion = formatNumber(resources.metrics.sin_ubicacion || 0);
+    const ubicadosValue = Number(resources.metrics.total_ubicados || 0);
+    const totalValue = Number(resources.metrics.total_contactos || 0);
+    const sinValue = Number(resources.metrics.sin_ubicacion || 0);
+    const ubicados = formatNumber(ubicadosValue);
+    const total = formatNumber(totalValue);
+    const sinUbicacion = formatNumber(sinValue);
     const nombre = resources.metrics.estado?.nombre || `Estado ${code}`;
     const channelName = channelLabel(state.channelKey);
+    const isVisitantes = state.channelKey === 'visitantes';
+    const isTodos = state.channelKey === 'todos';
+    const singular = isVisitantes ? 'visitante' : isTodos ? 'registro' : 'lead';
+    const plural = isVisitantes ? 'visitantes' : isTodos ? 'registros' : 'leads';
+    const ubicadosLabel = isVisitantes
+      ? 'Visitantes ubicados'
+      : isTodos
+        ? 'Registros ubicados'
+        : 'Leads ubicados';
+    const sinLabel = isVisitantes
+      ? 'Visitantes sin ubicación'
+      : isTodos
+        ? 'Registros sin ubicación'
+        : 'Sin ubicación';
     updateSummary(
-      `${channelName} · ${nombre}: ${ubicados} lead(s) ubicados de ${total}. Sin ubicación: ${sinUbicacion}.`,
+      `${channelName} · ${nombre}: ${ubicados} ${ubicadosValue === 1 ? singular : plural} ubicados de ${total}. ${sinLabel}: ${sinUbicacion}.`,
     );
   } catch (error) {
     console.error('[leads-map] municipios', error);

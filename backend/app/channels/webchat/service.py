@@ -18,7 +18,7 @@ from app.channels.webchat.schemas import (
     WebchatResponse,
 )
 from app.core.logging import get_logger, log_event
-from app.services import geolocation, storage, user_agent
+from app.services import geolocation, leads_geo, storage, user_agent
 from app.services import openai as openai_service
 
 
@@ -320,13 +320,20 @@ async def handle_webchat_message(
     )
 
 
-async def close_session_conversation(session_id: str) -> None:
+async def close_session_conversation(session_id: str, *, request: Request | None = None) -> None:
     """Cierra la conversación activa para un session_id y limpia cache/contexto.
 
     - Limpia el cache en memoria que mapea session_id -> conv_...
     - Inserta un mensaje de sistema en Supabase marcando el cierre de la sesión
       y solicitando a la capa de persistencia que cierre la conversación (estado="cerrada").
     """
+    context: dict[str, Any] = {}
+    if request is not None:
+        try:
+            context = await _extract_request_context(request)
+        except Exception:  # pragma: no cover - validaciones defensivas
+            context = {}
+
     # Limpia cache local de conversación de OpenAI
     try:
         if session_id in _CONVERSATION_CACHE:
@@ -349,6 +356,29 @@ async def close_session_conversation(session_id: str) -> None:
         # Propaga como error de servicio para que el caller decida ignorar o no
         log_event(logger, "webchat.session_closed_mark_failed", session_id=session_id)
         raise AssistantServiceError("No se pudo registrar cierre de conversación")
+
+    geo_meta = context.get("geo") if isinstance(context.get("geo"), dict) else None
+    estado, estado_nombre, municipio, municipio_nombre, cvegeo = (
+        leads_geo.location_from_geo_metadata(geo_meta)
+    )
+    try:
+        await storage.record_webchat_visitor_event(
+            session_id=session_id,
+            ip=str(context.get("ip") or "") or None,
+            device_type=str(context.get("device_type") or "") or None,
+            geo=geo_meta,
+            estado_clave=estado,
+            estado_nombre=estado_nombre,
+            municipio_clave=municipio,
+            municipio_nombre=municipio_nombre,
+            cvegeo=cvegeo,
+        )
+        log_event(logger, "webchat.session_visitor_recorded", session_id=session_id)
+    except storage.StorageError:
+        logger.exception(
+            "No se pudo registrar metadata geográfica del visitante",
+            extra={"session_id": session_id},
+        )
 
 
 async def _generate_assistant_reply(
