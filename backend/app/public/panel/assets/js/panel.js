@@ -10,7 +10,6 @@ async function loadKpis() {
     $('kpi-conv').textContent = String(d.conversaciones_hoy ?? '0');
     $('kpi-contacts').textContent = String(d.contactos_nuevos ?? '0');
     $('kpi-channels').textContent = String(d.canales_activos ?? '0');
-    $('kpi-webchat-visitas').textContent = String(d.visitas_webchat ?? '0');
     $('kpi-webchat-chats').textContent = String(d.conversaciones_webchat ?? '0');
     $('kpi-webchat-conversion').textContent = formatPercent(d.conversion_webchat);
     $('kpi-dialogos-gen').textContent = String(d.dialogos_generados ?? '0');
@@ -20,9 +19,10 @@ async function loadKpis() {
   } else {
     // fallback visual
     for (const id of [
-      'kpi-conv','kpi-contacts','kpi-channels','kpi-webchat-visitas','kpi-webchat-chats','kpi-webchat-conversion','kpi-dialogos-gen','kpi-dialogos-sr','kpi-lapso-medio','kpi-lapso-max'
+      'kpi-conv','kpi-contacts','kpi-channels','kpi-webchat-chats','kpi-webchat-conversion','kpi-dialogos-gen','kpi-dialogos-sr','kpi-lapso-medio','kpi-lapso-max'
     ]) { const el = $(id); if (el) el.textContent = '—'; }
   }
+  await updateVisitantesKpi(rango);
 }
 
 function formatSeconds(s) {
@@ -42,6 +42,25 @@ function formatPercent(value) {
   if (pct >= 100) return '100%';
   if (pct >= 10) return `${pct.toFixed(1)}%`;
   return `${pct.toFixed(2)}%`;
+}
+
+async function updateVisitantesKpi(rango) {
+  const el = $('kpi-webchat-visitas');
+  if (el) el.textContent = '…';
+  const params = [];
+  if (rango) params.push(`rango=${encodeURIComponent(rango)}`);
+  const query = params.length ? `?${params.join('&')}` : '';
+  try {
+    const response = await fetchJSONWithAuth(`/api/embudo/visitantes${query}`);
+    if (response.ok && response.json?.ok) {
+      const total = response.json.total;
+      if (el) el.textContent = String(total ?? 0);
+      return;
+    }
+  } catch (error) {
+    console.error('[kpi] visitantes fetch error', error);
+  }
+  if (el) el.textContent = '—';
 }
 
 async function main() {

@@ -192,9 +192,12 @@ def _looks_like_uuid(value: str | None) -> bool:
 
 DATE_RANGE_PRESETS: dict[str, timedelta] = {
     "hoy": timedelta(days=1),
+    "ayer": timedelta(days=1),
     "semana": timedelta(days=7),
     "quincena": timedelta(days=15),
     "mes": timedelta(days=30),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
     "ano": timedelta(days=365),
 }
 
@@ -233,6 +236,10 @@ def _resolve_date_range(
             if rango_norm == "hoy":
                 start = now.replace(hour=0, minute=0, second=0, microsecond=0)
                 end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+            elif rango_norm == "ayer":
+                target = now - timedelta(days=1)
+                start = target.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = target.replace(hour=23, minute=59, second=59, microsecond=999999)
             else:
                 end = now
                 start = now - DATE_RANGE_PRESETS[rango_norm]
@@ -873,6 +880,36 @@ async def obtener_embudo(
         },
         "stages": stages_payload,
         "totals": totals,
+        "range": {
+            "preset": (rango or "").strip().lower() or None,
+            "from": _format_utc(date_from) if date_from else None,
+            "to": _format_utc(date_to) if date_to else None,
+        },
+    }
+
+
+@router.get("/embudo/visitantes")
+async def embudo_visitantes(
+    canales: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    channel_values: list[str] = []
+    if canales:
+        channel_values = [c.strip().lower() for c in canales.split(",") if c.strip()]
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    total = await _fetch_visitantes_total(channel_values, date_from, date_to)
+
+    return {
+        "ok": True,
+        "total": total,
         "range": {
             "preset": (rango or "").strip().lower() or None,
             "from": _format_utc(date_from) if date_from else None,
