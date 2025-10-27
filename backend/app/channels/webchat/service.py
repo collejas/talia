@@ -43,6 +43,7 @@ REGISTER_LEAD_TOOL: list[dict[str, Any]] = [
                 "Registra en la base de datos los datos captados del prospecto cuando ya "
                 "cuentas con al menos correo o teléfono para contactarlo."
             ),
+            "strict": True,
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -67,7 +68,13 @@ REGISTER_LEAD_TOOL: list[dict[str, Any]] = [
                         "description": "Notas adicionales relevantes sobre el cliente.",
                     },
                 },
-                "required": [],
+                "required": [
+                    "full_name",
+                    "email",
+                    "phone_number",
+                    "company_name",
+                    "notes",
+                ],
                 "additionalProperties": False,
             },
         },
@@ -341,8 +348,29 @@ async def _generate_assistant_reply(
             "session_id": message.session_id,
             "locale": message.locale or "",
         },
-        "tools": REGISTER_LEAD_TOOL,
     }
+
+    # Política: solo habilitar tools cuando ya tengamos los 5 campos requeridos
+    def _has_all_required_fields(text: str) -> bool:
+        # Heurística simple basada en presencia de patrones; en producción, consultar estado/BD
+        # Requeridos: full_name, email, phone_number, company_name, notes
+        has_email = bool(EMAIL_REGEX.search(text))
+        has_phone = bool(re.search(r"\+?\d[\d\s\-()]{7,}", text))
+        has_name = bool(
+            re.search(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+){1,}[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\b", text)
+        )
+        has_company = bool(
+            re.search(
+                r"empresa|compañía|compania|S\.A\.|SAS|SRL|SL|LLC|Inc|\bSA\b", text, re.IGNORECASE
+            )
+        )
+        has_notes = bool(
+            len(text.strip()) > 40
+        )  # pobre, pero evita tool prematura con saludo corto
+        return has_email and has_phone and has_name and has_company and has_notes
+
+    if _has_all_required_fields(message.content):
+        request_payload["tools"] = REGISTER_LEAD_TOOL
 
     # Añadimos el identificador de conversación solo si parece válido (conv...)
     if conversation_id and str(conversation_id).startswith("conv"):
@@ -354,20 +382,176 @@ async def _generate_assistant_reply(
     else:
         request_payload["assistant_id"] = identifier
 
+    # Serializa por conversación para evitar `conversation_locked`
+    _locks: dict[str, asyncio.Lock] = getattr(_generate_assistant_reply, "_locks", {})  # type: ignore[attr-defined]
+    if not _locks:
+        setattr(_generate_assistant_reply, "_locks", _locks)  # type: ignore[attr-defined]
+
+    lock_key = conversation_id or message.session_id
+    lock = _locks.setdefault(lock_key, asyncio.Lock())
+
     try:
-        response = await client.responses.create(**request_payload)
-        response = await _handle_tool_calls(
-            client=client,
-            response=response,
-            talia_conversation_id=talia_conversation_id,
-        )
+        async with lock:
+            # 1) Crear respuesta inicial
+            response = await client.responses.create(**request_payload)
+            # 2) Procesar tool_calls ANTES de intentar extraer texto
+            response = await _handle_tool_calls(
+                client=client,
+                response=response,
+                talia_conversation_id=talia_conversation_id,
+            )
     except Exception as exc:  # pragma: no cover - dependerá de SDK
         logger.exception("Error llamando al asistente de OpenAI")
         raise AssistantServiceError("Error al llamar al asistente") from exc
 
+    # Importante: solo evaluamos texto después de procesar tool_calls
     reply_text = _extract_text_from_response(response)
     if not reply_text:
         logger.warning("Respuesta sin texto", extra={"response": _safe_dump(response)})
+        # Fallback adicional: si hay function_call en raíz, enviar tool_output missing_fields
+        try:
+            raw = (
+                response.model_dump()
+                if hasattr(response, "model_dump")
+                else (response if isinstance(response, dict) else {})
+            )
+            output_arr = raw.get("output") if isinstance(raw, dict) else None
+            fallback_call_id = None
+            fallback_wrapper_id = None
+            # Obtener response_id de forma estricta del mismo objeto crudo
+            raw_response_id = None
+            if isinstance(raw, dict):
+                rid = raw.get("id")
+                if isinstance(rid, str):
+                    raw_response_id = rid
+            parsed_call_args: dict[str, Any] | None = None
+            if isinstance(output_arr, list):
+                for itm in output_arr:
+                    if isinstance(itm, dict) and itm.get("type") in {"function_call", "tool_call"}:
+                        # Formatos posibles
+                        tool_call = itm.get("tool_call") or itm
+                        # La API espera el call_id; algunos payloads traen ambos
+                        fallback_call_id = (
+                            tool_call.get("call_id") or tool_call.get("id") or itm.get("call_id")
+                        )
+                        fallback_wrapper_id = itm.get("id")
+                        # Intentar leer argumentos si existen
+                        args_raw = (
+                            tool_call.get("function", {}).get("arguments")
+                            if isinstance(tool_call.get("function"), dict)
+                            else tool_call.get("arguments")
+                        )
+                        if isinstance(args_raw, str):
+                            try:
+                                parsed_call_args = json.loads(args_raw) if args_raw.strip() else {}
+                            except json.JSONDecodeError:
+                                parsed_call_args = {}
+                        elif isinstance(args_raw, dict):
+                            parsed_call_args = args_raw
+                        else:
+                            parsed_call_args = {}
+                        break
+            if fallback_call_id:
+                log_event(
+                    logger,
+                    "webchat.tool_calls_fallback_detected",
+                    response_id=raw_response_id or _extract_response_id(response),
+                    call_id=fallback_call_id,
+                    wrapper_id=fallback_wrapper_id,
+                )
+                # Si hay argumentos completos, procesar la herramienta; si no, missing_fields
+                if isinstance(raw_response_id, str) and raw_response_id.startswith("resp_"):
+                    tool_result: dict[str, Any]
+                    if parsed_call_args and any(parsed_call_args.values()):
+                        # Construir objeto ToolCall simulado para reutilizar _process_lead_capture_tool
+                        sim_call = ToolCall(
+                            id=str(fallback_call_id),
+                            name="register_lead",
+                            arguments=parsed_call_args,
+                        )
+                        tool_result = await _process_lead_capture_tool(
+                            call=sim_call,
+                            talia_conversation_id=talia_conversation_id,
+                        )
+                    else:
+                        tool_result = {
+                            "status": "error",
+                            "message": "missing_fields",
+                            "fields": [
+                                "full_name",
+                                "email",
+                                "phone_number",
+                                "company_name",
+                                "notes",
+                            ],
+                        }
+                    try:
+                        response = await client.responses.submit_tool_outputs(  # type: ignore[attr-defined]
+                            response_id=raw_response_id,
+                            tool_outputs=[
+                                {
+                                    "tool_call_id": str(fallback_call_id),
+                                    "output": json.dumps(tool_result, ensure_ascii=False),
+                                }
+                            ],
+                        )
+                    except Exception:
+                        # Si incluso el submit falla, devolvemos mensaje guía y cortamos el ciclo
+                        guide = "Para registrarte necesito 5 datos: nombre completo, correo, teléfono, empresa y una nota breve del contexto. ¿Me los confirmas?"
+                        return AssistantReply(
+                            text=guide,
+                            response_id=None,
+                            response_conversation_id=_extract_conversation_id(response),
+                        )
+                else:
+                    log_event(
+                        logger,
+                        "webchat.tool_outputs_fallback_response_id_missing",
+                        response_hint=_safe_dump(response),
+                        call_id=fallback_call_id,
+                    )
+                    # Sin response_id válido, evita errores 400 devolviendo texto guía
+                    guide = "Para registrarte necesito 5 datos: nombre completo, correo, teléfono, empresa y una nota breve del contexto. ¿Me los compartes?"
+                    return AssistantReply(
+                        text=guide,
+                        response_id=None,
+                        response_conversation_id=_extract_conversation_id(response),
+                    )
+                # Intentar extraer texto otra vez tras el submit
+                reply_text = _extract_text_from_response(response)
+        except Exception:
+            # Ignorar errores en fallback y seguir al siguiente intento
+            pass
+        # Fallback final: solicitar un mini-turno de continuación
+        if not reply_text:
+            try:
+                followup = await client.responses.create(
+                    input=[
+                        {
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": "Continúa, por favor."}],
+                        }
+                    ],
+                    conversation=_extract_conversation_id(response)
+                    or request_payload.get("conversation"),
+                    tools=REGISTER_LEAD_TOOL,
+                    metadata=request_payload.get("metadata"),
+                    assistant_id=request_payload.get("assistant_id"),
+                    prompt=request_payload.get("prompt"),
+                )
+                reply_text = _extract_text_from_response(followup) or ""
+                response = followup
+            except Exception:
+                # Si el fallback falla, devolvemos error como antes
+                pass
+        # Si aún no hay texto tras todos los intentos, devuelve guía para no cortar con 502
+        if not reply_text:
+            guide = "Para avanzar necesito: nombre completo, correo, teléfono, empresa y una nota breve. ¿Me los confirmas?"
+            return AssistantReply(
+                text=guide,
+                response_id=None,
+                response_conversation_id=_extract_conversation_id(response),
+            )
     if not reply_text:
         raise AssistantServiceError("El asistente respondió sin contenido de texto")
     response_id = _extract_response_id(response)
@@ -607,10 +791,24 @@ async def _handle_tool_calls(
                     }
                 )
                 continue
-            result = await _process_lead_capture_tool(
-                call=call,
-                talia_conversation_id=talia_conversation_id,
-            )
+            # Si los argumentos vienen vacíos, responde con missing_fields para cerrar el ciclo
+            if not call.arguments:
+                result = {
+                    "status": "error",
+                    "message": "missing_fields",
+                    "fields": [
+                        "full_name",
+                        "email",
+                        "phone_number",
+                        "company_name",
+                        "notes",
+                    ],
+                }
+            else:
+                result = await _process_lead_capture_tool(
+                    call=call,
+                    talia_conversation_id=talia_conversation_id,
+                )
             tool_outputs.append(
                 {"tool_call_id": call.id, "output": json.dumps(result, ensure_ascii=False)}
             )
@@ -632,12 +830,22 @@ async def _handle_tool_calls(
                 response_id=response_id,
                 tool_outputs=tool_outputs,
             )
-            response = await client.responses.submit_tool_outputs(  # type: ignore[attr-defined]
-                response_id=str(response_id),
-                tool_outputs=tool_outputs,
-            )
+            try:
+                response = await client.responses.submit_tool_outputs(  # type: ignore[attr-defined]
+                    response_id=str(response_id),
+                    tool_outputs=tool_outputs,
+                )
+            except Exception:
+                # Reintento único con un pequeño backoff
+                await asyncio.sleep(0.3)
+                response = await client.responses.submit_tool_outputs(  # type: ignore[attr-defined]
+                    response_id=str(response_id),
+                    tool_outputs=tool_outputs,
+                )
         except Exception:
-            logger.exception("No se pudieron enviar los resultados de herramienta a OpenAI")
+            logger.exception(
+                "No se pudieron enviar los resultados de herramienta a OpenAI (tras reintento)"
+            )
             return response
 
 
@@ -710,8 +918,19 @@ async def _process_lead_capture_tool(
     company = (args.get("company_name") or "").strip()
     notes = (args.get("notes") or "").strip()
 
-    if not email_raw and not phone_raw:
-        return {"status": "error", "message": "contact_info_required"}
+    # Validación estricta según schema requerido
+    missing: list[str] = []
+    for field, value in (
+        ("full_name", full_name),
+        ("email", email_raw),
+        ("phone_number", phone_raw),
+        ("company_name", company),
+        ("notes", notes),
+    ):
+        if not value:
+            missing.append(field)
+    if missing:
+        return {"status": "error", "message": "missing_fields", "fields": missing}
 
     email = email_raw if email_raw and EMAIL_REGEX.match(email_raw) else ""
     if email_raw and not email:
@@ -736,6 +955,7 @@ async def _process_lead_capture_tool(
         merged_datos["company_name"] = company
     merged_datos["lead_capture_source"] = merged_datos.get("lead_capture_source") or "webchat"
     merged_datos["lead_capture_completed_at"] = datetime.now(timezone.utc).isoformat()
+    merged_datos["lead_registered_by"] = "webchat"
     if email:
         merged_datos["email"] = email
     if phone_raw:
@@ -755,6 +975,12 @@ async def _process_lead_capture_tool(
     if company and not contact.get("origen"):
         patch.setdefault("origen", "webchat")
 
+    log_event(
+        logger,
+        "webchat.lead_capture_patch_built",
+        contact_id=info.contact_id,
+        patch=patch,
+    )
     try:
         updated_contact = await storage.update_contact(info.contact_id, patch)
     except storage.StorageError:
@@ -793,6 +1019,7 @@ async def _process_lead_capture_tool(
     return {
         "status": "success",
         "contact_id": info.contact_id,
+        "applied_patch": patch,
         "updated_fields": {
             key: value
             for key, value in {
