@@ -223,17 +223,44 @@ async def handle_webchat_message(
         )
 
     conversation_for_ai: str | None = None
-    if incoming_record and incoming_record.conversation_openai_id:
+    recently_closed = False
+    try:
+        recently_closed = await storage.is_webchat_session_recently_closed(message.session_id)
+    except storage.StorageError:
+        recently_closed = False
+
+    force_reset = bool(message.fresh_load)
+    if force_reset:
+        log_event(
+            logger,
+            "webchat.conversation_reset_reason",
+            reason="fresh_load",
+            session_id=message.session_id,
+        )
+
+    if recently_closed or force_reset:
+        _CONVERSATION_CACHE.pop(message.session_id, None)
+
+    if (
+        not (recently_closed or force_reset)
+        and incoming_record
+        and incoming_record.conversation_openai_id
+    ):
         conv_candidate = incoming_record.conversation_openai_id
         if isinstance(conv_candidate, str) and conv_candidate.startswith("conv"):
             conversation_for_ai = conv_candidate
-    if not conversation_for_ai and existing_message and existing_message.metadata:
+    if (
+        not (recently_closed or force_reset)
+        and not conversation_for_ai
+        and existing_message
+        and existing_message.metadata
+    ):
         conv_candidate = existing_message.metadata.get("openai_conversation_id")
         if isinstance(conv_candidate, str) and conv_candidate.startswith("conv"):
             conversation_for_ai = conv_candidate
 
     # Recupera conversation_id de OpenAI desde cache/BD (si existe)
-    if not conversation_for_ai:
+    if not (recently_closed or force_reset) and not conversation_for_ai:
         conversation_for_ai = _CONVERSATION_CACHE.get(message.session_id)
 
     # Si aún no hay conv_..., intenta crearlo explícitamente en OpenAI
@@ -298,6 +325,37 @@ async def handle_webchat_message(
         reply=reply.text,
         metadata=metadata,
     )
+
+
+async def close_session_conversation(session_id: str) -> None:
+    """Cierra la conversación activa para un session_id y limpia cache/contexto.
+
+    - Limpia el cache en memoria que mapea session_id -> conv_...
+    - Inserta un mensaje de sistema en Supabase marcando el cierre de la sesión
+      y solicitando a la capa de persistencia que cierre la conversación (estado="cerrada").
+    """
+    # Limpia cache local de conversación de OpenAI
+    try:
+        if session_id in _CONVERSATION_CACHE:
+            _CONVERSATION_CACHE.pop(session_id, None)
+    except Exception:
+        pass
+
+    # Intenta registrar un evento de cierre para que la lógica en BD cierre el hilo
+    log_event(logger, "webchat.session_close_received", session_id=session_id)
+    try:
+        await storage.mark_webchat_session_closed(session_id)
+        log_event(logger, "webchat.session_closed_marked", session_id=session_id)
+        await storage.record_webchat_message(
+            session_id=session_id,
+            author="system",
+            content="[webchat] session_closed",
+            metadata={"event": "session_closed", "reason": "view_unload"},
+        )
+    except storage.StorageError:
+        # Propaga como error de servicio para que el caller decida ignorar o no
+        log_event(logger, "webchat.session_closed_mark_failed", session_id=session_id)
+        raise AssistantServiceError("No se pudo registrar cierre de conversación")
 
 
 async def _sync_pipeline(conversation_id: str, *, canal: str, metadata: dict[str, Any]) -> None:

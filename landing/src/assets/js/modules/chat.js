@@ -8,6 +8,7 @@ const defaultConfig = {
   historyIntervalMs: 4000,
   fallbackMessage: DEFAULT_FALLBACK_MESSAGE,
   autoLifecycle: true,
+  hiddenInactivityTimeoutMs: 45 * 60 * 1000,
   getScrollContainer: () => {
     const layout = document.querySelector('.layout');
     return layout || document.scrollingElement || document.documentElement;
@@ -30,9 +31,11 @@ const state = {
   sessionId: null,
   assistantQueue: Promise.resolve(),
   lifecycleBound: false,
+  hiddenTimeoutHandle: null,
 };
 
 let config = { ...defaultConfig };
+let freshLoad = true;
 
 export function initialiseChat(options = {}) {
   config = { ...defaultConfig, ...options };
@@ -91,15 +94,77 @@ function setupLifecycleListeners() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
   }
   if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', stopHistoryPolling);
+    window.addEventListener('beforeunload', () => {
+      try {
+        sendSessionClosure({ allowBeacon: true });
+      } catch (e) {}
+      stopHistoryPolling();
+    });
   }
   state.lifecycleBound = true;
 }
 
 function handleVisibilityChange() {
   if (!state.chatEnabled) return;
-  if (document.hidden) stopHistoryPolling();
-  else startHistoryPolling();
+  if (document.hidden) {
+    stopHistoryPolling();
+    scheduleHiddenTimeout();
+  } else {
+    clearHiddenTimeout();
+    startHistoryPolling();
+  }
+}
+
+function sendSessionClosure({ allowBeacon = false } = {}) {
+  if (!state.sessionId) return false;
+  const url = `${config.apiBaseUrl}/close`;
+  const payload = JSON.stringify({ session_id: state.sessionId });
+  let sent = false;
+  if (allowBeacon && typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+    try {
+      sent = navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+    } catch (error) {
+      sent = false;
+    }
+  }
+  if (!sent) {
+    try {
+      void fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+        cache: 'no-store',
+      });
+      sent = true;
+    } catch (error) {
+      sent = false;
+    }
+  }
+  return sent;
+}
+
+function scheduleHiddenTimeout() {
+  clearHiddenTimeout();
+  const timeout = Number(config.hiddenInactivityTimeoutMs) || 0;
+  if (!timeout) return;
+  state.hiddenTimeoutHandle = window.setTimeout(() => {
+    state.hiddenTimeoutHandle = null;
+    try {
+      sendSessionClosure({ allowBeacon: false });
+    } finally {
+      try {
+        window.location.reload();
+      } catch (error) {}
+    }
+  }, timeout);
+}
+
+function clearHiddenTimeout() {
+  if (state.hiddenTimeoutHandle) {
+    window.clearTimeout(state.hiddenTimeoutHandle);
+    state.hiddenTimeoutHandle = null;
+  }
 }
 
 function getScrollContainer() {
@@ -430,6 +495,7 @@ async function sendToAssistant(message, clientMessageId) {
       author: 'user',
       content: message,
       locale: navigator.language || 'es-MX',
+      fresh_load: freshLoad === true,
     };
     if (clientMessageId) {
       payload.client_message_id = clientMessageId;
@@ -445,6 +511,7 @@ async function sendToAssistant(message, clientMessageId) {
       throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ''}`);
     }
     const data = await response.json();
+    freshLoad = false;
     const metadata = data?.metadata || {};
     if (!data?.reply && !metadata.manual_mode) {
       throw new Error('Respuesta vacía del asistente');

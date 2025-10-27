@@ -18,6 +18,9 @@ class WebchatMessage(BaseModel):
         description="Identificador único generado por el cliente para prevenir duplicados",
         max_length=120,
     )
+    fresh_load: bool | None = Field(
+        default=None, description="Indica primera petición tras cargar vista"
+    )
 
 
 class WebchatResponse(BaseModel):
@@ -45,3 +48,7 @@ class WebchatHistoryResponse(BaseModel):
     session_id: str
     messages: list[WebchatHistoryItem]
     next_since: str | None = Field(default=None, description="Cursor para seguir consultando")
+
+
+class WebchatClosePayload(BaseModel):
+    session_id: str = Field(..., min_length=4)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -45,6 +46,73 @@ class WebchatStoredMessage:
     direction: str | None = None
     content: str | None = None
     metadata: dict[str, Any] | None = None
+
+
+async def mark_webchat_session_closed(session_id: str) -> None:
+    """Inserta/actualiza marca de cierre para un session_id en webchat_session_closures."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/webchat_session_closures"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation,resolution=merge-duplicates",
+    }
+    payload = {
+        "session_id": session_id,
+        "closed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        raise StorageError(f"Error de red al marcar cierre de sesión: {exc}") from exc
+    if resp.status_code >= 400:
+        raise StorageError(
+            f"Supabase respondió error al marcar cierre de sesión (status={resp.status_code}, body={resp.text!r})"
+        )
+
+
+async def is_webchat_session_recently_closed(session_id: str, within_minutes: int = 10) -> bool:
+    """Devuelve true si existe marca de cierre reciente para session_id."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/webchat_session_closures"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "session_id,closed_at",
+        "session_id": f"eq.{session_id}",
+        "limit": "1",
+        "order": "closed_at.desc",
+    }
+    # Nota: el filtro por ventana de tiempo lo aplicamos del lado del cliente para compatibilidad
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        raise StorageError(f"Error de red al consultar cierre de sesión: {exc}") from exc
+    if resp.status_code >= 400:
+        raise StorageError(
+            f"Supabase respondió error al consultar cierre de sesión (status={resp.status_code}, body={resp.text!r})"
+        )
+    rows = resp.json() or []
+    if not rows:
+        return False
+    from datetime import timedelta
+
+    try:
+        closed_at = rows[0].get("closed_at")
+        ts = datetime.fromisoformat(str(closed_at).replace("Z", "+00:00"))
+        return (datetime.now(timezone.utc) - ts) <= timedelta(minutes=within_minutes)
+    except Exception:
+        return True
 
 
 async def fetch_webchat_conversation_info(conversation_id: str) -> WebchatConversationInfo:

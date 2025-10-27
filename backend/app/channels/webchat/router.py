@@ -3,7 +3,12 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from . import service
-from .schemas import WebchatHistoryResponse, WebchatMessage, WebchatResponse
+from .schemas import (
+    WebchatClosePayload,
+    WebchatHistoryResponse,
+    WebchatMessage,
+    WebchatResponse,
+)
 
 router = APIRouter(prefix="/webchat", tags=["webchat"])
 
@@ -36,3 +41,21 @@ async def receive_webchat_message(message: WebchatMessage, request: Request) -> 
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except service.AssistantServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post(
+    "/close",
+    summary="Cierra la conversación asociada al session_id y resetea contexto",
+)
+async def close_webchat_conversation(payload: WebchatClosePayload) -> dict:
+    session_id = payload.session_id
+    try:
+        await service.close_session_conversation(session_id)
+    except service.AssistantServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@router.get("/close/check")
+async def check_close_endpoint() -> dict:
+    return {"ok": True, "endpoint": "webchat.close"}
