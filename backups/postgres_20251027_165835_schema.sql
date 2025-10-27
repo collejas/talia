@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict N79pNLKe3CW5nNVHYvZ8wV3ALDYRd60yLz4q7r0BcEhqydjmTBdasgl6WAs5bcb
+\restrict OTCsqoJ01mL4eGSIQDhjPTXp0AS4zMtUASAhys5uun7SpGGqXoZjmgnw2W2GMCX
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -298,6 +298,17 @@ CREATE TYPE auth.one_time_token_type AS ENUM (
 CREATE TYPE public.fuente_resultado AS ENUM (
     'google_places',
     'denue'
+);
+
+
+--
+-- Name: lead_categoria; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.lead_categoria AS ENUM (
+    'abierta',
+    'ganada',
+    'perdida'
 );
 
 
@@ -915,6 +926,36 @@ COMMENT ON FUNCTION public.puede_ver_conversacion(p_conversacion_id uuid) IS 'Re
 
 
 --
+-- Name: puede_ver_lead(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.puede_ver_lead(p_tarjeta_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.lead_tarjetas lt
+          JOIN public.contactos ct ON ct.id = lt.contacto_id
+         WHERE lt.id = p_tarjeta_id
+           AND (
+                public.es_admin(auth.uid())
+                OR ct.propietario_usuario_id = auth.uid()
+                OR lt.propietario_usuario_id = auth.uid()
+                OR lt.asignado_a_usuario_id = auth.uid()
+            )
+    );
+$$;
+
+
+--
+-- Name: FUNCTION puede_ver_lead(p_tarjeta_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.puede_ver_lead(p_tarjeta_id uuid) IS 'True cuando el usuario actual es admin, propietario o asignado a la tarjeta.';
+
+
+--
 -- Name: puede_ver_mensaje(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -936,6 +977,34 @@ $$;
 --
 
 COMMENT ON FUNCTION public.puede_ver_mensaje(p_mensaje_id uuid) IS 'Retorna true cuando el mensaje pertenece a una conversación visible para el usuario actual.';
+
+
+--
+-- Name: puede_ver_tablero(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.puede_ver_tablero(p_tablero_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.lead_tableros t
+         WHERE t.id = p_tablero_id
+           AND (
+                public.es_admin(auth.uid())
+                OR t.propietario_usuario_id = auth.uid()
+                OR t.es_default = TRUE
+            )
+    );
+$$;
+
+
+--
+-- Name: FUNCTION puede_ver_tablero(p_tablero_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.puede_ver_tablero(p_tablero_id uuid) IS 'Determina si el usuario actual puede visualizar el tablero especificado.';
 
 
 --
@@ -978,6 +1047,14 @@ BEGIN
         VALUES (v_contact_id, 'webchat', p_session_id, coalesce(p_metadata, '{}'::jsonb));
     END IF;
 
+    IF coalesce(p_author, 'user') = 'user' THEN
+        v_direction := 'entrante';
+        v_estado := 'entregada';
+    ELSE
+        v_direction := 'saliente';
+        v_estado := 'enviada';
+    END IF;
+
     -- Busca conversación abierta reciente (<= v_hours) para continuar el hilo
     SELECT c.id, c.ultimo_mensaje_en, c.conversacion_openai_id
       INTO v_conversacion_id, v_last_activity, v_conv_openai
@@ -997,19 +1074,23 @@ BEGIN
 
     IF v_conversacion_id IS NULL THEN
         INSERT INTO public.conversaciones (
-            contacto_id, canal, estado, iniciada_en, ultimo_mensaje_en, ultimo_entrante_en
+            contacto_id,
+            canal,
+            estado,
+            iniciada_en,
+            ultimo_mensaje_en,
+            ultimo_entrante_en
         )
-        VALUES (v_contact_id, 'webchat', 'abierta', v_now, v_now, v_now)
+        VALUES (
+            v_contact_id,
+            'webchat',
+            'abierta',
+            v_now,
+            v_now,
+            CASE WHEN v_direction = 'entrante' THEN v_now ELSE NULL END
+        )
         RETURNING id INTO v_conversacion_id;
         v_conv_openai := NULL; -- reinicia el id de conversación de OpenAI en nuevo hilo
-    END IF;
-
-    IF coalesce(p_author, 'user') = 'user' THEN
-        v_direction := 'entrante';
-        v_estado := 'entregada';
-    ELSE
-        v_direction := 'saliente';
-        v_estado := 'enviada';
     END IF;
 
     INSERT INTO public.mensajes (
@@ -1076,6 +1157,318 @@ begin
   new.actualizado_en = now();
   return new;
 end;$$;
+
+
+--
+-- Name: tg_conversaciones_auto_tarjeta(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_conversaciones_auto_tarjeta() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_tablero uuid;
+    v_etapa uuid;
+BEGIN
+    IF NEW.estado = 'cerrada' THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.ultimo_entrante_en IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM public.lead_tarjetas lt
+         WHERE lt.conversacion_id = NEW.id
+    ) THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT id INTO v_tablero
+      FROM public.lead_tableros
+     WHERE es_default = TRUE
+     ORDER BY creado_en
+     LIMIT 1;
+
+    IF v_tablero IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT id INTO v_etapa
+      FROM public.lead_etapas
+     WHERE tablero_id = v_tablero
+     ORDER BY orden
+     LIMIT 1;
+
+    IF v_etapa IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    INSERT INTO public.lead_tarjetas (
+        contacto_id,
+        conversacion_id,
+        tablero_id,
+        etapa_id,
+        canal,
+        propietario_usuario_id,
+        asignado_a_usuario_id,
+        fuente,
+        metadata
+    )
+    VALUES (
+        NEW.contacto_id,
+        NEW.id,
+        v_tablero,
+        v_etapa,
+        NEW.canal,
+        NEW.asignado_a_usuario_id,
+        NEW.asignado_a_usuario_id,
+        'asistente',
+        jsonb_build_object('auto', true, 'motivo', 'conversacion_nueva')
+    )
+    ON CONFLICT DO NOTHING;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_conversaciones_auto_tarjeta(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta de lead cuando inicia una conversación con interacción entrante.';
+
+
+--
+-- Name: tg_lead_tarjetas_after_write(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_lead_tarjetas_after_write() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_old_cat public.lead_categoria;
+    v_new_cat public.lead_categoria;
+    v_actor uuid;
+BEGIN
+    v_actor := coalesce(auth.uid(), NEW.asignado_a_usuario_id, NEW.propietario_usuario_id);
+
+    SELECT categoria INTO v_new_cat FROM public.lead_etapas WHERE id = NEW.etapa_id;
+    IF TG_OP = 'UPDATE' THEN
+        SELECT categoria INTO v_old_cat FROM public.lead_etapas WHERE id = OLD.etapa_id;
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO public.lead_movimientos (tarjeta_id, etapa_destino_id, cambiado_por, fuente, metadata)
+        VALUES (NEW.id, NEW.etapa_id, v_actor, coalesce(NEW.fuente, 'api'), jsonb_build_object('evento', 'create'));
+    ELSIF TG_OP = 'UPDATE' AND NEW.etapa_id IS DISTINCT FROM OLD.etapa_id THEN
+        INSERT INTO public.lead_movimientos (tarjeta_id, etapa_origen_id, etapa_destino_id, cambiado_por, fuente, metadata)
+        VALUES (
+            NEW.id,
+            OLD.etapa_id,
+            NEW.etapa_id,
+            v_actor,
+            coalesce(NEW.fuente, 'humano'),
+            jsonb_build_object('evento', 'move')
+        );
+    END IF;
+
+    IF NEW.contacto_id IS NOT NULL THEN
+        IF v_new_cat = 'ganada' THEN
+            UPDATE public.contactos
+               SET estado = 'activo'
+             WHERE id = NEW.contacto_id;
+        ELSIF v_new_cat = 'perdida' THEN
+            UPDATE public.contactos
+               SET estado = 'lead'
+             WHERE id = NEW.contacto_id;
+        ELSIF TG_OP = 'UPDATE' AND v_old_cat IN ('ganada','perdida') AND v_new_cat = 'abierta' THEN
+            UPDATE public.contactos
+               SET estado = 'lead'
+             WHERE id = NEW.contacto_id;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_lead_tarjetas_after_write(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_lead_tarjetas_after_write() IS 'Registra movimientos y sincroniza estados de contacto tras cambios en la tarjeta.';
+
+
+--
+-- Name: tg_lead_tarjetas_before_write(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_lead_tarjetas_before_write() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_default_tablero uuid;
+    v_categoria public.lead_categoria;
+    v_etapa_id uuid;
+    v_conv_canal text;
+    v_conv_asignado uuid;
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        NEW.actualizado_en := now();
+    ELSE
+        IF NEW.creado_en IS NULL THEN
+            NEW.creado_en := now();
+        END IF;
+        NEW.actualizado_en := now();
+    END IF;
+
+    IF NEW.tablero_id IS NULL THEN
+        SELECT id INTO v_default_tablero
+          FROM public.lead_tableros
+         WHERE es_default IS TRUE
+         ORDER BY creado_en
+         LIMIT 1;
+
+        IF v_default_tablero IS NULL THEN
+            RAISE EXCEPTION 'No se encontró tablero por defecto para leads';
+        END IF;
+        NEW.tablero_id := v_default_tablero;
+    END IF;
+
+    IF NEW.etapa_id IS NULL THEN
+        SELECT id INTO v_etapa_id
+          FROM public.lead_etapas
+         WHERE tablero_id = NEW.tablero_id
+         ORDER BY orden
+         LIMIT 1;
+        IF v_etapa_id IS NULL THEN
+            RAISE EXCEPTION 'El tablero % no tiene etapas configuradas', NEW.tablero_id;
+        END IF;
+        NEW.etapa_id := v_etapa_id;
+    END IF;
+
+    IF NEW.propietario_usuario_id IS NULL THEN
+        SELECT propietario_usuario_id INTO NEW.propietario_usuario_id
+          FROM public.contactos
+         WHERE id = NEW.contacto_id;
+    END IF;
+
+    IF NEW.metadata IS NULL THEN
+        NEW.metadata := '{}'::jsonb;
+    END IF;
+
+    IF NEW.fuente IS NULL THEN
+        NEW.fuente := 'api';
+    END IF;
+
+    IF NEW.conversacion_id IS NOT NULL THEN
+        SELECT canal, asignado_a_usuario_id
+          INTO v_conv_canal, v_conv_asignado
+          FROM public.conversaciones
+         WHERE id = NEW.conversacion_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'La conversación % no existe', NEW.conversacion_id;
+        END IF;
+        IF NEW.canal IS NULL THEN
+            NEW.canal := v_conv_canal;
+        END IF;
+        IF NEW.asignado_a_usuario_id IS NULL THEN
+            NEW.asignado_a_usuario_id := v_conv_asignado;
+        END IF;
+    END IF;
+
+    IF NEW.canal IS NULL AND NEW.conversacion_id IS NULL THEN
+        IF NEW.metadata ? 'canal' THEN
+            NEW.canal := NEW.metadata ->> 'canal';
+        END IF;
+    END IF;
+
+    IF NEW.lead_score IS NULL AND NEW.conversacion_id IS NOT NULL THEN
+        SELECT lead_score INTO NEW.lead_score
+          FROM public.conversaciones_insights
+         WHERE conversacion_id = NEW.conversacion_id;
+    END IF;
+
+    SELECT categoria INTO v_categoria
+      FROM public.lead_etapas
+     WHERE id = NEW.etapa_id;
+
+    IF v_categoria IN ('ganada','perdida') THEN
+        IF NEW.cerrado_en IS NULL THEN
+            NEW.cerrado_en := now();
+        END IF;
+    ELSE
+        NEW.cerrado_en := NULL;
+        NEW.motivo_cierre := NULL;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_lead_tarjetas_before_write(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_lead_tarjetas_before_write() IS 'Ajusta valores por defecto y sincroniza datos antes de insertar/actualizar tarjetas.';
+
+
+--
+-- Name: tg_sync_lead_score_from_insights(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_sync_lead_score_from_insights() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    UPDATE public.lead_tarjetas
+       SET lead_score = NEW.lead_score,
+           metadata = metadata || jsonb_build_object('siguiente_accion', NEW.siguiente_accion)
+     WHERE conversacion_id = NEW.conversacion_id;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: tg_touch_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_touch_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.actualizado_en := now();
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_touch_updated_at(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_touch_updated_at() IS 'Actualiza la columna actualizado_en al momento actual.';
+
+
+--
+-- Name: touch_conversaciones_controles_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.touch_conversaciones_controles_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$;
 
 
 --
@@ -3415,6 +3808,17 @@ CREATE TABLE public.conversaciones (
 
 
 --
+-- Name: conversaciones_controles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conversaciones_controles (
+    conversacion_id uuid NOT NULL,
+    manual_override boolean DEFAULT false NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: usuarios; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3525,6 +3929,83 @@ CREATE TABLE public.ejecuciones_asistente (
 
 
 --
+-- Name: lead_tarjetas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_tarjetas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    contacto_id uuid NOT NULL,
+    conversacion_id uuid,
+    tablero_id uuid NOT NULL,
+    etapa_id uuid NOT NULL,
+    canal text,
+    propietario_usuario_id uuid,
+    asignado_a_usuario_id uuid,
+    monto_estimado numeric(12,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    probabilidad_override numeric(5,2),
+    motivo_cierre text,
+    cerrado_en timestamp with time zone,
+    lead_score integer,
+    tags text[],
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    asistido_por text,
+    fuente text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lead_tarjetas_amount_check CHECK (((monto_estimado IS NULL) OR (monto_estimado >= (0)::numeric))),
+    CONSTRAINT lead_tarjetas_canal_check CHECK (((canal IS NULL) OR (canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text, 'api'::text])))),
+    CONSTRAINT lead_tarjetas_fuente_check CHECK (((fuente IS NULL) OR (fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text])))),
+    CONSTRAINT lead_tarjetas_probability_check CHECK (((probabilidad_override IS NULL) OR ((probabilidad_override >= (0)::numeric) AND (probabilidad_override <= (100)::numeric))))
+);
+
+ALTER TABLE ONLY public.lead_tarjetas REPLICA IDENTITY FULL;
+
+
+--
+-- Name: embudo; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.embudo AS
+ SELECT lt.id,
+    lt.tablero_id,
+    lt.etapa_id,
+    lt.contacto_id,
+    ct.nombre_completo AS contacto_nombre,
+    ct.estado AS contacto_estado,
+    ct.telefono_e164 AS contacto_telefono,
+    ct.correo AS contacto_correo,
+    lt.conversacion_id,
+    COALESCE(lt.canal, conv.canal) AS canal,
+    conv.estado AS conversacion_estado,
+    conv.ultimo_mensaje_en,
+    lt.monto_estimado,
+    lt.moneda,
+    lt.probabilidad_override,
+    lt.lead_score,
+    lt.tags,
+    lt.metadata,
+    lt.asignado_a_usuario_id,
+    usr.nombre_completo AS asignado_nombre,
+    lt.propietario_usuario_id,
+    up.nombre_completo AS propietario_nombre,
+    lt.cerrado_en,
+    lt.motivo_cierre,
+    lt.creado_en,
+    lt.actualizado_en,
+    ci.resumen,
+    ci.intencion,
+    ci.sentimiento,
+    ci.siguiente_accion
+   FROM (((((public.lead_tarjetas lt
+     JOIN public.contactos ct ON ((ct.id = lt.contacto_id)))
+     LEFT JOIN public.conversaciones conv ON ((conv.id = lt.conversacion_id)))
+     LEFT JOIN public.conversaciones_insights ci ON ((ci.conversacion_id = lt.conversacion_id)))
+     LEFT JOIN public.usuarios usr ON ((usr.id = lt.asignado_a_usuario_id)))
+     LEFT JOIN public.usuarios up ON ((up.id = lt.propietario_usuario_id)));
+
+
+--
 -- Name: empleados; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3582,6 +4063,85 @@ CREATE TABLE public.identidades_canal (
     metadatos jsonb,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT identidades_canal_canal_check CHECK ((canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text])))
+);
+
+
+--
+-- Name: lead_etapas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_etapas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tablero_id uuid NOT NULL,
+    codigo text NOT NULL,
+    nombre text NOT NULL,
+    orden smallint NOT NULL,
+    categoria public.lead_categoria DEFAULT 'abierta'::public.lead_categoria NOT NULL,
+    probabilidad numeric(5,2),
+    sla_horas integer,
+    metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lead_etapas_probabilidad_check CHECK (((probabilidad IS NULL) OR ((probabilidad >= (0)::numeric) AND (probabilidad <= (100)::numeric)))),
+    CONSTRAINT lead_etapas_sla_check CHECK (((sla_horas IS NULL) OR (sla_horas >= 0)))
+);
+
+
+--
+-- Name: lead_movimientos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_movimientos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tarjeta_id uuid NOT NULL,
+    etapa_origen_id uuid,
+    etapa_destino_id uuid NOT NULL,
+    cambiado_por uuid,
+    cambiado_en timestamp with time zone DEFAULT now() NOT NULL,
+    motivo text,
+    fuente text DEFAULT 'humano'::text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT lead_movimientos_fuente_check CHECK ((fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text])))
+);
+
+ALTER TABLE ONLY public.lead_movimientos REPLICA IDENTITY FULL;
+
+
+--
+-- Name: lead_recordatorios; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_recordatorios (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tarjeta_id uuid NOT NULL,
+    descripcion text NOT NULL,
+    due_at timestamp with time zone NOT NULL,
+    creado_por uuid NOT NULL,
+    completado boolean DEFAULT false NOT NULL,
+    completado_en timestamp with time zone,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.lead_recordatorios REPLICA IDENTITY FULL;
+
+
+--
+-- Name: lead_tableros; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_tableros (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    nombre text NOT NULL,
+    slug text NOT NULL,
+    descripcion text,
+    departamento_id uuid,
+    propietario_usuario_id uuid,
+    es_default boolean DEFAULT false NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -3841,6 +4401,16 @@ CREATE VIEW public.v_resultados_unificados AS
 
 
 --
+-- Name: webchat_session_closures; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.webchat_session_closures (
+    session_id text NOT NULL,
+    closed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: webhooks_entrantes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3870,6 +4440,118 @@ CREATE TABLE realtime.messages (
     id uuid DEFAULT gen_random_uuid() NOT NULL
 )
 PARTITION BY RANGE (inserted_at);
+
+
+--
+-- Name: messages_2025_10_24; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_24 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_25; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_25 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_26; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_26 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_27; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_27 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_28; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_28 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_29; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_29 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_30; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_30 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
 
 
 --
@@ -4057,6 +4739,55 @@ CREATE TABLE supabase_migrations.seed_files (
     path text NOT NULL,
     hash text NOT NULL
 );
+
+
+--
+-- Name: messages_2025_10_24; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_24 FOR VALUES FROM ('2025-10-24 00:00:00') TO ('2025-10-25 00:00:00');
+
+
+--
+-- Name: messages_2025_10_25; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_25 FOR VALUES FROM ('2025-10-25 00:00:00') TO ('2025-10-26 00:00:00');
+
+
+--
+-- Name: messages_2025_10_26; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_26 FOR VALUES FROM ('2025-10-26 00:00:00') TO ('2025-10-27 00:00:00');
+
+
+--
+-- Name: messages_2025_10_27; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_27 FOR VALUES FROM ('2025-10-27 00:00:00') TO ('2025-10-28 00:00:00');
+
+
+--
+-- Name: messages_2025_10_28; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_28 FOR VALUES FROM ('2025-10-28 00:00:00') TO ('2025-10-29 00:00:00');
+
+
+--
+-- Name: messages_2025_10_29; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_29 FOR VALUES FROM ('2025-10-29 00:00:00') TO ('2025-10-30 00:00:00');
+
+
+--
+-- Name: messages_2025_10_30; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_30 FOR VALUES FROM ('2025-10-30 00:00:00') TO ('2025-10-31 00:00:00');
 
 
 --
@@ -4363,6 +5094,14 @@ ALTER TABLE ONLY public.contactos
 
 
 --
+-- Name: conversaciones_controles conversaciones_controles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversaciones_controles
+    ADD CONSTRAINT conversaciones_controles_pkey PRIMARY KEY (conversacion_id);
+
+
+--
 -- Name: conversaciones_insights conversaciones_insights_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4440,6 +5179,78 @@ ALTER TABLE ONLY public.eventos_entrega
 
 ALTER TABLE ONLY public.eventos_auditoria
     ADD CONSTRAINT events_audit_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lead_etapas lead_etapas_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_etapas
+    ADD CONSTRAINT lead_etapas_codigo_unique UNIQUE (tablero_id, codigo);
+
+
+--
+-- Name: lead_etapas lead_etapas_orden_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_etapas
+    ADD CONSTRAINT lead_etapas_orden_unique UNIQUE (tablero_id, orden);
+
+
+--
+-- Name: lead_etapas lead_etapas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_etapas
+    ADD CONSTRAINT lead_etapas_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lead_movimientos lead_movimientos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_movimientos
+    ADD CONSTRAINT lead_movimientos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lead_recordatorios lead_recordatorios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_recordatorios
+    ADD CONSTRAINT lead_recordatorios_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lead_tableros lead_tableros_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tableros
+    ADD CONSTRAINT lead_tableros_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lead_tableros lead_tableros_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tableros
+    ADD CONSTRAINT lead_tableros_slug_key UNIQUE (slug);
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_contacto_tablero_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_contacto_tablero_key UNIQUE (contacto_id, tablero_id);
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_pkey PRIMARY KEY (id);
 
 
 --
@@ -4579,6 +5390,14 @@ ALTER TABLE ONLY public.resultados
 
 
 --
+-- Name: webchat_session_closures webchat_session_closures_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.webchat_session_closures
+    ADD CONSTRAINT webchat_session_closures_pkey PRIMARY KEY (session_id);
+
+
+--
 -- Name: webhooks_entrantes webhooks_incoming_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4592,6 +5411,62 @@ ALTER TABLE ONLY public.webhooks_entrantes
 
 ALTER TABLE ONLY realtime.messages
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_24 messages_2025_10_24_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_24
+    ADD CONSTRAINT messages_2025_10_24_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_25 messages_2025_10_25_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_25
+    ADD CONSTRAINT messages_2025_10_25_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_26 messages_2025_10_26_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_26
+    ADD CONSTRAINT messages_2025_10_26_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_27 messages_2025_10_27_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_27
+    ADD CONSTRAINT messages_2025_10_27_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_28 messages_2025_10_28_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_28
+    ADD CONSTRAINT messages_2025_10_28_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_29 messages_2025_10_29_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_29
+    ADD CONSTRAINT messages_2025_10_29_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_30 messages_2025_10_30_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_30
+    ADD CONSTRAINT messages_2025_10_30_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
@@ -5160,6 +6035,13 @@ CREATE INDEX idx_user_roles_user ON public.usuarios_roles USING btree (usuario_i
 
 
 --
+-- Name: idx_webchat_session_closures_closed_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_webchat_session_closures_closed_at ON public.webchat_session_closures USING btree (closed_at);
+
+
+--
 -- Name: idx_webhooks_incoming_channel_time; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5216,6 +6098,55 @@ CREATE INDEX ix_resultados_tsv ON public.resultados USING gin (tsv);
 
 
 --
+-- Name: lead_etapas_tablero_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_etapas_tablero_idx ON public.lead_etapas USING btree (tablero_id, orden);
+
+
+--
+-- Name: lead_movimientos_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_movimientos_tarjeta_idx ON public.lead_movimientos USING btree (tarjeta_id, cambiado_en DESC);
+
+
+--
+-- Name: lead_recordatorios_due_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_recordatorios_due_idx ON public.lead_recordatorios USING btree (due_at, completado);
+
+
+--
+-- Name: lead_tarjetas_asignado_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjetas_asignado_idx ON public.lead_tarjetas USING btree (asignado_a_usuario_id);
+
+
+--
+-- Name: lead_tarjetas_categoria_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjetas_categoria_idx ON public.lead_tarjetas USING btree (((metadata ->> 'categoria'::text)));
+
+
+--
+-- Name: lead_tarjetas_conversacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjetas_conversacion_idx ON public.lead_tarjetas USING btree (conversacion_id);
+
+
+--
+-- Name: lead_tarjetas_tablero_etapa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjetas_tablero_etapa_idx ON public.lead_tarjetas USING btree (tablero_id, etapa_id);
+
+
+--
 -- Name: prompt_bindings_agente_activo_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5262,6 +6193,55 @@ CREATE INDEX ix_realtime_subscription_entity ON realtime.subscription USING btre
 --
 
 CREATE INDEX messages_inserted_at_topic_index ON ONLY realtime.messages USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_24_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_24_inserted_at_topic_idx ON realtime.messages_2025_10_24 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_25_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_25_inserted_at_topic_idx ON realtime.messages_2025_10_25 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_26_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_26_inserted_at_topic_idx ON realtime.messages_2025_10_26 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_27_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_27_inserted_at_topic_idx ON realtime.messages_2025_10_27 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_28_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_28_inserted_at_topic_idx ON realtime.messages_2025_10_28 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_29_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_29_inserted_at_topic_idx ON realtime.messages_2025_10_29 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_30_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_30_inserted_at_topic_idx ON realtime.messages_2025_10_30 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
@@ -5335,10 +6315,157 @@ CREATE UNIQUE INDEX objects_bucket_id_level_idx ON storage.objects USING btree (
 
 
 --
+-- Name: messages_2025_10_24_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_24_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_24_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_24_pkey;
+
+
+--
+-- Name: messages_2025_10_25_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_25_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_25_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_25_pkey;
+
+
+--
+-- Name: messages_2025_10_26_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_26_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_26_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_26_pkey;
+
+
+--
+-- Name: messages_2025_10_27_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_27_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_27_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_27_pkey;
+
+
+--
+-- Name: messages_2025_10_28_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_28_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_28_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_28_pkey;
+
+
+--
+-- Name: messages_2025_10_29_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_29_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_29_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_29_pkey;
+
+
+--
+-- Name: messages_2025_10_30_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_30_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_30_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_30_pkey;
+
+
+--
 -- Name: users on_auth_user_created; Type: TRIGGER; Schema: auth; Owner: -
 --
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.manejar_usuario_auth_nuevo();
+
+
+--
+-- Name: conversaciones conversaciones_auto_tarjeta; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conversaciones_auto_tarjeta AFTER INSERT ON public.conversaciones FOR EACH ROW EXECUTE FUNCTION public.tg_conversaciones_auto_tarjeta();
+
+
+--
+-- Name: lead_etapas lead_etapas_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_etapas_touch_updated_at BEFORE UPDATE ON public.lead_etapas FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: lead_recordatorios lead_recordatorios_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_recordatorios_touch_updated_at BEFORE UPDATE ON public.lead_recordatorios FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: lead_tableros lead_tableros_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_tableros_touch_updated_at BEFORE UPDATE ON public.lead_tableros FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_after_write; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_tarjetas_after_write AFTER INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_after_write();
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_before_write; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_tarjetas_before_write BEFORE INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_before_write();
+
+
+--
+-- Name: conversaciones_insights lead_tarjetas_sync_from_insights; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_tarjetas_sync_from_insights AFTER INSERT OR UPDATE ON public.conversaciones_insights FOR EACH ROW EXECUTE FUNCTION public.tg_sync_lead_score_from_insights();
 
 
 --
@@ -5367,6 +6494,13 @@ CREATE TRIGGER tg_resultados_set_geom BEFORE INSERT OR UPDATE OF lat, lng ON pub
 --
 
 CREATE TRIGGER tg_resultados_set_tsv BEFORE INSERT OR UPDATE OF name, actividad, address ON public.resultados FOR EACH ROW EXECUTE FUNCTION public.trg_resultados_set_tsv();
+
+
+--
+-- Name: conversaciones_controles trg_conversaciones_controles_touch; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_conversaciones_controles_touch BEFORE UPDATE ON public.conversaciones_controles FOR EACH ROW EXECUTE FUNCTION public.touch_conversaciones_controles_updated_at();
 
 
 --
@@ -5593,6 +6727,14 @@ ALTER TABLE ONLY public.contactos
 
 
 --
+-- Name: conversaciones_controles conversaciones_controles_conversacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversaciones_controles
+    ADD CONSTRAINT conversaciones_controles_conversacion_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conversaciones_insights conversaciones_insights_conversacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5678,6 +6820,126 @@ ALTER TABLE ONLY public.eventos_entrega
 
 ALTER TABLE ONLY public.eventos_auditoria
     ADD CONSTRAINT events_audit_actor_user_id_fkey FOREIGN KEY (actor_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_etapas lead_etapas_tablero_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_etapas
+    ADD CONSTRAINT lead_etapas_tablero_id_fkey FOREIGN KEY (tablero_id) REFERENCES public.lead_tableros(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lead_movimientos lead_movimientos_cambiado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_movimientos
+    ADD CONSTRAINT lead_movimientos_cambiado_por_fkey FOREIGN KEY (cambiado_por) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_movimientos lead_movimientos_etapa_destino_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_movimientos
+    ADD CONSTRAINT lead_movimientos_etapa_destino_id_fkey FOREIGN KEY (etapa_destino_id) REFERENCES public.lead_etapas(id);
+
+
+--
+-- Name: lead_movimientos lead_movimientos_etapa_origen_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_movimientos
+    ADD CONSTRAINT lead_movimientos_etapa_origen_id_fkey FOREIGN KEY (etapa_origen_id) REFERENCES public.lead_etapas(id);
+
+
+--
+-- Name: lead_movimientos lead_movimientos_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_movimientos
+    ADD CONSTRAINT lead_movimientos_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lead_recordatorios lead_recordatorios_creado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_recordatorios
+    ADD CONSTRAINT lead_recordatorios_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuarios(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lead_recordatorios lead_recordatorios_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_recordatorios
+    ADD CONSTRAINT lead_recordatorios_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lead_tableros lead_tableros_departamento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tableros
+    ADD CONSTRAINT lead_tableros_departamento_id_fkey FOREIGN KEY (departamento_id) REFERENCES public.departamentos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tableros lead_tableros_propietario_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tableros
+    ADD CONSTRAINT lead_tableros_propietario_usuario_id_fkey FOREIGN KEY (propietario_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_asignado_a_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_asignado_a_usuario_id_fkey FOREIGN KEY (asignado_a_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_conversacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_conversacion_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_etapa_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_etapa_id_fkey FOREIGN KEY (etapa_id) REFERENCES public.lead_etapas(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_propietario_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_propietario_usuario_id_fkey FOREIGN KEY (propietario_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_tablero_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_tablero_id_fkey FOREIGN KEY (tablero_id) REFERENCES public.lead_tableros(id) ON DELETE CASCADE;
 
 
 --
@@ -5973,6 +7235,19 @@ CREATE POLICY conversaciones_admin_todo ON public.conversaciones USING (public.e
 
 
 --
+-- Name: conversaciones_controles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conversaciones_controles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conversaciones_controles conversaciones_controles_service_role; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conversaciones_controles_service_role ON public.conversaciones_controles TO service_role USING (true) WITH CHECK (true);
+
+
+--
 -- Name: conversaciones_insights; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6159,6 +7434,129 @@ CREATE POLICY identidades_canal_admin_todo ON public.identidades_canal USING (pu
 
 
 --
+-- Name: lead_etapas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_etapas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_etapas lead_etapas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_etapas_admin_all ON public.lead_etapas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_etapas lead_etapas_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_etapas_select ON public.lead_etapas FOR SELECT TO authenticated USING (public.puede_ver_tablero(tablero_id));
+
+
+--
+-- Name: lead_movimientos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_movimientos ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_movimientos lead_movimientos_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_movimientos_admin_all ON public.lead_movimientos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_movimientos lead_movimientos_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_movimientos_select ON public.lead_movimientos FOR SELECT TO authenticated USING (public.puede_ver_lead(tarjeta_id));
+
+
+--
+-- Name: lead_recordatorios; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_recordatorios ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_recordatorios lead_recordatorios_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_recordatorios_admin_all ON public.lead_recordatorios USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_recordatorios lead_recordatorios_crud; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_recordatorios_crud ON public.lead_recordatorios TO authenticated USING (public.puede_ver_lead(tarjeta_id)) WITH CHECK (public.puede_ver_lead(tarjeta_id));
+
+
+--
+-- Name: lead_tableros; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_tableros ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_tableros lead_tableros_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tableros_admin_all ON public.lead_tableros USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_tableros lead_tableros_select_default; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tableros_select_default ON public.lead_tableros FOR SELECT TO authenticated USING (public.puede_ver_tablero(id));
+
+
+--
+-- Name: lead_tarjetas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_tarjetas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_tarjetas lead_tarjetas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjetas_admin_all ON public.lead_tarjetas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_member_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjetas_member_delete ON public.lead_tarjetas FOR DELETE TO authenticated USING (public.puede_ver_lead(id));
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_member_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjetas_member_insert ON public.lead_tarjetas FOR INSERT TO authenticated WITH CHECK ((public.es_admin(auth.uid()) OR (auth.uid() = propietario_usuario_id) OR (auth.uid() = asignado_a_usuario_id) OR (EXISTS ( SELECT 1
+   FROM public.contactos ct
+  WHERE ((ct.id = lead_tarjetas.contacto_id) AND (ct.propietario_usuario_id = auth.uid()))))));
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_member_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjetas_member_select ON public.lead_tarjetas FOR SELECT TO authenticated USING (public.puede_ver_lead(id));
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_member_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjetas_member_update ON public.lead_tarjetas FOR UPDATE TO authenticated USING (public.puede_ver_lead(id)) WITH CHECK (public.puede_ver_lead(id));
+
+
+--
 -- Name: llamadas; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6339,6 +7737,19 @@ CREATE POLICY usuarios_self_update ON public.usuarios FOR UPDATE USING (((id = a
 
 
 --
+-- Name: webchat_session_closures; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.webchat_session_closures ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: webchat_session_closures webchat_session_closures_service_role; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY webchat_session_closures_service_role ON public.webchat_session_closures TO service_role USING (true) WITH CHECK (true);
+
+
+--
 -- Name: webhooks_entrantes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6407,6 +7818,20 @@ CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, tr
 
 
 --
+-- Name: supabase_realtime_messages_publication; Type: PUBLICATION; Schema: -; Owner: -
+--
+
+CREATE PUBLICATION supabase_realtime_messages_publication WITH (publish = 'insert, update, delete, truncate');
+
+
+--
+-- Name: supabase_realtime_messages_publication messages; Type: PUBLICATION TABLE; Schema: realtime; Owner: -
+--
+
+ALTER PUBLICATION supabase_realtime_messages_publication ADD TABLE ONLY realtime.messages;
+
+
+--
 -- Name: issue_graphql_placeholder; Type: EVENT TRIGGER; Schema: -; Owner: -
 --
 
@@ -6462,5 +7887,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict N79pNLKe3CW5nNVHYvZ8wV3ALDYRd60yLz4q7r0BcEhqydjmTBdasgl6WAs5bcb
+\unrestrict OTCsqoJ01mL4eGSIQDhjPTXp0AS4zMtUASAhys5uun7SpGGqXoZjmgnw2W2GMCX
 

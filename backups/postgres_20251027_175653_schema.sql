@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KngbSnC8axmSVW9UCravON1V0U0tHFFMsv6PExsK95iT2r2GKjstPqcLMqiMKQT
+\restrict ibJULDmEZSTU9cftsQkyjIeoMe7lCMxdgjPFtlMb3TGCyhHzZgemQwRxgI7sIhX
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -1047,6 +1047,14 @@ BEGIN
         VALUES (v_contact_id, 'webchat', p_session_id, coalesce(p_metadata, '{}'::jsonb));
     END IF;
 
+    IF coalesce(p_author, 'user') = 'user' THEN
+        v_direction := 'entrante';
+        v_estado := 'entregada';
+    ELSE
+        v_direction := 'saliente';
+        v_estado := 'enviada';
+    END IF;
+
     -- Busca conversación abierta reciente (<= v_hours) para continuar el hilo
     SELECT c.id, c.ultimo_mensaje_en, c.conversacion_openai_id
       INTO v_conversacion_id, v_last_activity, v_conv_openai
@@ -1066,19 +1074,23 @@ BEGIN
 
     IF v_conversacion_id IS NULL THEN
         INSERT INTO public.conversaciones (
-            contacto_id, canal, estado, iniciada_en, ultimo_mensaje_en, ultimo_entrante_en
+            contacto_id,
+            canal,
+            estado,
+            iniciada_en,
+            ultimo_mensaje_en,
+            ultimo_entrante_en
         )
-        VALUES (v_contact_id, 'webchat', 'abierta', v_now, v_now, v_now)
+        VALUES (
+            v_contact_id,
+            'webchat',
+            'abierta',
+            v_now,
+            v_now,
+            CASE WHEN v_direction = 'entrante' THEN v_now ELSE NULL END
+        )
         RETURNING id INTO v_conversacion_id;
         v_conv_openai := NULL; -- reinicia el id de conversación de OpenAI en nuevo hilo
-    END IF;
-
-    IF coalesce(p_author, 'user') = 'user' THEN
-        v_direction := 'entrante';
-        v_estado := 'entregada';
-    ELSE
-        v_direction := 'saliente';
-        v_estado := 'enviada';
     END IF;
 
     INSERT INTO public.mensajes (
@@ -1162,6 +1174,10 @@ BEGIN
         RETURN NEW;
     END IF;
 
+    IF NEW.ultimo_entrante_en IS NULL THEN
+        RETURN NEW;
+    END IF;
+
     IF EXISTS (
         SELECT 1
           FROM public.lead_tarjetas lt
@@ -1223,7 +1239,7 @@ $$;
 -- Name: FUNCTION tg_conversaciones_auto_tarjeta(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta de lead cuando inicia una conversación ligada a un lead.';
+COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta de lead cuando inicia una conversación con interacción entrante.';
 
 
 --
@@ -3763,6 +3779,9 @@ CREATE TABLE public.contactos (
     estado text DEFAULT 'lead'::text NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     contacto_datos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    company_name text,
+    notes text,
+    necesidad_proposito text,
     CONSTRAINT contactos_estado_check CHECK ((estado = ANY (ARRAY['lead'::text, 'activo'::text, 'bloqueado'::text])))
 );
 
@@ -4385,6 +4404,16 @@ CREATE VIEW public.v_resultados_unificados AS
 
 
 --
+-- Name: webchat_session_closures; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.webchat_session_closures (
+    session_id text NOT NULL,
+    closed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: webhooks_entrantes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4414,22 +4443,6 @@ CREATE TABLE realtime.messages (
     id uuid DEFAULT gen_random_uuid() NOT NULL
 )
 PARTITION BY RANGE (inserted_at);
-
-
---
--- Name: messages_2025_10_23; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.messages_2025_10_23 (
-    topic text NOT NULL,
-    extension text NOT NULL,
-    payload jsonb,
-    event text,
-    private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-);
 
 
 --
@@ -4517,6 +4530,22 @@ CREATE TABLE realtime.messages_2025_10_28 (
 --
 
 CREATE TABLE realtime.messages_2025_10_29 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_10_30; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_10_30 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -4716,13 +4745,6 @@ CREATE TABLE supabase_migrations.seed_files (
 
 
 --
--- Name: messages_2025_10_23; Type: TABLE ATTACH; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_23 FOR VALUES FROM ('2025-10-23 00:00:00') TO ('2025-10-24 00:00:00');
-
-
---
 -- Name: messages_2025_10_24; Type: TABLE ATTACH; Schema: realtime; Owner: -
 --
 
@@ -4762,6 +4784,13 @@ ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_28
 --
 
 ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_29 FOR VALUES FROM ('2025-10-29 00:00:00') TO ('2025-10-30 00:00:00');
+
+
+--
+-- Name: messages_2025_10_30; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_30 FOR VALUES FROM ('2025-10-30 00:00:00') TO ('2025-10-31 00:00:00');
 
 
 --
@@ -5364,6 +5393,14 @@ ALTER TABLE ONLY public.resultados
 
 
 --
+-- Name: webchat_session_closures webchat_session_closures_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.webchat_session_closures
+    ADD CONSTRAINT webchat_session_closures_pkey PRIMARY KEY (session_id);
+
+
+--
 -- Name: webhooks_entrantes webhooks_incoming_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5377,14 +5414,6 @@ ALTER TABLE ONLY public.webhooks_entrantes
 
 ALTER TABLE ONLY realtime.messages
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id, inserted_at);
-
-
---
--- Name: messages_2025_10_23 messages_2025_10_23_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages_2025_10_23
-    ADD CONSTRAINT messages_2025_10_23_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
@@ -5433,6 +5462,14 @@ ALTER TABLE ONLY realtime.messages_2025_10_28
 
 ALTER TABLE ONLY realtime.messages_2025_10_29
     ADD CONSTRAINT messages_2025_10_29_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_10_30 messages_2025_10_30_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_10_30
+    ADD CONSTRAINT messages_2025_10_30_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
@@ -6001,6 +6038,13 @@ CREATE INDEX idx_user_roles_user ON public.usuarios_roles USING btree (usuario_i
 
 
 --
+-- Name: idx_webchat_session_closures_closed_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_webchat_session_closures_closed_at ON public.webchat_session_closures USING btree (closed_at);
+
+
+--
 -- Name: idx_webhooks_incoming_channel_time; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6155,13 +6199,6 @@ CREATE INDEX messages_inserted_at_topic_index ON ONLY realtime.messages USING bt
 
 
 --
--- Name: messages_2025_10_23_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
---
-
-CREATE INDEX messages_2025_10_23_inserted_at_topic_idx ON realtime.messages_2025_10_23 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
 -- Name: messages_2025_10_24_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
 --
 
@@ -6201,6 +6238,13 @@ CREATE INDEX messages_2025_10_28_inserted_at_topic_idx ON realtime.messages_2025
 --
 
 CREATE INDEX messages_2025_10_29_inserted_at_topic_idx ON realtime.messages_2025_10_29 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_10_30_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_10_30_inserted_at_topic_idx ON realtime.messages_2025_10_30 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
@@ -6271,20 +6315,6 @@ CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_patter
 --
 
 CREATE UNIQUE INDEX objects_bucket_id_level_idx ON storage.objects USING btree (bucket_id, level, name COLLATE "C");
-
-
---
--- Name: messages_2025_10_23_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_23_inserted_at_topic_idx;
-
-
---
--- Name: messages_2025_10_23_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_23_pkey;
 
 
 --
@@ -6369,6 +6399,20 @@ ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.
 --
 
 ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_29_pkey;
+
+
+--
+-- Name: messages_2025_10_30_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_30_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_10_30_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_30_pkey;
 
 
 --
@@ -7696,6 +7740,19 @@ CREATE POLICY usuarios_self_update ON public.usuarios FOR UPDATE USING (((id = a
 
 
 --
+-- Name: webchat_session_closures; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.webchat_session_closures ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: webchat_session_closures webchat_session_closures_service_role; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY webchat_session_closures_service_role ON public.webchat_session_closures TO service_role USING (true) WITH CHECK (true);
+
+
+--
 -- Name: webhooks_entrantes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -7833,5 +7890,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KngbSnC8axmSVW9UCravON1V0U0tHFFMsv6PExsK95iT2r2GKjstPqcLMqiMKQT
+\unrestrict ibJULDmEZSTU9cftsQkyjIeoMe7lCMxdgjPFtlMb3TGCyhHzZgemQwRxgI7sIhX
 

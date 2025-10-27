@@ -457,7 +457,7 @@ async def get_inbox(
     # Consultamos desde conversaciones para poder incluir el último mensaje y datos del contacto.
     select = (
         "id,canal,estado,prioridad,iniciada_en,ultimo_mensaje_en,no_leidos,"
-        "contacto:contactos(nombre_completo,telefono_e164,correo),"
+        "contacto:contactos(nombre_completo,telefono_e164,correo,company_name,notes,necesidad_proposito),"
         "ultimo_mensaje:mensajes!conversaciones_ultimo_mensaje_fk(texto,direccion,creado_en)"
     )
     params: dict[str, str] = {
@@ -501,6 +501,9 @@ async def get_inbox(
                 "contacto_nombre": contacto.get("nombre_completo"),
                 "contacto_correo": contacto.get("correo"),
                 "contacto_telefono": contacto.get("telefono_e164"),
+                "contacto_empresa": contacto.get("company_name"),
+                "contacto_notas": contacto.get("notes"),
+                "contacto_necesidad_proposito": contacto.get("necesidad_proposito"),
                 "preview": (ultimo.get("texto") or "")[:160],
                 "preview_direccion": ultimo.get("direccion"),
                 "preview_ts": ultimo.get("creado_en"),
@@ -742,7 +745,10 @@ def _parse_embudo_channels(raw: str | None) -> list[str] | None:
 
 async def _fetch_contact_locations(token: str, channels: list[str]) -> list[ContactLocation]:
     params = {
-        "select": "canal,contacto_id,metadatos,contacto:contactos(id,telefono_e164,contacto_datos)",
+        "select": (
+            "canal,contacto_id,metadatos,"
+            "contacto:contactos(id,telefono_e164,company_name,notes,necesidad_proposito,contacto_datos)"
+        ),
         "limit": "20000",
     }
     if len(channels) == 1:
@@ -773,6 +779,10 @@ async def _fetch_contact_locations(token: str, channels: list[str]) -> list[Cont
             entry["contacto"] = {
                 "telefono_e164": telefono,
                 "contacto_datos": datos,
+                "company_name": contacto.get("company_name") or existing.get("company_name"),
+                "notes": contacto.get("notes") or existing.get("notes"),
+                "necesidad_proposito": contacto.get("necesidad_proposito")
+                or existing.get("necesidad_proposito"),
             }
         entry["channels"].add(channel)
         metadata = row.get("metadatos")
@@ -991,6 +1001,9 @@ def _serialize_card(
         "estado": card.get("contacto_estado"),
         "telefono": card.get("contacto_telefono"),
         "correo": card.get("contacto_correo"),
+        "empresa": card.get("contacto_empresa"),
+        "notas": card.get("contacto_notas"),
+        "necesidad_proposito": card.get("contacto_necesidad_proposito"),
     }
     conversacion = {
         "id": card.get("conversacion_id"),
@@ -1063,7 +1076,7 @@ async def _fetch_webchat_visit_cards(
     params = {
         "select": (
             "id,contacto_id,canal,estado,iniciada_en,ultimo_mensaje_en,"
-            "contacto:contactos(id,nombre_completo,correo,telefono_e164,contacto_datos)"
+            "contacto:contactos(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,contacto_datos)"
         ),
         "canal": "eq.webchat",
         "order": "ultimo_mensaje_en.desc",
@@ -1138,6 +1151,9 @@ async def _fetch_webchat_visit_cards(
                 "estado": None,
                 "telefono": contact.get("telefono_e164"),
                 "correo": contact.get("correo"),
+                "empresa": contact.get("company_name"),
+                "notas": contact.get("notes"),
+                "necesidad_proposito": contact.get("necesidad_proposito"),
             },
             "conversacion": {
                 "id": conv_id,

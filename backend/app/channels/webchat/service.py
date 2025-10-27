@@ -67,6 +67,10 @@ REGISTER_LEAD_TOOL: list[dict[str, Any]] = [
                         "type": "string",
                         "description": "Notas adicionales relevantes sobre el cliente.",
                     },
+                    "necesidad_proposito": {
+                        "type": "string",
+                        "description": "Necesidad principal o propósito mencionado por el prospecto.",
+                    },
                 },
                 "required": [
                     "full_name",
@@ -975,6 +979,7 @@ async def _process_lead_capture_tool(
     phone_raw = (args.get("phone_number") or "").strip()
     company = (args.get("company_name") or "").strip()
     notes = (args.get("notes") or "").strip()
+    purpose = (args.get("necesidad_proposito") or "").strip()
 
     # Reglas: exigir al menos un dato de contacto (correo o teléfono)
     has_email = bool(email_raw)
@@ -1003,6 +1008,8 @@ async def _process_lead_capture_tool(
     merged_datos = dict(contacto_datos)
     if company:
         merged_datos["company_name"] = company
+    if purpose:
+        merged_datos["necesidad_proposito"] = purpose
     merged_datos["lead_capture_source"] = merged_datos.get("lead_capture_source") or "webchat"
     merged_datos["lead_capture_completed_at"] = datetime.now(timezone.utc).isoformat()
     merged_datos["lead_registered_by"] = "webchat"
@@ -1024,6 +1031,12 @@ async def _process_lead_capture_tool(
         patch["telefono_e164"] = phone_raw
     if company and not contact.get("origen"):
         patch.setdefault("origen", "webchat")
+    if company:
+        patch["company_name"] = company
+    if notes:
+        patch["notes"] = notes
+    if purpose:
+        patch["necesidad_proposito"] = purpose
 
     log_event(
         logger,
@@ -1052,7 +1065,9 @@ async def _process_lead_capture_tool(
             metadata={
                 key: value
                 for key, value in {
-                    "empresa": company or merged_datos.get("company_name"),
+                    "empresa": company
+                    or contact.get("company_name")
+                    or merged_datos.get("company_name"),
                     "lead_capture_completed": True,
                     "lead_email": email or None,
                     "lead_phone": sanitized_phone or phone_raw or None,
@@ -1076,7 +1091,9 @@ async def _process_lead_capture_tool(
                 "nombre_completo": full_name or contact.get("nombre_completo"),
                 "correo": email or contact.get("correo"),
                 "telefono_e164": sanitized_phone or phone_raw or contact.get("telefono_e164"),
-                "company_name": company or merged_datos.get("company_name"),
+                "company_name": company or contact.get("company_name"),
+                "notes": notes or contact.get("notes"),
+                "necesidad_proposito": purpose or contact.get("necesidad_proposito"),
             }.items()
             if value
         },

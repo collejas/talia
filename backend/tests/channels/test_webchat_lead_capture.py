@@ -67,6 +67,7 @@ async def test_process_lead_capture_success_with_email_only(
     assert patch["nombre_completo"] == "Ana Cliente"
     assert patch["correo"] == "ana@example.com"
     assert patch["contacto_datos"]["company_name"] == "Ejemplo SA"
+    assert patch["company_name"] == "Ejemplo SA"
     # No teléfono disponible, no se debe crear metadata lead_phone
     ensure_kwargs = calls["ensure_card"]
     assert ensure_kwargs["conversation_id"] == "00000000-0000-0000-0000-000000000001"

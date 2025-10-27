@@ -23,7 +23,11 @@
       },
       "notes": {
         "type": "string",
-        "description": "Notas adicionales relevantes."
+        "description": "Resumen breve generado por la asistente con los puntos clave de la conversación."
+      },
+      "necesidad_proposito": {
+        "type": "string",
+        "description": "Necesidad o propósito inferido por la asistente a partir del contexto conversado."
       }
     },
     "required": [
@@ -32,6 +36,7 @@
       "phone_number",
       "company_name",
       "notes"
+      "necesidad_proposito"
     ],
     "additionalProperties": false
   }

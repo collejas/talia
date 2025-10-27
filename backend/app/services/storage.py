@@ -651,7 +651,10 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
         "Accept": "application/json",
     }
     params = {
-        "select": "id,nombre_completo,correo,telefono_e164,contacto_datos",
+        "select": (
+            "id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,"
+            "contacto_datos"
+        ),
         "id": f"eq.{contact_id}",
         "limit": "1",
     }
