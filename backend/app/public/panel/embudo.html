@@ -43,6 +43,25 @@
               <option value="api">API</option>
             </select>
           </label>
+          <label class="map-control">
+            <span>Período</span>
+            <select id="embudo-period-select" class="btn btn-outline" aria-label="Seleccionar período">
+              <option value="hoy">Hoy</option>
+              <option value="semana">Última semana</option>
+              <option value="quincena">Última quincena</option>
+              <option value="mes">Último mes</option>
+              <option value="ano">Último año</option>
+              <option value="fechas">Fechas personalizadas</option>
+            </select>
+          </label>
+          <div class="map-control embudo-custom-dates embudo-hidden" id="embudo-custom-dates" aria-label="Seleccionar rango de fechas">
+            <span>Fechas</span>
+            <div class="embudo-date-range">
+              <input id="embudo-date-from" type="date" class="btn btn-outline" aria-label="Desde" />
+              <span class="embudo-date-sep">→</span>
+              <input id="embudo-date-to" type="date" class="btn btn-outline" aria-label="Hasta" />
+            </div>
+          </div>
           <button id="embudo-refresh" class="btn btn-ghost" type="button">Actualizar</button>
         </div>
       </div>

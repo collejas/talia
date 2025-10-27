@@ -3,6 +3,9 @@ import { $, fetchJSONWithAuth } from './common.js';
 const state = {
   board: '',
   channel: '',
+  period: 'hoy',
+  dateFrom: '',
+  dateTo: '',
   busy: false,
   requestId: 0,
 };
@@ -13,10 +16,38 @@ export function setupEmbudo() {
 
   const boardSelect = $('embudo-board-select');
   const channelSelect = $('embudo-filter-channel');
+  const periodSelect = $('embudo-period-select');
+  const dateFromInput = $('embudo-date-from');
+  const dateToInput = $('embudo-date-to');
   const refreshBtn = $('embudo-refresh');
 
   if (boardSelect) boardSelect.addEventListener('change', () => void loadBoard());
   if (channelSelect) channelSelect.addEventListener('change', () => void loadBoard());
+  if (periodSelect) {
+    state.period = periodSelect.value || 'hoy';
+    toggleCustomDates(state.period);
+    periodSelect.addEventListener('change', () => {
+      state.period = periodSelect.value || '';
+      toggleCustomDates(state.period);
+      if (state.period !== 'fechas') {
+        state.dateFrom = '';
+        state.dateTo = '';
+        if (dateFromInput) dateFromInput.value = '';
+        if (dateToInput) dateToInput.value = '';
+      }
+      void loadBoard();
+    });
+  } else {
+    toggleCustomDates(state.period);
+  }
+  const dateChangeHandler = () => {
+    if (state.period !== 'fechas') return;
+    state.dateFrom = dateFromInput?.value?.trim() || '';
+    state.dateTo = dateToInput?.value?.trim() || '';
+    void loadBoard();
+  };
+  if (dateFromInput) dateFromInput.addEventListener('change', dateChangeHandler);
+  if (dateToInput) dateToInput.addEventListener('change', dateChangeHandler);
   if (refreshBtn) refreshBtn.addEventListener('click', () => void loadBoard());
 
   void loadBoards().then(() => loadBoard());
@@ -38,6 +69,16 @@ async function loadBoards() {
   }
 }
 
+function toggleCustomDates(period) {
+  const container = $('embudo-custom-dates');
+  if (!container) return;
+  if (period === 'fechas') {
+    container.classList.remove('embudo-hidden');
+  } else {
+    container.classList.add('embudo-hidden');
+  }
+}
+
 async function loadBoard() {
   if (state.busy) return;
   state.busy = true;
@@ -46,6 +87,9 @@ async function loadBoard() {
 
   const boardSelect = $('embudo-board-select');
   const channelSelect = $('embudo-filter-channel');
+  const periodSelect = $('embudo-period-select');
+  const dateFromInput = $('embudo-date-from');
+  const dateToInput = $('embudo-date-to');
 
   const params = [];
   const boardValue = boardSelect?.value?.trim();
@@ -54,6 +98,20 @@ async function loadBoard() {
   state.channel = channelValue || '';
   if (state.board) params.push(`tablero=${encodeURIComponent(state.board)}`);
   if (state.channel) params.push(`canales=${encodeURIComponent(state.channel)}`);
+  const periodValue = periodSelect?.value?.trim();
+  state.period = periodValue || '';
+  if (state.period) params.push(`rango=${encodeURIComponent(state.period)}`);
+  if (state.period === 'fechas') {
+    const fromValue = dateFromInput?.value?.trim() || '';
+    const toValue = dateToInput?.value?.trim() || '';
+    state.dateFrom = fromValue;
+    state.dateTo = toValue;
+    if (state.dateFrom) params.push(`desde=${encodeURIComponent(state.dateFrom)}`);
+    if (state.dateTo) params.push(`hasta=${encodeURIComponent(state.dateTo)}`);
+  } else {
+    state.dateFrom = '';
+    state.dateTo = '';
+  }
   const url = `/api/embudo${params.length ? `?${params.join('&')}` : ''}`;
 
   showState('loading');
@@ -119,10 +177,10 @@ function renderStage(stage) {
       <div class="embudo-column embudo-column-counter">
         <div class="embudo-column-header">
           <div class="embudo-column-title">${escapeHtml(stage.nombre || 'Etapa')}</div>
-          <div class="embudo-column-count">${total} visita${total === 1 ? '' : 's'}</div>
+        <div class="embudo-column-count">${total} visita${total === 1 ? '' : 's'}</div>
         </div>
         <div class="embudo-column-body embudo-counter-body">
-          <p class="embudo-counter-copy">Visitas al webchat sin interacción registrada.</p>
+          <p class="embudo-counter-copy">Visitas al webchat sin interacción durante el período seleccionado.</p>
         </div>
       </div>
     `;

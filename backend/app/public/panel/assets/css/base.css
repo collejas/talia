@@ -119,6 +119,11 @@ body.theme-void .nav{background:rgba(8,8,12,.75);border-bottom:1px solid var(--b
 .embudo-header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px}
 .embudo-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .embudo-controls .btn{padding:8px 12px;font-size:13px}
+.embudo-custom-dates{display:flex;align-items:center;gap:8px}
+.embudo-custom-dates.embudo-hidden{display:none!important}
+.embudo-date-range{display:flex;align-items:center;gap:6px}
+.embudo-date-range .btn{padding:8px 10px;min-width:130px}
+.embudo-date-sep{color:var(--muted);font-size:12px}
 .embudo-summary{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:13px}
 .embudo-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;margin-top:4px}
 .embudo-board::-webkit-scrollbar{height:6px}

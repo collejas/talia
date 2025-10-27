@@ -190,6 +190,81 @@ def _looks_like_uuid(value: str | None) -> bool:
         return False
 
 
+DATE_RANGE_PRESETS: dict[str, timedelta] = {
+    "hoy": timedelta(days=1),
+    "semana": timedelta(days=7),
+    "quincena": timedelta(days=15),
+    "mes": timedelta(days=30),
+    "ano": timedelta(days=365),
+}
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_date_value(value: str | None, *, field: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+        except ValueError as exc:  # pragma: no cover - validaciones
+            raise HTTPException(status_code=400, detail=f"{field}_invalid") from exc
+    return _ensure_utc(parsed)
+
+
+def _resolve_date_range(
+    rango: str | None,
+    desde: str | None,
+    hasta: str | None,
+) -> tuple[datetime | None, datetime | None]:
+    now = datetime.now(timezone.utc)
+    start: datetime | None = None
+    end: datetime | None = None
+
+    rango_norm = (rango or "").strip().lower()
+    if rango_norm:
+        if rango_norm in DATE_RANGE_PRESETS:
+            if rango_norm == "hoy":
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+            else:
+                end = now
+                start = now - DATE_RANGE_PRESETS[rango_norm]
+        elif rango_norm == "fechas":
+            start = _parse_date_value(desde, field="fecha_desde")
+            end = _parse_date_value(hasta, field="fecha_hasta")
+        else:
+            raise HTTPException(status_code=400, detail="rango_invalid")
+    else:
+        start = _parse_date_value(desde, field="fecha_desde")
+        end = _parse_date_value(hasta, field="fecha_hasta")
+
+    if start and not end:
+        end = now
+    if start:
+        start = _ensure_utc(start)
+    if end:
+        end = _ensure_utc(end)
+        # Si el usuario proporcionó solo una fecha (sin hora), extiende al final del día
+        if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
+            end = end + timedelta(days=1) - timedelta(microseconds=1)
+
+    if start and end and start > end:
+        raise HTTPException(status_code=400, detail="rango_fecha_invalido")
+
+    return start, end
+
+
+def _format_utc(dt: datetime) -> str:
+    return _ensure_utc(dt).isoformat()
+
+
 @router.get("/auth/permisos")
 async def get_permissions(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     token = _parse_bearer(authorization)
@@ -566,6 +641,8 @@ async def _fetch_embudo_cards(
     token: str,
     tablero_id: str,
     canales: list[str] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> list[dict[str, Any]]:
     params: dict[str, str] = {
         "select": (
@@ -577,6 +654,7 @@ async def _fetch_embudo_cards(
         "tablero_id": f"eq.{tablero_id}",
         "order": "ultimo_mensaje_en.desc",
     }
+    and_filters: list[str] = []
     if canales:
         if len(canales) == 1:
             params["canal"] = f"eq.{canales[0]}"
@@ -584,6 +662,12 @@ async def _fetch_embudo_cards(
             valores = ",".join(sorted({c for c in canales if c}))
             if valores:
                 params["canal"] = f"in.({valores})"
+    if date_from:
+        and_filters.append(f"creado_en.gte.{_format_utc(date_from)}")
+    if date_to:
+        and_filters.append(f"creado_en.lte.{_format_utc(date_to)}")
+    if and_filters:
+        params["and"] = f"({','.join(and_filters)})"
     resp = await _sb_get("/rest/v1/embudo", params=params, token=token)
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail="Error consultando embudo")
@@ -593,11 +677,24 @@ async def _fetch_embudo_cards(
     return raw
 
 
-async def _fetch_visitantes_total(canales: list[str] | None = None) -> int:
+async def _fetch_visitantes_total(
+    canales: list[str] | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> int:
     canales = canales or []
     if canales and all(c != "webchat" for c in canales):
         return 0
-    resp = await _sb_post("/rest/v1/rpc/embudo_visitantes_contador", json=None, token=None)
+    payload: dict[str, Any] = {}
+    if date_from:
+        payload["p_closed_after"] = _format_utc(date_from)
+    if date_to:
+        payload["p_closed_before"] = _format_utc(date_to)
+    resp = await _sb_post(
+        "/rest/v1/rpc/embudo_visitantes_contador",
+        json=payload or None,
+        token=None,
+    )
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail="Error consultando visitantes")
     data = resp.json()
@@ -700,6 +797,9 @@ async def listar_embudo_tableros(
 async def obtener_embudo(
     tablero: str | None = Query(default=None),
     canales: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)
@@ -713,9 +813,11 @@ async def obtener_embudo(
     if canales:
         channel_values = [c.strip().lower() for c in canales.split(",") if c.strip()]
 
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+
     etapas = await _fetch_etapas(token, board_id)
-    cards = await _fetch_embudo_cards(token, board_id, channel_values)
-    visitantes_total = await _fetch_visitantes_total(channel_values)
+    cards = await _fetch_embudo_cards(token, board_id, channel_values, date_from, date_to)
+    visitantes_total = await _fetch_visitantes_total(channel_values, date_from, date_to)
 
     cards_by_stage: dict[str, list[dict[str, Any]]] = {}
     for row in cards:
@@ -771,6 +873,11 @@ async def obtener_embudo(
         },
         "stages": stages_payload,
         "totals": totals,
+        "range": {
+            "preset": (rango or "").strip().lower() or None,
+            "from": _format_utc(date_from) if date_from else None,
+            "to": _format_utc(date_to) if date_to else None,
+        },
     }
 
 

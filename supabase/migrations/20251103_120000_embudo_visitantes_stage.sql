@@ -206,8 +206,10 @@ $$;
 COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta()
     IS 'Crea una tarjeta de lead cuando inicia una conversación con interacción entrante.';
 
--- Función auxiliar para el contador de visitantes sin chat
-CREATE OR REPLACE FUNCTION public.embudo_visitantes_contador(p_closed_after timestamptz DEFAULT (now() - interval '30 days'))
+CREATE OR REPLACE FUNCTION public.embudo_visitantes_contador(
+    p_closed_after timestamptz DEFAULT (now() - interval '30 days'),
+    p_closed_before timestamptz DEFAULT NULL
+)
 RETURNS TABLE(total bigint)
 LANGUAGE sql
 STABLE
@@ -217,7 +219,8 @@ AS $$
     WITH base AS (
         SELECT sc.session_id
           FROM public.webchat_session_closures sc
-         WHERE p_closed_after IS NULL OR sc.closed_at >= p_closed_after
+         WHERE (p_closed_after IS NULL OR sc.closed_at >= p_closed_after)
+           AND (p_closed_before IS NULL OR sc.closed_at <= p_closed_before)
     ),
     filtered AS (
         SELECT b.session_id
@@ -231,7 +234,7 @@ AS $$
     FROM filtered;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.embudo_visitantes_contador(timestamptz)
+GRANT EXECUTE ON FUNCTION public.embudo_visitantes_contador(timestamptz, timestamptz)
     TO postgres, service_role, authenticated;
 
 COMMIT;
