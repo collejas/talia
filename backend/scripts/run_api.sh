@@ -6,7 +6,6 @@ LANDING_DEST="/var/www/talia-landing/"
 LOG_DIR="/home/devuser/talia/logs"
 LOG_FILE="$LOG_DIR/api.log"
 REQUEST_LOG="$LOG_DIR/request.log"
-WEBCHAT_LOG="$LOG_DIR/webchat.log"
 
 if [ -d "$LANDING_SRC" ]; then
   # Sin preservar owner/group para evitar errores, y asignando propiedad al vuelo
@@ -16,7 +15,7 @@ fi
 
 mkdir -p "$LOG_DIR"
 chown devuser:devuser "$LOG_DIR"
-for file in "$LOG_FILE" "$REQUEST_LOG" "$WEBCHAT_LOG"; do
+for file in "$LOG_FILE" "$REQUEST_LOG"; do
   touch "$file"
   chown devuser:devuser "$file"
 done

@@ -35,7 +35,7 @@
       "email",
       "phone_number",
       "company_name",
-      "notes"
+      "notes",
       "necesidad_proposito"
     ],
     "additionalProperties": false

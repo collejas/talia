@@ -24,13 +24,6 @@ router = APIRouter(prefix="", tags=["panel"])
 logger = get_logger(__name__)
 
 
-class PanelSendMessagePayload(BaseModel):
-    """Payload para que un operador envíe un mensaje a un cliente."""
-
-    content: str = Field(..., min_length=1, max_length=2000, description="Contenido del mensaje")
-    metadata: dict[str, Any] | None = Field(default=None, description="Metadatos opcionales")
-
-
 class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
@@ -516,53 +509,6 @@ async def set_manual_mode(
     return {"ok": True, "manual": payload.manual}
 
 
-@router.post("/conversaciones/{conversacion_id}/mensajes")
-async def send_panel_message(
-    conversacion_id: str,
-    payload: PanelSendMessagePayload,
-    authorization: str | None = Header(default=None),
-) -> dict[str, Any]:
-    token = _parse_bearer(authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="auth_required")
-    if not payload.content or not payload.content.strip():
-        raise HTTPException(status_code=400, detail="content_required")
-
-    try:
-        info = await storage.fetch_webchat_conversation_info(conversacion_id)
-    except storage.StorageError as exc:
-        detail = str(exc) or "No se pudo recuperar la conversación"
-        lowered = detail.lower()
-        if "error de red" in lowered or "respondió error" in lowered:
-            raise HTTPException(status_code=502, detail=detail) from exc
-        if "no se encontró" in lowered or "no encontrada" in lowered:
-            raise HTTPException(status_code=404, detail=detail) from exc
-        raise HTTPException(status_code=400, detail=detail) from exc
-
-    metadata = {"sender_type": "human_agent", "source": "panel"}
-    if payload.metadata:
-        metadata.update(payload.metadata)
-
-    try:
-        record = await storage.record_webchat_message(
-            session_id=info.session_id,
-            author="human_agent",
-            content=payload.content.strip(),
-            metadata=metadata,
-        )
-    except storage.StorageError as exc:
-        detail = str(exc) or "No se pudo enviar el mensaje"
-        lowered = detail.lower()
-        status = 502 if ("error de red" in lowered or "respondió error" in lowered) else 400
-        raise HTTPException(status_code=status, detail=detail) from exc
-
-    return {
-        "ok": True,
-        "conversation_id": record.conversation_id,
-        "message_id": record.message_id,
-    }
-
-
 @router.get("/conversaciones/{conversacion_id}/mensajes")
 async def get_messages(
     conversacion_id: str,
@@ -689,28 +635,7 @@ async def _fetch_visitantes_total(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> int:
-    canales = canales or []
-    if canales and all(c != "webchat" for c in canales):
-        return 0
-    payload: dict[str, Any] = {}
-    if date_from:
-        payload["p_closed_after"] = _format_utc(date_from)
-    if date_to:
-        payload["p_closed_before"] = _format_utc(date_to)
-    resp = await _sb_post(
-        "/rest/v1/rpc/embudo_visitantes_contador",
-        json=payload or None,
-        token=None,
-    )
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=502, detail="Error consultando visitantes")
-    data = resp.json()
-    if isinstance(data, dict) and "total" in data:
-        return int(data.get("total") or 0)
-    if isinstance(data, list) and data:
-        first = data[0]
-        if isinstance(first, dict) and "total" in first:
-            return int(first.get("total") or 0)
+    # La métrica de visitantes está temporalmente deshabilitada mientras se reconstruye el canal.
     return 0
 
 
