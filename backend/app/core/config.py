@@ -55,6 +55,10 @@ class Settings(BaseSettings):
         default=None,
         description="Número de horas para reiniciar conversación webchat; usa default SQL cuando no se define.",
     )
+    webchat_persist_session: bool = Field(
+        default=True,
+        description="Controla si el widget reutiliza session_id entre recargas.",
+    )
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 
 

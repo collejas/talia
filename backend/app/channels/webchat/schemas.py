@@ -76,3 +76,16 @@ class CloseSessionRequest(BaseModel):
     """Payload para POST /close."""
 
     session_id: str = Field(..., description="Identificador de sesión generado en el widget.")
+
+
+class ClientConfig(BaseModel):
+    """Configuración expuesta al widget para ajustar el comportamiento local."""
+
+    persist_session: bool = Field(
+        default=True,
+        description="Indica si el widget debe reutilizar session_id entre recargas.",
+    )
+    inactivity_timeout_hours: int | None = Field(
+        default=None,
+        description="Horas de inactividad en backend antes de iniciar nueva conversación.",
+    )

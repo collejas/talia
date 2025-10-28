@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Response
 
+from app.core.config import settings
+
 from . import schemas, service
 
 router = APIRouter(prefix="/webchat", tags=["webchat"])
@@ -41,3 +43,16 @@ async def close_webchat_session(payload: schemas.CloseSessionRequest) -> Respons
     """Persiste el cierre para alimentar métricas de visitantes."""
     await service.close_session(payload.session_id)
     return Response(status_code=204)
+
+
+@router.get(
+    "/config",
+    response_model=schemas.ClientConfig,
+    summary="Obtiene configuración del widget webchat",
+)
+async def get_webchat_config() -> schemas.ClientConfig:
+    """Expone parámetros de comportamiento para el frontend."""
+    return schemas.ClientConfig(
+        persist_session=settings.webchat_persist_session,
+        inactivity_timeout_hours=settings.webchat_inactivity_hours,
+    )

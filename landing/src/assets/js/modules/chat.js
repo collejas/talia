@@ -9,6 +9,7 @@ const defaultConfig = {
   fallbackMessage: DEFAULT_FALLBACK_MESSAGE,
   autoLifecycle: true,
   hiddenInactivityTimeoutMs: 45 * 60 * 1000,
+  persistSession: true,
   getScrollContainer: () => {
     const layout = document.querySelector('.layout');
     return layout || document.scrollingElement || document.documentElement;
@@ -58,7 +59,10 @@ export function initialiseChat(options = {}) {
     };
   }
 
-  state.sessionId = loadSessionId(config.storageSessionKey);
+  state.sessionId = loadSessionId(
+    config.storageSessionKey,
+    config.persistSession,
+  );
 
   elements.chatForm.addEventListener('submit', handleSubmit);
 
@@ -485,20 +489,32 @@ function generateClientMessageId() {
   return `msg-${Date.now()}-${random}`;
 }
 
-function loadSessionId(storageKey) {
-  try {
-    const stored = localStorage.getItem(storageKey);
-    if (stored && typeof stored === 'string' && stored.trim().length > 0) {
-      return stored;
+function loadSessionId(storageKey, shouldPersist = true) {
+  const persist = shouldPersist !== false;
+  if (persist) {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored && typeof stored === 'string' && stored.trim().length > 0) {
+        return stored;
+      }
+    } catch (error) {
+      console.warn('[chat] No se pudo recuperar session_id previo.', error);
     }
-  } catch (error) {
-    console.warn('[chat] No se pudo recuperar session_id previo.', error);
+  } else {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch (error) {
+      console.warn('[chat] No se pudo limpiar session_id previo.', error);
+    }
   }
+
   const fresh = generateSessionId();
-  try {
-    localStorage.setItem(storageKey, fresh);
-  } catch (error) {
-    console.warn('[chat] No se pudo persistir el session_id nuevo.', error);
+  if (persist) {
+    try {
+      localStorage.setItem(storageKey, fresh);
+    } catch (error) {
+      console.warn('[chat] No se pudo persistir el session_id nuevo.', error);
+    }
   }
   return fresh;
 }
