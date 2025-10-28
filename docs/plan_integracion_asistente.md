@@ -4,6 +4,8 @@
 - Consolidar `docs/prompt_landing.md` como fuente de instrucciones para el asistente “Tal-IA”.
 - Publicar en el dashboard de OpenAI las funciones descritas en `docs/funciones_prompt_openai.md`, asegurando validaciones (`strict`).
 - Documentar en el dashboard la dependencia de `conversacion_id` con la BD (tablas `contactos` y `conversaciones`).
+- Registrar que el contexto conversacional se mantiene en OpenAI usando `conversation_id` de `/v1/responses`. Supabase almacena el historial completo y datos del lead, pero cada turno reutiliza el `conversation_id` para evitar reenviar todo el historial.
+- Documentar en el prompt que cada function call debe incluir un `conversacion_id` válido (o alias soportado) y que las tool calls se devolverán como `function_call` dentro de la respuesta; el backend las ejecutará una sola vez por turno.
 
 ### 2. API Webchat (nuevo backend)
 - Crear módulo `app/channels/webchat/` con router FastAPI (`/api/webchat`) que exponga:
