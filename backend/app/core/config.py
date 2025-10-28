@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     )
     openai_api_key: str | None = None
     openai_assistant_id: str | None = None
+    openai_prompt_version: str | None = None
     openai_project_id: str | None = None
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
@@ -50,6 +51,10 @@ class Settings(BaseSettings):
     geolocation_api_url: str | None = None
     geolocation_api_token: str | None = None
     log_file_path: str = "/home/devuser/talia/logs/api.log"
+    webchat_inactivity_hours: int | None = Field(
+        default=None,
+        description="Número de horas para reiniciar conversación webchat; usa default SQL cuando no se define.",
+    )
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 
 

@@ -34,7 +34,7 @@
 ### 5. QA y despliegue
 - Añadir pruebas unitarias/integración (pytest) para el módulo webchat (mock de OpenAI y Supabase REST).
 - Verificar logs dedicados (`whatsapp.log`, `webchat.log`, `voice.log`) y rotación.
-- Documentar variables requeridas en `.env` (`TALIA_OPENAI_ASSISTANT_ID`, `TALIA_OPENAI_API_KEY`, `TALIA_SUPABASE_*`, Twilio opcional).
+- Documentar variables requeridas en `.env` (`TALIA_OPENAI_ASSISTANT_ID`, `TALIA_OPENAI_PROMPT_VERSION`, `TALIA_OPENAI_API_KEY`, `TALIA_SUPABASE_*`, Twilio opcional).
 - Preparar checklist de deploy (migraciones Supabase + build estático del panel + despliegue FastAPI).
 
 > **Recordatorio clave:** crear la API de webchat en el backend antes de exponer el asistente en producción.

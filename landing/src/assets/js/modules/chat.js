@@ -29,6 +29,10 @@ const state = {
   lastHistoryIds: [],
   syncingHistory: false,
   sessionId: null,
+  conversationId: null,
+  openaiConversationId: null,
+  lastAssistantResponseId: null,
+  manualMode: false,
   assistantQueue: Promise.resolve(),
   lifecycleBound: false,
   hiddenTimeoutHandle: null,
@@ -313,7 +317,11 @@ function mapHistoryRole(message) {
 
 function getMessageIds(messages) {
   return (messages || []).map((msg) =>
-    String(msg?.message_id ?? `${msg?.direction}-${msg?.created_at}-${msg?.content || ''}`)
+    String(
+      msg?.message_id ??
+        msg?.id ??
+        `${msg?.direction}-${msg?.created_at}-${msg?.content || ''}`,
+    )
   );
 }
 
@@ -427,6 +435,10 @@ async function syncHistory({ force = false } = {}) {
     }
     const data = await response.json();
     const messages = Array.isArray(data?.messages) ? data.messages : [];
+    if (data?.conversation_id) {
+      state.conversationId = data.conversation_id;
+    }
+    state.manualMode = Boolean(data?.manual_mode);
     const nextIds = getMessageIds(messages);
     if (!force) {
       const unchanged =
@@ -474,11 +486,19 @@ function generateClientMessageId() {
 }
 
 function loadSessionId(storageKey) {
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (stored && typeof stored === 'string' && stored.trim().length > 0) {
+      return stored;
+    }
+  } catch (error) {
+    console.warn('[chat] No se pudo recuperar session_id previo.', error);
+  }
   const fresh = generateSessionId();
   try {
-    localStorage.removeItem(storageKey);
+    localStorage.setItem(storageKey, fresh);
   } catch (error) {
-    console.warn('[chat] No se pudo limpiar el session_id previo.', error);
+    console.warn('[chat] No se pudo persistir el session_id nuevo.', error);
   }
   return fresh;
 }
@@ -497,6 +517,17 @@ async function sendToAssistant(message, clientMessageId) {
       locale: navigator.language || 'es-MX',
       fresh_load: freshLoad === true,
     };
+    const metaPayload = {};
+    if (state.conversationId) metaPayload.conversation_id = state.conversationId;
+    if (state.openaiConversationId) {
+      metaPayload.openai_conversation_id = state.openaiConversationId;
+    }
+    if (state.lastAssistantResponseId) {
+      metaPayload.assistant_response_id = state.lastAssistantResponseId;
+    }
+    if (Object.keys(metaPayload).length > 0) {
+      payload.metadata = metaPayload;
+    }
     if (clientMessageId) {
       payload.client_message_id = clientMessageId;
     }
@@ -563,6 +594,17 @@ async function handleAssistantReply(message, clientMessageId) {
     const data = await sendToAssistant(message, clientMessageId);
     const reply = data.reply;
     const metadata = data && typeof data.metadata === 'object' ? data.metadata : {};
+    if (metadata.conversation_id) {
+      state.conversationId = metadata.conversation_id;
+    }
+    if (metadata.openai_conversation_id) {
+      state.openaiConversationId = metadata.openai_conversation_id;
+    }
+    if (metadata.assistant_response_id) {
+      state.lastAssistantResponseId = metadata.assistant_response_id;
+    }
+    state.manualMode = Boolean(metadata.manual_mode);
+
     removeTypingIndicator();
     if (!metadata.manual_mode && reply) {
       appendMessage(reply, 'assistant', metadata, { behavior: 'smooth', force: true });
