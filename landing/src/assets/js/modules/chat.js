@@ -532,6 +532,61 @@ function loadSessionId(storageKey, shouldPersist = true) {
   return fresh;
 }
 
+function detectDeviceType(userAgent, screenInfo) {
+  const ua = (userAgent || '').toLowerCase();
+  const width = screenInfo && Number(screenInfo.width);
+  const height = screenInfo && Number(screenInfo.height);
+  const maxDim = Math.max(width || 0, height || 0);
+  if (/mobile|iphone|ipod|android.*mobile|windows phone/.test(ua)) {
+    return 'mobile';
+  }
+  if (/ipad|tablet|android/.test(ua) && !/mobile/.test(ua)) {
+    return 'tablet';
+  }
+  if (maxDim && maxDim < 760 && /android/.test(ua)) {
+    return 'mobile';
+  }
+  return 'desktop';
+}
+
+function collectClientMetadata() {
+  const nav = typeof window !== 'undefined' ? window.navigator : undefined;
+  const scr = typeof window !== 'undefined' ? window.screen : undefined;
+  const ua = nav?.userAgent || '';
+  const screenInfo = scr
+    ? {
+        width: scr.width,
+        height: scr.height,
+        availWidth: scr.availWidth,
+        availHeight: scr.availHeight,
+        colorDepth: scr.colorDepth,
+        pixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : undefined,
+      }
+    : undefined;
+  const tz =
+    typeof Intl !== 'undefined' && Intl.DateTimeFormat
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : undefined;
+
+  return {
+    user_agent: ua,
+    platform: nav?.platform,
+    language: nav?.language,
+    languages: Array.isArray(nav?.languages) ? nav.languages : undefined,
+    hardware_concurrency: nav?.hardwareConcurrency,
+    device_memory: nav?.deviceMemory,
+    screen: screenInfo,
+    timezone: tz,
+    prefers_dark_mode:
+      typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : undefined,
+    referrer: typeof document !== 'undefined' ? document.referrer || undefined : undefined,
+    location_href: typeof window !== 'undefined' ? window.location.href : undefined,
+    device_type: detectDeviceType(ua, screenInfo),
+  };
+}
+
 async function sendToAssistant(message, clientMessageId) {
   if (!state.chatEnabled) return { reply: getFallbackResponse(), metadata: {} };
 
@@ -539,6 +594,7 @@ async function sendToAssistant(message, clientMessageId) {
   const RETRY_DELAYS_MS = [1000, 2000];
 
   async function doFetch() {
+    const clientMeta = collectClientMetadata();
     const payload = {
       session_id: state.sessionId,
       author: 'user',
@@ -554,9 +610,8 @@ async function sendToAssistant(message, clientMessageId) {
     if (state.lastAssistantResponseId) {
       metaPayload.assistant_response_id = state.lastAssistantResponseId;
     }
-    if (Object.keys(metaPayload).length > 0) {
-      payload.metadata = metaPayload;
-    }
+    metaPayload.client = clientMeta;
+    payload.metadata = metaPayload;
     if (clientMessageId) {
       payload.client_message_id = clientMessageId;
     }

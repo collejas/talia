@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query, Request, Response
 
 from app.core.config import settings
 
@@ -16,9 +16,12 @@ router = APIRouter(prefix="/webchat", tags=["webchat"])
     response_model=schemas.MessageResponse,
     summary="Procesa un mensaje entrante del widget webchat",
 )
-async def post_webchat_message(payload: schemas.MessageRequest) -> schemas.MessageResponse:
+async def post_webchat_message(
+    payload: schemas.MessageRequest,
+    request: Request,
+) -> schemas.MessageResponse:
     """Recibe un mensaje del widget, invoca al asistente y responde."""
-    return await service.handle_message(payload)
+    return await service.handle_message(payload, request=request)
 
 
 @router.get(

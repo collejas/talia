@@ -249,6 +249,71 @@ async def record_webchat_session_closure(session_id: str) -> None:
         raise StorageError(msg)
 
 
+async def record_webchat_visit(
+    session_id: str,
+    *,
+    ip: str | None = None,
+    device_type: str | None = None,
+    geo: dict[str, Any] | None = None,
+    cve_ent: str | None = None,
+    nom_ent: str | None = None,
+    cve_mun: str | None = None,
+    nom_mun: str | None = None,
+    cvegeo: str | None = None,
+    referrer: str | None = None,
+    landing_url: str | None = None,
+) -> None:
+    """Actualiza/crea el registro del visitante con metadata adicional."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/record_webchat_visitante"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+
+    payload: dict[str, Any] = {"p_session_id": session_id}
+    if ip:
+        payload["p_ip"] = ip
+    if device_type:
+        payload["p_device_type"] = device_type
+    if geo:
+        payload["p_geo"] = geo
+    if cve_ent:
+        payload["p_cve_ent"] = cve_ent
+    if nom_ent:
+        payload["p_nom_ent"] = nom_ent
+    if cve_mun:
+        payload["p_cve_mun"] = cve_mun
+    if nom_mun:
+        payload["p_nom_mun"] = nom_mun
+    if cvegeo:
+        payload["p_cvegeo"] = cvegeo
+    if referrer:
+        payload["p_referrer"] = referrer
+    if landing_url:
+        payload["p_landing_url"] = landing_url
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al registrar visitante webchat: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al registrar visitante webchat"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+
 async def update_conversation(conversation_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     """Actualiza campos de una conversación."""
     if not settings.supabase_url or not settings.supabase_service_role:

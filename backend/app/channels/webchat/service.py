@@ -6,15 +6,15 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 from openai import AsyncOpenAI
 
 from app.assistants import registry
 from app.assistants.manager import AssistantConfig
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
+from app.services import geolocation, leads_geo, storage
 from app.services import openai as openai_service
-from app.services import storage
 
 from . import schemas
 
@@ -47,13 +47,240 @@ class AssistantSpec:
 _ASSISTANT_CACHE: dict[str, AssistantSpec] = {}
 
 
-async def handle_message(payload: schemas.MessageRequest) -> schemas.MessageResponse:
+def _extract_client_ip(request: Request | None) -> str | None:
+    if request is None:
+        return None
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        for chunk in forwarded.split(","):
+            candidate = chunk.strip()
+            if candidate:
+                return candidate
+    client = request.client
+    return client.host if client else None
+
+
+def _normalise_device_type(value: Any) -> str | None:
+    if not value:
+        return None
+    text = str(value).strip().lower()
+    if text in {"mobile", "tablet", "desktop", "laptop", "phone"}:
+        if text == "laptop":
+            return "desktop"
+        if text == "phone":
+            return "mobile"
+        return text
+    return None
+
+
+def _classify_device_type(user_agent: str | None, client_meta: dict[str, Any]) -> str | None:
+    device = _normalise_device_type(client_meta.get("device_type"))
+    if device:
+        return device
+    ua = (client_meta.get("user_agent") or user_agent or "").lower()
+    if not ua:
+        return None
+    if "mobile" in ua or "iphone" in ua or "ipod" in ua or "windows phone" in ua:
+        return "mobile"
+    if "ipad" in ua or "tablet" in ua:
+        return "tablet"
+    if "android" in ua:
+        if "mobile" in ua:
+            return "mobile"
+        return "tablet"
+    return "desktop"
+
+
+def _safe_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+async def _maybe_enrich_contact_metadata(
+    contact_id: str,
+    *,
+    client_context: dict[str, Any],
+    device_type: str | None,
+    geo_ip_data: dict[str, Any] | None,
+    estado_clave: str | None,
+    estado_nombre: str | None,
+    municipio_clave: str | None,
+    municipio_nombre: str | None,
+    cvegeo: str | None,
+    referrer: str | None,
+    landing_url: str | None,
+) -> None:
+    try:
+        contact = await storage.fetch_contact(contact_id)
+    except storage.StorageError as exc:
+        logger.exception(
+            "webchat.contact_fetch_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        return
+
+    contacto_datos = _safe_dict(contact.get("contacto_datos"))
+    if contacto_datos:
+        try:
+            updated_data = json.loads(json.dumps(contacto_datos))
+        except (TypeError, ValueError):
+            updated_data = dict(contacto_datos)
+    else:
+        updated_data = {}
+
+    ubicacion_actual = _safe_dict(updated_data.get("ubicacion"))
+    ubicacion_nueva = dict(ubicacion_actual)
+
+    def _set_if(value: Any, key: str) -> None:
+        if value is not None and value != "":
+            formatted = str(value)
+            if ubicacion_nueva.get(key) != formatted:
+                ubicacion_nueva[key] = formatted
+
+    _set_if(estado_clave, "cve_ent")
+    _set_if(estado_nombre, "nom_ent")
+    _set_if(municipio_clave, "cve_mun")
+    _set_if(municipio_nombre, "nom_mun")
+    _set_if(cvegeo, "cvegeo")
+
+    if geo_ip_data:
+        if geo_ip_data.get("latitude") is not None:
+            ubicacion_nueva.setdefault("lat", geo_ip_data.get("latitude"))
+        if geo_ip_data.get("longitude") is not None:
+            ubicacion_nueva.setdefault("lng", geo_ip_data.get("longitude"))
+        if geo_ip_data.get("timezone"):
+            ubicacion_nueva.setdefault("timezone", geo_ip_data.get("timezone"))
+
+    if ubicacion_nueva != ubicacion_actual and any(ubicacion_nueva.values()):
+        updated_data["ubicacion"] = ubicacion_nueva
+
+    dispositivo_actual = _safe_dict(updated_data.get("dispositivo"))
+    dispositivo_nuevo = dict(dispositivo_actual)
+    user_agent = (
+        client_context.get("user_agent")
+        if isinstance(client_context.get("user_agent"), str)
+        else None
+    )
+    platform = (
+        client_context.get("platform") if isinstance(client_context.get("platform"), str) else None
+    )
+    timezone = (
+        client_context.get("timezone") if isinstance(client_context.get("timezone"), str) else None
+    )
+    language = (
+        client_context.get("language") if isinstance(client_context.get("language"), str) else None
+    )
+    screen_info = _safe_dict(client_context.get("screen"))
+
+    device_type_norm = _normalise_device_type(device_type)
+    if device_type_norm and dispositivo_nuevo.get("tipo") != device_type_norm:
+        dispositivo_nuevo["tipo"] = device_type_norm
+    if user_agent and dispositivo_nuevo.get("user_agent") != user_agent:
+        dispositivo_nuevo["user_agent"] = user_agent
+    if platform and dispositivo_nuevo.get("plataforma") != platform:
+        dispositivo_nuevo["plataforma"] = platform
+    if timezone and dispositivo_nuevo.get("timezone") != timezone:
+        dispositivo_nuevo["timezone"] = timezone
+    if language and dispositivo_nuevo.get("idioma") != language:
+        dispositivo_nuevo["idioma"] = language
+    if screen_info:
+        dispositivo_nuevo.setdefault("pantalla", {})
+        for key, value in screen_info.items():
+            if dispositivo_nuevo["pantalla"].get(key) != value:
+                dispositivo_nuevo["pantalla"][key] = value
+        if not dispositivo_nuevo["pantalla"]:
+            dispositivo_nuevo.pop("pantalla", None)
+
+    prefers_dark = client_context.get("prefers_dark_mode")
+    if prefers_dark is not None and dispositivo_nuevo.get("prefiere_modo_oscuro") != prefers_dark:
+        dispositivo_nuevo["prefiere_modo_oscuro"] = bool(prefers_dark)
+
+    if dispositivo_nuevo != dispositivo_actual and dispositivo_nuevo:
+        updated_data["dispositivo"] = dispositivo_nuevo
+
+    trazabilidad_actual = _safe_dict(updated_data.get("trazabilidad"))
+    trazabilidad_nueva = dict(trazabilidad_actual)
+    if referrer and trazabilidad_nueva.get("referrer") != referrer:
+        trazabilidad_nueva["referrer"] = referrer
+    if landing_url and trazabilidad_nueva.get("landing") != landing_url:
+        trazabilidad_nueva["landing"] = landing_url
+    if trazabilidad_nueva != trazabilidad_actual and trazabilidad_nueva:
+        updated_data["trazabilidad"] = trazabilidad_nueva
+
+    if updated_data == contacto_datos:
+        return
+
+    try:
+        await storage.update_contact(contact_id, {"contacto_datos": updated_data})
+    except storage.StorageError as exc:
+        logger.exception(
+            "webchat.contact_update_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+
+
+async def handle_message(
+    payload: schemas.MessageRequest,
+    *,
+    request: Request | None = None,
+) -> schemas.MessageResponse:
     """Orquesta la recepción de un mensaje y delega en OpenAI/Supabase."""
     if payload.author != "user":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Sólo se aceptan mensajes de usuario desde el widget.",
         )
+
+    client_ip = _extract_client_ip(request)
+    user_agent_header = request.headers.get("user-agent") if request else None
+    client_metadata = _safe_dict(payload.metadata) if payload.metadata else {}
+    client_context = _safe_dict(client_metadata.get("client"))
+
+    device_type = _classify_device_type(user_agent_header, client_context)
+
+    geo_ip_data = await geolocation.lookup_ip(client_ip) if client_ip else None
+    client_geo = _safe_dict(client_context.get("geo"))
+
+    geo_source: dict[str, Any] = {}
+    if geo_ip_data:
+        country_ip = geo_ip_data.get("country")
+        if country_ip:
+            geo_source["country"] = str(country_ip).upper()
+        region_ip = geo_ip_data.get("region")
+        if region_ip:
+            geo_source["region"] = region_ip
+            geo_source.setdefault("state", region_ip)
+        city_ip = geo_ip_data.get("city")
+        if city_ip:
+            geo_source["city"] = city_ip
+    if client_geo:
+        country_client = client_geo.get("country_code") or client_geo.get("country")
+        if country_client:
+            geo_source["country"] = str(country_client).upper()
+        for key in ("region", "state", "nom_ent", "city", "nom_mun"):
+            value = client_geo.get(key)
+            if value:
+                geo_source[key] = value
+    location_tuple = leads_geo.location_from_geo_metadata(geo_source or None)
+    estado_clave, estado_nombre, muni_clave, muni_nombre, cvegeo = location_tuple
+
+    visitor_geo_payload: dict[str, Any] = {}
+    if geo_ip_data:
+        visitor_geo_payload["ip_lookup"] = geo_ip_data
+    if client_geo:
+        visitor_geo_payload["client"] = client_geo
+    if estado_nombre:
+        visitor_geo_payload.setdefault("nom_ent", estado_nombre)
+    if muni_nombre:
+        visitor_geo_payload.setdefault("nom_mun", muni_nombre)
 
     try:
         registration = await storage.register_webchat_message(
@@ -113,6 +340,54 @@ async def handle_message(payload: schemas.MessageRequest) -> schemas.MessageResp
     if not contact_id:
         raise HTTPException(
             status_code=500, detail="No se pudo asociar la conversación al contacto"
+        )
+
+    try:
+        await storage.record_webchat_visit(
+            payload.session_id,
+            ip=client_ip,
+            device_type=device_type,
+            geo=visitor_geo_payload or None,
+            cve_ent=estado_clave,
+            nom_ent=estado_nombre,
+            cve_mun=muni_clave,
+            nom_mun=muni_nombre,
+            cvegeo=cvegeo,
+            referrer=client_context.get("referrer")
+            if isinstance(client_context.get("referrer"), str)
+            else None,
+            landing_url=client_context.get("location_href")
+            if isinstance(client_context.get("location_href"), str)
+            else None,
+        )
+    except storage.StorageError as exc:
+        logger.exception(
+            "webchat.record_visit_failed",
+            extra={"session_id": payload.session_id, "error": str(exc)},
+        )
+
+    try:
+        await _maybe_enrich_contact_metadata(
+            str(contact_id),
+            client_context=client_context,
+            device_type=device_type,
+            geo_ip_data=geo_ip_data,
+            estado_clave=estado_clave,
+            estado_nombre=estado_nombre,
+            municipio_clave=muni_clave,
+            municipio_nombre=muni_nombre,
+            cvegeo=cvegeo,
+            referrer=client_context.get("referrer")
+            if isinstance(client_context.get("referrer"), str)
+            else None,
+            landing_url=client_context.get("location_href")
+            if isinstance(client_context.get("location_href"), str)
+            else None,
+        )
+    except Exception:  # pragma: no cover - best effort
+        logger.exception(
+            "webchat.contact_enrich_failed",
+            extra={"contact_id": str(contact_id)},
         )
 
     assistant: AssistantConfig
