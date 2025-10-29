@@ -267,7 +267,7 @@ function normalizeScrollOptions(options) {
 }
 
 function appendMessage(text, role = 'assistant', metadata = null, scrollOptions = {}) {
-  if (!elements.chatLog) return;
+  if (!elements.chatLog) return null;
   const { behavior = 'auto', force = false, tolerance } = normalizeScrollOptions(scrollOptions);
   const container = getScrollContainer();
   const shouldStick = force || isNearViewportBottom(container, tolerance);
@@ -276,6 +276,7 @@ function appendMessage(text, role = 'assistant', metadata = null, scrollOptions 
   if (shouldStick) {
     maintainViewportBottom(behavior, tolerance, force);
   }
+  return element;
 }
 
 function renderTypingIndicator() {
@@ -347,6 +348,16 @@ function getElementRole(el) {
   return null;
 }
 
+function removeLocalPlaceholders() {
+  if (!elements.chatLog) return;
+  let tail = getLastMessageElement();
+  while (tail && tail.getAttribute('data-local') === 'true') {
+    const parent = tail.parentNode;
+    parent?.removeChild(tail);
+    tail = getLastMessageElement();
+  }
+}
+
 function appendHistoryDelta(newItems, options = {}) {
   if (!elements.chatLog || !Array.isArray(newItems) || newItems.length === 0) return;
   const { behavior = 'auto', tolerance } = normalizeScrollOptions(options);
@@ -355,6 +366,8 @@ function appendHistoryDelta(newItems, options = {}) {
 
   const hadTyping = !!state.typingBubble;
   if (hadTyping) removeTypingIndicator({ preservePending: true });
+
+  removeLocalPlaceholders();
 
   const first = newItems[0];
   const firstRole = mapHistoryRole(first);
@@ -585,9 +598,11 @@ async function handleSubmit(event) {
 
   const userMessage = elements.chatInput.value.trim();
   elements.chatInput.value = '';
-  appendMessage(userMessage, 'user', null, { behavior: 'smooth', force: true });
-  const lastEl = getLastMessageElement();
-  if (lastEl) lastEl.setAttribute('data-local', 'true');
+  const localUserMessage = appendMessage(userMessage, 'user', null, {
+    behavior: 'smooth',
+    force: true,
+  });
+  if (localUserMessage) localUserMessage.setAttribute('data-local', 'true');
   elements.chatInput.focus();
 
   const clientMessageId = generateClientMessageId();
@@ -623,12 +638,20 @@ async function handleAssistantReply(message, clientMessageId) {
 
     removeTypingIndicator();
     if (!metadata.manual_mode && reply) {
-      appendMessage(reply, 'assistant', metadata, { behavior: 'smooth', force: true });
+      const localAssistant = appendMessage(reply, 'assistant', metadata, {
+        behavior: 'smooth',
+        force: true,
+      });
+      if (localAssistant) localAssistant.setAttribute('data-local', 'true');
     }
     void syncHistory();
   } catch (error) {
     removeTypingIndicator();
-    appendMessage(getFallbackResponse(), 'assistant', null, { behavior: 'smooth', force: true });
+    const fallback = appendMessage(getFallbackResponse(), 'assistant', null, {
+      behavior: 'smooth',
+      force: true,
+    });
+    if (fallback) fallback.setAttribute('data-local', 'true');
     console.error('Error obteniendo respuesta de TalIA:', error);
     void syncHistory();
   }
