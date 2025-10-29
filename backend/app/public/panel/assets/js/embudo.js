@@ -176,11 +176,11 @@ function renderStage(stage) {
     return `
       <div class="embudo-column embudo-column-counter">
         <div class="embudo-column-header">
-          <div class="embudo-column-title">${escapeHtml(stage.nombre || 'Etapa')}</div>
-        <div class="embudo-column-count">${total} visita${total === 1 ? '' : 's'}</div>
+          <div class="embudo-column-title">Visitas al webchat sin interacción durante el período seleccionado.</div>
+        <div class="embudo-column-count"></div>
         </div>
         <div class="embudo-column-body embudo-counter-body">
-          <p class="embudo-counter-copy">Visitas al webchat sin interacción durante el período seleccionado.</p>
+          <p class="embudo-counter-copy">${total} visita${total === 1 ? '' : 's'}</p>
         </div>
       </div>
     `;

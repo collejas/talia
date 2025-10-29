@@ -631,12 +631,48 @@ async def _fetch_embudo_cards(
 
 
 async def _fetch_visitantes_total(
+    token: str | None,
     canales: list[str] | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> int:
-    # La métrica de visitantes está temporalmente deshabilitada mientras se reconstruye el canal.
-    return 0
+    channels = {c for c in (canales or []) if c}
+    if channels and "webchat" not in channels:
+        return 0
+
+    payload: dict[str, Any] = {}
+    if date_from:
+        payload["p_closed_after"] = _format_utc(date_from)
+    if date_to:
+        payload["p_closed_before"] = _format_utc(date_to)
+
+    resp = await _sb_post(
+        "/rest/v1/rpc/embudo_visitantes_contador",
+        json=payload or None,
+        token=token,
+    )
+    if resp.status_code >= 400:
+        logger.error(
+            "embudo.visitantes_total_failed",
+            extra={"status": resp.status_code, "body": resp.text},
+        )
+        raise HTTPException(status_code=502, detail="Error consultando visitantes sin chat")
+
+    data = resp.json()
+    if isinstance(data, list):
+        row = data[0] if data else {}
+    elif isinstance(data, dict):
+        row = data
+    else:
+        logger.warning("embudo.visitantes_total_unexpected_payload", extra={"data": data})
+        return 0
+
+    total_value = row.get("total")
+    try:
+        return int(total_value)
+    except (TypeError, ValueError):
+        logger.warning("embudo.visitantes_total_invalid_value", extra={"total": total_value})
+        return 0
 
 
 def _stage_is_counter(meta: dict[str, Any] | None) -> bool:
@@ -749,7 +785,7 @@ async def obtener_embudo(
 
     etapas = await _fetch_etapas(token, board_id)
     cards = await _fetch_embudo_cards(token, board_id, channel_values, date_from, date_to)
-    visitantes_total = await _fetch_visitantes_total(channel_values, date_from, date_to)
+    visitantes_total = await _fetch_visitantes_total(token, channel_values, date_from, date_to)
 
     cards_by_stage: dict[str, list[dict[str, Any]]] = {}
     for row in cards:
@@ -830,7 +866,7 @@ async def embudo_visitantes(
         channel_values = [c.strip().lower() for c in canales.split(",") if c.strip()]
 
     date_from, date_to = _resolve_date_range(rango, desde, hasta)
-    total = await _fetch_visitantes_total(channel_values, date_from, date_to)
+    total = await _fetch_visitantes_total(token, channel_values, date_from, date_to)
 
     return {
         "ok": True,
