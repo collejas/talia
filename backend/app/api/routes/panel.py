@@ -675,6 +675,34 @@ async def _fetch_visitantes_total(
         return 0
 
 
+async def _fetch_dashboard_kpis(
+    token: str,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if date_from:
+        payload["p_from"] = _format_utc(date_from)
+    if date_to:
+        payload["p_to"] = _format_utc(date_to)
+    resp = await _sb_post(
+        "/rest/v1/rpc/dashboard_kpis",
+        json=payload or None,
+        token=token,
+    )
+    if resp.status_code >= 400:
+        logger.error(
+            "dashboard.kpis_failed",
+            extra={"status": resp.status_code, "body": resp.text},
+        )
+        raise HTTPException(status_code=502, detail="Error consultando KPIs del dashboard")
+    data = resp.json()
+    if isinstance(data, dict):
+        return data
+    logger.warning("dashboard.kpis_unexpected_payload", extra={"data": data})
+    return {}
+
+
 def _stage_is_counter(meta: dict[str, Any] | None) -> bool:
     if not isinstance(meta, dict):
         return False
@@ -871,6 +899,31 @@ async def embudo_visitantes(
     return {
         "ok": True,
         "total": total,
+        "range": {
+            "preset": (rango or "").strip().lower() or None,
+            "from": _format_utc(date_from) if date_from else None,
+            "to": _format_utc(date_to) if date_to else None,
+        },
+    }
+
+
+@router.get("/dashboard/kpis")
+async def dashboard_kpis_endpoint(
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    payload = await _fetch_dashboard_kpis(token, date_from, date_to)
+
+    return {
+        "ok": True,
+        "kpis": payload,
         "range": {
             "preset": (rango or "").strip().lower() or None,
             "from": _format_utc(date_from) if date_from else None,

@@ -22,6 +22,14 @@
     .card{padding:16px;border:1px solid var(--border-soft);border-radius:14px;background:var(--surface)}
     .kpi-value{font-size:28px;font-weight:800}
     .nav-local{display:flex;gap:10px}
+    .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:12px}
+    .status-card-title{font-size:16px;font-weight:600;margin:0 0 6px}
+    .status-list{list-style:none;margin:0;padding:0;font-size:14px}
+    .status-list li{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border-soft)}
+    .status-list li:last-child{border-bottom:none}
+    .status-label{display:inline-flex;align-items:center;gap:6px}
+    .status-values{display:inline-flex;align-items:center;gap:6px}
+    .status-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:999px;background:var(--surface-strong,var(--surface));font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted)}
   </style>
   <script src="./assets/js/config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -41,7 +49,7 @@
 
     <section class="kpi-grid">
       <div class="card">
-        <div class="muted">Conversaciones hoy</div>
+        <div class="muted">Visitas</div>
         <div id="kpi-conv" class="kpi-value">—</div>
       </div>
       <div class="card">
@@ -57,7 +65,7 @@
         <div id="kpi-webchat-visitas" class="kpi-value">—</div>
       </div>
       <div class="card">
-        <div class="muted">Conversaciones webchat</div>
+        <div class="muted">Vistas Webchat</div>
         <div id="kpi-webchat-chats" class="kpi-value">—</div>
       </div>
       <div class="card">
@@ -75,6 +83,27 @@
       <div class="card">
         <div class="muted">Tiempo respuesta</div>
         <div class="kpi-value"><span id="kpi-lapso-medio">—</span> <small class="muted">(máx <span id="kpi-lapso-max">—</span>)</small></div>
+      </div>
+    </section>
+
+    <section class="status-grid" aria-label="Resumen de estados">
+      <div class="card">
+        <h3 class="status-card-title">Conversaciones por estado</h3>
+        <ul id="status-conversaciones" class="status-list">
+          <li class="muted"><span>Actualizando…</span><span>—</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 class="status-card-title">Contactos por estado</h3>
+        <ul id="status-contactos" class="status-list">
+          <li class="muted"><span>Actualizando…</span><span>—</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 class="status-card-title">Captura de datos</h3>
+        <ul id="status-captura" class="status-list">
+          <li class="muted"><span>Actualizando…</span><span>—</span></li>
+        </ul>
       </div>
     </section>
 
