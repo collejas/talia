@@ -26,6 +26,12 @@ const MAP_MIN_ZOOM_MX = 3;
 const MAP_MIN_ZOOM_WORLD = 1;
 const MAP_MAX_ZOOM = 12;
 
+const controls = {
+  resetButton: null,
+  channelSelect: null,
+  modeSelect: null,
+};
+
 let leafletPromise = null;
 
 function loadStylesheet(url) {
@@ -214,6 +220,10 @@ const state = {
   municipalityCache: new Map(),
   worldCache: new Map(),
   tileLayer: null,
+  currentCountry: null,
+  parentLevel: null,
+  worldSummaryBase: '',
+  applyMode: null,
 };
 
 function getRangeQuery() {
@@ -517,6 +527,7 @@ function setMinZoom(minZoom) {
 }
 
 async function renderStates() {
+  state.view = 'states';
   if (state.mode === 'world') {
     await renderWorld();
     return;
@@ -567,11 +578,25 @@ async function renderStates() {
     console.error('[leads-map] estados', error);
     setError(true, 'No fue posible cargar los estados.');
   } finally {
+    const resetBtn = controls.resetButton;
+    if (resetBtn) {
+      if (state.parentLevel === 'world') {
+        resetBtn.removeAttribute('disabled');
+      } else if (!state.selectedState) {
+        resetBtn.setAttribute('disabled', 'true');
+      }
+    }
     setLoading(false);
   }
 }
 
 async function renderWorld() {
+  state.view = 'countries';
+  state.selectedState = null;
+  state.currentCountry = null;
+  if (state.mode === 'world') {
+    state.parentLevel = null;
+  }
   setMinZoom(MAP_MIN_ZOOM_WORLD);
   setLoading(true);
   setError(false);
@@ -584,14 +609,6 @@ async function renderWorld() {
       total: Number(item.total || 0),
       por_canal: { visitantes: Number(item.total || 0) },
     }));
-    drawPolygons({
-      geojson: resources.geojson,
-      metrics: { items: enrichedItems },
-      keyProperty: 'ISO_A2',
-      pad: 0,
-      viewMode: 'countries',
-      onFeatureClick: null,
-    });
     const totals = resources.metrics.totals || {};
     const totalValue = Number(totals.total || 0);
     const ubicadosValue = Number(totals.ubicados || 0);
@@ -599,13 +616,39 @@ async function renderWorld() {
     const countriesWithData = enrichedItems.filter(
       (item) => item.country_code && item.country_code !== 'UNK' && item.total > 0,
     ).length;
-    updateSummary(
-      `Visitantes globales: Total ${formatNumber(totalValue)}. Países con datos: ${formatNumber(
-        countriesWithData,
-      )}. Con país identificado: ${formatNumber(ubicadosValue)}. Sin país: ${formatNumber(
-        sinPaisValue,
-      )}.`,
-    );
+    const summaryBase = `Visitantes globales: Total ${formatNumber(
+      totalValue,
+    )}. Países con datos: ${formatNumber(
+      countriesWithData,
+    )}. Con país identificado: ${formatNumber(
+      ubicadosValue,
+    )}. Sin país: ${formatNumber(sinPaisValue)}.`;
+    state.worldSummaryBase = summaryBase;
+    const handleCountryClick = (data) => {
+      if (!data || !data.code) return;
+      const iso = String(data.code).toUpperCase();
+      const total = Number(data.total || 0);
+      const name = data.name || iso;
+      if (iso === 'MX') {
+        state.currentCountry = { code: iso, name, total };
+        state.parentLevel = 'world';
+        if (controls.modeSelect) {
+          controls.modeSelect.value = 'mx';
+        }
+        state.applyMode?.('mx', { fromWorld: true, country: state.currentCountry });
+        return;
+      }
+      updateSummary(`${summaryBase} ${name}: ${formatNumber(total)} visitantes.`);
+    };
+    drawPolygons({
+      geojson: resources.geojson,
+      metrics: { items: enrichedItems },
+      keyProperty: 'ISO_A2',
+      pad: 0,
+      viewMode: 'countries',
+      onFeatureClick: handleCountryClick,
+    });
+    updateSummary(summaryBase);
     if (state.map) {
       const bounds = state.layer?.getBounds();
       if (bounds && bounds.isValid()) {
@@ -618,11 +661,16 @@ async function renderWorld() {
     console.error('[leads-map] world', error);
     setError(true, 'No fue posible cargar los países.');
   } finally {
+    const resetBtn = controls.resetButton;
+    if (resetBtn) {
+      resetBtn.setAttribute('disabled', 'true');
+    }
     setLoading(false);
   }
 }
 
 async function renderMunicipalities(stateCode) {
+  state.view = 'municipalities';
   if (state.mode === 'world') {
     return;
   }
@@ -669,6 +717,10 @@ async function renderMunicipalities(stateCode) {
     console.error('[leads-map] municipios', error);
     setError(true, 'No se pudieron cargar los municipios seleccionados.');
   } finally {
+    const resetBtn = controls.resetButton;
+    if (resetBtn) {
+      resetBtn.removeAttribute('disabled');
+    }
     setLoading(false);
   }
 }
@@ -745,6 +797,10 @@ export function setupLeadsMap() {
   const modeSelect = $('leads-map-mode');
   const rangeSelect = $('dashboard-range');
 
+  controls.resetButton = resetButton;
+  controls.channelSelect = channelSelect;
+  controls.modeSelect = modeSelect;
+
   const scheduleRender = () => {
     if (!state.initialized) {
       return;
@@ -753,34 +809,42 @@ export function setupLeadsMap() {
       void renderWorld();
       return;
     }
-    if (state.view === 'states') {
-      void renderStates();
-    } else if (state.selectedState) {
+    if (state.view === 'municipalities' && state.selectedState) {
       void renderMunicipalities(state.selectedState.code);
-    } else {
-      void renderStates();
+      return;
     }
+    void renderStates();
   };
 
-  const applyMode = (value) => {
+  const applyMode = (value, options = {}) => {
     const nextMode = value === 'world' ? 'world' : 'mx';
-    if (state.mode === nextMode) return;
+    const { fromWorld = false, country = null, force = false } = options;
+    const previousMode = state.mode;
+    if (previousMode === nextMode && !force) {
+      return;
+    }
     state.mode = nextMode;
-    state.view = 'states';
     state.selectedState = null;
-    if (resetButton) {
-      resetButton.setAttribute('disabled', 'true');
+    state.view = nextMode === 'world' ? 'countries' : 'states';
+    if (modeSelect) {
+      modeSelect.value = nextMode;
     }
     if (nextMode === 'world') {
+      state.parentLevel = null;
+      state.currentCountry = null;
       state.prevChannelKey = state.channelKey;
       state.channelKey = 'visitantes';
       if (channelSelect) {
         channelSelect.value = 'visitantes';
+        channelSelect.disabled = true;
         channelSelect.setAttribute('disabled', 'true');
       }
     } else {
+      state.currentCountry = country || (fromWorld ? { code: 'MX', name: 'México' } : state.currentCountry);
+      state.parentLevel = fromWorld ? 'world' : null;
       if (channelSelect) {
         channelSelect.removeAttribute('disabled');
+        channelSelect.disabled = false;
         const restore =
           state.prevChannelKey && CHANNEL_OPTIONS[state.prevChannelKey]
             ? state.prevChannelKey
@@ -792,13 +856,28 @@ export function setupLeadsMap() {
         channelSelect.value = restore;
       }
     }
-    state.worldCache.clear();
+    if (resetButton) {
+      if (nextMode === 'world') {
+        resetButton.setAttribute('disabled', 'true');
+      } else if (state.parentLevel === 'world') {
+        resetButton.removeAttribute('disabled');
+      }
+    }
+    if (previousMode !== nextMode) {
+      state.worldCache.clear();
+    }
     if (state.initialized) {
-      void renderStates();
+      if (nextMode === 'world') {
+        void renderWorld();
+      } else {
+        void renderStates();
+      }
     } else {
       void initializeMap();
     }
   };
+  state.applyMode = applyMode;
+  state.scheduleRender = scheduleRender;
 
   if (paletteSelect) {
     paletteSelect.addEventListener('change', (event) => {
@@ -814,6 +893,16 @@ export function setupLeadsMap() {
 
   if (resetButton) {
     resetButton.addEventListener('click', () => {
+      if (state.view === 'municipalities' && state.selectedState) {
+        state.selectedState = null;
+        state.view = 'states';
+        void renderStates();
+        return;
+      }
+      if (state.mode === 'mx' && state.parentLevel === 'world') {
+        state.applyMode?.('world', { force: true });
+        return;
+      }
       state.view = 'states';
       state.selectedState = null;
       resetButton.setAttribute('disabled', 'true');
@@ -870,6 +959,7 @@ export function setupLeadsMap() {
   }
   if (state.mode === 'world' && channelSelect) {
     channelSelect.value = 'visitantes';
+    channelSelect.disabled = true;
     channelSelect.setAttribute('disabled', 'true');
   }
 
