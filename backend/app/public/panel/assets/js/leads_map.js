@@ -22,6 +22,9 @@ const PALETTES = {
 
 const NUMBER_FORMAT = new Intl.NumberFormat('es-MX');
 const FALLBACK_COLOR = 'rgba(255,255,255,0.15)';
+const MAP_MIN_ZOOM_MX = 3;
+const MAP_MIN_ZOOM_WORLD = 1;
+const MAP_MAX_ZOOM = 12;
 
 let leafletPromise = null;
 
@@ -210,6 +213,7 @@ const state = {
   statesCache: new Map(),
   municipalityCache: new Map(),
   worldCache: new Map(),
+  tileLayer: null,
 };
 
 function getRangeQuery() {
@@ -501,11 +505,23 @@ function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureC
   }
 }
 
+function setMinZoom(minZoom) {
+  if (state.map) {
+    state.map.setMinZoom(minZoom);
+  }
+  if (state.tileLayer && typeof state.tileLayer.setMinZoom === 'function') {
+    state.tileLayer.setMinZoom(minZoom);
+  } else if (state.tileLayer) {
+    state.tileLayer.options.minZoom = minZoom;
+  }
+}
+
 async function renderStates() {
   if (state.mode === 'world') {
     await renderWorld();
     return;
   }
+  setMinZoom(MAP_MIN_ZOOM_MX);
   setLoading(true);
   setError(false);
   try {
@@ -556,6 +572,7 @@ async function renderStates() {
 }
 
 async function renderWorld() {
+  setMinZoom(MAP_MIN_ZOOM_WORLD);
   setLoading(true);
   setError(false);
   try {
@@ -589,6 +606,14 @@ async function renderWorld() {
         sinPaisValue,
       )}.`,
     );
+    if (state.map) {
+      const bounds = state.layer?.getBounds();
+      if (bounds && bounds.isValid()) {
+        state.map.fitBounds(bounds, { padding: [30, 30] });
+      } else {
+        state.map.fitWorld({ animate: false });
+      }
+    }
   } catch (error) {
     console.error('[leads-map] world', error);
     setError(true, 'No fue posible cargar los países.');
@@ -690,9 +715,9 @@ async function initializeMap() {
       attributionControl: false,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 12,
-      minZoom: 3,
+    state.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: MAP_MAX_ZOOM,
+      minZoom: MAP_MIN_ZOOM_MX,
       attribution: '&copy; OpenStreetMap',
     }).addTo(state.map);
 
