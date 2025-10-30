@@ -104,6 +104,97 @@ class DemoAppointmentUpdatePayload(BaseModel):
     )
 
 
+class DepartamentoCreatePayload(BaseModel):
+    """Alta de departamento."""
+
+    nombre: str = Field(..., min_length=1, max_length=120)
+    departamento_padre_id: UUID | None = Field(default=None)
+
+
+class DepartamentoUpdatePayload(BaseModel):
+    """Actualización parcial de departamento."""
+
+    nombre: str | None = Field(default=None, min_length=1, max_length=120)
+    departamento_padre_id: UUID | None = Field(default=None)
+
+
+class PuestoCreatePayload(BaseModel):
+    """Alta de puesto."""
+
+    nombre: str = Field(..., min_length=1, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=400)
+    departamento_id: UUID | None = Field(default=None)
+
+
+class PuestoUpdatePayload(BaseModel):
+    """Actualización parcial de puesto."""
+
+    nombre: str | None = Field(default=None, min_length=1, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=400)
+    departamento_id: UUID | None = Field(default=None)
+
+
+class EmpleadoCreatePayload(BaseModel):
+    """Alta de empleado."""
+
+    usuario_id: UUID = Field(..., description="Usuario Supabase asociado.")
+    departamento_id: UUID | None = Field(default=None)
+    puesto_id: UUID | None = Field(default=None)
+    es_gestor: bool = Field(default=False)
+
+
+class EmpleadoUpdatePayload(BaseModel):
+    """Actualización parcial de empleado."""
+
+    departamento_id: UUID | None = Field(default=None)
+    puesto_id: UUID | None = Field(default=None)
+    es_gestor: bool | None = Field(default=None)
+
+
+class UsuarioCreatePayload(BaseModel):
+    """Alta de usuario (metadatos)."""
+
+    id: UUID = Field(..., description="UUID del usuario en auth.users.")
+    correo: str = Field(..., min_length=3, max_length=320)
+    nombre_completo: str | None = Field(default=None, max_length=200)
+    telefono_e164: str | None = Field(
+        default=None, pattern=r"^\+[0-9]{7,15}$", description="Número en formato E.164."
+    )
+    estado: Literal["activo", "inactivo"] = Field(default="activo")
+
+
+class UsuarioUpdatePayload(BaseModel):
+    """Actualización parcial de datos del usuario."""
+
+    correo: str | None = Field(default=None, min_length=3, max_length=320)
+    nombre_completo: str | None = Field(default=None, max_length=200)
+    telefono_e164: str | None = Field(
+        default=None, pattern=r"^\+[0-9]{7,15}$", description="Número en formato E.164."
+    )
+    estado: Literal["activo", "inactivo"] | None = Field(default=None)
+
+
+class UsuarioRolesUpdatePayload(BaseModel):
+    """Actualiza roles asignados a un usuario."""
+
+    roles: list[UUID] = Field(default_factory=list, description="IDs de roles a mantener.")
+
+
+class RolCreatePayload(BaseModel):
+    """Alta de rol."""
+
+    codigo: str = Field(..., min_length=2, max_length=50)
+    nombre: str = Field(..., min_length=2, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=400)
+
+
+class RolUpdatePayload(BaseModel):
+    """Actualización parcial de rol."""
+
+    nombre: str | None = Field(default=None, min_length=2, max_length=120)
+    descripcion: str | None = Field(default=None, max_length=400)
+
+
 def _supabase_base_url() -> str:
     if not settings.supabase_url:
         raise HTTPException(status_code=500, detail="Supabase no está configurado")
@@ -238,6 +329,33 @@ async def _sb_delete(
     except httpx.RequestError:
         logger.exception("Error al conectar a Supabase (DELETE)")
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+
+
+def _supabase_error(resp: httpx.Response, fallback: str) -> HTTPException:
+    detail: str | None = None
+    try:
+        payload = resp.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        detail = (
+            payload.get("message")
+            or payload.get("error_description")
+            or payload.get("error")
+            or payload.get("hint")
+        )
+    elif isinstance(payload, str):
+        detail = payload
+    if not detail:
+        detail = resp.text.strip() or fallback
+    status = resp.status_code if resp.status_code >= 400 else 502
+    return HTTPException(status_code=status, detail=detail)
+
+
+def _first_row(data: Any) -> Any:
+    if isinstance(data, list):
+        return data[0] if data else None
+    return data
 
 
 def _parse_bearer(authorization: str | None) -> str | None:
@@ -443,6 +561,377 @@ async def _require_admin(authorization: str | None) -> str:
     if not is_admin:
         raise HTTPException(status_code=403, detail="forbidden")
     return user_id
+
+
+@router.get("/config/personal")
+async def cfg_personal(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    await _require_admin(authorization)
+
+    resp_personal = await _sb_get(
+        "/rest/v1/v_configuracion_personal",
+        params={"select": "*", "order": "correo.asc"},
+    )
+    if resp_personal.status_code >= 400:
+        raise _supabase_error(resp_personal, "Error consultando personal")
+
+    resp_roles = await _sb_get(
+        "/rest/v1/roles",
+        params={"select": "id,codigo,nombre,descripcion,creado_en", "order": "codigo.asc"},
+    )
+    if resp_roles.status_code >= 400:
+        raise _supabase_error(resp_roles, "Error consultando roles")
+
+    resp_departamentos = await _sb_get(
+        "/rest/v1/departamentos",
+        params={"select": "id,nombre,departamento_padre_id,creado_en", "order": "nombre.asc"},
+    )
+    if resp_departamentos.status_code >= 400:
+        raise _supabase_error(resp_departamentos, "Error consultando departamentos")
+
+    resp_puestos = await _sb_get(
+        "/rest/v1/puestos",
+        params={"select": "id,nombre,descripcion,departamento_id,creado_en", "order": "nombre.asc"},
+    )
+    if resp_puestos.status_code >= 400:
+        raise _supabase_error(resp_puestos, "Error consultando puestos")
+
+    return {
+        "ok": True,
+        "personal": resp_personal.json() or [],
+        "roles": resp_roles.json() or [],
+        "departamentos": resp_departamentos.json() or [],
+        "puestos": resp_puestos.json() or [],
+    }
+
+
+@router.post("/config/departamentos")
+async def cfg_crear_departamento(
+    payload: DepartamentoCreatePayload, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    resp = await _sb_post("/rest/v1/departamentos", json=body, prefer="return=representation")
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando departamento")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.patch("/config/departamentos/{departamento_id}")
+async def cfg_actualizar_departamento(
+    departamento_id: UUID,
+    payload: DepartamentoUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if not body:
+        return {"ok": True, "item": None}
+    resp = await _sb_patch(
+        "/rest/v1/departamentos",
+        params={"id": f"eq.{departamento_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando departamento")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.delete("/config/departamentos/{departamento_id}")
+async def cfg_eliminar_departamento(
+    departamento_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    resp = await _sb_delete(
+        "/rest/v1/departamentos",
+        params={"id": f"eq.{departamento_id}"},
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error eliminando departamento")
+    deleted: Any | None = None
+    if resp.content:
+        try:
+            deleted = resp.json()
+        except ValueError:
+            deleted = None
+    return {"ok": True, "deleted": deleted}
+
+
+@router.post("/config/puestos")
+async def cfg_crear_puesto(
+    payload: PuestoCreatePayload, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    resp = await _sb_post("/rest/v1/puestos", json=body, prefer="return=representation")
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando puesto")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.patch("/config/puestos/{puesto_id}")
+async def cfg_actualizar_puesto(
+    puesto_id: UUID,
+    payload: PuestoUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if not body:
+        return {"ok": True, "item": None}
+    resp = await _sb_patch(
+        "/rest/v1/puestos",
+        params={"id": f"eq.{puesto_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando puesto")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.delete("/config/puestos/{puesto_id}")
+async def cfg_eliminar_puesto(
+    puesto_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    resp = await _sb_delete(
+        "/rest/v1/puestos", params={"id": f"eq.{puesto_id}"}, prefer="return=representation"
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error eliminando puesto")
+    deleted: Any | None = None
+    if resp.content:
+        try:
+            deleted = resp.json()
+        except ValueError:
+            deleted = None
+    return {"ok": True, "deleted": deleted}
+
+
+@router.post("/config/usuarios")
+async def cfg_crear_usuario(
+    payload: UsuarioCreatePayload, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if "telefono_e164" not in body or body["telefono_e164"] is None:
+        body.pop("telefono_e164", None)
+    resp = await _sb_post("/rest/v1/usuarios", json=body, prefer="return=representation")
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando usuario")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.patch("/config/usuarios/{usuario_id}")
+async def cfg_actualizar_usuario(
+    usuario_id: UUID,
+    payload: UsuarioUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if not body:
+        return {"ok": True, "item": None}
+    resp = await _sb_patch(
+        "/rest/v1/usuarios",
+        params={"id": f"eq.{usuario_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando usuario")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.delete("/config/usuarios/{usuario_id}")
+async def cfg_eliminar_usuario(
+    usuario_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    resp = await _sb_delete(
+        "/rest/v1/usuarios",
+        params={"id": f"eq.{usuario_id}"},
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error eliminando usuario")
+    deleted: Any | None = None
+    if resp.content:
+        try:
+            deleted = resp.json()
+        except ValueError:
+            deleted = None
+    return {"ok": True, "deleted": deleted}
+
+
+@router.put("/config/usuarios/{usuario_id}/roles")
+async def cfg_actualizar_roles_usuario(
+    usuario_id: UUID,
+    payload: UsuarioRolesUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    desired_ids = {str(rol_id) for rol_id in payload.roles}
+
+    resp_current = await _sb_get(
+        "/rest/v1/usuarios_roles",
+        params={"usuario_id": f"eq.{usuario_id}", "select": "rol_id"},
+    )
+    if resp_current.status_code >= 400:
+        raise _supabase_error(resp_current, "Error consultando roles actuales")
+    current_rows = resp_current.json() or []
+    current_ids = {row.get("rol_id") for row in current_rows if row.get("rol_id")}
+
+    to_add = sorted(desired_ids - current_ids)
+    to_remove = sorted(current_ids - desired_ids)
+
+    if to_add:
+        payload_rows = [{"usuario_id": str(usuario_id), "rol_id": rol_id} for rol_id in to_add]
+        resp_insert = await _sb_post(
+            "/rest/v1/usuarios_roles",
+            json=payload_rows,  # type: ignore[arg-type]
+            prefer="return=representation",
+        )
+        if resp_insert.status_code >= 400:
+            raise _supabase_error(resp_insert, "Error asignando roles")
+
+    for rol_id in to_remove:
+        resp_del = await _sb_delete(
+            "/rest/v1/usuarios_roles",
+            params={"usuario_id": f"eq.{usuario_id}", "rol_id": f"eq.{rol_id}"},
+        )
+        if resp_del.status_code >= 400:
+            raise _supabase_error(resp_del, "Error removiendo roles")
+
+    resp_updated = await _sb_get(
+        "/rest/v1/usuarios_roles",
+        params={
+            "usuario_id": f"eq.{usuario_id}",
+            "select": "rol:roles(id,codigo,nombre)",
+            "order": "rol(codigo).asc",
+        },
+    )
+    if resp_updated.status_code >= 400:
+        raise _supabase_error(resp_updated, "Error consultando roles actualizados")
+    return {"ok": True, "items": resp_updated.json() or []}
+
+
+@router.post("/config/empleados")
+async def cfg_crear_empleado(
+    payload: EmpleadoCreatePayload, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    resp = await _sb_post("/rest/v1/empleados", json=body, prefer="return=representation")
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando empleado")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.patch("/config/empleados/{usuario_id}")
+async def cfg_actualizar_empleado(
+    usuario_id: UUID,
+    payload: EmpleadoUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if not body:
+        return {"ok": True, "item": None}
+    resp = await _sb_patch(
+        "/rest/v1/empleados",
+        params={"usuario_id": f"eq.{usuario_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando empleado")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.delete("/config/empleados/{usuario_id}")
+async def cfg_eliminar_empleado(
+    usuario_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    resp = await _sb_delete(
+        "/rest/v1/empleados",
+        params={"usuario_id": f"eq.{usuario_id}"},
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error eliminando empleado")
+    deleted: Any | None = None
+    if resp.content:
+        try:
+            deleted = resp.json()
+        except ValueError:
+            deleted = None
+    return {"ok": True, "deleted": deleted}
+
+
+@router.post("/config/roles")
+async def cfg_crear_rol(
+    payload: RolCreatePayload, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    resp = await _sb_post("/rest/v1/roles", json=body, prefer="return=representation")
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando rol")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.patch("/config/roles/{rol_id}")
+async def cfg_actualizar_rol(
+    rol_id: UUID,
+    payload: RolUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if not body:
+        return {"ok": True, "item": None}
+    resp = await _sb_patch(
+        "/rest/v1/roles",
+        params={"id": f"eq.{rol_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando rol")
+    data = resp.json() or []
+    return {"ok": True, "item": _first_row(data)}
+
+
+@router.delete("/config/roles/{rol_id}")
+async def cfg_eliminar_rol(
+    rol_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    resp = await _sb_delete(
+        "/rest/v1/roles", params={"id": f"eq.{rol_id}"}, prefer="return=representation"
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error eliminando rol")
+    deleted: Any | None = None
+    if resp.content:
+        try:
+            deleted = resp.json()
+        except ValueError:
+            deleted = None
+    return {"ok": True, "deleted": deleted}
 
 
 @router.get("/config/agentes")
