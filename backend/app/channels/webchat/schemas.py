@@ -76,6 +76,20 @@ class CloseSessionRequest(BaseModel):
     """Payload para POST /close."""
 
     session_id: str = Field(..., description="Identificador de sesión generado en el widget.")
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos opcionales capturados en el cliente.",
+    )
+
+
+class VisitRegistrationRequest(BaseModel):
+    """Payload para registrar/actualizar una visita webchat."""
+
+    session_id: str = Field(..., description="Identificador de sesión generado en el widget.")
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos opcionales capturados en el cliente.",
+    )
 
 
 class ClientConfig(BaseModel):

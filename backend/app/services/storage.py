@@ -131,8 +131,8 @@ async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
     }
 
 
-async def resolve_webchat_conversation_from_session(session_id: str) -> dict[str, Any] | None:
-    """Obtiene la última conversación webchat asociada a un session_id."""
+async def get_webchat_contact_id(session_id: str) -> str | None:
+    """Devuelve el contacto asociado a un session_id para el canal webchat."""
     if not settings.supabase_url or not settings.supabase_service_role:
         raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
 
@@ -170,8 +170,24 @@ async def resolve_webchat_conversation_from_session(session_id: str) -> dict[str
     if not isinstance(ident_data, list) or not ident_data:
         return None
     contact_id = ident_data[0].get("contacto_id")
+    return str(contact_id) if contact_id else None
+
+
+async def resolve_webchat_conversation_from_session(session_id: str) -> dict[str, Any] | None:
+    """Obtiene la última conversación webchat asociada a un session_id."""
+    contact_id = await get_webchat_contact_id(session_id)
     if not contact_id:
         return None
+
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
 
     conv_url = f"{base_url}/rest/v1/conversaciones"
     conv_params = {

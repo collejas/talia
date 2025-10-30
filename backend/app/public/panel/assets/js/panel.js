@@ -3,6 +3,7 @@ import { setupLeadsMap } from './leads_map.js';
 
 const KPI_IDS = [
   'kpi-conv',
+  'kpi-visitas-totales',
   'kpi-contacts',
   'kpi-channels',
   'kpi-webchat-visitas',
@@ -109,6 +110,7 @@ function applyKpis(data) {
   const conversaciones = data?.conversaciones || {};
   const contactos = data?.contactos || {};
   const visitantesSinChat = Number(data?.visitantes ?? 0);
+  const visitasTotales = Number(data?.visitas_totales ?? 0);
   const webchat = data?.webchat || {};
   const totalConvs = Number(conversaciones?.total ?? 0);
   const totalContactosCompletos = Number(contactos?.total ?? 0);
@@ -122,6 +124,7 @@ function applyKpis(data) {
   const maxRespuesta = tiemposRespuesta?.maximo;
 
   setText('kpi-conv', formatNumber(totalConvs));
+  setText('kpi-visitas-totales', formatNumber(visitasTotales));
   setText('kpi-contacts', formatNumber(totalContactosCompletos));
   setText('kpi-channels', formatNumber(conversaciones?.canales_activos ?? 0));
   setText('kpi-webchat-visitas', formatNumber(visitantesSinChat));

@@ -227,28 +227,33 @@ async def _maybe_enrich_contact_metadata(
         )
 
 
-async def handle_message(
-    payload: schemas.MessageRequest,
+async def _register_webchat_visit(
+    session_id: str,
     *,
-    request: Request | None = None,
-) -> schemas.MessageResponse:
-    """Orquesta la recepción de un mensaje y delega en OpenAI/Supabase."""
-    if payload.author != "user":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Sólo se aceptan mensajes de usuario desde el widget.",
-        )
+    request: Request | None,
+    metadata: dict[str, Any] | None,
+    contact_id_hint: str | None = None,
+) -> str | None:
+    """Registra la visita para métricas y enriquece metadatos del contacto."""
+    client_meta = _safe_dict(metadata)
+    client_context = _safe_dict(client_meta.get("client"))
 
     client_ip = _extract_client_ip(request)
     user_agent_header = request.headers.get("user-agent") if request else None
-    client_metadata = _safe_dict(payload.metadata) if payload.metadata else {}
-    client_context = _safe_dict(client_metadata.get("client"))
-
     device_type = _classify_device_type(user_agent_header, client_context)
 
-    geo_ip_data = await geolocation.lookup_ip(client_ip) if client_ip else None
-    client_geo = _safe_dict(client_context.get("geo"))
+    geo_ip_data: dict[str, Any] | None = None
+    if client_ip:
+        try:
+            geo_ip_data = await geolocation.lookup_ip(client_ip)
+        except Exception:  # pragma: no cover - best effort
+            logger.exception(
+                "webchat.geo_lookup_failed",
+                extra={"session_id": session_id},
+            )
+            geo_ip_data = None
 
+    client_geo = _safe_dict(client_context.get("geo"))
     geo_source: dict[str, Any] = {}
     if geo_ip_data:
         country_ip = geo_ip_data.get("country")
@@ -269,8 +274,15 @@ async def handle_message(
             value = client_geo.get(key)
             if value:
                 geo_source[key] = value
-    location_tuple = leads_geo.location_from_geo_metadata(geo_source or None)
-    estado_clave, estado_nombre, muni_clave, muni_nombre, cvegeo = location_tuple
+
+    estado_clave: str | None
+    estado_nombre: str | None
+    municipio_clave: str | None
+    municipio_nombre: str | None
+    cvegeo: str | None
+    estado_clave, estado_nombre, municipio_clave, municipio_nombre, cvegeo = (
+        leads_geo.location_from_geo_metadata(geo_source or None)
+    )
 
     visitor_geo_payload: dict[str, Any] = {}
     if geo_ip_data:
@@ -279,8 +291,100 @@ async def handle_message(
         visitor_geo_payload["client"] = client_geo
     if estado_nombre:
         visitor_geo_payload.setdefault("nom_ent", estado_nombre)
-    if muni_nombre:
-        visitor_geo_payload.setdefault("nom_mun", muni_nombre)
+    if municipio_nombre:
+        visitor_geo_payload.setdefault("nom_mun", municipio_nombre)
+
+    referrer = (
+        client_context.get("referrer") if isinstance(client_context.get("referrer"), str) else None
+    )
+    landing_url = (
+        client_context.get("location_href")
+        if isinstance(client_context.get("location_href"), str)
+        else None
+    )
+
+    try:
+        await storage.record_webchat_visit(
+            session_id,
+            ip=client_ip,
+            device_type=device_type,
+            geo=visitor_geo_payload or None,
+            cve_ent=estado_clave,
+            nom_ent=estado_nombre,
+            cve_mun=municipio_clave,
+            nom_mun=municipio_nombre,
+            cvegeo=cvegeo,
+            referrer=referrer,
+            landing_url=landing_url,
+        )
+    except storage.StorageError as exc:
+        logger.exception(
+            "webchat.record_visit_failed",
+            extra={"session_id": session_id, "error": str(exc)},
+        )
+
+    contact_id = str(contact_id_hint) if contact_id_hint else None
+    if not contact_id:
+        try:
+            contact_id = await storage.get_webchat_contact_id(session_id)
+        except storage.StorageError as exc:
+            logger.exception(
+                "webchat.resolve_contact_failed",
+                extra={"session_id": session_id, "error": str(exc)},
+            )
+            contact_id = None
+
+    if contact_id:
+        try:
+            await _maybe_enrich_contact_metadata(
+                contact_id,
+                client_context=client_context,
+                device_type=device_type,
+                geo_ip_data=geo_ip_data,
+                estado_clave=estado_clave,
+                estado_nombre=estado_nombre,
+                municipio_clave=municipio_clave,
+                municipio_nombre=municipio_nombre,
+                cvegeo=cvegeo,
+                referrer=referrer,
+                landing_url=landing_url,
+            )
+        except Exception:  # pragma: no cover - best effort
+            logger.exception(
+                "webchat.contact_enrich_failed",
+                extra={"contact_id": contact_id},
+            )
+
+    return contact_id
+
+
+async def register_visit(
+    session_id: str,
+    *,
+    metadata: dict[str, Any] | None,
+    request: Request | None,
+) -> str | None:
+    """Endpoint público para registrar la visita aunque no haya mensajes."""
+    return await _register_webchat_visit(
+        session_id,
+        request=request,
+        metadata=metadata,
+    )
+
+
+async def handle_message(
+    payload: schemas.MessageRequest,
+    *,
+    request: Request | None = None,
+) -> schemas.MessageResponse:
+    """Orquesta la recepción de un mensaje y delega en OpenAI/Supabase."""
+    if payload.author != "user":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sólo se aceptan mensajes de usuario desde el widget.",
+        )
+
+    metadata_dict = payload.metadata if isinstance(payload.metadata, dict) else None
 
     try:
         registration = await storage.register_webchat_message(
@@ -342,53 +446,13 @@ async def handle_message(
             status_code=500, detail="No se pudo asociar la conversación al contacto"
         )
 
-    try:
-        await storage.record_webchat_visit(
-            payload.session_id,
-            ip=client_ip,
-            device_type=device_type,
-            geo=visitor_geo_payload or None,
-            cve_ent=estado_clave,
-            nom_ent=estado_nombre,
-            cve_mun=muni_clave,
-            nom_mun=muni_nombre,
-            cvegeo=cvegeo,
-            referrer=client_context.get("referrer")
-            if isinstance(client_context.get("referrer"), str)
-            else None,
-            landing_url=client_context.get("location_href")
-            if isinstance(client_context.get("location_href"), str)
-            else None,
-        )
-    except storage.StorageError as exc:
-        logger.exception(
-            "webchat.record_visit_failed",
-            extra={"session_id": payload.session_id, "error": str(exc)},
-        )
-
-    try:
-        await _maybe_enrich_contact_metadata(
-            str(contact_id),
-            client_context=client_context,
-            device_type=device_type,
-            geo_ip_data=geo_ip_data,
-            estado_clave=estado_clave,
-            estado_nombre=estado_nombre,
-            municipio_clave=muni_clave,
-            municipio_nombre=muni_nombre,
-            cvegeo=cvegeo,
-            referrer=client_context.get("referrer")
-            if isinstance(client_context.get("referrer"), str)
-            else None,
-            landing_url=client_context.get("location_href")
-            if isinstance(client_context.get("location_href"), str)
-            else None,
-        )
-    except Exception:  # pragma: no cover - best effort
-        logger.exception(
-            "webchat.contact_enrich_failed",
-            extra={"contact_id": str(contact_id)},
-        )
+    contact_id_value = await _register_webchat_visit(
+        payload.session_id,
+        request=request,
+        metadata=metadata_dict,
+        contact_id_hint=str(contact_id),
+    )
+    contact_id = contact_id_value or str(contact_id)
 
     assistant: AssistantConfig
     try:
@@ -535,7 +599,12 @@ async def fetch_history(session_id: str, limit: int) -> schemas.HistoryResponse:
     )
 
 
-async def close_session(session_id: str) -> None:
+async def close_session(
+    session_id: str,
+    *,
+    metadata: dict[str, Any] | None = None,
+    request: Request | None = None,
+) -> None:
     """Registra el cierre explícito de una sesión."""
     try:
         await storage.record_webchat_session_closure(session_id)
@@ -544,6 +613,18 @@ async def close_session(session_id: str) -> None:
             "webchat.session_close_failed", extra={"session_id": session_id, "error": str(exc)}
         )
         raise HTTPException(status_code=502, detail="No fue posible registrar el cierre") from exc
+
+    try:
+        await _register_webchat_visit(
+            session_id,
+            request=request,
+            metadata=metadata,
+        )
+    except Exception:  # pragma: no cover - best effort
+        logger.exception(
+            "webchat.visit_capture_failed",
+            extra={"session_id": session_id},
+        )
 
 
 async def _run_assistant_turn(

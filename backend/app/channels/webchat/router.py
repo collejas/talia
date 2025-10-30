@@ -42,9 +42,33 @@ async def get_webchat_messages(
     status_code=204,
     summary="Registra el cierre explícito de una sesión webchat",
 )
-async def close_webchat_session(payload: schemas.CloseSessionRequest) -> Response:
+async def close_webchat_session(
+    payload: schemas.CloseSessionRequest,
+    request: Request,
+) -> Response:
     """Persiste el cierre para alimentar métricas de visitantes."""
-    await service.close_session(payload.session_id)
+    await service.close_session(
+        payload.session_id,
+        metadata=payload.metadata,
+        request=request,
+    )
+    return Response(status_code=204)
+
+
+@router.post(
+    "/visit",
+    status_code=204,
+    summary="Registra o actualiza la visita de un session_id",
+)
+async def register_webchat_visit(
+    payload: schemas.VisitRegistrationRequest,
+    request: Request,
+) -> Response:
+    await service.register_visit(
+        payload.session_id,
+        metadata=payload.metadata,
+        request=request,
+    )
     return Response(status_code=204)
 
 

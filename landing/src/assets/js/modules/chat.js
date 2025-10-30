@@ -37,6 +37,7 @@ const state = {
   assistantQueue: Promise.resolve(),
   lifecycleBound: false,
   hiddenTimeoutHandle: null,
+  visitRegistered: false,
 };
 
 let config = { ...defaultConfig };
@@ -63,6 +64,8 @@ export function initialiseChat(options = {}) {
     config.storageSessionKey,
     config.persistSession,
   );
+  state.visitRegistered = false;
+  void ensureVisitRegistered();
 
   elements.chatForm.addEventListener('submit', handleSubmit);
 
@@ -125,12 +128,18 @@ function handleVisibilityChange() {
 
 function sendSessionClosure({ allowBeacon = false } = {}) {
   if (!state.sessionId) return false;
+  void ensureVisitRegistered(true);
   const url = `${config.apiBaseUrl}/close`;
-  const payload = JSON.stringify({ session_id: state.sessionId });
+  const clientMeta = collectClientMetadata();
+  const payload = { session_id: state.sessionId };
+  if (clientMeta && Object.keys(clientMeta).length > 0) {
+    payload.metadata = { client: clientMeta };
+  }
+  const jsonPayload = JSON.stringify(payload);
   let sent = false;
   if (allowBeacon && typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
     try {
-      sent = navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+      sent = navigator.sendBeacon(url, new Blob([jsonPayload], { type: 'application/json' }));
     } catch (error) {
       sent = false;
     }
@@ -140,7 +149,7 @@ function sendSessionClosure({ allowBeacon = false } = {}) {
       void fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: payload,
+        body: jsonPayload,
         keepalive: true,
         cache: 'no-store',
       });
@@ -587,6 +596,30 @@ function collectClientMetadata() {
   };
 }
 
+async function ensureVisitRegistered(force = false) {
+  if (!state.chatEnabled || !state.sessionId) return;
+  if (state.visitRegistered && !force) return;
+  const clientMeta = collectClientMetadata();
+  const payload = { session_id: state.sessionId };
+  if (clientMeta && Object.keys(clientMeta).length > 0) {
+    payload.metadata = { client: clientMeta };
+  }
+  try {
+    const response = await fetch(`${config.apiBaseUrl}/visit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+      keepalive: true,
+    });
+    if (response.ok) {
+      state.visitRegistered = true;
+    }
+  } catch (error) {
+    console.warn('[chat] No se pudo registrar la visita inicial.', error);
+  }
+}
+
 async function sendToAssistant(message, clientMessageId) {
   if (!state.chatEnabled) return { reply: getFallbackResponse(), metadata: {} };
 
@@ -594,6 +627,7 @@ async function sendToAssistant(message, clientMessageId) {
   const RETRY_DELAYS_MS = [1000, 2000];
 
   async function doFetch() {
+    void ensureVisitRegistered();
     const clientMeta = collectClientMetadata();
     const payload = {
       session_id: state.sessionId,
