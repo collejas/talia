@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>TalIA • Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/api/shared/logos/Logo8.svg" />
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./assets/js/config.js"></script>
+  <style>
+    .leads-card{display:flex;flex-direction:column;gap:18px;padding:22px;border-radius:18px;border:1px solid var(--border-soft);background:var(--surface);box-shadow:0 8px 26px rgba(10,12,20,.18)}
+    .leads-toolbar{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
+    .leads-filters{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+    .leads-filters label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+    .leads-filters input,
+    .leads-filters select{min-width:190px;padding:10px 12px;border-radius:10px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg)}
+    .leads-actions{display:flex;align-items:center;gap:10px}
+    .view-toggle{display:inline-flex;border:1px solid var(--border-soft);border-radius:10px;overflow:hidden}
+    .view-toggle .btn{border:none;border-radius:0;padding:8px 14px}
+    .view-toggle .btn.is-active{background:var(--primary);color:#fff}
+    .leads-loading{display:none;padding:12px 0;color:var(--muted)}
+    .leads-loading.is-visible{display:block}
+    .leads-error{padding:12px;border-radius:10px;background:rgba(223,72,108,.16);color:#ffd6e0;display:none}
+    .leads-error.is-visible{display:block}
+    .lead-table{width:100%;border-collapse:collapse;font-size:14px}
+    .lead-table th,.lead-table td{border:1px solid var(--border-soft);padding:10px 12px;text-align:left;vertical-align:top}
+    .lead-table th{background:var(--surface-alt);font-weight:600;color:var(--fg)}
+    .lead-table tbody tr:hover{background:rgba(106,163,255,.08)}
+    .lead-tags{display:flex;flex-wrap:wrap;gap:6px}
+    .lead-tag{padding:2px 8px;border-radius:999px;background:rgba(106,163,255,.12);color:var(--primary);font-size:12px}
+    .lead-view[hidden]{display:none !important}
+    .lead-accordion{display:grid;gap:12px}
+    .lead-accordion-item{border:1px solid var(--border-soft);border-radius:14px;overflow:hidden;background:var(--surface-alt)}
+    .lead-accordion-item summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;font-weight:600;cursor:pointer;list-style:none}
+    .lead-accordion-item summary::-webkit-details-marker{display:none}
+    .lead-accordion-item summary:hover{background:rgba(106,163,255,.08)}
+    .lead-accordion-meta{font-size:13px;color:var(--muted)}
+    .lead-accordion-body{padding:16px;background:var(--surface)}
+    .lead-detail-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin:0;padding:0}
+    .lead-detail-grid dt{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:2px}
+    .lead-detail-grid dd{margin:0;font-size:14px}
+    .lead-notes{margin-top:12px;font-size:13px;color:var(--muted)}
+    .lead-load-more{align-self:center}
+    @media (max-width:720px){
+      .leads-filters input,
+      .leads-filters select{min-width:0;width:100%}
+      .leads-actions{width:100%;justify-content:space-between}
+      .view-toggle{flex:1}
+      .view-toggle .btn{flex:1}
+    }
+  </style>
+</head>
+<body class="theme-aurora" data-nav="leads">
+  <main class="container" style="padding:24px 0 40px;">
+    <h1 style="margin:0 0 8px;">Leads</h1>
+    <p class="muted" style="margin:0 0 18px;">Explora y filtra los leads asignados en tiempo real.</p>
+
+    <section class="leads-card" aria-labelledby="leads-title">
+      <div class="leads-toolbar">
+        <div class="leads-filters" role="group" aria-label="Filtros de leads">
+          <label>
+            <span>Buscar</span>
+            <input type="search" id="lead-search" placeholder="Nombre, correo o teléfono" autocomplete="off" />
+          </label>
+          <label>
+            <span>Canal</span>
+            <select id="lead-filter-canal">
+              <option value="">Todos los canales</option>
+            </select>
+          </label>
+          <label>
+            <span>Etapa</span>
+            <select id="lead-filter-etapa">
+              <option value="">Todas las etapas</option>
+            </select>
+          </label>
+          <label>
+            <span>Vendedor</span>
+            <select id="lead-filter-vendedor">
+              <option value="">Todos los vendedores</option>
+            </select>
+          </label>
+        </div>
+        <div class="leads-actions">
+          <div class="view-toggle" role="group" aria-label="Cambiar vista">
+            <button class="btn btn-outline is-active" type="button" data-view="table" id="lead-view-table">Tabla</button>
+            <button class="btn btn-outline" type="button" data-view="accordion" id="lead-view-accordion">Acordeón</button>
+          </div>
+          <button class="btn btn-ghost" type="button" id="lead-clear-filters">Limpiar</button>
+        </div>
+      </div>
+
+      <div class="muted" id="lead-summary">Cargando leads…</div>
+      <div class="leads-loading" id="lead-loading">Actualizando datos…</div>
+      <div class="leads-error" id="lead-error">No fue posible cargar la lista de leads. Intenta nuevamente.</div>
+
+      <div id="lead-table-container" class="lead-view">
+        <table class="config-table lead-table" aria-describedby="lead-summary">
+          <thead>
+            <tr>
+              <th>Lead</th>
+              <th>Contacto</th>
+              <th>Canal</th>
+              <th>Etapa</th>
+              <th>Vendedor</th>
+              <th>Score</th>
+              <th>Creado</th>
+            </tr>
+          </thead>
+          <tbody id="lead-table-body">
+            <tr><td colspan="7" class="muted">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="lead-accordion-container" class="lead-view" hidden>
+        <div id="lead-accordion" class="lead-accordion"></div>
+      </div>
+
+      <button class="btn btn-outline lead-load-more" id="lead-load-more" type="button">Cargar más</button>
+    </section>
+  </main>
+
+  <script type="module">
+    import { ensureSession, setActiveNav } from './assets/js/common.js';
+    import { setupLeads } from './assets/js/leads.js';
+
+    (async () => {
+      await ensureSession();
+      setActiveNav(document.body.dataset.nav || '');
+      setupLeads();
+    })();
+  </script>
+</body>
+</html>

@@ -21,6 +21,7 @@ function isAuthPage() {
 const NAV_LINKS = [
   { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
   { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
+  { id: 'leads', href: 'leads.html', label: 'Leads' },
   { id: 'agenda', href: 'agenda.html', label: 'Agenda' },
   { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
   { id: 'config', href: 'configuracion.html', label: 'Configuración' },

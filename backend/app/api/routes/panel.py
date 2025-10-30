@@ -7,6 +7,7 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from uuid import UUID
@@ -358,6 +359,28 @@ def _first_row(data: Any) -> Any:
     if isinstance(data, list):
         return data[0] if data else None
     return data
+
+
+def _content_range_total(header: str | None) -> int | None:
+    if not header:
+        return None
+    try:
+        _range, total = header.split("/")
+    except ValueError:
+        return None
+    total = total.strip()
+    if not total or total == "*":
+        return None
+    try:
+        return int(total)
+    except ValueError:
+        return None
+
+
+def _single_related(value: Any) -> Any:
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
 
 
 def _parse_bearer(authorization: str | None) -> str | None:
@@ -968,6 +991,198 @@ async def cfg_canales(authorization: str | None = Header(default=None)) -> dict[
             counts[c] = counts.get(c, 0) + 1
     activos = sorted(counts.keys())
     return {"ok": True, "activos": activos, "conteo": counts}
+
+
+@router.get("/leads")
+async def listar_leads(
+    q: str | None = Query(default=None),
+    canal: str | None = Query(default=None),
+    etapa: str | None = Query(default=None),
+    tablero: str | None = Query(default=None),
+    asignado: str | None = Query(default=None),
+    propietario: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    direction: Literal["asc", "desc"] | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    limit = max(1, min(limit, 500))
+    offset = max(offset, 0)
+
+    select_clause = (
+        "id,tablero_id,etapa_id,contacto_id,canal,creado_en,actualizado_en,lead_score,"
+        "probabilidad_override,tags,metadata,"
+        "etapa:lead_etapas!lead_tarjetas_etapa_id_fkey(id,nombre,categoria,orden),"
+        "tablero:lead_tableros!lead_tarjetas_tablero_id_fkey(id,nombre,slug),"
+        "contacto:contactos!lead_tarjetas_contacto_id_fkey("
+        "id,nombre_completo,correo,telefono_e164,estado,company_name,notes,necesidad_proposito,creado_en"
+        "),"
+        "asignado:usuarios!lead_tarjetas_asignado_a_usuario_id_fkey(id,nombre_completo,correo),"
+        "propietario:usuarios!lead_tarjetas_propietario_usuario_id_fkey(id,nombre_completo,correo)"
+    )
+
+    params: dict[str, str] = {
+        "select": select_clause,
+        "limit": str(limit),
+        "offset": str(offset),
+    }
+
+    sort_columns = {"creado_en", "actualizado_en", "lead_score"}
+    direction_value = direction if direction in {"asc", "desc"} else "desc"
+    sort_column = sort if sort in sort_columns else "creado_en"
+    params["order"] = f"{sort_column}.{direction_value}"
+
+    if canal:
+        params["canal"] = f"eq.{canal.lower()}"
+    if etapa:
+        params["etapa_id"] = f"eq.{etapa}"
+    if tablero:
+        params["tablero_id"] = f"eq.{tablero}"
+    if asignado:
+        params["asignado_a_usuario_id"] = f"eq.{asignado}"
+    if propietario:
+        params["propietario_usuario_id"] = f"eq.{propietario}"
+
+    if q:
+        cleaned = " ".join(q.strip().split())
+        sanitized = "".join(ch for ch in cleaned if ch.isalnum() or ch in "@._+- ")
+        if sanitized:
+            like = sanitized
+            params["or"] = (
+                f"(contacto_nombre.ilike.*{like}*,contacto_correo.ilike.*{like}*,"
+                f"contacto_telefono.ilike.*{like}*)"
+            )
+
+    resp = await _sb_get(
+        "/rest/v1/lead_tarjetas",
+        params=params,
+        token=token,
+        prefer="count=exact",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando leads")
+
+    raw = resp.json() or []
+    if not isinstance(raw, list):
+        raw = []
+
+    items: list[dict[str, Any]] = []
+    for row in raw:
+        etapa_raw = _single_related(row.get("etapa"))
+        etapa: dict[str, Any] | None = None
+        if isinstance(etapa_raw, dict):
+            etapa = {
+                "id": etapa_raw.get("id"),
+                "nombre": etapa_raw.get("nombre"),
+                "categoria": etapa_raw.get("categoria"),
+                "orden": etapa_raw.get("orden"),
+            }
+
+        tablero_raw = _single_related(row.get("tablero"))
+        tablero_payload: dict[str, Any] | None = None
+        if isinstance(tablero_raw, dict):
+            tablero_payload = {
+                "id": tablero_raw.get("id"),
+                "nombre": tablero_raw.get("nombre"),
+                "slug": tablero_raw.get("slug"),
+            }
+
+        contacto_raw = _single_related(row.get("contacto"))
+        contacto_payload: dict[str, Any] = {}
+        if isinstance(contacto_raw, dict):
+            contacto_payload = {
+                "id": contacto_raw.get("id") or row.get("contacto_id"),
+                "nombre": contacto_raw.get("nombre_completo")
+                or row.get("contacto_nombre")
+                or "Sin nombre",
+                "correo": contacto_raw.get("correo") or row.get("contacto_correo"),
+                "telefono": contacto_raw.get("telefono_e164") or row.get("contacto_telefono"),
+                "estado": contacto_raw.get("estado"),
+                "company_name": contacto_raw.get("company_name"),
+                "notes": contacto_raw.get("notes"),
+                "necesidad": contacto_raw.get("necesidad_proposito"),
+                "creado_en": contacto_raw.get("creado_en"),
+            }
+        else:
+            contacto_payload = {
+                "id": row.get("contacto_id"),
+                "nombre": row.get("contacto_nombre") or "Sin nombre",
+                "correo": row.get("contacto_correo"),
+                "telefono": row.get("contacto_telefono"),
+                "estado": None,
+                "company_name": None,
+                "notes": None,
+                "necesidad": None,
+                "creado_en": None,
+            }
+
+        asignado_raw = _single_related(row.get("asignado"))
+        asignado_payload: dict[str, Any] | None = None
+        if isinstance(asignado_raw, dict):
+            asignado_payload = {
+                "id": asignado_raw.get("id"),
+                "nombre_completo": asignado_raw.get("nombre_completo"),
+                "correo": asignado_raw.get("correo"),
+            }
+
+        propietario_raw = _single_related(row.get("propietario"))
+        propietario_payload: dict[str, Any] | None = None
+        if isinstance(propietario_raw, dict):
+            propietario_payload = {
+                "id": propietario_raw.get("id"),
+                "nombre_completo": propietario_raw.get("nombre_completo"),
+                "correo": propietario_raw.get("correo"),
+            }
+
+        metadata = row.get("metadata")
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = None
+
+        siguiente_accion: str | None = None
+        if isinstance(metadata, dict):
+            raw_value = metadata.get("siguiente_accion")
+            if isinstance(raw_value, str):
+                siguiente_accion = raw_value
+        elif isinstance(metadata, list):
+            siguiente_accion = None
+
+        items.append(
+            {
+                "id": row.get("id"),
+                "canal": row.get("canal"),
+                "creado_en": row.get("creado_en"),
+                "actualizado_en": row.get("actualizado_en"),
+                "lead_score": row.get("lead_score"),
+                "probabilidad": row.get("probabilidad_override"),
+                "siguiente_accion": siguiente_accion,
+                "metadata": metadata if isinstance(metadata, (dict, list)) else None,
+                "tablero": tablero_payload,
+                "etapa": etapa,
+                "contacto": contacto_payload,
+                "asignado": asignado_payload,
+                "propietario": propietario_payload,
+            }
+        )
+
+    total = _content_range_total(resp.headers.get("content-range"))
+    computed_total = total if total is not None else offset + len(items)
+
+    return {
+        "ok": True,
+        "items": items,
+        "total": computed_total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": computed_total > offset + len(items),
+    }
 
 
 @router.get("/inbox")
