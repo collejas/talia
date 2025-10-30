@@ -756,6 +756,50 @@ async def fetch_visitantes_municipios(
     return data
 
 
+async def fetch_visitantes_paises(
+    *,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> dict[str, Any]:
+    """Recupera totales de visitantes agrupados por país."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/panel_visitantes_world_paises"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {}
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload or None)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar visitantes por país: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar visitantes por país"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json()
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada de visitantes por país: {data!r}")
+    return data
+
+
 async def fetch_leads_states(
     *,
     channels: list[str] | None = None,

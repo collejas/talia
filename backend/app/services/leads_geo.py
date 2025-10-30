@@ -135,6 +135,12 @@ def load_full_states_geojson() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=None)
+def load_world_countries_geojson() -> dict[str, Any]:
+    """GeoJSON simplificado de países."""
+    return _load_json("geo/world.geojson")
+
+
+@lru_cache(maxsize=None)
 def load_state_municipalities_geojson(cve_ent: str) -> dict[str, Any]:
     """Retorna el GeoJSON de municipios para la `cve_ent` recibida."""
     manifest = _municipios_manifest()

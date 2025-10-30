@@ -982,6 +982,16 @@ async def leads_geo_municipios(estado: str) -> dict[str, Any]:
     return {"ok": True, "geojson": geojson}
 
 
+@router.get("/kpis/leads/geo/paises")
+async def leads_geo_paises() -> dict[str, Any]:
+    try:
+        geojson = leads_geo.load_world_countries_geojson()
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        logger.exception("geo.world_missing")
+        raise HTTPException(status_code=500, detail="geojson_missing") from exc
+    return {"ok": True, "geojson": geojson}
+
+
 @router.get("/kpis/visitantes/estados")
 async def visitantes_estado_metrics(
     rango: str | None = Query(default=None),
@@ -1036,6 +1046,70 @@ async def visitantes_estado_metrics(
         "total_contactos": total,
         "total_ubicados": ubicados,
         "sin_ubicacion": sin_ubicacion,
+        "range": _build_range_payload(rango, date_from, date_to),
+    }
+
+
+@router.get("/kpis/visitantes/paises")
+async def visitantes_paises_metrics(
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+
+    try:
+        payload = await storage.fetch_visitantes_paises(date_from=date_from, date_to=date_to)
+    except storage.StorageError as exc:
+        logger.exception("visitantes.paises_fetch_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando visitantes por país"
+        ) from exc
+
+    raw_items = payload.get("items") if isinstance(payload, dict) else []
+    totals = payload.get("totals") if isinstance(payload, dict) else {}
+
+    items: list[dict[str, Any]] = []
+    if isinstance(raw_items, list):
+        for row in raw_items:
+            if not isinstance(row, dict):
+                continue
+            country_code = str(row.get("country_code") or "").upper()
+            total = int(row.get("total") or 0)
+            if total <= 0:
+                continue
+            item: dict[str, Any] = {
+                "country_code": country_code or "UNK",
+                "nombre": row.get("nombre") or country_code or "Desconocido",
+                "total": total,
+            }
+            if row.get("avg_lat") is not None and row.get("avg_lng") is not None:
+                try:
+                    item["avg_lat"] = float(row["avg_lat"])
+                    item["avg_lng"] = float(row["avg_lng"])
+                except (TypeError, ValueError):
+                    pass
+            with_coords = row.get("with_coordinates")
+            if with_coords is not None:
+                try:
+                    item["with_coordinates"] = int(with_coords)
+                except (TypeError, ValueError):
+                    item["with_coordinates"] = None
+            items.append(item)
+
+    return {
+        "ok": True,
+        "items": items,
+        "totals": {
+            "total": int((totals or {}).get("total") or 0),
+            "ubicados": int((totals or {}).get("ubicados") or 0),
+            "sin_pais": int((totals or {}).get("sin_pais") or 0),
+        },
         "range": _build_range_payload(rango, date_from, date_to),
     }
 

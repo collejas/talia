@@ -205,9 +205,18 @@ const state = {
   scale: 'quantile',
   palette: 'dusk',
   channelKey: 'todos',
+  prevChannelKey: 'todos',
+  mode: 'mx',
   statesCache: new Map(),
   municipalityCache: new Map(),
+  worldCache: new Map(),
 };
+
+function getRangeQuery() {
+  const rangeSelect = $('dashboard-range');
+  const value = rangeSelect ? rangeSelect.value : null;
+  return value ? `?rango=${encodeURIComponent(value)}` : '';
+}
 
 function getChannelParam(key) {
   if (key === 'todos') {
@@ -396,6 +405,31 @@ async function getMunicipalityData(channelParam, stateCode) {
   return state.municipalityCache.get(cacheKey);
 }
 
+async function getWorldResources() {
+  const rangeQuery = getRangeQuery();
+  const cacheKey = rangeQuery || '__default__';
+  if (!state.worldCache.has(cacheKey)) {
+    const promise = (async () => {
+      const [geo, metrics] = await Promise.all([
+        fetchJSON('/api/kpis/leads/geo/paises'),
+        fetchJSONWithAuth(`/api/kpis/visitantes/paises${rangeQuery}`),
+      ]);
+      if (!geo.ok || !geo.json?.geojson) {
+        throw new Error('geo_world_failed');
+      }
+      if (!metrics.ok || !metrics.json?.ok) {
+        throw new Error('metrics_world_failed');
+      }
+      return { geojson: geo.json.geojson, metrics: metrics.json };
+    })();
+    promise.catch(() => {
+      state.worldCache.delete(cacheKey);
+    });
+    state.worldCache.set(cacheKey, promise);
+  }
+  return state.worldCache.get(cacheKey);
+}
+
 function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureClick }) {
   if (!state.map) return;
   const valuesByKey = new Map();
@@ -404,19 +438,30 @@ function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureC
   const channelsByKey = new Map();
 
   for (const item of metrics.items || []) {
-    const key =
-      viewMode === 'states'
-        ? String(item.cve_ent).padStart(2, '0')
-        : String(item.cvegeo).padStart(5, '0');
-    valuesByKey.set(key, item.total || 0);
-    labelsByKey.set(
-      key,
-      viewMode === 'states'
-        ? item.nombre || key
-        : item.nombre || item.cve_mun || key,
-    );
-    channelsByKey.set(key, item.por_canal || {});
-    totals.push(Number(item.total || 0));
+    let key = null;
+    let label = null;
+    if (viewMode === 'states') {
+      key = String(item.cve_ent).padStart(2, '0');
+      label = item.nombre || key;
+    } else if (viewMode === 'municipalities') {
+      key = String(item.cvegeo).padStart(5, '0');
+      label = item.nombre || item.cve_mun || key;
+    } else if (viewMode === 'countries') {
+      const countryCode = item.country_code ? String(item.country_code).toUpperCase() : '';
+      if (!countryCode || countryCode === 'UNK') {
+        continue;
+      }
+      key = countryCode;
+      label = item.nombre || countryCode;
+    }
+    if (!key) continue;
+    const totalValue = Number(item.total || 0);
+    valuesByKey.set(key, totalValue);
+    labelsByKey.set(key, label || key);
+    const breakdown =
+      item.por_canal && typeof item.por_canal === 'object' ? item.por_canal : { visitantes: totalValue };
+    channelsByKey.set(key, breakdown);
+    totals.push(totalValue);
   }
 
   const { colorFor, legendItems } = buildScale(totals, state.palette, state.scale);
@@ -457,6 +502,10 @@ function drawPolygons({ geojson, metrics, keyProperty, pad, viewMode, onFeatureC
 }
 
 async function renderStates() {
+  if (state.mode === 'world') {
+    await renderWorld();
+    return;
+  }
   setLoading(true);
   setError(false);
   try {
@@ -506,7 +555,52 @@ async function renderStates() {
   }
 }
 
+async function renderWorld() {
+  setLoading(true);
+  setError(false);
+  try {
+    const resources = await getWorldResources();
+    const items = Array.isArray(resources.metrics.items) ? resources.metrics.items : [];
+    const enrichedItems = items.map((item) => ({
+      country_code: item.country_code ? String(item.country_code).toUpperCase() : 'UNK',
+      nombre: item.nombre || item.country_code || 'Desconocido',
+      total: Number(item.total || 0),
+      por_canal: { visitantes: Number(item.total || 0) },
+    }));
+    drawPolygons({
+      geojson: resources.geojson,
+      metrics: { items: enrichedItems },
+      keyProperty: 'ISO_A2',
+      pad: 0,
+      viewMode: 'countries',
+      onFeatureClick: null,
+    });
+    const totals = resources.metrics.totals || {};
+    const totalValue = Number(totals.total || 0);
+    const ubicadosValue = Number(totals.ubicados || 0);
+    const sinPaisValue = Number(totals.sin_pais || 0);
+    const countriesWithData = enrichedItems.filter(
+      (item) => item.country_code && item.country_code !== 'UNK' && item.total > 0,
+    ).length;
+    updateSummary(
+      `Visitantes globales: Total ${formatNumber(totalValue)}. Países con datos: ${formatNumber(
+        countriesWithData,
+      )}. Con país identificado: ${formatNumber(ubicadosValue)}. Sin país: ${formatNumber(
+        sinPaisValue,
+      )}.`,
+    );
+  } catch (error) {
+    console.error('[leads-map] world', error);
+    setError(true, 'No fue posible cargar los países.');
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function renderMunicipalities(stateCode) {
+  if (state.mode === 'world') {
+    return;
+  }
   setLoading(true);
   setError(false);
   const code = String(stateCode).padStart(2, '0');
@@ -558,6 +652,10 @@ function handlePaletteChange(palette) {
   if (!PALETTES[palette]) return;
   state.palette = palette;
   if (!state.initialized) return;
+  if (state.mode === 'world') {
+    void renderWorld();
+    return;
+  }
   if (state.view === 'states') {
     void renderStates();
   } else if (state.selectedState) {
@@ -569,6 +667,10 @@ function handleScaleChange(scale) {
   if (!SCALE_OPTIONS.includes(scale)) return;
   state.scale = scale;
   if (!state.initialized) return;
+  if (state.mode === 'world') {
+    void renderWorld();
+    return;
+  }
   if (state.view === 'states') {
     void renderStates();
   } else if (state.selectedState) {
@@ -615,6 +717,63 @@ export function setupLeadsMap() {
   const scaleSelect = $('leads-map-scale');
   const resetButton = $('leads-map-reset');
   const channelSelect = $('leads-map-channel');
+  const modeSelect = $('leads-map-mode');
+  const rangeSelect = $('dashboard-range');
+
+  const scheduleRender = () => {
+    if (!state.initialized) {
+      return;
+    }
+    if (state.mode === 'world') {
+      void renderWorld();
+      return;
+    }
+    if (state.view === 'states') {
+      void renderStates();
+    } else if (state.selectedState) {
+      void renderMunicipalities(state.selectedState.code);
+    } else {
+      void renderStates();
+    }
+  };
+
+  const applyMode = (value) => {
+    const nextMode = value === 'world' ? 'world' : 'mx';
+    if (state.mode === nextMode) return;
+    state.mode = nextMode;
+    state.view = 'states';
+    state.selectedState = null;
+    if (resetButton) {
+      resetButton.setAttribute('disabled', 'true');
+    }
+    if (nextMode === 'world') {
+      state.prevChannelKey = state.channelKey;
+      state.channelKey = 'visitantes';
+      if (channelSelect) {
+        channelSelect.value = 'visitantes';
+        channelSelect.setAttribute('disabled', 'true');
+      }
+    } else {
+      if (channelSelect) {
+        channelSelect.removeAttribute('disabled');
+        const restore =
+          state.prevChannelKey && CHANNEL_OPTIONS[state.prevChannelKey]
+            ? state.prevChannelKey
+            : channelSelect.value && CHANNEL_OPTIONS[channelSelect.value]
+              ? channelSelect.value
+              : 'todos';
+        state.channelKey = restore;
+        state.prevChannelKey = restore;
+        channelSelect.value = restore;
+      }
+    }
+    state.worldCache.clear();
+    if (state.initialized) {
+      void renderStates();
+    } else {
+      void initializeMap();
+    }
+  };
 
   if (paletteSelect) {
     paletteSelect.addEventListener('change', (event) => {
@@ -639,11 +798,17 @@ export function setupLeadsMap() {
 
   if (channelSelect) {
     channelSelect.addEventListener('change', (event) => {
+      if (channelSelect.disabled || state.mode === 'world') {
+        channelSelect.value = state.channelKey;
+        return;
+      }
       const key = event.target.value;
       if (!CHANNEL_OPTIONS[key]) {
+        channelSelect.value = state.channelKey;
         return;
       }
       state.channelKey = key;
+      state.prevChannelKey = key;
       state.view = 'states';
       state.selectedState = null;
       if (resetButton) {
@@ -653,6 +818,34 @@ export function setupLeadsMap() {
         void renderStates();
       }
     });
+  }
+
+  if (modeSelect) {
+    modeSelect.addEventListener('change', (event) => {
+      applyMode(event.target.value);
+    });
+  }
+
+  if (rangeSelect) {
+    rangeSelect.addEventListener('change', () => {
+      state.statesCache.clear();
+      state.municipalityCache.clear();
+      state.worldCache.clear();
+      state.view = 'states';
+      state.selectedState = null;
+      if (resetButton) {
+        resetButton.setAttribute('disabled', 'true');
+      }
+      scheduleRender();
+    });
+  }
+
+  if (modeSelect) {
+    modeSelect.value = state.mode;
+  }
+  if (state.mode === 'world' && channelSelect) {
+    channelSelect.value = 'visitantes';
+    channelSelect.setAttribute('disabled', 'true');
   }
 
   const intersect = () => {
