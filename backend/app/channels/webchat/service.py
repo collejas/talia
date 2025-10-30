@@ -19,6 +19,7 @@ from app.services import openai as openai_service
 from . import schemas
 
 logger = get_logger("app.channels.webchat")
+visit_logger = get_logger("app.analytics.visitas")
 
 DEFAULT_FALLBACK = (
     "Tu mensaje quedó registrado, pero tuve un problema momentáneo al responder. "
@@ -301,6 +302,29 @@ async def _register_webchat_visit(
         client_context.get("location_href")
         if isinstance(client_context.get("location_href"), str)
         else None
+    )
+
+    visit_logger.info(
+        "visit.metadata_resolved",
+        extra={
+            "session_id": session_id,
+            "visit": {
+                "ip": client_ip,
+                "device_type": device_type,
+                "resolved_location": {
+                    "cve_ent": estado_clave,
+                    "nom_ent": estado_nombre,
+                    "cve_mun": municipio_clave,
+                    "nom_mun": municipio_nombre,
+                    "cvegeo": cvegeo,
+                },
+                "referrer": referrer,
+                "landing_url": landing_url,
+                "geo_ip": geo_ip_data,
+                "geo_client": client_geo,
+                "client_context": client_context,
+            },
+        },
     )
 
     try:

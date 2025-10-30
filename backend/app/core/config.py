@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     supabase_legacy_jwt_secret: str | None = None
     geolocation_api_url: str | None = None
     geolocation_api_token: str | None = None
+    geolocation_cache_ttl_seconds: int = Field(
+        default=4 * 60 * 60,
+        description="Tiempo de vida (en segundos) para reutilizar resultados de geolocalización por IP.",
+    )
     log_file_path: str = "/home/devuser/talia/logs/api.log"
     webchat_inactivity_hours: int | None = Field(
         default=None,

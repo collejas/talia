@@ -72,7 +72,7 @@ sudo systemctl status talia-api.service
 
 poetry run pytest
 
-
+codex resume 019a34e3-a3da-7b53-a1b6-64fb5bc93ed1
 
 - Dashboard (panel.html)
 - Inbox (inbox.html)

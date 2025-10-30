@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import httpx
@@ -13,6 +14,8 @@ logger = get_logger(__name__)
 
 _LOOPBACKS = {"127.0.0.1", "::1", ""}
 _DEFAULT_ENDPOINT = "https://ipapi.co/{ip}/json/"
+_CACHE: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_NEGATIVE_TTL = 5 * 60  # TTL más corto para resultados fallidos
 
 
 async def lookup_ip(ip: str | None) -> dict[str, Any] | None:
@@ -23,6 +26,16 @@ async def lookup_ip(ip: str | None) -> dict[str, Any] | None:
 
     if not ip or ip in _LOOPBACKS:
         return None
+
+    ttl = max(int(settings.geolocation_cache_ttl_seconds or 0), 0)
+    now = time.monotonic()
+    cached = _CACHE.get(ip)
+    if cached:
+        timestamp, stored = cached
+        # TTL dinámico: si el valor es None usamos TTL reducido
+        effective_ttl = _NEGATIVE_TTL if stored is None and ttl else ttl
+        if effective_ttl and now - timestamp < effective_ttl:
+            return stored
 
     endpoint_template = settings.geolocation_api_url or _DEFAULT_ENDPOINT
     url = endpoint_template.format(ip=ip)
@@ -37,12 +50,16 @@ async def lookup_ip(ip: str | None) -> dict[str, Any] | None:
             response = await client.get(url, headers=headers)
     except httpx.RequestError as exc:  # pragma: no cover - depende de red externa
         logger.warning("No se pudo resolver geolocalización", exc_info=exc)
+        if ttl:
+            _CACHE[ip] = (now, None)
         return None
 
     if response.status_code >= 400:
         logger.warning(
             "Geolocalización respondió con error", extra={"status": response.status_code}
         )
+        if ttl:
+            _CACHE[ip] = (now, None)
         return None
 
     try:
@@ -66,4 +83,7 @@ async def lookup_ip(ip: str | None) -> dict[str, Any] | None:
     }
 
     # Removemos claves con valores None para evitar ruido.
-    return {key: value for key, value in normalized.items() if value is not None}
+    result = {key: value for key, value in normalized.items() if value is not None}
+    if ttl:
+        _CACHE[ip] = (now, result)
+    return result
