@@ -187,11 +187,16 @@ function renderEmpleados() {
         )}">Eliminar</button>
       </div>
     `;
+    const vendedorLabel = item.es_vendedor ? 'Sí' : 'No';
+    const vendedorInfo = item.es_vendedor && item.ultimo_lead_asignado_en
+      ? `${vendedorLabel}<br><span class="muted">Último lead: ${formatDate(item.ultimo_lead_asignado_en)}</span>`
+      : vendedorLabel;
     return `
       <tr>
         <td>${escapeHtml(item.correo ?? '—')}</td>
         <td>${escapeHtml(dept?.nombre ?? 'Sin departamento')}</td>
         <td>${escapeHtml(puesto?.nombre ?? 'Sin puesto')}</td>
+        <td>${vendedorInfo}</td>
         <td>${item.es_gestor ? 'Sí' : 'No'}</td>
         <td>${formatDate(item.empleado_creado_en)}</td>
         <td>${acciones}</td>
@@ -199,7 +204,7 @@ function renderEmpleados() {
     `;
   });
   tbody.innerHTML =
-    rows.join('') || '<tr><td colspan="6" class="muted">Aún no hay empleados registrados.</td></tr>';
+    rows.join('') || '<tr><td colspan="7" class="muted">Aún no hay empleados registrados.</td></tr>';
 }
 
 function renderDepartamentos() {
@@ -448,10 +453,18 @@ async function handleEmployeeEdit(usuarioId) {
   if (gestorEntrada === null) return;
   const esGestor = gestorEntrada.trim().toLowerCase().startsWith('s');
 
+  const vendedorEntrada = prompt(
+    '¿Puede vender? (si/no):',
+    empleado.es_vendedor ? 'si' : 'no',
+  );
+  if (vendedorEntrada === null) return;
+  const esVendedor = vendedorEntrada.trim().toLowerCase().startsWith('s');
+
   const payload = {
     departamento_id: departamentoId,
     puesto_id: puestoId,
     es_gestor: esGestor,
+    es_vendedor: esVendedor,
   };
   await requestJSON(
     `/api/config/empleados/${usuarioId}`,
@@ -657,6 +670,7 @@ function setupFormHandlers() {
         departamento_id: (data.get('departamento_id') || '').toString().trim() || null,
         puesto_id: (data.get('puesto_id') || '').toString().trim() || null,
         es_gestor: data.get('es_gestor') === 'on',
+        es_vendedor: data.get('es_vendedor') === 'on',
       };
       try {
         await requestJSON(

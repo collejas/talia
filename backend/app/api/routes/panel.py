@@ -141,6 +141,7 @@ class EmpleadoCreatePayload(BaseModel):
     departamento_id: UUID | None = Field(default=None)
     puesto_id: UUID | None = Field(default=None)
     es_gestor: bool = Field(default=False)
+    es_vendedor: bool = Field(default=False)
 
 
 class EmpleadoUpdatePayload(BaseModel):
@@ -149,6 +150,7 @@ class EmpleadoUpdatePayload(BaseModel):
     departamento_id: UUID | None = Field(default=None)
     puesto_id: UUID | None = Field(default=None)
     es_gestor: bool | None = Field(default=None)
+    es_vendedor: bool | None = Field(default=None)
 
 
 class UsuarioCreatePayload(BaseModel):
@@ -845,6 +847,8 @@ async def cfg_actualizar_empleado(
 ) -> dict[str, Any]:
     await _require_admin(authorization)
     body = payload.model_dump(mode="json", exclude_none=True)
+    if body.get("es_vendedor") is False:
+        body["ultimo_lead_asignado_en"] = None
     if not body:
         return {"ok": True, "item": None}
     resp = await _sb_patch(
