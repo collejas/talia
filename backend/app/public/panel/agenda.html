@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>TalIA • Agenda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/api/shared/logos/Logo8.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/api/shared/logos/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/api/shared/logos/favicon-16.png" />
+  <link rel="icon" type="image/x-icon" href="/api/shared/logos/favicon.ico" />
+  <link rel="apple-touch-icon" href="/api/shared/logos/Logo7.png" />
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .muted{color:var(--muted)}
+    .agenda-page{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
+    main.container{padding:24px 0 48px;max-width:1280px}
+    .card{padding:18px;border:1px solid var(--border-soft);border-radius:14px;background:var(--surface)}
+    .filters{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:20px}
+    .filters label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+    .filters button{height:40px}
+    .agenda-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px}
+    @media (max-width:1100px){.agenda-grid{grid-template-columns:1fr}}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    thead th{padding:10px;border-bottom:1px solid var(--border-soft);text-align:left;color:var(--muted);font-weight:600;font-size:13px}
+    tbody td{padding:10px;border-bottom:1px solid var(--border-soft)}
+    tbody tr:hover{background:var(--surface-alt)}
+    tbody tr.is-selected{background:rgba(99,102,241,.12)}
+    .table-wrapper{border:1px solid var(--border-soft);border-radius:14px;overflow:hidden;background:var(--surface)}
+    form.agenda-form{display:flex;flex-direction:column;gap:12px}
+    form.agenda-form label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+    form.agenda-form input, form.agenda-form select, form.agenda-form textarea{
+      font:inherit;border:1px solid var(--border-soft);border-radius:10px;background:var(--surface-alt);
+      color:var(--fg);padding:8px 10px
+    }
+    form.agenda-form textarea{min-height:70px;resize:vertical}
+    form.agenda-form input:focus, form.agenda-form select:focus, form.agenda-form textarea:focus{
+      outline:none;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset
+    }
+    .form-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+    .status-text{font-size:12px}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg);text-transform:capitalize}
+    .agenda-empty{padding:24px;text-align:center;color:var(--muted)}
+    .section-title{margin:0 0 6px;font-size:18px;font-weight:700}
+  </style>
+  <script src="./assets/js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="agenda-page theme-aurora" data-nav="agenda">
+  <main class="container">
+    <header style="margin-bottom:20px;">
+      <h1 style="margin:0 0 6px;">Agenda de demos</h1>
+      <p class="muted" style="margin:0;">Gestiona y sincroniza las demostraciones comerciales.</p>
+    </header>
+
+    <section class="card filters" aria-label="Filtros de agenda">
+      <label>
+        <span>Rango</span>
+        <select id="filtro-rango" class="btn btn-outline">
+          <option value="hoy">Hoy</option>
+          <option value="7d" selected>Próximos 7 días</option>
+          <option value="30d">Próximos 30 días</option>
+          <option value="fechas">Personalizado</option>
+        </select>
+      </label>
+      <label>
+        <span>Desde</span>
+        <input type="date" id="filtro-desde" />
+      </label>
+      <label>
+        <span>Hasta</span>
+        <input type="date" id="filtro-hasta" />
+      </label>
+      <label>
+        <span>Estado</span>
+        <select id="filtro-estado" class="btn btn-outline">
+          <option value="">Todos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="confirmada">Confirmada</option>
+          <option value="reprogramada">Reprogramada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="realizada">Realizada</option>
+        </select>
+      </label>
+      <label>
+        <span>Proveedor</span>
+        <select id="filtro-provider" class="btn btn-outline">
+          <option value="">Todos</option>
+          <option value="hosting">Hosting</option>
+          <option value="google">Google</option>
+        </select>
+      </label>
+      <button id="agenda-refresh" class="btn">Actualizar</button>
+      <span id="agenda-status" class="muted status-text" role="status" aria-live="polite"></span>
+    </section>
+
+    <section class="agenda-grid">
+      <div>
+        <div class="table-wrapper" aria-live="polite">
+          <table>
+            <thead>
+              <tr>
+                <th>Inicio</th>
+                <th>Contacto</th>
+                <th>Estado</th>
+                <th>Proveedor</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="agenda-table-body">
+              <tr><td colspan="5" class="agenda-empty">Sin registros.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <section class="card">
+          <h2 class="section-title">Nueva demo</h2>
+          <form id="crear-cita-form" class="agenda-form">
+            <label>
+              <span>ID de tarjeta *</span>
+              <input id="crear-tarjeta" type="text" required minlength="10" />
+            </label>
+            <label>
+              <span>ID de contacto (opcional)</span>
+              <input id="crear-contacto" type="text" />
+            </label>
+            <label>
+              <span>ID de conversación (opcional)</span>
+              <input id="crear-conversacion" type="text" />
+            </label>
+            <label>
+              <span>Inicio *</span>
+              <input id="crear-inicio" type="datetime-local" required />
+            </label>
+            <label>
+              <span>Fin</span>
+              <input id="crear-fin" type="datetime-local" />
+            </label>
+            <label>
+              <span>Zona horaria</span>
+              <input id="crear-timezone" type="text" placeholder="America/Mexico_City" />
+            </label>
+            <label>
+              <span>Estado</span>
+              <select id="crear-estado">
+                <option value="">Pendiente</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="confirmada">Confirmada</option>
+                <option value="reprogramada">Reprogramada</option>
+              </select>
+            </label>
+            <label>
+              <span>Proveedor</span>
+              <select id="crear-provider">
+                <option value="">Hosting</option>
+                <option value="hosting">Hosting</option>
+                <option value="google">Google</option>
+              </select>
+            </label>
+            <label>
+              <span>URL de reunión</span>
+              <input id="crear-meeting" type="url" placeholder="https://..." />
+            </label>
+            <label>
+              <span>Ubicación</span>
+              <input id="crear-location" type="text" />
+            </label>
+            <label>
+              <span>Notas</span>
+              <textarea id="crear-notes"></textarea>
+            </label>
+            <label>
+              <span>Metadata (JSON)</span>
+              <textarea id="crear-metadata" placeholder='{"fuente":"panel"}'></textarea>
+            </label>
+            <div class="form-actions">
+              <span id="crear-status" class="muted status-text"></span>
+              <button class="btn" type="submit">Crear cita</button>
+            </div>
+          </form>
+        </section>
+        <section class="card">
+          <h2 class="section-title">Editar demo</h2>
+          <form id="editar-cita-form" class="agenda-form">
+            <label>
+              <span>Cita seleccionada</span>
+              <input id="editar-id" type="text" readonly />
+            </label>
+            <label>
+              <span>Inicio</span>
+              <input id="editar-inicio" type="datetime-local" />
+            </label>
+            <label>
+              <span>Fin</span>
+              <input id="editar-fin" type="datetime-local" />
+            </label>
+            <label>
+              <span>Zona horaria</span>
+              <input id="editar-timezone" type="text" placeholder="America/Mexico_City" />
+            </label>
+            <label>
+              <span>Estado</span>
+              <select id="editar-estado">
+                <option value="">Sin cambios</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="confirmada">Confirmada</option>
+                <option value="reprogramada">Reprogramada</option>
+                <option value="cancelada">Cancelada</option>
+                <option value="realizada">Realizada</option>
+              </select>
+            </label>
+            <label>
+              <span>Motivo de cancelación</span>
+              <input id="editar-motivo" type="text" />
+            </label>
+            <label>
+              <span>Proveedor</span>
+              <select id="editar-provider">
+                <option value="">Sin cambios</option>
+                <option value="hosting">Hosting</option>
+                <option value="google">Google</option>
+              </select>
+            </label>
+            <label>
+              <span>URL de reunión</span>
+              <input id="editar-meeting" type="url" placeholder="https://..." />
+            </label>
+            <label>
+              <span>Ubicación</span>
+              <input id="editar-location" type="text" />
+            </label>
+            <label>
+              <span>Notas</span>
+              <textarea id="editar-notes"></textarea>
+            </label>
+            <label>
+              <span>Metadata (JSON)</span>
+              <textarea id="editar-metadata"></textarea>
+            </label>
+            <div class="form-actions">
+              <span id="editar-status" class="muted status-text"></span>
+              <button id="btn-eliminar" class="btn btn-outline" type="button">Eliminar</button>
+              <button class="btn" type="submit">Guardar cambios</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { setActiveNav } from './assets/js/common.js';
+    setActiveNav(document.body.dataset.nav || '');
+  </script>
+  <script type="module" src="./assets/js/agenda.js"></script>
+</body>
+</html>

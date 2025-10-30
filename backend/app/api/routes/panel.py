@@ -8,7 +8,7 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -28,6 +28,80 @@ class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
     manual: bool = Field(..., description="True para pausar al asistente")
+
+
+class DemoAppointmentCreatePayload(BaseModel):
+    """Payload para crear una cita de demostración."""
+
+    tarjeta_id: UUID = Field(..., description="ID de la tarjeta de lead asociada.")
+    contacto_id: UUID | None = Field(
+        default=None,
+        description="Contacto invitado; se toma de la tarjeta cuando se omite.",
+    )
+    conversacion_id: UUID | None = Field(
+        default=None, description="Conversación relacionada con la cita."
+    )
+    start_at: datetime = Field(..., description="Inicio de la demo (timestamp con zona).")
+    end_at: datetime | None = Field(default=None, description="Fin de la demo.")
+    timezone: str | None = Field(
+        default=None,
+        description="Zona horaria IANA (ej. America/Mexico_City) para mostrar localmente.",
+    )
+    estado: Literal["pendiente", "confirmada", "reprogramada", "cancelada", "realizada"] | None = (
+        Field(default=None, description="Estado inicial; por defecto se usa 'pendiente'.")
+    )
+    provider: Literal["hosting", "google"] | None = Field(
+        default=None, description="Proveedor del calendario externo (hosting propio o Google)."
+    )
+    provider_calendar_id: str | None = Field(
+        default=None, description="Identificador del calendario externo."
+    )
+    provider_event_id: str | None = Field(
+        default=None, description="Identificador del evento externo."
+    )
+    meeting_url: str | None = Field(
+        default=None, description="URL de videollamada o enlace de reunión."
+    )
+    location: str | None = Field(default=None, description="Ubicación física de la demo.")
+    notes: str | None = Field(default=None, description="Notas internas adicionales.")
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="Metadatos adicionales a persistir como JSON."
+    )
+
+
+class DemoAppointmentUpdatePayload(BaseModel):
+    """Payload para actualizar una cita existente."""
+
+    start_at: datetime | None = Field(default=None, description="Nuevo inicio de la demo.")
+    end_at: datetime | None = Field(default=None, description="Nuevo fin de la demo.")
+    timezone: str | None = Field(default=None, description="Zona horaria actualizada.")
+    estado: Literal["pendiente", "confirmada", "reprogramada", "cancelada", "realizada"] | None = (
+        Field(default=None, description="Estado actualizado de la cita.")
+    )
+    provider: Literal["hosting", "google"] | None = Field(
+        default=None, description="Proveedor actualizado del calendario."
+    )
+    provider_calendar_id: str | None = Field(
+        default=None, description="Identificador del calendario externo."
+    )
+    provider_event_id: str | None = Field(
+        default=None, description="Identificador del evento externo."
+    )
+    meeting_url: str | None = Field(default=None, description="URL de reunión actualizada.")
+    location: str | None = Field(default=None, description="Ubicación física actualizada.")
+    notes: str | None = Field(default=None, description="Notas internas actualizadas.")
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="Metadatos adicionales a actualizar."
+    )
+    contacto_id: UUID | None = Field(
+        default=None, description="Actualizar el contacto asociado a la cita."
+    )
+    conversacion_id: UUID | None = Field(
+        default=None, description="Actualizar la conversación asociada."
+    )
+    cancel_reason: str | None = Field(
+        default=None, description="Motivo de cancelación (se usa junto con estado 'cancelada')."
+    )
 
 
 def _supabase_base_url() -> str:
@@ -97,6 +171,72 @@ async def _sb_post(
             return await client.post(url, headers=headers, json=json or {})
     except httpx.RequestError:
         logger.exception("Error al conectar a Supabase (POST)")
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+
+
+async def _sb_patch(
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+    json: dict[str, Any] | None = None,
+    token: str | None = None,
+    prefer: str | None = None,
+) -> httpx.Response:
+    base_url = _supabase_base_url()
+    url = f"{base_url}{path}"
+    headers: dict[str, str] = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        anon = getattr(settings, "supabase_anon", None)
+        if anon:
+            headers["apikey"] = anon  # type: ignore[assignment]
+    elif settings.supabase_service_role:
+        headers["apikey"] = settings.supabase_service_role
+        headers["Authorization"] = f"Bearer {settings.supabase_service_role}"
+    else:
+        raise HTTPException(status_code=500, detail="Falta SUPABASE_SERVICE_ROLE")
+    if prefer:
+        headers["Prefer"] = prefer
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.patch(url, headers=headers, params=params, json=json or {})
+    except httpx.RequestError:
+        logger.exception("Error al conectar a Supabase (PATCH)")
+        raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
+
+
+async def _sb_delete(
+    path: str,
+    *,
+    params: dict[str, str] | None = None,
+    token: str | None = None,
+    prefer: str | None = None,
+) -> httpx.Response:
+    base_url = _supabase_base_url()
+    url = f"{base_url}{path}"
+    headers: dict[str, str] = {
+        "Accept": "application/json",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        anon = getattr(settings, "supabase_anon", None)
+        if anon:
+            headers["apikey"] = anon  # type: ignore[assignment]
+    elif settings.supabase_service_role:
+        headers["apikey"] = settings.supabase_service_role
+        headers["Authorization"] = f"Bearer {settings.supabase_service_role}"
+    else:
+        raise HTTPException(status_code=500, detail="Falta SUPABASE_SERVICE_ROLE")
+    if prefer:
+        headers["Prefer"] = prefer
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.delete(url, headers=headers, params=params)
+    except httpx.RequestError:
+        logger.exception("Error al conectar a Supabase (DELETE)")
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
 
 
@@ -942,6 +1082,304 @@ def _build_range_payload(
         "from": _format_utc(date_from) if date_from else None,
         "to": _format_utc(date_to) if date_to else None,
     }
+
+
+@router.get("/agenda/demos")
+async def agenda_demos(
+    limit: int = Query(default=100, ge=1, le=500),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    params: dict[str, str] = {
+        "select": "*",
+        "order": "start_at.asc",
+        "limit": str(limit),
+    }
+    and_filters: list[str] = []
+    if date_from:
+        and_filters.append(f"start_at.gte.{_format_utc(date_from)}")
+    if date_to:
+        and_filters.append(f"start_at.lte.{_format_utc(date_to)}")
+    if and_filters:
+        params["and"] = f"({','.join(and_filters)})"
+
+    estado_values = [
+        val.strip().lower() for val in (estado or "").split(",") if val.strip()
+    ] or None
+    if estado_values:
+        if len(estado_values) == 1:
+            params["estado"] = f"eq.{estado_values[0]}"
+        else:
+            params["estado"] = f"in.({','.join(sorted(set(estado_values)))})"
+
+    provider_values = [
+        val.strip().lower() for val in (provider or "").split(",") if val.strip()
+    ] or None
+    if provider_values:
+        if len(provider_values) == 1:
+            params["provider"] = f"eq.{provider_values[0]}"
+        else:
+            params["provider"] = f"in.({','.join(sorted(set(provider_values)))})"
+
+    resp = await _sb_get("/rest/v1/panel_agenda_demos", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando agenda de demos")
+
+    raw = resp.json() or []
+    return {
+        "ok": True,
+        "items": raw,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "filters": {
+            "estado": estado_values,
+            "provider": provider_values,
+        },
+    }
+
+
+_DEMO_ESTADOS = {"pendiente", "confirmada", "reprogramada", "cancelada", "realizada"}
+_DEMO_PROVIDERS = {"hosting", "google"}
+
+
+def _normalize_demo_estado(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in _DEMO_ESTADOS:
+        raise HTTPException(status_code=400, detail="estado_invalid")
+    return normalized
+
+
+def _normalize_demo_provider(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in _DEMO_PROVIDERS:
+        raise HTTPException(status_code=400, detail="provider_invalid")
+    return normalized
+
+
+def _serialize_datetime(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return _format_utc(_ensure_utc(value))
+
+
+def _validate_metadata(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=400, detail="metadata_invalid")
+    return value
+
+
+def _clean_payload(data: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in data.items() if value is not None}
+
+
+def _uuid_to_str(value: UUID | str | None) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+async def _resolve_lead_card_context(tarjeta_id: str, token: str) -> dict[str, Any]:
+    params = {
+        "select": "id,contacto_id,conversacion_id",
+        "id": f"eq.{tarjeta_id}",
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/lead_tarjetas", params=params, token=token)
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail="Error consultando lead asociado")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="lead_not_found")
+    return rows[0]
+
+
+async def _prepare_create_demo_payload(
+    payload: DemoAppointmentCreatePayload,
+    token: str,
+    user_id: str | None,
+) -> dict[str, Any]:
+    tarjeta_id = _uuid_to_str(payload.tarjeta_id)
+    contacto_id = payload.contacto_id
+    conversacion_id = payload.conversacion_id
+
+    if contacto_id is None or conversacion_id is None:
+        context = await _resolve_lead_card_context(tarjeta_id, token)
+        if contacto_id is None:
+            contacto_id = context.get("contacto_id")
+        if conversacion_id is None:
+            conversacion_id = context.get("conversacion_id")
+
+    if contacto_id is None:
+        raise HTTPException(status_code=400, detail="contacto_requerido")
+
+    estado = _normalize_demo_estado(payload.estado)
+    provider = _normalize_demo_provider(payload.provider)
+    metadata_value = _validate_metadata(payload.metadata)
+
+    data = {
+        "tarjeta_id": tarjeta_id,
+        "contacto_id": _uuid_to_str(contacto_id),
+        "conversacion_id": _uuid_to_str(conversacion_id),
+        "start_at": _serialize_datetime(payload.start_at),
+        "end_at": _serialize_datetime(payload.end_at),
+        "timezone": payload.timezone,
+        "provider": provider,
+        "provider_calendar_id": payload.provider_calendar_id,
+        "provider_event_id": payload.provider_event_id,
+        "meeting_url": payload.meeting_url,
+        "location": payload.location,
+        "notes": payload.notes,
+        "metadata": metadata_value,
+        "estado": estado,
+        "created_by": user_id,
+        "updated_by": user_id,
+    }
+    return _clean_payload(data)
+
+
+def _prepare_update_demo_payload(
+    payload: DemoAppointmentUpdatePayload,
+    user_id: str | None,
+) -> dict[str, Any]:
+    metadata_value = _validate_metadata(payload.metadata)
+    estado = _normalize_demo_estado(payload.estado)
+    provider = _normalize_demo_provider(payload.provider)
+
+    data = {
+        "start_at": _serialize_datetime(payload.start_at),
+        "end_at": _serialize_datetime(payload.end_at),
+        "timezone": payload.timezone,
+        "estado": estado,
+        "provider": provider,
+        "provider_calendar_id": payload.provider_calendar_id,
+        "provider_event_id": payload.provider_event_id,
+        "meeting_url": payload.meeting_url,
+        "location": payload.location,
+        "notes": payload.notes,
+        "metadata": metadata_value,
+        "contacto_id": _uuid_to_str(payload.contacto_id),
+        "conversacion_id": _uuid_to_str(payload.conversacion_id),
+        "cancel_reason": payload.cancel_reason,
+        "updated_by": user_id,
+    }
+    return _clean_payload(data)
+
+
+@router.post("/agenda/demos", status_code=201)
+async def create_demo_appointment(
+    payload: DemoAppointmentCreatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    user_id = _jwt_verify_and_sub(token)
+
+    body = await _prepare_create_demo_payload(payload, token, user_id)
+    if "start_at" not in body:
+        raise HTTPException(status_code=400, detail="start_at_requerido")
+
+    resp = await _sb_post(
+        "/rest/v1/lead_citas_demo",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        logger.error(
+            "agenda.demo_create_failed",
+            extra={"status": resp.status_code, "body": resp.text},
+        )
+        raise HTTPException(status_code=502, detail="Error creando cita demo")
+
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=502, detail="Respuesta inesperada creando cita demo")
+
+    return {"ok": True, "item": rows[0]}
+
+
+@router.patch("/agenda/demos/{cita_id}")
+async def update_demo_appointment(
+    cita_id: UUID,
+    payload: DemoAppointmentUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    user_id = _jwt_verify_and_sub(token)
+
+    body = _prepare_update_demo_payload(payload, user_id)
+    non_meta_keys = {k for k in body.keys() if k not in {"updated_by"}}
+    if not non_meta_keys:
+        raise HTTPException(status_code=400, detail="no_changes")
+
+    params = {"id": f"eq.{cita_id}", "limit": "1"}
+    resp = await _sb_patch(
+        "/rest/v1/lead_citas_demo",
+        params=params,
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        logger.error(
+            "agenda.demo_update_failed",
+            extra={"status": resp.status_code, "body": resp.text, "cita_id": str(cita_id)},
+        )
+        raise HTTPException(status_code=502, detail="Error actualizando cita demo")
+
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="cita_not_found")
+
+    return {"ok": True, "item": rows[0]}
+
+
+@router.delete("/agenda/demos/{cita_id}")
+async def delete_demo_appointment(
+    cita_id: UUID,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    params = {"id": f"eq.{cita_id}"}
+    resp = await _sb_delete(
+        "/rest/v1/lead_citas_demo",
+        params=params,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        logger.error(
+            "agenda.demo_delete_failed",
+            extra={"status": resp.status_code, "body": resp.text, "cita_id": str(cita_id)},
+        )
+        raise HTTPException(status_code=502, detail="Error eliminando cita demo")
+
+    if resp.status_code == 200:
+        deleted = resp.json() or []
+        if not deleted:
+            raise HTTPException(status_code=404, detail="cita_not_found")
+
+    return {"ok": True}
 
 
 def _ensure_state_code(value: str) -> str:

@@ -1,0 +1,36 @@
+TALIA_ENVIRONMENT=development
+TALIA_LOG_LEVEL=info
+TALIA_REQUEST_LOG_LEVEL=info
+
+TALIA_OPENAI_API_KEY=sk-proj-xxxxx
+TALIA_OPENAI_ASSISTANT_ID=pmpt_69001211f6688194b2e27f3cf50e959f08c8cd898208331e
+TALIA_OPENAI_PROMPT_VERSION=24
+TALIA_OPENAI_PROJECT_ID=sk-proj-xxxxx
+TALIA_TWILIO_ACCOUNT_SID=AC...
+TALIA_TWILIO_AUTH_TOKEN=...
+TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:xxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+TALIA_SUPABASE_SERVICE_ROLE=eyxxxxxx
+SUPABASE_ANON_KEY=eyxxxxxx
+TALIA_SUPABASE_LEGACY_JWT_SECRET=xxxx
+TALIA_SUPABASE_ACCES_TOKEN=sbp_xxxx
+DATABASE_URL=postgresql://postgres:xxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+SUPABASE_DB_PASSWORD=xxxxx
+TALIA_WEBCHAT_INACTIVITY_HOURS=2
+TALIA_WEBCHAT_PERSIST_SESSION=false
+
+# CORREO #
+TALIA_MAIL_USERNAME=hola@talia.mx
+TALIA_MAIL_CONTRASENA=xxxxxx
+TALIA_MAIL_INCOMING_SERVER=mail.talia.mx
+TALIA_MAIL_INCOMING_PORT_IMAP=993
+TALIA_MAIL_OUTGOING_SERVER=mail.talia.mx 
+TALIA_MAIL_OUTGOING_PORT_SMTP=465
+
+# CALENDARIO #
+TALIA_CALENDARIO_USERNAME=hola@talia.mx
+TALIA_CALENDARIO_SERVER_URL=https://mail.talia.mx:2080
+TALIA_CALENDARIO_SERVER_PORT=2080
+TALIA_CALENDARIO_SERVER_URL_ALTERNATE=https://mail.talia.mx:2080/principals/hola@talia.mx
+TALIA_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar
+TALIA_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/hola@talia.mx/addressbook
