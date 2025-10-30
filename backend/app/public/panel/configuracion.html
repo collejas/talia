@@ -40,6 +40,23 @@
     }
     pre{margin:0;background:var(--surface-alt);border:1px solid var(--border-soft);border-radius:12px;padding:12px;overflow:auto;color:var(--fg)}
     .helper{font-size:13px;color:var(--muted);margin:4px 0 12px}
+    body.modal-open{overflow:hidden}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(11,16,32,.72);z-index:90;padding:24px}
+    .modal.is-open{display:flex}
+    .modal-dialog{position:relative;width:100%;max-width:520px;background:var(--surface);border-radius:18px;padding:28px;box-shadow:0 18px 60px rgba(0,0,0,.35)}
+    .modal-title{margin:0 0 6px;font-size:20px;font-weight:600;color:var(--fg)}
+    .modal-subtitle{margin:0 0 18px;font-size:13px}
+    .modal-close{position:absolute;top:14px;right:14px;border:none;background:transparent;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;line-height:1}
+    .modal-close:hover{color:var(--fg)}
+    .modal-form{display:flex;flex-direction:column;gap:14px}
+    .modal-form .field{display:flex;flex-direction:column;gap:6px}
+    .modal-form label{font-size:13px;font-weight:600;color:var(--muted)}
+    .modal-form input,
+    .modal-form select{padding:10px 12px;border-radius:10px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg)}
+    .modal-form input[readonly]{background:var(--surface);color:var(--muted)}
+    .checkbox-row{display:flex;flex-wrap:wrap;gap:14px}
+    .checkbox-row label{display:flex;align-items:center;gap:6px;font-weight:500;color:var(--fg);font-size:14px}
+    .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px}
   </style>
   <script src="./assets/js/config.js"></script>
 </head>
@@ -217,6 +234,70 @@
       <pre id="canales-json">cargando...</pre>
     </section>
   </main>
+
+  <div class="modal" id="modal-user" role="dialog" aria-modal="true" aria-labelledby="modal-user-title">
+    <div class="modal-dialog">
+      <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+      <h3 class="modal-title" id="modal-user-title">Editar usuario</h3>
+      <p class="muted modal-subtitle" id="modal-user-subtitle"></p>
+      <form id="form-editar-usuario" class="modal-form" novalidate>
+        <div class="field">
+          <label for="modal-usuario-correo">Correo</label>
+          <input type="email" id="modal-usuario-correo" name="correo" placeholder="correo@ejemplo.com" required data-initial-focus />
+        </div>
+        <div class="field">
+          <label for="modal-usuario-nombre">Nombre completo</label>
+          <input type="text" id="modal-usuario-nombre" name="nombre_completo" placeholder="Nombre y apellidos" />
+        </div>
+        <div class="field">
+          <label for="modal-usuario-telefono">Teléfono (E.164)</label>
+          <input type="text" id="modal-usuario-telefono" name="telefono_e164" placeholder="+52..." />
+        </div>
+        <div class="field">
+          <label for="modal-usuario-estado">Estado</label>
+          <select id="modal-usuario-estado" name="estado" required>
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" data-modal-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-employee" role="dialog" aria-modal="true" aria-labelledby="modal-employee-title">
+    <div class="modal-dialog">
+      <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+      <h3 class="modal-title" id="modal-employee-title">Editar empleado</h3>
+      <p class="muted modal-subtitle" id="modal-employee-subtitle"></p>
+      <form id="form-editar-empleado" class="modal-form" novalidate>
+        <div class="field">
+          <label for="modal-empleado-departamento">Departamento</label>
+          <select id="modal-empleado-departamento" name="departamento_id" data-initial-focus>
+            <option value="">Sin departamento</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="modal-empleado-puesto">Puesto</label>
+          <select id="modal-empleado-puesto" name="puesto_id">
+            <option value="">Sin puesto</option>
+          </select>
+        </div>
+        <div class="checkbox-row">
+          <label><input type="checkbox" name="es_gestor" /> Gestor</label>
+          <label><input type="checkbox" name="es_vendedor" /> Vendedor</label>
+        </div>
+        <p class="muted" id="modal-employee-meta"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" data-modal-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script type="module">
     import { setActiveNav } from './assets/js/common.js';

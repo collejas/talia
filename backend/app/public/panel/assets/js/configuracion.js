@@ -7,6 +7,64 @@ const state = {
   puestos: [],
 };
 
+const openModals = new Set();
+
+function initModal(id) {
+  const modal = document.getElementById(id);
+  if (!modal) return null;
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeModal(modal);
+  });
+  modal.querySelectorAll('[data-modal-close]').forEach((btn) => {
+    btn.addEventListener('click', () => closeModal(modal));
+  });
+  return modal;
+}
+
+function openModal(modal) {
+  if (!modal) return;
+  modal.classList.add('is-open');
+  openModals.add(modal);
+  document.body.classList.add('modal-open');
+  const focusTarget =
+    modal.querySelector('[data-initial-focus]') || modal.querySelector('input, select, button');
+  if (focusTarget) {
+    focusTarget.focus();
+  }
+}
+
+function closeModal(modal) {
+  if (!modal) return;
+  if (!modal.classList.contains('is-open')) return;
+  modal.classList.remove('is-open');
+  openModals.delete(modal);
+  modal.querySelectorAll('form').forEach((form) => {
+    form.reset();
+    Object.keys(form.dataset || {}).forEach((key) => {
+      delete form.dataset[key];
+    });
+  });
+  Object.keys(modal.dataset || {}).forEach((key) => {
+    delete modal.dataset[key];
+  });
+  if (openModals.size === 0) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
+const modals = {
+  user: initModal('modal-user'),
+  employee: initModal('modal-employee'),
+};
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && openModals.size > 0) {
+    for (const modal of [...openModals]) {
+      closeModal(modal);
+    }
+  }
+});
+
 function showTab(tab) {
   for (const el of document.querySelectorAll('[data-tab]')) {
     el.style.display = el.dataset.tab === tab ? 'block' : 'none';
@@ -85,19 +143,29 @@ function populateSelectors() {
     }
   }
 
-  const departamentoSelects = [
-    document.querySelector('#form-crear-empleado select[name="departamento_id"]'),
-    document.querySelector('#form-crear-departamento select[name="departamento_padre_id"]'),
-    document.querySelector('#form-crear-puesto select[name="departamento_id"]'),
-  ].filter(Boolean);
+  const departamentoTargets = [
+    {
+      element: document.querySelector('#form-crear-empleado select[name="departamento_id"]'),
+      placeholder: '<option value="">Departamento (opcional)</option>',
+    },
+    {
+      element: document.querySelector('#form-crear-departamento select[name="departamento_padre_id"]'),
+      placeholder: '<option value="">Sin departamento padre</option>',
+    },
+    {
+      element: document.querySelector('#form-crear-puesto select[name="departamento_id"]'),
+      placeholder: '<option value="">Departamento (opcional)</option>',
+    },
+    {
+      element: document.querySelector('#modal-employee select[name="departamento_id"]'),
+      placeholder: '<option value="">Sin departamento</option>',
+    },
+  ].filter((target) => target.element);
 
-  for (const select of departamentoSelects) {
-    const current = select.value;
+  for (const target of departamentoTargets) {
+    const { element, placeholder } = target;
+    const current = element.value;
     const items = sortBy(state.departamentos, 'nombre');
-    const placeholder =
-      select.name === 'departamento_padre_id'
-        ? '<option value="">Sin departamento padre</option>'
-        : '<option value="">Departamento (opcional)</option>';
     const options = [
       placeholder,
       ...items.map(
@@ -105,29 +173,38 @@ function populateSelectors() {
           `<option value="${escapeHtml(item.id)}">${escapeHtml(item.nombre ?? '')}</option>`,
       ),
     ];
-    select.innerHTML = options.join('');
-    if (current && select.querySelector(`option[value="${escapeHtml(current)}"]`)) {
-      select.value = current;
+    element.innerHTML = options.join('');
+    if (current && element.querySelector(`option[value="${escapeHtml(current)}"]`)) {
+      element.value = current;
     }
   }
 
-  const puestoSelect = document.querySelector(
-    '#form-crear-empleado select[name="puesto_id"]',
-  );
-  if (puestoSelect) {
-    const current = puestoSelect.value;
+  const puestoTargets = [
+    {
+      element: document.querySelector('#form-crear-empleado select[name="puesto_id"]'),
+      placeholder: '<option value="">Puesto (opcional)</option>',
+    },
+    {
+      element: document.querySelector('#modal-employee select[name="puesto_id"]'),
+      placeholder: '<option value="">Sin puesto</option>',
+    },
+  ].filter((target) => target.element);
+
+  for (const target of puestoTargets) {
+    const { element, placeholder } = target;
+    const current = element.value;
     const items = sortBy(state.puestos, 'nombre');
     const options = [
-      '<option value="">Puesto (opcional)</option>',
+      placeholder,
       ...items.map((item) => {
         const dept = state.departamentos.find((d) => d.id === item.departamento_id);
         const info = dept ? `${item.nombre} • ${dept.nombre}` : item.nombre;
         return `<option value="${escapeHtml(item.id)}">${escapeHtml(info ?? '')}</option>`;
       }),
     ];
-    puestoSelect.innerHTML = options.join('');
-    if (current && puestoSelect.querySelector(`option[value="${escapeHtml(current)}"]`)) {
-      puestoSelect.value = current;
+    element.innerHTML = options.join('');
+    if (current && element.querySelector(`option[value="${escapeHtml(current)}"]`)) {
+      element.value = current;
     }
   }
 }
@@ -332,38 +409,31 @@ function optionsList(items, labelFn) {
   return items.map(labelFn).join('\n');
 }
 
-async function handleUserEdit(usuarioId) {
+function handleUserEdit(usuarioId) {
   const usuario = state.personal.find((item) => item.usuario_id === usuarioId);
-  if (!usuario) return;
-  const correo = prompt('Correo del usuario:', usuario.correo || '');
-  if (correo === null) return;
-  const nombre = prompt('Nombre completo:', usuario.nombre_completo || '');
-  if (nombre === null) return;
-  const telefono = prompt('Teléfono E.164 (+52...):', usuario.telefono_e164 || '');
-  if (telefono === null) return;
-  const estado = prompt('Estado (activo/inactivo):', usuario.estado || 'activo');
-  if (estado === null) return;
-  const trimmedEstado = estado.trim().toLowerCase();
-  if (trimmedEstado && trimmedEstado !== 'activo' && trimmedEstado !== 'inactivo') {
-    alert('El estado debe ser "activo" o "inactivo".');
+  if (!usuario) {
+    alert('No se encontró el usuario seleccionado.');
     return;
   }
-  const payload = {
-    correo: correo.trim() || undefined,
-    nombre_completo: nombre.trim() || undefined,
-    telefono_e164: telefono.trim() || undefined,
-    estado: trimmedEstado || undefined,
-  };
-  await requestJSON(
-    `/api/config/usuarios/${usuarioId}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    },
-    'No se pudo actualizar el usuario',
-  );
-  await loadRRHH();
+  const modal = modals.user;
+  const form = document.getElementById('form-editar-usuario');
+  if (!modal || !form) return;
+  modal.dataset.userId = usuarioId;
+  form.dataset.userId = usuarioId;
+  const subtitle = document.getElementById('modal-user-subtitle');
+  if (subtitle) {
+    const correo = usuario.correo || 'Sin correo';
+    subtitle.textContent = `${correo} • ID: ${usuario.usuario_id}`;
+  }
+  const correoInput = document.getElementById('modal-usuario-correo');
+  const nombreInput = document.getElementById('modal-usuario-nombre');
+  const telefonoInput = document.getElementById('modal-usuario-telefono');
+  const estadoSelect = document.getElementById('modal-usuario-estado');
+  if (correoInput) correoInput.value = usuario.correo || '';
+  if (nombreInput) nombreInput.value = usuario.nombre_completo || '';
+  if (telefonoInput) telefonoInput.value = usuario.telefono_e164 || '';
+  if (estadoSelect) estadoSelect.value = usuario.estado || 'activo';
+  openModal(modal);
 }
 
 async function handleUserDelete(usuarioId) {
@@ -371,6 +441,12 @@ async function handleUserDelete(usuarioId) {
   const correo = usuario?.correo || usuarioId;
   if (!confirm(`¿Eliminar el usuario ${correo}? Esta acción elimina sus roles y empleado asociado.`)) {
     return;
+  }
+  if (modals.user?.classList.contains('is-open') && modals.user.dataset.userId === usuarioId) {
+    closeModal(modals.user);
+  }
+  if (modals.employee?.classList.contains('is-open') && modals.employee.dataset.usuarioId === usuarioId) {
+    closeModal(modals.employee);
   }
   await requestJSON(
     `/api/config/usuarios/${usuarioId}`,
@@ -421,67 +497,54 @@ async function handleUserRoles(usuarioId) {
   await loadRRHH();
 }
 
-async function handleEmployeeEdit(usuarioId) {
+function handleEmployeeEdit(usuarioId) {
   const empleado = state.personal.find((item) => item.usuario_id === usuarioId);
-  if (!empleado) return;
-  const deptLista = optionsList(
-    sortBy(state.departamentos, 'nombre'),
-    (dept) => `${dept.id} • ${dept.nombre}`,
-  );
-  const deptEntrada = prompt(
-    `Departamento (ID, deja vacío para ninguno):\n${deptLista}`,
-    empleado.departamento_id || '',
-  );
-  if (deptEntrada === null) return;
-  const departamentoId = deptEntrada.trim() || null;
-
-  const puestoLista = optionsList(
-    sortBy(state.puestos, 'nombre'),
-    (puesto) => `${puesto.id} • ${puesto.nombre}`,
-  );
-  const puestoEntrada = prompt(
-    `Puesto (ID, deja vacío para ninguno):\n${puestoLista}`,
-    empleado.puesto_id || '',
-  );
-  if (puestoEntrada === null) return;
-  const puestoId = puestoEntrada.trim() || null;
-
-  const gestorEntrada = prompt(
-    '¿Es gestor? (si/no):',
-    empleado.es_gestor ? 'si' : 'no',
-  );
-  if (gestorEntrada === null) return;
-  const esGestor = gestorEntrada.trim().toLowerCase().startsWith('s');
-
-  const vendedorEntrada = prompt(
-    '¿Puede vender? (si/no):',
-    empleado.es_vendedor ? 'si' : 'no',
-  );
-  if (vendedorEntrada === null) return;
-  const esVendedor = vendedorEntrada.trim().toLowerCase().startsWith('s');
-
-  const payload = {
-    departamento_id: departamentoId,
-    puesto_id: puestoId,
-    es_gestor: esGestor,
-    es_vendedor: esVendedor,
-  };
-  await requestJSON(
-    `/api/config/empleados/${usuarioId}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    },
-    'No se pudo actualizar el empleado',
-  );
-  await loadRRHH();
+  if (!empleado) {
+    alert('No se encontró el empleado seleccionado.');
+    return;
+  }
+  const modal = modals.employee;
+  const form = document.getElementById('form-editar-empleado');
+  if (!modal || !form) return;
+  modal.dataset.usuarioId = usuarioId;
+  form.dataset.usuarioId = usuarioId;
+  const subtitle = document.getElementById('modal-employee-subtitle');
+  if (subtitle) {
+    const correo = empleado.correo || 'Sin correo';
+    subtitle.textContent = `${correo} • ID: ${empleado.usuario_id}`;
+  }
+  const meta = document.getElementById('modal-employee-meta');
+  if (meta) {
+    if (empleado.es_vendedor) {
+      meta.textContent = `Último lead asignado: ${formatDate(empleado.ultimo_lead_asignado_en)}`;
+    } else {
+      meta.textContent = 'Este empleado no participa en la asignación de leads.';
+    }
+  }
+  const deptSelect = document.getElementById('modal-empleado-departamento');
+  if (deptSelect) {
+    if (!deptSelect.options.length) populateSelectors();
+    deptSelect.value = empleado.departamento_id || '';
+  }
+  const puestoSelect = document.getElementById('modal-empleado-puesto');
+  if (puestoSelect) {
+    if (!puestoSelect.options.length) populateSelectors();
+    puestoSelect.value = empleado.puesto_id || '';
+  }
+  const gestorCheckbox = form.querySelector('input[name="es_gestor"]');
+  if (gestorCheckbox) gestorCheckbox.checked = Boolean(empleado.es_gestor);
+  const vendedorCheckbox = form.querySelector('input[name="es_vendedor"]');
+  if (vendedorCheckbox) vendedorCheckbox.checked = Boolean(empleado.es_vendedor);
+  openModal(modal);
 }
 
 async function handleEmployeeDelete(usuarioId) {
   const empleado = state.personal.find((item) => item.usuario_id === usuarioId);
   const correo = empleado?.correo || usuarioId;
   if (!confirm(`¿Eliminar la ficha de empleado de ${correo}?`)) return;
+  if (modals.employee?.classList.contains('is-open') && modals.employee.dataset.usuarioId === usuarioId) {
+    closeModal(modals.employee);
+  }
   await requestJSON(
     `/api/config/empleados/${usuarioId}`,
     { method: 'DELETE' },
@@ -683,6 +746,90 @@ function setupFormHandlers() {
           'No se pudo crear el empleado',
         );
         formEmpleado.reset();
+        await loadRRHH();
+      } catch (error) {
+        console.error(error);
+        alert(error.message);
+      }
+    });
+  }
+
+  const formEditarUsuario = document.getElementById('form-editar-usuario');
+  if (formEditarUsuario) {
+    formEditarUsuario.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const userId = formEditarUsuario.dataset.userId;
+      if (!userId) {
+        alert('No se pudo identificar el usuario a actualizar.');
+        return;
+      }
+      const data = new FormData(formEditarUsuario);
+      const correo = (data.get('correo') || '').toString().trim();
+      if (!correo) {
+        alert('El correo es obligatorio.');
+        return;
+      }
+      const nombre = (data.get('nombre_completo') || '').toString().trim();
+      const telefono = (data.get('telefono_e164') || '').toString().trim();
+      const estado = (data.get('estado') || 'activo').toString();
+      if (estado !== 'activo' && estado !== 'inactivo') {
+        alert('Selecciona un estado válido.');
+        return;
+      }
+      const payload = {
+        correo,
+        nombre_completo: nombre || null,
+        telefono_e164: telefono || null,
+        estado,
+      };
+      try {
+        await requestJSON(
+          `/api/config/usuarios/${userId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          'No se pudo actualizar el usuario',
+        );
+        closeModal(modals.user);
+        await loadRRHH();
+      } catch (error) {
+        console.error(error);
+        alert(error.message);
+      }
+    });
+  }
+
+  const formEditarEmpleado = document.getElementById('form-editar-empleado');
+  if (formEditarEmpleado) {
+    formEditarEmpleado.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const usuarioId = formEditarEmpleado.dataset.usuarioId;
+      if (!usuarioId) {
+        alert('No se pudo identificar el empleado a actualizar.');
+        return;
+      }
+      const data = new FormData(formEditarEmpleado);
+      const departamentoId = (data.get('departamento_id') || '').toString().trim();
+      const puestoId = (data.get('puesto_id') || '').toString().trim();
+      const payload = {
+        departamento_id: departamentoId || null,
+        puesto_id: puestoId || null,
+        es_gestor: data.get('es_gestor') === 'on',
+        es_vendedor: data.get('es_vendedor') === 'on',
+      };
+      try {
+        await requestJSON(
+          `/api/config/empleados/${usuarioId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+          'No se pudo actualizar el empleado',
+        );
+        closeModal(modals.employee);
         await loadRRHH();
       } catch (error) {
         console.error(error);
