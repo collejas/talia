@@ -215,7 +215,7 @@ const state = {
   palette: 'dusk',
   channelKey: 'todos',
   prevChannelKey: 'todos',
-  mode: 'mx',
+  mode: 'world',
   statesCache: new Map(),
   municipalityCache: new Map(),
   worldCache: new Map(),
@@ -773,7 +773,9 @@ async function initializeMap() {
       attribution: '&copy; OpenStreetMap',
     }).addTo(state.map);
 
-    state.map.setView([23.6345, -102.5528], 4.6);
+    const center = state.mode === 'world' ? [20, 0] : [23.6345, -102.5528];
+    const zoom = state.mode === 'world' ? 2 : 4.6;
+    state.map.setView(center, zoom);
     window.setTimeout(() => state.map?.invalidateSize(), 120);
     await renderStates();
     state.initialized = true;
