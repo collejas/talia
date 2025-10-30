@@ -19,9 +19,10 @@
   <style>
     .muted{color:var(--muted)}
     .agenda-page{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
-    main.container{padding:24px 0 48px;max-width:1280px}
+    main.container{padding:24px 20px 48px;max-width:100%;width:100%}
     .card{padding:18px;border:1px solid var(--border-soft);border-radius:14px;background:var(--surface)}
     .filters{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:20px}
+    .filters-title{margin:0;font-size:22px;font-weight:700}
     .filters label{display:flex;flex-direction:column;gap:6px;font-size:13px}
     .filters button{height:40px}
     .agenda-layout{display:flex;flex-direction:column;gap:20px}
@@ -90,29 +91,9 @@
 </head>
 <body class="agenda-page theme-aurora" data-nav="agenda">
   <main class="container">
-    <header style="margin-bottom:20px;">
-      <h1 style="margin:0 0 6px;">Agenda de demos</h1>
-      <p class="muted" style="margin:0;">Gestiona y sincroniza las demostraciones comerciales.</p>
-    </header>
 
     <section class="card filters" aria-label="Filtros de agenda">
-      <label>
-        <span>Rango</span>
-        <select id="filtro-rango" class="btn btn-outline">
-          <option value="hoy">Hoy</option>
-          <option value="7d" selected>Próximos 7 días</option>
-          <option value="30d">Próximos 30 días</option>
-          <option value="fechas">Personalizado</option>
-        </select>
-      </label>
-      <label>
-        <span>Desde</span>
-        <input type="date" id="filtro-desde" />
-      </label>
-      <label>
-        <span>Hasta</span>
-        <input type="date" id="filtro-hasta" />
-      </label>
+      <h1 class="filters-title">Agenda</h1>
       <label>
         <span>Estado</span>
         <select id="filtro-estado" class="btn btn-outline">
