@@ -24,6 +24,44 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./assets/css/styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "name": "TalIA",
+            "url": "https://talia.mx/",
+            "logo": "https://talia.mx/android-chrome-512x512.png",
+            "contactPoint": [
+              {
+                "@type": "ContactPoint",
+                "contactType": "customer support",
+                "email": "hola@talia.mx",
+                "availableLanguage": ["es"],
+                "areaServed": "MX"
+              }
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "name": "TalIA",
+            "url": "https://talia.mx/"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Inicio",
+                "item": "https://talia.mx/"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body class="theme-ice">
     <header class="site-header">
