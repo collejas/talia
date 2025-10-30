@@ -653,13 +653,6 @@ function attachEvents() {
   $('calendar-view')?.addEventListener('change', (event) => {
     changeView(event.target?.value || 'month');
   });
-  $('#cal-prev')?.addEventListener('click', goPrev);
-  $('#cal-next')?.addEventListener('click', goNext);
-  $('#cal-today')?.addEventListener('click', () => {
-    gotoToday();
-    renderCalendar();
-  });
-
   $('#modal-form')?.addEventListener('submit', submitModal);
   $('#modal-delete')?.addEventListener('click', deleteAppointment);
   const closeBtn = $('#modal-close');
@@ -670,10 +663,26 @@ function attachEvents() {
   }
   document.addEventListener('click', (event) => {
     const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.id === 'modal-close' || target.closest('#modal-close')) {
+    if (!target || typeof target.closest !== 'function') return;
+    if (target.closest('#modal-close')) {
       event.preventDefault();
       closeModal();
+      return;
+    }
+    if (target.closest('#cal-prev')) {
+      event.preventDefault();
+      goPrev();
+      return;
+    }
+    if (target.closest('#cal-next')) {
+      event.preventDefault();
+      goNext();
+      return;
+    }
+    if (target.closest('#cal-today')) {
+      event.preventDefault();
+      gotoToday();
+      return;
     }
   });
   $('#agenda-modal')?.addEventListener('click', (event) => {
