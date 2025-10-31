@@ -806,6 +806,8 @@ async def fetch_webchat_visitas_detalle(
     date_to: datetime | None = None,
     has_chat: bool | None = None,
     state: str | None = None,
+    country: str | None = None,
+    city: str | None = None,
     search: str | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -824,9 +826,18 @@ async def fetch_webchat_visitas_detalle(
         "Authorization": f"Bearer {settings.supabase_service_role}",
         "Content-Type": "application/json",
     }
+    country_value = country.strip() if isinstance(country, str) else country
+    if isinstance(country_value, str) and not country_value:
+        country_value = None
+    city_value = city.strip() if isinstance(city, str) else city
+    if isinstance(city_value, str) and not city_value:
+        city_value = None
+
     payload: dict[str, Any] = {
         "p_limit": limit,
         "p_offset": offset,
+        "p_country": country_value,
+        "p_city": city_value,
     }
     if date_from:
         payload["p_from"] = date_from.isoformat()
@@ -846,6 +857,28 @@ async def fetch_webchat_visitas_detalle(
         msg = f"Error de red al consultar visitas webchat: {exc}"
         logger.exception(msg)
         raise StorageError(msg) from exc
+
+    if response.status_code == 400:
+        try:
+            error_json = response.json()
+        except ValueError:
+            error_json = None
+        if (
+            isinstance(error_json, dict)
+            and error_json.get("code") == "PGRST203"
+            and "p_country" not in payload
+            and "p_city" not in payload
+        ):
+            retry_payload = dict(payload)
+            retry_payload["p_country"] = country or None
+            retry_payload["p_city"] = city or None
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(url, headers=headers, json=retry_payload)
+            except httpx.RequestError as exc:
+                msg = f"Error de red al consultar visitas webchat: {exc}"
+                logger.exception(msg)
+                raise StorageError(msg) from exc
 
     if response.status_code >= 400:
         msg = (
