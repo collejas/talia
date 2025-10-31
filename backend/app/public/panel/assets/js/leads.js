@@ -42,6 +42,9 @@ const leadModal = $('modal-lead');
 const leadForm = $('form-editar-lead');
 const leadModalInfo = $('modal-lead-info');
 const leadModalSubtitle = $('modal-lead-subtitle');
+const leadModalNombre = $('lead-modal-nombre');
+const leadModalCorreo = $('lead-modal-correo');
+const leadModalTelefono = $('lead-modal-telefono');
 const leadModalEtapa = $('lead-modal-etapa');
 const leadModalAsignado = $('lead-modal-asignado');
 const leadModalScore = $('lead-modal-score');
@@ -543,8 +546,8 @@ function openLeadEditor(leadId) {
   if (leadModalSubtitle) {
     leadModalSubtitle.textContent = `ID: ${lead.id}`;
   }
+  const contacto = lead.contacto || {};
   if (leadModalInfo) {
-    const contacto = lead.contacto || {};
     const vendedor = lead.asignado?.nombre || lead.asignado?.correo || 'Sin asignar';
     leadModalInfo.innerHTML = `
       <strong>${escapeHtml(contacto.nombre || 'Sin nombre')}</strong><br />
@@ -552,6 +555,9 @@ function openLeadEditor(leadId) {
       <span class="muted">Vendedor actual: ${escapeHtml(vendedor)}</span>
     `;
   }
+  if (leadModalNombre) leadModalNombre.value = contacto.nombre || '';
+  if (leadModalCorreo) leadModalCorreo.value = contacto.correo || '';
+  if (leadModalTelefono) leadModalTelefono.value = contacto.telefono || '';
   updateEditSelects();
   if (leadModalEtapa && lead.etapa?.id) {
     ensureOption(leadModalEtapa, lead.etapa.id, lead.etapa.nombre || lead.etapa.id);
@@ -631,6 +637,23 @@ async function submitLeadForm(event) {
     metadata,
     tags,
   };
+
+  const contactoPayload = {};
+  if (leadModalNombre) {
+    const value = leadModalNombre.value.trim();
+    contactoPayload.nombre = value || null;
+  }
+  if (leadModalCorreo) {
+    const value = leadModalCorreo.value.trim().toLowerCase();
+    contactoPayload.correo = value || null;
+  }
+  if (leadModalTelefono) {
+    const value = leadModalTelefono.value.trim();
+    contactoPayload.telefono = value || null;
+  }
+  if (Object.keys(contactoPayload).length > 0) {
+    payload.contacto = contactoPayload;
+  }
 
   if (leadScoreValue) {
     const parsedScore = Number.parseInt(leadScoreValue, 10);

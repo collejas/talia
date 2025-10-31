@@ -56,16 +56,21 @@
     .modal-subtitle{margin:0 0 12px;font-size:13px;color:var(--muted)}
     .modal-close{position:absolute;top:14px;right:14px;border:none;background:transparent;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;line-height:1}
     .modal-close:hover{color:var(--fg)}
-    .modal-form{display:flex;flex-direction:column;gap:14px}
+    .modal-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .modal-form .field{display:flex;flex-direction:column;gap:6px}
     .modal-form label{font-size:13px;font-weight:600;color:var(--muted)}
     .modal-form input,
     .modal-form select,
     .modal-form textarea{padding:10px 12px;border-radius:10px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg);font:inherit}
     .modal-form textarea{min-height:80px;resize:vertical}
-    .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
+    .modal-form .full-span{grid-column:1/-1}
+    .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:4px;grid-column:1/-1}
     .modal-info{padding:12px;border-radius:12px;background:var(--surface-alt);font-size:13px;color:var(--muted)}
-    @media (max-width:720px){
+    @media (max-width:900px){
+      .modal-form{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media (max-width:600px){
+      .modal-form{grid-template-columns:1fr}
       .leads-filters input,
       .leads-filters select{min-width:0;width:100%}
       .leads-actions{width:100%;justify-content:space-between}
@@ -164,6 +169,18 @@
       <div class="modal-info" id="modal-lead-info"></div>
       <form id="form-editar-lead" class="modal-form" novalidate>
         <div class="field">
+          <label for="lead-modal-nombre">Nombre del contacto</label>
+          <input type="text" id="lead-modal-nombre" name="contacto_nombre" placeholder="Nombre completo" />
+        </div>
+        <div class="field">
+          <label for="lead-modal-correo">Correo</label>
+          <input type="email" id="lead-modal-correo" name="contacto_correo" placeholder="correo@ejemplo.com" />
+        </div>
+        <div class="field">
+          <label for="lead-modal-telefono">Teléfono (E.164)</label>
+          <input type="text" id="lead-modal-telefono" name="contacto_telefono" placeholder="+52..." />
+        </div>
+        <div class="field">
           <label for="lead-modal-etapa">Etapa</label>
           <select id="lead-modal-etapa" name="etapa_id" required data-initial-focus>
             <option value="">Selecciona etapa…</option>
@@ -183,11 +200,11 @@
           <label for="lead-modal-probabilidad">Probabilidad (%)</label>
           <input type="number" id="lead-modal-probabilidad" name="probabilidad_override" min="0" max="100" step="0.1" placeholder="0-100" />
         </div>
-        <div class="field">
+        <div class="field full-span">
           <label for="lead-modal-siguiente">Siguiente acción</label>
           <textarea id="lead-modal-siguiente" name="siguiente_accion" placeholder="Describe la siguiente acción acordada"></textarea>
         </div>
-        <div class="field">
+        <div class="field full-span">
           <label for="lead-modal-tags">Tags (separados por coma)</label>
           <input type="text" id="lead-modal-tags" name="tags" placeholder="Ej. demo, seguimiento, prioridad" />
         </div>

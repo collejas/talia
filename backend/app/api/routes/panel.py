@@ -198,6 +198,14 @@ class RolUpdatePayload(BaseModel):
     descripcion: str | None = Field(default=None, max_length=400)
 
 
+class LeadContactUpdate(BaseModel):
+    """Actualización parcial del contacto asociado al lead."""
+
+    nombre: str | None = Field(default=None, max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=32)
+
+
 class LeadUpdatePayload(BaseModel):
     """Actualización parcial de una tarjeta de lead."""
 
@@ -209,6 +217,7 @@ class LeadUpdatePayload(BaseModel):
     siguiente_accion: str | None = Field(default=None, max_length=400)
     tags: list[str] | None = Field(default=None)
     metadata: dict[str, Any] | None = Field(default=None)
+    contacto: LeadContactUpdate | None = Field(default=None)
 
     model_config = ConfigDict(extra="ignore")
 
@@ -1207,32 +1216,76 @@ async def actualizar_lead(
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     await _require_admin(authorization)
-    data = payload.model_dump(exclude_unset=True)
-    updates: dict[str, Any] = {}
-
-    if not data:
+    raw_data = payload.model_dump(exclude_unset=True)
+    if not raw_data:
         return {"ok": True, "item": None}
 
-    etapa_id = data.get("etapa_id")
+    contact_payload = raw_data.pop("contacto", None)
+    metadata_payload = raw_data.pop("metadata", None)
+    siguiente_accion = raw_data.pop("siguiente_accion", None)
+
+    if metadata_payload is not None and not isinstance(metadata_payload, dict):
+        raise HTTPException(status_code=400, detail="metadata_invalid")
+    if contact_payload is not None and not isinstance(contact_payload, dict):
+        raise HTTPException(status_code=400, detail="contacto_invalid")
+
+    need_existing = bool(contact_payload) or (
+        metadata_payload is None and siguiente_accion is not None
+    )
+    existing_row: dict[str, Any] | None = None
+    contacto_id: str | None = None
+
+    current_metadata: dict[str, Any] | None = None
+    if metadata_payload is not None:
+        current_metadata = dict(metadata_payload)
+
+    if need_existing:
+        resp_existing = await _sb_get(
+            "/rest/v1/lead_tarjetas",
+            params={"id": f"eq.{lead_id}", "select": "id,contacto_id,metadata"},
+        )
+        if resp_existing.status_code >= 400:
+            raise _supabase_error(resp_existing, "Error consultando lead")
+        existing_rows = resp_existing.json() or []
+        existing_row = _first_row(existing_rows)
+        if not existing_row:
+            raise HTTPException(status_code=404, detail="lead_not_found")
+        contacto_id = existing_row.get("contacto_id")
+        if current_metadata is None:
+            meta_raw = existing_row.get("metadata")
+            current_metadata = meta_raw if isinstance(meta_raw, dict) else {}
+
+    if current_metadata is None and siguiente_accion is not None:
+        current_metadata = {}
+
+    if current_metadata is not None and siguiente_accion is not None:
+        if siguiente_accion:
+            current_metadata["siguiente_accion"] = siguiente_accion
+        else:
+            current_metadata.pop("siguiente_accion", None)
+
+    updates: dict[str, Any] = {}
+
+    etapa_id = raw_data.get("etapa_id")
     if etapa_id is not None:
         updates["etapa_id"] = str(etapa_id)
 
-    if "asignado_a_usuario_id" in data:
-        asignado = data.get("asignado_a_usuario_id")
+    if "asignado_a_usuario_id" in raw_data:
+        asignado = raw_data.get("asignado_a_usuario_id")
         updates["asignado_a_usuario_id"] = str(asignado) if asignado else None
 
-    if "propietario_usuario_id" in data:
-        propietario = data.get("propietario_usuario_id")
+    if "propietario_usuario_id" in raw_data:
+        propietario = raw_data.get("propietario_usuario_id")
         updates["propietario_usuario_id"] = str(propietario) if propietario else None
 
-    if "lead_score" in data:
-        updates["lead_score"] = data.get("lead_score")
+    if "lead_score" in raw_data:
+        updates["lead_score"] = raw_data.get("lead_score")
 
-    if "probabilidad_override" in data:
-        updates["probabilidad_override"] = data.get("probabilidad_override")
+    if "probabilidad_override" in raw_data:
+        updates["probabilidad_override"] = raw_data.get("probabilidad_override")
 
-    if "tags" in data:
-        tags_value = data.get("tags")
+    if "tags" in raw_data:
+        tags_value = raw_data.get("tags")
         if tags_value is None:
             updates["tags"] = []
         elif isinstance(tags_value, list):
@@ -1240,32 +1293,57 @@ async def actualizar_lead(
         else:
             raise HTTPException(status_code=400, detail="tags_invalid")
 
-    metadata_payload = data.get("metadata")
-    if metadata_payload is not None:
-        if not isinstance(metadata_payload, dict):
-            raise HTTPException(status_code=400, detail="metadata_invalid")
-        updates["metadata"] = metadata_payload
+    if current_metadata is not None:
+        updates["metadata"] = current_metadata
 
-    siguiente_accion = data.get("siguiente_accion")
-    if siguiente_accion is not None and "metadata" not in updates:
-        # Obtener metadata actual para aplicar cambios incrementales
-        resp_meta = await _sb_get(
-            "/rest/v1/lead_tarjetas",
-            params={"id": f"eq.{lead_id}", "select": "metadata"},
+    contact_updates: dict[str, Any] = {}
+    if isinstance(contact_payload, dict):
+        if "nombre" in contact_payload:
+            raw_nombre = contact_payload.get("nombre")
+            if raw_nombre is None:
+                contact_updates["nombre_completo"] = None
+            else:
+                nombre_value = str(raw_nombre).strip()
+                contact_updates["nombre_completo"] = nombre_value or None
+        if "correo" in contact_payload:
+            raw_correo = contact_payload.get("correo")
+            if raw_correo is None:
+                contact_updates["correo"] = None
+            else:
+                correo_value = str(raw_correo).strip()
+                contact_updates["correo"] = correo_value or None
+        if "telefono" in contact_payload:
+            raw_tel = contact_payload.get("telefono")
+            if raw_tel is None:
+                contact_updates["telefono_e164"] = None
+            else:
+                tel_value = str(raw_tel).strip()
+                contact_updates["telefono_e164"] = tel_value or None
+
+    if contact_updates:
+        if not contacto_id:
+            if not existing_row:
+                resp_existing = await _sb_get(
+                    "/rest/v1/lead_tarjetas",
+                    params={"id": f"eq.{lead_id}", "select": "contacto_id"},
+                )
+                if resp_existing.status_code >= 400:
+                    raise _supabase_error(resp_existing, "Error consultando lead")
+                existing_rows = resp_existing.json() or []
+                existing_row = _first_row(existing_rows)
+                if not existing_row:
+                    raise HTTPException(status_code=404, detail="lead_not_found")
+                contacto_id = existing_row.get("contacto_id")
+        if not contacto_id:
+            raise HTTPException(status_code=400, detail="lead_without_contact")
+        resp_contact = await _sb_patch(
+            "/rest/v1/contactos",
+            params={"id": f"eq.{contacto_id}"},
+            json=contact_updates,
+            prefer="return=representation",
         )
-        if resp_meta.status_code >= 400:
-            raise _supabase_error(resp_meta, "Error preparando metadata")
-        current_rows = resp_meta.json() or []
-        current_meta = {}
-        if current_rows and isinstance(current_rows[0], dict):
-            current_meta = current_rows[0].get("metadata") or {}
-        if not isinstance(current_meta, dict):
-            current_meta = {}
-        if siguiente_accion:
-            current_meta["siguiente_accion"] = siguiente_accion
-        else:
-            current_meta.pop("siguiente_accion", None)
-        updates["metadata"] = current_meta
+        if resp_contact.status_code >= 400:
+            raise _supabase_error(resp_contact, "Error actualizando contacto")
 
     if not updates:
         return {"ok": True, "item": None}
@@ -1279,6 +1357,8 @@ async def actualizar_lead(
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error actualizando lead")
     rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="lead_not_found")
     item = _first_row(rows)
     return {"ok": True, "item": item}
 
