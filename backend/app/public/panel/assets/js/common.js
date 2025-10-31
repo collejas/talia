@@ -18,12 +18,15 @@ function isAuthPage() {
   }
 }
 
-const NAV_LINKS = [
+const PANEL_LINKS = [
   { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
-  { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
-  { id: 'leads', href: 'leads.html', label: 'Leads' },
-  { id: 'agenda', href: 'agenda.html', label: 'Agenda' },
   { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
+  { id: 'leads', href: 'leads.html', label: 'Leads' },
+  { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
+  { id: 'agenda', href: 'agenda.html', label: 'Agenda' },
+];
+
+const NAV_LINKS = [
   { id: 'config', href: 'configuracion.html', label: 'Configuración' },
 ];
 
@@ -38,6 +41,11 @@ function renderHeader() {
   if (isAuthPage()) return null; // No renderizar header en páginas de autenticación
   let header = document.querySelector('header.nav[data-panel-header="true"]');
   if (header) return header;
+
+  const panelLinks = PANEL_LINKS.map(
+    (link) =>
+      `<a class="menu-panel-link" data-nav="${link.id}" href="${link.href}" role="menuitem">${link.label}</a>`
+  ).join('');
 
   const navLinks = NAV_LINKS.map(
     (link) =>
@@ -60,6 +68,14 @@ function renderHeader() {
         </span>
       </a>
       <nav class="menu">
+        <div class="menu-panel" data-panel-container>
+          <button class="btn btn-outline menu-panel-toggle" type="button" data-panel-toggle aria-haspopup="true" aria-expanded="false">
+            Panel
+          </button>
+          <div class="menu-panel-dropdown" data-panel-menu role="menu" hidden>
+            ${panelLinks}
+          </div>
+        </div>
         ${navLinks}
         <div class="theme-switcher">
           <select id="panel-theme-select" class="btn btn-outline" aria-label="Cambiar tema visual">
@@ -91,6 +107,45 @@ function renderHeader() {
     }
   } catch (e) {
     console.warn('[panel] No se pudo inicializar el botón de logout.', e);
+  }
+
+  const panelContainer = header.querySelector('[data-panel-container]');
+  const panelButton = header.querySelector('[data-panel-toggle]');
+  const panelMenu = header.querySelector('[data-panel-menu]');
+  if (panelContainer && panelButton && panelMenu) {
+    const closeMenu = () => {
+      panelMenu.hidden = true;
+      panelContainer.classList.remove('is-open');
+      panelButton.setAttribute('aria-expanded', 'false');
+    };
+
+    const openMenu = () => {
+      panelMenu.hidden = false;
+      panelContainer.classList.add('is-open');
+      panelButton.setAttribute('aria-expanded', 'true');
+    };
+
+    panelButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      const isOpen = panelContainer.classList.contains('is-open');
+      if (isOpen) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    });
+
+    panelMenu.addEventListener('click', (event) => {
+      if (event.target instanceof HTMLElement && event.target.matches('[data-nav]')) {
+        closeMenu();
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!panelContainer.contains(event.target)) {
+        closeMenu();
+      }
+    });
   }
   return header;
 }
@@ -168,8 +223,16 @@ export async function ensureSession({ redirectTo, emailElId = 'user-email' } = {
 
 export function setActiveNav(section) {
   const links = document.querySelectorAll('[data-nav]');
+  let panelActive = false;
   links.forEach((link) => {
     const isTarget = link.dataset.nav === section;
     link.classList.toggle('is-active', Boolean(section) && isTarget);
+    if (isTarget && link.closest('[data-panel-menu]')) {
+      panelActive = true;
+    }
   });
+  const panelButton = document.querySelector('[data-panel-toggle]');
+  if (panelButton) {
+    panelButton.classList.toggle('is-active', panelActive);
+  }
 }
