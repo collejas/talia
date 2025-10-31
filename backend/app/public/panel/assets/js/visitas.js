@@ -69,10 +69,7 @@ function formatCountry(row) {
 }
 
 function formatState(row) {
-  const parts = [];
-  if (row.state_name) parts.push(row.state_name);
-  if (row.state_code) parts.push(`CVE ${row.state_code}`);
-  return parts.join(' · ') || 'Sin datos';
+  return row.state_name || 'Sin datos';
 }
 
 function formatCity(row) {
