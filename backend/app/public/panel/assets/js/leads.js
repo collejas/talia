@@ -152,9 +152,9 @@ function normalizeLead(row) {
     correo: contactoRaw.correo ?? contactoRaw.email ?? row.contacto_correo ?? null,
     telefono: contactoRaw.telefono ?? contactoRaw.telefono_e164 ?? row.contacto_telefono ?? null,
     estado: contactoRaw.estado ?? null,
-    company: contactoRaw.company_name ?? null,
-    notas: contactoRaw.notes ?? null,
-    necesidad: contactoRaw.necesidad ?? contactoRaw.necesidad_proposito ?? null,
+    empresa: contactoRaw.company_name ?? null,
+    notasIA: contactoRaw.notes ?? null,
+    resumenIA: contactoRaw.necesidad ?? contactoRaw.necesidad_proposito ?? null,
     creado_en: contactoRaw.creado_en ?? null,
   };
 
@@ -365,18 +365,27 @@ function renderTable() {
     return;
   }
   const rows = leadsState.items.map((item) => {
-    const contacto = item.contacto || {};
-    const etapaNombre = item.etapa?.nombre || 'Sin etapa';
-    const vendedorNombre = item.asignado?.nombre || item.asignado?.correo || 'Sin asignar';
-    const canalLabel = item.canal ? item.canal.charAt(0).toUpperCase() + item.canal.slice(1) : '—';
-    const tagsHtml = displayTags(item);
-    const acciones = `
+  const contacto = item.contacto || {};
+  const etapaNombre = item.etapa?.nombre || 'Sin etapa';
+  const vendedorNombre = item.asignado?.nombre || item.asignado?.correo || 'Sin asignar';
+  const canalLabel = item.canal ? item.canal.charAt(0).toUpperCase() + item.canal.slice(1) : '—';
+  const tagsHtml = displayTags(item);
+  const empresa = contacto.empresa
+    ? `<div><small class="muted">Empresa: ${escapeHtml(contacto.empresa)}</small></div>`
+    : '';
+  const notas = contacto.notasIA
+    ? `<div><small class="muted">Notas IA: ${escapeHtml(contacto.notasIA)}</small></div>`
+    : '';
+  const resumen = contacto.resumenIA
+    ? `<div><small class="muted">Resumen IA: ${escapeHtml(contacto.resumenIA)}</small></div>`
+    : '';
+  const acciones = `
       <div class="lead-actions">
         <button type="button" class="btn btn-outline" data-action="lead-edit" data-id="${escapeHtml(item.id)}">Editar</button>
         <button type="button" class="btn btn-outline" data-action="lead-delete" data-id="${escapeHtml(item.id)}">Eliminar</button>
       </div>
     `;
-    return `
+  return `
       <tr>
         <td>
           <strong>${escapeHtml(contacto.nombre || 'Sin nombre')}</strong><br />
@@ -385,6 +394,9 @@ function renderTable() {
         <td>
           ${escapeHtml(contacto.correo || '—')}<br />
           <small class="muted">${escapeHtml(contacto.telefono || '—')}</small>
+          ${empresa}
+          ${notas}
+          ${resumen}
         </td>
         <td>${escapeHtml(canalLabel)}</td>
         <td>${escapeHtml(etapaNombre)}</td>
@@ -412,8 +424,8 @@ function renderAccordion() {
     const contacto = item.contacto || {};
     const etapaNombre = item.etapa?.nombre || 'Sin etapa';
     const vendedorNombre = item.asignado?.nombre || item.asignado?.correo || 'Sin asignar';
-    const nota = contacto.notas ? `<p class="lead-notes"><strong>Notas:</strong> ${escapeHtml(contacto.notas)}</p>` : '';
-    const necesidad = contacto.necesidad ? `<p class="lead-notes"><strong>Necesidad:</strong> ${escapeHtml(contacto.necesidad)}</p>` : '';
+    const nota = contacto.notasIA ? `<p class="lead-notes"><strong>Notas IA:</strong> ${escapeHtml(contacto.notasIA)}</p>` : '';
+    const necesidad = contacto.resumenIA ? `<p class="lead-notes"><strong>Resumen IA:</strong> ${escapeHtml(contacto.resumenIA)}</p>` : '';
     const tagsHtml = displayTags(item);
     const metadataText =
       item.metadata && typeof item.metadata === 'object'
@@ -435,16 +447,17 @@ function renderAccordion() {
           <div class="lead-detail-grid">
             <div><dt>Correo</dt><dd>${escapeHtml(contacto.correo || '—')}</dd></div>
             <div><dt>Teléfono</dt><dd>${escapeHtml(contacto.telefono || '—')}</dd></div>
+            <div><dt>Empresa</dt><dd>${escapeHtml(contacto.empresa || '—')}</dd></div>
             <div><dt>Canal</dt><dd>${escapeHtml(item.canal || '—')}</dd></div>
             <div><dt>Vendedor</dt><dd>${escapeHtml(vendedorNombre)}</dd></div>
             <div><dt>Score</dt><dd>${escapeHtml(formatScore(item.lead_score))}</dd></div>
             <div><dt>Creado</dt><dd>${escapeHtml(formatDate(item.creado_en))}</dd></div>
             <div><dt>Actualizado</dt><dd>${escapeHtml(formatDate(item.actualizado_en))}</dd></div>
             <div><dt>Siguiente acción</dt><dd>${escapeHtml(item.siguiente_accion || '—')}</dd></div>
+            <div><dt>Notas IA</dt><dd>${escapeHtml(contacto.notasIA || '—')}</dd></div>
+            <div><dt>Resumen IA</dt><dd>${escapeHtml(contacto.resumenIA || '—')}</dd></div>
           </div>
           ${tagsHtml}
-          ${nota}
-          ${necesidad}
           ${metadataText}
           ${acciones}
         </div>
