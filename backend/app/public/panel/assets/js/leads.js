@@ -38,6 +38,20 @@ const elements = {
   viewAccordion: $('lead-view-accordion'),
 };
 
+const leadModal = $('modal-lead');
+const leadForm = $('form-editar-lead');
+const leadModalInfo = $('modal-lead-info');
+const leadModalSubtitle = $('modal-lead-subtitle');
+const leadModalEtapa = $('lead-modal-etapa');
+const leadModalAsignado = $('lead-modal-asignado');
+const leadModalScore = $('lead-modal-score');
+const leadModalProb = $('lead-modal-probabilidad');
+const leadModalNext = $('lead-modal-siguiente');
+const leadModalTags = $('lead-modal-tags');
+
+let activeLeadId = null;
+let actionsInitialized = false;
+
 let searchTimer = null;
 
 function escapeHtml(value) {
@@ -65,6 +79,47 @@ function formatScore(score) {
   if (Number.isNaN(n)) return '—';
   return `${n}%`;
 }
+
+function closeLeadModal() {
+  if (!leadModal) return;
+  leadModal.classList.remove('is-open');
+  document.body.classList.remove('modal-open');
+  activeLeadId = null;
+  if (leadForm) {
+    leadForm.reset();
+    delete leadForm.dataset.leadId;
+  }
+  if (leadModalInfo) leadModalInfo.textContent = '';
+  if (leadModalSubtitle) leadModalSubtitle.textContent = '';
+}
+
+function openLeadModal() {
+  if (!leadModal) return;
+  leadModal.classList.add('is-open');
+  document.body.classList.add('modal-open');
+  const focusTarget =
+    (leadModal && leadModal.querySelector('[data-initial-focus]')) ||
+    leadModalEtapa ||
+    leadModal.querySelector('input, select, textarea, button');
+  if (focusTarget) focusTarget.focus();
+}
+
+if (leadModal) {
+  leadModal.addEventListener('click', (event) => {
+    if (event.target === leadModal) {
+      closeLeadModal();
+    }
+  });
+  leadModal.querySelectorAll('[data-modal-close]').forEach((btn) => {
+    btn.addEventListener('click', closeLeadModal);
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && leadModal?.classList.contains('is-open')) {
+    closeLeadModal();
+  }
+});
 
 function setLoading(isLoading) {
   if (elements.loading) {
@@ -138,6 +193,15 @@ function normalizeLead(row) {
     }
   }
 
+  const tags = Array.isArray(row.tags) ? row.tags : [];
+  let siguienteAccion = null;
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const rawNext = metadata.siguiente_accion;
+    if (typeof rawNext === 'string' && rawNext.trim()) {
+      siguienteAccion = rawNext.trim();
+    }
+  }
+
   return {
     id: row.id,
     canal: row.canal || '',
@@ -145,8 +209,9 @@ function normalizeLead(row) {
     actualizado_en: row.actualizado_en,
     lead_score: row.lead_score ?? null,
     probabilidad: row.probabilidad ?? row.probabilidad_override ?? null,
-    siguiente_accion: row.siguiente_accion ?? null,
+    siguiente_accion: siguienteAccion,
     metadata: metadata && typeof metadata === 'object' ? metadata : null,
+    tags,
     contacto,
     etapa,
     tablero,
@@ -222,6 +287,17 @@ function setSelectOptions(select, placeholder, entries, currentValue) {
   }
 }
 
+function ensureOption(select, value, label) {
+  if (!select || !value) return;
+  const exists = Array.from(select.options).some((opt) => opt.value === value);
+  if (!exists) {
+    select.insertAdjacentHTML(
+      'beforeend',
+      `<option value="${escapeHtml(value)}">${escapeHtml(label || value)}</option>`
+    );
+  }
+}
+
 function updateFilterOptions() {
   const canales = Array.from(leadsState.lookups.canales.values()).sort((a, b) =>
     a.label.localeCompare(b.label, 'es')
@@ -237,6 +313,23 @@ function updateFilterOptions() {
     (a.nombre || '').localeCompare(b.nombre || '', 'es')
   );
   setSelectOptions(elements.vendedor, 'Todos los vendedores', vendedores, leadsState.filters.vendedor);
+
+  updateEditSelects();
+}
+
+function updateEditSelects() {
+  if (leadModalEtapa) {
+    const etapas = Array.from(leadsState.lookups.etapas.values()).sort((a, b) =>
+      (a.nombre || '').localeCompare(b.nombre || '', 'es')
+    );
+    setSelectOptions(leadModalEtapa, 'Selecciona etapa…', etapas, leadModalEtapa.value);
+  }
+  if (leadModalAsignado) {
+    const vendedores = Array.from(leadsState.lookups.vendedores.values()).sort((a, b) =>
+      (a.nombre || '').localeCompare(b.nombre || '', 'es')
+    );
+    setSelectOptions(leadModalAsignado, 'Sin asignar', vendedores, leadModalAsignado.value);
+  }
 }
 
 function renderSummary() {
@@ -249,11 +342,14 @@ function renderSummary() {
   elements.summary.textContent = `Mostrando ${leadsState.items.length} de ${total} leads`;
 }
 
-function displayTags(metadata) {
-  if (!metadata || typeof metadata !== 'object') return '';
-  const tags = metadata.tags;
-  if (!Array.isArray(tags) || !tags.length) return '';
-  return `<div class="lead-tags">${tags
+function displayTags(lead) {
+  const tagsSource = Array.isArray(lead?.tags) && lead.tags.length
+    ? lead.tags
+    : Array.isArray(lead?.metadata?.tags)
+      ? lead.metadata.tags
+      : [];
+  if (!tagsSource.length) return '';
+  return `<div class="lead-tags">${tagsSource
     .slice(0, 4)
     .map((tag) => `<span class="lead-tag">${escapeHtml(String(tag))}</span>`)
     .join('')}</div>`;
@@ -262,7 +358,7 @@ function displayTags(metadata) {
 function renderTable() {
   if (!elements.tableBody) return;
   if (!leadsState.items.length) {
-    elements.tableBody.innerHTML = '<tr><td colspan="7" class="muted">No se encontraron leads.</td></tr>';
+    elements.tableBody.innerHTML = '<tr><td colspan="8" class="muted">No se encontraron leads.</td></tr>';
     return;
   }
   const rows = leadsState.items.map((item) => {
@@ -270,7 +366,13 @@ function renderTable() {
     const etapaNombre = item.etapa?.nombre || 'Sin etapa';
     const vendedorNombre = item.asignado?.nombre || item.asignado?.correo || 'Sin asignar';
     const canalLabel = item.canal ? item.canal.charAt(0).toUpperCase() + item.canal.slice(1) : '—';
-    const tagsHtml = displayTags(item.metadata);
+    const tagsHtml = displayTags(item);
+    const acciones = `
+      <div class="lead-actions">
+        <button type="button" class="btn btn-outline" data-action="lead-edit" data-id="${escapeHtml(item.id)}">Editar</button>
+        <button type="button" class="btn btn-outline" data-action="lead-delete" data-id="${escapeHtml(item.id)}">Eliminar</button>
+      </div>
+    `;
     return `
       <tr>
         <td>
@@ -285,7 +387,12 @@ function renderTable() {
         <td>${escapeHtml(etapaNombre)}</td>
         <td>${escapeHtml(vendedorNombre)}</td>
         <td>${escapeHtml(formatScore(item.lead_score))}</td>
-        <td>${escapeHtml(formatDate(item.creado_en))}${tagsHtml}</td>
+        <td>
+          ${escapeHtml(formatDate(item.creado_en))}<br />
+          <small class="muted">${escapeHtml(item.siguiente_accion || '')}</small>
+          ${tagsHtml}
+        </td>
+        <td>${acciones}</td>
       </tr>
     `;
   });
@@ -304,8 +411,17 @@ function renderAccordion() {
     const vendedorNombre = item.asignado?.nombre || item.asignado?.correo || 'Sin asignar';
     const nota = contacto.notas ? `<p class="lead-notes"><strong>Notas:</strong> ${escapeHtml(contacto.notas)}</p>` : '';
     const necesidad = contacto.necesidad ? `<p class="lead-notes"><strong>Necesidad:</strong> ${escapeHtml(contacto.necesidad)}</p>` : '';
-    const tagsHtml = displayTags(item.metadata);
-    const metadataText = item.metadata ? `<pre style="margin:12px 0 0;white-space:pre-wrap;font-size:12px;background:var(--surface-alt);padding:12px;border-radius:12px;">${escapeHtml(JSON.stringify(item.metadata, null, 2))}</pre>` : '';
+    const tagsHtml = displayTags(item);
+    const metadataText =
+      item.metadata && typeof item.metadata === 'object'
+        ? `<pre style="margin:12px 0 0;white-space:pre-wrap;font-size:12px;background:var(--surface-alt);padding:12px;border-radius:12px;">${escapeHtml(JSON.stringify(item.metadata, null, 2))}</pre>`
+        : '';
+    const acciones = `
+      <div class="lead-actions" style="margin-top:14px;">
+        <button type="button" class="btn btn-outline" data-action="lead-edit" data-id="${escapeHtml(item.id)}">Editar</button>
+        <button type="button" class="btn btn-outline" data-action="lead-delete" data-id="${escapeHtml(item.id)}">Eliminar</button>
+      </div>
+    `;
     return `
       <details class="lead-accordion-item">
         <summary>
@@ -327,6 +443,7 @@ function renderAccordion() {
           ${nota}
           ${necesidad}
           ${metadataText}
+          ${acciones}
         </div>
       </details>
     `;
@@ -413,6 +530,162 @@ async function fetchLeads({ reset = false } = {}) {
   }
 }
 
+function openLeadEditor(leadId) {
+  const lead = leadsState.items.find((item) => item.id === leadId);
+  if (!lead) {
+    alert('No se encontró la información del lead.');
+    return;
+  }
+  activeLeadId = leadId;
+  if (leadForm) {
+    leadForm.dataset.leadId = leadId;
+  }
+  if (leadModalSubtitle) {
+    leadModalSubtitle.textContent = `ID: ${lead.id}`;
+  }
+  if (leadModalInfo) {
+    const contacto = lead.contacto || {};
+    const vendedor = lead.asignado?.nombre || lead.asignado?.correo || 'Sin asignar';
+    leadModalInfo.innerHTML = `
+      <strong>${escapeHtml(contacto.nombre || 'Sin nombre')}</strong><br />
+      <span class="muted">${escapeHtml(contacto.correo || 'Sin correo')} • ${escapeHtml(contacto.telefono || 'Sin teléfono')}</span><br />
+      <span class="muted">Vendedor actual: ${escapeHtml(vendedor)}</span>
+    `;
+  }
+  updateEditSelects();
+  if (leadModalEtapa && lead.etapa?.id) {
+    ensureOption(leadModalEtapa, lead.etapa.id, lead.etapa.nombre || lead.etapa.id);
+    leadModalEtapa.value = lead.etapa.id;
+  } else if (leadModalEtapa) {
+    leadModalEtapa.value = '';
+  }
+  if (leadModalAsignado) {
+    if (lead.asignado?.id) {
+      ensureOption(
+        leadModalAsignado,
+        lead.asignado.id,
+        lead.asignado.nombre || lead.asignado.correo || lead.asignado.id,
+      );
+      leadModalAsignado.value = lead.asignado.id;
+    } else {
+      leadModalAsignado.value = '';
+    }
+  }
+  if (leadModalScore) {
+    leadModalScore.value = lead.lead_score ?? '';
+  }
+  if (leadModalProb) {
+    leadModalProb.value = lead.probabilidad ?? '';
+  }
+  if (leadModalNext) {
+    leadModalNext.value = lead.siguiente_accion ?? '';
+  }
+  if (leadModalTags) {
+    const tags = Array.isArray(lead.tags) && lead.tags.length
+      ? lead.tags
+      : Array.isArray(lead.metadata?.tags)
+        ? lead.metadata.tags
+        : [];
+    leadModalTags.value = tags.join(', ');
+  }
+  openLeadModal();
+}
+
+async function submitLeadForm(event) {
+  event.preventDefault();
+  if (!activeLeadId) {
+    alert('No se pudo identificar el lead a actualizar.');
+    return;
+  }
+
+  const etapaId = leadModalEtapa?.value || '';
+  if (!etapaId) {
+    alert('Selecciona una etapa válida.');
+    return;
+  }
+
+  const asignadoId = leadModalAsignado?.value || '';
+  const leadScoreValue = leadModalScore?.value || '';
+  const probValue = leadModalProb?.value || '';
+  const siguienteAccion = leadModalNext?.value?.trim() || '';
+  const tagsValue = leadModalTags?.value || '';
+  const currentLead = leadsState.items.find((item) => item.id === activeLeadId) || null;
+  const metadata = currentLead && currentLead.metadata && typeof currentLead.metadata === 'object' && !Array.isArray(currentLead.metadata)
+    ? { ...currentLead.metadata }
+    : {};
+
+  if (siguienteAccion) {
+    metadata.siguiente_accion = siguienteAccion;
+  } else {
+    delete metadata.siguiente_accion;
+  }
+
+  const tags = tagsValue
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+  const payload = {
+    etapa_id: etapaId,
+    asignado_a_usuario_id: asignadoId || null,
+    metadata,
+    tags,
+  };
+
+  if (leadScoreValue) {
+    const parsedScore = Number.parseInt(leadScoreValue, 10);
+    if (!Number.isNaN(parsedScore)) {
+      payload.lead_score = parsedScore;
+    }
+  } else {
+    payload.lead_score = null;
+  }
+
+  if (probValue) {
+    const parsedProb = Number.parseFloat(probValue);
+    if (!Number.isNaN(parsedProb)) {
+      payload.probabilidad_override = parsedProb;
+    }
+  } else {
+    payload.probabilidad_override = null;
+  }
+
+  try {
+    const response = await fetchJSONWithAuth(`/api/leads/${activeLeadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(response.json?.detail || 'No se pudo actualizar el lead');
+    }
+    closeLeadModal();
+    await fetchLeads({ reset: true });
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'No se pudo actualizar el lead');
+  }
+}
+
+async function handleLeadDelete(leadId) {
+  const lead = leadsState.items.find((item) => item.id === leadId);
+  const nombre = lead?.contacto?.nombre || leadId;
+  if (!confirm(`¿Eliminar el lead ${nombre}?`)) return;
+  try {
+    const response = await fetchJSONWithAuth(`/api/leads/${leadId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error(response.json?.detail || 'No se pudo eliminar el lead');
+    }
+    if (activeLeadId === leadId) {
+      closeLeadModal();
+    }
+    await fetchLeads({ reset: true });
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'No se pudo eliminar el lead');
+  }
+}
+
 function handleSearchInput(event) {
   const value = event.target.value || '';
   clearTimeout(searchTimer);
@@ -477,10 +750,33 @@ function initEvents() {
       setView('accordion');
     });
   }
+  if (leadForm) {
+    leadForm.addEventListener('submit', submitLeadForm);
+  }
+}
+
+function initActions() {
+  if (actionsInitialized) return;
+  actionsInitialized = true;
+  document.addEventListener('click', (event) => {
+    const actionBtn = event.target.closest('[data-action]');
+    if (!actionBtn) return;
+    const action = actionBtn.dataset.action;
+    const id = actionBtn.dataset.id;
+    if (!id) return;
+    if (action === 'lead-edit') {
+      event.preventDefault();
+      openLeadEditor(id);
+    } else if (action === 'lead-delete') {
+      event.preventDefault();
+      handleLeadDelete(id);
+    }
+  });
 }
 
 export async function setupLeads() {
   resetLookups();
   initEvents();
+  initActions();
   await fetchLeads({ reset: true });
 }

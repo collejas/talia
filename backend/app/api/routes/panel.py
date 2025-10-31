@@ -14,7 +14,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -196,6 +196,21 @@ class RolUpdatePayload(BaseModel):
 
     nombre: str | None = Field(default=None, min_length=2, max_length=120)
     descripcion: str | None = Field(default=None, max_length=400)
+
+
+class LeadUpdatePayload(BaseModel):
+    """Actualización parcial de una tarjeta de lead."""
+
+    etapa_id: UUID | None = Field(default=None)
+    asignado_a_usuario_id: UUID | None = Field(default=None)
+    propietario_usuario_id: UUID | None = Field(default=None)
+    lead_score: int | None = Field(default=None)
+    probabilidad_override: float | None = Field(default=None)
+    siguiente_accion: str | None = Field(default=None, max_length=400)
+    tags: list[str] | None = Field(default=None)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 def _supabase_base_url() -> str:
@@ -1183,6 +1198,105 @@ async def listar_leads(
         "offset": offset,
         "has_more": computed_total > offset + len(items),
     }
+
+
+@router.patch("/leads/{lead_id}")
+async def actualizar_lead(
+    lead_id: UUID,
+    payload: LeadUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    data = payload.model_dump(exclude_unset=True)
+    updates: dict[str, Any] = {}
+
+    if not data:
+        return {"ok": True, "item": None}
+
+    etapa_id = data.get("etapa_id")
+    if etapa_id is not None:
+        updates["etapa_id"] = str(etapa_id)
+
+    if "asignado_a_usuario_id" in data:
+        asignado = data.get("asignado_a_usuario_id")
+        updates["asignado_a_usuario_id"] = str(asignado) if asignado else None
+
+    if "propietario_usuario_id" in data:
+        propietario = data.get("propietario_usuario_id")
+        updates["propietario_usuario_id"] = str(propietario) if propietario else None
+
+    if "lead_score" in data:
+        updates["lead_score"] = data.get("lead_score")
+
+    if "probabilidad_override" in data:
+        updates["probabilidad_override"] = data.get("probabilidad_override")
+
+    if "tags" in data:
+        tags_value = data.get("tags")
+        if tags_value is None:
+            updates["tags"] = []
+        elif isinstance(tags_value, list):
+            updates["tags"] = tags_value
+        else:
+            raise HTTPException(status_code=400, detail="tags_invalid")
+
+    metadata_payload = data.get("metadata")
+    if metadata_payload is not None:
+        if not isinstance(metadata_payload, dict):
+            raise HTTPException(status_code=400, detail="metadata_invalid")
+        updates["metadata"] = metadata_payload
+
+    siguiente_accion = data.get("siguiente_accion")
+    if siguiente_accion is not None and "metadata" not in updates:
+        # Obtener metadata actual para aplicar cambios incrementales
+        resp_meta = await _sb_get(
+            "/rest/v1/lead_tarjetas",
+            params={"id": f"eq.{lead_id}", "select": "metadata"},
+        )
+        if resp_meta.status_code >= 400:
+            raise _supabase_error(resp_meta, "Error preparando metadata")
+        current_rows = resp_meta.json() or []
+        current_meta = {}
+        if current_rows and isinstance(current_rows[0], dict):
+            current_meta = current_rows[0].get("metadata") or {}
+        if not isinstance(current_meta, dict):
+            current_meta = {}
+        if siguiente_accion:
+            current_meta["siguiente_accion"] = siguiente_accion
+        else:
+            current_meta.pop("siguiente_accion", None)
+        updates["metadata"] = current_meta
+
+    if not updates:
+        return {"ok": True, "item": None}
+
+    resp = await _sb_patch(
+        "/rest/v1/lead_tarjetas",
+        params={"id": f"eq.{lead_id}"},
+        json=updates,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando lead")
+    rows = resp.json() or []
+    item = _first_row(rows)
+    return {"ok": True, "item": item}
+
+
+@router.delete("/leads/{lead_id}")
+async def eliminar_lead(
+    lead_id: UUID,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    resp = await _sb_delete(
+        "/rest/v1/lead_tarjetas",
+        params={"id": f"eq.{lead_id}"},
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error eliminando lead")
+    return {"ok": True}
 
 
 @router.get("/inbox")
