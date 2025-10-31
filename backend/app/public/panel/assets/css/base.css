@@ -68,7 +68,7 @@ a{color:inherit;text-decoration:none}
 .logo{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--primary),#b48cff);color:#fff;font-weight:700}
 .menu{display:flex;gap:12px;align-items:center}
 .menu-panel{position:relative}
-.menu-panel-toggle{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;border:1px solid var(--btn-border);background:transparent;color:var(--fg);cursor:pointer;transition:.2s}
+.menu-panel-toggle{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--fg);cursor:pointer;transition:.2s;font-size:13px;font-weight:500}
 .menu-panel-toggle::after{content:'▾';font-size:.7rem;color:var(--muted);transition:transform .2s ease}
 .menu-panel.is-open .menu-panel-toggle::after{transform:rotate(180deg)}
 .menu-panel .menu-panel-toggle.is-active{background:rgba(106,163,255,.12);border-color:rgba(106,163,255,.35);color:var(--primary);font-weight:600}
@@ -78,12 +78,14 @@ a{color:inherit;text-decoration:none}
 .menu-panel-dropdown a.is-active{background:rgba(106,163,255,.12);border:1px solid rgba(106,163,255,.35);color:var(--primary);font-weight:600}
 .menu-panel.is-open .menu-panel-dropdown{display:flex}
 .theme-switcher{display:flex;align-items:center;gap:10px}
-.theme-switcher select{padding:6px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--surface-alt);color:var(--fg);appearance:none;font-size:13px}
+.theme-switcher select{padding:6px 12px;border-radius:10px;border:1px solid var(--btn-border);background:var(--btn-bg);color:var(--fg);appearance:none;font-size:13px;font-weight:500}
 .theme-switcher select:focus{outline:2px solid var(--primary);outline-offset:2px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border-radius:10px;border:1px solid transparent;background:var(--btn-bg);color:var(--fg);transition:.2s}
+.menu .btn{padding:6px 12px;font-size:13px}
+.menu-panel-toggle{padding:6px 12px}
 .btn:hover{transform:translateY(-1px)}
 .btn-outline{background:transparent;border-color:var(--btn-border)}
-.menu > a.is-active{background:rgba(106,163,255,.12);border-color:rgba(106,163,255,.35);border-radius:10px;color:var(--primary);font-weight:600}
+.menu > a.is-active{background:rgba(106,163,255,.12);border-color:rgba(106,163,255,.35);border-radius:10px;color:var(--primary)}
 .muted{color:var(--muted)}
 
 body.theme-ice .nav{background:rgba(255,255,255,.85);border-bottom:1px solid var(--border-soft)}
