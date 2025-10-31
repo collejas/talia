@@ -45,85 +45,79 @@
     </div>
   </main>
 
-  <!-- Fallback ESM: carga cliente directo por import si CDN global falla -->
+  <!-- Inicializa Supabase con fallback dinámico solo si el bundle global no cargó -->
   <script type="module">
     const msgEl = document.getElementById('msg');
-    try {
-      const url = window.SUPABASE_URL || '';
-      const anon = window.SUPABASE_ANON_KEY || '';
-      if (!url || !anon) {
-        if (msgEl) msgEl.textContent = 'Falta configuración de Supabase (URL/ANON)';
-      } else {
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-        const sb = createClient(url, anon);
-        const onLogin = async () => {
-          const email = document.getElementById('email').value.trim();
-          const password = document.getElementById('password').value;
-          if (!email || !password) { if (msgEl) msgEl.textContent = 'Completa usuario y contraseña'; return; }
-          if (msgEl) msgEl.textContent = 'Ingresando...';
-          try {
-            const { error } = await sb.auth.signInWithPassword({ email, password });
-            if (error) { if (msgEl) msgEl.textContent = error.message || 'Error de autenticación'; return; }
-            if (msgEl) msgEl.textContent = 'Listo, redirigiendo...';
-            window.location.href = '../panel.html';
-          } catch (e) {
-            console.error('[Panel][ESM] login error', e);
-            if (msgEl) msgEl.textContent = 'Error de red al iniciar sesión';
-          }
-        };
-        const btn = document.getElementById('login');
-        if (btn) btn.addEventListener('click', onLogin);
-        document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') onLogin(); });
-      }
-    } catch (e) {
-      // En algunos entornos ESM puede estar bloqueado; el script inline no-módulo actúa como backup
-      console.warn('[Panel] ESM fallback no disponible', e);
-    }
-  </script>
+    const setMessage = (text) => {
+      if (msgEl) msgEl.textContent = text || '';
+    };
 
-  <script>
-    (function(){
-      const msgEl = document.getElementById('msg');
-      try {
-        console.debug('[Panel] login init', {
-          hasSupabase: !!window.supabase,
-          url: window.SUPABASE_URL,
-          hasAnon: !!window.SUPABASE_ANON_KEY,
-        });
+    const supabaseUrl = (window.SUPABASE_URL || '').trim();
+    const supabaseAnon = (window.SUPABASE_ANON_KEY || '').trim();
 
-        if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
-          if (msgEl) msgEl.textContent = 'Configura SUPABASE_URL y SUPABASE_ANON_KEY';
+    console.debug('[Panel] login init', {
+      hasSupabase: !!window.supabase,
+      hasUrl: !!supabaseUrl,
+      hasAnon: !!supabaseAnon,
+    });
+
+    if (!supabaseUrl || !supabaseAnon) {
+      setMessage('Configura SUPABASE_URL y SUPABASE_ANON_KEY');
+    } else {
+      const ensureClient = async () => {
+        if (window.supabase?.createClient) {
+          return window.supabase.createClient(supabaseUrl, supabaseAnon);
+        }
+        try {
+          const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+          console.info('[Panel] Usando fallback ESM para Supabase.');
+          return createClient(supabaseUrl, supabaseAnon);
+        } catch (error) {
+          console.error('[Panel] No se pudo cargar Supabase vía fallback.', error);
+          throw error;
+        }
+      };
+
+      const setupLogin = async () => {
+        let client;
+        try {
+          client = await ensureClient();
+        } catch (error) {
+          setMessage('Error cargando autenticación');
           return;
         }
 
-        const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-
         const onLogin = async () => {
-          const email = document.getElementById('email').value.trim();
-          const password = document.getElementById('password').value;
-          if (!email || !password) { if (msgEl) msgEl.textContent = 'Completa usuario y contraseña'; return; }
-          if (msgEl) msgEl.textContent = 'Ingresando...';
+          const email = document.getElementById('email')?.value.trim() || '';
+          const password = document.getElementById('password')?.value || '';
+          if (!email || !password) {
+            setMessage('Completa usuario y contraseña');
+            return;
+          }
+          setMessage('Ingresando...');
           try {
-            const { data, error } = await sb.auth.signInWithPassword({ email, password });
-            if (error) { if (msgEl) msgEl.textContent = error.message || 'Error de autenticación'; return; }
-            if (msgEl) msgEl.textContent = 'Listo, redirigiendo...';
+            const { error } = await client.auth.signInWithPassword({ email, password });
+            if (error) {
+              setMessage(error.message || 'Error de autenticación');
+              return;
+            }
+            setMessage('Listo, redirigiendo...');
             window.location.href = '../panel.html';
-          } catch (e) {
-            console.error('[Panel] login error', e);
-            if (msgEl) msgEl.textContent = 'Error de red al iniciar sesión';
+          } catch (error) {
+            console.error('[Panel] login error', error);
+            setMessage('Error de red al iniciar sesión');
           }
         };
 
         const btn = document.getElementById('login');
         if (btn) btn.addEventListener('click', onLogin);
-        document.addEventListener('keydown', (ev) => {
-          if (ev.key === 'Enter') onLogin();
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') onLogin();
         });
-      } catch (e) {
-        console.error('[Panel] init error', e);
-        if (msgEl) msgEl.textContent = 'Error cargando login';
-      }
-    })();
+      };
+
+      setupLogin();
+    }
   </script>
   <script type="module" src="../assets/js/common.js"></script>
 </body>
