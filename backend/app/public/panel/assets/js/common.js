@@ -20,10 +20,10 @@ function isAuthPage() {
 
 const PANEL_LINKS = [
   { id: 'dashboard', href: 'panel.html', label: 'Dashboard' },
-  { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
-  { id: 'leads', href: 'leads.html', label: 'Leads' },
   { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
+  { id: 'leads', href: 'leads.html', label: 'Leads' },
   { id: 'agenda', href: 'agenda.html', label: 'Agenda' },
+  { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
 ];
 
 const NAV_LINKS = [
@@ -63,9 +63,7 @@ function renderHeader() {
     <div class="container nav-inner">
       <a class="brand" href="panel.html">
         <img class="brand-icon" src="/api/shared/logos/Logo8.png" alt="TalIA logo" />
-        <span class="brand-text">
-          Tal-<span class="logo">IA</span><span class="brand-text-panel">Panel</span>
-        </span>
+        <span class="brand-text">Tal-<span class="logo">IA</span></span>
       </a>
       <nav class="menu">
         <div class="menu-panel" data-panel-container>
