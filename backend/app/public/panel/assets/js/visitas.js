@@ -7,12 +7,20 @@ function formatDateTime(value) {
   return date.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-function formatLocation(row) {
+function formatDuration(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return '—';
+  let remaining = Math.floor(value);
+  const hours = Math.floor(remaining / 3600);
+  remaining -= hours * 3600;
+  const minutes = Math.floor(remaining / 60);
+  const secs = remaining - minutes * 60;
   const parts = [];
-  if (row.nom_mun) parts.push(row.nom_mun);
-  if (row.nom_ent) parts.push(row.nom_ent);
-  if (parts.length === 0 && row.cve_ent) parts.push(`CVE ${row.cve_ent}`);
-  return parts.join(', ') || 'Sin datos';
+  if (hours) parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  if (!hours && secs) parts.push(`${secs}s`);
+  if (!parts.length) parts.push('0s');
+  return parts.join(' ');
 }
 
 function formatContact(row) {
@@ -39,8 +47,10 @@ function createCell(value, { monospace = false, nowrap = false, multiline = fals
 function formatDevice(row) {
   const pieces = [];
   if (row.device_type) pieces.push(row.device_type);
-  if (row.sistema_operativo) pieces.push(row.sistema_operativo);
-  const pantalla = row.pantalla_cache;
+  const deviceInfo = row.dispositivo_cache;
+  const platform = row.sistema_operativo || deviceInfo?.plataforma;
+  if (platform) pieces.push(platform);
+  const pantalla = row.pantalla_cache || deviceInfo?.pantalla;
   if (pantalla && typeof pantalla === 'object') {
     const sizeParts = [];
     if (pantalla.width && pantalla.height) sizeParts.push(`${pantalla.width}×${pantalla.height}`);
@@ -48,6 +58,25 @@ function formatDevice(row) {
     if (sizeParts.length) pieces.push(sizeParts.join(' '));
   }
   return pieces.join(' • ') || 'Sin datos';
+}
+
+function formatCountry(row) {
+  const code = row.country_code ? row.country_code.toUpperCase() : '';
+  const name = row.country_name || code;
+  if (!name) return 'Sin datos';
+  if (code && name.toUpperCase() !== code) return `${name} (${code})`;
+  return name;
+}
+
+function formatState(row) {
+  const parts = [];
+  if (row.state_name) parts.push(row.state_name);
+  if (row.state_code) parts.push(`CVE ${row.state_code}`);
+  return parts.join(' · ') || 'Sin datos';
+}
+
+function formatCity(row) {
+  return row.city_name || 'Sin datos';
 }
 
 const state = {
@@ -102,14 +131,21 @@ function renderRows(items, { reset }) {
     const chatLabel = row.tuvo_chat
       ? `Sí (${row.mensajes_entrantes || 0} entrantes)`
       : 'No';
-    const visitInfo = `Visitas: ${row.visit_count || 1}${row.closed_at ? `\nCierre: ${formatDateTime(row.closed_at)}` : ''}`;
+    const firstVisit = `${formatDateTime(row.registrado_en)}\nVisitas: ${row.visit_count || 1}`;
+    const lastEventParts = [formatDateTime(row.ultimo_evento_en)];
+    if (row.closed_at) lastEventParts.push(`Cierre: ${formatDateTime(row.closed_at)}`);
 
     tr.appendChild(createCell(row.session_id, { monospace: true, nowrap: true }));
-    tr.appendChild(createCell(`${formatDateTime(row.registrado_en)}\n${visitInfo}`, { multiline: true }));
-    tr.appendChild(createCell(formatDateTime(row.ultimo_evento_en)));
+    tr.appendChild(createCell(row.ip, { breakWord: true }));
+    tr.appendChild(createCell(firstVisit, { multiline: true }));
+    tr.appendChild(createCell(lastEventParts.join('\n'), { multiline: true }));
+    tr.appendChild(createCell(formatDuration(row.stay_seconds)));
+    tr.appendChild(createCell(formatDuration(row.avg_stay_seconds)));
     tr.appendChild(createCell(chatLabel));
     tr.appendChild(createCell(formatContact(row), { multiline: true }));
-    tr.appendChild(createCell(formatLocation(row)));
+    tr.appendChild(createCell(formatCountry(row)));
+    tr.appendChild(createCell(formatState(row)));
+    tr.appendChild(createCell(formatCity(row)));
     tr.appendChild(createCell(formatDevice(row)));
     tr.appendChild(createCell(row.referrer, { breakWord: true }));
     tr.appendChild(createCell(row.landing_url, { breakWord: true }));
@@ -142,6 +178,9 @@ async function loadVisits({ reset } = { reset: false }) {
   if (reset) {
     state.offset = 0;
     state.total = 0;
+    state.totalChat = 0;
+    state.totalSinChat = 0;
+    updateSummary();
   }
 
   const params = new URLSearchParams();
@@ -178,7 +217,7 @@ async function loadVisits({ reset } = { reset: false }) {
     console.error('[visitas] load error', error);
     const tbody = tableBody();
     if (tbody && (!tbody.childElementCount || reset)) {
-      tbody.innerHTML = '<tr><td colspan="9" class="muted">No fue posible cargar las visitas.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" class="muted">No fue posible cargar las visitas.</td></tr>';
     }
   } finally {
     setLoading(false);
