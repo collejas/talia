@@ -800,6 +800,102 @@ async def fetch_visitantes_paises(
     return data
 
 
+async def fetch_webchat_visitas_detalle(
+    *,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    has_chat: bool | None = None,
+    state: str | None = None,
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Consulta visitas (con y sin chat) del webchat para el panel."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/panel_webchat_visitas_detalle"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+    payload: dict[str, Any] = {
+        "p_limit": limit,
+        "p_offset": offset,
+    }
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+    if has_chat is not None:
+        payload["p_has_chat"] = has_chat
+    if state:
+        payload["p_state"] = state
+    if search:
+        payload["p_search"] = search
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar visitas webchat: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar visitas webchat"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json() or []
+    if not isinstance(data, list):
+        raise StorageError(f"Respuesta inesperada de visitas webchat: {data!r}")
+
+    total = 0
+    total_chat = 0
+    total_no_chat = 0
+    cleaned: list[dict[str, Any]] = []
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        if total == 0:
+            try:
+                total = int(row.get("total_rows") or 0)
+            except (TypeError, ValueError):
+                total = 0
+        if total_chat == 0:
+            try:
+                total_chat = int(row.get("total_chat_rows") or 0)
+            except (TypeError, ValueError):
+                total_chat = 0
+        if total_no_chat == 0:
+            try:
+                total_no_chat = int(row.get("total_no_chat_rows") or 0)
+            except (TypeError, ValueError):
+                total_no_chat = 0
+        row.pop("total_rows", None)
+        row.pop("total_chat_rows", None)
+        row.pop("total_no_chat_rows", None)
+        cleaned.append(row)
+
+    return {
+        "items": cleaned,
+        "total": total,
+        "total_chat": total_chat,
+        "total_no_chat": total_no_chat,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 async def fetch_leads_states(
     *,
     channels: list[str] | None = None,

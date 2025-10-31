@@ -23,6 +23,7 @@ const PANEL_LINKS = [
   { id: 'embudo', href: 'embudo.html', label: 'Embudo' },
   { id: 'leads', href: 'leads.html', label: 'Leads' },
   { id: 'agenda', href: 'agenda.html', label: 'Agenda' },
+  { id: 'visitas', href: 'visitas.html', label: 'Visitas' },
   { id: 'inbox', href: 'inbox.html', label: 'Inbox' },
 ];
 

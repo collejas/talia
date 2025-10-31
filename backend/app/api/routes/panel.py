@@ -1974,6 +1974,81 @@ async def dashboard_kpis_endpoint(
     }
 
 
+def _parse_bool_flag(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+@router.get("/visitas/webchat")
+async def visitas_webchat_detalle(
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    con_chat: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    has_chat = _parse_bool_flag(con_chat)
+    state = estado.strip() if estado else None
+    search = q.strip() if q else None
+
+    try:
+        payload = await storage.fetch_webchat_visitas_detalle(
+            date_from=date_from,
+            date_to=date_to,
+            has_chat=has_chat,
+            state=state,
+            search=search,
+            limit=limit,
+            offset=offset,
+        )
+    except storage.StorageError as exc:
+        logger.exception("visitas.webchat_fetch_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando visitas"
+        ) from exc
+
+    items = payload.get("items") if isinstance(payload, dict) else []
+    total = int(payload.get("total") or 0) if isinstance(payload, dict) else 0
+    total_chat = int(payload.get("total_chat") or 0) if isinstance(payload, dict) else 0
+    total_no_chat = int(payload.get("total_no_chat") or 0) if isinstance(payload, dict) else 0
+
+    return {
+        "ok": True,
+        "items": items,
+        "total": total,
+        "totals": {
+            "con_chat": total_chat,
+            "sin_chat": total_no_chat,
+        },
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "returned": len(items) if isinstance(items, list) else 0,
+        },
+        "filters": {
+            "con_chat": has_chat,
+            "estado": state,
+            "search": search,
+        },
+        "range": _build_range_payload(rango, date_from, date_to),
+    }
+
+
 def _build_range_payload(
     rango: str | None,
     date_from: datetime | None,

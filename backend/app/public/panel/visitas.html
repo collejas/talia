@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>TalIA • Visitas Webchat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/api/shared/logos/Logo8.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/api/shared/logos/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/api/shared/logos/favicon-16.png" />
+  <link rel="icon" type="image/x-icon" href="/api/shared/logos/favicon.ico" />
+  <link rel="apple-touch-icon" href="/api/shared/logos/Logo7.png" />
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <script src="/api/panel/env.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./assets/js/config.js"></script>
+  <style>
+    .visitas-card{display:flex;flex-direction:column;gap:18px;padding:22px;border-radius:18px;border:1px solid var(--border-soft);background:var(--surface);box-shadow:0 8px 26px rgba(10,12,20,.18)}
+    .visitas-toolbar{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
+    .visitas-filters{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+    .visitas-filters label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+    .visitas-filters input,
+    .visitas-filters select{min-width:160px;padding:10px 12px;border-radius:10px;border:1px solid var(--border-soft);background:var(--surface-alt);color:var(--fg)}
+    .visitas-table{width:100%;border-collapse:collapse;font-size:13px}
+    .visitas-table th,
+    .visitas-table td{border:1px solid var(--border-soft);padding:10px 12px;text-align:left;vertical-align:top}
+    .visitas-table th{background:var(--surface-alt);font-weight:600;color:var(--fg);white-space:nowrap}
+    .visitas-table tbody tr:hover{background:rgba(106,163,255,.08)}
+    .visitas-summary{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted)}
+    .visitas-loading{padding:12px 0;display:none;color:var(--muted)}
+    .visitas-loading.is-visible{display:block}
+    .visitas-empty{padding:18px;border-radius:12px;background:var(--surface-alt);color:var(--muted);display:none}
+    .visitas-empty.is-visible{display:block}
+  </style>
+</head>
+<body class="theme-aurora" data-nav="visitas">
+  <main class="container" style="padding:24px 0 40px;">
+    <h1 style="margin:0 0 8px;">Visitas Webchat</h1>
+    <p class="muted" style="margin:0 0 18px;">Listado de visitas al widget, con y sin interacción.</p>
+
+    <section class="visitas-card" aria-labelledby="visitas-title">
+      <div class="visitas-toolbar">
+        <form id="visitas-filters-form" class="visitas-filters">
+          <label>
+            <span>Período</span>
+            <select id="visitas-range">
+              <option value="">Todos</option>
+              <option value="hoy">Hoy</option>
+              <option value="ayer">Ayer</option>
+              <option value="7d" selected>Últimos 7 días</option>
+              <option value="30d">Últimos 30 días</option>
+            </select>
+          </label>
+          <label>
+            <span>Chat</span>
+            <select id="visitas-chat">
+              <option value="all" selected>Todos</option>
+              <option value="with">Con chat</option>
+              <option value="without">Sin chat</option>
+            </select>
+          </label>
+          <label>
+            <span>Estado (CVE)</span>
+            <input type="text" id="visitas-state" maxlength="3" placeholder="Ej. 09" />
+          </label>
+          <label>
+            <span>Búsqueda</span>
+            <input type="search" id="visitas-search" placeholder="Sesión, contacto, referrer..." />
+          </label>
+          <button type="submit" class="btn">Aplicar</button>
+          <button type="button" id="visitas-reset" class="btn btn-outline">Limpiar</button>
+        </form>
+        <div class="visitas-summary" id="visitas-summary">
+          <span id="visitas-total-label">Total: —</span>
+          <span id="visitas-chat-label">Con chat: —</span>
+          <span id="visitas-sinchat-label">Sin chat: —</span>
+        </div>
+      </div>
+
+      <div class="visitas-loading" id="visitas-loading">Cargando visitas…</div>
+      <div class="visitas-empty" id="visitas-empty">No se encontraron visitas con los filtros actuales.</div>
+
+      <div style="overflow-x:auto;">
+        <table class="visitas-table" aria-describedby="visitas-total-label">
+          <thead>
+            <tr>
+              <th>Sesión</th>
+              <th>Primera visita</th>
+              <th>Último evento</th>
+              <th>Chat</th>
+              <th>Contacto</th>
+              <th>Ubicación</th>
+              <th>Dispositivo</th>
+              <th>Referrer</th>
+              <th>Landing</th>
+            </tr>
+          </thead>
+          <tbody id="visitas-table-body">
+            <tr><td colspan="9" class="muted">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button class="btn btn-outline" id="visitas-load-more" type="button" style="align-self:center;">Cargar más</button>
+    </section>
+  </main>
+
+  <script type="module">
+    import { ensureSession, setActiveNav } from './assets/js/common.js';
+    import { setupVisitas } from './assets/js/visitas.js';
+    (async () => {
+      await ensureSession();
+      setActiveNav(document.body.dataset.nav || '');
+      setupVisitas();
+    })();
+  </script>
+</body>
+</html>
