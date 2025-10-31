@@ -131,13 +131,14 @@ function renderRows(items, { reset }) {
     const chatLabel = row.tuvo_chat
       ? `Sí (${row.mensajes_entrantes || 0} entrantes)`
       : 'No';
-    const firstVisit = `${formatDateTime(row.registrado_en)}\nVisitas: ${row.visit_count || 1}`;
+    const visitsTotal = row.total_visitas ?? row.visit_count ?? 0;
     const lastEventParts = [formatDateTime(row.ultimo_evento_en)];
     if (row.closed_at) lastEventParts.push(`Cierre: ${formatDateTime(row.closed_at)}`);
 
     tr.appendChild(createCell(row.session_id, { monospace: true, nowrap: true }));
     tr.appendChild(createCell(row.ip, { breakWord: true }));
-    tr.appendChild(createCell(firstVisit, { multiline: true }));
+    tr.appendChild(createCell(visitsTotal));
+    tr.appendChild(createCell(formatDateTime(row.primera_visita_en || row.registrado_en)));
     tr.appendChild(createCell(lastEventParts.join('\n'), { multiline: true }));
     tr.appendChild(createCell(formatDuration(row.stay_seconds)));
     tr.appendChild(createCell(formatDuration(row.avg_stay_seconds)));
@@ -217,7 +218,7 @@ async function loadVisits({ reset } = { reset: false }) {
     console.error('[visitas] load error', error);
     const tbody = tableBody();
     if (tbody && (!tbody.childElementCount || reset)) {
-      tbody.innerHTML = '<tr><td colspan="13" class="muted">No fue posible cargar las visitas.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="15" class="muted">No fue posible cargar las visitas.</td></tr>';
     }
   } finally {
     setLoading(false);
