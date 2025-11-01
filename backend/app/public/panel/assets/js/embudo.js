@@ -459,7 +459,7 @@ function renderDetailList(entries) {
 
 function renderExtraDetails(datos) {
   if (!datos || typeof datos !== 'object') return '';
-  const entries = Object.entries(datos);
+  const entries = Object.entries(datos).filter(([key]) => !shouldHideExtraField(key));
   if (!entries.length) return '';
   const rows = entries
     .map(([key, value]) => {
@@ -544,6 +544,16 @@ function formatExtraLabel(key) {
     .replace(/[_\s]+/g, ' ')
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function shouldHideExtraField(key) {
+  const token = normalizeToken(key);
+  return (
+    token === 'ubicacion' ||
+    token === 'sessionid' ||
+    token === 'dispositivo' ||
+    token === 'trazabilidad'
+  );
 }
 
 function findPrecalificadoIndex(stageInfo) {
