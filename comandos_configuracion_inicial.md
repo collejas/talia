@@ -79,8 +79,13 @@ sudo systemctl status talia-api.service
 
 poetry run pytest
 
+fondo #eff1f5
+adentro #ffffff
 
-
+#4400e3ff
+#7b44ff
+#9142ff
+#b458ffff
 
 # Exportacion de permisos servdor
 export SUPABASE_URL="https://qnimyamtczbbwmlrlejc.supabase.co"
