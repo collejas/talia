@@ -502,6 +502,7 @@ body.theme-aurora .intro h1,
 body.theme-aurora .intro p span {
   display: inline-block;
   overflow: hidden;
+  max-width: 100%;
   white-space: nowrap;
   clip-path: inset(0 100% 0 0);
   -webkit-clip-path: inset(0 100% 0 0);
@@ -522,6 +523,13 @@ body.theme-aurora .intro p span:nth-of-type(2) {
 
 body.theme-aurora .intro p .callout {
   animation: introAuroraTyping 1.4s steps(20, end) 5.6s forwards;
+}
+
+@media (max-width: 540px) {
+  body.theme-aurora .intro h1,
+  body.theme-aurora .intro p span {
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
