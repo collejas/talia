@@ -592,7 +592,7 @@ function normalizeExtraData(datos) {
   if (formatDetailValue(deviceType)) {
     entries.push(['Dispositivo', deviceType]);
   }
-  const referrer = source.referrer || trazabilidad.referrer || trazabilidad.landing || fuenteReferrer(trazabilidad);
+  const referrer = resolveReferrer(source, trazabilidad);
   if (formatDetailValue(referrer)) {
     entries.push(['Referral', referrer]);
   }
@@ -608,13 +608,19 @@ function normalizeExtraData(datos) {
   return Object.fromEntries(result);
 }
 
-function fuenteReferrer(trazabilidad) {
-  if (!trazabilidad || typeof trazabilidad !== 'object') return undefined;
-  if (typeof trazabilidad.referrer === 'string' && trazabilidad.referrer.trim()) {
-    return trazabilidad.referrer;
+function resolveReferrer(source, trazabilidad) {
+  if (source && typeof source.referrer === 'string' && source.referrer.trim()) {
+    return source.referrer.trim();
   }
-  if (typeof trazabilidad.landing === 'string' && trazabilidad.landing.trim()) {
-    return trazabilidad.landing;
+  if (trazabilidad && typeof trazabilidad === 'object') {
+    const raw = trazabilidad.referrer;
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.trim();
+    }
+    const landing = trazabilidad.landing;
+    if (typeof landing === 'string' && landing.trim()) {
+      return 'Entrada directa';
+    }
   }
   return undefined;
 }
