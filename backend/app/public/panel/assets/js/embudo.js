@@ -419,27 +419,14 @@ function renderContactModal(contacto, { cardName, stageName }) {
     ? `<span class="embudo-modal-stage">Etapa: ${escapeHtml(stageName)}</span>`
     : '';
 
-  const necesidadValue = formatDetailValue(contacto.necesidad_proposito);
-  const necesidadHtml = necesidadValue
-    ? `<div><h4 class="embudo-modal-section-title">Necesidad / propósito</h4><div class="embudo-modal-notes">${escapeHtml(
-        necesidadValue
-      )}</div></div>`
-    : '';
-
-  const notesValue = formatDetailValue(contacto.notes);
-  const notesHtml = notesValue
-    ? `<div><h4 class="embudo-modal-section-title">Notas</h4><div class="embudo-modal-notes">${escapeHtml(
-        notesValue
-      )}</div></div>`
-    : '';
+  const necesidadBlock = renderNeedNotesBlock(contacto.necesidad_proposito, contacto.notes);
 
   const extraHtml = renderExtraDetails(contacto.datos);
 
   body.innerHTML = `
     ${stageBadge}
+    ${necesidadBlock}
     ${detailsHtml || '<p class="muted">No hay datos adicionales disponibles.</p>'}
-    ${necesidadHtml}
-    ${notesHtml}
     ${extraHtml}
   `;
 }
@@ -477,6 +464,36 @@ function renderExtraDetails(datos) {
       <h4 class="embudo-modal-section-title">Datos adicionales</h4>
       <dl class="embudo-modal-details">${rows}</dl>
     </div>
+  `;
+}
+
+function renderNeedNotesBlock(necesidad, notas) {
+  const needText = formatDetailValue(necesidad);
+  const notesText = formatDetailValue(notas);
+  if (!needText && !notesText) return '';
+  return `
+    <section class="embudo-modal-rich-block">
+      <div class="embudo-modal-rich-brand">
+        <img class="embudo-modal-brand-icon" src="/api/shared/logos/Logo8.png" alt="TalIA logo" />
+        <span class="embudo-modal-brand-text">Tal-<span class="embudo-modal-brand-badge">IA</span></span>
+      </div>
+      <div class="embudo-modal-rich-body">
+        ${
+          needText
+            ? `<div><h4 class="embudo-modal-section-title">Necesidad / propósito</h4><div class="embudo-modal-notes">${escapeHtml(
+                needText
+              )}</div></div>`
+            : ''
+        }
+        ${
+          notesText
+            ? `<div><h4 class="embudo-modal-section-title">Notas</h4><div class="embudo-modal-notes">${escapeHtml(
+                notesText
+              )}</div></div>`
+            : ''
+        }
+      </div>
+    </section>
   `;
 }
 
