@@ -73,6 +73,7 @@ server {
     server_name talia.mx www.talia.mx;
     return 301 https://$host$request_uri;
 }
+
 ```
 
 Verificación rápida:
@@ -80,6 +81,14 @@ Verificación rápida:
 - `sudo systemctl reload nginx`
 - `curl -I https://talia.mx/api/panel/auth/login.html` → 200
 - `curl -I https://talia.mx/panel/auth/login.html` → 200
+
+Para servir correctamente `site.webmanifest`, edita como root `/etc/nginx/mime.types` y dentro del bloque `types { ... }` añade:
+
+```
+    application/manifest+json webmanifest;
+```
+
+Guarda, ejecuta `sudo nginx -t` y luego `sudo systemctl reload nginx`.
 
 Frontend ya actualizado:
 - El botón "Cerrar sesión" y `ensureSession()` detectan automáticamente si entraste por `/api/panel` o `/panel` y redirigen al prefijo correcto.

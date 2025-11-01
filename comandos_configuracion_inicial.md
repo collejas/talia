@@ -72,13 +72,10 @@ sudo systemctl status talia-api.service
 
 poetry run pytest
 
-codex resume 019a34e3-a3da-7b53-a1b6-64fb5bc93ed1
-
-- Dashboard (panel.html)
-- Inbox (inbox.html)
-- Configuración (configuracion.html)
 
 
+
+# Exportacion de permisos servdor
 export SUPABASE_URL="https://qnimyamtczbbwmlrlejc.supabase.co"
 export SERVICE_ROLE="<<eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuaW15YW10Y3piYndtbHJsZWpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTIyODg1NSwiZXhwIjoyMDc2ODA0ODU1fQ.MNUm-C1W7-pPTD6dR6_HlBq_J9nTLf2WNXy8-Z0t4KM>>"
 Nombre: J
@@ -88,12 +85,16 @@ contrasena: DE_se479156376421
 
 sudo journalctl -u talia-api.service -n 50 --no-pager
 
-
-
-
 TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:xxxxxxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
 TALIA_SUPABASE_SERVICE_ROLE=eyJxxxxxxxxx
 SUPABASE_ANON_KEY=eyJhbGxxxxxx
 TALIA_SUPABASE_LEGACY_JWT_SECRET=z9bDxxxxx
 TALIA_SUPABASE_ACCES_TOKEN=sbp_a3xxxx
+
+
+# Google
+sudo grep "Googlebot" /var/log/nginx/access.log | tail
+
+- Agrege: "application/manifest+json                       webmanifest;"  a nginx/mime.types     
+- cree landing/src/robots.txt
