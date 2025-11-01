@@ -133,14 +133,6 @@
           <span class="brand-text">Tal-<span class="logo">IA</span></span>
         </a>
 
-        <div class="theme-switcher">
-          <label class="sr-only" for="theme-select">Selecciona un tema</label>
-          <select id="theme-select" name="theme-select" aria-label="Seleccionar tema visual">
-            <option value="theme-aurora">Aurora violeta</option>
-            <option value="theme-ice">Espectro vibrante</option>
-            <option value="theme-void">Nocturno</option>
-          </select>
-        </div>
         <a class="cta" href="#contacto">Únete a la lista</a>
 
         <button id="menu-toggle" class="hamburger" aria-label="Abrir menú"
@@ -168,6 +160,66 @@
         </ul>
       </div>
     </nav>
+
+    <div class="theme-switcher" data-theme-controls>
+      <span class="sr-only" id="theme-switcher-label">Selecciona un tema visual</span>
+      <div class="theme-button-group" role="group" aria-labelledby="theme-switcher-label">
+        <button
+          type="button"
+          class="theme-button theme-button--ice"
+          data-theme="theme-ice"
+          aria-pressed="true"
+          aria-label="Espectro vibrante"
+        >
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="5" />
+            <g>
+              <line x1="12" y1="2" x2="12" y2="6" />
+              <line x1="12" y1="18" x2="12" y2="22" />
+              <line x1="4.22" y1="4.22" x2="6.99" y2="6.99" />
+              <line x1="17.01" y1="17.01" x2="19.78" y2="19.78" />
+              <line x1="2" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="22" y2="12" />
+              <line x1="4.22" y1="19.78" x2="6.99" y2="17.01" />
+              <line x1="17.01" y1="6.99" x2="19.78" y2="4.22" />
+            </g>
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="theme-button theme-button--aurora"
+          data-theme="theme-aurora"
+          aria-pressed="false"
+          aria-label="Aurora violeta"
+        >
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="theme-button theme-button--void"
+          data-theme="theme-void"
+          aria-pressed="false"
+          aria-label="Nocturno"
+        >
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+            <path d="M12 2a10 10 0 1 0 0 20V2Z" />
+          </svg>
+        </button>
+      </div>
+      <select
+        id="theme-select"
+        name="theme-select"
+        aria-hidden="true"
+        tabindex="-1"
+        class="theme-select-hidden sr-only"
+      >
+        <option value="theme-aurora">Aurora violeta</option>
+        <option value="theme-ice" selected>Espectro vibrante</option>
+        <option value="theme-void">Nocturno</option>
+      </select>
+    </div>
 
     <main class="layout" aria-live="polite">
       <section class="chat-shell">

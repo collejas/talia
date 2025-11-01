@@ -3,7 +3,7 @@ const originalPositions = new Map();
 const defaultNavConfig = {
   mobileBreakpoint: '(max-width: 960px)',
   ctaSelector: '.site-header .cta',
-  themeSwitcherSelector: '.theme-switcher',
+  themeSwitcherSelector: null,
 };
 
 let navConfig = { ...defaultNavConfig };
@@ -124,28 +124,15 @@ function setupMobileMenu() {
   if (!mobileMenuList) return;
 
   const cta = document.querySelector(navConfig.ctaSelector);
-  const themeSwitcher = document.querySelector(navConfig.themeSwitcherSelector);
 
   rememberPosition(cta);
-  rememberPosition(themeSwitcher);
 
   let liCta = mobileMenuList.querySelector('[data-menu-item="cta"]');
-  let liTheme = mobileMenuList.querySelector('[data-menu-item="theme"]');
 
-  if (!liTheme) {
-    liTheme = document.createElement('li');
-    liTheme.setAttribute('data-menu-item', 'theme');
-    liTheme.role = 'none';
-  }
   if (!liCta) {
     liCta = document.createElement('li');
     liCta.setAttribute('data-menu-item', 'cta');
     liCta.role = 'none';
-  }
-
-  if (themeSwitcher && themeSwitcher.parentElement !== liTheme) {
-    liTheme.innerHTML = '';
-    liTheme.appendChild(themeSwitcher);
   }
 
   const isMobile = mediaQuery?.matches ?? false;
@@ -166,12 +153,6 @@ function setupMobileMenu() {
     if (liCta.parentElement === mobileMenuList && !liCta.firstChild) {
       mobileMenuList.removeChild(liCta);
     }
-  }
-
-  if (liTheme.parentElement !== mobileMenuList) {
-    mobileMenuList.appendChild(liTheme);
-  } else if (liCta.parentElement === mobileMenuList && mobileMenuList.firstChild !== liCta) {
-    mobileMenuList.insertBefore(liCta, liTheme);
   }
 }
 
