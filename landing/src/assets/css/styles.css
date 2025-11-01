@@ -394,7 +394,7 @@ button:hover {
   --theme-button-active-bg: var(--accent-soft);
   --theme-button-active-border: var(--accent);
   --theme-button-active-color: var(--accent-strong);
-  min-width: 56px;
+  min-width: 28px;
   height: 56px;
   border-radius: 32px 0 0 32px;
   border: 1px solid var(--theme-button-border);
@@ -412,8 +412,8 @@ button:hover {
 }
 
 .theme-button svg {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
 }
 
 .theme-button svg circle,
@@ -1118,13 +1118,13 @@ body.theme-ice .intro p .callout {
   }
 
   .theme-button {
-    min-width: 50px;
+    min-width: 24px;
     height: 50px;
   }
 
   .theme-button svg {
-    width: 24px;
-    height: 24px;
+    width: 18px;
+    height: 18px;
   }
 
   /* Mostrar botón hamburger en móvil */
@@ -1223,13 +1223,13 @@ body.theme-ice .intro p .callout {
   }
 
   .theme-button {
-    min-width: 46px;
+    min-width: 22px;
     height: 46px;
   }
 
   .theme-button svg {
-    width: 22px;
-    height: 22px;
+    width: 16px;
+    height: 16px;
   }
 }
 
