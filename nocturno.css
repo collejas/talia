@@ -38,7 +38,6 @@ main {
   align-items: center;
 }
 
-/* Tema: Aurora violeta */
 body.theme-aurora {
   color-scheme: dark;
   --bg: #120928;
@@ -52,9 +51,6 @@ body.theme-aurora {
   --accent-strong: #6366f1;
   --accent-soft: rgba(168, 85, 247, 0.18);
   --accent-soft-strong: rgba(99, 102, 241, 0.26);
-  --accent-gradient: linear-gradient(135deg, var(--accent-strong), var(--accent));
-  --accent-gradient-text: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  --accent-gradient-callout: linear-gradient(90deg, var(--accent), var(--accent-strong));
   --border: #9b58f6;
   --cta-foreground: #0f172a;
   --status-available: #4ade80;
@@ -88,7 +84,52 @@ body.theme-aurora {
   --shell-panel-background: #160b32;
 }
 
-/* Tema: Nocturno */
+body.theme-ice {
+  color-scheme: light;
+  --bg: #fef9f5;
+  --bg-alt: #fdf4ff;
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-strong: rgba(250, 245, 255, 0.95);
+  --surface-soft: rgba(253, 244, 255, 0.6);
+  --text: #1f2937;
+  --text-muted: rgba(31, 41, 55, 0.68);
+  --accent: #f97316;
+  --accent-strong: #ec4899;
+  --accent-soft: rgba(249, 115, 22, 0.2);
+  --accent-soft-strong: rgba(236, 72, 153, 0.22);
+  --border: rgba(148, 163, 184, 0.28);
+  --cta-foreground: #fff8f1;
+  --status-available: #ec4899;
+  --header-background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(252, 231, 243, 0.85));
+  --hero-background: radial-gradient(circle at top right, rgba(168, 85, 247, 0.28), transparent 40%),
+    radial-gradient(circle at bottom left, rgba(249, 115, 22, 0.22), transparent 55%),
+    radial-gradient(circle at center, rgba(236, 72, 153, 0.18), transparent 60%);
+  --section-alt-background: #fdf4ff;
+  --preview-card-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(253, 244, 255, 0.94));
+  --preview-border: rgba(168, 85, 247, 0.18);
+  --shadow-preview: 0 16px 46px rgba(249, 115, 22, 0.12);
+  --shadow-card: 0 12px 32px rgba(168, 85, 247, 0.15);
+  --shadow-floating: 0 18px 40px rgba(236, 72, 153, 0.18);
+  --plan-highlight-border: rgba(168, 85, 247, 0.4);
+  --plan-highlight-background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(168, 85, 247, 0.28));
+  --pillars-background: rgba(255, 255, 255, 0.87);
+  --chat-window-background: rgba(255, 255, 255, 0.96);
+  --chat-form-background: rgba(253, 244, 255, 0.82);
+  --chat-input-background: rgba(255, 255, 255, 0.95);
+  --chat-message-background: rgba(244, 243, 255, 0.65);
+  --chat-message-user-background: rgba(236, 72, 153, 0.22);
+  --chat-message-bot-background: rgba(168, 85, 247, 0.25);
+  --plan-card-background: rgba(255, 255, 255, 0.95);
+  --contact-form-background: rgba(255, 255, 255, 0.95);
+  --footer-background: rgba(253, 244, 255, 0.95);
+  --form-button-background: rgba(249, 115, 22, 0.18);
+  --form-button-color: rgba(31, 41, 55, 0.75);
+  --bubble-assistant: rgba(168, 85, 247, 0.25);
+  --bubble-user: rgba(236, 72, 153, 0.22);
+  --composer-bg: rgba(255, 255, 255, 0.94);
+  --shadow-elevated: 0 20px 55px rgba(236, 72, 153, 0.18);
+}
+
 body.theme-void {
   color-scheme: dark;
   --bg: #050505;
@@ -170,93 +211,6 @@ body.theme-void {
   --bubble-user: rgba(255, 255, 255, 0.06);
   --composer-bg: rgba(5, 5, 7, 0.9);
   --shadow-elevated: 0 20px 55px rgba(0, 0, 0, 0.55);
-}
-
-/* Tema: Espectro vibrante */
-body.theme-ice {
-  color-scheme: light;
-  --bg: #fef9f5;
-  --bg-alt: #fdf4ff;
-  --surface: rgba(255, 255, 255, 0.94);
-  --surface-strong: rgba(250, 245, 255, 0.95);
-  --surface-soft: rgba(253, 244, 255, 0.6);
-  --text: #1f2937;
-  --text-muted: rgba(31, 41, 55, 0.68);
-  --accent: #b458ffff;
-  --accent-strong: #4400e3ff;
-  --accent-soft: rgba(168, 65, 255, 0.18);
-  --accent-soft-strong: rgba(123, 68, 255, 0.26);
-  --accent-gradient: linear-gradient(
-    135deg,
-    #4400e3ff 0%,
-    #8144ff 14%,
-    #8843ff 28%,
-    #8e43ff 42%,
-    #9242ff 50%,
-    #9542ff 58%,
-    #9b42ff 72%,
-    #a241ff 86%,
-    #b458ffff 100%
-  );
-  --accent-gradient-text: linear-gradient(
-    180deg,
-    #4400e3ff 0%,
-    #8144ff 14%,
-    #8843ff 28%,
-    #8e43ff 42%,
-    #9242ff 50%,
-    #9542ff 58%,
-    #9b42ff 72%,
-    #a241ff 86%,
-    #b458ffff 100%
-  );
-  --accent-gradient-callout: linear-gradient(
-    90deg,
-    #4400e3ff 0%,
-    #8144ff 14%,
-    #8843ff 28%,
-    #8e43ff 42%,
-    #9242ff 50%,
-    #9542ff 58%,
-    #9b42ff 72%,
-    #a241ff 86%,
-    #b458ffff 100%
-  );
-  --border: rgba(123, 68, 255, 0.2);
-  --cta-foreground: #f9f7ff;
-  --status-available: #4400e3ff;
-  --header-background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 245, 255, 0.88));
-  --hero-background: radial-gradient(circle at top right, rgba(123, 68, 255, 0.28), transparent 38%),
-    radial-gradient(circle at bottom left, rgba(168, 65, 255, 0.24), transparent 52%),
-    radial-gradient(circle at center, rgba(129, 230, 255, 0.18), transparent 62%);
-  --section-alt-background: #fdf4ff;
-  --preview-card-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(253, 244, 255, 0.94));
-  --preview-border: rgba(123, 68, 255, 0.18);
-  --shadow-preview: 0 16px 46px rgba(123, 68, 255, 0.12);
-  --shadow-card: 0 12px 32px rgba(123, 68, 255, 0.16);
-  --shadow-floating: 0 18px 40px rgba(168, 65, 255, 0.18);
-  --plan-highlight-border: rgba(168, 65, 255, 0.38);
-  --plan-highlight-background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.97),
-      rgba(168, 65, 255, 0.28)
-    );
-  --pillars-background: rgba(255, 255, 255, 0.87);
-  --chat-window-background: rgba(255, 255, 255, 0.96);
-  --chat-form-background: rgba(253, 244, 255, 0.82);
-  --chat-input-background: rgba(255, 255, 255, 0.95);
-  --chat-message-background: rgba(244, 243, 255, 0.65);
-  --chat-message-user-background: rgba(168, 65, 255, 0.18);
-  --chat-message-bot-background: rgba(123, 68, 255, 0.22);
-  --plan-card-background: rgba(255, 255, 255, 0.95);
-  --contact-form-background: rgba(255, 255, 255, 0.95);
-  --footer-background: rgba(253, 244, 255, 0.95);
-  --form-button-background: rgba(123, 68, 255, 0.16);
-  --form-button-color: rgba(31, 41, 55, 0.78);
-  --bubble-assistant: rgba(123, 68, 255, 0.22);
-  --bubble-user: rgba(168, 65, 255, 0.18);
-  --composer-bg: rgba(255, 255, 255, 0.94);
-  --shadow-elevated: 0 20px 55px rgba(123, 68, 255, 0.18);
 }
 
 * {
@@ -581,6 +535,20 @@ button:hover {
   text-align: center;
 }
 
+body.theme-aurora .intro h1,
+body.theme-aurora .intro p span,
+body.theme-void .intro h1,
+body.theme-void .intro p span {
+  font-family: 'Inter', serif;
+}
+
+body.theme-aurora .intro,
+body.theme-void .intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .intro p span + span {
   margin-left: 0;
   margin-top: 0.4rem;
@@ -596,23 +564,6 @@ button:hover {
   -webkit-text-fill-color: transparent;
 }
 
-body.theme-aurora .intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-body.theme-aurora .intro h1,
-body.theme-aurora .intro p span {
-  font-family: 'Inter', serif;
-  display: inline-block;
-  overflow: hidden;
-  max-width: 100%;
-  white-space: nowrap;
-  clip-path: inset(0 100% 0 0);
-  -webkit-clip-path: inset(0 100% 0 0);
-}
-
 @keyframes introAuroraTyping {
   0% {
     clip-path: inset(0 100% 0 0);
@@ -622,6 +573,18 @@ body.theme-aurora .intro p span {
     clip-path: inset(0 0 0 0);
     -webkit-clip-path: inset(0 0 0 0);
   }
+}
+
+body.theme-aurora .intro h1,
+body.theme-aurora .intro p span,
+body.theme-void .intro h1,
+body.theme-void .intro p span {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  clip-path: inset(0 100% 0 0);
+  -webkit-clip-path: inset(0 100% 0 0);
 }
 
 body.theme-aurora .intro h1 {
@@ -641,130 +604,37 @@ body.theme-aurora .intro p .callout {
   animation: introAuroraTyping 1.4s steps(20, end) 5.6s forwards;
 }
 
-body.theme-void .intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-body.theme-void .intro h1,
-body.theme-void .intro p span {
-  font-family: 'Inter', serif;
-  display: inline-block;
-  overflow: hidden;
-  max-width: 100%;
-  white-space: nowrap;
-  clip-path: inset(0 100% 0 0);
-  -webkit-clip-path: inset(0 100% 0 0);
-}
-
-@keyframes introVoidTyping {
-  0% {
-    clip-path: inset(0 100% 0 0);
-    -webkit-clip-path: inset(0 100% 0 0);
-  }
-  100% {
-    clip-path: inset(0 0 0 0);
-    -webkit-clip-path: inset(0 0 0 0);
-  }
-}
-
 body.theme-void .intro h1 {
   margin-inline: auto;
-  animation: introVoidTyping 1.4s steps(22, end) 0.3s forwards;
+  animation: introAuroraTyping 1.4s steps(22, end) 0.3s forwards;
 }
 
 body.theme-void .intro p span:nth-of-type(1) {
-  animation: introVoidTyping 1.6s steps(24, end) 2s forwards;
+  animation: introAuroraTyping 1.6s steps(24, end) 2s forwards;
 }
 
 body.theme-void .intro p span:nth-of-type(2) {
-  animation: introVoidTyping 1.6s steps(23, end) 3.9s forwards;
+  animation: introAuroraTyping 1.6s steps(23, end) 3.9s forwards;
 }
 
 body.theme-void .intro p .callout {
-  animation: introVoidTyping 1.4s steps(20, end) 5.6s forwards;
-}
-
-body.theme-ice .intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-body.theme-ice .intro h1,
-body.theme-ice .intro p span {
-  font-family: 'Inter', serif;
-  display: inline-block;
-  overflow: hidden;
-  max-width: 100%;
-  white-space: nowrap;
-  clip-path: inset(0 100% 0 0);
-  -webkit-clip-path: inset(0 100% 0 0);
-}
-
-@keyframes introIceTyping {
-  0% {
-    clip-path: inset(0 100% 0 0);
-    -webkit-clip-path: inset(0 100% 0 0);
-  }
-  100% {
-    clip-path: inset(0 0 0 0);
-    -webkit-clip-path: inset(0 0 0 0);
-  }
-}
-
-body.theme-ice .intro h1 {
-  margin-inline: auto;
-  animation: introIceTyping 1.4s steps(22, end) 0.3s forwards;
-}
-
-body.theme-ice .intro p span:nth-of-type(1) {
-  animation: introIceTyping 1.6s steps(24, end) 2s forwards;
-}
-
-body.theme-ice .intro p span:nth-of-type(2) {
-  animation: introIceTyping 1.6s steps(23, end) 3.9s forwards;
-}
-
-body.theme-ice .intro p .callout {
-  animation: introIceTyping 1.4s steps(20, end) 5.6s forwards;
+  animation: introAuroraTyping 1.4s steps(20, end) 5.6s forwards;
 }
 
 @media (max-width: 540px) {
   body.theme-aurora .intro h1,
-  body.theme-aurora .intro p span {
-    white-space: normal;
-  }
-
+  body.theme-aurora .intro p span,
   body.theme-void .intro h1,
   body.theme-void .intro p span {
-    white-space: normal;
-  }
-
-  body.theme-ice .intro h1,
-  body.theme-ice .intro p span {
     white-space: normal;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   body.theme-aurora .intro h1,
-  body.theme-aurora .intro p span {
-    clip-path: none !important;
-    -webkit-clip-path: none !important;
-    animation: none !important;
-  }
-
+  body.theme-aurora .intro p span,
   body.theme-void .intro h1,
   body.theme-void .intro p span {
-    clip-path: none !important;
-    -webkit-clip-path: none !important;
-    animation: none !important;
-  }
-
-  body.theme-ice .intro h1,
-  body.theme-ice .intro p span {
     clip-path: none !important;
     -webkit-clip-path: none !important;
     animation: none !important;
