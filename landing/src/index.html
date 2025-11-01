@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="TalIA es inteligencia artificial conversacional omnicanal que automatiza atención, ventas y soporte en WhatsApp, webchat y más."
+      content="TalIA es inteligencia artificial conversacional omnicanal que automatiza ventas, atención, y soporte, por canales de comunicación como Teléfono WhatsApp, Facebook, Instagram webchat y más."
     />
     <title>TalIA · Inteligencia artificial conversacional para ventas y atención</title>
     <meta name="theme-color" content="#fdf4ff" />
@@ -33,9 +33,11 @@
         "@graph": [
           {
             "@type": "Organization",
+            "@id": "https://talia.mx/#organization",
             "name": "TalIA",
             "url": "https://talia.mx/",
             "logo": "https://talia.mx/android-chrome-512x512.png",
+            "image": "https://talia.mx/android-chrome-512x512.png",
             "contactPoint": [
               {
                 "@type": "ContactPoint",
@@ -48,8 +50,65 @@
           },
           {
             "@type": "WebSite",
+            "@id": "https://talia.mx/#website",
             "name": "TalIA",
-            "url": "https://talia.mx/"
+            "url": "https://talia.mx/",
+            "publisher": {
+              "@id": "https://talia.mx/#organization"
+            }
+          },
+          {
+            "@type": "Service",
+            "@id": "https://talia.mx/#service",
+            "name": "TalIA inteligencia artificial para ventas",
+            "url": "https://talia.mx/",
+            "provider": {
+              "@id": "https://talia.mx/#organization"
+            },
+            "areaServed": "MX",
+            "availableLanguage": ["es"],
+            "serviceType": [
+              "Inteligencia artificial para ventas",
+              "Chatbot para WhatsApp",
+              "Automatización de atención y ventas"
+            ],
+            "serviceAudience": {
+              "@type": "Audience",
+              "audienceType": [
+                "Empresas que buscan inteligencia artificial para ventas y atención al cliente",
+                "Equipos de ventas que automatizan seguimiento con IA"
+              ]
+            },
+            "image": "https://talia.mx/android-chrome-512x512.png",
+            "keywords": [
+              "inteligencia artificial",
+              "IA conversacional",
+              "chatbot WhatsApp",
+              "automatización de ventas",
+              "atención al cliente"
+            ],
+            "description": "TalIA ofrece inteligencia artificial conversacional omnicanal que automatiza las ventas y atención al cliente, la generación de leads en Teléfono WhatsApp, Facebook, Instagram webchat y más."
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://talia.mx/#app",
+            "name": "TalIA plataforma de inteligencia artificial para ventas",
+            "applicationCategory": "BusinessApplication",
+            "applicationSubCategory": "Chatbot",
+            "operatingSystem": "Web",
+            "url": "https://talia.mx/",
+            "publisher": {
+              "@id": "https://talia.mx/#organization"
+            },
+            "image": "https://talia.mx/android-chrome-512x512.png",
+            "description": "TalIA es una plataforma SaaS de inteligencia artificial conversacional que integra múltiples canales para automatizar atención, marketing y ventas.",
+            "keywords": [
+              "software de inteligencia artificial",
+              "plataforma IA conversacional",
+              "chatbot empresarial",
+              "automatización de atención",
+              "ventas con IA"
+            ]
           },
           {
             "@type": "BreadcrumbList",

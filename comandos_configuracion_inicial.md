@@ -27,6 +27,13 @@ dig talia.mx
 nslookup talia.mx
 curl -I http://talia.mx
 
+
+dig +short tal-ia.mx @8.8.8.8
+dig +short tal-ia.mx @1.1.1.1
+dig tal-ia.mx
+nslookup tal-ia.mx
+curl -I http://tal-ia.mx
+
 # Instalar Cerbot
   - Instala Certbot y el plugin de Nginx (sudo snap install core && sudo snap refresh core, luego sudo snap install --classic certbot y sudo ln -s /snap/bin/certbot /usr/bin/certbot).
   - Verifica que tu bloque server HTTP en /etc/nginx/sites-available/talia pase el lint (sudo nginx -t) y recarga (sudo systemctl reload nginx).
@@ -93,8 +100,16 @@ TALIA_SUPABASE_LEGACY_JWT_SECRET=z9bDxxxxx
 TALIA_SUPABASE_ACCES_TOKEN=sbp_a3xxxx
 
 
-# Google
+# GOOGLE
+sudo rsync -av --delete ~/talia/landing/src/ /var/www/talia-landing/
 sudo grep "Googlebot" /var/log/nginx/access.log | tail
 
 - Agrege: "application/manifest+json                       webmanifest;"  a nginx/mime.types     
 - cree landing/src/robots.txt
+
+
+
+
+# ME GUSTO ESTO:
+
+¡Hola! Soy Tal-IA, tu especialista en agentes virtuales inteligentes con GenAI. Desarrollo soluciones que automatizan interacciones, procesan datos y aprenden de tus operaciones para potenciar tu productividad y toma de decisiones. También ofrezco servicios complementarios como: Automatización de procesos (RPA) Integración de sistemas y datos OT/IT Soluciones de análisis avanzado Trabajo contigo para entender tus flujos críticos y diseñar soluciones a medida que generen valor tangible desde el primer día. ¿Listo para llevar tu operación al siguiente nivel con agentes virtuales inteligentes? Habla conmigo, con Tal-IA. 

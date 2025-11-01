@@ -68,11 +68,25 @@ server {
 }
 
 server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name tal-ia.mx www.tal-ia.mx;
+
+    ssl_certificate /etc/letsencrypt/live/talia.mx/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/talia.mx/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://talia.mx$request_uri;
+}
+
+server {
     listen 80;
     listen [::]:80;
-    server_name talia.mx www.talia.mx;
-    return 301 https://$host$request_uri;
+    server_name talia.mx www.talia.mx tal-ia.mx www.tal-ia.mx;
+    return 301 https://talia.mx$request_uri;
 }
+
 
 ```
 
