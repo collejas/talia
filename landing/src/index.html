@@ -163,13 +163,15 @@
 
     <div class="theme-switcher" data-theme-controls>
       <span class="sr-only" id="theme-switcher-label">Selecciona un tema visual</span>
-      <div class="theme-button-group" role="group" aria-labelledby="theme-switcher-label">
+      <div class="theme-button-group" id="theme-options" role="group" aria-labelledby="theme-switcher-label">
         <button
           type="button"
           class="theme-button theme-button--ice"
           data-theme="theme-ice"
           aria-pressed="true"
           aria-label="Espectro vibrante"
+          aria-controls="theme-options"
+          aria-expanded="false"
         >
           <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="5" />
@@ -191,6 +193,8 @@
           data-theme="theme-aurora"
           aria-pressed="false"
           aria-label="Aurora violeta"
+          aria-controls="theme-options"
+          aria-expanded="false"
         >
           <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
@@ -202,6 +206,8 @@
           data-theme="theme-void"
           aria-pressed="false"
           aria-label="Nocturno"
+          aria-controls="theme-options"
+          aria-expanded="false"
         >
           <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
             <path d="M12 2a10 10 0 1 0 0 20V2Z" />

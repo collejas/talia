@@ -383,9 +383,10 @@ button:hover {
 .theme-button-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   padding: 0;
   margin: 0;
+  align-items: flex-end;
 }
 
 .theme-button {
@@ -409,6 +410,35 @@ button:hover {
     color var(--transition-fast);
   margin-right: -1px;
   padding: 0;
+}
+
+.theme-button-group .theme-button {
+  display: none;
+}
+
+.theme-button-group .theme-button[aria-pressed='true'] {
+  display: inline-flex;
+}
+
+.theme-switcher.is-expanded .theme-button-group .theme-button {
+  display: inline-flex;
+}
+
+.theme-switcher.is-expanded .theme-button-group {
+  padding: 0.35rem 0.25rem 0.35rem 0;
+  border-radius: 36px 0 0 36px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-floating);
+  align-items: stretch;
+}
+
+.theme-switcher.is-expanded .theme-button {
+  margin-right: 0;
+}
+
+.theme-switcher:not(.is-expanded) .theme-button[aria-pressed='true'] {
+  box-shadow: var(--shadow-floating);
 }
 
 .theme-button svg {

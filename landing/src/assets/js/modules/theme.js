@@ -116,6 +116,8 @@ function setupThemeButtons({
   themes = DEFAULT_THEMES,
   attachSelectListener = true,
 } = {}) {
+  const switcherEl = document.querySelector('[data-theme-controls]');
+  const groupEl = switcherEl ? switcherEl.querySelector('.theme-button-group') : null;
   const buttonEls = Array.from(
     document.querySelectorAll('[data-theme-controls] [data-theme]')
   ).filter((btn) => btn instanceof HTMLButtonElement);
@@ -124,11 +126,85 @@ function setupThemeButtons({
     return null;
   }
 
+  if (groupEl && !groupEl.id) {
+    groupEl.id = 'theme-options';
+  }
+
+  const controlsId = groupEl?.id;
+
+  buttonEls.forEach((button) => {
+    if (controlsId) {
+      button.setAttribute('aria-controls', controlsId);
+    }
+  });
+
+  let expanded = false;
+  let userInitiated = false;
+
+  function updateAriaExpanded() {
+    buttonEls.forEach((button) => {
+      const isActive = button.getAttribute('aria-pressed') === 'true';
+      button.setAttribute('aria-expanded', isActive && expanded ? 'true' : 'false');
+      button.setAttribute('aria-haspopup', isActive ? 'menu' : 'false');
+    });
+  }
+
+  function handleOutsideClick(event) {
+    if (!switcherEl || !expanded) return;
+    if (switcherEl.contains(event.target)) return;
+    collapse();
+  }
+
+  function handleKeydown(event) {
+    if (event.key === 'Escape') {
+      collapse();
+    }
+  }
+
+  function setExpanded(value) {
+    const next = Boolean(value);
+    if (switcherEl) {
+      switcherEl.classList.toggle('is-expanded', next);
+      switcherEl.setAttribute('data-expanded', next ? 'true' : 'false');
+    }
+    if (expanded !== next) {
+      expanded = next;
+      if (expanded) {
+        document.addEventListener('click', handleOutsideClick, { capture: true });
+        document.addEventListener('keydown', handleKeydown);
+      } else {
+        document.removeEventListener('click', handleOutsideClick, { capture: true });
+        document.removeEventListener('keydown', handleKeydown);
+      }
+    }
+    updateAriaExpanded();
+  }
+
+  function expand() {
+    setExpanded(true);
+  }
+
+  function collapse() {
+    setExpanded(false);
+  }
+
+  function toggleExpanded() {
+    setExpanded(!expanded);
+  }
+
   const updatePressed = (theme) => {
     buttonEls.forEach((button) => {
       const isActive = button.dataset.theme === theme;
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+    collapse();
+    if (userInitiated && switcherEl && typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        const activeButton = switcherEl.querySelector('[data-theme][aria-pressed="true"]');
+        activeButton?.focus({ preventScroll: true });
+      });
+    }
+    userInitiated = false;
   };
 
   const handleSelectChange = () => {
@@ -144,7 +220,17 @@ function setupThemeButtons({
   buttonEls.forEach((button) => {
     button.addEventListener('click', () => {
       const theme = getThemeFromButton(button);
+      const current =
+        detectActiveTheme(bodyEl, themes) || (selectEl ? selectEl.value : null);
       if (!theme) return;
+      if (theme === current) {
+        toggleExpanded();
+        button.focus({ preventScroll: true });
+        return;
+      }
+
+      userInitiated = true;
+
       if (selectEl) {
         if (selectEl.value !== theme) {
           selectEl.value = theme;
@@ -152,18 +238,27 @@ function setupThemeButtons({
           selectEl.dispatchEvent(changeEvent);
         } else if (!attachSelectListener) {
           updatePressed(theme);
+        } else {
+          userInitiated = false;
         }
       } else if (bodyEl) {
         bodyEl.classList.remove(...themes);
         bodyEl.classList.add(theme);
         updatePressed(theme);
       }
+      collapse();
     });
   });
 
   if (selectEl && attachSelectListener) {
     selectEl.addEventListener('change', handleSelectChange);
   }
+
+  buttonEls.forEach((button) => {
+    button.setAttribute('aria-expanded', 'false');
+  });
+
+  updateAriaExpanded();
 
   const initialTheme =
     detectActiveTheme(bodyEl, themes) || (selectEl ? selectEl.value : null) || getThemeFromButton(buttonEls[0]);
@@ -183,6 +278,8 @@ function setupThemeButtons({
 
   return {
     buttons: buttonEls,
+    expand,
+    collapse,
     update: updatePressed,
   };
 }
