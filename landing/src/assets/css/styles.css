@@ -86,6 +86,7 @@ body.theme-aurora {
   --composer-bg: rgba(6, 8, 20, 0.9);
   --shadow-elevated: 0 20px 60px rgba(2, 6, 23, 0.55);
   --shell-panel-background: #160b32;
+  --layout-background: #120928;
 }
 
 /* Tema: Nocturno */
@@ -170,12 +171,13 @@ body.theme-void {
   --bubble-user: rgba(255, 255, 255, 0.06);
   --composer-bg: rgba(5, 5, 7, 0.9);
   --shadow-elevated: 0 20px 55px rgba(0, 0, 0, 0.55);
+  --layout-background: #050505;
 }
 
 /* Tema: Espectro vibrante */
 body.theme-ice {
   color-scheme: light;
-  --bg: #fef9f5;
+  --bg: #eff1f5;
   --bg-alt: #fdf4ff;
   --surface: rgba(255, 255, 255, 0.94);
   --surface-strong: rgba(250, 245, 255, 0.95);
@@ -222,20 +224,20 @@ body.theme-ice {
     #a241ff 86%,
     #b458ffff 100%
   );
-  --border: rgba(123, 68, 255, 0.2);
+  --border: #b96bfd;
   --cta-foreground: #f9f7ff;
   --status-available: #4400e3ff;
-  --header-background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 245, 255, 0.88));
+  --header-background: #eff1f5;
   --hero-background: radial-gradient(circle at top right, rgba(123, 68, 255, 0.28), transparent 38%),
     radial-gradient(circle at bottom left, rgba(168, 65, 255, 0.24), transparent 52%),
     radial-gradient(circle at center, rgba(129, 230, 255, 0.18), transparent 62%);
   --section-alt-background: #fdf4ff;
   --preview-card-background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(253, 244, 255, 0.94));
-  --preview-border: rgba(123, 68, 255, 0.18);
+  --preview-border: rgba(185, 107, 253, 0.22);
   --shadow-preview: 0 16px 46px rgba(123, 68, 255, 0.12);
   --shadow-card: 0 12px 32px rgba(123, 68, 255, 0.16);
   --shadow-floating: 0 18px 40px rgba(168, 65, 255, 0.18);
-  --plan-highlight-border: rgba(168, 65, 255, 0.38);
+  --plan-highlight-border: rgba(185, 107, 253, 0.45);
   --plan-highlight-background: linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.97),
@@ -250,13 +252,14 @@ body.theme-ice {
   --chat-message-bot-background: rgba(123, 68, 255, 0.22);
   --plan-card-background: rgba(255, 255, 255, 0.95);
   --contact-form-background: rgba(255, 255, 255, 0.95);
-  --footer-background: rgba(253, 244, 255, 0.95);
+  --footer-background: #eff1f5;
   --form-button-background: rgba(123, 68, 255, 0.16);
   --form-button-color: rgba(31, 41, 55, 0.78);
   --bubble-assistant: rgba(123, 68, 255, 0.22);
   --bubble-user: rgba(168, 65, 255, 0.18);
   --composer-bg: rgba(255, 255, 255, 0.94);
   --shadow-elevated: 0 20px 55px rgba(123, 68, 255, 0.18);
+  --layout-background: #eff1f5;
 }
 
 * {
@@ -524,6 +527,7 @@ button:hover {
   top: var(--header-h);
   left: 0;
   right: 0;
+  background: var(--layout-background, var(--bg));
   /* Reservar sólo la altura del composer; el gap se agrega como padding interno */
   bottom: calc(var(--composer-h) + var(--composer-b, 0px));
   overflow-y: auto; /* Scrollbar a nivel viewport */
