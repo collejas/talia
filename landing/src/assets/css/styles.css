@@ -456,6 +456,17 @@ button:hover {
   text-align: center;
 }
 
+body.theme-aurora .intro h1,
+body.theme-aurora .intro p span {
+  font-family: 'Inter', serif;
+}
+
+body.theme-aurora .intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .intro p span + span {
   margin-left: 0;
   margin-top: 0.4rem;
@@ -474,6 +485,52 @@ button:hover {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+@keyframes introAuroraTyping {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    -webkit-clip-path: inset(0 100% 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    -webkit-clip-path: inset(0 0 0 0);
+  }
+}
+
+body.theme-aurora .intro h1,
+body.theme-aurora .intro p span {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(0 100% 0 0);
+  -webkit-clip-path: inset(0 100% 0 0);
+}
+
+body.theme-aurora .intro h1 {
+  margin-inline: auto;
+  animation: introAuroraTyping 1.4s steps(22, end) 0.3s forwards;
+}
+
+body.theme-aurora .intro p span:nth-of-type(1) {
+  animation: introAuroraTyping 1.6s steps(24, end) 2s forwards;
+}
+
+body.theme-aurora .intro p span:nth-of-type(2) {
+  animation: introAuroraTyping 1.6s steps(23, end) 3.9s forwards;
+}
+
+body.theme-aurora .intro p .callout {
+  animation: introAuroraTyping 1.4s steps(20, end) 5.6s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-aurora .intro h1,
+  body.theme-aurora .intro p span {
+    clip-path: none !important;
+    -webkit-clip-path: none !important;
+    animation: none !important;
+  }
 }
 
 
