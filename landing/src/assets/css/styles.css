@@ -48,19 +48,19 @@ body.theme-aurora {
   --accent-strong: #6366f1;
   --accent-soft: rgba(168, 85, 247, 0.18);
   --accent-soft-strong: rgba(99, 102, 241, 0.26);
-  --border: rgba(148, 163, 184, 0.25);
+  --border: #9b58f6;
   --cta-foreground: #0f172a;
   --status-available: #4ade80;
-  --header-background: linear-gradient(180deg, rgba(6, 8, 20, 0.95), rgba(6, 8, 20, 0.72));
+  --header-background: #120928;
   --hero-background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.35), transparent 45%),
     radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.22), transparent 52%);
   --section-alt-background: #111827;
   --preview-card-background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(24, 34, 68, 0.7));
-  --preview-border: rgba(255, 255, 255, 0.08);
+  --preview-border: #9b58f6;
   --shadow-preview: 0 20px 60px rgba(2, 6, 23, 0.6);
   --shadow-card: 0 12px 30px rgba(2, 6, 23, 0.4);
   --shadow-floating: 0 24px 50px rgba(2, 6, 23, 0.55);
-  --plan-highlight-border: rgba(168, 85, 247, 0.6);
+  --plan-highlight-border: #9b58f6;
   --plan-highlight-background: linear-gradient(180deg, rgba(24, 34, 68, 0.92), rgba(124, 58, 237, 0.45));
   --pillars-background: rgba(15, 23, 42, 0.5);
   --chat-window-background: rgba(15, 23, 42, 0.65);
@@ -499,7 +499,7 @@ button:hover {
 .message--human {
   align-self: flex-start;
   background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid var(--border);
 }
 
 .message--user {
@@ -567,7 +567,7 @@ button:hover {
   margin: 0 auto 0.65rem;
   background: var(--shell-panel-background);
   border-radius: 22px;
-  border: 1px solid var(--border);
+  border: 0.8px solid var(--border);
   box-shadow: var(--shadow-elevated);
   padding: 1.25rem 1.25rem 0.25rem;
   position: fixed;
@@ -601,7 +601,7 @@ button:hover {
   background: var(--surface);
   border-radius: 999px;
   padding: 0.35rem 0.4rem;
-  border: 1px solid var(--border);
+  border: 0.8px solid var(--border);
 }
 
 .composer-form input {
