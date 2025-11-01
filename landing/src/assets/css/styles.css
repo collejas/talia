@@ -438,6 +438,11 @@ button:hover {
   margin: 0;
   font-size: clamp(1.9rem, 5vw, 2.6rem);
   text-align: center;
+  background-image: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .intro p {
@@ -458,7 +463,17 @@ button:hover {
 
 .intro p .callout {
   font-weight: 600;
-  color: var(--text);
+  font-size: 1.15em;
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent-strong) 50%,
+    var(--accent) 100%
+  );
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 
