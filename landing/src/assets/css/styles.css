@@ -13,6 +13,7 @@
   --footer-gap: clamp(10px, 1.75vw, 20px);
   /* Margen interno del scroll para que el box-shadow del card no se recorte */
   --shell-shadow-bleed: clamp(12px, 1.6vw, 24px);
+  --shell-panel-background: var(--surface-strong);
 }
 
 body {
@@ -36,7 +37,7 @@ main {
 
 body.theme-aurora {
   color-scheme: dark;
-  --bg: #060414;
+  --bg: #120928;
   --bg-alt: #111827;
   --surface: rgba(18, 24, 40, 0.78);
   --surface-strong: rgba(12, 17, 33, 0.85);
@@ -77,6 +78,7 @@ body.theme-aurora {
   --bubble-user: rgba(255, 255, 255, 0.06);
   --composer-bg: rgba(6, 8, 20, 0.9);
   --shadow-elevated: 0 20px 60px rgba(2, 6, 23, 0.55);
+  --shell-panel-background: #160b32;
 }
 
 body.theme-ice {
@@ -410,7 +412,7 @@ button:hover {
 .layout > .chat-shell {
   width: min(760px, 92vw);
   margin: 0 auto; /* el espaciado vertical lo maneja el padding de .layout */
-  background: var(--surface-strong);
+  background: var(--shell-panel-background);
   border-radius: 22px;
   padding: clamp(1.5rem, 4vw, 3rem);
   box-shadow: var(--shadow-elevated);
@@ -563,7 +565,7 @@ button:hover {
 .composer {
   width: min(760px, 92vw);
   margin: 0 auto 0.65rem;
-  background: var(--surface-strong);
+  background: var(--shell-panel-background);
   border-radius: 22px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-elevated);
