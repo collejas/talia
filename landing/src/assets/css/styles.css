@@ -14,6 +14,9 @@
   /* Margen interno del scroll para que el box-shadow del card no se recorte */
   --shell-shadow-bleed: clamp(12px, 1.6vw, 24px);
   --shell-panel-background: var(--surface-strong);
+  --accent-gradient: linear-gradient(125deg, var(--accent-strong), var(--accent));
+  --accent-gradient-text: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  --accent-gradient-callout: linear-gradient(90deg, var(--accent), var(--accent-strong));
 }
 
 body {
@@ -142,6 +145,36 @@ body.theme-void {
   --accent-soft-strong: rgba(24, 131, 109, 0.36);
   --accent-cool: #1e3a8a;
   --accent-cool-soft: rgba(30, 64, 175, 0.22);
+  --accent-gradient: linear-gradient(
+    135deg,
+    #0ea97c 0%,
+    #1cc191 16%,
+    #28d6a5 32%,
+    #39ddc0 48%,
+    #d44f93 64%,
+    #c1326e 82%,
+    #a90e3b 100%
+  );
+  --accent-gradient-text: linear-gradient(
+    180deg,
+    #0ea97c 0%,
+    #1cc191 16%,
+    #28d6a5 32%,
+    #39ddc0 48%,
+    #d44f93 64%,
+    #c1326e 82%,
+    #a90e3b 100%
+  );
+  --accent-gradient-callout: linear-gradient(
+    90deg,
+    #0ea97c 0%,
+    #1cc191 16%,
+    #28d6a5 32%,
+    #39ddc0 48%,
+    #d44f93 64%,
+    #c1326e 82%,
+    #a90e3b 100%
+  );
   --border: #0ea97c;
   --cta-foreground: #041b11;
   --status-available: #22c55e;
@@ -250,7 +283,7 @@ button:hover {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  background: var(--accent-gradient);
   color: #fff;
   font-size: 1rem;
   font-weight: 700;
@@ -326,7 +359,7 @@ button:hover {
 .cta {
   padding: 0.5rem 1.05rem;
   border-radius: 999px;
-  background: linear-gradient(120deg, var(--accent-strong), var(--accent));
+  background: var(--accent-gradient);
   color: var(--cta-foreground);
   font-weight: 600;
   display: inline-flex;
@@ -484,7 +517,7 @@ button:hover {
   margin: 0;
   font-size: clamp(1.9rem, 5vw, 2.6rem);
   text-align: center;
-  background-image: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  background-image: var(--accent-gradient-text);
   color: transparent;
   background-clip: text;
   -webkit-background-clip: text;
@@ -524,12 +557,7 @@ body.theme-void .intro {
 .intro p .callout {
   font-weight: 600;
   font-size: 1.15em;
-  background-image: linear-gradient(
-    90deg,
-    var(--accent) 0%,
-    var(--accent-strong) 50%,
-    var(--accent) 100%
-  );
+  background-image: var(--accent-gradient-callout);
   color: transparent;
   background-clip: text;
   -webkit-background-clip: text;
@@ -774,7 +802,7 @@ body.theme-void .intro p .callout {
   border-radius: 999px;
   padding: 0.75rem 1.4rem;
   font-weight: 600;
-  background: linear-gradient(120deg, var(--accent-strong), var(--accent));
+  background: var(--accent-gradient);
   color: #0f172a;
   cursor: pointer;
   transition: transform var(--transition-fast);
