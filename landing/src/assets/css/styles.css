@@ -495,11 +495,14 @@ button:hover {
 }
 
 body.theme-aurora .intro h1,
-body.theme-aurora .intro p span {
+body.theme-aurora .intro p span,
+body.theme-void .intro h1,
+body.theme-void .intro p span {
   font-family: 'Inter', serif;
 }
 
-body.theme-aurora .intro {
+body.theme-aurora .intro,
+body.theme-void .intro {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -537,7 +540,9 @@ body.theme-aurora .intro {
 }
 
 body.theme-aurora .intro h1,
-body.theme-aurora .intro p span {
+body.theme-aurora .intro p span,
+body.theme-void .intro h1,
+body.theme-void .intro p span {
   display: inline-block;
   overflow: hidden;
   max-width: 100%;
@@ -563,16 +568,37 @@ body.theme-aurora .intro p .callout {
   animation: introAuroraTyping 1.4s steps(20, end) 5.6s forwards;
 }
 
+body.theme-void .intro h1 {
+  margin-inline: auto;
+  animation: introAuroraTyping 1.4s steps(22, end) 0.3s forwards;
+}
+
+body.theme-void .intro p span:nth-of-type(1) {
+  animation: introAuroraTyping 1.6s steps(24, end) 2s forwards;
+}
+
+body.theme-void .intro p span:nth-of-type(2) {
+  animation: introAuroraTyping 1.6s steps(23, end) 3.9s forwards;
+}
+
+body.theme-void .intro p .callout {
+  animation: introAuroraTyping 1.4s steps(20, end) 5.6s forwards;
+}
+
 @media (max-width: 540px) {
   body.theme-aurora .intro h1,
-  body.theme-aurora .intro p span {
+  body.theme-aurora .intro p span,
+  body.theme-void .intro h1,
+  body.theme-void .intro p span {
     white-space: normal;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   body.theme-aurora .intro h1,
-  body.theme-aurora .intro p span {
+  body.theme-aurora .intro p span,
+  body.theme-void .intro h1,
+  body.theme-void .intro p span {
     clip-path: none !important;
     -webkit-clip-path: none !important;
     animation: none !important;
