@@ -187,6 +187,8 @@ body[data-nav="embudo"] .embudo-column-body{flex:1;min-height:0;overflow-y:auto;
 .embudo-modal-brand-text{display:flex;align-items:center;gap:8px;font-size:1.05rem;letter-spacing:.3px}
 .embudo-modal-brand-badge{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--primary),#b48cff);color:#fff;font-weight:700;font-size:.9rem}
 .embudo-modal-rich-body{display:flex;flex-direction:column;gap:16px}
+.embudo-modal-intro{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.embudo-modal-intro strong{color:var(--fg)}
 
 @media (max-width:768px){
   .embudo-column{min-width:220px}

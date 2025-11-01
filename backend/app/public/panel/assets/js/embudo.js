@@ -18,6 +18,8 @@ const state = {
     body: null,
     title: null,
     closeBtn: null,
+    currentName: '',
+    currentCompany: '',
   },
 };
 
@@ -401,15 +403,14 @@ function renderContactModal(contacto, { cardName, stageName }) {
     renderContactModalError('No se encontró el contacto solicitado.');
     return;
   }
-
+  state.modal.currentName = contacto.nombre || cardName || '';
+  state.modal.currentCompany = contacto.company_name || '';
   const details = [
-    ['Nombre', contacto.nombre || cardName],
     ['Correo', contacto.correo],
     ['Teléfono', contacto.telefono],
     ['Origen', contacto.origen],
     ['Estado', contacto.estado],
     ['Captura', contacto.captura_estado],
-    ['Empresa', contacto.company_name],
     ['Propietario', contacto.propietario_usuario_id],
     ['Creado', formatDateTime(contacto.creado_en)],
   ];
@@ -470,7 +471,11 @@ function renderExtraDetails(datos) {
 function renderNeedNotesBlock(necesidad, notas) {
   const needText = formatDetailValue(necesidad);
   const notesText = formatDetailValue(notas);
-  if (!needText && !notesText) return '';
+  const hasNeed = Boolean(needText);
+  const hasNotes = Boolean(notesText);
+  if (!hasNeed && !hasNotes) return '';
+  const nameText = formatDetailValue(state.modal.currentName) || 'Lead sin nombre';
+  const companyText = formatDetailValue(state.modal.currentCompany);
   return `
     <section class="embudo-modal-rich-block">
       <div class="embudo-modal-rich-brand">
@@ -478,15 +483,19 @@ function renderNeedNotesBlock(necesidad, notas) {
         <span class="embudo-modal-brand-text">Tal-<span class="embudo-modal-brand-badge">IA</span></span>
       </div>
       <div class="embudo-modal-rich-body">
+        <p class="embudo-modal-intro">
+          Se comunicó con nosotros: <strong>${escapeHtml(nameText)}</strong><br />
+          ${companyText ? `De la empresa: <strong>${escapeHtml(companyText)}</strong>` : ''}
+        </p>
         ${
-          needText
+          hasNeed
             ? `<div><h4 class="embudo-modal-section-title">Necesidad / propósito</h4><div class="embudo-modal-notes">${escapeHtml(
                 needText
               )}</div></div>`
             : ''
         }
         ${
-          notesText
+          hasNotes
             ? `<div><h4 class="embudo-modal-section-title">Notas</h4><div class="embudo-modal-notes">${escapeHtml(
                 notesText
               )}</div></div>`
@@ -521,6 +530,8 @@ function closeContactModal() {
   if (title) title.textContent = 'Detalles del contacto';
   const trigger = state.modalTrigger;
   state.modalTrigger = null;
+  state.modal.currentName = '';
+  state.modal.currentCompany = '';
   if (trigger && typeof trigger.focus === 'function') {
     trigger.focus();
   }
