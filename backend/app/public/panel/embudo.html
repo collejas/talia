@@ -75,6 +75,28 @@
     </section>
   </main>
 
+  <div
+    id="embudo-contact-modal"
+    class="embudo-modal embudo-hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="embudo-modal-title"
+    aria-hidden="true"
+  >
+    <div id="embudo-modal-panel" class="embudo-modal-panel" role="document" tabindex="-1">
+      <div class="embudo-modal-header">
+        <h3 id="embudo-modal-title">Detalles del contacto</h3>
+        <button
+          id="embudo-modal-close"
+          class="btn btn-ghost embudo-modal-close"
+          type="button"
+          aria-label="Cerrar ventana"
+        >&times;</button>
+      </div>
+      <div id="embudo-modal-body" class="embudo-modal-body"></div>
+    </div>
+  </div>
+
   <script type="module">
     import { setActiveNav, ensureSession } from './assets/js/common.js';
     import { setupEmbudo } from './assets/js/embudo.js';

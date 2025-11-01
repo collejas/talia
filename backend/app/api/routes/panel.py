@@ -1209,6 +1209,56 @@ async def listar_leads(
     }
 
 
+@router.get("/contactos/{contacto_id}")
+async def obtener_contacto_detalle(
+    contacto_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    try:
+        contacto_uuid = str(UUID(contacto_id))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="contacto_invalid_id")
+
+    params = {
+        "id": f"eq.{contacto_uuid}",
+        "select": (
+            "id,nombre_completo,correo,telefono_e164,origen,propietario_usuario_id,"
+            "estado,creado_en,contacto_datos,company_name,notes,necesidad_proposito,"
+            "captura_estado"
+        ),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/contactos", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando contacto")
+    rows = resp.json() or []
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(status_code=404, detail="contacto_not_found")
+
+    row = rows[0]
+    datos_raw = row.get("contacto_datos")
+    datos_extra = datos_raw if isinstance(datos_raw, dict) else None
+    contacto = {
+        "id": row.get("id"),
+        "nombre": row.get("nombre_completo"),
+        "correo": row.get("correo"),
+        "telefono": row.get("telefono_e164"),
+        "origen": row.get("origen"),
+        "estado": row.get("estado"),
+        "creado_en": row.get("creado_en"),
+        "company_name": row.get("company_name"),
+        "notes": row.get("notes"),
+        "necesidad_proposito": row.get("necesidad_proposito"),
+        "captura_estado": row.get("captura_estado"),
+        "propietario_usuario_id": row.get("propietario_usuario_id"),
+        "datos": datos_extra,
+    }
+    return {"ok": True, "contacto": contacto}
+
+
 @router.patch("/leads/{lead_id}")
 async def actualizar_lead(
     lead_id: UUID,
