@@ -9,7 +9,7 @@ const state = {
   busy: false,
   requestId: 0,
   stageInfo: [],
-  precalificadoIndex: null,
+  captadoIndex: null,
   modalRequestId: 0,
   modalTrigger: null,
   modal: {
@@ -207,15 +207,15 @@ function renderBoard(data) {
     nombre: stage?.nombre,
     index,
   }));
-  state.precalificadoIndex = findPrecalificadoIndex(state.stageInfo);
+  state.captadoIndex = findCaptadoIndex(state.stageInfo);
   const html = stages
-    .map((stage, index) => renderStage(stage, index, state.precalificadoIndex))
+    .map((stage, index) => renderStage(stage, index, state.captadoIndex))
     .join('');
   container.innerHTML = html;
   showState('ready');
 }
 
-function renderStage(stage, index, precalificadoIndex) {
+function renderStage(stage, index, captadoIndex) {
   if (stage.counter_only) {
     const total = stage.total || 0;
     return `
@@ -233,8 +233,8 @@ function renderStage(stage, index, precalificadoIndex) {
 
   const stageIndex = Number.isFinite(index) ? index : -1;
   const allowInteraction =
-    typeof precalificadoIndex === 'number' && precalificadoIndex !== null
-      ? stageIndex >= precalificadoIndex
+    typeof captadoIndex === 'number' && captadoIndex !== null
+      ? stageIndex >= captadoIndex
       : false;
   const cards = Array.isArray(stage.cards)
     ? stage.cards.map((card) => renderCard(card, stage, stageIndex, allowInteraction)).join('')
@@ -403,6 +403,7 @@ function renderContactModal(contacto, { cardName, stageName }) {
   }
 
   const details = [
+    ['Nombre', contacto.nombre || cardName],
     ['Correo', contacto.correo],
     ['Teléfono', contacto.telefono],
     ['Origen', contacto.origen],
@@ -556,20 +557,20 @@ function shouldHideExtraField(key) {
   );
 }
 
-function findPrecalificadoIndex(stageInfo) {
+function findCaptadoIndex(stageInfo) {
   if (!Array.isArray(stageInfo)) return null;
   for (const info of stageInfo) {
-    if (isPrecalificadoStage(info)) {
+    if (isCaptadoStage(info)) {
       return typeof info.index === 'number' ? info.index : null;
     }
   }
   return null;
 }
 
-function isPrecalificadoStage(info) {
+function isCaptadoStage(info) {
   const nameToken = normalizeToken(info?.nombre);
   const codeToken = normalizeToken(info?.codigo);
-  const targets = new Set(['precalificado', 'precalificacion']);
+  const targets = new Set(['captado', 'captacion']);
   return targets.has(nameToken) || targets.has(codeToken);
 }
 
