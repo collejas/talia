@@ -460,7 +460,8 @@ function renderDetailList(entries) {
 
 function renderExtraDetails(datos) {
   if (!datos || typeof datos !== 'object') return '';
-  const entries = Object.entries(datos).filter(([key]) => !shouldHideExtraField(key));
+  const normalized = normalizeExtraData(datos);
+  const entries = Object.entries(normalized).filter(([key]) => !shouldHideExtraField(key));
   if (!entries.length) return '';
   const rows = entries
     .map(([key, value]) => {
@@ -555,6 +556,67 @@ function shouldHideExtraField(key) {
     token === 'dispositivo' ||
     token === 'trazabilidad'
   );
+}
+
+function normalizeExtraData(datos) {
+  const source = typeof datos === 'object' && datos !== null ? datos : {};
+
+  const ubicacion = source.ubicacion && typeof source.ubicacion === 'object' ? source.ubicacion : {};
+  const dispositivo = source.dispositivo && typeof source.dispositivo === 'object' ? source.dispositivo : {};
+  const pantalla =
+    dispositivo.pantalla && typeof dispositivo.pantalla === 'object' ? dispositivo.pantalla : {};
+  const trazabilidad =
+    source.trazabilidad && typeof source.trazabilidad === 'object' ? source.trazabilidad : {};
+
+  const entries = [];
+
+  const pais = ubicacion.country || ubicacion.country_name || ubicacion.pais;
+  if (formatDetailValue(pais)) {
+    entries.push(['País', pais]);
+  }
+  const localidad = ubicacion.city || ubicacion.localidad || ubicacion.locality;
+  if (formatDetailValue(localidad)) {
+    entries.push(['Localidad', localidad]);
+  }
+  const ciudad =
+    ubicacion.nom_mun ||
+    ubicacion.city ||
+    ubicacion.municipio ||
+    ubicacion.town ||
+    ubicacion.ciudad;
+  if (formatDetailValue(ciudad)) {
+    entries.push(['Ciudad', ciudad]);
+  }
+
+  const deviceType = dispositivo.tipo || dispositivo.type || source.device_type;
+  if (formatDetailValue(deviceType)) {
+    entries.push(['Dispositivo', deviceType]);
+  }
+  const referrer = source.referrer || trazabilidad.referrer || trazabilidad.landing || fuenteReferrer(trazabilidad);
+  if (formatDetailValue(referrer)) {
+    entries.push(['Referral', referrer]);
+  }
+
+  const result = new Map();
+  for (const [label, value] of entries) {
+    const formatted = formatDetailValue(value);
+    if (!formatted) continue;
+    if (!result.has(label)) {
+      result.set(label, formatted);
+    }
+  }
+  return Object.fromEntries(result);
+}
+
+function fuenteReferrer(trazabilidad) {
+  if (!trazabilidad || typeof trazabilidad !== 'object') return undefined;
+  if (typeof trazabilidad.referrer === 'string' && trazabilidad.referrer.trim()) {
+    return trazabilidad.referrer;
+  }
+  if (typeof trazabilidad.landing === 'string' && trazabilidad.landing.trim()) {
+    return trazabilidad.landing;
+  }
+  return undefined;
 }
 
 function findCaptadoIndex(stageInfo) {
