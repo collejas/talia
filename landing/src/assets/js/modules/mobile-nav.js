@@ -2,7 +2,7 @@ const originalPositions = new Map();
 
 const defaultNavConfig = {
   mobileBreakpoint: '(max-width: 960px)',
-  ctaSelector: '.site-header .cta',
+  ctaSelector: null,
   themeSwitcherSelector: null,
 };
 
@@ -123,13 +123,15 @@ function outsideClickHandler(event) {
 function setupMobileMenu() {
   if (!mobileMenuList) return;
 
-  const cta = document.querySelector(navConfig.ctaSelector);
+  const cta = navConfig.ctaSelector ? document.querySelector(navConfig.ctaSelector) : null;
 
-  rememberPosition(cta);
+  if (cta) {
+    rememberPosition(cta);
+  }
 
-  let liCta = mobileMenuList.querySelector('[data-menu-item="cta"]');
+  let liCta = cta ? mobileMenuList.querySelector('[data-menu-item="cta"]') : null;
 
-  if (!liCta) {
+  if (cta && !liCta) {
     liCta = document.createElement('li');
     liCta.setAttribute('data-menu-item', 'cta');
     liCta.role = 'none';
@@ -137,22 +139,26 @@ function setupMobileMenu() {
 
   const isMobile = mediaQuery?.matches ?? false;
 
-  if (isMobile) {
-    if (cta && cta.parentElement !== liCta) {
-      liCta.innerHTML = '';
-      liCta.appendChild(cta);
+  if (cta && liCta) {
+    if (isMobile) {
+      if (cta && cta.parentElement !== liCta) {
+        liCta.innerHTML = '';
+        liCta.appendChild(cta);
+      }
+      if (liCta.parentElement !== mobileMenuList) {
+        mobileMenuList.insertBefore(liCta, mobileMenuList.firstChild);
+      }
+    } else {
+      if (cta && cta.parentElement === liCta) {
+        restorePosition(cta);
+        liCta.innerHTML = '';
+      }
+      if (liCta.parentElement === mobileMenuList && !liCta.firstChild) {
+        mobileMenuList.removeChild(liCta);
+      }
     }
-    if (liCta.parentElement !== mobileMenuList) {
-      mobileMenuList.insertBefore(liCta, mobileMenuList.firstChild);
-    }
-  } else {
-    if (cta && cta.parentElement === liCta) {
-      restorePosition(cta);
-      liCta.innerHTML = '';
-    }
-    if (liCta.parentElement === mobileMenuList && !liCta.firstChild) {
-      mobileMenuList.removeChild(liCta);
-    }
+  } else if (liCta && liCta.parentElement === mobileMenuList) {
+    mobileMenuList.removeChild(liCta);
   }
 }
 
@@ -177,9 +183,11 @@ function teardownMobileNav() {
 
   closeMobileMenu();
 
-  const cta =
-    document.querySelector('.mobile-menu .cta') || document.querySelector(navConfig.ctaSelector);
-  if (cta) restorePosition(cta);
+  if (navConfig.ctaSelector) {
+    const cta =
+      document.querySelector('.mobile-menu .cta') || document.querySelector(navConfig.ctaSelector);
+    if (cta) restorePosition(cta);
+  }
 }
 
 function handleViewportChange(event) {

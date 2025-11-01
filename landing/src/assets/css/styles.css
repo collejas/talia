@@ -1144,6 +1144,21 @@ body.theme-ice .intro p .callout {
     gap: 1rem;
   }
 
+  .site-header .brand {
+    display: none;
+  }
+
+  .site-header .cta {
+    position: static;
+    transform: none;
+    margin-left: auto;
+    margin-right: clamp(0.4rem, 2.5vw, 1rem);
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 0.90rem;
+    line-height: 1.1;
+  }
+
   .theme-button {
     min-width: 24px;
     height: 50px;
@@ -1243,10 +1258,12 @@ body.theme-ice .intro p .callout {
 @media (max-width: 480px) {
   .site-header .cta {
     font-size: 0.82rem;
-    padding: 0.15rem 0.5rem;
+    padding: 0.52rem 0.8rem;
     border-radius: 8px;
     line-height: 1.05;
     white-space: nowrap;
+    margin-left: auto;
+    margin-right: clamp(0.35rem, 4vw, 0.75rem);
   }
 
   .theme-button {
