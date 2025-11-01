@@ -427,9 +427,6 @@ button:hover {
 .theme-switcher.is-expanded .theme-button-group {
   padding: 0.35rem 0.25rem 0.35rem 0;
   border-radius: 36px 0 0 36px;
-  background: var(--surface-strong);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-floating);
   align-items: stretch;
 }
 
