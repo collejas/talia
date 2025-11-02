@@ -51,7 +51,28 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { AlertCircle, InfoIcon, Clock, Globe, Mail, Phone, MonitorSmartphone } from 'lucide-react'
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from '@/components/ui/command'
+import {
+  AlertCircle,
+  InfoIcon,
+  Clock,
+  Globe,
+  Mail,
+  Phone,
+  MonitorSmartphone,
+  Command as CommandIcon,
+  Sparkles,
+  RefreshCw,
+  Filter,
+} from 'lucide-react'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { fetchVisitas } from '@/services/visitas'
 import type { VisitaRow } from '@/types/visitas'
@@ -59,6 +80,23 @@ import type { VisitaRow } from '@/types/visitas'
 const LIMIT = 50
 const COLUMN_COUNT = 15
 const COLUMN_MIN_WIDTH = 120
+const SKELETON_WIDTHS = [
+  'w-32',
+  'w-28',
+  'w-16',
+  'w-36',
+  'w-40',
+  'w-20',
+  'w-20',
+  'w-28',
+  'w-48',
+  'w-28',
+  'w-24',
+  'w-28',
+  'w-36',
+  'w-40',
+  'w-40',
+] as const
 
 const RANGE_OPTIONS = [
   { value: 'all', label: 'Todos' },
@@ -66,13 +104,13 @@ const RANGE_OPTIONS = [
   { value: 'ayer', label: 'Ayer' },
   { value: '7d', label: 'Últimos 7 días' },
   { value: '30d', label: 'Últimos 30 días' },
-]
+] as const
 
 const CHAT_OPTIONS = [
   { value: 'all', label: 'Todos' },
   { value: 'with', label: 'Con chat' },
   { value: 'without', label: 'Sin chat' },
-]
+] as const
 
 type RangeOption = 'all' | 'hoy' | 'ayer' | '7d' | '30d'
 
@@ -81,6 +119,11 @@ type Filters = {
   conChat: 'all' | 'with' | 'without'
   estado: string
   search: string
+}
+
+type ChatTotals = {
+  conChat: number
+  sinChat: number
 }
 
 const DEFAULT_FILTERS: Filters = {
@@ -230,11 +273,26 @@ export function VisitasPage() {
   const [total, setTotal] = useState(0)
   const [isFetching, setIsFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chatTotals, setChatTotals] = useState<ChatTotals>({ conChat: 0, sinChat: 0 })
+  const [commandOpen, setCommandOpen] = useState(false)
   const [columnWidths, setColumnWidths] = useState<(number | undefined)[]>(
     Array(COLUMN_COUNT).fill(undefined),
   )
   const columnWidthsRef = useRef(columnWidths)
   const [selectedVisit, setSelectedVisit] = useState<VisitaRow | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const setRangeFilter = useCallback((value: RangeOption) => {
+    setFilters((current) => {
+      if (current.rango === value) return current
+      return { ...current, rango: value }
+    })
+  }, [])
+  const setChatFilter = useCallback((value: Filters['conChat']) => {
+    setFilters((current) => {
+      if (current.conChat === value) return current
+      return { ...current, conChat: value }
+    })
+  }, [])
 
   const handleOpenDetails = useCallback((visit: VisitaRow) => {
     setSelectedVisit(visit)
@@ -285,12 +343,14 @@ export function VisitasPage() {
         if (!cancelled) {
           setItems(data.items)
           setTotal(data.total)
+          setChatTotals(data.totals)
         }
       } catch (err) {
         console.error('[visitas] fetch error', err)
         if (!cancelled) {
           setItems([])
           setTotal(0)
+          setChatTotals({ conChat: 0, sinChat: 0 })
           setError(
             err instanceof Error && err.message
               ? err.message
@@ -400,6 +460,27 @@ export function VisitasPage() {
       }),
     [items],
   )
+  const quickRanges = useMemo(() => RANGE_OPTIONS, [])
+  const showTotalsSkeleton = loadingState && !hasData
+  const dimTotals = isFetching && hasData
+  const chatFilterLabel = useMemo(() => {
+    const option = CHAT_OPTIONS.find((item) => item.value === filters.conChat)
+    return option?.label ?? 'Todos'
+  }, [filters.conChat])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault()
+        setCommandOpen((open) => !open)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 
   useEffect(() => {
     document.body.classList.add('theme-aurora')
@@ -490,6 +571,7 @@ export function VisitasPage() {
                   }
                   placeholder="Sesión, contacto, referrer..."
                   className="border-border bg-surface-alt text-foreground"
+                  ref={searchInputRef}
                 />
               </div>
 
@@ -549,6 +631,90 @@ export function VisitasPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
+              <div
+                className={`flex flex-wrap items-center gap-3 text-sm text-muted-foreground ${
+                  dimTotals ? 'opacity-60 transition-opacity duration-200' : ''
+                }`}
+              >
+                {showTotalsSkeleton ? (
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-32 rounded-sm" />
+                    <Skeleton className="h-5 w-24 rounded-sm" />
+                    <Skeleton className="h-5 w-24 rounded-sm" />
+                  </div>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-2">
+                      <Filter className="h-4 w-4" />
+                      {total > 0
+                        ? `${numberFormatter.format(pagerStart)}-${numberFormatter.format(pagerEnd)} de ${resultsLabel}`
+                        : '0 resultados'}
+                    </span>
+                    <Badge variant="outline" className="bg-surface text-foreground">
+                      Con chat: {numberFormatter.format(chatTotals.conChat)}
+                    </Badge>
+                    <Badge variant="outline" className="bg-surface text-foreground">
+                      Sin chat: {numberFormatter.format(chatTotals.sinChat)}
+                    </Badge>
+                    <Badge variant="secondary" className="bg-surface text-foreground">
+                      Filtro chat: {chatFilterLabel}
+                    </Badge>
+                  </>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1">
+                  {quickRanges.map((option) => (
+                    <Button
+                      key={`quick-range-${option.value}`}
+                      type="button"
+                      size="sm"
+                      variant={filters.rango === option.value ? 'secondary' : 'ghost'}
+                      onClick={() => setRangeFilter(option.value)}
+                      disabled={loadingState && filters.rango === option.value}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="hidden h-6 w-px bg-border sm:block" />
+                <div className="flex flex-wrap items-center gap-1">
+                  {CHAT_OPTIONS.map((option) => (
+                    <Button
+                      key={`quick-chat-${option.value}`}
+                      type="button"
+                      size="sm"
+                      variant={filters.conChat === option.value ? 'secondary' : 'ghost'}
+                      onClick={() => setChatFilter(option.value)}
+                      disabled={loadingState && filters.conChat === option.value}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCommandOpen(true)}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>Comandos</span>
+                  <span className="hidden text-xs text-muted-foreground sm:inline">⌘K / Ctrl+K</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleRefresh}
+                  disabled={isFetching}
+                >
+                  <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Actualizar</span>
+                </Button>
+              </div>
+            </div>
             <TooltipProvider delayDuration={150} skipDelayDuration={100}>
               <div className="overflow-x-auto">
                 <Table>
@@ -590,7 +756,7 @@ export function VisitasPage() {
                   </TableHeader>
                   <TableBody>
                   {loadingState && !hasData
-                    ? Array.from({ length: 3 }).map((_, skeletonIndex) => (
+                    ? Array.from({ length: 5 }).map((_, skeletonIndex) => (
                         <TableRow key={`skeleton-${skeletonIndex}`} className="border-b border-border">
                           {headers.map((_, cellIndex) => (
                             <TableCell
@@ -598,7 +764,14 @@ export function VisitasPage() {
                               style={columnStyle(cellIndex)}
                               className="px-4 py-3"
                             >
-                              <Skeleton className="h-4 w-full rounded-sm" />
+                              <div className="flex flex-col gap-2">
+                                <Skeleton
+                                  className={`h-4 rounded-sm ${SKELETON_WIDTHS[cellIndex] ?? 'w-full'}`}
+                                />
+                                {cellIndex === 4 || cellIndex === 8 ? (
+                                  <Skeleton className="h-3 w-3/4 rounded-sm" />
+                                ) : null}
+                              </div>
                             </TableCell>
                           ))}
                         </TableRow>
@@ -958,6 +1131,78 @@ export function VisitasPage() {
             ) : null}
           </DialogContent>
         </Dialog>
+        <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
+          <CommandInput placeholder="Buscar acción o filtro..." />
+          <CommandList>
+            <CommandEmpty>Sin comandos disponibles.</CommandEmpty>
+            <CommandGroup heading="Período">
+              {RANGE_OPTIONS.map((option) => (
+                <CommandItem
+                  key={`cmd-range-${option.value}`}
+                  onSelect={() => {
+                    setRangeFilter(option.value)
+                    setCommandOpen(false)
+                  }}
+                >
+                  {option.label}
+                  {filters.rango === option.value ? (
+                    <Badge variant="outline" className="ml-auto">
+                      Activo
+                    </Badge>
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Chat">
+              {CHAT_OPTIONS.map((option) => (
+                <CommandItem
+                  key={`cmd-chat-${option.value}`}
+                  onSelect={() => {
+                    setChatFilter(option.value)
+                    setCommandOpen(false)
+                  }}
+                >
+                  {option.label}
+                  {filters.conChat === option.value ? (
+                    <Badge variant="outline" className="ml-auto">
+                      Activo
+                    </Badge>
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading="Acciones">
+              <CommandItem
+                onSelect={() => {
+                  handleRefresh()
+                  setCommandOpen(false)
+                }}
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Actualizar datos</span>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  handleReset()
+                  setCommandOpen(false)
+                }}
+              >
+                <Filter className="h-4 w-4" />
+                <span>Limpiar filtros</span>
+              </CommandItem>
+              <CommandItem
+                onSelect={() => {
+                  setCommandOpen(false)
+                  searchInputRef.current?.focus()
+                }}
+              >
+                <CommandIcon className="h-4 w-4" />
+                <span>Enfocar búsqueda</span>
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </CommandDialog>
       </div>
     </div>
   )

@@ -149,3 +149,9 @@
   cualquier ruta no encontrada devuelva `index.html`, evitando errores 404 en el router.
 - Se ajustó Nginx para servir la SPA bajo `/panel-react/` y mantener el panel legacy en `/panel/`; tras `npm run build`, basta reiniciar
   `talia-api.service` para publicar los cambios.
+- Se integró un toolbar sobre la tabla de visitas con acciones rápidas: botones de rango/estado de chat, contadores dinámicos y acceso a
+  refresco inmediato sin abandonar la vista de filtros.
+- Se añadió una paleta de comandos (⌘K / Ctrl+K) basada en shadcn + cmdk (`components/ui/command.tsx`) con accesos a filtros, refresh,
+  limpiar y enfoque de búsqueda; queda lista para extenderse a otras pantallas.
+- Los skeletons del listado ahora cubren cinco filas con placeholders multi-línea, lo que evita saltos bruscos durante la carga inicial y
+  mantiene el layout estable mientras llegan los datos.
