@@ -468,15 +468,55 @@ export function LeadsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-6 px-6 py-10">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-6 py-8">
         <Card className="border-border bg-surface shadow-panel-soft">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-xl font-semibold">Filtros de leads</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Busca leads por etapa, canal o vendedor asignado. Puedes aplicar cambios o limpiar la búsqueda rápidamente.
-            </p>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <Filter className="h-4 w-4" />
+                <Badge variant="outline" className="bg-surface text-foreground">
+                  Vista: {viewMode === 'table' ? 'Tabla' : 'Accordion'}
+                </Badge>
+                {filters.canal ? (
+                  <Badge variant="outline" className="bg-surface text-foreground">
+                    Canal: {filters.canal}
+                  </Badge>
+                ) : null}
+                {filters.etapa ? (
+                  <Badge variant="outline" className="bg-surface text-foreground">
+                    Etapa: {filters.etapa}
+                  </Badge>
+                ) : null}
+                {filters.vendedor ? (
+                  <Badge variant="outline" className="bg-surface text-foreground">
+                    Vendedor: {filters.vendedor}
+                  </Badge>
+                ) : null}
+                {!filters.canal && !filters.etapa && !filters.vendedor ? (
+                  <span>Sin filtros activos</span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                  onClick={() => setViewMode('table')}
+                >
+                  <TableIcon className="mr-2 h-4 w-4" />
+                  Tabla
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'accordion' ? 'secondary' : 'ghost'}
+                  onClick={() => setViewMode('accordion')}
+                >
+                  <LayoutList className="mr-2 h-4 w-4" />
+                  Accordion
+                </Button>
+              </div>
+            </div>
             <form className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" onSubmit={handleSubmitFilters}>
               <div className="flex flex-col gap-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">
                 <span>Buscar</span>
@@ -624,49 +664,6 @@ export function LeadsPage() {
             <p className="text-sm text-muted-foreground">{summaryText}</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <Filter className="h-4 w-4" />
-                <span>Vista:</span>
-                <Badge variant="outline" className="bg-surface text-foreground">
-                  {viewMode === 'table' ? 'Tabla' : 'Resumen detallado'}
-                </Badge>
-                <Badge variant="outline" className="bg-surface text-foreground">
-                  Filtrado por {filters.canal ? `canal "${filters.canal}"` : 'todos los canales'}
-                </Badge>
-                {filters.etapa ? (
-                  <Badge variant="outline" className="bg-surface text-foreground">
-                    Etapa {filters.etapa}
-                  </Badge>
-                ) : null}
-                {filters.vendedor ? (
-                  <Badge variant="outline" className="bg-surface text-foreground">
-                    Vendedor {filters.vendedor}
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-                  onClick={() => setViewMode('table')}
-                >
-                  <TableIcon className="mr-2 h-4 w-4" />
-                  Tabla
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={viewMode === 'accordion' ? 'secondary' : 'ghost'}
-                  onClick={() => setViewMode('accordion')}
-                >
-                  <LayoutList className="mr-2 h-4 w-4" />
-                  Accordion
-                </Button>
-              </div>
-            </div>
-
             {showSkeleton ? (
               <div className="space-y-3">
                 {Array.from({ length: 4 }).map((_, index) => (
