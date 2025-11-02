@@ -73,6 +73,7 @@ import {
   RefreshCw,
   Filter,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { fetchVisitas } from '@/services/visitas'
 import type { VisitaRow } from '@/types/visitas'
@@ -597,45 +598,12 @@ export function VisitasPage() {
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-
-        {error ? (
-          <Alert
-            variant="destructive"
-            className="border border-destructive/40 bg-destructive/10 text-destructive shadow-panel-soft"
-          >
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error al cargar visitas</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {showEmptyState ? (
-          <Alert className="border border-border bg-surface shadow-panel-soft">
-            <InfoIcon className="h-4 w-4" />
-            <AlertTitle>Sin resultados</AlertTitle>
-            <AlertDescription>
-              No se encontraron visitas con los filtros seleccionados. Ajusta el período, el estado o la búsqueda para ver otros datos.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        <Card className="border-border bg-surface shadow-panel">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-xl font-semibold">Listado de visitas</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {loadingState
-                ? 'Cargando visitas...'
-                : `Mostrando ${numberFormatter.format(items.length)} de ${resultsLabel} visitas`}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
               <div
-                className={`flex flex-wrap items-center gap-3 text-sm text-muted-foreground ${
-                  dimTotals ? 'opacity-60 transition-opacity duration-200' : ''
-                }`}
+                className={cn(
+                  'flex flex-wrap items-center gap-2 text-sm text-muted-foreground',
+                  dimTotals ? 'opacity-60 transition-opacity duration-200' : '',
+                )}
               >
                 {showTotalsSkeleton ? (
                   <div className="flex items-center gap-2">
@@ -645,8 +613,8 @@ export function VisitasPage() {
                   </div>
                 ) : (
                   <>
-                    <span className="flex items-center gap-2">
-                      <Filter className="h-4 w-4" />
+                    <Filter className="h-4 w-4" />
+                    <span>
                       {total > 0
                         ? `${numberFormatter.format(pagerStart)}-${numberFormatter.format(pagerEnd)} de ${resultsLabel}`
                         : '0 resultados'}
@@ -715,6 +683,35 @@ export function VisitasPage() {
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {error ? (
+          <Alert
+            variant="destructive"
+            className="border border-destructive/40 bg-destructive/10 text-destructive shadow-panel-soft"
+          >
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error al cargar visitas</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {showEmptyState ? (
+          <Alert className="border border-border bg-surface shadow-panel-soft">
+            <InfoIcon className="h-4 w-4" />
+            <AlertTitle>Sin resultados</AlertTitle>
+            <AlertDescription>
+              No se encontraron visitas con los filtros seleccionados. Ajusta el período, el estado o la búsqueda para ver otros datos.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <Card className="border-border bg-surface shadow-panel">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl font-semibold">Listado de visitas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <TooltipProvider delayDuration={150} skipDelayDuration={100}>
               <div className="overflow-x-auto">
                 <Table>
