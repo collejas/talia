@@ -77,6 +77,9 @@ sudo systemctl enable talia-api.service
 sudo systemctl restart talia-api.service
 sudo systemctl status talia-api.service
 
+
+npm run build
+
 poetry run pytest
 
 fondo #eff1f5
@@ -118,3 +121,44 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
 # ME GUSTO ESTO:
 
 ¡Hola! Soy Tal-IA, tu especialista en agentes virtuales inteligentes con GenAI. Desarrollo soluciones que automatizan interacciones, procesan datos y aprenden de tus operaciones para potenciar tu productividad y toma de decisiones. También ofrezco servicios complementarios como: Automatización de procesos (RPA) Integración de sistemas y datos OT/IT Soluciones de análisis avanzado Trabajo contigo para entender tus flujos críticos y diseñar soluciones a medida que generen valor tangible desde el primer día. ¿Listo para llevar tu operación al siguiente nivel con agentes virtuales inteligentes? Habla conmigo, con Tal-IA. 
+
+
+
+
+
+VITE_ENVIRONMENT=development
+VITE_LOG_LEVEL=info
+VITE_REQUEST_LOG_LEVEL=info
+
+VITE_OPENAI_API_KEY=sk-proj-XXXXX
+VITE_OPENAI_ASSISTANT_ID=pmpt_69001211f6688194b2e27f3cf50e959f08c8cd898208331e
+VITE_OPENAI_PROMPT_VERSION=24
+VITE_OPENAI_PROJECT_ID=sk-proj-XXX
+VITE_TWILIO_ACCOUNT_SID=AC...
+VITE_TWILIO_AUTH_TOKEN=...
+VITE_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+VITE_SUPABASE_DATABASE_URL=postgresql://postgres:XXXXXX@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+VITE_SUPABASE_SERVICE_ROLE=XXXXXX
+SUPABASE_ANON_KEY=XXXXXXXXX
+VITE_SUPABASE_LEGACY_JWT_SECRET=XXXXX
+VITE_SUPABASE_ACCES_TOKEN=XXXXXXXXX
+DATABASE_URL=postgresql://postgres:XXXXXXX@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+SUPABASE_DB_PASSWORD=XXXXXX
+VITE_WEBCHAT_INACTIVITY_HOURS=2
+VITE_WEBCHAT_PERSIST_SESSION=false
+
+# CORREO #
+VITE_MAIL_USERNAME=hola@talia.mx
+VITE_MAIL_CONTRASENA=XXXXXX
+VITE_MAIL_INCOMING_SERVER=mail.talia.mx
+VITE_MAIL_INCOMING_PORT_IMAP=993
+VITE_MAIL_OUTGOING_SERVER=mail.talia.mx 
+VITE_MAIL_OUTGOING_PORT_SMTP=465
+
+# CALENDARIO #
+VITE_CALENDARIO_USERNAME=hola@talia.mx
+VITE_CALENDARIO_SERVER_URL=https://mail.talia.mx:2080
+VITE_CALENDARIO_SERVER_PORT=2080
+VITE_CALENDARIO_SERVER_URL_ALTERNATE=https://mail.talia.mx:2080/principals/hola@talia.mx
+VITE_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar
+VITE_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/hola@talia.mx/addressbook

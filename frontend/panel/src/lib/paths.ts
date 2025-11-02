@@ -20,11 +20,10 @@ export function getSpaBasePath(): string {
 }
 
 export function buildLoginUrl(): string {
-  if (typeof window === 'undefined') return `${getLegacyPanelBasePath()}/auth/login.html`
-  const base = getLegacyPanelBasePath()
-  const target = `${base}/auth/login.html`
+  const spaBase = getSpaBasePath()
+  if (typeof window === 'undefined') return `${spaBase}/auth/login`
   const redirect = encodeURIComponent(
-    `${window.location.pathname}${window.location.search}`,
+    `${window.location.pathname}${window.location.search}${window.location.hash}`,
   )
-  return `${target}?redirect=${redirect}`
+  return `${spaBase}/auth/login?redirect=${redirect}`
 }

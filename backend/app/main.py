@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
 from app.api.routes.health import router as health_router
@@ -15,6 +16,18 @@ from app.channels.whatsapp.router import router as whatsapp_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
+
+
+class SPAStaticFiles(StaticFiles):
+    """StaticFiles que hace fallback a index.html para rutas de SPA."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
 
 
 def create_app() -> FastAPI:
@@ -80,7 +93,7 @@ def create_app() -> FastAPI:
             log.warning("panel.static_missing", extra={"expected_path": str(packaged)})
 
         if modern_panel.exists():
-            modern_static = StaticFiles(directory=str(modern_panel), html=True)
+            modern_static = SPAStaticFiles(directory=str(modern_panel), html=True)
             app.mount("/panel-react", modern_static, name="panel_react")
             app.mount("/api/panel-react", modern_static, name="panel_react_alt")
             log.info("panel_react.static_mounted", extra={"path": str(modern_panel)})

@@ -30,9 +30,7 @@ server {
         proxy_redirect off;
     }
 
-    # FastAPI (puerto 8004) - Panel estático/SPA bajo /panel
-    # Importante: usar ^~ para que este bloque tenga precedencia sobre los regex de estáticos.
-    # Nota: La app tiene root_path "/api"; reescribimos /panel/* -> /api/panel/* para que siempre exista.
+    # FastAPI (puerto 8004) - Panel estático/SPA legacy bajo /panel
     location ^~ /panel/ {
         rewrite ^/panel/(.*)$ /api/panel/$1 break;
         proxy_pass http://127.0.0.1:8004;  # upstream en 8004
@@ -40,7 +38,18 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Prefix /api;  # la app está en root_path /api
+        proxy_redirect off;
+    }
+
+    # FastAPI (puerto 8004) - Nuevo panel React bajo /panel-react
+    location ^~ /panel-react/ {
+        rewrite ^/panel-react/(.*)$ /api/panel-react/$1 break;
+        proxy_pass http://127.0.0.1:8004;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /panel-react;
         proxy_redirect off;
     }
 

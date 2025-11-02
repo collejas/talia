@@ -65,3 +65,69 @@
 
   Si quieres avanzar, lo lógico es arrancar con una ruta piloto (p.ej. visitas) para validar stack y luego portarlo todo. Puedo ayudarte a
   montar la base Vite + shadcn y migrar la primera pantalla cuando lo indiques.
+
+
+
+# Paso 2
+
+• Para llevar el panel completo a la SPA React hay que “desarmar” lo que hace el panel legacy página por página y rehacerlo con los
+  componentes nuevos. Propongo dividirlo en fases:
+
+  1. Inventario y arquitectura
+
+  - Revisar backend/app/public/panel: páginas (panel.html, embudo.html, leads.html, agenda.html, inbox.html, configuracion.html, las de
+    auth) y los scripts en assets/js/*.js. Cada archivo JS describe los datos que pide al backend y cómo los presenta.
+  - Identificar utilidades globales del legacy (common.js, theme.js, supabase auth) para saber qué hay que portar o reemplazar.
+
+  2. Base común en React
+
+  - Crear un layout principal: header con menú, theme switcher, user/email y botón de logout (lo tenemos en common.js). Conviene sacar un
+    componente <PanelLayout> que use useSupabaseSession y controle el tema.
+  - Configurar un enrutador (React Router o TanStack Router) con rutas /panel-react/visitas, /panel-react/dashboard, etc. para que cada
+    página sea un componente, y un guardia que redirija a login si no hay sesión.
+  - Portar el selector de tema y variables CSS (theme.js, base.css) a un proveedor React que aplique theme-aurora, theme-ice, theme-void.
+
+  3. Capa de datos
+
+  - Centralizar los fetch: un módulo (services/*) por cada endpoint (dashboard, embudo, leads, agenda, inbox, configuracion…). El patrón
+    ya está en visitas (fetchVisitas).
+  - Reusar env.js o import.meta.env para Supabase y base urls, igual que hicimos con lib/env.ts.
+
+  4. Migrar cada módulo
+  Para cada página legacy:
+
+  1. Revisar el JS viejo para ver filtros y render.
+  2. Crear el componente React:
+      - Formularios/filtros con componentes shadcn (Select, Input, DateRange si aplica).
+      - Tabla/lista con <Table>, <Card>, etc.
+      - Manetener KPIs, totales, placeholders (usando Skeleton para cargando).
+  3. Validar en dev que la UI se vea igual y que consume el mismo endpoint.
+     Prioridad sugerida:
+     a. panel.html (KPIs)
+     b. embudo.html
+     c. leads.html + mapas si los hay (habrá que ver Leaflet)
+     d. agenda.html
+     e. inbox.html
+     f. configuracion.html
+     g. Páginas de auth (puedes mantener las legacy por ahora o hacer una pantalla React de login usando supabase auth UI).
+
+  5. Ajustes visuales
+
+  - Replicar estilos específicos (cards, badges, tooltips) con Tailwind + CSS variables.
+  - Si la SPA debe compartir las mismas fuentes y colores, seguir usando los tokens que ya mapeamos.
+
+  6. Testing y despliegue
+
+  - Añadir scripts de verificación (npm run lint, npm run build ya están).
+  - Cuando todas las páginas estén migradas:
+      - Cambiar vite.config.ts para que el build vaya a backend/app/public/panel.
+      - Ajustar FastAPI para montar la SPA en /panel (o redirigir /panel a /panel-react).
+      - Actualizar Nginx si hay reglas específicas.
+
+  7. Documentación y soporte
+
+  - Actualizar README de backend y docs de despliegue.
+  - Si hay scripts o cron que apunten a páginas concretas, cambiarlos.
+
+  Si te parece, puedo empezar con el layout + dashboard como siguiente paso, y repetimos el proceso página por página hasta tener todo
+  cubierto. Sólo confirma por dónde quieres seguir y lo vamos implementando.
