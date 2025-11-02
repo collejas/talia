@@ -121,6 +121,75 @@ const CHAT_OPTIONS = [
   { value: 'without', label: 'Sin chat' },
 ] as const
 
+const MEXICO_STATE_LABELS: Record<string, string> = {
+  '01': 'Aguascalientes',
+  '02': 'Baja California',
+  '03': 'Baja California Sur',
+  '04': 'Campeche',
+  '05': 'Coahuila de Zaragoza',
+  '06': 'Colima',
+  '07': 'Chiapas',
+  '08': 'Chihuahua',
+  '09': 'Ciudad de México',
+  '10': 'Durango',
+  '11': 'Guanajuato',
+  '12': 'Guerrero',
+  '13': 'Hidalgo',
+  '14': 'Jalisco',
+  '15': 'Estado de México',
+  '16': 'Michoacán de Ocampo',
+  '17': 'Morelos',
+  '18': 'Nayarit',
+  '19': 'Nuevo León',
+  '20': 'Oaxaca',
+  '21': 'Puebla',
+  '22': 'Querétaro',
+  '23': 'Quintana Roo',
+  '24': 'San Luis Potosí',
+  '25': 'Sinaloa',
+  '26': 'Sonora',
+  '27': 'Tabasco',
+  '28': 'Tamaulipas',
+  '29': 'Tlaxcala',
+  '30': 'Veracruz de Ignacio de la Llave',
+  '31': 'Yucatán',
+  '32': 'Zacatecas',
+  AGU: 'Aguascalientes',
+  BCN: 'Baja California',
+  BCS: 'Baja California Sur',
+  CAM: 'Campeche',
+  COA: 'Coahuila de Zaragoza',
+  COL: 'Colima',
+  CHP: 'Chiapas',
+  CHH: 'Chihuahua',
+  CMX: 'Ciudad de México',
+  CDMX: 'Ciudad de México',
+  DF: 'Ciudad de México',
+  DUR: 'Durango',
+  GUA: 'Guanajuato',
+  GRO: 'Guerrero',
+  HID: 'Hidalgo',
+  JAL: 'Jalisco',
+  MEX: 'Estado de México',
+  MIC: 'Michoacán de Ocampo',
+  MOR: 'Morelos',
+  NAY: 'Nayarit',
+  NLE: 'Nuevo León',
+  OAX: 'Oaxaca',
+  PUE: 'Puebla',
+  QUE: 'Querétaro',
+  ROO: 'Quintana Roo',
+  SLP: 'San Luis Potosí',
+  SIN: 'Sinaloa',
+  SON: 'Sonora',
+  TAB: 'Tabasco',
+  TAM: 'Tamaulipas',
+  TLA: 'Tlaxcala',
+  VER: 'Veracruz de Ignacio de la Llave',
+  YUC: 'Yucatán',
+  ZAC: 'Zacatecas',
+}
+
 type RangeOption = 'all' | 'hoy' | 'ayer' | '7d' | '30d'
 
 type Filters = {
@@ -635,20 +704,50 @@ export function VisitasPage() {
     () => cityOptions.find((option) => option.value === filters.city),
     [cityOptions, filters.city],
   )
+  const countryDisplayNames = useMemo(() => {
+    if (typeof Intl.DisplayNames !== 'function') return null
+    try {
+      return new Intl.DisplayNames(['es-MX', 'es', 'en'], { type: 'region' })
+    } catch {
+      return null
+    }
+  }, [])
+  const countryBadgeLabel = useMemo(() => {
+    if (!filters.country) return ''
+    if (selectedCountryOption?.label) return selectedCountryOption.label
+    const normalized = filters.country.trim().toUpperCase()
+    if (countryDisplayNames) {
+      const resolved = countryDisplayNames.of(normalized)
+      if (resolved && resolved.toUpperCase() !== normalized) {
+        return resolved
+      }
+    }
+    return normalized
+  }, [filters.country, selectedCountryOption, countryDisplayNames])
+  const stateBadgeLabel = useMemo(() => {
+    if (!filters.estado) return ''
+    if (selectedStateOption?.label) return selectedStateOption.label
+    const normalized = filters.estado.trim().toUpperCase()
+    return MEXICO_STATE_LABELS[normalized as keyof typeof MEXICO_STATE_LABELS] ?? normalized
+  }, [filters.estado, selectedStateOption])
+  const cityBadgeLabel = useMemo(() => {
+    if (!filters.city) return ''
+    return selectedCityOption?.label ?? filters.city
+  }, [filters.city, selectedCityOption])
   const GEO_ANY_VALUE = '__all'
   const contentRef = useRef<HTMLDivElement | null>(null)
   const geoSummary = useMemo(() => {
-    if (filters.city) {
-      return selectedCityOption?.label ?? filters.city
+    if (cityBadgeLabel) {
+      return cityBadgeLabel
     }
-    if (filters.estado) {
-      return selectedStateOption?.label ?? filters.estado
+    if (stateBadgeLabel) {
+      return stateBadgeLabel
     }
-    if (filters.country) {
-      return selectedCountryOption?.label ?? filters.country
+    if (countryBadgeLabel) {
+      return countryBadgeLabel
     }
     return 'Ubicación geográfica'
-  }, [filters.city, filters.estado, filters.country, selectedCityOption, selectedStateOption, selectedCountryOption])
+  }, [cityBadgeLabel, stateBadgeLabel, countryBadgeLabel])
   const geoActive = Boolean(filters.country || filters.estado || filters.city)
   const geoTriggerClass = cn(
     'h-8 w-[200px] justify-start gap-2 border-border bg-surface text-sm font-medium',
@@ -774,17 +873,17 @@ export function VisitasPage() {
                     </Badge>
                     {filters.country ? (
                       <Badge variant="outline" className="bg-surface text-foreground">
-                        País: {selectedCountryOption?.label ?? filters.country}
+                        País: {countryBadgeLabel}
                       </Badge>
                     ) : null}
                     {filters.estado ? (
                       <Badge variant="outline" className="bg-surface text-foreground">
-                        Región: {selectedStateOption?.label ?? filters.estado}
+                        Región: {stateBadgeLabel}
                       </Badge>
                     ) : null}
                     {filters.city ? (
                       <Badge variant="outline" className="bg-surface text-foreground">
-                        Ciudad: {selectedCityOption?.label ?? filters.city}
+                        Ciudad: {cityBadgeLabel}
                       </Badge>
                     ) : null}
                   </>
