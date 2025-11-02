@@ -706,6 +706,8 @@ const DEFAULT_COLUMN_ORDER = COLUMN_DEFINITIONS.map((column) => column.id)
 
 const COLUMN_COUNT = COLUMN_DEFINITIONS.length
 
+const COLUMN_STORAGE_KEY = 'visitas.column_prefs.v1'
+
 function createDefaultColumnVisibility(): Record<ColumnId, boolean> {
   const visibility = {} as Record<ColumnId, boolean>
   DEFAULT_COLUMN_ORDER.forEach((id) => {
@@ -719,6 +721,66 @@ function arrayMove<T>(array: readonly T[], from: number, to: number): T[] {
   const [item] = result.splice(from, 1)
   result.splice(to, 0, item)
   return result
+}
+
+function sanitizeOrder(candidate: unknown): ColumnId[] {
+  if (!Array.isArray(candidate)) return [...DEFAULT_COLUMN_ORDER]
+  const seen = new Set<ColumnId>()
+  const result: ColumnId[] = []
+  candidate.forEach((value) => {
+    if (typeof value !== 'string') return
+    if ((COLUMN_DEFINITION_MAP as Record<string, ColumnDefinition>)[value] && !seen.has(value as ColumnId)) {
+      seen.add(value as ColumnId)
+      result.push(value as ColumnId)
+    }
+  })
+  DEFAULT_COLUMN_ORDER.forEach((id) => {
+    if (!seen.has(id)) {
+      seen.add(id)
+      result.push(id)
+    }
+  })
+  return result
+}
+
+function sanitizeVisibility(candidate: unknown): Record<ColumnId, boolean> {
+  const visibility = createDefaultColumnVisibility()
+  if (!candidate || typeof candidate !== 'object') return visibility
+  Object.entries(candidate as Record<string, unknown>).forEach(([key, value]) => {
+    if ((COLUMN_DEFINITION_MAP as Record<string, ColumnDefinition>)[key]) {
+      visibility[key as ColumnId] = Boolean(value)
+    }
+  })
+  return visibility
+}
+
+function loadColumnPreferences(): { order: ColumnId[]; visibility: Record<ColumnId, boolean> } {
+  if (typeof window === 'undefined') {
+    return {
+      order: [...DEFAULT_COLUMN_ORDER],
+      visibility: createDefaultColumnVisibility(),
+    }
+  }
+  try {
+    const raw = window.localStorage.getItem(COLUMN_STORAGE_KEY)
+    if (!raw) {
+      return {
+        order: [...DEFAULT_COLUMN_ORDER],
+        visibility: createDefaultColumnVisibility(),
+      }
+    }
+    const parsed = JSON.parse(raw) as { order?: unknown; visibility?: unknown }
+    return {
+      order: sanitizeOrder(parsed.order),
+      visibility: sanitizeVisibility(parsed.visibility),
+    }
+  } catch (error) {
+    console.warn('[visitas] no se pudo leer columnas desde storage', error)
+    return {
+      order: [...DEFAULT_COLUMN_ORDER],
+      visibility: createDefaultColumnVisibility(),
+    }
+  }
 }
 
 export function VisitasPage() {
@@ -738,9 +800,16 @@ export function VisitasPage() {
   const [columnWidths, setColumnWidths] = useState<(number | undefined)[]>(
     Array(COLUMN_COUNT).fill(undefined),
   )
-  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(() => [...DEFAULT_COLUMN_ORDER])
+  const initialColumnPrefsRef = useRef<{ order: ColumnId[]; visibility: Record<ColumnId, boolean> } | null>(null)
+  const getInitialColumnPrefs = () => {
+    if (!initialColumnPrefsRef.current) {
+      initialColumnPrefsRef.current = loadColumnPreferences()
+    }
+    return initialColumnPrefsRef.current
+  }
+  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(() => getInitialColumnPrefs().order)
   const [columnVisibility, setColumnVisibility] = useState<Record<ColumnId, boolean>>(
-    () => createDefaultColumnVisibility(),
+    () => getInitialColumnPrefs().visibility,
   )
   const activeColumnDefinitions = useMemo(
     () => columnOrder.filter((id) => columnVisibility[id]).map((id) => COLUMN_DEFINITION_MAP[id]),
@@ -829,6 +898,18 @@ export function VisitasPage() {
   useEffect(() => {
     columnWidthsRef.current = columnWidths
   }, [columnWidths])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        COLUMN_STORAGE_KEY,
+        JSON.stringify({ order: columnOrder, visibility: columnVisibility }),
+      )
+    } catch (error) {
+      console.warn('[visitas] no se pudo guardar columnas en storage', error)
+    }
+  }, [columnOrder, columnVisibility])
 
   useEffect(() => {
     if (activeHeaderFilter && !columnVisibility[activeHeaderFilter]) {
@@ -1197,6 +1278,13 @@ export function VisitasPage() {
   const handleResetColumns = useCallback(() => {
     setColumnOrder([...DEFAULT_COLUMN_ORDER])
     setColumnVisibility(createDefaultColumnVisibility())
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(COLUMN_STORAGE_KEY)
+      } catch (error) {
+        console.warn('[visitas] no se pudo limpiar columnas en storage', error)
+      }
+    }
   }, [])
 
   const handleSortToggle = useCallback((key: SortKey) => {
