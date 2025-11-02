@@ -9,6 +9,8 @@ export interface VisitasQuery {
   rango?: VisitasRange
   conChat?: 'with' | 'without' | 'all'
   estado?: string
+  country?: string
+  city?: string
   search?: string
 }
 
@@ -21,6 +23,8 @@ export async function fetchVisitas(query: VisitasQuery) {
   if (query.conChat === 'with') params.set('con_chat', 'true')
   if (query.conChat === 'without') params.set('con_chat', 'false')
   if (query.estado) params.set('estado', query.estado)
+  if (query.country) params.set('pais', query.country)
+  if (query.city) params.set('ciudad', query.city)
   if (query.search) params.set('q', query.search)
 
   const { ok, data, status } = await fetchJSONWithAuth<VisitasApiResponse>(

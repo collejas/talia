@@ -52,6 +52,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -74,6 +80,9 @@ import {
   Filter,
   Calendar,
   MessageCircle,
+  Building2,
+  MapPin,
+  Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
@@ -121,6 +130,8 @@ type Filters = {
   rango: RangeOption
   conChat: 'all' | 'with' | 'without'
   estado: string
+  country: string
+  city: string
   search: string
 }
 
@@ -133,6 +144,8 @@ const DEFAULT_FILTERS: Filters = {
   rango: '7d',
   conChat: 'all',
   estado: '',
+  country: '',
+  city: '',
   search: '',
 }
 
@@ -242,6 +255,14 @@ function captureBadgeFromValue(value?: string | null): ReactNode | null {
   )
 }
 
+type GeoOption = {
+  value: string
+  label: string
+  subtitle?: string
+  country?: string
+  state?: string
+}
+
 const headers = [
   'Sesión',
   'IP',
@@ -264,6 +285,88 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   'Tiempo estancia': 'Tiempo total entre el registro y el cierre de la sesión, en una sola visita.',
   'Estancia promedio': 'Promedio de tiempo por visita calculado en función del número total de visitas registradas.',
   'Último evento': 'Última interacción detectada para la sesión, incluyendo el momento de cierre si existe.',
+}
+
+type GeoComboboxProps = {
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  placeholder: string
+  emptyText: string
+  value: string
+  onSelect: (value: string | null) => void
+  options: GeoOption[]
+  width?: number
+}
+
+function GeoCombobox({
+  icon: Icon,
+  placeholder,
+  emptyText,
+  value,
+  onSelect,
+  options,
+  width = 180,
+}: GeoComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((option) => option.value === value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-8 justify-start gap-2 border-border bg-surface text-sm font-medium"
+          style={{ width }}
+        >
+          <Icon className="h-4 w-4 text-primary/80" />
+          <span className="truncate">
+            {selected ? selected.label : placeholder}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0">
+        <Command>
+          <CommandInput placeholder={placeholder} className="h-9" />
+          <CommandEmpty>{emptyText}</CommandEmpty>
+          <CommandList>
+            <CommandGroup>
+              <CommandItem
+                key="__clear"
+                value="__clear"
+                onSelect={() => {
+                  onSelect(null)
+                  setOpen(false)
+                }}
+              >
+                Limpiar
+              </CommandItem>
+              <CommandSeparator />
+              {options.map((option) => (
+                <CommandItem
+                  key={`${option.value}-${option.subtitle ?? ''}`}
+                  value={option.label}
+                  onSelect={() => {
+                    onSelect(option.value)
+                    setOpen(false)
+                  }}
+                >
+                  <div className="flex flex-col">
+                    <span>{option.label}</span>
+                    {option.subtitle ? (
+                      <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                    ) : null}
+                  </div>
+                  {option.value === value ? <Check className="ml-auto h-4 w-4" /> : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export function VisitasPage() {
@@ -294,6 +397,47 @@ export function VisitasPage() {
     setFilters((current) => {
       if (current.conChat === value) return current
       return { ...current, conChat: value }
+    })
+  }, [])
+  const handleCountryFilter = useCallback((value: string | null) => {
+    setFilters((current) => {
+      const nextCountry = value ?? ''
+      if (current.country === nextCountry) return current
+      return {
+        ...current,
+        country: nextCountry,
+        estado: '',
+        city: '',
+      }
+    })
+    setFormValues((current) => ({
+      ...current,
+      estado: '',
+    }))
+  }, [])
+  const handleStateFilter = useCallback((value: string | null) => {
+    const nextState = value ?? ''
+    setFilters((current) => {
+      if (current.estado === nextState && current.city === '') return current
+      return {
+        ...current,
+        estado: nextState,
+        city: '',
+      }
+    })
+    setFormValues((current) => ({
+      ...current,
+      estado: nextState,
+    }))
+  }, [])
+  const handleCityFilter = useCallback((value: string | null) => {
+    const nextCity = value ?? ''
+    setFilters((current) => {
+      if (current.city === nextCity) return current
+      return {
+        ...current,
+        city: nextCity,
+      }
     })
   }, [])
 
@@ -334,6 +478,8 @@ export function VisitasPage() {
           rango: filters.rango,
           conChat: filters.conChat,
           estado: filters.estado || undefined,
+          country: filters.country || undefined,
+          city: filters.city || undefined,
           search: filters.search || undefined,
         })
 
@@ -469,6 +615,98 @@ export function VisitasPage() {
     const option = CHAT_OPTIONS.find((item) => item.value === filters.conChat)
     return option?.label ?? 'Todos'
   }, [filters.conChat])
+  const countryOptions = useMemo<GeoOption[]>(() => {
+    const map = new Map<string, GeoOption>()
+    items.forEach((row) => {
+      const code = typeof row.country_code === 'string' ? row.country_code.trim().toUpperCase() : ''
+      const name = typeof row.country_name === 'string' ? row.country_name.trim() : ''
+      const value = code || name
+      if (!value) return
+      if (!map.has(value)) {
+        map.set(value, {
+          value,
+          label: name || value,
+          subtitle: code && name && code !== name.toUpperCase() ? code : undefined,
+          country: value,
+        })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'es'))
+  }, [items])
+  const stateOptions = useMemo<GeoOption[]>(() => {
+    const map = new Map<string, GeoOption>()
+    items.forEach((row) => {
+      const value = typeof row.cve_ent === 'string' && row.cve_ent.trim()
+        ? row.cve_ent.trim()
+        : typeof row.state_code === 'string' && row.state_code.trim()
+          ? row.state_code.trim()
+          : undefined
+      const label = typeof row.state_name === 'string' && row.state_name.trim()
+        ? row.state_name.trim()
+        : typeof row.nom_ent === 'string' && row.nom_ent.trim()
+          ? row.nom_ent.trim()
+          : value
+      if (!value || !label) return
+      if (!map.has(value)) {
+        map.set(value, {
+          value,
+          label,
+          subtitle: typeof row.country_name === 'string' ? row.country_name.trim() || undefined : undefined,
+          country: typeof row.country_code === 'string' ? row.country_code.trim().toUpperCase() || undefined : undefined,
+        })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'es'))
+  }, [items])
+  const cityOptions = useMemo<GeoOption[]>(() => {
+    const map = new Map<string, GeoOption>()
+    items.forEach((row) => {
+      const label = typeof row.city_name === 'string' ? row.city_name.trim() : ''
+      if (!label) return
+      const state = typeof row.cve_ent === 'string' ? row.cve_ent.trim() : undefined
+      const country = typeof row.country_code === 'string' ? row.country_code.trim().toUpperCase() : undefined
+      const stateName = typeof row.state_name === 'string' ? row.state_name.trim() : undefined
+      const countryName = typeof row.country_name === 'string' ? row.country_name.trim() : undefined
+      const key = `${label}|${state || ''}|${country || ''}`
+      if (!map.has(key)) {
+        map.set(key, {
+          value: label,
+          label,
+          subtitle: [stateName, countryName].filter(Boolean).join(' • ') || undefined,
+          state,
+          country,
+        })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'es'))
+  }, [items])
+  const filteredStateOptions = useMemo(() => {
+    if (!filters.country) return stateOptions
+    return stateOptions.filter((option) => !option.country || option.country === filters.country)
+  }, [stateOptions, filters.country])
+  const filteredCityOptions = useMemo(() => (
+    cityOptions.filter((option) => {
+      if (filters.country && option.country && option.country !== filters.country) {
+        return false
+      }
+      if (filters.estado && option.state && option.state !== filters.estado) {
+        return false
+      }
+      return true
+    })
+  ), [cityOptions, filters.country, filters.estado])
+  const selectedCountryOption = useMemo(
+    () => countryOptions.find((option) => option.value === filters.country),
+    [countryOptions, filters.country],
+  )
+  const selectedStateOption = useMemo(
+    () => stateOptions.find((option) => option.value === filters.estado),
+    [stateOptions, filters.estado],
+  )
+  const selectedCityOption = useMemo(
+    () => cityOptions.find((option) => option.value === filters.city),
+    [cityOptions, filters.city],
+  )
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -585,52 +823,95 @@ export function VisitasPage() {
                       Sin chat: {numberFormatter.format(chatTotals.sinChat)}
                     </Badge>
                     <Badge variant="secondary" className="bg-surface text-foreground">
-                      Filtro chat: {chatFilterLabel}
+                      Chat: {chatFilterLabel}
                     </Badge>
+                    {filters.country ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        País: {selectedCountryOption?.label ?? filters.country}
+                      </Badge>
+                    ) : null}
+                    {filters.estado ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Región: {selectedStateOption?.label ?? filters.estado}
+                      </Badge>
+                    ) : null}
+                    {filters.city ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Ciudad: {selectedCityOption?.label ?? filters.city}
+                      </Badge>
+                    ) : null}
                   </>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <GeoCombobox
+                  icon={Globe}
+                  placeholder="País"
+                  emptyText="Sin resultados"
+                  value={filters.country}
+                  onSelect={handleCountryFilter}
+                  options={countryOptions}
+                  width={180}
+                />
+                <GeoCombobox
+                  icon={MapPin}
+                  placeholder="Región"
+                  emptyText="Sin resultados"
+                  value={filters.estado}
+                  onSelect={handleStateFilter}
+                  options={filteredStateOptions}
+                  width={180}
+                />
+                <GeoCombobox
+                  icon={Building2}
+                  placeholder="Ciudad"
+                  emptyText="Sin resultados"
+                  value={filters.city}
+                  onSelect={handleCityFilter}
+                  options={filteredCityOptions}
+                  width={200}
+                />
+                <div className="hidden h-6 w-px bg-border sm:block" />
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary/80" />
                   <div className="w-[140px]">
-                  <Select
-                    value={filters.rango}
-                    onValueChange={(value: RangeOption) => setRangeFilter(value)}
-                  >
-                    <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
-                      <SelectValue placeholder="Selecciona rango" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RANGE_OPTIONS.map((option) => (
-                        <SelectItem key={`toolbar-range-${option.value}`} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <Select
+                      value={filters.rango}
+                      onValueChange={(value: RangeOption) => setRangeFilter(value)}
+                    >
+                      <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
+                        <SelectValue placeholder="Selecciona rango" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RANGE_OPTIONS.map((option) => (
+                          <SelectItem key={`toolbar-range-${option.value}`} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="hidden h-6 w-px bg-border sm:block" />
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4 text-primary/80" />
                   <div className="w-[140px]">
-                  <Select
-                    value={filters.conChat}
-                    onValueChange={(value: 'all' | 'with' | 'without') => setChatFilter(value)}
-                  >
-                    <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
-                      <SelectValue placeholder="Filtrar chat" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CHAT_OPTIONS.map((option) => (
-                        <SelectItem key={`toolbar-chat-${option.value}`} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <Select
+                      value={filters.conChat}
+                      onValueChange={(value: 'all' | 'with' | 'without') => setChatFilter(value)}
+                    >
+                      <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
+                        <SelectValue placeholder="Filtrar chat" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHAT_OPTIONS.map((option) => (
+                          <SelectItem key={`toolbar-chat-${option.value}`} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <Button
                   type="button"

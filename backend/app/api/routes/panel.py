@@ -2042,6 +2042,8 @@ async def visitas_webchat_detalle(
     hasta: str | None = Query(default=None),
     con_chat: str | None = Query(default=None),
     estado: str | None = Query(default=None),
+    pais: str | None = Query(default=None),
+    ciudad: str | None = Query(default=None),
     q: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -2055,6 +2057,12 @@ async def visitas_webchat_detalle(
     has_chat = _parse_bool_flag(con_chat)
     state = estado.strip() if estado else None
     search = q.strip() if q else None
+    country = pais.strip().upper() if pais else None
+    if country == "":
+        country = None
+    city = ciudad.strip() if ciudad else None
+    if city == "":
+        city = None
 
     try:
         payload = await storage.fetch_webchat_visitas_detalle(
@@ -2062,6 +2070,8 @@ async def visitas_webchat_detalle(
             date_to=date_to,
             has_chat=has_chat,
             state=state,
+            country=country,
+            city=city,
             search=search,
             limit=limit,
             offset=offset,
@@ -2093,6 +2103,8 @@ async def visitas_webchat_detalle(
         "filters": {
             "con_chat": has_chat,
             "estado": state,
+            "pais": country,
+            "ciudad": city,
             "search": search,
         },
         "range": _build_range_payload(rango, date_from, date_to),
