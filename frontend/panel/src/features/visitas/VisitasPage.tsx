@@ -774,54 +774,7 @@ export function VisitasPage() {
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-6 pt-1 pb-4">
         <Card className="border-border bg-surface shadow-panel-soft">
           <CardContent className="pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
-              <div
-                className={cn(
-                  'flex flex-wrap items-center gap-2 text-sm text-muted-foreground',
-                  dimTotals ? 'opacity-60 transition-opacity duration-200' : '',
-                )}
-              >
-                {showTotalsSkeleton ? (
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-5 w-32 rounded-sm" />
-                    <Skeleton className="h-5 w-24 rounded-sm" />
-                    <Skeleton className="h-5 w-24 rounded-sm" />
-                  </div>
-                ) : (
-                  <>
-                    <Filter className="h-4 w-4" />
-                    <span>
-                      {total > 0
-                        ? `${numberFormatter.format(pagerStart)}-${numberFormatter.format(pagerEnd)} de ${resultsLabel}`
-                        : '0 resultados'}
-                    </span>
-                    <Badge variant="outline" className="bg-surface text-foreground">
-                      Con chat: {numberFormatter.format(chatTotals.conChat)}
-                    </Badge>
-                    <Badge variant="outline" className="bg-surface text-foreground">
-                      Sin chat: {numberFormatter.format(chatTotals.sinChat)}
-                    </Badge>
-                    <Badge variant="secondary" className="bg-surface text-foreground">
-                      Chat: {chatFilterLabel}
-                    </Badge>
-                    {filters.country ? (
-                      <Badge variant="outline" className="bg-surface text-foreground">
-                        País: {countryBadgeLabel}
-                      </Badge>
-                    ) : null}
-                    {filters.estado ? (
-                      <Badge variant="outline" className="bg-surface text-foreground">
-                        Región: {stateBadgeLabel}
-                      </Badge>
-                    ) : null}
-                    {filters.city ? (
-                      <Badge variant="outline" className="bg-surface text-foreground">
-                        Ciudad: {cityBadgeLabel}
-                      </Badge>
-                    ) : null}
-                  </>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-alt px-4 py-3">
               <div className="flex w-full flex-wrap items-center gap-2">
                 <div className="flex flex-1 flex-wrap items-center gap-2">
                   <Popover open={geoPopoverOpen} onOpenChange={setGeoPopoverOpen}>
@@ -1014,26 +967,79 @@ export function VisitasPage() {
         ) : null}
 
         <Card className="border-border bg-surface shadow-panel">
-          <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle className="text-xl font-semibold">Listado de visitas</CardTitle>
-            <Input
-              value={formValues.search}
-              onChange={(event) => {
-                const nextValue = event.target.value
-                setFormValues((current) => ({
-                  ...current,
-                  search: nextValue,
-                }))
-                setFilters((current) => {
-                  if (current.search === nextValue) return current
-                  return { ...current, search: nextValue }
-                })
-              }}
-              placeholder="Buscar visitas..."
-              className="w-full max-w-[20ch] border-border bg-surface-alt text-foreground sm:w-[20ch]"
-              ref={searchInputRef}
-              aria-label="Buscar visitas"
-            />
+          <CardHeader className="pb-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:gap-4">
+              <CardTitle className="text-center text-xl font-semibold lg:flex-[0_0_auto] lg:text-left">
+                Listado de visitas
+              </CardTitle>
+              <div
+                className={cn(
+                  'flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground lg:flex-1 lg:flex-nowrap lg:justify-center',
+                  dimTotals ? 'opacity-60 transition-opacity duration-200' : '',
+                )}
+              >
+                {showTotalsSkeleton ? (
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-32 rounded-sm" />
+                    <Skeleton className="h-5 w-24 rounded-sm" />
+                    <Skeleton className="h-5 w-24 rounded-sm" />
+                  </div>
+                ) : (
+                  <>
+                    <Filter className="h-4 w-4" />
+                    <span>
+                      {total > 0
+                        ? `${numberFormatter.format(pagerStart)}-${numberFormatter.format(pagerEnd)} de ${resultsLabel}`
+                        : '0 resultados'}
+                    </span>
+                    <Badge variant="outline" className="bg-surface text-foreground">
+                      Con chat: {numberFormatter.format(chatTotals.conChat)}
+                    </Badge>
+                    <Badge variant="outline" className="bg-surface text-foreground">
+                      Sin chat: {numberFormatter.format(chatTotals.sinChat)}
+                    </Badge>
+                    <Badge variant="secondary" className="bg-surface text-foreground">
+                      Chat: {chatFilterLabel}
+                    </Badge>
+                    {filters.country ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        País: {countryBadgeLabel}
+                      </Badge>
+                    ) : null}
+                    {filters.estado ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Región: {stateBadgeLabel}
+                      </Badge>
+                    ) : null}
+                    {filters.city ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Ciudad: {cityBadgeLabel}
+                      </Badge>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              <div className="flex justify-center lg:flex-[0_0_auto] lg:justify-end">
+                <Input
+                  value={formValues.search}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    setFormValues((current) => ({
+                      ...current,
+                      search: nextValue,
+                    }))
+                    setFilters((current) => {
+                      if (current.search === nextValue) return current
+                      return { ...current, search: nextValue }
+                    })
+                  }}
+                  placeholder="Buscar visitas..."
+                  className="w-full max-w-[20ch] border-border bg-surface-alt text-foreground lg:w-[20ch]"
+                  ref={searchInputRef}
+                  aria-label="Buscar visitas"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <TooltipProvider delayDuration={150} skipDelayDuration={100}>
