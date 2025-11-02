@@ -77,8 +77,12 @@ sudo systemctl enable talia-api.service
 sudo systemctl restart talia-api.service
 sudo systemctl status talia-api.service
 
+npm run dev
+http://localhost:8004/panel-react/auth/login
+
 
 npm run build
+
 
 poetry run pytest
 
