@@ -158,6 +158,9 @@
 - Se migró la vista de `Leads` a React (`src/features/leads/LeadsPage.tsx`), replicando filtros, vista tabla/acordeón, paginación incremental,
   edición y eliminación mediante el backend `/api/leads`. Se añadieron los tipos y servicios (`types/leads.ts`, `services/leads.ts`), nuevas
   piezas UI (accordion, textarea) y la navegación del layout ahora apunta al SPA (`/panel-react/leads`).
+- Se añadieron menús contextualizados por lead con `DropdownMenu` y confirmaciones accesibles mediante `AlertDialog`, evitando `window.confirm`
+  y unificando la experiencia de eliminación.
+- El modal de edición ahora utiliza `Tabs` para separar los campos de contacto y seguimiento, mostrando el spinner y las toasts mediante los componentes shadcn existentes.
 
 
 

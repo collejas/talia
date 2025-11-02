@@ -15,6 +15,7 @@ import {
   LayoutList,
   Loader2,
   Mail,
+  MoreHorizontal,
   NotebookPen,
   Phone,
   RefreshCw,
@@ -30,6 +31,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -48,6 +56,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import {
@@ -163,6 +182,9 @@ export function LeadsPage() {
   const [editForm, setEditForm] = useState<EditFormState>(DEFAULT_EDIT_FORM)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null)
+  const [leadToDelete, setLeadToDelete] = useState<LeadItem | null>(null)
+  const [editTab, setEditTab] = useState('general')
+  const isDeleting = deleteLoadingId !== null
 
   const filtersRef = useRef(filters)
   const itemsRef = useRef(items)
@@ -302,6 +324,7 @@ export function LeadsPage() {
 
   const openEditDialog = (lead: LeadItem) => {
     setEditLead(lead)
+    setEditTab('general')
     setEditForm({
       nombre: lead.contacto.nombre ?? '',
       correo: lead.contacto.correo ?? '',
@@ -322,6 +345,7 @@ export function LeadsPage() {
     setEditLead(null)
     setEditForm(DEFAULT_EDIT_FORM)
     setIsSubmitting(false)
+    setEditTab('general')
   }
 
   const handleSubmitEdit = async (event: FormEvent<HTMLFormElement>) => {
@@ -394,10 +418,8 @@ export function LeadsPage() {
 
   const handleDeleteLead = async (lead: LeadItem) => {
     const nombre = lead.contacto.nombre || lead.id
-    const confirmed = window.confirm(`¿Eliminar el lead "${nombre}"?`)
-    if (!confirmed) return
-
     setDeleteLoadingId(lead.id)
+    let success = false
     try {
       await deleteLead(lead.id)
       toast({
@@ -408,6 +430,7 @@ export function LeadsPage() {
         closeEditDialog()
       }
       setRefreshToken((token) => token + 1)
+      success = true
     } catch (err) {
       console.error('[leads] delete error', err)
       toast({
@@ -419,6 +442,20 @@ export function LeadsPage() {
       })
     } finally {
       setDeleteLoadingId(null)
+    }
+    return success
+  }
+
+  const requestDeleteLead = (lead: LeadItem) => {
+    if (isDeleting) return
+    setLeadToDelete(lead)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!leadToDelete) return
+    const success = await handleDeleteLead(leadToDelete)
+    if (success) {
+      setLeadToDelete(null)
     }
   }
 
@@ -747,30 +784,40 @@ export function LeadsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="px-4 py-3 align-top">
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditDialog(lead)}
-                                disabled={isSubmitting || deleteLoadingId === lead.id}
-                              >
-                                Editar
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleDeleteLead(lead)}
-                                disabled={deleteLoadingId === lead.id || isSubmitting}
-                              >
-                                {deleteLoadingId === lead.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  'Eliminar'
-                                )}
-                              </Button>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  disabled={isSubmitting || deleteLoadingId === lead.id}
+                                >
+                                  {deleteLoadingId === lead.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  )}
+                                  <span className="sr-only">Abrir acciones</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => openEditDialog(lead)}>
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onSelect={(event) => {
+                                    event.preventDefault()
+                                    requestDeleteLead(lead)
+                                  }}
+                                  disabled={deleteLoadingId === lead.id}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       )
@@ -899,7 +946,7 @@ export function LeadsPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => void handleDeleteLead(lead)}
+                            onClick={() => requestDeleteLead(lead)}
                             disabled={deleteLoadingId === lead.id || isSubmitting}
                           >
                             {deleteLoadingId === lead.id ? (
@@ -952,136 +999,156 @@ export function LeadsPage() {
               </DialogDescription>
             </DialogHeader>
             {editLead ? (
-              <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmitEdit}>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Nombre del contacto</span>
-                  <Input
-                    value={editForm.nombre}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, nombre: event.target.value }))
-                    }
-                    placeholder="Nombre completo"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Correo electrónico</span>
-                  <Input
-                    type="email"
-                    value={editForm.correo}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, correo: event.target.value }))
-                    }
-                    placeholder="correo@ejemplo.com"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Teléfono</span>
-                  <Input
-                    value={editForm.telefono}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, telefono: event.target.value }))
-                    }
-                    placeholder="+52..."
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Etapa</span>
-                  <Select
-                    value={editForm.etapa}
-                    onValueChange={(value) =>
-                      setEditForm((current) => ({ ...current, etapa: value }))
-                    }
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona etapa…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {etapaOptions.map((option) => (
-                        <SelectItem key={`edit-etapa-${option.value}`} value={option.value}>
-                          {option.categoria ? `${option.label} • ${option.categoria}` : option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Vendedor asignado</span>
-                  <Select
-                    value={editForm.asignado}
-                    onValueChange={(value) =>
-                      setEditForm((current) => ({ ...current, asignado: value }))
-                    }
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sin asignar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Sin asignar</SelectItem>
-                      {vendedorOptions.map((option) => (
-                        <SelectItem key={`edit-vendedor-${option.value}`} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Lead score</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={editForm.leadScore}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, leadScore: event.target.value }))
-                    }
-                    placeholder="0-100"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Probabilidad (%)</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.1}
-                    value={editForm.probabilidad}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, probabilidad: event.target.value }))
-                    }
-                    placeholder="0-100"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="md:col-span-2 flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Siguiente acción</span>
-                  <Textarea
-                    value={editForm.siguienteAccion}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, siguienteAccion: event.target.value }))
-                    }
-                    placeholder="Describe la siguiente acción acordada"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="md:col-span-2 flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <span>Tags (separados por coma)</span>
-                  <Input
-                    value={editForm.tags}
-                    onChange={(event) =>
-                      setEditForm((current) => ({ ...current, tags: event.target.value }))
-                    }
-                    placeholder="Ej. demo, seguimiento, prioridad"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+              <form className="space-y-6" onSubmit={handleSubmitEdit}>
+                <Tabs value={editTab} onValueChange={setEditTab}>
+                  <TabsList className="w-full">
+                    <TabsTrigger value="general" className="flex-1">
+                      Contacto
+                    </TabsTrigger>
+                    <TabsTrigger value="seguimiento" className="flex-1">
+                      Seguimiento
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="general">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Nombre del contacto</span>
+                        <Input
+                          value={editForm.nombre}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, nombre: event.target.value }))
+                          }
+                          placeholder="Nombre completo"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Correo electrónico</span>
+                        <Input
+                          type="email"
+                          value={editForm.correo}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, correo: event.target.value }))
+                          }
+                          placeholder="correo@ejemplo.com"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Teléfono</span>
+                        <Input
+                          value={editForm.telefono}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, telefono: event.target.value }))
+                          }
+                          placeholder="+52..."
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Etapa</span>
+                        <Select
+                          value={editForm.etapa}
+                          onValueChange={(value) =>
+                            setEditForm((current) => ({ ...current, etapa: value }))
+                          }
+                          disabled={isSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona etapa…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {etapaOptions.map((option) => (
+                              <SelectItem key={`edit-etapa-${option.value}`} value={option.value}>
+                                {option.categoria ? `${option.label} • ${option.categoria}` : option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="md:col-span-2 flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Vendedor asignado</span>
+                        <Select
+                          value={editForm.asignado}
+                          onValueChange={(value) =>
+                            setEditForm((current) => ({ ...current, asignado: value }))
+                          }
+                          disabled={isSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sin asignar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Sin asignar</SelectItem>
+                            {vendedorOptions.map((option) => (
+                              <SelectItem key={`edit-vendedor-${option.value}`} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="seguimiento">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Lead score</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={editForm.leadScore}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, leadScore: event.target.value }))
+                          }
+                          placeholder="0-100"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Probabilidad (%)</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={editForm.probabilidad}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, probabilidad: event.target.value }))
+                          }
+                          placeholder="0-100"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4">
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Siguiente acción</span>
+                        <Textarea
+                          value={editForm.siguienteAccion}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, siguienteAccion: event.target.value }))
+                          }
+                          placeholder="Describe la siguiente acción acordada"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <span>Tags (separados por coma)</span>
+                        <Input
+                          value={editForm.tags}
+                          onChange={(event) =>
+                            setEditForm((current) => ({ ...current, tags: event.target.value }))
+                          }
+                          placeholder="Ej. demo, seguimiento, prioridad"
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+                <div className="flex justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -1105,6 +1172,47 @@ export function LeadsPage() {
             ) : null}
           </DialogContent>
         </Dialog>
+        <AlertDialog
+          open={Boolean(leadToDelete)}
+          onOpenChange={(open) => {
+            if (!open && !isDeleting) {
+              setLeadToDelete(null)
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Eliminar lead</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción eliminará el lead{' '}
+                <span className="font-semibold">
+                  {leadToDelete?.contacto.nombre || leadToDelete?.id || ''}
+                </span>
+                . No podrás deshacerlo.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(event) => {
+                  event.preventDefault()
+                  void handleConfirmDelete()
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive"
+              >
+                {isDeleting && leadToDelete ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  'Eliminar'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )
