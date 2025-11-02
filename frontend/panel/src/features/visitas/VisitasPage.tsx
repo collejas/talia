@@ -786,24 +786,8 @@ export function VisitasPage() {
             </p>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-wrap items-end gap-4" onSubmit={handleSubmit}>
-              <div className="flex min-w-[240px] flex-1 flex-col gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
-                <span>Buscar</span>
-                <Input
-                  value={formValues.search}
-                  onChange={(event) =>
-                    setFormValues((current) => ({
-                      ...current,
-                      search: event.target.value,
-                    }))
-                  }
-                  placeholder="Sesión, contacto, referrer..."
-                  className="border-border bg-surface-alt text-foreground"
-                  ref={searchInputRef}
-                />
-              </div>
-
-              <div className="ml-auto flex items-center gap-3">
+            <form className="flex flex-wrap items-center justify-end gap-3" onSubmit={handleSubmit}>
+              <div className="flex items-center gap-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -1053,8 +1037,21 @@ export function VisitasPage() {
         ) : null}
 
         <Card className="border-border bg-surface shadow-panel">
-          <CardHeader className="pb-4">
+          <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-xl font-semibold">Listado de visitas</CardTitle>
+            <Input
+              value={formValues.search}
+              onChange={(event) =>
+                setFormValues((current) => ({
+                  ...current,
+                  search: event.target.value,
+                }))
+              }
+              placeholder="Buscar visitas..."
+              className="w-full max-w-[20ch] border-border bg-surface-alt text-foreground sm:w-[20ch]"
+              ref={searchInputRef}
+              aria-label="Buscar visitas"
+            />
           </CardHeader>
           <CardContent className="space-y-4">
             <TooltipProvider delayDuration={150} skipDelayDuration={100}>
