@@ -1720,23 +1720,23 @@ export function VisitasPage() {
 
                         const columns: Array<{ value: ReactNode; className?: string; title?: string }> = [
                           {
-                            value: <span className="font-mono">{row.session_id || '—'}</span>,
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate font-mono">{row.session_id || '—'}</span>,
+                            className: 'truncate',
                             title: row.session_id || undefined,
                           },
                           {
                             value: row.ip ? <span className="font-mono break-words">{row.ip}</span> : '—',
-                            className: 'break-words',
+                            className: 'font-mono break-words',
                             title: row.ip || undefined,
                           },
                           {
-                            value: numberFormatter.format(visitsTotal),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{numberFormatter.format(visitsTotal)}</span>,
+                            className: 'truncate',
                             title: numberFormatter.format(visitsTotal),
                           },
                           {
-                            value: formatDateTime(row.primera_visita_en || row.registrado_en),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{formatDateTime(row.primera_visita_en || row.registrado_en)}</span>,
+                            className: 'truncate',
                             title: formatDateTime(row.primera_visita_en || row.registrado_en),
                           },
                           {
@@ -1745,18 +1745,18 @@ export function VisitasPage() {
                             title: lastEventContent[rowIndex],
                           },
                           {
-                            value: formatDuration(row.stay_seconds),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{formatDuration(row.stay_seconds)}</span>,
+                            className: 'truncate',
                             title: formatDuration(row.stay_seconds),
                           },
                           {
-                            value: formatDuration(row.avg_stay_seconds),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{formatDuration(row.avg_stay_seconds)}</span>,
+                            className: 'truncate',
                             title: formatDuration(row.avg_stay_seconds),
                           },
                           {
                             value: chatBadge,
-                            className: 'whitespace-nowrap',
+                            className: 'truncate',
                             title: chatLabel,
                           },
                           {
@@ -1772,28 +1772,28 @@ export function VisitasPage() {
                             title: formatContact(row),
                           },
                           {
-                            value: formatCountry(row),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{formatCountry(row)}</span>,
+                            className: 'truncate',
                             title: formatCountry(row),
                           },
                           {
-                            value: formatState(row),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{formatState(row)}</span>,
+                            className: 'truncate',
                             title: formatState(row),
                           },
                           {
-                            value: formatCity(row),
-                            className: 'whitespace-nowrap',
+                            value: <span className="block truncate">{formatCity(row)}</span>,
+                            className: 'truncate',
                             title: formatCity(row),
                           },
                           {
                             value: (
-                              <div className="flex items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
-                                <span>{formatDevice(row)}</span>
+                                <span className="truncate">{formatDevice(row)}</span>
                               </div>
                             ),
-                            className: 'whitespace-nowrap',
+                            className: 'truncate',
                             title: formatDevice(row),
                           },
                           {
@@ -1827,7 +1827,10 @@ export function VisitasPage() {
                                 key={columnIndex}
                                 style={columnStyle(columnIndex)}
                                 title={column.title ?? (typeof column.value === 'string' ? column.value : undefined)}
-                                className={`px-4 py-3 text-sm text-foreground ${column.className ?? ''}`}
+                                className={cn(
+                                  'px-4 py-3 align-top text-sm text-foreground whitespace-normal break-words',
+                                  column.className,
+                                )}
                               >
                                 {column.value}
                               </TableCell>
