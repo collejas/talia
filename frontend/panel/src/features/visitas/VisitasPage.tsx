@@ -636,6 +636,7 @@ export function VisitasPage() {
     [cityOptions, filters.city],
   )
   const GEO_ANY_VALUE = '__all'
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const geoSummary = useMemo(() => {
     if (filters.city) {
       return selectedCityOption?.label ?? filters.city
@@ -650,7 +651,7 @@ export function VisitasPage() {
   }, [filters.city, filters.estado, filters.country, selectedCityOption, selectedStateOption, selectedCountryOption])
   const geoActive = Boolean(filters.country || filters.estado || filters.city)
   const geoTriggerClass = cn(
-    'h-8 gap-2 border-border bg-surface text-sm font-medium',
+    'h-8 w-[200px] justify-start gap-2 border-border bg-surface text-sm font-medium',
     geoActive ? 'text-primary' : 'text-foreground',
   )
 
@@ -797,79 +798,79 @@ export function VisitasPage() {
                       <span className="max-w-[160px] truncate">{geoSummary}</span>
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[320px] space-y-4">
-                    <div className="space-y-2">
-                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">País</span>
-                      <Select
-                        value={filters.country || GEO_ANY_VALUE}
-                        onValueChange={(value) => handleCountryFilter(value === GEO_ANY_VALUE ? null : value)}
-                      >
-                        <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
-                          <SelectValue placeholder="Todos los países" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={GEO_ANY_VALUE}>Todos los países</SelectItem>
-                          {countryOptions.map((option) => (
-                            <SelectItem key={`geo-country-${option.value}`} value={option.value}>
-                              <div className="flex flex-col">
-                                <span>{option.label}</span>
-                                {option.subtitle ? (
-                                  <span className="text-xs text-muted-foreground">{option.subtitle}</span>
-                                ) : null}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Región</span>
-                      <Select
-                        value={filters.estado || GEO_ANY_VALUE}
-                        onValueChange={(value) => handleStateFilter(value === GEO_ANY_VALUE ? null : value)}
-                      >
-                        <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
-                          <SelectValue placeholder="Todas las regiones" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={GEO_ANY_VALUE}>Todas las regiones</SelectItem>
-                          {filteredStateOptions.map((option) => (
-                            <SelectItem key={`geo-state-${option.value}`} value={option.value}>
-                              <div className="flex flex-col">
-                                <span>{option.label}</span>
-                                {option.subtitle ? (
-                                  <span className="text-xs text-muted-foreground">{option.subtitle}</span>
-                                ) : null}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Ciudad</span>
-                      <Select
-                        value={filters.city || GEO_ANY_VALUE}
-                        onValueChange={(value) => handleCityFilter(value === GEO_ANY_VALUE ? null : value)}
-                      >
-                        <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
-                          <SelectValue placeholder="Todas las ciudades" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={GEO_ANY_VALUE}>Todas las ciudades</SelectItem>
-                          {filteredCityOptions.map((option) => (
-                            <SelectItem key={`geo-city-${option.value}-${option.subtitle ?? 'x'}`} value={option.value}>
-                              <div className="flex flex-col">
-                                <span>{option.label}</span>
-                                {option.subtitle ? (
-                                  <span className="text-xs text-muted-foreground">{option.subtitle}</span>
-                                ) : null}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <PopoverContent ref={contentRef} align="start" className="w-[320px] space-y-4">
+                      <div className="space-y-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">País</span>
+                        <Select
+                          value={filters.country || GEO_ANY_VALUE}
+                          onValueChange={(value) => handleCountryFilter(value === GEO_ANY_VALUE ? null : value)}
+                        >
+                          <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
+                            <SelectValue placeholder="Todos los países" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={GEO_ANY_VALUE}>Todos los países</SelectItem>
+                            {countryOptions.map((option) => (
+                              <SelectItem key={`geo-country-${option.value}`} value={option.value}>
+                                <div className="flex flex-col">
+                                  <span>{option.label}</span>
+                                  {option.subtitle ? (
+                                    <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                                  ) : null}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Región</span>
+                        <Select
+                          value={filters.estado || GEO_ANY_VALUE}
+                          onValueChange={(value) => handleStateFilter(value === GEO_ANY_VALUE ? null : value)}
+                        >
+                          <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
+                            <SelectValue placeholder="Todas las regiones" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={GEO_ANY_VALUE}>Todas las regiones</SelectItem>
+                            {filteredStateOptions.map((option) => (
+                              <SelectItem key={`geo-state-${option.value}`} value={option.value}>
+                                <div className="flex flex-col">
+                                  <span>{option.label}</span>
+                                  {option.subtitle ? (
+                                    <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                                  ) : null}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Ciudad</span>
+                        <Select
+                          value={filters.city || GEO_ANY_VALUE}
+                          onValueChange={(value) => handleCityFilter(value === GEO_ANY_VALUE ? null : value)}
+                        >
+                          <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
+                            <SelectValue placeholder="Todas las ciudades" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={GEO_ANY_VALUE}>Todas las ciudades</SelectItem>
+                            {filteredCityOptions.map((option) => (
+                              <SelectItem key={`geo-city-${option.value}-${option.subtitle ?? 'x'}`} value={option.value}>
+                                <div className="flex flex-col">
+                                  <span>{option.label}</span>
+                                  {option.subtitle ? (
+                                    <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                                  ) : null}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     <div className="flex justify-between gap-2 pt-2">
                       <Button type="button" variant="ghost" size="sm" onClick={handleClearGeoFilters}>
                         Limpiar
