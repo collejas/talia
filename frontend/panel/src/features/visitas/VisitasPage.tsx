@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent,
   type ReactNode,
 } from 'react'
 
@@ -821,6 +822,8 @@ export function VisitasPage() {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [columnsPopoverOpen, setColumnsPopoverOpen] = useState(false)
   const [activeHeaderFilter, setActiveHeaderFilter] = useState<ColumnId | null>(null)
+  const [draggedColumn, setDraggedColumn] = useState<ColumnId | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<ColumnId | null>(null)
   const setRangeFilter = useCallback((value: RangeOption) => {
     setFilters((current) => {
       if (current.rango === value) return current
@@ -915,7 +918,13 @@ export function VisitasPage() {
     if (activeHeaderFilter && !columnVisibility[activeHeaderFilter]) {
       setActiveHeaderFilter(null)
     }
-  }, [activeHeaderFilter, columnVisibility])
+    if (draggedColumn && !columnVisibility[draggedColumn]) {
+      setDraggedColumn(null)
+    }
+    if (dragOverColumn && !columnVisibility[dragOverColumn]) {
+      setDragOverColumn(null)
+    }
+  }, [activeHeaderFilter, columnVisibility, draggedColumn, dragOverColumn])
 
   useEffect(() => {
     setFormValues(filters)
@@ -999,11 +1008,13 @@ export function VisitasPage() {
   }, [sessionLoading, filters, sortConfig, offset, page, refreshToken])
 
   const handleResizeStart = useCallback(
-    (index: number) => (event: React.MouseEvent<HTMLSpanElement>) => {
+    (columnId: ColumnId) => (event: React.MouseEvent<HTMLSpanElement>) => {
       event.preventDefault()
       event.stopPropagation()
       const header = event.currentTarget.parentElement as HTMLElement | null
       if (!header) return
+      const definitionIndex = DEFAULT_COLUMN_ORDER.indexOf(columnId)
+      if (definitionIndex === -1) return
 
       const startX = event.clientX
       const startWidth = header.getBoundingClientRect().width
@@ -1013,7 +1024,7 @@ export function VisitasPage() {
         const nextWidth = Math.max(COLUMN_MIN_WIDTH, Math.round(startWidth + delta))
         setColumnWidths((prev) => {
           const draft = [...prev]
-          draft[index] = nextWidth
+          draft[definitionIndex] = nextWidth
           return draft
         })
       }
@@ -1032,14 +1043,13 @@ export function VisitasPage() {
     [],
   )
 
-  const columnStyle = useCallback(
-    (index: number): CSSProperties => {
-      const width = columnWidthsRef.current[index]
-      if (!width) return {}
-      return { width, minWidth: width, maxWidth: width }
-    },
-    [],
-  )
+  const columnStyle = useCallback((columnId: ColumnId): CSSProperties => {
+    const definitionIndex = DEFAULT_COLUMN_ORDER.indexOf(columnId)
+    if (definitionIndex === -1) return {}
+    const width = columnWidthsRef.current[definitionIndex]
+    if (!width) return {}
+    return { width, minWidth: width, maxWidth: width }
+  }, [])
 
   const handleReset = () => {
     setFilters(DEFAULT_FILTERS)
@@ -1285,6 +1295,56 @@ export function VisitasPage() {
         console.warn('[visitas] no se pudo limpiar columnas en storage', error)
       }
     }
+  }, [])
+
+  const handleDragStartColumn = useCallback(
+    (columnId: ColumnId) => (event: DragEvent<HTMLDivElement>) => {
+      setDraggedColumn(columnId)
+      setDragOverColumn(null)
+      event.dataTransfer.effectAllowed = 'move'
+      try {
+        event.dataTransfer.setData('text/plain', columnId)
+      } catch (error) {
+        console.warn('[visitas] no se pudo establecer dataTransfer', error)
+      }
+    },
+    [],
+  )
+
+  const handleDragOverColumn = useCallback(
+    (columnId: ColumnId) => (event: DragEvent<HTMLDivElement>) => {
+      if (!draggedColumn || draggedColumn === columnId) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setDragOverColumn((current) => (current === columnId ? current : columnId))
+    },
+    [draggedColumn],
+  )
+
+  const handleDragLeaveColumn = useCallback(() => {
+    setDragOverColumn(null)
+  }, [])
+
+  const handleDropColumn = useCallback(
+    (columnId: ColumnId) => (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      const source = draggedColumn ?? (event.dataTransfer.getData('text/plain') as ColumnId)
+      setDragOverColumn(null)
+      setDraggedColumn(null)
+      if (!source || source === columnId) return
+      setColumnOrder((current) => {
+        const from = current.indexOf(source)
+        const to = current.indexOf(columnId)
+        if (from === -1 || to === -1 || from === to) return current
+        return arrayMove(current, from, to)
+      })
+    },
+    [draggedColumn],
+  )
+
+  const handleDragEndColumn = useCallback(() => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
   }, [])
 
   const handleSortToggle = useCallback((key: SortKey) => {
@@ -1830,13 +1890,23 @@ export function VisitasPage() {
                         const isVisible = columnVisibility[columnId]
                         const isFirst = index === 0
                         const isLast = index === columnOrder.length - 1
+                        const isDragSource = draggedColumn === columnId
+                        const isDragTarget = dragOverColumn === columnId
                         return (
                           <div
                             key={`column-config-${columnId}`}
                             className={cn(
-                              'flex items-center gap-2 rounded-md border border-border/60 bg-surface px-2 py-1.5',
+                              'flex items-center gap-2 rounded-md border bg-surface px-2 py-1.5 transition',
                               !isVisible ? 'opacity-70' : '',
+                              isDragSource ? 'opacity-60 ring-2 ring-primary/40' : '',
+                              isDragTarget ? 'border-primary/60 bg-primary/5' : 'border-border/60',
                             )}
+                            draggable
+                            onDragStart={handleDragStartColumn(columnId)}
+                            onDragOver={handleDragOverColumn(columnId)}
+                            onDragLeave={handleDragLeaveColumn}
+                            onDrop={handleDropColumn(columnId)}
+                            onDragEnd={handleDragEndColumn}
                           >
                             <Button
                               type="button"
@@ -2064,8 +2134,6 @@ export function VisitasPage() {
                   <TableHeader>
                     <TableRow className="border-b border-border">
                       {activeColumnDefinitions.map((column) => {
-                        const orderIndex = columnOrder.indexOf(column.id)
-                        const widthIndex = orderIndex === -1 ? 0 : orderIndex
                         const headLabel = column.tooltip ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -2086,13 +2154,13 @@ export function VisitasPage() {
                         return (
                           <TableHead
                             key={column.id}
-                            style={columnStyle(widthIndex)}
+                            style={columnStyle(column.id)}
                             className="relative whitespace-nowrap bg-surface-alt px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
                           >
                             {headerContent}
                             <span
                               className="o_resize_handle"
-                              onMouseDown={handleResizeStart(widthIndex)}
+                              onMouseDown={handleResizeStart(column.id)}
                             />
                           </TableHead>
                         )
@@ -2104,13 +2172,13 @@ export function VisitasPage() {
                     ? Array.from({ length: 5 }).map((_, skeletonIndex) => (
                         <TableRow key={`skeleton-${skeletonIndex}`} className="border-b border-border">
                           {activeColumnDefinitions.map((column) => {
-                            const orderIndex = columnOrder.indexOf(column.id)
-                            const widthIndex = orderIndex === -1 ? 0 : orderIndex
-                            const skeletonWidth = SKELETON_WIDTHS[widthIndex] ?? 'w-full'
+                            const definitionIndex = DEFAULT_COLUMN_ORDER.indexOf(column.id)
+                            const skeletonWidth =
+                              definitionIndex !== -1 ? SKELETON_WIDTHS[definitionIndex] ?? 'w-full' : 'w-full'
                             return (
                               <TableCell
                                 key={`${column.id}-skeleton`}
-                                style={columnStyle(widthIndex)}
+                                style={columnStyle(column.id)}
                                 className="px-4 py-3"
                               >
                                 <div className="flex flex-col gap-2">
@@ -2143,12 +2211,10 @@ export function VisitasPage() {
                         >
                           {activeColumnDefinitions.map((column) => {
                             const cell = column.render(row)
-                            const orderIndex = columnOrder.indexOf(column.id)
-                            const widthIndex = orderIndex === -1 ? 0 : orderIndex
                             return (
                               <TableCell
                                 key={`${column.id}-${rowIndex}`}
-                                style={columnStyle(widthIndex)}
+                                style={columnStyle(column.id)}
                                 title={cell.title ?? (typeof cell.value === 'string' ? cell.value : undefined)}
                                 className={cn(
                                   'px-4 py-3 align-top text-sm text-foreground whitespace-normal break-words',
