@@ -787,22 +787,6 @@ export function VisitasPage() {
           </CardHeader>
           <CardContent>
             <form className="flex flex-wrap items-end gap-4" onSubmit={handleSubmit}>
-              <div className="flex min-w-[120px] flex-col gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
-                <span>Estado (CVE)</span>
-                <Input
-                  value={formValues.estado}
-                  maxLength={3}
-                  onChange={(event) =>
-                    setFormValues((current) => ({
-                      ...current,
-                      estado: event.target.value.replace(/[^0-9A-Za-z]/g, '').slice(0, 3),
-                    }))
-                  }
-                  placeholder="Ej. 09"
-                  className="border-border bg-surface-alt text-foreground"
-                />
-              </div>
-
               <div className="flex min-w-[240px] flex-1 flex-col gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
                 <span>Buscar</span>
                 <Input
