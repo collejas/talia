@@ -12,6 +12,8 @@ export interface VisitaRow {
   tuvo_chat?: boolean | null
   mensajes_entrantes?: number | null
   mensajes_salientes?: number | null
+  primer_mensaje_en?: string | null
+  ultimo_mensaje_conversacion?: string | null
   contacto_id?: string | null
   contacto_nombre?: string | null
   contacto_correo?: string | null

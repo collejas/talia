@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import {
   Card,
   CardContent,
@@ -36,7 +38,20 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert'
-import { AlertCircle, InfoIcon } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { AlertCircle, InfoIcon, Clock, Globe, Mail, Phone, MonitorSmartphone } from 'lucide-react'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { fetchVisitas } from '@/services/visitas'
 import type { VisitaRow } from '@/types/visitas'
@@ -148,6 +163,39 @@ function formatDevice(row: VisitaRow): string {
   return pieces.join(' • ') || 'Sin datos'
 }
 
+function captureBadgeFromValue(value?: string | null): ReactNode | null {
+  if (!value) return null
+  const normalized = value.toLowerCase()
+
+  if (normalized === 'completo') {
+    return (
+      <Badge
+        variant="secondary"
+        className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+      >
+        Contacto completo
+      </Badge>
+    )
+  }
+
+  if (normalized === 'incompleto') {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-500/40 bg-amber-500/10 text-amber-200"
+      >
+        Contacto incompleto
+      </Badge>
+    )
+  }
+
+  return (
+    <Badge variant="outline" className="border-border text-muted-foreground">
+      {value}
+    </Badge>
+  )
+}
+
 const headers = [
   'Sesión',
   'IP',
@@ -166,6 +214,12 @@ const headers = [
   'Landing',
 ]
 
+const HEADER_TOOLTIPS: Record<string, string> = {
+  'Tiempo estancia': 'Tiempo total entre el registro y el cierre de la sesión, en una sola visita.',
+  'Estancia promedio': 'Promedio de tiempo por visita calculado en función del número total de visitas registradas.',
+  'Último evento': 'Última interacción detectada para la sesión, incluyendo el momento de cierre si existe.',
+}
+
 export function VisitasPage() {
   const { loading: sessionLoading } = useSupabaseSession()
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
@@ -180,6 +234,15 @@ export function VisitasPage() {
     Array(COLUMN_COUNT).fill(undefined),
   )
   const columnWidthsRef = useRef(columnWidths)
+  const [selectedVisit, setSelectedVisit] = useState<VisitaRow | null>(null)
+
+  const handleOpenDetails = useCallback((visit: VisitaRow) => {
+    setSelectedVisit(visit)
+  }, [])
+
+  const handleCloseDetails = useCallback(() => {
+    setSelectedVisit(null)
+  }, [])
 
   useEffect(() => {
     columnWidthsRef.current = columnWidths
@@ -321,6 +384,10 @@ export function VisitasPage() {
   const loadingState = sessionLoading || isFetching
   const showEmptyState = !loadingState && !error && !hasData
   const resultsLabel = numberFormatter.format(total)
+  const detailsOpen = Boolean(selectedVisit)
+  const selectedCaptureBadge = selectedVisit
+    ? captureBadgeFromValue(selectedVisit.contacto_captura)
+    : null
   const lastEventContent = useMemo(
     () =>
       items.map((row) => {
@@ -482,26 +549,46 @@ export function VisitasPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b border-border">
-                    {headers.map((header, index) => (
-                      <TableHead
-                        key={header}
-                        style={columnStyle(index)}
-                        className="relative whitespace-nowrap bg-surface-alt px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
-                      >
-                        {header}
-                        <span
-                          className="o_resize_handle"
-                          onMouseDown={handleResizeStart(index)}
-                        />
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+            <TooltipProvider delayDuration={150} skipDelayDuration={100}>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-border">
+                      {headers.map((header, index) => {
+                        const tooltipContent = HEADER_TOOLTIPS[header]
+                        const headLabel = tooltipContent ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex cursor-help items-center gap-1">
+                                {header}
+                                <InfoIcon className="h-3 w-3" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                              {tooltipContent}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          header
+                        )
+
+                        return (
+                          <TableHead
+                            key={header}
+                            style={columnStyle(index)}
+                            className="relative whitespace-nowrap bg-surface-alt px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
+                          >
+                            {headLabel}
+                            <span
+                              className="o_resize_handle"
+                              onMouseDown={handleResizeStart(index)}
+                            />
+                          </TableHead>
+                        )
+                      })}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                   {loadingState && !hasData
                     ? Array.from({ length: 3 }).map((_, skeletonIndex) => (
                         <TableRow key={`skeleton-${skeletonIndex}`} className="border-b border-border">
@@ -525,15 +612,50 @@ export function VisitasPage() {
                         const chatLabel = row.tuvo_chat
                           ? `Sí (${numberFormatter.format(inbound)} entrantes)`
                           : 'No'
+                        const chatBadge = (
+                          <Badge
+                            variant={row.tuvo_chat ? 'default' : 'outline'}
+                            className={row.tuvo_chat
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                              : 'border-border text-muted-foreground'}
+                          >
+                            {row.tuvo_chat ? 'Chat activo' : 'Sin chat'}
+                          </Badge>
+                        )
+                        const captureBadge = captureBadgeFromValue(row.contacto_captura)
+                        const referrerLink = row.referrer ? (
+                          <a
+                            href={row.referrer}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="break-words text-primary hover:underline"
+                          >
+                            {row.referrer}
+                          </a>
+                        ) : (
+                          '—'
+                        )
+                        const landingLink = row.landing_url ? (
+                          <a
+                            href={row.landing_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="break-words text-primary hover:underline"
+                          >
+                            {row.landing_url}
+                          </a>
+                        ) : (
+                          '—'
+                        )
 
-                        const columns = [
+                        const columns: Array<{ value: ReactNode; className?: string; title?: string }> = [
                           {
-                            value: row.session_id || '—',
-                            className: 'font-mono whitespace-nowrap',
+                            value: <span className="font-mono">{row.session_id || '—'}</span>,
+                            className: 'whitespace-nowrap',
                             title: row.session_id || undefined,
                           },
                           {
-                            value: row.ip || '—',
+                            value: row.ip ? <span className="font-mono break-words">{row.ip}</span> : '—',
                             className: 'break-words',
                             title: row.ip || undefined,
                           },
@@ -563,12 +685,19 @@ export function VisitasPage() {
                             title: formatDuration(row.avg_stay_seconds),
                           },
                           {
-                            value: chatLabel,
+                            value: chatBadge,
                             className: 'whitespace-nowrap',
                             title: chatLabel,
                           },
                           {
-                            value: formatContact(row),
+                            value: (
+                              <div className="flex flex-col gap-1">
+                                <span className="whitespace-pre-line">{formatContact(row)}</span>
+                                {captureBadge ? (
+                                  <div className="flex flex-wrap gap-1">{captureBadge}</div>
+                                ) : null}
+                              </div>
+                            ),
                             className: 'whitespace-pre-line',
                             title: formatContact(row),
                           },
@@ -588,17 +717,22 @@ export function VisitasPage() {
                             title: formatCity(row),
                           },
                           {
-                            value: formatDevice(row),
+                            value: (
+                              <div className="flex items-center gap-2">
+                                <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
+                                <span>{formatDevice(row)}</span>
+                              </div>
+                            ),
                             className: 'whitespace-nowrap',
                             title: formatDevice(row),
                           },
                           {
-                            value: row.referrer || '—',
+                            value: referrerLink,
                             className: 'break-words',
                             title: row.referrer || undefined,
                           },
                           {
-                            value: row.landing_url || '—',
+                            value: landingLink,
                             className: 'break-words',
                             title: row.landing_url || undefined,
                           },
@@ -607,20 +741,25 @@ export function VisitasPage() {
                         return (
                           <TableRow
                             key={row.session_id ?? `${rowIndex}`}
-                            className="border-b border-border hover:bg-surface-alt/60"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleOpenDetails(row)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                handleOpenDetails(row)
+                              }
+                            }}
+                            className="cursor-pointer border-b border-border transition hover:bg-surface-alt/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                           >
                             {columns.map((column, columnIndex) => (
                               <TableCell
                                 key={columnIndex}
                                 style={columnStyle(columnIndex)}
-                                title={column.title}
+                                title={column.title ?? (typeof column.value === 'string' ? column.value : undefined)}
                                 className={`px-4 py-3 text-sm text-foreground ${column.className ?? ''}`}
                               >
-                                {column.className?.includes('whitespace-pre-line') ? (
-                                  <span className="whitespace-pre-line">{column.value}</span>
-                                ) : (
-                                  column.value
-                                )}
+                                {column.value}
                               </TableCell>
                             ))}
                           </TableRow>
@@ -641,6 +780,7 @@ export function VisitasPage() {
                 </TableBody>
               </Table>
             </div>
+            </TooltipProvider>
 
             <div className="flex items-center justify-between gap-4 border-t border-border bg-surface-alt px-4 py-3 text-sm text-muted">
               <span>
@@ -669,6 +809,155 @@ export function VisitasPage() {
             </div>
           </CardContent>
         </Card>
+        <Dialog
+          open={detailsOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCloseDetails()
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl">
+            {selectedVisit ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Detalle de la visita</DialogTitle>
+                  <DialogDescription>
+                    Sesión <span className="font-mono">{selectedVisit.session_id}</span>
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 text-sm">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Información general
+                      </h4>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          Primera visita: {formatDateTime(selectedVisit.primera_visita_en || selectedVisit.registrado_en)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          Último evento: {formatDateTime(selectedVisit.ultimo_evento_en)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>Estancia total: {formatDuration(selectedVisit.stay_seconds)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>Promedio por visita: {formatDuration(selectedVisit.avg_stay_seconds)}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Ubicación y origen
+                      </h4>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          {formatCountry(selectedVisit)}
+                          {selectedVisit.state_name ? ` · ${selectedVisit.state_name}` : ''}
+                          {selectedVisit.city_name ? ` (${selectedVisit.city_name})` : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
+                        <span>{formatDevice(selectedVisit)}</span>
+                      </div>
+                      {selectedVisit.referrer ? (
+                        <div className="flex items-center gap-2 text-foreground">
+                          <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                          <a
+                            href={selectedVisit.referrer}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="truncate text-primary hover:underline"
+                          >
+                            {selectedVisit.referrer}
+                          </a>
+                        </div>
+                      ) : null}
+                      {selectedVisit.landing_url ? (
+                        <div className="flex items-center gap-2 text-foreground">
+                          <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                          <a
+                            href={selectedVisit.landing_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="truncate text-primary hover:underline"
+                          >
+                            {selectedVisit.landing_url}
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Contacto
+                      </h4>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span>{selectedVisit.contacto_correo || 'Sin correo'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span>{selectedVisit.contacto_telefono || 'Sin teléfono'}</span>
+                      </div>
+                      {selectedVisit.contacto_nombre ? (
+                        <div className="text-foreground">{selectedVisit.contacto_nombre}</div>
+                      ) : null}
+                      {selectedVisit.contacto_empresa ? (
+                        <div className="text-foreground">{selectedVisit.contacto_empresa}</div>
+                      ) : null}
+                      {selectedCaptureBadge ? (
+                        <div className="flex flex-wrap gap-1">{selectedCaptureBadge}</div>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Conversación
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-2 text-foreground">
+                        <span className="text-sm">Estado:</span>
+                        {selectedVisit.tuvo_chat ? (
+                          <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
+                            Chat activo
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Sin chat</Badge>
+                        )}
+                      </div>
+                      <div className="text-foreground">
+                        Mensajes entrantes: {numberFormatter.format(selectedVisit.mensajes_entrantes ?? 0)}
+                      </div>
+                      <div className="text-foreground">
+                        Mensajes salientes: {numberFormatter.format(selectedVisit.mensajes_salientes ?? 0)}
+                      </div>
+                      {selectedVisit.primer_mensaje_en ? (
+                        <div className="text-foreground">
+                          Primer mensaje: {formatDateTime(selectedVisit.primer_mensaje_en)}
+                        </div>
+                      ) : null}
+                      {selectedVisit.ultimo_mensaje_conversacion ? (
+                        <div className="text-foreground">
+                          Último mensaje: {formatDateTime(selectedVisit.ultimo_mensaje_conversacion)}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
