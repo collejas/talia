@@ -14,11 +14,12 @@ import { cn } from '@/lib/utils'
 import { getLegacyPanelBasePath, getSpaBasePath, buildLoginUrl } from '@/lib/paths'
 import { getSupabaseClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { Toaster } from '@/components/ui/toaster'
 
 const PANEL_LINKS = [
   { id: 'dashboard', label: 'Dashboard', href: '/panel.html', legacy: true },
   { id: 'embudo', label: 'Embudo', href: '/panel/embudo.html', legacy: true },
-  { id: 'leads', label: 'Leads', href: '/panel/leads.html', legacy: true },
+  { id: 'leads', label: 'Leads', href: '/leads', legacy: false },
   { id: 'agenda', label: 'Agenda', href: '/panel/agenda.html', legacy: true },
   { id: 'visitas', label: 'Visitas', href: '/visitas', legacy: false },
   { id: 'inbox', label: 'Inbox', href: '/panel/inbox.html', legacy: true },
@@ -162,6 +163,7 @@ export function PanelLayout({ session }: PanelLayoutProps) {
           ))}
         </div>
       </footer>
+      <Toaster />
     </div>
   )
 }

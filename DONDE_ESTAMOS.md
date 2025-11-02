@@ -155,3 +155,11 @@
   limpiar y enfoque de búsqueda; queda lista para extenderse a otras pantallas.
 - Los skeletons del listado ahora cubren cinco filas con placeholders multi-línea, lo que evita saltos bruscos durante la carga inicial y
   mantiene el layout estable mientras llegan los datos.
+- Se migró la vista de `Leads` a React (`src/features/leads/LeadsPage.tsx`), replicando filtros, vista tabla/acordeón, paginación incremental,
+  edición y eliminación mediante el backend `/api/leads`. Se añadieron los tipos y servicios (`types/leads.ts`, `services/leads.ts`), nuevas
+  piezas UI (accordion, textarea) y la navegación del layout ahora apunta al SPA (`/panel-react/leads`).
+
+
+
+
+codex resume 019a42b5-1f97-7f02-a0d5-830af650c58d
