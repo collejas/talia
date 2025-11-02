@@ -1,10 +1,12 @@
 import { fetchJSONWithAuth } from '@/lib/api'
 import type { VisitasApiResponse } from '@/types/visitas'
 
+export type VisitasRange = 'all' | 'hoy' | 'ayer' | '7d' | '30d'
+
 export interface VisitasQuery {
   limit: number
   offset: number
-  rango?: string
+  rango?: VisitasRange
   conChat?: 'with' | 'without' | 'all'
   estado?: string
   search?: string
@@ -15,7 +17,7 @@ export async function fetchVisitas(query: VisitasQuery) {
   params.set('limit', String(query.limit))
   params.set('offset', String(query.offset))
 
-  if (query.rango) params.set('rango', query.rango)
+  if (query.rango && query.rango !== 'all') params.set('rango', query.rango)
   if (query.conChat === 'with') params.set('con_chat', 'true')
   if (query.conChat === 'without') params.set('con_chat', 'false')
   if (query.estado) params.set('estado', query.estado)

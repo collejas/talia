@@ -34,7 +34,7 @@ const COLUMN_COUNT = 15
 const COLUMN_MIN_WIDTH = 120
 
 const RANGE_OPTIONS = [
-  { value: '', label: 'Todos' },
+  { value: 'all', label: 'Todos' },
   { value: 'hoy', label: 'Hoy' },
   { value: 'ayer', label: 'Ayer' },
   { value: '7d', label: 'Últimos 7 días' },
@@ -47,9 +47,18 @@ const CHAT_OPTIONS = [
   { value: 'without', label: 'Sin chat' },
 ]
 
-const DEFAULT_FILTERS = {
+type RangeOption = 'all' | 'hoy' | 'ayer' | '7d' | '30d'
+
+type Filters = {
+  rango: RangeOption
+  conChat: 'all' | 'with' | 'without'
+  estado: string
+  search: string
+}
+
+const DEFAULT_FILTERS: Filters = {
   rango: '7d',
-  conChat: 'all' as 'all' | 'with' | 'without',
+  conChat: 'all',
   estado: '',
   search: '',
 }
@@ -145,8 +154,6 @@ const headers = [
   'Landing',
 ]
 
-type Filters = typeof DEFAULT_FILTERS
-
 export function VisitasPage() {
   const { loading: sessionLoading } = useSupabaseSession()
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
@@ -188,7 +195,7 @@ export function VisitasPage() {
         const data = await fetchVisitas({
           limit: LIMIT,
           offset,
-          rango: filters.rango || undefined,
+          rango: filters.rango,
           conChat: filters.conChat,
           estado: filters.estado || undefined,
           search: filters.search || undefined,
@@ -332,7 +339,7 @@ export function VisitasPage() {
             <span>Período</span>
             <Select
               value={formValues.rango}
-              onValueChange={(value) =>
+              onValueChange={(value: RangeOption) =>
                 setFormValues((current) => ({ ...current, rango: value }))
               }
             >
@@ -341,7 +348,7 @@ export function VisitasPage() {
               </SelectTrigger>
               <SelectContent>
                 {RANGE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value || 'all'} value={option.value}>
+                  <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
                 ))}
