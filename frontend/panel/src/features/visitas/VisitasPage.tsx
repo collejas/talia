@@ -92,6 +92,7 @@ import { cn } from '@/lib/utils'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { fetchVisitas } from '@/services/visitas'
 import type { VisitaRow } from '@/types/visitas'
+import { VisitasDashboard } from './components/VisitasDashboard'
 
 const LIMIT = 50
 const COLUMN_MIN_WIDTH = 120
@@ -1913,6 +1914,14 @@ export function VisitasPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-[100vw] flex-col gap-4 px-4 pt-1 pb-4">
+        {(loadingState || hasData) ? (
+          <VisitasDashboard
+            total={total}
+            chatTotals={chatTotals}
+            items={items}
+            loading={loadingState}
+          />
+        ) : null}
         <Card className="border-border bg-surface shadow-panel-soft">
           <CardContent className="pt-4">
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-alt px-4 py-3">
