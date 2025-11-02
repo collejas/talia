@@ -1,9 +1,14 @@
-import type { PropsWithChildren } from 'react'
+import type { ComponentType } from 'react'
+import type { Session } from '@supabase/supabase-js'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 
-export function ProtectedRoute({ children }: PropsWithChildren) {
+export function ProtectedRoute({
+  component: Component,
+}: {
+  component: ComponentType<{ session: Session }>
+}) {
   const { loading, session } = useSupabaseSession()
 
   if (loading) {
@@ -18,9 +23,8 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
   }
 
   if (!session) {
-    // El hook ya redirigió a login, solo renderiza placeholder.
     return null
   }
 
-  return <>{children}</>
+  return <Component session={session} />
 }

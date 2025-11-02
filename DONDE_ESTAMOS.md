@@ -131,3 +131,20 @@
 
   Si te parece, puedo empezar con el layout + dashboard como siguiente paso, y repetimos el proceso página por página hasta tener todo
   cubierto. Sólo confirma por dónde quieres seguir y lo vamos implementando.
+
+# Paso 3
+
+- Se creó el nuevo proyecto `frontend/panel` con Vite + React + TypeScript, Tailwind 3 y shadcn/ui. El build ahora genera la SPA en
+  `backend/app/public/panel-react`, que FastAPI monta en `/panel-react` (con fallback a `index.html` para rutas internas).
+- Se migró la pantalla de login: `frontend/panel/src/pages/LoginPage.tsx` integra Supabase, shadcn `Card`, y el flujo de redirección al
+  nuevo panel.
+- Se implementó la vista React de `Visitas` (`src/features/visitas/VisitasPage.tsx`) replicando filtros, paginación, resumen, formato de
+  columnas y redimensionamiento; usa `services/visitas.ts` para llamar a `/api/visitas/webchat`.
+- Se añadió un layout central (`src/components/layouts/PanelLayout.tsx`) que incluye el header con menú, selector de tema, email del
+  usuario y footer, manteniendo enlaces al panel legacy donde aún no se migra la funcionalidad.
+- Se incorporó una capa de autenticación compartida (`useSupabaseSession`, `ProtectedRoute`) que protege las rutas, redirige a login y
+  expone la sesión al layout/páginas.
+- El build diferencia entre dev (`base: '/'`) y prod (`base: '/panel-react/'`). También se añadió `SPAStaticFiles` en el backend para que
+  cualquier ruta no encontrada devuelva `index.html`, evitando errores 404 en el router.
+- Se ajustó Nginx para servir la SPA bajo `/panel-react/` y mantener el panel legacy en `/panel/`; tras `npm run build`, basta reiniciar
+  `talia-api.service` para publicar los cambios.
