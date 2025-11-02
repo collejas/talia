@@ -491,7 +491,7 @@ export function VisitasPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-6 px-6 py-10">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-6 pt-1 pb-4">
         <Card className="border-border bg-surface shadow-panel-soft">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl font-semibold">Filtros de visitas</CardTitle>

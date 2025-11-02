@@ -468,7 +468,7 @@ export function LeadsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-6 py-8">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-6 pt-1 pb-4">
         <Card className="border-border bg-surface shadow-panel-soft">
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">

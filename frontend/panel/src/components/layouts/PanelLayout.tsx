@@ -142,7 +142,7 @@ export function PanelLayout({ session }: PanelLayoutProps) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1240px] px-6 py-8">
+      <main className="mx-auto w-full max-w-[1240px] px-6 py-4">
         <Outlet />
       </main>
 
