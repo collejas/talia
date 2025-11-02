@@ -804,7 +804,7 @@ export function VisitasPage() {
                         value={filters.country || GEO_ANY_VALUE}
                         onValueChange={(value) => handleCountryFilter(value === GEO_ANY_VALUE ? null : value)}
                       >
-                        <SelectTrigger className="h-8 border-border bg-surface text-sm">
+                        <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
                           <SelectValue placeholder="Todos los países" />
                         </SelectTrigger>
                         <SelectContent>
@@ -828,7 +828,7 @@ export function VisitasPage() {
                         value={filters.estado || GEO_ANY_VALUE}
                         onValueChange={(value) => handleStateFilter(value === GEO_ANY_VALUE ? null : value)}
                       >
-                        <SelectTrigger className="h-8 border-border bg-surface text-sm">
+                        <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
                           <SelectValue placeholder="Todas las regiones" />
                         </SelectTrigger>
                         <SelectContent>
@@ -852,7 +852,7 @@ export function VisitasPage() {
                         value={filters.city || GEO_ANY_VALUE}
                         onValueChange={(value) => handleCityFilter(value === GEO_ANY_VALUE ? null : value)}
                       >
-                        <SelectTrigger className="h-8 border-border bg-surface text-sm">
+                        <SelectTrigger className="h-8 border-border bg-surface-alt text-foreground text-sm">
                           <SelectValue placeholder="Todas las ciudades" />
                         </SelectTrigger>
                         <SelectContent>
