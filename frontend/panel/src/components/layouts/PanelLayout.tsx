@@ -59,7 +59,7 @@ export function PanelLayout({ session }: PanelLayoutProps) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-6 px-6 py-4">
+        <div className="mx-auto flex w-full max-w-[100vw] items-center justify-between gap-6 px-6 py-4">
           <a
             className="flex items-center gap-3 text-lg font-semibold tracking-tight"
             href={`${spaBase}/visitas`}
@@ -124,7 +124,7 @@ export function PanelLayout({ session }: PanelLayoutProps) {
             </Button>
           </div>
         </div>
-        <div className="mx-auto flex w-full max-w-[1240px] items-center gap-3 px-6 pb-3 text-xs text-muted md:hidden">
+        <div className="mx-auto flex w-full max-w-[100vw] items-center gap-3 px-6 pb-3 text-xs text-muted md:hidden">
           {PANEL_LINKS.filter((link) => !link.legacy).map((link) => (
             <a
               key={link.id}
@@ -142,11 +142,11 @@ export function PanelLayout({ session }: PanelLayoutProps) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1240px] px-6 py-4">
+      <main className="mx-auto w-full max-w-[100vw] px-6 py-4">
         <Outlet />
       </main>
 
-      <footer className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-4 px-6 pb-10 text-xs text-muted">
+      <footer className="mx-auto flex w-full max-w-[100vw] items-center justify-between gap-4 px-6 pb-10 text-xs text-muted">
         <div>
           <span>Sesión iniciada como </span>
           <span className="font-medium text-foreground">{session.user.email}</span>
