@@ -4,7 +4,7 @@
   --transition-medium: 0.3s ease;
   --container-max: 1120px;
   /* Alturas fijas para layout con header + capa inferior */
-  --header-h: 64px;
+  --header-h: 54px;
   /* Altura total estimada de la capa inferior (composer) en desktop */
   --composer-h: 180px;
   /* Separación visible entre el card y el composer */
