@@ -1,3 +1,13 @@
+# Etapa de build del frontend
+FROM node:20-alpine AS frontend
+WORKDIR /app/frontend/panel
+COPY frontend/panel/package.json frontend/panel/package-lock.json ./
+RUN npm ci
+COPY frontend/panel .
+RUN mkdir -p ../../backend/app/public
+RUN npm run build
+
+# Etapa principal de backend
 FROM python:3.11-slim
 
 ENV POETRY_HOME=/opt/poetry \
@@ -16,6 +26,7 @@ RUN poetry config virtualenvs.create false && \
     poetry install --only main --no-root
 
 COPY app ./app
+COPY --from=frontend /app/backend/app/public/panel-react ./app/public/panel-react
 RUN adduser --disabled-password --gecos "" appuser
 USER appuser
 

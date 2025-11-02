@@ -16,6 +16,7 @@ vendor/
 *.log
 dist/
 build/
+backend/app/public/panel-react/
 coverage/
 
 # Archivos de Git

@@ -68,6 +68,7 @@ def create_app() -> FastAPI:
         public_root = Path(__file__).resolve().parent / "public"
         packaged = public_root / "panel"
         shared = public_root / "shared"
+        modern_panel = public_root / "panel-react"
         if packaged.exists():
             static = StaticFiles(directory=str(packaged), html=True)
             # Monta en /panel (cuando el proxy pasa root_path correctamente)
@@ -77,6 +78,14 @@ def create_app() -> FastAPI:
             log.info("panel.static_mounted", extra={"path": str(packaged)})
         else:
             log.warning("panel.static_missing", extra={"expected_path": str(packaged)})
+
+        if modern_panel.exists():
+            modern_static = StaticFiles(directory=str(modern_panel), html=True)
+            app.mount("/panel-react", modern_static, name="panel_react")
+            app.mount("/api/panel-react", modern_static, name="panel_react_alt")
+            log.info("panel_react.static_mounted", extra={"path": str(modern_panel)})
+        else:
+            log.info("panel_react.static_missing", extra={"expected_path": str(modern_panel)})
 
         if shared.exists():
             shared_static = StaticFiles(directory=str(shared), html=False)
