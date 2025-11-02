@@ -72,6 +72,8 @@ import {
   Sparkles,
   RefreshCw,
   Filter,
+  Calendar,
+  MessageCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
@@ -461,7 +463,6 @@ export function VisitasPage() {
       }),
     [items],
   )
-  const quickRanges = useMemo(() => RANGE_OPTIONS, [])
   const showTotalsSkeleton = loadingState && !hasData
   const dimTotals = isFetching && hasData
   const chatFilterLabel = useMemo(() => {
@@ -598,7 +599,7 @@ export function VisitasPage() {
                 </Button>
               </div>
             </form>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt px-4 py-3">
               <div
                 className={cn(
                   'flex flex-wrap items-center gap-2 text-sm text-muted-foreground',
@@ -632,34 +633,46 @@ export function VisitasPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex flex-wrap items-center gap-1">
-                  {quickRanges.map((option) => (
-                    <Button
-                      key={`quick-range-${option.value}`}
-                      type="button"
-                      size="sm"
-                      variant={filters.rango === option.value ? 'secondary' : 'ghost'}
-                      onClick={() => setRangeFilter(option.value)}
-                      disabled={loadingState && filters.rango === option.value}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary/80" />
+                  <div className="w-[140px]">
+                  <Select
+                    value={filters.rango}
+                    onValueChange={(value: RangeOption) => setRangeFilter(value)}
+                  >
+                    <SelectTrigger className="h-9 border-border bg-surface text-foreground text-sm font-medium">
+                      <SelectValue placeholder="Selecciona rango" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RANGE_OPTIONS.map((option) => (
+                        <SelectItem key={`toolbar-range-${option.value}`} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 </div>
                 <div className="hidden h-6 w-px bg-border sm:block" />
-                <div className="flex flex-wrap items-center gap-1">
-                  {CHAT_OPTIONS.map((option) => (
-                    <Button
-                      key={`quick-chat-${option.value}`}
-                      type="button"
-                      size="sm"
-                      variant={filters.conChat === option.value ? 'secondary' : 'ghost'}
-                      onClick={() => setChatFilter(option.value)}
-                      disabled={loadingState && filters.conChat === option.value}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-primary/80" />
+                  <div className="w-[140px]">
+                  <Select
+                    value={filters.conChat}
+                    onValueChange={(value: 'all' | 'with' | 'without') => setChatFilter(value)}
+                  >
+                    <SelectTrigger className="h-9 border-border bg-surface text-foreground text-sm font-medium">
+                      <SelectValue placeholder="Filtrar chat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHAT_OPTIONS.map((option) => (
+                        <SelectItem key={`toolbar-chat-${option.value}`} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 </div>
                 <Button
                   type="button"
