@@ -80,6 +80,9 @@ import {
   Calendar,
   MessageCircle,
   MapPin,
+  Columns3,
+  Eye,
+  EyeOff,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -90,7 +93,6 @@ import { fetchVisitas } from '@/services/visitas'
 import type { VisitaRow } from '@/types/visitas'
 
 const LIMIT = 50
-const COLUMN_COUNT = 15
 const COLUMN_MIN_WIDTH = 120
 const SKELETON_WIDTHS = [
   'w-32',
@@ -316,6 +318,15 @@ function formatDevice(row: VisitaRow): string {
   return pieces.join(' • ') || 'Sin datos'
 }
 
+function formatLastEvent(row: VisitaRow): string {
+  const parts: string[] = []
+  parts.push(formatDateTime(row.ultimo_evento_en))
+  if (row.closed_at) {
+    parts.push(`Cierre: ${formatDateTime(row.closed_at)}`)
+  }
+  return parts.filter(Boolean).join('\n')
+}
+
 function captureBadgeFromValue(value?: string | null): ReactNode | null {
   if (!value) return null
   const normalized = value.toLowerCase()
@@ -357,24 +368,6 @@ type GeoOption = {
   state?: string
 }
 
-const headers = [
-  'Sesión',
-  'IP',
-  'Visitas',
-  'Primera visita',
-  'Último evento',
-  'Tiempo estancia',
-  'Estancia promedio',
-  'Chat',
-  'Contacto',
-  'País',
-  'Estado',
-  'Ciudad',
-  'Dispositivo',
-  'Referrer',
-  'Landing',
-]
-
 type TextFilterField = 'sessionId' | 'ip' | 'referrer' | 'landing'
 
 type ColumnFilterConfig =
@@ -404,6 +397,23 @@ type ColumnFilterConfig =
       target: 'country' | 'state' | 'city'
     }
 
+type ColumnId =
+  | 'session'
+  | 'ip'
+  | 'visitas'
+  | 'primera'
+  | 'ultimo'
+  | 'stay'
+  | 'avgStay'
+  | 'chat'
+  | 'contact'
+  | 'country'
+  | 'state'
+  | 'city'
+  | 'device'
+  | 'referrer'
+  | 'landing'
+
 type SortKey =
   | 'session'
   | 'ip'
@@ -420,27 +430,295 @@ type SortKey =
   | 'referrer'
   | 'landing'
 
-const HEADER_SORT_MAP: Record<string, SortKey> = {
-  Sesión: 'session',
-  IP: 'ip',
-  Visitas: 'visitas',
-  'Primera visita': 'primera',
-  'Último evento': 'ultimo',
-  'Tiempo estancia': 'stay',
-  'Estancia promedio': 'avg_stay',
-  Chat: 'chat',
-  País: 'country',
-  Estado: 'state',
-  Ciudad: 'city',
-  Dispositivo: 'device',
-  Referrer: 'referrer',
-  Landing: 'landing',
+type ColumnCell = { value: ReactNode; className?: string; title?: string }
+
+type ColumnDefinition = {
+  id: ColumnId
+  label: string
+  sortKey?: SortKey
+  tooltip?: string
+  filter?: ColumnFilterConfig
+  render: (row: VisitaRow) => ColumnCell
 }
 
-const HEADER_TOOLTIPS: Record<string, string> = {
-  'Tiempo estancia': 'Tiempo total entre el registro y el cierre de la sesión, en una sola visita.',
-  'Estancia promedio': 'Promedio de tiempo por visita calculado en función del número total de visitas registradas.',
-  'Último evento': 'Última interacción detectada para la sesión, incluyendo el momento de cierre si existe.',
+const COLUMN_DEFINITIONS: ColumnDefinition[] = [
+  {
+    id: 'session',
+    label: 'Sesión',
+    sortKey: 'session',
+    filter: { type: 'text', field: 'sessionId', placeholder: 'ID de sesión' },
+    render: (row) => ({
+      value: <span className="block truncate font-mono">{row.session_id || '—'}</span>,
+      className: 'truncate',
+      title: row.session_id || undefined,
+    }),
+  },
+  {
+    id: 'ip',
+    label: 'IP',
+    sortKey: 'ip',
+    filter: { type: 'text', field: 'ip', placeholder: 'Ej. 187.1.2.3' },
+    render: (row) => ({
+      value: row.ip ? <span className="block break-words font-mono">{row.ip}</span> : '—',
+      className: 'font-mono break-words',
+      title: row.ip || undefined,
+    }),
+  },
+  {
+    id: 'visitas',
+    label: 'Visitas',
+    sortKey: 'visitas',
+    filter: {
+      type: 'numberRange',
+      fieldMin: 'visitasMin',
+      fieldMax: 'visitasMax',
+      minPlaceholder: 'Mínimo',
+      maxPlaceholder: 'Máximo',
+    },
+    render: (row) => {
+      const visitsTotal = Number(row.total_visitas ?? row.visit_count ?? 0)
+      const formatted = numberFormatter.format(visitsTotal)
+      return {
+        value: <span className="block truncate">{formatted}</span>,
+        className: 'truncate',
+        title: formatted,
+      }
+    },
+  },
+  {
+    id: 'primera',
+    label: 'Primera visita',
+    sortKey: 'primera',
+    render: (row) => {
+      const text = formatDateTime(row.primera_visita_en || row.registrado_en)
+      return {
+        value: <span className="block truncate">{text}</span>,
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'ultimo',
+    label: 'Último evento',
+    sortKey: 'ultimo',
+    tooltip: 'Última interacción detectada para la sesión, incluyendo el momento de cierre si existe.',
+    render: (row) => {
+      const text = formatLastEvent(row) || '—'
+      return {
+        value: <span className="whitespace-pre-line">{text}</span>,
+        className: 'whitespace-pre-line',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'stay',
+    label: 'Tiempo estancia',
+    sortKey: 'stay',
+    tooltip: 'Tiempo total entre el registro y el cierre de la sesión, en una sola visita.',
+    render: (row) => {
+      const text = formatDuration(row.stay_seconds)
+      return {
+        value: <span className="block truncate">{text}</span>,
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'avgStay',
+    label: 'Estancia promedio',
+    sortKey: 'avg_stay',
+    tooltip: 'Promedio de tiempo por visita calculado en función del número total de visitas registradas.',
+    render: (row) => {
+      const text = formatDuration(row.avg_stay_seconds)
+      return {
+        value: <span className="block truncate">{text}</span>,
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'chat',
+    label: 'Chat',
+    sortKey: 'chat',
+    filter: { type: 'select', field: 'conChat', options: CHAT_OPTIONS },
+    render: (row) => {
+      const inbound = Number(row.mensajes_entrantes ?? 0)
+      const chatLabel = row.tuvo_chat ? `Sí (${numberFormatter.format(inbound)} entrantes)` : 'No'
+      const badge = row.tuvo_chat ? (
+        <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200">Chat activo</Badge>
+      ) : (
+        <Badge variant="outline" className="border-border text-muted-foreground">
+          Sin chat
+        </Badge>
+      )
+      return {
+        value: badge,
+        className: 'truncate',
+        title: chatLabel,
+      }
+    },
+  },
+  {
+    id: 'contact',
+    label: 'Contacto',
+    filter: { type: 'select', field: 'contactStatus', options: CONTACT_STATUS_OPTIONS },
+    render: (row) => {
+      const contactText = formatContact(row)
+      const badge = captureBadgeFromValue(row.contacto_captura)
+      return {
+        value: (
+          <div className="flex flex-col gap-1">
+            <span className="whitespace-pre-line">{contactText}</span>
+            {badge ? <div className="flex flex-wrap gap-1">{badge}</div> : null}
+          </div>
+        ),
+        className: 'whitespace-pre-line',
+        title: contactText,
+      }
+    },
+  },
+  {
+    id: 'country',
+    label: 'País',
+    sortKey: 'country',
+    filter: { type: 'geo', target: 'country' },
+    render: (row) => {
+      const text = formatCountry(row)
+      return {
+        value: <span className="block truncate">{text}</span>,
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'state',
+    label: 'Estado',
+    sortKey: 'state',
+    filter: { type: 'geo', target: 'state' },
+    render: (row) => {
+      const text = formatState(row)
+      return {
+        value: <span className="block truncate">{text}</span>,
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'city',
+    label: 'Ciudad',
+    sortKey: 'city',
+    filter: { type: 'geo', target: 'city' },
+    render: (row) => {
+      const text = formatCity(row)
+      return {
+        value: <span className="block truncate">{text}</span>,
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'device',
+    label: 'Dispositivo',
+    sortKey: 'device',
+    filter: { type: 'multiSelect', field: 'deviceTypes' },
+    render: (row) => {
+      const text = formatDevice(row)
+      return {
+        value: (
+          <div className="flex min-w-0 items-center gap-2">
+            <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
+            <span className="truncate">{text}</span>
+          </div>
+        ),
+        className: 'truncate',
+        title: text,
+      }
+    },
+  },
+  {
+    id: 'referrer',
+    label: 'Referrer',
+    sortKey: 'referrer',
+    filter: { type: 'text', field: 'referrer', placeholder: 'Dominio o URL' },
+    render: (row) => {
+      if (!row.referrer) {
+        return { value: '—', title: undefined }
+      }
+      return {
+        value: (
+          <a
+            href={row.referrer}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-primary hover:underline"
+          >
+            {row.referrer}
+          </a>
+        ),
+        className: 'truncate',
+        title: row.referrer,
+      }
+    },
+  },
+  {
+    id: 'landing',
+    label: 'Landing',
+    sortKey: 'landing',
+    filter: { type: 'text', field: 'landing', placeholder: 'URL' },
+    render: (row) => {
+      if (!row.landing_url) {
+        return { value: '—', title: undefined }
+      }
+      return {
+        value: (
+          <a
+            href={row.landing_url}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-primary hover:underline"
+          >
+            {row.landing_url}
+          </a>
+        ),
+        className: 'truncate',
+        title: row.landing_url,
+      }
+    },
+  },
+]
+
+const COLUMN_DEFINITION_MAP: Record<ColumnId, ColumnDefinition> = COLUMN_DEFINITIONS.reduce(
+  (acc, column) => {
+    acc[column.id] = column
+    return acc
+  },
+  {} as Record<ColumnId, ColumnDefinition>,
+)
+
+const DEFAULT_COLUMN_ORDER = COLUMN_DEFINITIONS.map((column) => column.id)
+
+const COLUMN_COUNT = COLUMN_DEFINITIONS.length
+
+function createDefaultColumnVisibility(): Record<ColumnId, boolean> {
+  const visibility = {} as Record<ColumnId, boolean>
+  DEFAULT_COLUMN_ORDER.forEach((id) => {
+    visibility[id] = true
+  })
+  return visibility
+}
+
+function arrayMove<T>(array: readonly T[], from: number, to: number): T[] {
+  const result = [...array]
+  const [item] = result.splice(from, 1)
+  result.splice(to, 0, item)
+  return result
 }
 
 export function VisitasPage() {
@@ -460,9 +738,20 @@ export function VisitasPage() {
   const [columnWidths, setColumnWidths] = useState<(number | undefined)[]>(
     Array(COLUMN_COUNT).fill(undefined),
   )
+  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(() => [...DEFAULT_COLUMN_ORDER])
+  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnId, boolean>>(
+    () => createDefaultColumnVisibility(),
+  )
+  const activeColumnDefinitions = useMemo(
+    () => columnOrder.filter((id) => columnVisibility[id]).map((id) => COLUMN_DEFINITION_MAP[id]),
+    [columnOrder, columnVisibility],
+  )
+  const visibleColumnCount = useMemo(() => activeColumnDefinitions.length, [activeColumnDefinitions])
   const columnWidthsRef = useRef(columnWidths)
   const [selectedVisit, setSelectedVisit] = useState<VisitaRow | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const [columnsPopoverOpen, setColumnsPopoverOpen] = useState(false)
+  const [activeHeaderFilter, setActiveHeaderFilter] = useState<ColumnId | null>(null)
   const setRangeFilter = useCallback((value: RangeOption) => {
     setFilters((current) => {
       if (current.rango === value) return current
@@ -540,6 +829,12 @@ export function VisitasPage() {
   useEffect(() => {
     columnWidthsRef.current = columnWidths
   }, [columnWidths])
+
+  useEffect(() => {
+    if (activeHeaderFilter && !columnVisibility[activeHeaderFilter]) {
+      setActiveHeaderFilter(null)
+    }
+  }, [activeHeaderFilter, columnVisibility])
 
   useEffect(() => {
     setFormValues(filters)
@@ -694,18 +989,6 @@ export function VisitasPage() {
   const selectedCaptureBadge = selectedVisit
     ? captureBadgeFromValue(selectedVisit.contacto_captura)
     : null
-  const lastEventContent = useMemo(
-    () =>
-      items.map((row) => {
-        const parts: string[] = []
-        parts.push(formatDateTime(row.ultimo_evento_en))
-        if (row.closed_at) {
-          parts.push(`Cierre: ${formatDateTime(row.closed_at)}`)
-        }
-        return parts.join('\n')
-      }),
-    [items],
-  )
   const showTotalsSkeleton = loadingState && !hasData
   const dimTotals = isFetching && hasData
   const chatFilterLabel = useMemo(() => {
@@ -858,30 +1141,6 @@ export function VisitasPage() {
     })
     return map
   }, [deviceOptions])
-  const columnFilterConfig = useMemo<Record<string, ColumnFilterConfig>>(
-    () => ({
-      Sesión: { type: 'text', field: 'sessionId', placeholder: 'ID de sesión' },
-      IP: { type: 'text', field: 'ip', placeholder: 'Ej. 187.1.2.3' },
-      Visitas: {
-        type: 'numberRange',
-        fieldMin: 'visitasMin',
-        fieldMax: 'visitasMax',
-        minPlaceholder: 'Mínimo',
-        maxPlaceholder: 'Máximo',
-      },
-      Chat: { type: 'select', field: 'conChat', options: CHAT_OPTIONS },
-      Contacto: { type: 'select', field: 'contactStatus', options: CONTACT_STATUS_OPTIONS },
-      País: { type: 'geo', target: 'country' },
-      Estado: { type: 'geo', target: 'state' },
-      Ciudad: { type: 'geo', target: 'city' },
-      Dispositivo: { type: 'multiSelect', field: 'deviceTypes' },
-      Referrer: { type: 'text', field: 'referrer', placeholder: 'Dominio o URL' },
-      Landing: { type: 'text', field: 'landing', placeholder: 'URL' },
-    }),
-    [],
-  )
-  const [activeHeaderFilter, setActiveHeaderFilter] = useState<string | null>(null)
-
   const setFilterValue = useCallback(<K extends keyof Filters>(field: K, value: Filters[K]) => {
     setFilters((current) => {
       if (current[field] === value) return current
@@ -912,6 +1171,34 @@ export function VisitasPage() {
     })
   }, [])
 
+  const handleToggleColumnVisibility = useCallback(
+    (columnId: ColumnId) => {
+      setColumnVisibility((current) => {
+        const isVisible = current[columnId]
+        if (isVisible && visibleColumnCount <= 1) {
+          return current
+        }
+        return { ...current, [columnId]: !isVisible }
+      })
+    },
+    [visibleColumnCount],
+  )
+
+  const handleMoveColumn = useCallback((columnId: ColumnId, direction: -1 | 1) => {
+    setColumnOrder((current) => {
+      const index = current.indexOf(columnId)
+      if (index === -1) return current
+      const targetIndex = index + direction
+      if (targetIndex < 0 || targetIndex >= current.length) return current
+      return arrayMove(current, index, targetIndex)
+    })
+  }, [])
+
+  const handleResetColumns = useCallback(() => {
+    setColumnOrder([...DEFAULT_COLUMN_ORDER])
+    setColumnVisibility(createDefaultColumnVisibility())
+  }, [])
+
   const handleSortToggle = useCallback((key: SortKey) => {
     setSortConfig((current) => {
       if (!current || current.key !== key) {
@@ -925,8 +1212,8 @@ export function VisitasPage() {
   }, [])
 
   const handleClearColumnFilter = useCallback(
-    (header: string) => {
-      const config = columnFilterConfig[header]
+    (column: ColumnDefinition) => {
+      const config = column.filter
       if (!config) return
       switch (config.type) {
         case 'text':
@@ -962,11 +1249,12 @@ export function VisitasPage() {
           break
       }
     },
-    [columnFilterConfig, setFilterValue, setNumberFilter, handleCountryFilter, handleStateFilter, handleCityFilter, setFilters],
+    [setFilterValue, setNumberFilter, handleCountryFilter, handleStateFilter, handleCityFilter, setFilters],
   )
 
   const isColumnFilterActive = useCallback(
-    (config: ColumnFilterConfig) => {
+    (config?: ColumnFilterConfig) => {
+      if (!config) return false
       switch (config.type) {
         case 'text':
           return filters[config.field].trim() !== ''
@@ -990,13 +1278,15 @@ export function VisitasPage() {
     [filters],
   )
 
-  const renderColumnFilterContent = (header: string, config: ColumnFilterConfig) => {
+  const renderColumnFilterContent = (column: ColumnDefinition) => {
+    const config = column.filter
+    if (!config) return null
     switch (config.type) {
       case 'text':
         return (
           <div className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Filtro por {header.toLowerCase()}
+              Filtro por {column.label.toLowerCase()}
             </span>
             <Input
               value={filters[config.field]}
@@ -1008,7 +1298,7 @@ export function VisitasPage() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleClearColumnFilter(header)}
+                onClick={() => handleClearColumnFilter(column)}
               >
                 Limpiar
               </Button>
@@ -1068,7 +1358,7 @@ export function VisitasPage() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleClearColumnFilter(header)}
+                onClick={() => handleClearColumnFilter(column)}
               >
                 Limpiar
               </Button>
@@ -1099,7 +1389,7 @@ export function VisitasPage() {
               </SelectTrigger>
               <SelectContent>
                 {config.options.map((option) => (
-                  <SelectItem key={`${header}-filter-${option.value}`} value={option.value}>
+                  <SelectItem key={`${column.id}-filter-${option.value}`} value={option.value}>
                     {option.label}
                   </SelectItem>
                 ))}
@@ -1110,7 +1400,7 @@ export function VisitasPage() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleClearColumnFilter(header)}
+                onClick={() => handleClearColumnFilter(column)}
               >
                 Limpiar
               </Button>
@@ -1153,7 +1443,7 @@ export function VisitasPage() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleClearColumnFilter(header)}
+                onClick={() => handleClearColumnFilter(column)}
               >
                 Limpiar
               </Button>
@@ -1168,9 +1458,9 @@ export function VisitasPage() {
     }
   }
 
-  const renderHeaderLabel = (header: string, headLabel: ReactNode) => {
-    const config = columnFilterConfig[header]
-    const sortKey = HEADER_SORT_MAP[header]
+  const renderHeaderLabel = (column: ColumnDefinition, headLabel: ReactNode) => {
+    const config = column.filter
+    const sortKey = column.sortKey
     const currentSortDirection = sortKey && sortConfig?.key === sortKey ? sortConfig.direction : null
     const sortButton = sortKey ? (
       <Button
@@ -1227,8 +1517,8 @@ export function VisitasPage() {
         <span>{headLabel}</span>
         {sortButton}
         <Popover
-          open={activeHeaderFilter === header}
-          onOpenChange={(open) => setActiveHeaderFilter(open ? header : null)}
+          open={activeHeaderFilter === column.id}
+          onOpenChange={(open) => setActiveHeaderFilter(open ? column.id : null)}
         >
           <PopoverTrigger asChild>
             <Button
@@ -1244,7 +1534,7 @@ export function VisitasPage() {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-72 space-y-3" align="end" side="bottom">
-            {renderColumnFilterContent(header, config)}
+            {renderColumnFilterContent(column)}
           </PopoverContent>
         </Popover>
       </div>
@@ -1410,32 +1700,101 @@ export function VisitasPage() {
                       </Select>
                     </div>
                   </div>
-                  <div className="hidden h-6 w-px bg-border sm:block" />
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="h-4 w-4 text-primary/80" />
-                    <div className="w-[140px]">
-                      <Select
-                        value={filters.conChat}
-                        onValueChange={(value: 'all' | 'with' | 'without') => setChatFilter(value)}
-                      >
-                        <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
-                          <SelectValue placeholder="Filtrar chat" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CHAT_OPTIONS.map((option) => (
-                            <SelectItem key={`toolbar-chat-${option.value}`} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="hidden h-6 w-px bg-border sm:block" />
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-primary/80" />
+                  <div className="w-[140px]">
+                    <Select
+                      value={filters.conChat}
+                      onValueChange={(value: 'all' | 'with' | 'without') => setChatFilter(value)}
+                    >
+                      <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
+                        <SelectValue placeholder="Filtrar chat" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHAT_OPTIONS.map((option) => (
+                          <SelectItem key={`toolbar-chat-${option.value}`} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCommandOpen(true)}
+                </div>
+                <Popover open={columnsPopoverOpen} onOpenChange={setColumnsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" size="sm" variant="outline">
+                      <Columns3 className="mr-2 h-4 w-4" /> Columnas
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 space-y-3" align="end">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Columnas visibles
+                      </span>
+                      <Button type="button" variant="ghost" size="sm" onClick={handleResetColumns}>
+                        Restablecer
+                      </Button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {columnOrder.map((columnId, index) => {
+                        const column = COLUMN_DEFINITION_MAP[columnId]
+                        const isVisible = columnVisibility[columnId]
+                        const isFirst = index === 0
+                        const isLast = index === columnOrder.length - 1
+                        return (
+                          <div
+                            key={`column-config-${columnId}`}
+                            className={cn(
+                              'flex items-center gap-2 rounded-md border border-border/60 bg-surface px-2 py-1.5',
+                              !isVisible ? 'opacity-70' : '',
+                            )}
+                          >
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleMoveColumn(columnId, -1)}
+                              disabled={isFirst}
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleMoveColumn(columnId, 1)}
+                              disabled={isLast}
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={isVisible ? 'secondary' : 'outline'}
+                              size="sm"
+                              className="flex-1 justify-start"
+                              onClick={() => handleToggleColumnVisibility(columnId)}
+                            >
+                              {isVisible ? (
+                                <Eye className="mr-2 h-4 w-4" />
+                              ) : (
+                                <EyeOff className="mr-2 h-4 w-4" />
+                              )}
+                              {column.label}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCommandOpen(true)}
                   >
                     <Sparkles className="h-4 w-4" />
                     <span>Comandos</span>
@@ -1616,35 +1975,36 @@ export function VisitasPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-border">
-                      {headers.map((header, index) => {
-                        const tooltipContent = HEADER_TOOLTIPS[header]
-                        const headLabel = tooltipContent ? (
+                      {activeColumnDefinitions.map((column) => {
+                        const orderIndex = columnOrder.indexOf(column.id)
+                        const widthIndex = orderIndex === -1 ? 0 : orderIndex
+                        const headLabel = column.tooltip ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-flex cursor-help items-center gap-1">
-                                {header}
+                                {column.label}
                                 <InfoIcon className="h-3 w-3" />
                               </span>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                              {tooltipContent}
+                              {column.tooltip}
                             </TooltipContent>
                           </Tooltip>
                         ) : (
-                          header
+                          column.label
                         )
-                        const headerContent = renderHeaderLabel(header, headLabel)
+                        const headerContent = renderHeaderLabel(column, headLabel)
 
                         return (
                           <TableHead
-                            key={header}
-                            style={columnStyle(index)}
+                            key={column.id}
+                            style={columnStyle(widthIndex)}
                             className="relative whitespace-nowrap bg-surface-alt px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
                           >
                             {headerContent}
                             <span
                               className="o_resize_handle"
-                              onMouseDown={handleResizeStart(index)}
+                              onMouseDown={handleResizeStart(widthIndex)}
                             />
                           </TableHead>
                         )
@@ -1655,195 +2015,70 @@ export function VisitasPage() {
                   {loadingState && !hasData
                     ? Array.from({ length: 5 }).map((_, skeletonIndex) => (
                         <TableRow key={`skeleton-${skeletonIndex}`} className="border-b border-border">
-                          {headers.map((_, cellIndex) => (
-                            <TableCell
-                              key={cellIndex}
-                              style={columnStyle(cellIndex)}
-                              className="px-4 py-3"
-                            >
-                              <div className="flex flex-col gap-2">
-                                <Skeleton
-                                  className={`h-4 rounded-sm ${SKELETON_WIDTHS[cellIndex] ?? 'w-full'}`}
-                                />
-                                {cellIndex === 4 || cellIndex === 8 ? (
-                                  <Skeleton className="h-3 w-3/4 rounded-sm" />
-                                ) : null}
-                              </div>
-                            </TableCell>
-                          ))}
+                          {activeColumnDefinitions.map((column) => {
+                            const orderIndex = columnOrder.indexOf(column.id)
+                            const widthIndex = orderIndex === -1 ? 0 : orderIndex
+                            const skeletonWidth = SKELETON_WIDTHS[widthIndex] ?? 'w-full'
+                            return (
+                              <TableCell
+                                key={`${column.id}-skeleton`}
+                                style={columnStyle(widthIndex)}
+                                className="px-4 py-3"
+                              >
+                                <div className="flex flex-col gap-2">
+                                  <Skeleton className={`h-4 rounded-sm ${skeletonWidth}`} />
+                                  {column.id === 'ultimo' || column.id === 'contact' ? (
+                                    <Skeleton className="h-3 w-3/4 rounded-sm" />
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                            )
+                          })}
                         </TableRow>
                       ))
                     : null}
 
                   {!error && hasData
-                    ? items.map((row, rowIndex) => {
-                        const visitsTotal = Number(row.total_visitas ?? row.visit_count ?? 0)
-                        const inbound = Number(row.mensajes_entrantes ?? 0)
-                        const chatLabel = row.tuvo_chat
-                          ? `Sí (${numberFormatter.format(inbound)} entrantes)`
-                          : 'No'
-                        const chatBadge = (
-                          <Badge
-                            variant={row.tuvo_chat ? 'default' : 'outline'}
-                            className={row.tuvo_chat
-                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-                              : 'border-border text-muted-foreground'}
-                          >
-                            {row.tuvo_chat ? 'Chat activo' : 'Sin chat'}
-                          </Badge>
-                        )
-                        const captureBadge = captureBadgeFromValue(row.contacto_captura)
-                        const referrerLink = row.referrer ? (
-                          <a
-                            href={row.referrer}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="break-words text-primary hover:underline"
-                          >
-                            {row.referrer}
-                          </a>
-                        ) : (
-                          '—'
-                        )
-                        const landingLink = row.landing_url ? (
-                          <a
-                            href={row.landing_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="break-words text-primary hover:underline"
-                          >
-                            {row.landing_url}
-                          </a>
-                        ) : (
-                          '—'
-                        )
-
-                        const columns: Array<{ value: ReactNode; className?: string; title?: string }> = [
-                          {
-                            value: <span className="block truncate font-mono">{row.session_id || '—'}</span>,
-                            className: 'truncate',
-                            title: row.session_id || undefined,
-                          },
-                          {
-                            value: row.ip ? <span className="font-mono break-words">{row.ip}</span> : '—',
-                            className: 'font-mono break-words',
-                            title: row.ip || undefined,
-                          },
-                          {
-                            value: <span className="block truncate">{numberFormatter.format(visitsTotal)}</span>,
-                            className: 'truncate',
-                            title: numberFormatter.format(visitsTotal),
-                          },
-                          {
-                            value: <span className="block truncate">{formatDateTime(row.primera_visita_en || row.registrado_en)}</span>,
-                            className: 'truncate',
-                            title: formatDateTime(row.primera_visita_en || row.registrado_en),
-                          },
-                          {
-                            value: lastEventContent[rowIndex],
-                            className: 'whitespace-pre-line',
-                            title: lastEventContent[rowIndex],
-                          },
-                          {
-                            value: <span className="block truncate">{formatDuration(row.stay_seconds)}</span>,
-                            className: 'truncate',
-                            title: formatDuration(row.stay_seconds),
-                          },
-                          {
-                            value: <span className="block truncate">{formatDuration(row.avg_stay_seconds)}</span>,
-                            className: 'truncate',
-                            title: formatDuration(row.avg_stay_seconds),
-                          },
-                          {
-                            value: chatBadge,
-                            className: 'truncate',
-                            title: chatLabel,
-                          },
-                          {
-                            value: (
-                              <div className="flex flex-col gap-1">
-                                <span className="whitespace-pre-line">{formatContact(row)}</span>
-                                {captureBadge ? (
-                                  <div className="flex flex-wrap gap-1">{captureBadge}</div>
-                                ) : null}
-                              </div>
-                            ),
-                            className: 'whitespace-pre-line',
-                            title: formatContact(row),
-                          },
-                          {
-                            value: <span className="block truncate">{formatCountry(row)}</span>,
-                            className: 'truncate',
-                            title: formatCountry(row),
-                          },
-                          {
-                            value: <span className="block truncate">{formatState(row)}</span>,
-                            className: 'truncate',
-                            title: formatState(row),
-                          },
-                          {
-                            value: <span className="block truncate">{formatCity(row)}</span>,
-                            className: 'truncate',
-                            title: formatCity(row),
-                          },
-                          {
-                            value: (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
-                                <span className="truncate">{formatDevice(row)}</span>
-                              </div>
-                            ),
-                            className: 'truncate',
-                            title: formatDevice(row),
-                          },
-                          {
-                            value: referrerLink,
-                            className: 'break-words',
-                            title: row.referrer || undefined,
-                          },
-                          {
-                            value: landingLink,
-                            className: 'break-words',
-                            title: row.landing_url || undefined,
-                          },
-                        ]
-
-                        return (
-                          <TableRow
-                            key={row.session_id ?? `${rowIndex}`}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => handleOpenDetails(row)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                handleOpenDetails(row)
-                              }
-                            }}
-                            className="cursor-pointer border-b border-border transition hover:bg-surface-alt/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-                          >
-                            {columns.map((column, columnIndex) => (
+                    ? items.map((row, rowIndex) => (
+                        <TableRow
+                          key={row.session_id ?? `row-${rowIndex}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleOpenDetails(row)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              handleOpenDetails(row)
+                            }
+                          }}
+                          className="cursor-pointer border-b border-border transition hover:bg-surface-alt/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                        >
+                          {activeColumnDefinitions.map((column) => {
+                            const cell = column.render(row)
+                            const orderIndex = columnOrder.indexOf(column.id)
+                            const widthIndex = orderIndex === -1 ? 0 : orderIndex
+                            return (
                               <TableCell
-                                key={columnIndex}
-                                style={columnStyle(columnIndex)}
-                                title={column.title ?? (typeof column.value === 'string' ? column.value : undefined)}
+                                key={`${column.id}-${rowIndex}`}
+                                style={columnStyle(widthIndex)}
+                                title={cell.title ?? (typeof cell.value === 'string' ? cell.value : undefined)}
                                 className={cn(
                                   'px-4 py-3 align-top text-sm text-foreground whitespace-normal break-words',
-                                  column.className,
+                                  cell.className,
                                 )}
                               >
-                                {column.value}
+                                {cell.value}
                               </TableCell>
-                            ))}
-                          </TableRow>
-                        )
-                      })
+                            )
+                          })}
+                        </TableRow>
+                      ))
                     : null}
 
                   {showEmptyState ? (
                     <TableRow>
                       <TableCell
-                        colSpan={COLUMN_COUNT}
+                        colSpan={activeColumnDefinitions.length || 1}
                         className="px-4 py-10 text-center text-sm text-muted"
                       >
                         No se encontraron visitas con los filtros actuales.
