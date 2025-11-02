@@ -57,7 +57,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import {
-  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -80,9 +79,7 @@ import {
   Filter,
   Calendar,
   MessageCircle,
-  Building2,
   MapPin,
-  Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
@@ -287,88 +284,6 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   'Último evento': 'Última interacción detectada para la sesión, incluyendo el momento de cierre si existe.',
 }
 
-type GeoComboboxProps = {
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-  placeholder: string
-  emptyText: string
-  value: string
-  onSelect: (value: string | null) => void
-  options: GeoOption[]
-  width?: number
-}
-
-function GeoCombobox({
-  icon: Icon,
-  placeholder,
-  emptyText,
-  value,
-  onSelect,
-  options,
-  width = 180,
-}: GeoComboboxProps) {
-  const [open, setOpen] = useState(false)
-  const selected = options.find((option) => option.value === value)
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="h-8 justify-start gap-2 border-border bg-surface text-sm font-medium"
-          style={{ width }}
-        >
-          <Icon className="h-4 w-4 text-primary/80" />
-          <span className="truncate">
-            {selected ? selected.label : placeholder}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[240px] p-0">
-        <Command>
-          <CommandInput placeholder={placeholder} className="h-9" />
-          <CommandEmpty>{emptyText}</CommandEmpty>
-          <CommandList>
-            <CommandGroup>
-              <CommandItem
-                key="__clear"
-                value="__clear"
-                onSelect={() => {
-                  onSelect(null)
-                  setOpen(false)
-                }}
-              >
-                Limpiar
-              </CommandItem>
-              <CommandSeparator />
-              {options.map((option) => (
-                <CommandItem
-                  key={`${option.value}-${option.subtitle ?? ''}`}
-                  value={option.label}
-                  onSelect={() => {
-                    onSelect(option.value)
-                    setOpen(false)
-                  }}
-                >
-                  <div className="flex flex-col">
-                    <span>{option.label}</span>
-                    {option.subtitle ? (
-                      <span className="text-xs text-muted-foreground">{option.subtitle}</span>
-                    ) : null}
-                  </div>
-                  {option.value === value ? <Check className="ml-auto h-4 w-4" /> : null}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
 export function VisitasPage() {
   const { loading: sessionLoading } = useSupabaseSession()
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
@@ -381,6 +296,7 @@ export function VisitasPage() {
   const [error, setError] = useState<string | null>(null)
   const [chatTotals, setChatTotals] = useState<ChatTotals>({ conChat: 0, sinChat: 0 })
   const [commandOpen, setCommandOpen] = useState(false)
+  const [geoPopoverOpen, setGeoPopoverOpen] = useState(false)
   const [columnWidths, setColumnWidths] = useState<(number | undefined)[]>(
     Array(COLUMN_COUNT).fill(undefined),
   )
@@ -400,9 +316,9 @@ export function VisitasPage() {
     })
   }, [])
   const handleCountryFilter = useCallback((value: string | null) => {
+    const nextCountry = value ?? ''
     setFilters((current) => {
-      const nextCountry = value ?? ''
-      if (current.country === nextCountry) return current
+      if (current.country === nextCountry && current.estado === '' && current.city === '') return current
       return {
         ...current,
         country: nextCountry,
@@ -412,7 +328,9 @@ export function VisitasPage() {
     })
     setFormValues((current) => ({
       ...current,
+      country: nextCountry,
       estado: '',
+      city: '',
     }))
   }, [])
   const handleStateFilter = useCallback((value: string | null) => {
@@ -428,6 +346,7 @@ export function VisitasPage() {
     setFormValues((current) => ({
       ...current,
       estado: nextState,
+      city: '',
     }))
   }, [])
   const handleCityFilter = useCallback((value: string | null) => {
@@ -439,7 +358,16 @@ export function VisitasPage() {
         city: nextCity,
       }
     })
+    setFormValues((current) => ({
+      ...current,
+      city: nextCity,
+    }))
   }, [])
+  const handleClearGeoFilters = useCallback(() => {
+    handleCountryFilter(null)
+    handleStateFilter(null)
+    handleCityFilter(null)
+  }, [handleCountryFilter, handleStateFilter, handleCityFilter])
 
   const handleOpenDetails = useCallback((visit: VisitaRow) => {
     setSelectedVisit(visit)
@@ -707,6 +635,24 @@ export function VisitasPage() {
     () => cityOptions.find((option) => option.value === filters.city),
     [cityOptions, filters.city],
   )
+  const GEO_ANY_VALUE = '__all'
+  const geoSummary = useMemo(() => {
+    if (filters.city) {
+      return selectedCityOption?.label ?? filters.city
+    }
+    if (filters.estado) {
+      return selectedStateOption?.label ?? filters.estado
+    }
+    if (filters.country) {
+      return selectedCountryOption?.label ?? filters.country
+    }
+    return 'Ubicación geográfica'
+  }, [filters.city, filters.estado, filters.country, selectedCityOption, selectedStateOption, selectedCountryOption])
+  const geoActive = Boolean(filters.country || filters.estado || filters.city)
+  const geoTriggerClass = cn(
+    'h-8 gap-2 border-border bg-surface text-sm font-medium',
+    geoActive ? 'text-primary' : 'text-foreground',
+  )
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -844,33 +790,96 @@ export function VisitasPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <GeoCombobox
-                  icon={Globe}
-                  placeholder="País"
-                  emptyText="Sin resultados"
-                  value={filters.country}
-                  onSelect={handleCountryFilter}
-                  options={countryOptions}
-                  width={180}
-                />
-                <GeoCombobox
-                  icon={MapPin}
-                  placeholder="Región"
-                  emptyText="Sin resultados"
-                  value={filters.estado}
-                  onSelect={handleStateFilter}
-                  options={filteredStateOptions}
-                  width={180}
-                />
-                <GeoCombobox
-                  icon={Building2}
-                  placeholder="Ciudad"
-                  emptyText="Sin resultados"
-                  value={filters.city}
-                  onSelect={handleCityFilter}
-                  options={filteredCityOptions}
-                  width={200}
-                />
+                <Popover open={geoPopoverOpen} onOpenChange={setGeoPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" className={geoTriggerClass}>
+                      <MapPin className="h-4 w-4 text-primary/80" />
+                      <span className="max-w-[160px] truncate">{geoSummary}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[320px] space-y-4">
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">País</span>
+                      <Select
+                        value={filters.country || GEO_ANY_VALUE}
+                        onValueChange={(value) => handleCountryFilter(value === GEO_ANY_VALUE ? null : value)}
+                      >
+                        <SelectTrigger className="h-8 border-border bg-surface text-sm">
+                          <SelectValue placeholder="Todos los países" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={GEO_ANY_VALUE}>Todos los países</SelectItem>
+                          {countryOptions.map((option) => (
+                            <SelectItem key={`geo-country-${option.value}`} value={option.value}>
+                              <div className="flex flex-col">
+                                <span>{option.label}</span>
+                                {option.subtitle ? (
+                                  <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                                ) : null}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Región</span>
+                      <Select
+                        value={filters.estado || GEO_ANY_VALUE}
+                        onValueChange={(value) => handleStateFilter(value === GEO_ANY_VALUE ? null : value)}
+                      >
+                        <SelectTrigger className="h-8 border-border bg-surface text-sm">
+                          <SelectValue placeholder="Todas las regiones" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={GEO_ANY_VALUE}>Todas las regiones</SelectItem>
+                          {filteredStateOptions.map((option) => (
+                            <SelectItem key={`geo-state-${option.value}`} value={option.value}>
+                              <div className="flex flex-col">
+                                <span>{option.label}</span>
+                                {option.subtitle ? (
+                                  <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                                ) : null}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Ciudad</span>
+                      <Select
+                        value={filters.city || GEO_ANY_VALUE}
+                        onValueChange={(value) => handleCityFilter(value === GEO_ANY_VALUE ? null : value)}
+                      >
+                        <SelectTrigger className="h-8 border-border bg-surface text-sm">
+                          <SelectValue placeholder="Todas las ciudades" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={GEO_ANY_VALUE}>Todas las ciudades</SelectItem>
+                          {filteredCityOptions.map((option) => (
+                            <SelectItem key={`geo-city-${option.value}-${option.subtitle ?? 'x'}`} value={option.value}>
+                              <div className="flex flex-col">
+                                <span>{option.label}</span>
+                                {option.subtitle ? (
+                                  <span className="text-xs text-muted-foreground">{option.subtitle}</span>
+                                ) : null}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-between gap-2 pt-2">
+                      <Button type="button" variant="ghost" size="sm" onClick={handleClearGeoFilters}>
+                        Limpiar
+                      </Button>
+                      <Button type="button" size="sm" onClick={() => setGeoPopoverOpen(false)}>
+                        Cerrar
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <div className="hidden h-6 w-px bg-border sm:block" />
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary/80" />

@@ -161,8 +161,8 @@
 - Se añadieron menús contextualizados por lead con `DropdownMenu` y confirmaciones accesibles mediante `AlertDialog`, evitando `window.confirm`
   y unificando la experiencia de eliminación.
 - El modal de edición ahora utiliza `Tabs` para separar los campos de contacto y seguimiento, mostrando el spinner y las toasts mediante los componentes shadcn existentes.
-- En la vista de visitas se consolidaron los filtros en un único bloque con selects compactos e íconos; se añadieron comboboxes (`Popover` +
-  `Command`) para elegir país, región y ciudad reutilizando los datos cargados y pasando los parámetros (`pais`, `ciudad`) al backend.
+- En la vista de visitas se consolidaron los filtros en un único bloque y se agregó un popover de "Filtro geográfico" (Radix Popover +
+  Selects shadcn) para país, región y ciudad; los parámetros (`pais`, `ciudad`) ahora viajan al backend, y los recuentos muestran el estado de la selección.
 
 
 
