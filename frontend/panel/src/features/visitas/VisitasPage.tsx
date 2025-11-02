@@ -503,48 +503,6 @@ export function VisitasPage() {
           </CardHeader>
           <CardContent>
             <form className="flex flex-wrap items-end gap-4" onSubmit={handleSubmit}>
-              <div className="flex min-w-[160px] flex-col gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
-                <span>Período</span>
-                <Select
-                  value={formValues.rango}
-                  onValueChange={(value: RangeOption) =>
-                    setFormValues((current) => ({ ...current, rango: value }))
-                  }
-                >
-                  <SelectTrigger className="border-border bg-surface-alt text-foreground">
-                    <SelectValue placeholder="Selecciona un rango" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RANGE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex min-w-[160px] flex-col gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
-                <span>Chat</span>
-                <Select
-                  value={formValues.conChat}
-                  onValueChange={(value: 'all' | 'with' | 'without') =>
-                    setFormValues((current) => ({ ...current, conChat: value }))
-                  }
-                >
-                  <SelectTrigger className="border-border bg-surface-alt text-foreground">
-                    <SelectValue placeholder="Filtrar por chat" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHAT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="flex min-w-[120px] flex-col gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
                 <span>Estado (CVE)</span>
                 <Input
