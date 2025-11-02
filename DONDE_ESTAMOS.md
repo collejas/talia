@@ -142,6 +142,7 @@
   columnas y redimensionamiento; usa `services/visitas.ts` para llamar a `/api/visitas/webchat`.
 - Se añadió un layout central (`src/components/layouts/PanelLayout.tsx`) que incluye el header con menú, selector de tema, email del
   usuario y footer, manteniendo enlaces al panel legacy donde aún no se migra la funcionalidad.
+- Vista Visitas (React) envuelta en componentes `Card`, con `Alert` para estados de carga/errores y tabla con filtros estilizados.
 - Se incorporó una capa de autenticación compartida (`useSupabaseSession`, `ProtectedRoute`) que protege las rutas, redirige a login y
   expone la sesión al layout/páginas.
 - El build diferencia entre dev (`base: '/'`) y prod (`base: '/panel-react/'`). También se añadió `SPAStaticFiles` en el backend para que
