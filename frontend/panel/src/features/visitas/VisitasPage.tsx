@@ -640,7 +640,7 @@ export function VisitasPage() {
                     value={filters.rango}
                     onValueChange={(value: RangeOption) => setRangeFilter(value)}
                   >
-                    <SelectTrigger className="h-9 border-border bg-surface text-foreground text-sm font-medium">
+                    <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
                       <SelectValue placeholder="Selecciona rango" />
                     </SelectTrigger>
                     <SelectContent>
@@ -661,7 +661,7 @@ export function VisitasPage() {
                     value={filters.conChat}
                     onValueChange={(value: 'all' | 'with' | 'without') => setChatFilter(value)}
                   >
-                    <SelectTrigger className="h-9 border-border bg-surface text-foreground text-sm font-medium">
+                    <SelectTrigger className="h-8 border-border bg-surface text-foreground text-sm font-medium">
                       <SelectValue placeholder="Filtrar chat" />
                     </SelectTrigger>
                     <SelectContent>
