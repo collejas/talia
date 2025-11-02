@@ -2035,6 +2035,24 @@ def _parse_bool_flag(value: str | None) -> bool | None:
     return None
 
 
+VISITAS_SORT_FIELDS: dict[str, str] = {
+    "session": "session",
+    "ip": "ip",
+    "visitas": "visitas",
+    "primera": "primera",
+    "ultimo": "ultimo",
+    "stay": "stay",
+    "avg_stay": "avg_stay",
+    "chat": "chat",
+    "country": "country",
+    "state": "state",
+    "city": "city",
+    "device": "device",
+    "referrer": "referrer",
+    "landing": "landing",
+}
+
+
 @router.get("/visitas/webchat")
 async def visitas_webchat_detalle(
     rango: str | None = Query(default=None),
@@ -2044,6 +2062,31 @@ async def visitas_webchat_detalle(
     estado: str | None = Query(default=None),
     pais: str | None = Query(default=None),
     ciudad: str | None = Query(default=None),
+    session: str | None = Query(default=None, description="Filtro por ID de sesión (parcial)."),
+    ip: str | None = Query(default=None, description="Filtro por IP (parcial)."),
+    visitas_min: int | None = Query(default=None, ge=0),
+    visitas_max: int | None = Query(default=None, ge=0),
+    primera_desde: str | None = Query(default=None),
+    primera_hasta: str | None = Query(default=None),
+    ultimo_desde: str | None = Query(default=None),
+    ultimo_hasta: str | None = Query(default=None),
+    estancia_min: float | None = Query(default=None, ge=0.0),
+    estancia_max: float | None = Query(default=None, ge=0.0),
+    estancia_promedio_min: float | None = Query(default=None, ge=0.0),
+    estancia_promedio_max: float | None = Query(default=None, ge=0.0),
+    contacto_estado: str | None = Query(
+        default=None,
+        description="Estado del contacto (completo, incompleto, sin_contacto).",
+    ),
+    dispositivo: str | None = Query(
+        default=None, description="Lista separada por comas de tipos de dispositivo."
+    ),
+    referrer: str | None = Query(default=None),
+    landing: str | None = Query(default=None),
+    orden: str | None = Query(default=None, description="Campo de ordenamiento."),
+    direccion: str | None = Query(
+        default=None, description="Dirección de ordenamiento (asc/desc)."
+    ),
     q: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -2063,16 +2106,92 @@ async def visitas_webchat_detalle(
     city = ciudad.strip() if ciudad else None
     if city == "":
         city = None
+    session_filter = session.strip() if session else None
+    if session_filter == "":
+        session_filter = None
+    ip_filter = ip.strip() if ip else None
+    if ip_filter == "":
+        ip_filter = None
+
+    visitas_min_value = visitas_min if visitas_min is not None else None
+    visitas_max_value = visitas_max if visitas_max is not None else None
+    primera_desde_dt = (
+        _parse_date_value(primera_desde, field="primera_desde") if primera_desde else None
+    )
+    primera_hasta_dt = (
+        _parse_date_value(primera_hasta, field="primera_hasta") if primera_hasta else None
+    )
+    ultimo_desde_dt = (
+        _parse_date_value(ultimo_desde, field="ultimo_desde") if ultimo_desde else None
+    )
+    ultimo_hasta_dt = (
+        _parse_date_value(ultimo_hasta, field="ultimo_hasta") if ultimo_hasta else None
+    )
+    estancia_min_value = float(estancia_min) if estancia_min is not None else None
+    estancia_max_value = float(estancia_max) if estancia_max is not None else None
+    estancia_promedio_min_value = (
+        float(estancia_promedio_min) if estancia_promedio_min is not None else None
+    )
+    estancia_promedio_max_value = (
+        float(estancia_promedio_max) if estancia_promedio_max is not None else None
+    )
+
+    contacto_estado_norm = contacto_estado.strip().lower() if contacto_estado else None
+    if contacto_estado_norm in {"", "todos", "all"}:
+        contacto_estado_norm = None
+    valid_contact_states = {"completo", "incompleto", "sin", "sin_contacto"}
+    if contacto_estado_norm is not None and contacto_estado_norm not in valid_contact_states:
+        raise HTTPException(status_code=400, detail="contacto_estado_invalid")
+
+    device_values: list[str] | None = None
+    if dispositivo:
+        candidates = [part.strip() for part in dispositivo.split(",") if part.strip()]
+        if candidates:
+            device_values = candidates
+    referrer_filter = referrer.strip() if referrer else None
+    if referrer_filter == "":
+        referrer_filter = None
+    landing_filter = landing.strip() if landing else None
+    if landing_filter == "":
+        landing_filter = None
+
+    orden_norm = (orden or "").strip().lower()
+    if orden_norm and orden_norm not in VISITAS_SORT_FIELDS:
+        raise HTTPException(status_code=400, detail="orden_invalid")
+    order_field = orden_norm or None
+
+    direccion_norm = (direccion or "").strip().lower()
+    if direccion_norm and direccion_norm not in {"asc", "desc"}:
+        raise HTTPException(status_code=400, detail="direccion_invalid")
+    order_direction = direccion_norm or None
 
     try:
         payload = await storage.fetch_webchat_visitas_detalle(
             date_from=date_from,
             date_to=date_to,
             has_chat=has_chat,
+            session=session_filter,
+            ip=ip_filter,
             state=state,
             country=country,
             city=city,
             search=search,
+            visit_min=visitas_min_value,
+            visit_max=visitas_max_value,
+            first_from=primera_desde_dt,
+            first_to=primera_hasta_dt,
+            last_from=ultimo_desde_dt,
+            last_to=ultimo_hasta_dt,
+            stay_min=estancia_min_value,
+            stay_max=estancia_max_value,
+            avg_stay_min=estancia_promedio_min_value,
+            avg_stay_max=estancia_promedio_max_value,
+            contact_status=contacto_estado_norm,
+            device_types=device_values,
+            referrer=referrer_filter,
+            landing=landing_filter,
+            order_by=order_field,
+            order_dir=order_direction,
             limit=limit,
             offset=offset,
         )

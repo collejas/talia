@@ -12,6 +12,24 @@ export interface VisitasQuery {
   country?: string
   city?: string
   search?: string
+  sessionId?: string
+  ip?: string
+  visitasMin?: number
+  visitasMax?: number
+  firstFrom?: string
+  firstTo?: string
+  lastFrom?: string
+  lastTo?: string
+  stayMin?: number
+  stayMax?: number
+  avgStayMin?: number
+  avgStayMax?: number
+  contactStatus?: 'completo' | 'incompleto' | 'sin_contacto'
+  deviceTypes?: string[]
+  referrer?: string
+  landing?: string
+  orderBy?: string
+  orderDirection?: 'asc' | 'desc'
 }
 
 export async function fetchVisitas(query: VisitasQuery) {
@@ -26,6 +44,24 @@ export async function fetchVisitas(query: VisitasQuery) {
   if (query.country) params.set('pais', query.country)
   if (query.city) params.set('ciudad', query.city)
   if (query.search) params.set('q', query.search)
+  if (query.sessionId) params.set('session', query.sessionId)
+  if (query.ip) params.set('ip', query.ip)
+  if (typeof query.visitasMin === 'number') params.set('visitas_min', String(query.visitasMin))
+  if (typeof query.visitasMax === 'number') params.set('visitas_max', String(query.visitasMax))
+  if (query.firstFrom) params.set('primera_desde', query.firstFrom)
+  if (query.firstTo) params.set('primera_hasta', query.firstTo)
+  if (query.lastFrom) params.set('ultimo_desde', query.lastFrom)
+  if (query.lastTo) params.set('ultimo_hasta', query.lastTo)
+  if (typeof query.stayMin === 'number') params.set('estancia_min', String(query.stayMin))
+  if (typeof query.stayMax === 'number') params.set('estancia_max', String(query.stayMax))
+  if (typeof query.avgStayMin === 'number') params.set('estancia_promedio_min', String(query.avgStayMin))
+  if (typeof query.avgStayMax === 'number') params.set('estancia_promedio_max', String(query.avgStayMax))
+  if (query.contactStatus) params.set('contacto_estado', query.contactStatus)
+  if (query.deviceTypes?.length) params.set('dispositivo', query.deviceTypes.join(','))
+  if (query.referrer) params.set('referrer', query.referrer)
+  if (query.landing) params.set('landing', query.landing)
+  if (query.orderBy) params.set('orden', query.orderBy)
+  if (query.orderDirection) params.set('direccion', query.orderDirection)
 
   const { ok, data, status } = await fetchJSONWithAuth<VisitasApiResponse>(
     `/api/visitas/webchat?${params.toString()}`,

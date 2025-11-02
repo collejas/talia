@@ -80,6 +80,9 @@ import {
   Calendar,
   MessageCircle,
   MapPin,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
@@ -119,6 +122,13 @@ const CHAT_OPTIONS = [
   { value: 'all', label: 'Todos' },
   { value: 'with', label: 'Con chat' },
   { value: 'without', label: 'Sin chat' },
+] as const
+
+const CONTACT_STATUS_OPTIONS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'completo', label: 'Contacto completo' },
+  { value: 'incompleto', label: 'Contacto incompleto' },
+  { value: 'sin_contacto', label: 'Sin contacto' },
 ] as const
 
 const MEXICO_STATE_LABELS: Record<string, string> = {
@@ -192,6 +202,8 @@ const MEXICO_STATE_LABELS: Record<string, string> = {
 
 type RangeOption = 'all' | 'hoy' | 'ayer' | '7d' | '30d'
 
+type ContactStatusOption = 'all' | 'completo' | 'incompleto' | 'sin_contacto'
+
 type Filters = {
   rango: RangeOption
   conChat: 'all' | 'with' | 'without'
@@ -199,6 +211,14 @@ type Filters = {
   country: string
   city: string
   search: string
+  sessionId: string
+  ip: string
+  visitasMin: number | null
+  visitasMax: number | null
+  contactStatus: ContactStatusOption
+  deviceTypes: string[]
+  referrer: string
+  landing: string
 }
 
 type ChatTotals = {
@@ -213,6 +233,14 @@ const DEFAULT_FILTERS: Filters = {
   country: '',
   city: '',
   search: '',
+  sessionId: '',
+  ip: '',
+  visitasMin: null,
+  visitasMax: null,
+  contactStatus: 'all',
+  deviceTypes: [],
+  referrer: '',
+  landing: '',
 }
 
 const numberFormatter = new Intl.NumberFormat('es-MX')
@@ -347,6 +375,68 @@ const headers = [
   'Landing',
 ]
 
+type TextFilterField = 'sessionId' | 'ip' | 'referrer' | 'landing'
+
+type ColumnFilterConfig =
+  | {
+      type: 'text'
+      field: TextFilterField
+      placeholder?: string
+    }
+  | {
+      type: 'numberRange'
+      fieldMin: 'visitasMin'
+      fieldMax: 'visitasMax'
+      minPlaceholder?: string
+      maxPlaceholder?: string
+    }
+  | {
+      type: 'select'
+      field: 'conChat' | 'contactStatus'
+      options: readonly { value: string; label: string }[]
+    }
+  | {
+      type: 'multiSelect'
+      field: 'deviceTypes'
+    }
+  | {
+      type: 'geo'
+      target: 'country' | 'state' | 'city'
+    }
+
+type SortKey =
+  | 'session'
+  | 'ip'
+  | 'visitas'
+  | 'primera'
+  | 'ultimo'
+  | 'stay'
+  | 'avg_stay'
+  | 'chat'
+  | 'country'
+  | 'state'
+  | 'city'
+  | 'device'
+  | 'referrer'
+  | 'landing'
+
+const HEADER_SORT_MAP: Record<string, SortKey> = {
+  Sesión: 'session',
+  IP: 'ip',
+  Visitas: 'visitas',
+  'Primera visita': 'primera',
+  'Último evento': 'ultimo',
+  'Tiempo estancia': 'stay',
+  'Estancia promedio': 'avg_stay',
+  Chat: 'chat',
+  País: 'country',
+  Estado: 'state',
+  Ciudad: 'city',
+  Dispositivo: 'device',
+  Referrer: 'referrer',
+  Landing: 'landing',
+}
+
 const HEADER_TOOLTIPS: Record<string, string> = {
   'Tiempo estancia': 'Tiempo total entre el registro y el cierre de la sesión, en una sola visita.',
   'Estancia promedio': 'Promedio de tiempo por visita calculado en función del número total de visitas registradas.',
@@ -357,6 +447,7 @@ export function VisitasPage() {
   const { loading: sessionLoading } = useSupabaseSession()
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
   const [formValues, setFormValues] = useState<Filters>(DEFAULT_FILTERS)
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null)
   const [page, setPage] = useState(0)
   const [refreshToken, setRefreshToken] = useState(0)
   const [items, setItems] = useState<VisitaRow[]>([])
@@ -455,6 +546,10 @@ export function VisitasPage() {
     setPage(0)
   }, [filters])
 
+  useEffect(() => {
+    setPage(0)
+  }, [sortConfig])
+
   const offset = page * LIMIT
   const hasData = items.length > 0
   const pagerStart = total > 0 ? offset + 1 : 0
@@ -478,6 +573,16 @@ export function VisitasPage() {
           country: filters.country || undefined,
           city: filters.city || undefined,
           search: filters.search || undefined,
+          sessionId: filters.sessionId || undefined,
+          ip: filters.ip || undefined,
+          visitasMin: filters.visitasMin ?? undefined,
+          visitasMax: filters.visitasMax ?? undefined,
+          contactStatus: filters.contactStatus !== 'all' ? filters.contactStatus : undefined,
+          deviceTypes: filters.deviceTypes.length ? filters.deviceTypes : undefined,
+          referrer: filters.referrer || undefined,
+          landing: filters.landing || undefined,
+          orderBy: sortConfig?.key,
+          orderDirection: sortConfig?.direction,
         })
 
         if (page > 0 && data.total > 0 && offset >= data.total) {
@@ -515,7 +620,7 @@ export function VisitasPage() {
     return () => {
       cancelled = true
     }
-  }, [sessionLoading, filters, offset, page, refreshToken])
+  }, [sessionLoading, filters, sortConfig, offset, page, refreshToken])
 
   const handleResizeStart = useCallback(
     (index: number) => (event: React.MouseEvent<HTMLSpanElement>) => {
@@ -565,6 +670,7 @@ export function VisitasPage() {
     setFormValues(DEFAULT_FILTERS)
     setColumnWidths(Array(COLUMN_COUNT).fill(undefined))
     setPage(0)
+    setSortConfig(null)
   }
 
   const handleRefresh = () => {
@@ -728,6 +834,422 @@ export function VisitasPage() {
     if (!filters.city) return ''
     return selectedCityOption?.label ?? filters.city
   }, [filters.city, selectedCityOption])
+  const deviceOptions = useMemo(
+    () => {
+      const map = new Map<string, string>()
+      items.forEach((row) => {
+        const raw = typeof row.device_type === 'string' ? row.device_type.trim() : ''
+        if (!raw) return
+        const normalized = raw.toLowerCase()
+        if (!map.has(normalized)) {
+          map.set(normalized, raw)
+        }
+      })
+      return Array.from(map.entries())
+        .sort((a, b) => a[1].localeCompare(b[1], 'es'))
+        .map(([key, label]) => ({ value: key, label }))
+    },
+    [items],
+  )
+  const deviceLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    deviceOptions.forEach((option) => {
+      map.set(option.value, option.label)
+    })
+    return map
+  }, [deviceOptions])
+  const columnFilterConfig = useMemo<Record<string, ColumnFilterConfig>>(
+    () => ({
+      Sesión: { type: 'text', field: 'sessionId', placeholder: 'ID de sesión' },
+      IP: { type: 'text', field: 'ip', placeholder: 'Ej. 187.1.2.3' },
+      Visitas: {
+        type: 'numberRange',
+        fieldMin: 'visitasMin',
+        fieldMax: 'visitasMax',
+        minPlaceholder: 'Mínimo',
+        maxPlaceholder: 'Máximo',
+      },
+      Chat: { type: 'select', field: 'conChat', options: CHAT_OPTIONS },
+      Contacto: { type: 'select', field: 'contactStatus', options: CONTACT_STATUS_OPTIONS },
+      País: { type: 'geo', target: 'country' },
+      Estado: { type: 'geo', target: 'state' },
+      Ciudad: { type: 'geo', target: 'city' },
+      Dispositivo: { type: 'multiSelect', field: 'deviceTypes' },
+      Referrer: { type: 'text', field: 'referrer', placeholder: 'Dominio o URL' },
+      Landing: { type: 'text', field: 'landing', placeholder: 'URL' },
+    }),
+    [],
+  )
+  const [activeHeaderFilter, setActiveHeaderFilter] = useState<string | null>(null)
+
+  const setFilterValue = useCallback(<K extends keyof Filters>(field: K, value: Filters[K]) => {
+    setFilters((current) => {
+      if (current[field] === value) return current
+      return { ...current, [field]: value }
+    })
+  }, [])
+
+  const setNumberFilter = useCallback(
+    (field: 'visitasMin' | 'visitasMax', value: number | null) => {
+      setFilters((current) => {
+        if (current[field] === value) return current
+        return { ...current, [field]: value }
+      })
+    },
+    [],
+  )
+
+  const toggleDeviceType = useCallback((value: string) => {
+    const normalized = value.trim().toLowerCase()
+    setFilters((current) => {
+      const exists = current.deviceTypes.includes(normalized)
+      if (exists) {
+        const next = current.deviceTypes.filter((item) => item !== normalized)
+        if (next.length === current.deviceTypes.length) return current
+        return { ...current, deviceTypes: next }
+      }
+      return { ...current, deviceTypes: [...current.deviceTypes, normalized] }
+    })
+  }, [])
+
+  const handleSortToggle = useCallback((key: SortKey) => {
+    setSortConfig((current) => {
+      if (!current || current.key !== key) {
+        return { key, direction: 'asc' }
+      }
+      if (current.direction === 'asc') {
+        return { key, direction: 'desc' }
+      }
+      return null
+    })
+  }, [])
+
+  const handleClearColumnFilter = useCallback(
+    (header: string) => {
+      const config = columnFilterConfig[header]
+      if (!config) return
+      switch (config.type) {
+        case 'text':
+          setFilterValue(config.field, '' as Filters[typeof config.field])
+          break
+        case 'numberRange':
+          setNumberFilter(config.fieldMin, null)
+          setNumberFilter(config.fieldMax, null)
+          break
+        case 'select':
+          if (config.field === 'conChat') {
+            setFilterValue('conChat', 'all')
+          } else {
+            setFilterValue('contactStatus', 'all')
+          }
+          break
+        case 'multiSelect':
+          setFilters((current) => {
+            if (current.deviceTypes.length === 0) return current
+            return { ...current, deviceTypes: [] }
+          })
+          break
+        case 'geo':
+          if (config.target === 'country') {
+            handleCountryFilter(null)
+          } else if (config.target === 'state') {
+            handleStateFilter(null)
+          } else {
+            handleCityFilter(null)
+          }
+          break
+        default:
+          break
+      }
+    },
+    [columnFilterConfig, setFilterValue, setNumberFilter, handleCountryFilter, handleStateFilter, handleCityFilter, setFilters],
+  )
+
+  const isColumnFilterActive = useCallback(
+    (config: ColumnFilterConfig) => {
+      switch (config.type) {
+        case 'text':
+          return filters[config.field].trim() !== ''
+        case 'numberRange':
+          return filters[config.fieldMin] !== null || filters[config.fieldMax] !== null
+        case 'select':
+          if (config.field === 'conChat') {
+            return filters.conChat !== 'all'
+          }
+          return filters.contactStatus !== 'all'
+        case 'multiSelect':
+          return filters.deviceTypes.length > 0
+        case 'geo':
+          if (config.target === 'country') return Boolean(filters.country)
+          if (config.target === 'state') return Boolean(filters.estado)
+          return Boolean(filters.city)
+        default:
+          return false
+      }
+    },
+    [filters],
+  )
+
+  const renderColumnFilterContent = (header: string, config: ColumnFilterConfig) => {
+    switch (config.type) {
+      case 'text':
+        return (
+          <div className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Filtro por {header.toLowerCase()}
+            </span>
+            <Input
+              value={filters[config.field]}
+              onChange={(event) => setFilterValue(config.field, event.target.value as Filters[typeof config.field])}
+              placeholder={config.placeholder}
+            />
+            <div className="flex justify-between gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleClearColumnFilter(header)}
+              >
+                Limpiar
+              </Button>
+              <Button type="button" size="sm" onClick={() => setActiveHeaderFilter(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )
+      case 'numberRange':
+        return (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Rango de visitas
+              </span>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={filters[config.fieldMin] ?? ''}
+                  placeholder={config.minPlaceholder}
+                  onChange={(event) => {
+                    const raw = event.target.value
+                    if (raw === '') {
+                      setNumberFilter(config.fieldMin, null)
+                      return
+                    }
+                    const next = Number(raw)
+                    if (!Number.isNaN(next)) {
+                      setNumberFilter(config.fieldMin, next)
+                    }
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">a</span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  value={filters[config.fieldMax] ?? ''}
+                  placeholder={config.maxPlaceholder}
+                  onChange={(event) => {
+                    const raw = event.target.value
+                    if (raw === '') {
+                      setNumberFilter(config.fieldMax, null)
+                      return
+                    }
+                    const next = Number(raw)
+                    if (!Number.isNaN(next)) {
+                      setNumberFilter(config.fieldMax, next)
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleClearColumnFilter(header)}
+              >
+                Limpiar
+              </Button>
+              <Button type="button" size="sm" onClick={() => setActiveHeaderFilter(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )
+      case 'select':
+        return (
+          <div className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Selecciona una opción
+            </span>
+            <Select
+              value={String(filters[config.field])}
+              onValueChange={(value) => {
+                if (config.field === 'conChat') {
+                  setFilterValue('conChat', value as Filters['conChat'])
+                } else {
+                  setFilterValue('contactStatus', value as Filters['contactStatus'])
+                }
+              }}
+            >
+              <SelectTrigger className="border-border bg-surface-alt text-foreground">
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                {config.options.map((option) => (
+                  <SelectItem key={`${header}-filter-${option.value}`} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-between gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleClearColumnFilter(header)}
+              >
+                Limpiar
+              </Button>
+              <Button type="button" size="sm" onClick={() => setActiveHeaderFilter(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )
+      case 'multiSelect':
+        return (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Tipos de dispositivo
+              </span>
+              {deviceOptions.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {deviceOptions.map((option) => {
+                    const selected = filters.deviceTypes.includes(option.value)
+                    return (
+                      <Button
+                        key={`device-option-${option.value}`}
+                        type="button"
+                        variant={selected ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => toggleDeviceType(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sin datos de dispositivos en esta página.</p>
+              )}
+            </div>
+            <div className="flex justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleClearColumnFilter(header)}
+              >
+                Limpiar
+              </Button>
+              <Button type="button" size="sm" onClick={() => setActiveHeaderFilter(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
+
+  const renderHeaderLabel = (header: string, headLabel: ReactNode) => {
+    const config = columnFilterConfig[header]
+    const sortKey = HEADER_SORT_MAP[header]
+    const currentSortDirection = sortKey && sortConfig?.key === sortKey ? sortConfig.direction : null
+    const sortButton = sortKey ? (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'h-7 w-7 rounded-md border border-transparent text-muted-foreground hover:text-primary',
+          currentSortDirection ? 'text-primary hover:text-primary' : '',
+        )}
+        onClick={() => handleSortToggle(sortKey)}
+      >
+        {currentSortDirection === 'asc' ? (
+          <ArrowUp className="h-3.5 w-3.5" />
+        ) : currentSortDirection === 'desc' ? (
+          <ArrowDown className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5" />
+        )}
+      </Button>
+    ) : null
+
+    if (!config) {
+      if (!sortButton) return headLabel
+      return <div className="flex items-center gap-1">{headLabel}{sortButton}</div>
+    }
+
+    if (config.type === 'geo') {
+      const active = isColumnFilterActive(config)
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className={cn(
+              'group inline-flex items-center gap-1 text-left focus:outline-none',
+              active ? 'text-primary' : 'text-foreground',
+            )}
+            onClick={() => {
+              setGeoPopoverOpen(true)
+              setActiveHeaderFilter(null)
+            }}
+          >
+            <span>{headLabel}</span>
+            <Filter className={cn('h-3.5 w-3.5 transition-colors', active ? 'text-primary' : 'text-muted-foreground group-hover:text-primary')} />
+          </button>
+          {sortButton}
+        </div>
+      )
+    }
+
+    const active = isColumnFilterActive(config)
+    return (
+      <div className="flex items-center gap-1">
+        <span>{headLabel}</span>
+        {sortButton}
+        <Popover
+          open={activeHeaderFilter === header}
+          onOpenChange={(open) => setActiveHeaderFilter(open ? header : null)}
+        >
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-7 w-7 -mr-2 rounded-md border border-transparent',
+                active ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-primary',
+              )}
+            >
+              <Filter className="h-3.5 w-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 space-y-3" align="end" side="bottom">
+            {renderColumnFilterContent(header, config)}
+          </PopoverContent>
+        </Popover>
+      </div>
+    )
+  }
   const GEO_ANY_VALUE = '__all'
   const contentRef = useRef<HTMLDivElement | null>(null)
   const geoSummary = useMemo(() => {
@@ -1016,6 +1538,53 @@ export function VisitasPage() {
                         Ciudad: {cityBadgeLabel}
                       </Badge>
                     ) : null}
+                    {filters.sessionId ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Sesión: {filters.sessionId}
+                      </Badge>
+                    ) : null}
+                    {filters.ip ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        IP: {filters.ip}
+                      </Badge>
+                    ) : null}
+                    {filters.visitasMin !== null || filters.visitasMax !== null ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Visitas:
+                        {' '}
+                        {filters.visitasMin !== null && filters.visitasMax !== null
+                          ? `${filters.visitasMin}–${filters.visitasMax}`
+                          : filters.visitasMin !== null
+                            ? `≥${filters.visitasMin}`
+                            : `≤${filters.visitasMax}`}
+                      </Badge>
+                    ) : null}
+                    {filters.contactStatus !== 'all' ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Contacto:
+                        {' '}
+                        {CONTACT_STATUS_OPTIONS.find((option) => option.value === filters.contactStatus)?.label ?? filters.contactStatus}
+                      </Badge>
+                    ) : null}
+                    {filters.deviceTypes.length ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Dispositivo:
+                        {' '}
+                        {filters.deviceTypes
+                          .map((value) => deviceLabelMap.get(value) ?? value)
+                          .join(', ')}
+                      </Badge>
+                    ) : null}
+                    {filters.referrer ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Referrer: {filters.referrer}
+                      </Badge>
+                    ) : null}
+                    {filters.landing ? (
+                      <Badge variant="outline" className="bg-surface text-foreground">
+                        Landing: {filters.landing}
+                      </Badge>
+                    ) : null}
                   </>
                 )}
               </div>
@@ -1064,6 +1633,7 @@ export function VisitasPage() {
                         ) : (
                           header
                         )
+                        const headerContent = renderHeaderLabel(header, headLabel)
 
                         return (
                           <TableHead
@@ -1071,7 +1641,7 @@ export function VisitasPage() {
                             style={columnStyle(index)}
                             className="relative whitespace-nowrap bg-surface-alt px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
                           >
-                            {headLabel}
+                            {headerContent}
                             <span
                               className="o_resize_handle"
                               onMouseDown={handleResizeStart(index)}

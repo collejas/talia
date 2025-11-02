@@ -805,10 +805,28 @@ async def fetch_webchat_visitas_detalle(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     has_chat: bool | None = None,
+    session: str | None = None,
+    ip: str | None = None,
     state: str | None = None,
     country: str | None = None,
     city: str | None = None,
     search: str | None = None,
+    visit_min: int | None = None,
+    visit_max: int | None = None,
+    first_from: datetime | None = None,
+    first_to: datetime | None = None,
+    last_from: datetime | None = None,
+    last_to: datetime | None = None,
+    stay_min: float | None = None,
+    stay_max: float | None = None,
+    avg_stay_min: float | None = None,
+    avg_stay_max: float | None = None,
+    contact_status: str | None = None,
+    device_types: list[str] | None = None,
+    referrer: str | None = None,
+    landing: str | None = None,
+    order_by: str | None = None,
+    order_dir: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -849,6 +867,42 @@ async def fetch_webchat_visitas_detalle(
         payload["p_state"] = state
     if search:
         payload["p_search"] = search
+    if session:
+        payload["p_session"] = session
+    if ip:
+        payload["p_ip"] = ip
+    if visit_min is not None:
+        payload["p_visit_min"] = visit_min
+    if visit_max is not None:
+        payload["p_visit_max"] = visit_max
+    if first_from:
+        payload["p_first_from"] = first_from.isoformat()
+    if first_to:
+        payload["p_first_to"] = first_to.isoformat()
+    if last_from:
+        payload["p_last_from"] = last_from.isoformat()
+    if last_to:
+        payload["p_last_to"] = last_to.isoformat()
+    if stay_min is not None:
+        payload["p_stay_min"] = stay_min
+    if stay_max is not None:
+        payload["p_stay_max"] = stay_max
+    if avg_stay_min is not None:
+        payload["p_avg_stay_min"] = avg_stay_min
+    if avg_stay_max is not None:
+        payload["p_avg_stay_max"] = avg_stay_max
+    if contact_status:
+        payload["p_contact_status"] = contact_status
+    if device_types:
+        payload["p_device_types"] = device_types
+    if referrer:
+        payload["p_referrer"] = referrer
+    if landing:
+        payload["p_landing"] = landing
+    if order_by:
+        payload["p_order_by"] = order_by
+    if order_dir:
+        payload["p_order_dir"] = order_dir
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
