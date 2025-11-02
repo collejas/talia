@@ -108,6 +108,7 @@ const SKELETON_WIDTHS = [
   'w-28',
   'w-24',
   'w-28',
+  'w-32',
   'w-36',
   'w-40',
   'w-40',
@@ -251,6 +252,11 @@ const dateFormatter = new Intl.DateTimeFormat('es-MX', {
   dateStyle: 'short',
   timeStyle: 'short',
 })
+const coordinateFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 5,
+  maximumFractionDigits: 5,
+  signDisplay: 'auto',
+})
 
 function formatDateTime(value?: string | null): string {
   if (!value) return '—'
@@ -295,6 +301,151 @@ function formatState(row: VisitaRow): string {
 
 function formatCity(row: VisitaRow): string {
   return row.city_name || 'Sin datos'
+}
+
+type CoordinateSearchResult = {
+  lat: number
+  lng: number
+  path: string
+}
+
+type CoordinatesInfo = {
+  lat: number
+  lng: number
+  source?: string
+}
+
+function toCoordinateNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const normalized = value.replace(',', '.')
+    const parsed = Number(normalized)
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return null
+}
+
+function extractCoordinatesFromRecord(
+  record: Record<string, unknown> | null | undefined,
+): { lat: number; lng: number } | null {
+  if (!record) return null
+  const latKeys = ['lat', 'latitude', 'latitud', 'y']
+  const lngKeys = ['lng', 'lon', 'long', 'longitude', 'x']
+  let lat: number | null = null
+  let lng: number | null = null
+
+  for (const key of latKeys) {
+    if (key in record) {
+      const candidate = toCoordinateNumber(record[key])
+      if (candidate !== null) {
+        lat = candidate
+        break
+      }
+    }
+  }
+
+  for (const key of lngKeys) {
+    if (key in record) {
+      const candidate = toCoordinateNumber(record[key])
+      if (candidate !== null) {
+        lng = candidate
+        break
+      }
+    }
+  }
+
+  if (lat === null || lng === null) {
+    const coordinatesValue = record['coordinates']
+    if (Array.isArray(coordinatesValue) && coordinatesValue.length >= 2) {
+      const first = toCoordinateNumber(coordinatesValue[0])
+      const second = toCoordinateNumber(coordinatesValue[1])
+      if (first !== null && second !== null) {
+        if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
+          lat = first
+          lng = second
+        } else if (Math.abs(second) <= 90 && Math.abs(first) <= 180) {
+          lat = second
+          lng = first
+        }
+      }
+    }
+  }
+
+  if (lat === null || lng === null) {
+    return null
+  }
+
+  return { lat, lng }
+}
+
+function findCoordinatesCandidate(
+  value: unknown,
+  path: string[],
+  depth = 0,
+): CoordinateSearchResult | null {
+  if (value === null || value === undefined || depth > 5) {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const result = findCoordinatesCandidate(value[index], [...path, String(index)], depth + 1)
+      if (result) return result
+    }
+    return null
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const direct = extractCoordinatesFromRecord(record)
+    if (direct) {
+      return {
+        ...direct,
+        path: path.join('.'),
+      }
+    }
+    for (const [key, nested] of Object.entries(record)) {
+      const result = findCoordinatesCandidate(nested, [...path, key], depth + 1)
+      if (result) return result
+    }
+  }
+
+  return null
+}
+
+function resolveCoordinates(row: VisitaRow): CoordinatesInfo | null {
+  const ubicacionResult = findCoordinatesCandidate(
+    row.ubicacion_cache as Record<string, unknown> | undefined,
+    ['ubicacion'],
+  )
+  if (ubicacionResult) {
+    return {
+      lat: ubicacionResult.lat,
+      lng: ubicacionResult.lng,
+      source: 'Contacto',
+    }
+  }
+
+  const geoResult = findCoordinatesCandidate(row.geo, ['geo'])
+  if (geoResult) {
+    let source = 'Geo'
+    if (geoResult.path.includes('ip_lookup')) {
+      source = 'GeoIP'
+    } else if (geoResult.path.includes('client')) {
+      source = 'Cliente'
+    }
+    return {
+      lat: geoResult.lat,
+      lng: geoResult.lng,
+      source,
+    }
+  }
+
+  return null
 }
 
 function formatDevice(row: VisitaRow): string {
@@ -411,6 +562,7 @@ type ColumnId =
   | 'country'
   | 'state'
   | 'city'
+  | 'coordinates'
   | 'device'
   | 'referrer'
   | 'landing'
@@ -621,6 +773,35 @@ const COLUMN_DEFINITIONS: ColumnDefinition[] = [
         value: <span className="block truncate">{text}</span>,
         className: 'truncate',
         title: text,
+      }
+    },
+  },
+  {
+    id: 'coordinates',
+    label: 'Coordenadas',
+    tooltip: 'Latitud y longitud detectadas para la sesión.',
+    render: (row) => {
+      const coords = resolveCoordinates(row)
+      if (!coords) {
+        return { value: '—', title: undefined }
+      }
+      const latText = coordinateFormatter.format(coords.lat)
+      const lngText = coordinateFormatter.format(coords.lng)
+      const combined = `${latText}, ${lngText}`
+      const subtitle = coords.source ? `${coords.source}` : ''
+      return {
+        value: (
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-mono text-sm">{combined}</span>
+            {subtitle ? (
+              <span className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                {subtitle}
+              </span>
+            ) : null}
+          </div>
+        ),
+        className: 'whitespace-pre-line',
+        title: subtitle ? `${combined} • ${subtitle}` : combined,
       }
     },
   },
