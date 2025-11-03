@@ -37,7 +37,7 @@ const NAVIGATION = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
     { title: "Embudo", url: "#", icon: IconListDetails },
-    { title: "Leads", url: "#", icon: IconUsers },
+    { title: "Leads", url: "/leads", icon: IconUsers },
     { title: "Agenda", url: "#", icon: IconCalendar },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
     { title: "Proyectos", url: "#", icon: IconFolder },
