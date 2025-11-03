@@ -153,17 +153,22 @@ function mapCards(
     let sinChat = 0;
     let conChat = 0;
     const contactos = new Set<string>();
-    for (const row of detalle) {
-      const visits = toNumber(row.visit_count);
-      totalVisits += visits;
-      if (row.tuvo_chat) {
-        conChat += visits;
-      } else {
-        sinChat += visits;
-      }
-      const contactId = row.contacto_correo || row.contacto_nombre;
+    const seenSessions = new Set<string>();
+    detalle.forEach((row, index) => {
+    const sessionKey = row.session_id ?? `row-${index}`;
+    totalVisits += 1;
+    if (row.tuvo_chat) {
+      conChat += 1;
+      seenSessions.add(sessionKey);
+    } else if (!seenSessions.has(sessionKey)) {
+      sinChat += 1;
+    }
+
+      const contactId = row.contacto_id || row.contacto_correo || row.contacto_nombre;
       if (contactId) contactos.add(contactId);
     }
+    );
+
     return {
       totalVisits,
       sinChat,
@@ -183,18 +188,25 @@ function mapCards(
 function mapChart(detalle?: VisitDetailRaw[] | null): VisitChartPoint[] {
   if (!detalle || !detalle.length) return [];
   const totals = new Map<string, { desktop: number; mobile: number }>();
-  for (const row of detalle) {
-    const date = normalizeDate(row.primera_visita_en ?? row.registrado_en ?? row.ultimo_evento_en ?? undefined);
-    if (!date) continue;
+  const seenSessions = new Set<string>();
+  detalle.forEach((row, index) => {
+    const sessionKey = row.session_id ?? `row-${index}`;
+    const date = normalizeDate(
+      row.primera_visita_en ?? row.registrado_en ?? row.ultimo_evento_en ?? undefined
+    );
+    if (!date) return;
+
     const bucket = totals.get(date) ?? { desktop: 0, mobile: 0 };
-    const visits = toNumber(row.visit_count);
     if (row.tuvo_chat) {
-      bucket.desktop += visits;
+      bucket.desktop += 1;
+      seenSessions.add(sessionKey);
     } else {
-      bucket.mobile += visits;
+      if (!seenSessions.has(sessionKey)) {
+        bucket.mobile += 1;
+      }
     }
     totals.set(date, bucket);
-  }
+  });
   return Array.from(totals.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([date, values]) => ({
