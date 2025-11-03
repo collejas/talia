@@ -16,6 +16,7 @@ import {
   IconUsers,
   IconCalendar,
   IconMessageCircle,
+  IconAddressBook,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -36,6 +37,7 @@ import {
 const NAVIGATION = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
+    { title: "Contactos", url: "/contactos", icon: IconAddressBook },
     { title: "Embudo", url: "#", icon: IconListDetails },
     { title: "Leads", url: "/leads", icon: IconUsers },
     { title: "Agenda", url: "#", icon: IconCalendar },
