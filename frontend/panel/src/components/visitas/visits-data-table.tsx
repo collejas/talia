@@ -152,6 +152,7 @@ const visitExtraColumns: ColumnDef<TableRow>[] = VISIT_FIELDS.map((field) => {
     cell: ({ getValue }) => renderValue(getValue(), field.type),
     enableSorting: field.type !== "json",
     enableHiding: true,
+    meta: { label: field.label },
   } satisfies ColumnDef<TableRow>;
 });
 
@@ -169,6 +170,7 @@ export function VisitsDataTable({ data }: { data: VisitTableRow[] }) {
       data={data}
       extraColumns={visitExtraColumns}
       initialVisibility={visitColumnVisibility}
+      storageKey="visits-table-column-order"
     />
   );
 }

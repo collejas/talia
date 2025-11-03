@@ -12,14 +12,14 @@ import {
   type DragEndEvent,
   type UniqueIdentifier,
 } from "@dnd-kit/core"
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
+// no directional modifier at DnD context level; we clamp transforms per draggable
 import {
   arrayMove,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
 } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import {
   IconChevronDown,
   IconChevronLeft,
@@ -48,6 +48,7 @@ import {
   SortingState,
   useReactTable,
   VisibilityState,
+  type Header,
 } from "@tanstack/react-table"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { z } from "zod"
@@ -118,6 +119,38 @@ export const schema = z.object({
 
 type TableRowData = z.infer<typeof schema>
 
+type ColumnMeta = {
+  label?: string
+  reorderable?: boolean
+}
+
+const COLUMN_DRAG_PREFIX = "column:"
+const NON_REORDERABLE_COLUMN_IDS = new Set(["drag-handle", "row-select"])
+
+function columnDragId(columnId: string): string {
+  return `${COLUMN_DRAG_PREFIX}${columnId}`
+}
+
+function stripColumnDragId(dragId: string): string {
+  return dragId.replace(COLUMN_DRAG_PREFIX, "")
+}
+
+function isColumnReorderable(columnId: string, meta?: ColumnMeta): boolean {
+  if (meta?.reorderable === false) return false
+  if (NON_REORDERABLE_COLUMN_IDS.has(columnId)) return false
+  return true
+}
+
+function normalizeOrder(order: string[], reference: string[]): string[] {
+  const filtered = order.filter((id) => reference.includes(id))
+  const missing = reference.filter((id) => !filtered.includes(id))
+  const next = [...filtered, ...missing]
+  if (next.length === order.length && next.every((id, index) => id === order[index])) {
+    return order
+  }
+  return next
+}
+
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
   const { attributes, listeners } = useSortable({
@@ -140,12 +173,13 @@ function DragHandle({ id }: { id: number }) {
 
 const baseColumns: ColumnDef<TableRowData>[] = [
   {
-    id: "drag",
+    id: "drag-handle",
     header: () => null,
     cell: ({ row }) => <DragHandle id={row.original.id} />,
+    meta: { label: "Mover fila", reorderable: false } satisfies ColumnMeta,
   },
   {
-    id: "select",
+    id: "row-select",
     header: ({ table }) => (
       <div className="flex items-center justify-center">
         <Checkbox
@@ -169,16 +203,20 @@ const baseColumns: ColumnDef<TableRowData>[] = [
     ),
     enableSorting: false,
     enableHiding: false,
+    meta: { label: "Seleccionar", reorderable: false } satisfies ColumnMeta,
   },
   {
     accessorKey: "header",
+    id: "session",
     header: "Sesión",
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
+    meta: { label: "Sesión" } satisfies ColumnMeta,
   },
   {
     accessorKey: "type",
+    id: "type",
     header: "Estado o País",
     cell: ({ row }) => (
       <div className="w-32">
@@ -187,9 +225,11 @@ const baseColumns: ColumnDef<TableRowData>[] = [
         </Badge>
       </div>
     ),
+    meta: { label: "Estado o País" } satisfies ColumnMeta,
   },
   {
     accessorKey: "status",
+    id: "chat",
     header: "Chat",
     cell: ({ row }) => {
       const hasChat = row.original.status === "Done"
@@ -212,11 +252,13 @@ const baseColumns: ColumnDef<TableRowData>[] = [
         </Badge>
       )
     },
+    meta: { label: "Chat" } satisfies ColumnMeta,
   },
   {
     accessorKey: "target",
+    id: "visits",
     header: () => <div className="w-full text-right">Visitas</div>,
-    meta: { label: "Visitas" },
+    meta: { label: "Visitas" } satisfies ColumnMeta,
     cell: ({ row }) => {
       const rawCount = row.original.raw?.visit_count
       const fallback = Number(row.original.target)
@@ -231,6 +273,7 @@ const baseColumns: ColumnDef<TableRowData>[] = [
   },
   {
     accessorKey: "reviewer",
+    id: "reviewer",
     header: "Vendedor Asig.",
     cell: ({ row }) => {
       const isAssigned = row.original.reviewer !== "Assign reviewer"
@@ -262,6 +305,7 @@ const baseColumns: ColumnDef<TableRowData>[] = [
         </>
       )
     },
+    meta: { label: "Vendedor Asig." } satisfies ColumnMeta,
   },
   {
     id: "actions",
@@ -286,8 +330,45 @@ const baseColumns: ColumnDef<TableRowData>[] = [
         </DropdownMenuContent>
       </DropdownMenu>
     ),
+    meta: { label: "Acciones", reorderable: false } satisfies ColumnMeta,
   },
 ]
+
+type SortableColumnHeaderProps = {
+  header: Header<TableRowData, unknown>
+  id: string
+}
+
+function SortableColumnHeader({ header, id }: SortableColumnHeaderProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const translateX = transform?.x ?? 0
+  const style: React.CSSProperties = {
+    transform: `translate3d(${translateX}px, 0, 0)` ,
+    transition,
+    cursor: "grab",
+    opacity: isDragging ? 0.6 : undefined,
+  }
+
+  return (
+    <TableHead
+      ref={setNodeRef}
+      colSpan={header.colSpan}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      {flexRender(header.column.columnDef.header, header.getContext())}
+    </TableHead>
+  )
+}
 
 function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
@@ -301,7 +382,7 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
       ref={setNodeRef}
       className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
       style={{
-        transform: CSS.Transform.toString(transform),
+        transform: `translate3d(0, ${transform?.y ?? 0}px, 0)` ,
         transition: transition,
       }}
     >
@@ -318,10 +399,12 @@ export function DataTable({
   data: initialData,
   extraColumns = [],
   initialVisibility,
+  storageKey,
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
   initialVisibility?: VisibilityState
+  storageKey?: string
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
@@ -353,8 +436,54 @@ export function DataTable({
     [extraColumns]
   )
 
-  // TanStack table expone funciones no memoizables; aceptamos la advertencia al usarlo.
-  // eslint-disable-next-line react-hooks/incompatible-library
+  const defaultColumnOrder = React.useMemo(() => {
+    return mergedColumns
+      .map((column) => {
+        const colId = column.id
+        if (typeof colId === "string" && colId.length) {
+          return colId
+        }
+        const accessorKey = (column as { accessorKey?: unknown }).accessorKey
+        return typeof accessorKey === "string" && accessorKey.length ? accessorKey : ""
+      })
+      .filter((id): id is string => id !== "")
+  }, [mergedColumns])
+
+  const [columnOrder, setColumnOrder] = React.useState<string[]>(defaultColumnOrder)
+  const hasLoadedColumnOrder = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined" || hasLoadedColumnOrder.current) {
+      return
+    }
+    try {
+      const stored = window.localStorage.getItem(storageKey)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          setColumnOrder(normalizeOrder(parsed, defaultColumnOrder))
+        }
+      }
+    } catch (error) {
+      console.warn("[visitas] No se pudo leer el orden de columnas", error)
+    } finally {
+      hasLoadedColumnOrder.current = true
+    }
+  }, [storageKey, defaultColumnOrder])
+
+  React.useEffect(() => {
+    setColumnOrder((prev) => normalizeOrder(prev, defaultColumnOrder))
+  }, [defaultColumnOrder])
+
+  React.useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(columnOrder))
+    } catch (error) {
+      console.warn("[visitas] No se pudo guardar el orden de columnas", error)
+    }
+  }, [columnOrder, storageKey])
+
   const table = useReactTable({
     data,
     columns: mergedColumns,
@@ -364,6 +493,7 @@ export function DataTable({
       rowSelection,
       columnFilters,
       pagination,
+      columnOrder,
     },
     getRowId: (row) => row.id.toString(),
     enableRowSelection: true,
@@ -372,6 +502,7 @@ export function DataTable({
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
+    onColumnOrderChange: setColumnOrder,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -382,7 +513,30 @@ export function DataTable({
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
-    if (active && over && active.id !== over.id) {
+    if (!over) return
+
+    if (
+      typeof active.id === "string" &&
+      typeof over.id === "string" &&
+      active.id.startsWith(COLUMN_DRAG_PREFIX) &&
+      over.id.startsWith(COLUMN_DRAG_PREFIX)
+    ) {
+      const sourceId = stripColumnDragId(active.id)
+      const targetId = stripColumnDragId(over.id)
+      if (sourceId !== targetId) {
+        setColumnOrder((prev) => {
+          const oldIndex = prev.indexOf(sourceId)
+          const newIndex = prev.indexOf(targetId)
+          if (oldIndex === -1 || newIndex === -1) return prev
+          const next = arrayMove(prev, oldIndex, newIndex)
+          table.setColumnOrder(next)
+          return next
+        })
+      }
+      return
+    }
+
+    if (active.id !== over.id) {
       setData((data) => {
         const oldIndex = dataIds.indexOf(active.id)
         const newIndex = dataIds.indexOf(over.id)
@@ -476,29 +630,64 @@ export function DataTable({
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
             onDragEnd={handleDragEnd}
             sensors={sensors}
             id={sortableId}
           >
             <Table>
               <TableHeader className="bg-muted sticky top-0 z-10">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => {
-                      return (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
+                {table.getHeaderGroups().map((headerGroup) => {
+                  const sortableHeaders = headerGroup.headers.filter((header) => {
+                    if (header.isPlaceholder) return false
+                    const meta = header.column.columnDef.meta as ColumnMeta | undefined
+                    return isColumnReorderable(header.column.id, meta)
+                  })
+                  const sortableItems = sortableHeaders.map((header) =>
+                    columnDragId(header.column.id)
+                  )
+
+                  return (
+                    <TableRow key={headerGroup.id}>
+                      <SortableContext
+                        items={sortableItems}
+                        strategy={horizontalListSortingStrategy}
+                      >
+                        {headerGroup.headers.map((header) => {
+                          if (header.isPlaceholder) {
+                            return (
+                              <TableHead key={header.id} colSpan={header.colSpan} />
+                            )
+                          }
+
+                          const meta = header.column.columnDef.meta as ColumnMeta | undefined
+                          const reorderable = isColumnReorderable(
+                            header.column.id,
+                            meta
+                          )
+
+                          if (reorderable) {
+                            return (
+                              <SortableColumnHeader
+                                key={header.id}
+                                header={header}
+                                id={columnDragId(header.column.id)}
+                              />
+                            )
+                          }
+
+                          return (
+                            <TableHead key={header.id} colSpan={header.colSpan}>
+                              {flexRender(
                                 header.column.columnDef.header,
                                 header.getContext()
                               )}
-                        </TableHead>
-                      )
-                    })}
-                  </TableRow>
-                ))}
+                            </TableHead>
+                          )
+                        })}
+                      </SortableContext>
+                    </TableRow>
+                  )
+                })}
               </TableHeader>
               <TableBody className="**:data-[slot=table-cell]:first:w-8">
                 {table.getRowModel().rows?.length ? (
