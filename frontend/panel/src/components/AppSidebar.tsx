@@ -38,7 +38,7 @@ const data = {
     avatar: "/assets/logos/Logo8.png",
   },
   navMain: [
-    { title: "Dashboard", url: "#", icon: IconChartBar },
+    { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
     { title: "Embudo", url: "#", icon: IconListDetails },
     { title: "Leads", url: "#", icon: IconUsers },
     { title: "Agenda", url: "#", icon: IconCalendar },

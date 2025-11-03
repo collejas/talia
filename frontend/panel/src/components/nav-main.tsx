@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
 
 import { Button } from '@/components/ui/button'
@@ -11,15 +13,15 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 
-export function NavMain({
-  items,
-}: {
-  items: {
-    title: string
-    url: string
-    icon?: Icon
-  }[]
-}) {
+type NavItem = {
+  title: string
+  url: string
+  icon?: Icon
+}
+
+export function NavMain({ items }: { items: NavItem[] }) {
+  const pathname = usePathname()
+
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
@@ -27,7 +29,7 @@ export function NavMain({
           <SidebarMenuItem className="flex items-center gap-2">
             <SidebarMenuButton
               tooltip="Quick Create"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground min-w-8 duration-200 ease-linear"
+              className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
             >
               <IconCirclePlusFilled />
               <span>Quick Create</span>
@@ -43,14 +45,29 @@ export function NavMain({
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title}>
+          {items.map((item) => {
+            const isPlaceholder = !item.url || item.url === "#"
+            const isActive = !isPlaceholder && pathname.startsWith(item.url)
+
+            const content = (
+              <>
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+              </>
+            )
+
+            return (
+              <SidebarMenuItem key={item.title}>
+                {isPlaceholder ? (
+                  <SidebarMenuButton tooltip={item.title}>{content}</SidebarMenuButton>
+                ) : (
+                  <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                    <Link href={item.url}>{content}</Link>
+                  </SidebarMenuButton>
+                )}
+              </SidebarMenuItem>
+            )
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
