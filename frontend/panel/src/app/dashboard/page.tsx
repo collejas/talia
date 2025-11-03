@@ -7,6 +7,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from '@/components/ui/sidebar'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 import data from "./data.json"
 
@@ -35,6 +36,7 @@ export default function Page() {
           </div>
         </div>
       </SidebarInset>
+      <ThemeToggle />
     </SidebarProvider>
   )
 }
