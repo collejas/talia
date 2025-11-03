@@ -2,16 +2,17 @@
 
 import * as React from "react";
 import {
-  IconChevronRight,
   IconCircleFilled,
   IconDots,
-  IconSend,
+  IconFilter,
+  IconSearch,
 } from "@tabler/icons-react";
 
 import type { InboxFolder, InboxThread } from "@/lib/inbox/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { InboxComposer } from "@/components/inbox/composer";
 
 type InboxSplitViewProps = {
   folders: InboxFolder[];
@@ -19,9 +20,8 @@ type InboxSplitViewProps = {
 };
 
 export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
-  const [selectedId, setSelectedId] = React.useState<string | null>(
-    threads[0]?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
+  const [searchTerm, setSearchTerm] = React.useState("");
 
   React.useEffect(() => {
     if (!selectedId && threads.length) {
@@ -29,157 +29,182 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
     }
   }, [selectedId, threads]);
 
-  const selectedThread = threads.find((thread) => thread.id === selectedId) ?? null;
+  const filteredThreads = React.useMemo(() => {
+    if (!searchTerm) return threads;
+    const term = searchTerm.toLowerCase();
+    return threads.filter((thread) => {
+      const haystack = [
+        thread.contactoNombre,
+        thread.canal,
+        thread.preview,
+        thread.tags.join(" "),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [threads, searchTerm]);
+
+  const selectedThread = selectedId
+    ? filteredThreads.find((thread) => thread.id === selectedId) ?? filteredThreads[0] ?? null
+    : filteredThreads[0] ?? null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,320px),minmax(0,1fr)]">
-      <div className="flex min-h-[360px] flex-col overflow-hidden rounded-lg border bg-card">
+    <div className="flex gap-4">
+      <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
+        <div className="border-b px-4 py-3 space-y-3">
+          <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+            <IconSearch className="size-4" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar chats"
+              className="h-8 flex-1 border-0 bg-transparent px-0 text-sm focus-visible:ring-0"
+              aria-label="Buscar chats"
+            />
+          </div>
+          {folders.length ? (
+            <div className="flex flex-wrap gap-2">
+              {folders.map((folder) => (
+                <Badge key={folder.id} variant="outline" className="cursor-pointer text-xs uppercase">
+                  {folder.label}
+                  <span className="ml-1 text-[11px] text-primary">{folder.count}</span>
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <div>
-            <h3 className="text-sm font-semibold uppercase text-muted-foreground">
-              Carpetas
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Organiza conversaciones por prioridad
-            </p>
-          </div>
-          <IconChevronRight className="size-4 text-muted-foreground" />
-        </div>
-        <div className="border-b px-2 py-2">
-          <div className="flex flex-col gap-1">
-            {folders.map((folder) => (
-              <button
-                key={folder.id}
-                type="button"
-                className="flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition hover:bg-muted"
-              >
-                <span>{folder.label}</span>
-                <Badge variant="secondary">{folder.count}</Badge>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center justify-between px-4 py-3">
-          <h3 className="text-sm font-semibold uppercase text-muted-foreground">
-            Conversaciones
-          </h3>
+          <h3 className="text-sm font-semibold uppercase text-muted-foreground">Conversaciones</h3>
           <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
             <IconDots className="size-4" />
+            <span className="sr-only">Acciones de bandeja</span>
           </Button>
         </div>
+
+        <div className="border-b px-2 py-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="cursor-pointer">Sin leer</Badge>
+            <Badge variant="outline" className="cursor-pointer">Seguimiento</Badge>
+            <Badge variant="outline" className="cursor-pointer">Alta prioridad</Badge>
+            <Badge variant="outline" className="cursor-pointer">Webchat</Badge>
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto">
-          {threads.length ? (
-            <div className="divide-y">
-              {threads.map((thread) => {
+          {filteredThreads.length ? (
+            <ul className="divide-y">
+              {filteredThreads.map((thread) => {
                 const isActive = thread.id === selectedId;
-                const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn;
-                const subject = thread.contactoNombre;
-                const senderTitle = thread.asignadoNombre ? `Atiende: ${thread.asignadoNombre}` : thread.canal;
+                const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || "Sin actividad";
                 const unread = thread.noLeidos > 0;
                 return (
-                  <button
-                    key={thread.id}
-                    type="button"
-                    onClick={() => setSelectedId(thread.id)}
-                    className={[
-                      "flex w-full flex-col gap-1 px-4 py-3 text-left transition",
-                      isActive ? "bg-primary/10" : "hover:bg-muted",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{subject}</span>
-                        {unread ? (
-                          <IconCircleFilled className="size-2 fill-primary" />
-                        ) : null}
+                  <li key={thread.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(thread.id)}
+                      className={`flex w-full flex-col gap-1 px-4 py-3 text-left transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{thread.contactoNombre}</span>
+                          {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{new Date(displayTime).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground">{displayTime || "Sin actividad"}</span>
-                    </div>
-                    <p className="line-clamp-1 text-sm font-medium text-foreground">
-                      {senderTitle}
-                    </p>
-                    <p className="line-clamp-2 text-xs text-muted-foreground">
-                      {thread.preview}
-                    </p>
-                    {thread.tags?.length ? (
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {thread.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="uppercase">{thread.canal}</Badge>
+                        {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                       </div>
-                    ) : null}
-                  </button>
+                      <p className="line-clamp-2 text-xs text-muted-foreground">
+                        {thread.preview?.length ? thread.preview : "Sin vista previa disponible"}
+                      </p>
+                      {thread.tags.length ? (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {thread.tags.map((tag) => (
+                            <Badge key={tag} variant="outline" className="text-[10px] uppercase">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           ) : (
             <div className="flex h-full items-center justify-center px-6 py-12 text-center text-sm text-muted-foreground">
-              No hay conversaciones en esta carpeta.
+              No hay conversaciones que coincidan con la búsqueda.
             </div>
           )}
         </div>
-      </div>
+      </aside>
 
-      <div className="flex min-h-[360px] flex-col overflow-hidden rounded-lg border bg-card">
+      <section className="flex h-[calc(100vh-13rem)] min-h-[320px] flex-1 flex-col overflow-hidden rounded-lg border bg-card">
         {selectedThread ? (
           <>
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
+            <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
-                  {selectedThread.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      {tag}
-                    </Badge>
-                  ))}
+                <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="uppercase">{selectedThread.canal}</Badge>
+                  {selectedThread.contactoCorreo ? <span>{selectedThread.contactoCorreo}</span> : null}
+                  {selectedThread.contactoTelefono ? <span>{selectedThread.contactoTelefono}</span> : null}
+                  {selectedThread.asignadoNombre ? (
+                    <span className="font-medium text-foreground">Asignado a {selectedThread.asignadoNombre}</span>
+                  ) : null}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {selectedThread.canal.toUpperCase()}
-                  {selectedThread.asignadoNombre ? ` · ${selectedThread.asignadoNombre}` : ""}
-                </p>
+                {selectedThread.tags.length ? (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedThread.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  Programar seguimiento
+                <Button variant="outline" size="sm" className="gap-2">
+                  <IconFilter className="size-4" /> Actualizar estado
                 </Button>
-                <Button size="sm">
-                  <IconSend className="mr-2 size-4" />
-                  Responder
+                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
+                  <IconDots className="size-4" />
+                  <span className="sr-only">Acciones rápidas</span>
                 </Button>
               </div>
-            </div>
+            </header>
+
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4">
                 {selectedThread.messages.length ? (
-                  selectedThread.messages.map((message) => (
-                    <article
-                      key={message.id}
-                      className="rounded-lg border bg-background/40 p-4 shadow-xs"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">
-                          {message.author}
-                          {message.role === "usuario" ? " · Tal-IA" : ""}
-                        </span>
-                        <Separator orientation="vertical" className="hidden h-4 lg:block" />
-                        <span className="text-xs text-muted-foreground">{message.timestamp}</span>
+                  selectedThread.messages.map((message) => {
+                    const isAgent = message.role === "usuario";
+                    return (
+                      <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{message.author}</span>
+                          <span>{new Date(message.timestamp).toLocaleString("es-MX", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</span>
+                        </div>
+                        <div
+                          className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+                        >
+                          {message.body.map((paragraph, index) => (
+                            <p key={index}>{paragraph}</p>
+                          ))}
+                        </div>
                       </div>
-                      <div className="mt-3 space-y-2 text-sm leading-relaxed">
-                        {message.body.map((paragraph, index) => (
-                          <p key={index}>{paragraph}</p>
-                        ))}
-                      </div>
-                    </article>
-                  ))
+                    );
+                  })
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Aún no hay mensajes en esta conversación.
-                  </p>
+                  <p className="text-sm text-muted-foreground">Aún no hay mensajes en esta conversación.</p>
                 )}
               </div>
             </div>
+
+            <InboxComposer conversationId={selectedThread.id} placeholder={`Responder a ${selectedThread.contactoNombre}`} />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
@@ -189,7 +214,7 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             </p>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
