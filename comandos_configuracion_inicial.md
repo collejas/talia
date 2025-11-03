@@ -166,3 +166,6 @@ VITE_CALENDARIO_SERVER_PORT=2080
 VITE_CALENDARIO_SERVER_URL_ALTERNATE=https://mail.talia.mx:2080/principals/hola@talia.mx
 VITE_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar
 VITE_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/hola@talia.mx/addressbook
+
+
+npx shadcn@latest add "https://v0.app/chat/b/b_mxlbOBL8zSH?token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..wv9M7O6jQT_e-pVT.5zjUlUJDNKXIAiQHqArmcjTTRNxWEDqz-KOZ4PFDZv1dK-ASKlSeLpNERM8.-HDFVn8rF-1cPqUOfLaKoA"
