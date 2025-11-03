@@ -126,6 +126,7 @@ type ColumnMeta = {
 
 const COLUMN_DRAG_PREFIX = "column:"
 const NON_REORDERABLE_COLUMN_IDS = new Set(["drag-handle", "row-select"])
+const BADGE_VARIANTS = new Set(["default", "secondary", "destructive", "outline"])
 
 function columnDragId(columnId: string): string {
   return `${COLUMN_DRAG_PREFIX}${columnId}`
@@ -217,7 +218,7 @@ const baseColumns: ColumnDef<TableRowData>[] = [
   {
     accessorKey: "type",
     id: "type",
-    header: "Estado o País",
+    header: "Ubicación / Etapa",
     cell: ({ row }) => (
       <div className="w-32">
         <Badge variant="outline" className="text-muted-foreground px-1.5">
@@ -232,6 +233,21 @@ const baseColumns: ColumnDef<TableRowData>[] = [
     id: "chat",
     header: "Chat",
     cell: ({ row }) => {
+      const raw = row.original.raw as Record<string, unknown> | undefined
+      const statusMeta =
+        raw && typeof raw === "object"
+          ? (raw as { status_meta?: { label?: string; variant?: string } }).status_meta
+          : undefined
+      if (statusMeta?.label) {
+        const variant = BADGE_VARIANTS.has(statusMeta.variant ?? "")
+          ? (statusMeta.variant as "default" | "secondary" | "destructive" | "outline")
+          : "outline"
+        return (
+          <Badge variant={variant} className="text-muted-foreground px-1.5">
+            {statusMeta.label}
+          </Badge>
+        )
+      }
       const hasChat = row.original.status === "Done"
       return (
         <Badge
@@ -257,10 +273,21 @@ const baseColumns: ColumnDef<TableRowData>[] = [
   {
     accessorKey: "target",
     id: "visits",
-    header: () => <div className="w-full text-right">Visitas</div>,
-    meta: { label: "Visitas" } satisfies ColumnMeta,
+    header: () => <div className="w-full text-right">Visitas / Valor</div>,
+    meta: { label: "Visitas / Valor" } satisfies ColumnMeta,
     cell: ({ row }) => {
-      const rawCount = row.original.raw?.visit_count
+      const raw = row.original.raw as Record<string, unknown> | undefined
+      const metricMeta =
+        raw && typeof raw === "object"
+          ? (raw as { metric_meta?: { formatted?: string; value?: unknown } }).metric_meta
+          : undefined
+      if (metricMeta?.formatted) {
+        return <div className="text-right tabular-nums">{metricMeta.formatted}</div>
+      }
+      const rawCount =
+        raw && typeof raw === "object"
+          ? (raw as { visit_count?: unknown }).visit_count
+          : undefined
       const fallback = Number(row.original.target)
       const value = typeof rawCount === "number" && Number.isFinite(rawCount)
         ? rawCount
