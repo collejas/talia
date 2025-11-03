@@ -4,26 +4,27 @@ import { IconFilter, IconPlus, IconSearch } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import type { InboxSnapshot } from "@/app/inbox/data";
+import type { InboxSummary } from "@/lib/inbox/data";
 
 type InboxToolbarProps = {
-  snapshot: Pick<InboxSnapshot, "total" | "unread" | "awaiting">;
+  summary: InboxSummary;
 };
 
-export function InboxToolbar({ snapshot }: InboxToolbarProps) {
+export function InboxToolbar({ summary }: InboxToolbarProps) {
+  const total = summary.total ?? 0;
+  const unread = summary.unread ?? 0;
+  const awaiting = summary.awaiting ?? 0;
+  const closed = summary.folders.find((folder) => folder.id === "closed")?.count ?? 0;
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Bandeja de entrada</h2>
           <p className="text-sm text-muted-foreground">
-            {snapshot.total} conversaciones · {snapshot.unread} sin leer · {snapshot.awaiting} en seguimiento
+            {total} conversaciones · {unread} sin leer · {awaiting} en seguimiento
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -42,17 +43,20 @@ export function InboxToolbar({ snapshot }: InboxToolbarProps) {
           <TabsList className="grid h-auto grid-cols-2 gap-1 bg-muted/60 p-1 sm:grid-cols-4">
             <TabsTrigger value="all" className="flex items-center gap-2">
               Todos
-              <Badge variant="secondary">{snapshot.total}</Badge>
+              <Badge variant="secondary">{total}</Badge>
             </TabsTrigger>
             <TabsTrigger value="unread" className="flex items-center gap-2">
               Sin leer
-              <Badge variant="secondary">{snapshot.unread}</Badge>
+              <Badge variant="secondary">{unread}</Badge>
             </TabsTrigger>
             <TabsTrigger value="awaiting" className="flex items-center gap-2">
               Seguimiento
-              <Badge variant="secondary">{snapshot.awaiting}</Badge>
+              <Badge variant="secondary">{awaiting}</Badge>
             </TabsTrigger>
-            <TabsTrigger value="archived">Archivados</TabsTrigger>
+            <TabsTrigger value="archived" className="flex items-center gap-2">
+              Archivados
+              <Badge variant="secondary">{closed}</Badge>
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex w-full items-center gap-2 lg:ml-auto lg:w-72">

@@ -8,7 +8,7 @@ import {
   IconSend,
 } from "@tabler/icons-react";
 
-import type { InboxFolder, InboxThread } from "@/app/inbox/data";
+import type { InboxFolder, InboxThread } from "@/lib/inbox/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -72,6 +72,10 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             <div className="divide-y">
               {threads.map((thread) => {
                 const isActive = thread.id === selectedId;
+                const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn;
+                const subject = thread.contactoNombre;
+                const senderTitle = thread.asignadoNombre ? `Atiende: ${thread.asignadoNombre}` : thread.canal;
+                const unread = thread.noLeidos > 0;
                 return (
                   <button
                     key={thread.id}
@@ -84,15 +88,15 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{thread.sender}</span>
-                        {thread.unread ? (
+                        <span className="font-medium">{subject}</span>
+                        {unread ? (
                           <IconCircleFilled className="size-2 fill-primary" />
                         ) : null}
                       </div>
-                      <span className="text-xs text-muted-foreground">{thread.time}</span>
+                      <span className="text-xs text-muted-foreground">{displayTime || "Sin actividad"}</span>
                     </div>
                     <p className="line-clamp-1 text-sm font-medium text-foreground">
-                      {thread.subject}
+                      {senderTitle}
                     </p>
                     <p className="line-clamp-2 text-xs text-muted-foreground">
                       {thread.preview}
@@ -124,16 +128,16 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold">{selectedThread.subject}</h3>
-                  {selectedThread.tags?.map((tag) => (
+                  <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
+                  {selectedThread.tags.map((tag) => (
                     <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedThread.sender}
-                  {selectedThread.senderTitle ? ` · ${selectedThread.senderTitle}` : ""}
+                  {selectedThread.canal.toUpperCase()}
+                  {selectedThread.asignadoNombre ? ` · ${selectedThread.asignadoNombre}` : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -148,26 +152,32 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4">
               <div className="flex flex-col gap-6">
-                {selectedThread.messages.map((message) => (
-                  <article
-                    key={message.id}
-                    className="rounded-lg border bg-background/40 p-4 shadow-xs"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">
-                        {message.author}
-                        {message.role === "usuario" ? " · Tal-IA" : ""}
-                      </span>
-                      <Separator orientation="vertical" className="hidden h-4 lg:block" />
-                      <span className="text-xs text-muted-foreground">{message.timestamp}</span>
-                    </div>
-                    <div className="mt-3 space-y-2 text-sm leading-relaxed">
-                      {message.body.map((paragraph, index) => (
-                        <p key={index}>{paragraph}</p>
-                      ))}
-                    </div>
-                  </article>
-                ))}
+                {selectedThread.messages.length ? (
+                  selectedThread.messages.map((message) => (
+                    <article
+                      key={message.id}
+                      className="rounded-lg border bg-background/40 p-4 shadow-xs"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">
+                          {message.author}
+                          {message.role === "usuario" ? " · Tal-IA" : ""}
+                        </span>
+                        <Separator orientation="vertical" className="hidden h-4 lg:block" />
+                        <span className="text-xs text-muted-foreground">{message.timestamp}</span>
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm leading-relaxed">
+                        {message.body.map((paragraph, index) => (
+                          <p key={index}>{paragraph}</p>
+                        ))}
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Aún no hay mensajes en esta conversación.
+                  </p>
+                )}
               </div>
             </div>
           </>
