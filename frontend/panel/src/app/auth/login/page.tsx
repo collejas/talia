@@ -10,7 +10,26 @@ export const metadata: Metadata = {
   description: "Accede al panel administrativo de Tal-IA con tus credenciales.",
 }
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
+function extractRedirect(
+  searchParams?: Record<string, string | string[] | undefined>,
+) {
+  if (!searchParams) return undefined
+  const candidate = searchParams.redirectTo
+  if (!candidate) return undefined
+  if (Array.isArray(candidate)) {
+    return typeof candidate[0] === "string" ? candidate[0] : undefined
+  }
+  return typeof candidate === "string" ? candidate : undefined
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined
+  const redirectTo = extractRedirect(resolvedSearchParams)
+
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-surface text-foreground">
       <div
@@ -60,7 +79,7 @@ export default function LoginPage() {
         </section>
 
         <section className="flex w-full justify-center md:max-w-md">
-          <LoginForm />
+          <LoginForm redirectTo={redirectTo} />
         </section>
       </main>
 

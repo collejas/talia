@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo, useState } from "react"
 import {
   IconCreditCard,
   IconDotsVertical,
@@ -31,14 +32,40 @@ import {
 
 export function NavUser({
   user,
+  onLogout,
+  loading,
 }: {
   user: {
     name: string
     email: string
     avatar: string
   }
+  onLogout?: () => Promise<void> | void
+  loading?: boolean
 }) {
   const { isMobile } = useSidebar()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const initials = useMemo(() => {
+    const source = user.name?.trim() || user.email || ""
+    if (!source) return "US"
+    const parts = source.split(/\s+/)
+    const letters = parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase())
+    const fallback = letters.join("") || source.charAt(0).toUpperCase()
+    return fallback.slice(0, 2)
+  }, [user.name, user.email])
+
+  const handleLogout = async () => {
+    if (!onLogout || isLoggingOut) return
+    setIsLoggingOut(true)
+    try {
+      await onLogout()
+    } catch (error) {
+      console.error("[auth] error while logging out", error)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -51,7 +78,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">TI</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -72,7 +99,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">TI</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -98,9 +125,15 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <IconLogout />
-              Log out
+            <DropdownMenuItem
+              disabled={isLoggingOut || loading}
+              onSelect={(event) => {
+                event.preventDefault()
+                void handleLogout()
+              }}
+            >
+              <IconLogout className={isLoggingOut ? "animate-spin" : ""} />
+              {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

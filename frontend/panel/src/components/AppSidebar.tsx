@@ -1,7 +1,8 @@
 "use client"
 
-import Image from 'next/image'
-import * as React from "react"
+import Image from "next/image"
+import { useCallback, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import {
   IconChartBar,
   IconDatabase,
@@ -17,6 +18,7 @@ import {
   IconMessageCircle,
 } from "@tabler/icons-react"
 
+import { useCurrentUser } from "@/hooks/use-current-user"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
@@ -31,12 +33,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 
-const data = {
-  user: {
-    name: "Soporte técnico",
-    email: "administracion@tal-ia.mx",
-    avatar: "/assets/logos/Logo8.png",
-  },
+const NAVIGATION = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
     { title: "Embudo", url: "#", icon: IconListDetails },
@@ -58,13 +55,61 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const router = useRouter()
+  const { user, loading } = useCurrentUser()
+
+  const sidebarUser = useMemo(() => {
+    const fallbackAvatar = "/assets/logos/Logo8.png"
+    if (user) {
+      const metadataName =
+        typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.trim()
+          ? user.user_metadata.full_name.trim()
+          : null
+      const name =
+        metadataName ||
+        (user.email ? user.email.split("@")[0] || "Usuario" : "Usuario Tal-IA")
+      const avatar =
+        typeof user.user_metadata?.avatar_url === "string" && user.user_metadata.avatar_url
+          ? (user.user_metadata.avatar_url as string)
+          : fallbackAvatar
+      return {
+        name,
+        email: user.email || "usuario@tal-ia.mx",
+        avatar,
+      }
+    }
+    if (loading) {
+      return {
+        name: "Cargando usuario...",
+        email: "••••••••••••",
+        avatar: fallbackAvatar,
+      }
+    }
+    return {
+      name: "Sesión no disponible",
+      email: "Inicia sesión nuevamente",
+      avatar: fallbackAvatar,
+    }
+  }, [user, loading])
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+    } catch (error) {
+      console.error("[auth] logout error", error)
+    } finally {
+      router.replace("/auth/login")
+      router.refresh()
+    }
+  }, [router])
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
-              <a href="#" className="flex items-center gap-3">
+              <a href="/dashboard" className="flex items-center gap-3">
                 <Image
                   src="/assets/logos/Logo8.png"
                   alt="Tal-IA"
@@ -79,12 +124,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={NAVIGATION.navMain} />
+        <NavDocuments items={NAVIGATION.documents} />
+        <NavSecondary items={NAVIGATION.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={sidebarUser} loading={loading} onLogout={handleLogout} />
       </SidebarFooter>
     </Sidebar>
   )

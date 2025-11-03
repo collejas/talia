@@ -27,7 +27,11 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-export function LoginForm() {
+type LoginFormProps = {
+  redirectTo?: string
+}
+
+export function LoginForm({ redirectTo }: LoginFormProps) {
   const router = useRouter()
   const [fields, setFields] = useState<LoginFields>({
     email: "",
@@ -53,13 +57,25 @@ export function LoginForm() {
         email: normalizeEmail(fields.email),
         password: fields.password,
         rememberMe: fields.rememberMe,
+        redirectTo,
       }
 
-      // TODO: reemplazar por integración real con el backend de autenticación.
-      await new Promise((resolve) => setTimeout(resolve, 600))
-      console.info("[login] credentials payload", payload)
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
 
-      router.push("/dashboard")
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        const errorMessage = body?.error || "Credenciales inválidas. Intenta nuevamente."
+        setError(errorMessage)
+        return
+      }
+
+      const data = (await response.json()) as { redirectTo?: string }
+      router.replace(data.redirectTo || "/dashboard")
+      router.refresh()
     } catch (err) {
       console.error("[login] unexpected error", err)
       setError("No se pudo iniciar sesión. Intenta nuevamente.")

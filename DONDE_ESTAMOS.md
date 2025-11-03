@@ -8,7 +8,7 @@
     no considera un build de frontend.
 
   Qué implica adoptar shadcn/ui
-  shadcn/ui asume React + Tailwind + Radix (componentes accesibles) y un bundler moderno (Vite, Next, Turbopack, etc.). El “kit” es un CLI
+  shadcn/ui asume React + Tailwind + Radix +Next (componentes accesibles) y un bundler moderno (Vite, Next, Turbopack, etc.). El “kit” es un CLI
   que copia componentes a tu repo; tú los mantienes y personalizas. Para integrarlo en esta codebase necesitamos:
 
   1. Introducir un proyecto frontend
