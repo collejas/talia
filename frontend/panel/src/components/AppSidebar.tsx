@@ -39,7 +39,7 @@ const NAVIGATION = {
     { title: "Embudo", url: "#", icon: IconListDetails },
     { title: "Leads", url: "#", icon: IconUsers },
     { title: "Agenda", url: "#", icon: IconCalendar },
-    { title: "Visitas", url: "#", icon: IconMessageCircle },
+    { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
     { title: "Proyectos", url: "#", icon: IconFolder },
   ],
   documents: [

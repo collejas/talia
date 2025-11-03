@@ -81,9 +81,12 @@ npm run dev
 http://127.0.0.1:3000/dashboard
 http://127.0.0.1:3000/auth/login
 
-
+npm run lint
 npm run build
 
+npm run lint
+npm run build --webpack
+sudo systemctl restart talia-panel.service
 
 poetry run pytest
 
