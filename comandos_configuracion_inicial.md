@@ -9,6 +9,7 @@ sudo chown -R www-data:www-data /var/www/talia-landing
 
 # Crear/Editar Nginx
 sudo nano /etc/nginx/sites-available/talia
+sudo micro /etc/nginx/sites-available/talia
 
 # Habilita el sitio:
 sudo ln -s /etc/nginx/sites-available/talia /etc/nginx/sites-enabled/
@@ -67,18 +68,18 @@ pg_restore --clean --if-exists --no-owner --no-acl \
 
 
 # NUEVO ARRANQUE CON SYSTEM, EDICION Y ESTATUS
+sudo nano /etc/systemd/system/talia-panel.service
+sudo micro /etc/systemd/system/talia-panel.service
 
-sudo nano /etc/systemd/system/talia-api.service
-
-
-sudo systemctl start talia-api.service
-sudo systemctl stop talia-api.service
-sudo systemctl enable talia-api.service
-sudo systemctl restart talia-api.service
-sudo systemctl status talia-api.service
+sudo systemctl start talia-panel.service
+sudo systemctl stop talia-panel.service
+sudo systemctl enable talia-panel.service
+sudo systemctl restart talia-panel.service
+sudo systemctl status talia-panel.service
 
 npm run dev
-http://localhost:8004/panel-react/auth/login
+http://127.0.0.1:3000/dashboard
+http://127.0.0.1:3000/auth/login
 
 
 npm run build

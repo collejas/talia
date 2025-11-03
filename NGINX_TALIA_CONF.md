@@ -1,11 +1,12 @@
-# Configuración Nginx para TalIA (API + Panel)
+# Configuración Nginx para TalIA (Next.js sirviendo en la raíz)
 
-Este es el archivo de configuración completo basado en tu setup actual, con la recomendación aplicada para servir también el Panel bajo el prefijo `/panel/`. Puedes copiar y pegarlo en tu configuración.
+Este archivo parte de la premisa de que el backend legacy en 8004 ya no se usa y que todo el frontend (incluyendo login y dashboard) vive en el Next.js alojado en `127.0.0.1:8004`. Con este ajuste, las rutas públicas serán directas (`https://talia.mx/`, `https://talia.mx/auth/login`, `https://talia.mx/dashboard`, etc.), sin el prefijo `panel-react`.
 
-Notas clave:
-- Se mantiene el proxy existente en `^~ /api/` (con `X-Forwarded-Prefix: /api`).
-- Se agrega `^~ /panel/` apuntando al mismo backend FastAPI en `127.0.0.1:8004` (con `X-Forwarded-Prefix: /panel`).
-- Los bloques `^~` tienen precedencia sobre los regex de estáticos, evitando conflictos con `.css`, `.js`, `.png`, etc.
+Aspectos clave:
+- `/` y cualquier ruta dinámica (excepto las estáticas de la landing si decides conservarla) se proxéan al Next.js.
+- `/panel/` y `/panel-react/` redirigen a `/` para mantener la compatibilidad.
+- Si agregas rutas API dentro de Next (por ejemplo `src/app/api/*`), el bloque `/api/` reenvía las solicitudes al mismo servidor de Next.
+- Si aún necesitas archivos de la landing antigua (`/var/www/talia-landing`), deja esas rutas como estáticos específicos o migra los assets a la carpeta `public/` de Next.
 
 ```nginx
 server {
@@ -13,61 +14,94 @@ server {
     listen [::]:443 ssl http2;
     server_name talia.mx www.talia.mx;
 
-    root /var/www/talia-landing;
-    index index.html;
-
-    add_header Cache-Control "public, max-age=300";
     add_header X-Content-Type-Options "nosniff";
 
-    # FastAPI (puerto 8004) - API
+    # Aplicación Next.js (todas las vistas públicas)
+    location / {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    # API opcional servida por Next.js (app/api/*)
     location ^~ /api/ {
         proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Prefix /api;
-        proxy_redirect off;
+        proxy_set_header Connection "";
+        proxy_buffering off;
     }
 
-    # FastAPI (puerto 8004) - Panel estático/SPA legacy bajo /panel
-    location ^~ /panel/ {
-        rewrite ^/panel/(.*)$ /api/panel/$1 break;
-        proxy_pass http://127.0.0.1:8004;  # upstream en 8004
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_redirect off;
-    }
-
-    # FastAPI (puerto 8004) - Nuevo panel React bajo /panel-react
-    location ^~ /panel-react/ {
-        rewrite ^/panel-react/(.*)$ /api/panel-react/$1 break;
+    # Assets estáticos generados por Next.js
+    location ^~ /_next/static/ {
         proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Prefix /panel-react;
-        proxy_redirect off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
-    # Archivos estáticos de la landing
-    location ~* \.(css|js)$ {
-        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-        add_header Pragma "no-cache" always;
-        add_header Expires "0" always;
-        try_files $uri =404;
+    # Imágenes optimizadas por Next.js
+    location ^~ /_next/image {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~* \.(svg|png|jpg|jpeg|gif|webp|ico)$ {
+    # Otros endpoints internos de Next.js (datos, etc.)
+    location ^~ /_next/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+
+    # Cache agresiva para assets generados por Next
+    location ~* ^/panel-react/_next/static/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Assets estáticos del panel (imágenes, fuentes, etc.)
+    location ~* ^/panel-react/(.*\.(?:js|css|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2))$ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "public, max-age=86400";
+    }
+
+    # Normalizar /panel-react sin slash
+    location = /panel-react {
+        return 301 /;
+    }
+
+    # Redirecciones legacy
+    location ^~ /panel/ {
+        return 301 /;
+    }
+    location ^~ /panel-react/ {
+        return 301 /;
+    }
+
+    # Activos heredados de la landing (opcional). Si ya migraste todo a Next, elimina estas reglas.
+    location ~* ^/landing-assets/(.*\.(?:css|js|png|jpg|jpeg|gif|webp|ico))$ {
+        root /var/www/talia-landing;
         add_header Cache-Control "public, max-age=86400";
         try_files $uri =404;
-    }
-
-    location / {
-        try_files $uri $uri/ =404;
     }
 
     ssl_certificate /etc/letsencrypt/live/talia.mx/fullchain.pem;
@@ -95,23 +129,16 @@ server {
     server_name talia.mx www.talia.mx tal-ia.mx www.tal-ia.mx;
     return 301 https://talia.mx$request_uri;
 }
-
-
 ```
 
-Verificación rápida:
-- `sudo nginx -t`
-- `sudo systemctl reload nginx`
-- `curl -I https://talia.mx/api/panel/auth/login.html` → 200
-- `curl -I https://talia.mx/panel/auth/login.html` → 200
+### Pasos recomendados
+1. Detén y deshabilita el servicio legacy (`sudo systemctl stop talia-api.service`, `sudo systemctl disable talia-api.service`).
+2. Configura un unit systemd (por ejemplo `talia-panel.service`) que ejecute `npm run start -- -p 8004` en `~/talia/frontend/panel` y reinicie automáticamente.
+3. Copia esta configuración a `/etc/nginx/sites-available/talia`, ejecuta `sudo nginx -t`, `sudo systemctl daemon-reload` y `sudo systemctl reload nginx`.
+4. Verifica:
+   - `curl -I https://talia.mx/` → 200 del Next.js.
+   - `curl -I https://talia.mx/auth/login` → 200.
+   - `curl -I https://talia.mx/_next/static/...` → 200.
+   - `curl -I https://talia.mx/panel-react/` → 301 → `/`.
 
-Para servir correctamente `site.webmanifest`, edita como root `/etc/nginx/mime.types` y dentro del bloque `types { ... }` añade:
-
-```
-    application/manifest+json webmanifest;
-```
-
-Guarda, ejecuta `sudo nginx -t` y luego `sudo systemctl reload nginx`.
-
-Frontend ya actualizado:
-- El botón "Cerrar sesión" y `ensureSession()` detectan automáticamente si entraste por `/api/panel` o `/panel` y redirigen al prefijo correcto.
+Siempre que agregues más rutas o activos estáticos, publícalos en la carpeta `public/` del proyecto Next y, si hace falta, ajusta estas reglas.
