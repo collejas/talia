@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict omWtaxz5CnZRcqxcnhqe3K3r6s0MN8dviDHOuvXCYAwA7r80urO5fNPL4ZesXlw
+\restrict rGInmkR6qBzHBOi17y3hwa9t5Uy7lyAjmcwsjI8fE8HewbIenZptK8oCvwvrxUh
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -1451,6 +1451,282 @@ $$;
 
 
 --
+-- Name: panel_leads_list(uuid, uuid, public.lead_categoria, uuid, timestamp with time zone, timestamp with time zone, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+WITH filtered AS (
+    SELECT
+        lt.id AS tarjeta_id,
+        lt.contacto_id,
+        ct.nombre_completo AS contacto_nombre,
+        ct.correo AS contacto_correo,
+        ct.telefono_e164 AS contacto_telefono,
+        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
+        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
+        le.id AS etapa_id,
+        le.nombre AS etapa_nombre,
+        le.categoria,
+        lt.creado_en,
+        lt.actualizado_en,
+        lt.cerrado_en,
+        lt.monto_estimado,
+        lt.moneda,
+        COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
+        lt.lead_score,
+        lt.asignado_a_usuario_id AS asignado_id,
+        asignado.nombre_completo AS asignado_nombre,
+        lt.propietario_usuario_id AS propietario_id,
+        propietario.nombre_completo AS propietario_nombre,
+        lt.conversacion_id,
+        conv.ultimo_mensaje_en,
+        lt.motivo_cierre,
+        lt.tags,
+        lt.metadata
+    FROM public.lead_tarjetas lt
+    JOIN public.lead_etapas le ON le.id = lt.etapa_id
+    JOIN public.contactos ct ON ct.id = lt.contacto_id
+    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
+    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
+    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
+    WHERE public.puede_ver_lead(lt.id)
+      AND (p_tablero IS NULL OR lt.tablero_id = p_tablero)
+      AND (p_etapa IS NULL OR lt.etapa_id = p_etapa)
+      AND (p_categoria IS NULL OR le.categoria = p_categoria)
+      AND (p_asignado IS NULL OR lt.asignado_a_usuario_id = p_asignado)
+      AND (p_from IS NULL OR lt.creado_en >= p_from)
+      AND (p_to IS NULL OR lt.creado_en <= p_to)
+      AND (
+        p_search IS NULL OR p_search = '' OR
+        ct.nombre_completo ILIKE '%' || p_search || '%' OR
+        ct.correo ILIKE '%' || p_search || '%' OR
+        ct.telefono_e164 ILIKE '%' || p_search || '%' OR
+        le.nombre ILIKE '%' || p_search || '%' OR
+        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) ILIKE '%' || p_search || '%' OR
+        asignado.nombre_completo ILIKE '%' || p_search || '%' OR
+        propietario.nombre_completo ILIKE '%' || p_search || '%'
+      )
+),
+annotated AS (
+    SELECT
+        f.*,
+        COUNT(*) OVER () AS total_rows
+    FROM filtered f
+),
+ordered AS (
+    SELECT *
+    FROM annotated
+    ORDER BY
+        CASE
+            WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN actualizado_en
+        END ASC,
+        CASE
+            WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN actualizado_en
+        END DESC,
+        CASE
+            WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) = 'asc' THEN cerrado_en
+        END ASC,
+        CASE
+            WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) <> 'asc' THEN cerrado_en
+        END DESC,
+        CASE
+            WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) = 'asc' THEN monto_estimado
+        END ASC,
+        CASE
+            WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) <> 'asc' THEN monto_estimado
+        END DESC,
+        CASE
+            WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) = 'asc' THEN probabilidad
+        END ASC,
+        CASE
+            WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) <> 'asc' THEN probabilidad
+        END DESC,
+        CASE
+            WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) = 'asc' THEN lead_score
+        END ASC,
+        CASE
+            WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) <> 'asc' THEN lead_score
+        END DESC,
+        CASE
+            WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) = 'asc' THEN creado_en
+        END ASC,
+        CASE
+            WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) <> 'asc' THEN creado_en
+        END DESC,
+        creado_en DESC,
+        tarjeta_id
+)
+SELECT
+    tarjeta_id,
+    contacto_id,
+    contacto_nombre,
+    contacto_correo,
+    contacto_telefono,
+    contacto_estado,
+    canal,
+    etapa_id,
+    etapa_nombre,
+    categoria,
+    creado_en,
+    actualizado_en,
+    cerrado_en,
+    monto_estimado,
+    moneda,
+    probabilidad,
+    lead_score,
+    asignado_id,
+    asignado_nombre,
+    propietario_id,
+    propietario_nombre,
+    conversacion_id,
+    ultimo_mensaje_en,
+    motivo_cierre,
+    tags,
+    metadata,
+    total_rows
+FROM ordered
+LIMIT COALESCE(NULLIF(p_limit, 0), 100)
+OFFSET GREATEST(p_offset, 0);
+$$;
+
+
+--
+-- Name: panel_leads_resumen(timestamp with time zone, timestamp with time zone, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_leads_resumen(p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_tablero uuid DEFAULT NULL::uuid, p_asignado uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+WITH base AS (
+    SELECT
+        lt.*,
+        le.categoria,
+        le.nombre AS etapa_nombre
+    FROM public.lead_tarjetas lt
+    JOIN public.lead_etapas le ON le.id = lt.etapa_id
+    WHERE (p_from IS NULL OR lt.creado_en >= p_from)
+      AND (p_to IS NULL OR lt.creado_en <= p_to)
+      AND (p_tablero IS NULL OR lt.tablero_id = p_tablero)
+      AND (p_asignado IS NULL OR lt.asignado_a_usuario_id = p_asignado)
+      AND public.puede_ver_lead(lt.id)
+),
+counts AS (
+    SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE categoria = 'abierta') AS abiertas,
+        COUNT(*) FILTER (WHERE categoria = 'ganada') AS ganadas,
+        COUNT(*) FILTER (WHERE categoria = 'perdida') AS perdidas,
+        COUNT(*) FILTER (
+            WHERE lt.creado_en >= COALESCE(p_from, now() - INTERVAL '24 hours')
+        ) AS nuevas,
+        COUNT(DISTINCT asignado_a_usuario_id) FILTER (WHERE asignado_a_usuario_id IS NOT NULL) AS vendedores_activos
+    FROM base lt
+),
+monto AS (
+    SELECT COALESCE(SUM(monto_estimado), 0)::numeric AS monto_total
+    FROM base
+),
+top_vendedor AS (
+    SELECT asignado_a_usuario_id, COUNT(*) AS total
+    FROM base
+    WHERE asignado_a_usuario_id IS NOT NULL
+    GROUP BY asignado_a_usuario_id
+    ORDER BY total DESC
+    LIMIT 1
+),
+top_vendedor_datos AS (
+    SELECT
+        u.id,
+        u.nombre_completo,
+        tv.total
+    FROM top_vendedor tv
+    LEFT JOIN public.usuarios u ON u.id = tv.asignado_a_usuario_id
+)
+SELECT jsonb_build_object(
+    'total', COALESCE((SELECT total FROM counts), 0),
+    'abiertas', COALESCE((SELECT abiertas FROM counts), 0),
+    'ganadas', COALESCE((SELECT ganadas FROM counts), 0),
+    'perdidas', COALESCE((SELECT perdidas FROM counts), 0),
+    'nuevas', COALESCE((SELECT nuevas FROM counts), 0),
+    'vendedores_activos', COALESCE((SELECT vendedores_activos FROM counts), 0),
+    'monto_total', COALESCE((SELECT monto_total FROM monto), 0),
+    'top_vendedor', COALESCE((
+        SELECT jsonb_build_object(
+            'id', id,
+            'nombre', nombre_completo,
+            'total', total
+        )
+        FROM top_vendedor_datos
+    ), '{}'::jsonb)
+);
+$$;
+
+
+--
+-- Name: panel_leads_timeline(timestamp with time zone, timestamp with time zone, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_leads_timeline(p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_tablero uuid DEFAULT NULL::uuid, p_asignado uuid DEFAULT NULL::uuid) RETURNS TABLE(bucket_date date, nuevos bigint, ganados bigint, perdidos bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+WITH bounds AS (
+    SELECT
+        COALESCE(date_trunc('day', p_from), date_trunc('day', now() - INTERVAL '29 days'))::date AS start_date,
+        COALESCE(date_trunc('day', p_to), date_trunc('day', now()))::date AS end_date
+),
+series AS (
+    SELECT generate_series(start_date, end_date, '1 day')::date AS bucket_date
+    FROM bounds
+),
+visibles AS (
+    SELECT
+        lt.id,
+        lt.creado_en::date AS creado_date,
+        lt.cerrado_en::date AS cerrado_date,
+        le.categoria
+    FROM public.lead_tarjetas lt
+    JOIN public.lead_etapas le ON le.id = lt.etapa_id
+    WHERE (p_tablero IS NULL OR lt.tablero_id = p_tablero)
+      AND (p_asignado IS NULL OR lt.asignado_a_usuario_id = p_asignado)
+      AND (p_to IS NULL OR lt.creado_en <= p_to)
+      AND public.puede_ver_lead(lt.id)
+),
+agg_new AS (
+    SELECT creado_date AS bucket_date, COUNT(*) AS nuevos
+    FROM visibles
+    WHERE creado_date IS NOT NULL
+      AND (p_from IS NULL OR creado_date >= p_from::date)
+    GROUP BY creado_date
+),
+agg_closed AS (
+    SELECT
+        cerrado_date AS bucket_date,
+        COUNT(*) FILTER (WHERE categoria = 'ganada') AS ganados,
+        COUNT(*) FILTER (WHERE categoria = 'perdida') AS perdidos
+    FROM visibles
+    WHERE cerrado_date IS NOT NULL
+      AND (p_from IS NULL OR cerrado_date >= p_from::date)
+      AND (p_to IS NULL OR cerrado_date <= p_to::date)
+    GROUP BY cerrado_date
+)
+SELECT
+    s.bucket_date,
+    COALESCE(agg_new.nuevos, 0) AS nuevos,
+    COALESCE(agg_closed.ganados, 0) AS ganados,
+    COALESCE(agg_closed.perdidos, 0) AS perdidos
+FROM series s
+LEFT JOIN agg_new ON agg_new.bucket_date = s.bucket_date
+LEFT JOIN agg_closed ON agg_closed.bucket_date = s.bucket_date
+ORDER BY s.bucket_date;
+$$;
+
+
+--
 -- Name: panel_visitantes_sin_chat_base(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1833,18 +2109,82 @@ $_$;
 
 
 --
--- Name: panel_webchat_visitas_detalle(timestamp with time zone, timestamp with time zone, boolean, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: panel_webchat_visitas_detalle(timestamp with time zone, timestamp with time zone, boolean, text, text, text, text, text, integer, integer, timestamp with time zone, timestamp with time zone, timestamp with time zone, timestamp with time zone, double precision, double precision, double precision, double precision, text, text[], text, text, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_webchat_visitas_detalle(p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_has_chat boolean DEFAULT NULL::boolean, p_state text DEFAULT NULL::text, p_search text DEFAULT NULL::text, p_limit integer DEFAULT NULL::integer, p_offset integer DEFAULT 0) RETURNS TABLE(session_id text, ip text, registrado_en timestamp with time zone, primera_visita_en timestamp with time zone, ultimo_evento_en timestamp with time zone, closed_at timestamp with time zone, stay_seconds double precision, avg_stay_seconds double precision, visit_count integer, total_visitas integer, tuvo_chat boolean, mensajes_entrantes integer, mensajes_salientes integer, primer_mensaje_en timestamp with time zone, ultimo_mensaje_conversacion timestamp with time zone, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_estado text, contacto_captura text, contacto_creado_en timestamp with time zone, country_code text, country_name text, state_name text, state_code text, city_name text, cve_ent text, nom_ent text, cve_mun text, nom_mun text, cvegeo text, ubicacion_cache jsonb, device_type text, dispositivo_cache jsonb, pantalla_cache jsonb, sistema_operativo text, idioma text, timezone text, prefiere_modo_oscuro boolean, referrer text, landing_url text, trazabilidad_cache jsonb, geo jsonb, total_rows bigint, total_chat_rows bigint, total_no_chat_rows bigint)
+CREATE FUNCTION public.panel_webchat_visitas_detalle(p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_has_chat boolean DEFAULT NULL::boolean, p_country text DEFAULT NULL::text, p_state text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_session text DEFAULT NULL::text, p_ip text DEFAULT NULL::text, p_visit_min integer DEFAULT NULL::integer, p_visit_max integer DEFAULT NULL::integer, p_first_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_first_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_last_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_last_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_stay_min double precision DEFAULT NULL::double precision, p_stay_max double precision DEFAULT NULL::double precision, p_avg_stay_min double precision DEFAULT NULL::double precision, p_avg_stay_max double precision DEFAULT NULL::double precision, p_contact_status text DEFAULT NULL::text, p_device_types text[] DEFAULT NULL::text[], p_referrer text DEFAULT NULL::text, p_landing text DEFAULT NULL::text, p_order_by text DEFAULT NULL::text, p_order_dir text DEFAULT NULL::text, p_search text DEFAULT NULL::text, p_limit integer DEFAULT NULL::integer, p_offset integer DEFAULT 0) RETURNS TABLE(session_id text, ip text, registrado_en timestamp with time zone, primera_visita_en timestamp with time zone, ultimo_evento_en timestamp with time zone, closed_at timestamp with time zone, stay_seconds double precision, avg_stay_seconds double precision, visit_count integer, total_visitas integer, tuvo_chat boolean, mensajes_entrantes integer, mensajes_salientes integer, primer_mensaje_en timestamp with time zone, ultimo_mensaje_conversacion timestamp with time zone, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_estado text, contacto_captura text, contacto_creado_en timestamp with time zone, country_code text, country_name text, state_name text, state_code text, city_name text, cve_ent text, nom_ent text, cve_mun text, nom_mun text, cvegeo text, ubicacion_cache jsonb, device_type text, dispositivo_cache jsonb, pantalla_cache jsonb, sistema_operativo text, idioma text, timezone text, prefiere_modo_oscuro boolean, referrer text, landing_url text, trazabilidad_cache jsonb, geo jsonb, total_rows bigint, total_chat_rows bigint, total_no_chat_rows bigint)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-WITH state_param AS (
-    SELECT CASE
-        WHEN p_state IS NULL OR btrim(p_state) = '' THEN NULL
-        ELSE LPAD(REGEXP_REPLACE(p_state, '\D', '', 'g'), 2, '0')
-    END AS code
+WITH params AS (
+    SELECT
+        CASE
+            WHEN p_state IS NULL OR btrim(p_state) = '' THEN NULL
+            ELSE LPAD(REGEXP_REPLACE(p_state, '\D', '', 'g'), 2, '0')
+        END AS state_code,
+        CASE
+            WHEN p_country IS NULL OR btrim(p_country) = '' THEN NULL
+            ELSE UPPER(btrim(p_country))
+        END AS country_code,
+        CASE
+            WHEN p_country IS NULL OR btrim(p_country) = '' THEN NULL
+            ELSE btrim(p_country)
+        END AS country_name,
+        CASE
+            WHEN p_city IS NULL OR btrim(p_city) = '' THEN NULL
+            ELSE btrim(p_city)
+        END AS city_name,
+        CASE
+            WHEN p_session IS NULL OR btrim(p_session) = '' THEN NULL
+            ELSE btrim(p_session)
+        END AS session_filter,
+        CASE
+            WHEN p_ip IS NULL OR btrim(p_ip) = '' THEN NULL
+            ELSE btrim(p_ip)
+        END AS ip_filter,
+        CASE WHEN p_visit_min IS NULL THEN NULL ELSE p_visit_min END AS visit_min,
+        CASE WHEN p_visit_max IS NULL THEN NULL ELSE p_visit_max END AS visit_max,
+        p_first_from AS first_from,
+        p_first_to AS first_to,
+        p_last_from AS last_from,
+        p_last_to AS last_to,
+        CASE WHEN p_stay_min IS NULL THEN NULL ELSE p_stay_min END AS stay_min,
+        CASE WHEN p_stay_max IS NULL THEN NULL ELSE p_stay_max END AS stay_max,
+        CASE WHEN p_avg_stay_min IS NULL THEN NULL ELSE p_avg_stay_min END AS avg_stay_min,
+        CASE WHEN p_avg_stay_max IS NULL THEN NULL ELSE p_avg_stay_max END AS avg_stay_max,
+        CASE
+            WHEN p_contact_status IS NULL OR btrim(p_contact_status) = '' THEN NULL
+            ELSE lower(btrim(p_contact_status))
+        END AS contact_status,
+        CASE
+            WHEN p_referrer IS NULL OR btrim(p_referrer) = '' THEN NULL
+            ELSE btrim(p_referrer)
+        END AS referrer_filter,
+        CASE
+            WHEN p_landing IS NULL OR btrim(p_landing) = '' THEN NULL
+            ELSE btrim(p_landing)
+        END AS landing_filter,
+        CASE
+            WHEN p_device_types IS NULL OR array_length(p_device_types, 1) IS NULL THEN NULL
+            ELSE ARRAY(
+                SELECT DISTINCT UPPER(btrim(value))
+                FROM unnest(p_device_types) AS value
+                WHERE value IS NOT NULL AND btrim(value) <> ''
+            )
+        END AS device_values,
+        CASE
+            WHEN p_order_by IS NULL OR btrim(p_order_by) = '' THEN 'ultimo'
+            WHEN lower(btrim(p_order_by)) IN (
+                'session', 'ip', 'visitas', 'primera', 'ultimo', 'stay',
+                'avg_stay', 'chat', 'country', 'state', 'city', 'device',
+                'referrer', 'landing'
+            ) THEN lower(btrim(p_order_by))
+            ELSE 'ultimo'
+        END AS order_by,
+        CASE
+            WHEN lower(coalesce(p_order_dir, 'desc')) = 'asc' THEN 'asc'
+            ELSE 'desc'
+        END AS order_dir
 ),
 base AS (
     SELECT
@@ -1959,7 +2299,8 @@ geo_unified AS (
     FROM base b
     LEFT JOIN messages m ON m.session_id = b.session_id
     LEFT JOIN contacts ct ON ct.id = b.contacto_id
-)
+) ,
+result AS (
 SELECT
     g.session_id,
     g.ip,
@@ -1969,7 +2310,7 @@ SELECT
     g.closed_at,
     g.duration_seconds AS stay_seconds,
     CASE
-        WHEN COALESCE(g.visit_count, 0) > 1
+        WHEN COALESCE(g.visit_count, 0) > 0
             THEN g.duration_seconds / NULLIF(g.visit_count, 0)
         ELSE NULL
     END AS avg_stay_seconds,
@@ -2102,330 +2443,145 @@ SELECT
     COUNT(*) FILTER (WHERE COALESCE(g.entrantes, 0) > 0) OVER () AS total_chat_rows,
     COUNT(*) FILTER (WHERE COALESCE(g.entrantes, 0) = 0) OVER () AS total_no_chat_rows
 FROM geo_unified g
-CROSS JOIN state_param sp
+CROSS JOIN params pr
 WHERE (p_from IS NULL OR COALESCE(g.ultimo_evento_en, g.registrado_en) >= p_from)
   AND (p_to IS NULL OR COALESCE(g.ultimo_evento_en, g.registrado_en) <= p_to)
   AND (
-        sp.code IS NULL
+        pr.state_code IS NULL
         OR COALESCE(
             LPAD(NULLIF(g.cve_ent, ''), 2, '0'),
             LPAD(NULLIF(g.contacto_datos #>> '{ubicacion,cve_ent}', ''), 2, '0'),
             NULLIF(g.contacto_datos #>> '{cve_ent}', '')
-        ) = sp.code
+        ) = pr.state_code
       )
   AND (
-        p_has_chat IS NULL
-        OR (p_has_chat IS TRUE AND COALESCE(g.entrantes, 0) > 0)
-        OR (p_has_chat IS FALSE AND COALESCE(g.entrantes, 0) = 0)
-      )
-  AND (
-        p_search IS NULL OR btrim(p_search) = '' OR
-        (
-            g.session_id ILIKE '%' || btrim(p_search) || '%' OR
-            COALESCE(g.nombre_completo, '') ILIKE '%' || btrim(p_search) || '%' OR
-            COALESCE(g.correo, '') ILIKE '%' || btrim(p_search) || '%' OR
-            COALESCE(g.telefono_e164, '') ILIKE '%' || btrim(p_search) || '%' OR
-            COALESCE(g.referrer, '') ILIKE '%' || btrim(p_search) || '%' OR
-            COALESCE(g.landing_url, '') ILIKE '%' || btrim(p_search) || '%'
-        )
-      )
-ORDER BY COALESCE(g.ultimo_evento_en, g.registrado_en) DESC, g.session_id
-LIMIT COALESCE(NULLIF(p_limit, 0), 500)
-OFFSET GREATEST(COALESCE(p_offset, 0), 0);
-$$;
-
-
---
--- Name: panel_webchat_visitas_detalle(timestamp with time zone, timestamp with time zone, boolean, text, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_webchat_visitas_detalle(p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_has_chat boolean DEFAULT NULL::boolean, p_country text DEFAULT NULL::text, p_state text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_search text DEFAULT NULL::text, p_limit integer DEFAULT NULL::integer, p_offset integer DEFAULT 0) RETURNS TABLE(session_id text, ip text, registrado_en timestamp with time zone, primera_visita_en timestamp with time zone, ultimo_evento_en timestamp with time zone, closed_at timestamp with time zone, stay_seconds double precision, avg_stay_seconds double precision, visit_count integer, total_visitas integer, tuvo_chat boolean, mensajes_entrantes integer, mensajes_salientes integer, primer_mensaje_en timestamp with time zone, ultimo_mensaje_conversacion timestamp with time zone, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_estado text, contacto_captura text, contacto_creado_en timestamp with time zone, country_code text, country_name text, state_name text, state_code text, city_name text, cve_ent text, nom_ent text, cve_mun text, nom_mun text, cvegeo text, ubicacion_cache jsonb, device_type text, dispositivo_cache jsonb, pantalla_cache jsonb, sistema_operativo text, idioma text, timezone text, prefiere_modo_oscuro boolean, referrer text, landing_url text, trazabilidad_cache jsonb, geo jsonb, total_rows bigint, total_chat_rows bigint, total_no_chat_rows bigint)
-    LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-WITH filter_params AS (
-    SELECT
-        CASE
-            WHEN p_country IS NULL OR btrim(p_country) = '' THEN NULL
-            ELSE upper(btrim(p_country))
-        END AS country_code,
-        CASE
-            WHEN p_state IS NULL OR btrim(p_state) = '' THEN NULL
-            ELSE lower(btrim(p_state))
-        END AS state_name,
-        CASE
-            WHEN p_city IS NULL OR btrim(p_city) = '' THEN NULL
-            ELSE lower(btrim(p_city))
-        END AS city_name
-),
-base AS (
-    SELECT
-        w.session_id,
-        COALESCE(w.contacto_id, ic.contacto_id) AS contacto_id,
-        w.registrado_en,
-        w.ultimo_evento_en,
-        sc.closed_at,
-        w.visit_count,
-        w.cve_ent,
-        w.nom_ent,
-        w.cve_mun,
-        w.nom_mun,
-        w.cvegeo,
-        w.ip,
-        w.device_type,
-        w.geo,
-        w.referrer,
-        w.landing_url,
-        GREATEST(
-            EXTRACT(
-                EPOCH FROM (
-                    COALESCE(sc.closed_at, w.ultimo_evento_en, w.registrado_en) - w.registrado_en
-                )
-            ),
-            0
-        ) AS duration_seconds
-    FROM public.webchat_visitantes w
-    LEFT JOIN public.identidades_canal ic
-        ON ic.canal = 'webchat' AND ic.id_externo = w.session_id
-    LEFT JOIN public.webchat_session_closures sc
-        ON sc.session_id = w.session_id
-),
-messages AS (
-    SELECT
-        datos ->> 'session_id' AS session_id,
-        COUNT(*) FILTER (WHERE direccion = 'entrante') AS entrantes,
-        COUNT(*) FILTER (WHERE direccion = 'saliente') AS salientes,
-        MIN(creado_en) FILTER (WHERE direccion = 'entrante') AS primer_mensaje_en,
-        MAX(creado_en) AS ultimo_mensaje_en
-    FROM public.mensajes
-    WHERE datos ? 'session_id'
-    GROUP BY datos ->> 'session_id'
-),
-contacts AS (
-    SELECT
-        c.id,
-        c.nombre_completo,
-        c.correo,
-        c.telefono_e164,
-        c.company_name,
-        c.estado,
-        c.captura_estado,
-        c.creado_en,
-        c.contacto_datos
-    FROM public.contactos c
-),
-geo_unified AS (
-    SELECT
-        b.*,
-        m.entrantes,
-        m.salientes,
-        m.primer_mensaje_en,
-        m.ultimo_mensaje_en,
-        ct.id AS contacto_ref,
-        ct.nombre_completo,
-        ct.correo,
-        ct.telefono_e164,
-        ct.company_name,
-        ct.estado,
-        ct.captura_estado,
-        ct.creado_en,
-        ct.contacto_datos,
-        UPPER(
+        pr.country_code IS NULL
+        OR UPPER(
             COALESCE(
-                NULLIF((b.geo -> 'ip_lookup') ->> 'country_code', ''),
-                NULLIF((b.geo -> 'ip_lookup') ->> 'country', ''),
-                NULLIF((b.geo -> 'client') ->> 'country_code', ''),
-                NULLIF((b.geo -> 'client') ->> 'country', ''),
-                NULLIF(ct.contacto_datos #>> '{ubicacion,country_code}', ''),
-                NULLIF(ct.contacto_datos #>> '{ubicacion,country}', '')
+                NULLIF(g.geo_country_code, ''),
+                NULLIF(g.contacto_datos #>> '{ubicacion,country_code}', ''),
+                NULLIF(g.contacto_datos #>> '{ubicacion,country}', '')
             )
-        ) AS country_code_norm,
-        COALESCE(
-            NULLIF((b.geo -> 'ip_lookup') ->> 'country_name', ''),
-            NULLIF((b.geo -> 'client') ->> 'country_name', ''),
-            NULLIF((b.geo -> 'ip_lookup') ->> 'country', ''),
-            NULLIF((b.geo -> 'client') ->> 'country', ''),
-            ct.contacto_datos #>> '{ubicacion,country}',
-            ct.contacto_datos #>> '{ubicacion,nom_ent}',
-            ct.contacto_datos #>> '{ubicacion,nom_pais}'
-        ) AS country_name_norm,
-        lower(COALESCE(
-            CASE
-                WHEN UPPER(
-                    COALESCE(
-                        NULLIF((b.geo -> 'ip_lookup') ->> 'country_code', ''),
-                        NULLIF((b.geo -> 'ip_lookup') ->> 'country', ''),
-                        NULLIF((b.geo -> 'client') ->> 'country_code', ''),
-                        NULLIF((b.geo -> 'client') ->> 'country', ''),
-                        NULLIF(ct.contacto_datos #>> '{ubicacion,country_code}', ''),
-                        NULLIF(ct.contacto_datos #>> '{ubicacion,country}', '')
-                    )
-                ) = 'MX'
-                THEN COALESCE(
-                    NULLIF(b.nom_ent, ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,nom_ent}', ''),
-                    NULLIF((b.geo -> 'client') ->> 'region', ''),
-                    NULLIF((b.geo -> 'ip_lookup') ->> 'region', '')
-                )
-                ELSE COALESCE(
-                    NULLIF((b.geo -> 'ip_lookup') ->> 'region', ''),
-                    NULLIF((b.geo -> 'client') ->> 'region', ''),
-                    NULLIF((b.geo -> 'client') ->> 'state', ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,region}', ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,nom_ent}', '')
-                )
-            END,
-            ''
-        )) AS state_name_norm,
-        CASE
-            WHEN UPPER(
-                COALESCE(
-                    NULLIF((b.geo -> 'ip_lookup') ->> 'country_code', ''),
-                    NULLIF((b.geo -> 'ip_lookup') ->> 'country', ''),
-                    NULLIF((b.geo -> 'client') ->> 'country_code', ''),
-                    NULLIF((b.geo -> 'client') ->> 'country', ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,country_code}', ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,country}', '')
-                )
-            ) = 'MX'
-            THEN LPAD(
-                COALESCE(
-                    NULLIF(b.cve_ent, ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,cve_ent}', '')
-                ),
-                2,
-                '0'
-            )
-            ELSE NULL
-        END AS state_code_norm,
-        lower(COALESCE(
-            CASE
-                WHEN UPPER(
-                    COALESCE(
-                        NULLIF((b.geo -> 'ip_lookup') ->> 'country_code', ''),
-                        NULLIF((b.geo -> 'ip_lookup') ->> 'country', ''),
-                        NULLIF((b.geo -> 'client') ->> 'country_code', ''),
-                        NULLIF((b.geo -> 'client') ->> 'country', ''),
-                        NULLIF(ct.contacto_datos #>> '{ubicacion,country_code}', ''),
-                        NULLIF(ct.contacto_datos #>> '{ubicacion,country}', '')
-                    )
-                ) = 'MX'
-                THEN COALESCE(
-                    NULLIF(b.nom_mun, ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,nom_mun}', ''),
-                    NULLIF((b.geo -> 'client') ->> 'city', ''),
-                    NULLIF((b.geo -> 'ip_lookup') ->> 'city', '')
-                )
-                ELSE COALESCE(
-                    NULLIF((b.geo -> 'ip_lookup') ->> 'city', ''),
-                    NULLIF((b.geo -> 'client') ->> 'city', ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,city}', ''),
-                    NULLIF(ct.contacto_datos #>> '{ubicacion,nom_mun}', '')
-                )
-            END,
-            ''
-        )) AS city_name_norm
-    FROM base b
-    LEFT JOIN messages m ON m.session_id = b.session_id
-    LEFT JOIN contacts ct ON ct.id = b.contacto_id
-)
-SELECT
-    g.session_id,
-    g.ip,
-    g.registrado_en,
-    g.registrado_en AS primera_visita_en,
-    g.ultimo_evento_en,
-    g.closed_at,
-    g.duration_seconds AS stay_seconds,
-    CASE
-        WHEN COALESCE(g.visit_count, 0) > 1
-            THEN g.duration_seconds / NULLIF(g.visit_count, 0)
-        ELSE NULL
-    END AS avg_stay_seconds,
-    COALESCE(g.visit_count, 0) AS visit_count,
-    COALESCE(g.visit_count, 0) AS total_visitas,
-    COALESCE(g.entrantes, 0) > 0 AS tuvo_chat,
-    COALESCE(g.entrantes, 0) AS mensajes_entrantes,
-    COALESCE(g.salientes, 0) AS mensajes_salientes,
-    g.primer_mensaje_en,
-    g.ultimo_mensaje_en AS ultimo_mensaje_conversacion,
-    g.contacto_ref AS contacto_id,
-    g.nombre_completo AS contacto_nombre,
-    g.correo AS contacto_correo,
-    g.telefono_e164 AS contacto_telefono,
-    g.company_name AS contacto_empresa,
-    g.estado AS contacto_estado,
-    g.captura_estado AS contacto_captura,
-    g.creado_en AS contacto_creado_en,
-    g.country_code_norm AS country_code,
-    g.country_name_norm AS country_name,
-    g.state_name_norm AS state_name,
-    g.state_code_norm AS state_code,
-    g.city_name_norm AS city_name,
-    COALESCE(
-        LPAD(NULLIF(g.cve_ent, ''), 2, '0'),
-        LPAD(NULLIF(g.contacto_datos #>> '{ubicacion,cve_ent}', ''), 2, '0'),
-        NULLIF(g.contacto_datos #>> '{cve_ent}', '')
-    ) AS cve_ent,
-    COALESCE(
-        g.nom_ent,
-        g.contacto_datos #>> '{ubicacion,nom_ent}',
-        g.contacto_datos #>> '{nom_ent}'
-    ) AS nom_ent,
-    COALESCE(
-        LPAD(NULLIF(g.cve_mun, ''), 3, '0'),
-        LPAD(NULLIF(g.contacto_datos #>> '{ubicacion,cve_mun}', ''), 3, '0'),
-        g.contacto_datos #>> '{cve_mun}'
-    ) AS cve_mun,
-    COALESCE(
-        g.nom_mun,
-        g.contacto_datos #>> '{ubicacion,nom_mun}',
-        g.contacto_datos #>> '{nom_mun}'
-    ) AS nom_mun,
-    COALESCE(
-        LPAD(NULLIF(g.cvegeo, ''), 5, '0'),
-        LPAD(NULLIF(g.contacto_datos #>> '{ubicacion,cvegeo}', ''), 5, '0'),
-        g.contacto_datos #>> '{cvegeo}'
-    ) AS cvegeo,
-    g.contacto_datos -> 'ubicacion' AS ubicacion_cache,
-    g.device_type,
-    g.contacto_datos -> 'dispositivo' AS dispositivo_cache,
-    (g.contacto_datos -> 'dispositivo' -> 'pantalla') AS pantalla_cache,
-    NULLIF(g.contacto_datos #>> '{dispositivo,plataforma}', '') AS sistema_operativo,
-    NULLIF(g.contacto_datos #>> '{dispositivo,idioma}', '') AS idioma,
-    NULLIF(g.contacto_datos #>> '{dispositivo,timezone}', '') AS timezone,
-    CASE
-        WHEN (g.contacto_datos #>> '{dispositivo,prefiere_modo_oscuro}') IN ('true', '1') THEN true
-        WHEN (g.contacto_datos #>> '{dispositivo,prefiere_modo_oscuro}') IN ('false', '0') THEN false
-        ELSE NULL
-    END AS prefiere_modo_oscuro,
-    COALESCE(g.referrer, NULLIF(g.contacto_datos #>> '{trazabilidad,referrer}', '')) AS referrer,
-    COALESCE(g.landing_url, NULLIF(g.contacto_datos #>> '{trazabilidad,landing}', '')) AS landing_url,
-    g.contacto_datos -> 'trazabilidad' AS trazabilidad_cache,
-    g.geo,
-    COUNT(*) OVER () AS total_rows,
-    COUNT(*) FILTER (WHERE COALESCE(g.entrantes, 0) > 0) OVER () AS total_chat_rows,
-    COUNT(*) FILTER (WHERE COALESCE(g.entrantes, 0) = 0) OVER () AS total_no_chat_rows
-FROM geo_unified g
-CROSS JOIN filter_params fp
-WHERE (p_from IS NULL OR COALESCE(g.ultimo_evento_en, g.registrado_en) >= p_from)
-  AND (p_to IS NULL OR COALESCE(g.ultimo_evento_en, g.registrado_en) <= p_to)
-  AND (
-        fp.country_code IS NULL
-        OR g.country_code_norm = fp.country_code
+        ) = pr.country_code
+        OR (
+            pr.country_name IS NOT NULL AND pr.country_name <> '' AND
+            COALESCE(
+                g.geo_country_name,
+                g.contacto_datos #>> '{ubicacion,country}',
+                g.contacto_datos #>> '{ubicacion,nom_ent}',
+                g.contacto_datos #>> '{ubicacion,nom_pais}'
+            ) ILIKE '%' || pr.country_name || '%'
+        )
       )
   AND (
-        fp.state_name IS NULL
-        OR g.state_name_norm ILIKE '%' || fp.state_name || '%'
-      )
-  AND (
-        fp.city_name IS NULL
-        OR g.city_name_norm ILIKE '%' || fp.city_name || '%'
+        pr.city_name IS NULL
+        OR (
+            COALESCE(
+                g.nom_mun,
+                g.contacto_datos #>> '{ubicacion,nom_mun}',
+                g.geo_city
+            ) ILIKE '%' || pr.city_name || '%'
+        )
       )
   AND (
         p_has_chat IS NULL
         OR (p_has_chat IS TRUE AND COALESCE(g.entrantes, 0) > 0)
         OR (p_has_chat IS FALSE AND COALESCE(g.entrantes, 0) = 0)
+      )
+  AND (
+        pr.session_filter IS NULL
+        OR g.session_id ILIKE '%' || pr.session_filter || '%'
+      )
+  AND (
+        pr.ip_filter IS NULL
+        OR COALESCE(g.ip, '') ILIKE '%' || pr.ip_filter || '%'
+      )
+  AND (
+        pr.visit_min IS NULL
+        OR COALESCE(g.visit_count, 0) >= pr.visit_min
+      )
+  AND (
+        pr.visit_max IS NULL
+        OR COALESCE(g.visit_count, 0) <= pr.visit_max
+      )
+  AND (
+        pr.first_from IS NULL
+        OR g.registrado_en >= pr.first_from
+      )
+  AND (
+        pr.first_to IS NULL
+        OR g.registrado_en <= pr.first_to
+      )
+  AND (
+        pr.last_from IS NULL
+        OR COALESCE(g.ultimo_evento_en, g.registrado_en) >= pr.last_from
+      )
+  AND (
+        pr.last_to IS NULL
+        OR COALESCE(g.ultimo_evento_en, g.registrado_en) <= pr.last_to
+      )
+  AND (
+        pr.stay_min IS NULL
+        OR g.duration_seconds >= pr.stay_min
+      )
+  AND (
+        pr.stay_max IS NULL
+        OR g.duration_seconds <= pr.stay_max
+      )
+  AND (
+        pr.avg_stay_min IS NULL
+        OR (
+            CASE
+                WHEN COALESCE(g.visit_count, 0) > 0
+                    THEN g.duration_seconds / NULLIF(g.visit_count, 0)
+                ELSE NULL
+            END
+        ) >= pr.avg_stay_min
+      )
+  AND (
+        pr.avg_stay_max IS NULL
+        OR (
+            CASE
+                WHEN COALESCE(g.visit_count, 0) > 0
+                    THEN g.duration_seconds / NULLIF(g.visit_count, 0)
+                ELSE NULL
+            END
+        ) <= pr.avg_stay_max
+      )
+  AND (
+        pr.contact_status IS NULL
+        OR pr.contact_status NOT IN ('completo', 'incompleto', 'sin', 'sin_contacto')
+        OR (
+            pr.contact_status = 'completo'
+            AND (
+                COALESCE(lower(g.captura_estado), '') = 'completo'
+                OR (
+                    COALESCE(btrim(g.correo), '') <> ''
+                    AND COALESCE(btrim(g.telefono_e164), '') <> ''
+                )
+            )
+        )
+        OR (
+            pr.contact_status = 'incompleto'
+            AND COALESCE(lower(g.captura_estado), '') = 'incompleto'
+        )
+        OR (
+            pr.contact_status IN ('sin', 'sin_contacto')
+            AND g.contacto_ref IS NULL
+        )
+      )
+  AND (
+        pr.device_values IS NULL
+        OR array_length(pr.device_values, 1) = 0
+        OR UPPER(COALESCE(g.device_type, '')) = ANY(pr.device_values)
+      )
+  AND (
+        pr.referrer_filter IS NULL
+        OR COALESCE(g.referrer, '') ILIKE '%' || pr.referrer_filter || '%'
+      )
+  AND (
+        pr.landing_filter IS NULL
+        OR COALESCE(g.landing_url, '') ILIKE '%' || pr.landing_filter || '%'
       )
   AND (
         p_search IS NULL OR btrim(p_search) = '' OR
@@ -2435,10 +2591,45 @@ WHERE (p_from IS NULL OR COALESCE(g.ultimo_evento_en, g.registrado_en) >= p_from
             COALESCE(g.correo, '') ILIKE '%' || btrim(p_search) || '%' OR
             COALESCE(g.telefono_e164, '') ILIKE '%' || btrim(p_search) || '%' OR
             COALESCE(g.referrer, '') ILIKE '%' || btrim(p_search) || '%' OR
-            COALESCE(g.landing_url, '') ILIKE '%' || btrim(p_search) || '%'
+            COALESCE(g.landing_url, '') ILIKE '%' || btrim(p_search) || '%' OR
+            COALESCE(g.ip, '') ILIKE '%' || btrim(p_search) || '%'
         )
       )
-ORDER BY COALESCE(g.ultimo_evento_en, g.registrado_en) DESC, g.session_id
+)
+SELECT r.*
+FROM result r
+CROSS JOIN params pr
+ORDER BY
+  CASE WHEN pr.order_by = 'session' AND pr.order_dir = 'asc' THEN r.session_id END ASC,
+  CASE WHEN pr.order_by = 'session' AND pr.order_dir = 'desc' THEN r.session_id END DESC,
+  CASE WHEN pr.order_by = 'ip' AND pr.order_dir = 'asc' THEN COALESCE(r.ip, '') END ASC,
+  CASE WHEN pr.order_by = 'ip' AND pr.order_dir = 'desc' THEN COALESCE(r.ip, '') END DESC,
+  CASE WHEN pr.order_by = 'visitas' AND pr.order_dir = 'asc' THEN COALESCE(r.total_visitas, 0) END ASC,
+  CASE WHEN pr.order_by = 'visitas' AND pr.order_dir = 'desc' THEN COALESCE(r.total_visitas, 0) END DESC,
+  CASE WHEN pr.order_by = 'primera' AND pr.order_dir = 'asc' THEN r.primera_visita_en END ASC,
+  CASE WHEN pr.order_by = 'primera' AND pr.order_dir = 'desc' THEN r.primera_visita_en END DESC,
+  CASE WHEN pr.order_by = 'ultimo' AND pr.order_dir = 'asc' THEN COALESCE(r.ultimo_evento_en, r.registrado_en) END ASC,
+  CASE WHEN pr.order_by = 'ultimo' AND pr.order_dir = 'desc' THEN COALESCE(r.ultimo_evento_en, r.registrado_en) END DESC,
+  CASE WHEN pr.order_by = 'stay' AND pr.order_dir = 'asc' THEN COALESCE(r.stay_seconds, 0) END ASC,
+  CASE WHEN pr.order_by = 'stay' AND pr.order_dir = 'desc' THEN COALESCE(r.stay_seconds, 0) END DESC,
+  CASE WHEN pr.order_by = 'avg_stay' AND pr.order_dir = 'asc' THEN COALESCE(r.avg_stay_seconds, 0) END ASC,
+  CASE WHEN pr.order_by = 'avg_stay' AND pr.order_dir = 'desc' THEN COALESCE(r.avg_stay_seconds, 0) END DESC,
+  CASE WHEN pr.order_by = 'chat' AND pr.order_dir = 'asc' THEN r.tuvo_chat END ASC,
+  CASE WHEN pr.order_by = 'chat' AND pr.order_dir = 'desc' THEN r.tuvo_chat END DESC,
+  CASE WHEN pr.order_by = 'country' AND pr.order_dir = 'asc' THEN COALESCE(r.country_name, '') END ASC,
+  CASE WHEN pr.order_by = 'country' AND pr.order_dir = 'desc' THEN COALESCE(r.country_name, '') END DESC,
+  CASE WHEN pr.order_by = 'state' AND pr.order_dir = 'asc' THEN COALESCE(r.state_name, '') END ASC,
+  CASE WHEN pr.order_by = 'state' AND pr.order_dir = 'desc' THEN COALESCE(r.state_name, '') END DESC,
+  CASE WHEN pr.order_by = 'city' AND pr.order_dir = 'asc' THEN COALESCE(r.city_name, '') END ASC,
+  CASE WHEN pr.order_by = 'city' AND pr.order_dir = 'desc' THEN COALESCE(r.city_name, '') END DESC,
+  CASE WHEN pr.order_by = 'device' AND pr.order_dir = 'asc' THEN COALESCE(r.device_type, '') END ASC,
+  CASE WHEN pr.order_by = 'device' AND pr.order_dir = 'desc' THEN COALESCE(r.device_type, '') END DESC,
+  CASE WHEN pr.order_by = 'referrer' AND pr.order_dir = 'asc' THEN COALESCE(r.referrer, '') END ASC,
+  CASE WHEN pr.order_by = 'referrer' AND pr.order_dir = 'desc' THEN COALESCE(r.referrer, '') END DESC,
+  CASE WHEN pr.order_by = 'landing' AND pr.order_dir = 'asc' THEN COALESCE(r.landing_url, '') END ASC,
+  CASE WHEN pr.order_by = 'landing' AND pr.order_dir = 'desc' THEN COALESCE(r.landing_url, '') END DESC,
+  COALESCE(r.ultimo_evento_en, r.registrado_en) DESC,
+  r.session_id DESC
 LIMIT COALESCE(NULLIF(p_limit, 0), 500)
 OFFSET GREATEST(COALESCE(p_offset, 0), 0);
 $$;
@@ -6564,22 +6755,6 @@ PARTITION BY RANGE (inserted_at);
 
 
 --
--- Name: messages_2025_10_30; Type: TABLE; Schema: realtime; Owner: -
---
-
-CREATE TABLE realtime.messages_2025_10_30 (
-    topic text NOT NULL,
-    extension text NOT NULL,
-    payload jsonb,
-    event text,
-    private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
-    id uuid DEFAULT gen_random_uuid() NOT NULL
-);
-
-
---
 -- Name: messages_2025_10_31; Type: TABLE; Schema: realtime; Owner: -
 --
 
@@ -6664,6 +6839,22 @@ CREATE TABLE realtime.messages_2025_11_04 (
 --
 
 CREATE TABLE realtime.messages_2025_11_05 (
+    topic text NOT NULL,
+    extension text NOT NULL,
+    payload jsonb,
+    event text,
+    private boolean DEFAULT false,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL
+);
+
+
+--
+-- Name: messages_2025_11_06; Type: TABLE; Schema: realtime; Owner: -
+--
+
+CREATE TABLE realtime.messages_2025_11_06 (
     topic text NOT NULL,
     extension text NOT NULL,
     payload jsonb,
@@ -6863,13 +7054,6 @@ CREATE TABLE supabase_migrations.seed_files (
 
 
 --
--- Name: messages_2025_10_30; Type: TABLE ATTACH; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_10_30 FOR VALUES FROM ('2025-10-30 00:00:00') TO ('2025-10-31 00:00:00');
-
-
---
 -- Name: messages_2025_10_31; Type: TABLE ATTACH; Schema: realtime; Owner: -
 --
 
@@ -6909,6 +7093,13 @@ ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_04
 --
 
 ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_05 FOR VALUES FROM ('2025-11-05 00:00:00') TO ('2025-11-06 00:00:00');
+
+
+--
+-- Name: messages_2025_11_06; Type: TABLE ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages ATTACH PARTITION realtime.messages_2025_11_06 FOR VALUES FROM ('2025-11-06 00:00:00') TO ('2025-11-07 00:00:00');
 
 
 --
@@ -7559,14 +7750,6 @@ ALTER TABLE ONLY realtime.messages
 
 
 --
--- Name: messages_2025_10_30 messages_2025_10_30_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
---
-
-ALTER TABLE ONLY realtime.messages_2025_10_30
-    ADD CONSTRAINT messages_2025_10_30_pkey PRIMARY KEY (id, inserted_at);
-
-
---
 -- Name: messages_2025_10_31 messages_2025_10_31_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
 --
 
@@ -7612,6 +7795,14 @@ ALTER TABLE ONLY realtime.messages_2025_11_04
 
 ALTER TABLE ONLY realtime.messages_2025_11_05
     ADD CONSTRAINT messages_2025_11_05_pkey PRIMARY KEY (id, inserted_at);
+
+
+--
+-- Name: messages_2025_11_06 messages_2025_11_06_pkey; Type: CONSTRAINT; Schema: realtime; Owner: -
+--
+
+ALTER TABLE ONLY realtime.messages_2025_11_06
+    ADD CONSTRAINT messages_2025_11_06_pkey PRIMARY KEY (id, inserted_at);
 
 
 --
@@ -8418,13 +8609,6 @@ CREATE INDEX messages_inserted_at_topic_index ON ONLY realtime.messages USING bt
 
 
 --
--- Name: messages_2025_10_30_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
---
-
-CREATE INDEX messages_2025_10_30_inserted_at_topic_idx ON realtime.messages_2025_10_30 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
-
-
---
 -- Name: messages_2025_10_31_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
 --
 
@@ -8464,6 +8648,13 @@ CREATE INDEX messages_2025_11_04_inserted_at_topic_idx ON realtime.messages_2025
 --
 
 CREATE INDEX messages_2025_11_05_inserted_at_topic_idx ON realtime.messages_2025_11_05 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
+
+
+--
+-- Name: messages_2025_11_06_inserted_at_topic_idx; Type: INDEX; Schema: realtime; Owner: -
+--
+
+CREATE INDEX messages_2025_11_06_inserted_at_topic_idx ON realtime.messages_2025_11_06 USING btree (inserted_at DESC, topic) WHERE ((extension = 'broadcast'::text) AND (private IS TRUE));
 
 
 --
@@ -8534,20 +8725,6 @@ CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_patter
 --
 
 CREATE UNIQUE INDEX objects_bucket_id_level_idx ON storage.objects USING btree (bucket_id, level, name COLLATE "C");
-
-
---
--- Name: messages_2025_10_30_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_10_30_inserted_at_topic_idx;
-
-
---
--- Name: messages_2025_10_30_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
---
-
-ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_10_30_pkey;
 
 
 --
@@ -8632,6 +8809,20 @@ ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.
 --
 
 ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_05_pkey;
+
+
+--
+-- Name: messages_2025_11_06_inserted_at_topic_idx; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_inserted_at_topic_index ATTACH PARTITION realtime.messages_2025_11_06_inserted_at_topic_idx;
+
+
+--
+-- Name: messages_2025_11_06_pkey; Type: INDEX ATTACH; Schema: realtime; Owner: -
+--
+
+ALTER INDEX realtime.messages_pkey ATTACH PARTITION realtime.messages_2025_11_06_pkey;
 
 
 --
@@ -10290,5 +10481,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict omWtaxz5CnZRcqxcnhqe3K3r6s0MN8dviDHOuvXCYAwA7r80urO5fNPL4ZesXlw
+\unrestrict rGInmkR6qBzHBOi17y3hwa9t5Uy7lyAjmcwsjI8fE8HewbIenZptK8oCvwvrxUh
 
