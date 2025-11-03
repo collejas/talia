@@ -18,6 +18,8 @@ import {
   IconCalendar,
   IconMessageCircle,
   IconAddressBook,
+  IconLayoutGrid,
+  IconLayoutKanban,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -45,6 +47,8 @@ const NAVIGATION = {
     { title: "Agenda", url: "#", icon: IconCalendar },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
     { title: "Proyectos", url: "#", icon: IconFolder },
+    { title: "Vista 1", url: "/vista-1", icon: IconLayoutGrid },
+    { title: "Vista 2", url: "/vista-2", icon: IconLayoutKanban },
   ],
   documents: [
     { name: "Data Library", url: "#", icon: IconDatabase },
