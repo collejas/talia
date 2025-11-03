@@ -21,27 +21,55 @@ type VisitantesEstadosResponse = {
   }>;
 };
 
-type VisitasDetalleRow = {
-  session_id?: string;
-  ip?: string;
-  visit_count?: number;
-  total_visitas?: number;
-  tuvo_chat?: boolean;
-  country_name?: string;
-  state_name?: string;
-  city_name?: string;
-  registrado_en?: string;
-  primera_visita_en?: string;
-  ultimo_evento_en?: string;
-  stay_seconds?: number;
-  avg_stay_seconds?: number;
-  contacto_nombre?: string;
-  contacto_correo?: string;
-  contacto_estado?: string;
-  contacto_captura?: string;
-  total_rows?: number;
-  total_chat_rows?: number;
-  total_no_chat_rows?: number;
+export type VisitDetailRaw = {
+  session_id: string | null;
+  ip: string | null;
+  registrado_en: string | null;
+  primera_visita_en: string | null;
+  ultimo_evento_en: string | null;
+  closed_at: string | null;
+  stay_seconds: number | null;
+  avg_stay_seconds: number | null;
+  visit_count: number | null;
+  total_visitas: number | null;
+  tuvo_chat: boolean | null;
+  mensajes_entrantes: number | null;
+  mensajes_salientes: number | null;
+  primer_mensaje_en: string | null;
+  ultimo_mensaje_conversacion: string | null;
+  contacto_id: string | null;
+  contacto_nombre: string | null;
+  contacto_correo: string | null;
+  contacto_telefono: string | null;
+  contacto_empresa: string | null;
+  contacto_estado: string | null;
+  contacto_captura: string | null;
+  contacto_creado_en: string | null;
+  country_code: string | null;
+  country_name: string | null;
+  state_name: string | null;
+  state_code: string | null;
+  city_name: string | null;
+  cve_ent: string | null;
+  nom_ent: string | null;
+  cve_mun: string | null;
+  nom_mun: string | null;
+  cvegeo: string | null;
+  ubicacion_cache: Record<string, unknown> | null;
+  device_type: string | null;
+  dispositivo_cache: Record<string, unknown> | null;
+  pantalla_cache: Record<string, unknown> | null;
+  sistema_operativo: string | null;
+  idioma: string | null;
+  timezone: string | null;
+  prefiere_modo_oscuro: boolean | null;
+  referrer: string | null;
+  landing_url: string | null;
+  trazabilidad_cache: Record<string, unknown> | null;
+  geo: Record<string, unknown> | null;
+  total_rows: number | null;
+  total_chat_rows: number | null;
+  total_no_chat_rows: number | null;
 };
 
 export type VisitCards = {
@@ -65,6 +93,7 @@ export type VisitTableRow = {
   target: string;
   limit: string;
   reviewer: string;
+  raw?: VisitDetailRaw;
 };
 
 export type VisitsPayload = {
@@ -78,7 +107,7 @@ export async function loadVisitsData(): Promise<VisitsPayload> {
   const [kpisResult, estadosResult, detalleResult] = await Promise.all([
     callSupabaseRpc<DashboardKpisResponse>("dashboard_kpis"),
     callSupabaseRpc<VisitantesEstadosResponse>("panel_visitantes_sin_chat_estados"),
-    callSupabaseRpc<VisitasDetalleRow[]>("panel_webchat_visitas_detalle", {
+    callSupabaseRpc<VisitDetailRaw[]>("panel_webchat_visitas_detalle", {
       body: {
         p_limit: 200,
         p_offset: 0,
@@ -93,9 +122,10 @@ export async function loadVisitsData(): Promise<VisitsPayload> {
   if (!estadosResult.ok) errors.push(estadosResult.error);
   if (!detalleResult.ok) errors.push(detalleResult.error);
 
-  const cards = mapCards(kpisResult.ok ? kpisResult.data : undefined, detalleResult.ok ? detalleResult.data : undefined);
-  const chart = mapChart(detalleResult.ok ? detalleResult.data : undefined);
-  const table = mapTable(detalleResult.ok ? detalleResult.data : undefined);
+  const detalle = detalleResult.ok ? detalleResult.data : undefined;
+  const cards = mapCards(kpisResult.ok ? kpisResult.data : undefined, detalle);
+  const chart = mapChart(detalle);
+  const table = mapTable(detalle);
 
   return {
     cards,
@@ -107,7 +137,7 @@ export async function loadVisitsData(): Promise<VisitsPayload> {
 
 function mapCards(
   payload?: DashboardKpisResponse,
-  detalle?: VisitasDetalleRow[] | null,
+  detalle?: VisitDetailRaw[] | null,
 ): VisitCards {
   if (payload) {
     return {
@@ -150,11 +180,11 @@ function mapCards(
   };
 }
 
-function mapChart(detalle?: VisitasDetalleRow[] | null): VisitChartPoint[] {
+function mapChart(detalle?: VisitDetailRaw[] | null): VisitChartPoint[] {
   if (!detalle || !detalle.length) return [];
   const totals = new Map<string, { desktop: number; mobile: number }>();
   for (const row of detalle) {
-    const date = normalizeDate(row.primera_visita_en || row.registrado_en || row.ultimo_evento_en);
+    const date = normalizeDate(row.primera_visita_en ?? row.registrado_en ?? row.ultimo_evento_en ?? undefined);
     if (!date) continue;
     const bucket = totals.get(date) ?? { desktop: 0, mobile: 0 };
     const visits = toNumber(row.visit_count);
@@ -174,7 +204,7 @@ function mapChart(detalle?: VisitasDetalleRow[] | null): VisitChartPoint[] {
     }));
 }
 
-function mapTable(detalle?: VisitasDetalleRow[] | null): VisitTableRow[] {
+function mapTable(detalle?: VisitDetailRaw[] | null): VisitTableRow[] {
   if (!detalle || !detalle.length) return [];
   return detalle.map((row, index) => ({
     id: index + 1,
@@ -182,8 +212,9 @@ function mapTable(detalle?: VisitasDetalleRow[] | null): VisitTableRow[] {
     type: row.state_name || row.country_name || "Sin ubicación",
     status: row.tuvo_chat ? "Done" : "In Process",
     target: toNumber(row.visit_count).toString(),
-    limit: formatDuration(row.avg_stay_seconds),
+    limit: formatDuration(row.avg_stay_seconds ?? undefined),
     reviewer: row.contacto_nombre || row.contacto_correo || "Asignar contacto",
+    raw: row,
   }));
 }
 

@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/AppSidebar"
 import { VisitsChartArea } from "@/components/visitas/chart-area"
-import { DataTable } from "@/components/data-table"
 import { VisitsSectionCards } from "@/components/visitas/section-cards"
+import { VisitsDataTable } from "@/components/visitas/visits-data-table"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
@@ -48,7 +48,7 @@ export default async function Page() {
             </div>
             <div className="@container/main flex flex-1 flex-col gap-2">
               <div className="px-4 lg:px-6">
-                <DataTable data={visitsData.table} />
+                <VisitsDataTable data={visitsData.table} />
               </div>
             </div>
           </div>

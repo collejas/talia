@@ -114,7 +114,10 @@ export const schema = z.object({
   target: z.string(),
   limit: z.string(),
   reviewer: z.string(),
+  raw: z.record(z.string(), z.any()).optional(),
 })
+
+type TableRowData = z.infer<typeof schema>
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
@@ -136,7 +139,7 @@ function DragHandle({ id }: { id: number }) {
   )
 }
 
-const columns: ColumnDef<z.infer<typeof schema>>[] = [
+const baseColumns: ColumnDef<TableRowData>[] = [
   {
     id: "drag",
     header: () => null,
@@ -338,13 +341,18 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
 
 export function DataTable({
   data: initialData,
+  extraColumns = [],
+  initialVisibility,
 }: {
-  data: z.infer<typeof schema>[]
+  data: TableRowData[]
+  extraColumns?: ColumnDef<TableRowData>[]
+  initialVisibility?: VisibilityState
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(
+    () => initialVisibility ?? {}
+  )
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
   )
@@ -365,11 +373,16 @@ export function DataTable({
     [data]
   )
 
+  const mergedColumns = React.useMemo(
+    () => [...baseColumns, ...extraColumns],
+    [extraColumns]
+  )
+
   // TanStack table expone funciones no memoizables; aceptamos la advertencia al usarlo.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
-    columns,
+    columns: mergedColumns,
     state: {
       sorting,
       columnVisibility,
@@ -521,7 +534,7 @@ export function DataTable({
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={columns.length}
+                      colSpan={mergedColumns.length}
                       className="h-24 text-center"
                     >
                       No results.
