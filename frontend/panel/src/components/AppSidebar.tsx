@@ -7,6 +7,7 @@ import {
   IconChartBar,
   IconDatabase,
   IconFileWord,
+  IconInbox,
   IconFolder,
   IconHelp,
   IconListDetails,
@@ -38,6 +39,7 @@ const NAVIGATION = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
     { title: "Contactos", url: "/contactos", icon: IconAddressBook },
+    { title: "Inbox", url: "/inbox", icon: IconInbox },
     { title: "Embudo", url: "#", icon: IconListDetails },
     { title: "Leads", url: "/leads", icon: IconUsers },
     { title: "Agenda", url: "#", icon: IconCalendar },
