@@ -173,3 +173,13 @@ NEXT_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/ho
 
 
 npx shadcn@latest add "https://v0.app/chat/b/b_mxlbOBL8zSH?token=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..wv9M7O6jQT_e-pVT.5zjUlUJDNKXIAiQHqArmcjTTRNxWEDqz-KOZ4PFDZv1dK-ASKlSeLpNERM8.-HDFVn8rF-1cPqUOfLaKoA"
+
+
+
+
+
+
+
+npm run lint
+npm run build --webpack
+sudo systemctl restart talia-panel.service
