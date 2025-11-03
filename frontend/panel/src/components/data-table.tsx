@@ -50,7 +50,6 @@ import {
   VisibilityState,
 } from "@tanstack/react-table"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
-import { toast } from "sonner"
 import { z } from "zod"
 
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -173,15 +172,14 @@ const baseColumns: ColumnDef<TableRowData>[] = [
   },
   {
     accessorKey: "header",
-    header: "Header",
+    header: "Sesión",
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
-    enableHiding: false,
   },
   {
     accessorKey: "type",
-    header: "Section Type",
+    header: "Estado o País",
     cell: ({ row }) => (
       <div className="w-32">
         <Badge variant="outline" className="text-muted-foreground px-1.5">
@@ -192,71 +190,48 @@ const baseColumns: ColumnDef<TableRowData>[] = [
   },
   {
     accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => (
-      <Badge variant="outline" className="text-muted-foreground px-1.5">
-        {row.original.status === "Done" ? (
-          <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
-        ) : (
-          <IconLoader />
-        )}
-        {row.original.status}
-      </Badge>
-    ),
+    header: "Chat",
+    cell: ({ row }) => {
+      const hasChat = row.original.status === "Done"
+      return (
+        <Badge
+          variant={hasChat ? "default" : "outline"}
+          className="text-muted-foreground px-1.5"
+        >
+          {hasChat ? (
+            <>
+              <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
+              Con chat
+            </>
+          ) : (
+            <>
+              <IconLoader />
+              Sin chat
+            </>
+          )}
+        </Badge>
+      )
+    },
   },
   {
     accessorKey: "target",
-    header: () => <div className="w-full text-right">Target</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
-    ),
-  },
-  {
-    accessorKey: "limit",
-    header: () => <div className="w-full text-right">Limit</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
+    header: () => <div className="w-full text-right">Visitas</div>,
+    meta: { label: "Visitas" },
+    cell: ({ row }) => {
+      const rawCount = row.original.raw?.visit_count
+      const fallback = Number(row.original.target)
+      const value = typeof rawCount === "number" && Number.isFinite(rawCount)
+        ? rawCount
+        : fallback
+      const formatted = Number.isFinite(value)
+        ? value.toLocaleString("es-MX")
+        : row.original.target
+      return <div className="text-right tabular-nums">{formatted}</div>
+    },
   },
   {
     accessorKey: "reviewer",
-    header: "Reviewer",
+    header: "Vendedor Asig.",
     cell: ({ row }) => {
       const isAssigned = row.original.reviewer !== "Assign reviewer"
 
@@ -267,7 +242,7 @@ const baseColumns: ColumnDef<TableRowData>[] = [
       return (
         <>
           <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Reviewer
+            Vendedor Asig.
           </Label>
           <Select>
             <SelectTrigger
@@ -479,7 +454,10 @@ export function DataTable({
                         }
                         onSelect={(event) => event.preventDefault()}
                       >
-                        {column.id}
+                      {((column.columnDef.meta as { label?: string } | undefined)?.label)
+                        ?? (typeof column.columnDef.header === "string"
+                          ? column.columnDef.header
+                          : column.id)}
                       </DropdownMenuCheckboxItem>
                     )
                   })}
@@ -740,12 +718,12 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
           )}
           <form className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
-              <Label htmlFor="header">Header</Label>
+          <Label htmlFor="header">Sesión</Label>
               <Input id="header" defaultValue={item.header} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type">Estado o País</Label>
                 <Select defaultValue={item.type}>
                   <SelectTrigger id="type" className="w-full">
                     <SelectValue placeholder="Select a type" />
@@ -771,7 +749,7 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
                 </Select>
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status">Chat</Label>
                 <Select defaultValue={item.status}>
                   <SelectTrigger id="status" className="w-full">
                     <SelectValue placeholder="Select a status" />
@@ -786,16 +764,16 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
-                <Label htmlFor="target">Target</Label>
+                <Label htmlFor="target">Visitas</Label>
                 <Input id="target" defaultValue={item.target} />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="limit">Limit</Label>
+                <Label htmlFor="limit">Estancia prom. (s)</Label>
                 <Input id="limit" defaultValue={item.limit} />
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              <Label htmlFor="reviewer">Reviewer</Label>
+              <Label htmlFor="reviewer">Vendedor Asig.</Label>
               <Select defaultValue={item.reviewer}>
                 <SelectTrigger id="reviewer" className="w-full">
                   <SelectValue placeholder="Select a reviewer" />
