@@ -1,5 +1,7 @@
 :root {
   --radius: 12px;
+  --font-geist-sans: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-geist-mono: "JetBrains Mono", "Fira Code", "Menlo", monospace;
 
   /* Aurora (por defecto) */
   --background: #0b1020;
