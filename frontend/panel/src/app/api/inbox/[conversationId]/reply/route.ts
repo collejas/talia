@@ -3,6 +3,12 @@ import { cookies } from "next/headers";
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
+import {
+  buildBackendTargets,
+  extractConversationIdFromPath,
+  fallbackErrorFromText,
+  looksLikeHtml,
+} from "@/lib/inbox/backend";
 import { callSupabaseRpc } from "@/lib/inbox/supabase";
 import type { InboxMessageRow } from "@/lib/inbox/data";
 import { mapMessageRows } from "@/lib/inbox/transform";
@@ -85,84 +91,6 @@ type RouteContext = {
   };
 };
 
-function extractConversationIdFromPath(url: string): string | null {
-  try {
-    const { pathname } = new URL(url);
-    const segments = pathname.split("/").filter(Boolean);
-    if (!segments.length) {
-      return null;
-    }
-
-    const replyIndex = segments.lastIndexOf("reply");
-    if (replyIndex > 0) {
-      const candidate = segments[replyIndex - 1];
-      const trimmed = candidate?.trim();
-      if (trimmed && trimmed !== "inbox" && trimmed !== "api") {
-        return trimmed;
-      }
-    }
-
-    const inboxIndex = segments.indexOf("inbox");
-    if (inboxIndex >= 0 && inboxIndex + 1 < segments.length) {
-      const candidate = segments[inboxIndex + 1];
-      const trimmed = candidate?.trim();
-      if (trimmed && trimmed !== "reply" && trimmed !== "api") {
-        return trimmed;
-      }
-    }
-  } catch {
-    // Si falla el parseo, devolvemos null y dejamos que el flujo principal maneje el error.
-  }
-  return null;
-}
-
-function looksLikeHtml(text: string): boolean {
-  const sample = text.trim().slice(0, 128).toLowerCase();
-  if (!sample.length) return false;
-  return sample.startsWith("<!doctype html") || sample.startsWith("<html") || sample.includes("<body");
-}
-
-function fallbackErrorFromText(text: string): string | undefined {
-  const trimmed = text.trim();
-  if (!trimmed || looksLikeHtml(trimmed)) {
-    return undefined;
-  }
-  return trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
-}
-
-function buildBackendTargets(baseUrl: string, conversationId: string): string[] {
-  const trimmed = baseUrl.replace(/\/+$/, "");
-  const targets = new Set<string>();
-
-  if (trimmed.length) {
-    targets.add(`${trimmed}/conversaciones/${conversationId}/responder`);
-  }
-
-  const lowerTrimmed = trimmed.toLowerCase();
-  const hasPanelSuffix = lowerTrimmed.endsWith("/panel") || lowerTrimmed.endsWith("/panel-react");
-  let isLocalHost = false;
-
-  try {
-    const parsed = new URL(trimmed);
-    const hostname = parsed.hostname.toLowerCase();
-    isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    // Si no se puede parsear como URL absoluta, asumimos que no es host local explícito.
-  }
-
-  if (!hasPanelSuffix && !isLocalHost) {
-    if (lowerTrimmed.endsWith("/api")) {
-      targets.add(`${trimmed}/panel/conversaciones/${conversationId}/responder`);
-    } else if (/^https?:\/\/[^/]+$/i.test(trimmed)) {
-      targets.add(`${trimmed}/api/panel/conversaciones/${conversationId}/responder`);
-    } else if (!lowerTrimmed.includes("/panel/")) {
-      targets.add(`${trimmed}/panel/conversaciones/${conversationId}/responder`);
-    }
-  }
-
-  return Array.from(targets);
-}
-
 export async function POST(request: Request, context: unknown) {
   const routeContext = (context as RouteContext | null) ?? {};
   const conversationId =
@@ -203,7 +131,7 @@ export async function POST(request: Request, context: unknown) {
     client_message_id: clientMessageId,
   };
 
-  const backendTargets = buildBackendTargets(backendBaseUrl, conversationId);
+  const backendTargets = buildBackendTargets(backendBaseUrl, conversationId, "responder");
   if (!backendTargets.length) {
     return NextResponse.json(
       { error: "backend_url_invalid" },

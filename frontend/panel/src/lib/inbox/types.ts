@@ -50,7 +50,7 @@ export type InboxThread = {
   preview: string;
   previewAt: string | null;
   messages: InboxMessage[];
-  manualMode?: boolean;
+  manualMode: boolean;
 };
 
 export type InboxPayload = {

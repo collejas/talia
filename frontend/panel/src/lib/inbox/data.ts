@@ -32,6 +32,7 @@ type InboxThreadRow = {
   asignado_id: string | null;
   asignado_nombre: string | null;
   tags: string[] | null;
+  manual_override: boolean | null;
   last_message_preview: string | null;
   last_message_at: string | null;
   messages: unknown;
@@ -114,6 +115,7 @@ function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       asignadoId: row.asignado_id,
       asignadoNombre: row.asignado_nombre,
       tags: row.tags?.filter(Boolean) ?? [],
+      manualMode: Boolean(row.manual_override),
       preview: row.last_message_preview ?? "",
       previewAt: row.last_message_at,
       messages,

@@ -5,6 +5,8 @@ import {
   IconCircleFilled,
   IconDots,
   IconFilter,
+  IconRobot,
+  IconRobotOff,
   IconSearch,
 } from "@tabler/icons-react";
 
@@ -24,6 +26,14 @@ type InboxReplyPayload = {
   reply?: string | null;
   metadata?: ReplyMetadata;
   messages?: unknown;
+  error?: string;
+  detail?: string;
+  message?: string;
+};
+
+type ManualToggleResponse = {
+  ok?: boolean;
+  manual?: boolean;
   error?: string;
   detail?: string;
   message?: string;
@@ -77,6 +87,39 @@ function extractError(payload: InboxReplyPayload): string | undefined {
   }
   return undefined;
 }
+
+function parseManualToggleResponse(raw: string): ManualToggleResponse {
+  if (!raw) return {};
+  try {
+    const json = JSON.parse(raw);
+    if (typeof json !== "object" || json === null) {
+      return {};
+    }
+    const record = json as Record<string, unknown>;
+    return {
+      ok: typeof record.ok === "boolean" ? record.ok : undefined,
+      manual: typeof record.manual === "boolean" ? record.manual : undefined,
+      error: typeof record.error === "string" ? record.error : undefined,
+      detail: typeof record.detail === "string" ? record.detail : undefined,
+      message: typeof record.message === "string" ? record.message : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function extractManualToggleError(payload: ManualToggleResponse): string | undefined {
+  if (payload.error && payload.error.trim().length) {
+    return payload.error;
+  }
+  if (payload.detail && payload.detail.trim().length) {
+    return payload.detail;
+  }
+  if (payload.message && payload.message.trim().length) {
+    return payload.message;
+  }
+  return undefined;
+}
 type InboxSplitViewProps = {
   threads: InboxThread[];
 };
@@ -87,6 +130,8 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
+  const [manualToggling, setManualToggling] = React.useState(false);
+  const [manualToggleError, setManualToggleError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setThreadItems(threads);
@@ -125,6 +170,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     const inAll = threadItems.find((thread) => thread.id === selectedId);
     return inAll ?? filteredThreads[0] ?? null;
   }, [selectedId, filteredThreads, threadItems]);
+
+  React.useEffect(() => {
+    setManualToggleError(null);
+    setManualToggling(false);
+  }, [selectedThread?.id]);
 
   const handleSendMessage = React.useCallback(
     async (content: string) => {
@@ -185,6 +235,56 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     },
     [selectedId, threadItems],
   );
+
+  const handleToggleManualMode = React.useCallback(async () => {
+    if (!selectedThread) {
+      return false;
+    }
+
+    const targetId = selectedThread.id;
+    const nextManualValue = !selectedThread.manualMode;
+
+    setManualToggleError(null);
+    setManualToggling(true);
+    try {
+      const response = await fetch(`/api/inbox/${targetId}/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manual: nextManualValue }),
+      });
+
+      const text = await response.text();
+      const payload = parseManualToggleResponse(text);
+
+      if (!response.ok) {
+        const message =
+          extractManualToggleError(payload) ?? "No se pudo actualizar el modo manual. Inténtalo nuevamente.";
+        setManualToggleError(message);
+        return false;
+      }
+
+      const manual = typeof payload.manual === "boolean" ? payload.manual : nextManualValue;
+      setThreadItems((current) =>
+        current.map((thread) => {
+          if (thread.id !== targetId) {
+            return thread;
+          }
+          return {
+            ...thread,
+            manualMode: manual,
+          };
+        }),
+      );
+      setManualToggleError(null);
+      return true;
+    } catch (error) {
+      console.error("[inbox] manual toggle failed", error);
+      setManualToggleError("Ocurrió un error inesperado al actualizar el modo manual.");
+      return false;
+    } finally {
+      setManualToggling(false);
+    }
+  }, [selectedThread]);
 
   return (
     <div className="flex gap-4">
@@ -291,6 +391,26 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant={selectedThread.manualMode ? "default" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleToggleManualMode}
+                  disabled={manualToggling}
+                  aria-pressed={selectedThread.manualMode}
+                >
+                  {selectedThread.manualMode ? (
+                    <>
+                      <IconRobot className="size-4" />
+                      {manualToggling ? "Reactivando…" : "Volver al asistente"}
+                    </>
+                  ) : (
+                    <>
+                      <IconRobotOff className="size-4" />
+                      {manualToggling ? "Pausando…" : "Pausar asistente"}
+                    </>
+                  )}
+                </Button>
                 <Button variant="outline" size="sm" className="gap-2">
                   <IconFilter className="size-4" /> Actualizar estado
                 </Button>
@@ -302,6 +422,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
             </header>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
+              {manualToggleError ? (
+                <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {manualToggleError}
+                </div>
+              ) : null}
               {selectedThread.manualMode ? (
                 <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
                   Modo manual activado: el asistente no enviará respuestas automáticas.

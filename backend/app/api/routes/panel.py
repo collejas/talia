@@ -1765,7 +1765,94 @@ async def reply_conversation(
         metadata=payload.metadata,
     )
 
+    manual_override = bool(conversation_meta.get("manual_override"))
+    if not manual_override:
+        # Revalida con tabla de controles para evitar lecturas inconsistentes.
+        try:
+            manual_override = await storage.get_manual_override(str(conversacion_id))
+        except storage.StorageError as exc:
+            logger.exception(
+                "panel.inbox.manual_check_failed",
+                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            )
+
+    logger.info(
+        "panel.inbox.manual_state",
+        extra={
+            "conversation_id": str(conversacion_id),
+            "manual_override": manual_override,
+        },
+    )
+
+    if manual_override:
+        extra_metadata: dict[str, Any] = {
+            "client_message_id": client_message_id,
+            "manual_override": True,
+            "origin": "panel_manual",
+        }
+        if payload.locale:
+            extra_metadata["locale"] = payload.locale
+        if payload.metadata and isinstance(payload.metadata, dict):
+            extra_metadata["extra"] = payload.metadata
+        try:
+            await storage.register_webchat_message(
+                session_id=session_id,
+                author="agent",
+                content=content,
+                inactivity_hours=settings.webchat_inactivity_hours,
+                metadata=extra_metadata,
+            )
+        except storage.StorageError as exc:
+            logger.exception(
+                "panel.inbox.manual_register_failed",
+                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            )
+            raise HTTPException(status_code=502, detail="No se pudo registrar el mensaje") from exc
+
+        try:
+            await webchat_service.append_manual_agent_context(
+                conversation_meta=conversation_meta,
+                session_id=session_id,
+                content=content,
+                locale=payload.locale,
+            )
+        except Exception as exc:  # pragma: no cover - logging defensivo
+            logger.exception(
+                "panel.inbox.manual_context_append_failed",
+                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            )
+
+        logger.info(
+            "panel.inbox.manual_message_recorded",
+            extra={
+                "conversation_id": str(conversacion_id),
+                "session_id": session_id,
+                "client_message_id": client_message_id,
+            },
+        )
+
+        metadata: dict[str, Any] = {
+            "conversation_id": str(conversacion_id),
+            "client_message_id": client_message_id,
+            "manual_mode": True,
+            "session_id": session_id,
+            "contact_id": str(contact_id),
+        }
+        return {
+            "ok": True,
+            "reply": None,
+            "metadata": metadata,
+        }
+
     try:
+        logger.info(
+            "panel.inbox.manual_state_auto_reply",
+            extra={
+                "conversation_id": str(conversacion_id),
+                "manual_override": manual_override,
+                "client_message_id": client_message_id,
+            },
+        )
         assistant_response = await webchat_service.handle_message(
             message_payload,
             request=None,

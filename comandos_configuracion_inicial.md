@@ -71,24 +71,26 @@ pg_restore --clean --if-exists --no-owner --no-acl \
 sudo nano /etc/systemd/system/talia-panel.service
 sudo micro /etc/systemd/system/talia-panel.service
 
-sudo systemctl start talia-panel.service
-sudo systemctl stop talia-panel.service
+
+
 sudo systemctl daemon-reload
 sudo systemctl enable talia-panel.service
-sudo systemctl restart talia-panel.service
-sudo systemctl status talia-panel.service
+sudo systemctl start talia-panel.service
 
+sudo systemctl stop talia-panel.service
+
+npm run lint
+npm run build --webpack
+sudo systemctl restart talia-panel.service
+sudo systemctl restart talia-api.service
+
+sudo systemctl status talia-panel.service
+sudo systemctl status talia-api.service
 
 npm run dev
 http://127.0.0.1:3000/dashboard
 http://127.0.0.1:3000/auth/login
 
-npm run lint
-npm run build
-
-npm run lint
-npm run build --webpack
-sudo systemctl restart talia-panel.service
 
 poetry run pytest
 

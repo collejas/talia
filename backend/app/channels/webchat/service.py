@@ -568,6 +568,126 @@ async def handle_message(
     return schemas.MessageResponse(reply=assistant_reply, metadata=metadata)
 
 
+async def append_manual_agent_context(
+    *,
+    conversation_meta: dict[str, Any],
+    session_id: str,
+    content: str,
+    locale: str | None = None,
+) -> None:
+    """Agrega una nota del agente humano al contexto del asistente sin generar respuesta."""
+    if not content:
+        return
+
+    conversation_id = conversation_meta.get("id")
+    contact_id = conversation_meta.get("contact_id")
+    if not conversation_id or not contact_id:
+        return
+
+    openai_conversation_id = conversation_meta.get("openai_conversation_id")
+    previous_response_id = conversation_meta.get("last_response_id")
+
+    try:
+        assistant = registry.resolve_assistant("landing")
+    except ValueError as exc:  # pragma: no cover - configuración inválida
+        logger.exception("webchat.manual_context.assistant_unavailable", extra={"error": str(exc)})
+        return
+
+    client = openai_service.get_assistant_client()
+    assistant_spec: AssistantSpec | None = None
+    if not assistant.is_prompt:
+        if not assistant.assistant_id:
+            logger.warning("webchat.manual_context.missing_assistant_id")
+            return
+        try:
+            assistant_spec = await _resolve_assistant_spec(client, assistant.assistant_id)
+        except Exception as exc:  # pragma: no cover - configuración remota inválida
+            logger.exception("webchat.manual_context.resolve_failed", extra={"error": str(exc)})
+            return
+
+    context = WebchatContext(
+        conversation_id=str(conversation_id),
+        contact_id=str(contact_id),
+        session_id=session_id,
+    )
+
+    manual_text_parts = [
+        "Nota del agente humano:",
+        content,
+        "",
+        "El asistente no debe responder a esta nota; únicamente utilízala como contexto en turnos futuros.",
+    ]
+    manual_text = "\n".join(part for part in manual_text_parts if part is not None)
+
+    request_kwargs: dict[str, Any] = {
+        "input": [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": manual_text,
+                    }
+                ],
+            }
+        ],
+        "store": True,
+        "metadata": {
+            "source": "panel_manual",
+            "skip_user_delivery": "true",
+        },
+    }
+    if locale:
+        request_kwargs["metadata"]["locale"] = locale
+
+    if openai_conversation_id:
+        request_kwargs["conversation"] = openai_conversation_id
+    elif previous_response_id:
+        request_kwargs["previous_response_id"] = previous_response_id
+
+    if assistant.is_prompt:
+        try:
+            request_kwargs["prompt"] = _build_prompt_payload(assistant, context)
+        except ValueError as exc:
+            logger.exception(
+                "webchat.manual_context.prompt_payload_failed", extra={"error": str(exc)}
+            )
+            return
+        request_kwargs["text"] = {"format": {"type": "text"}}
+    else:
+        if not assistant_spec:
+            return
+        request_kwargs["model"] = assistant_spec.model
+        instructions = assistant_spec.instructions or ""
+        note = (
+            "Nota interna: si recibes un mensaje marcado como nota del agente humano, "
+            "no generes una respuesta para el visitante; únicamente incorpora el contenido al contexto."
+        )
+        request_kwargs["instructions"] = f"{instructions}\n\n{note}".strip()
+        if assistant_spec.tools:
+            request_kwargs["tools"] = assistant_spec.tools
+
+    try:
+        await client.responses.create(**request_kwargs)
+    except Exception as exc:  # pragma: no cover - errores de OpenAI
+        logger.exception(
+            "webchat.manual_context.append_failed",
+            extra={
+                "conversation_id": str(conversation_id),
+                "session_id": session_id,
+                "error": str(exc),
+            },
+        )
+    else:
+        logger.info(
+            "webchat.manual_context.appended",
+            extra={
+                "conversation_id": str(conversation_id),
+                "session_id": session_id,
+            },
+        )
+
+
 async def fetch_history(session_id: str, limit: int) -> schemas.HistoryResponse:
     """Devuelve mensajes recientes asociados al session_id del widget."""
     try:
