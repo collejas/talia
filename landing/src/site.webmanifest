@@ -1,7 +1,7 @@
 {
   "name": "TalIA",
   "short_name": "TalIA",
-  "description": "Asistente conversacional omnicanal para atención y ventas.",
+  "description": "TalIA es una plataforma de inteligencia artificial que integra múltiples canales para automatizar ventas, atención y marketing.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
