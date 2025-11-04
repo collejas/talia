@@ -6,30 +6,32 @@ import { IconMoodSmile, IconPaperclip, IconSend } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 
 type InboxComposerProps = {
-  conversationId: string;
   placeholder?: string;
+  pending?: boolean;
+  error?: string | null;
+  onSend?: (content: string) => Promise<boolean | void> | boolean | void;
 };
 
-export function InboxComposer({ conversationId, placeholder }: InboxComposerProps) {
+export function InboxComposer({ placeholder, pending, error, onSend }: InboxComposerProps) {
   const [message, setMessage] = React.useState("");
-  const [sending, setSending] = React.useState(false);
+  const [localPending, setLocalPending] = React.useState(false);
+
+  const busy = pending || localPending;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!onSend) return;
     const content = message.trim();
     if (!content.length) return;
-    setSending(true);
+
+    setLocalPending(true);
     try {
-      // Aquí se integraría el envío real al backend / Supabase.
-      // Por ahora solo simulamos el envío.
-      console.debug("[inbox] enviar mensaje", {
-        conversationId,
-        content,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      setMessage("");
+      const result = await onSend(content);
+      if (result !== false) {
+        setMessage("");
+      }
     } finally {
-      setSending(false);
+      setLocalPending(false);
     }
   }
 
@@ -59,19 +61,24 @@ export function InboxComposer({ conversationId, placeholder }: InboxComposerProp
             }}
             placeholder={placeholder ?? "Escribe tu respuesta"}
             className="min-h-[48px] flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            disabled={sending}
+            disabled={busy}
             autoComplete="off"
             rows={2}
           />
-          <Button type="submit" size="icon" className="size-9" disabled={sending || message.trim().length === 0}>
+          <Button type="submit" size="icon" className="size-9" disabled={busy || message.trim().length === 0}>
             <IconSend className="size-5" />
             <span className="sr-only">Enviar mensaje</span>
           </Button>
         </div>
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>Presiona Enter para enviar · Shift + Enter para salto de línea</span>
-          {sending ? <span>Enviando…</span> : null}
+          {busy ? <span>Enviando…</span> : null}
         </div>
+        {error ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {error}
+          </div>
+        ) : null}
       </div>
     </form>
   );

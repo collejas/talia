@@ -10,12 +10,14 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.channels.webchat import schemas as webchat_schemas
+from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.services import leads_geo, storage
@@ -29,6 +31,23 @@ class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
     manual: bool = Field(..., description="True para pausar al asistente")
+
+
+class ConversationReplyPayload(BaseModel):
+    """Payload para enviar mensajes desde el panel y recibir respuesta del asistente."""
+
+    content: str = Field(..., min_length=1, max_length=4000)
+    locale: str | None = Field(
+        default=None, description="Locale del panel (ej. es-MX) para informar al asistente."
+    )
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="Metadatos opcionales que se adjuntarán al mensaje entrante."
+    )
+    client_message_id: str | None = Field(
+        default=None,
+        max_length=120,
+        description="Identificador generado en el cliente para evitar duplicados.",
+    )
 
 
 class DemoAppointmentCreatePayload(BaseModel):
@@ -1537,6 +1556,65 @@ def _auth_headers_for_user(token: str) -> dict[str, str]:
     return headers
 
 
+def _extract_session_id_from_contact(contact_data: Any) -> str | None:
+    """Intenta extraer session_id de la estructura contacto_datos."""
+    if not isinstance(contact_data, dict):
+        return None
+    candidates: list[Any] = [
+        contact_data.get("session_id"),
+        contact_data.get("SessionId"),
+    ]
+    trazabilidad = contact_data.get("trazabilidad")
+    if isinstance(trazabilidad, dict):
+        candidates.extend(
+            [
+                trazabilidad.get("session_id"),
+                trazabilidad.get("SessionId"),
+            ]
+        )
+    metadata = contact_data.get("metadata")
+    if isinstance(metadata, dict):
+        candidates.extend(
+            [
+                metadata.get("session_id"),
+                metadata.get("SessionId"),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, str):
+            stripped = candidate.strip()
+            if stripped:
+                return stripped
+    return None
+
+
+async def _resolve_webchat_session_id(contact_id: str) -> str | None:
+    """Obtiene el session_id asociado al contacto webchat."""
+    try:
+        contact = await storage.fetch_contact(contact_id)
+    except storage.StorageError as exc:
+        logger.exception(
+            "panel.inbox.fetch_contact_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        contact = None
+
+    session_id: str | None = None
+    if contact:
+        session_id = _extract_session_id_from_contact(contact.get("contacto_datos"))
+        if session_id:
+            return session_id
+
+    try:
+        return await storage.fetch_webchat_session_id(contact_id)
+    except storage.StorageError as exc:
+        logger.exception(
+            "panel.inbox.fetch_session_id_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        return None
+
+
 @router.post("/conversaciones/{conversacion_id}/cerrar")
 async def close_conversation(
     conversacion_id: str,
@@ -1637,6 +1715,100 @@ async def get_messages(
             }
         )
     return {"ok": True, "items": items}
+
+
+@router.post("/conversaciones/{conversacion_id}/responder")
+async def reply_conversation(
+    conversacion_id: UUID,
+    payload: ConversationReplyPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="message_required")
+
+    params = {
+        "select": "id,canal,estado",
+        "id": f"eq.{conversacion_id}",
+        "limit": "1",
+    }
+    conv_resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
+    if conv_resp.status_code >= 400:
+        raise _supabase_error(conv_resp, "Error consultando la conversación solicitada")
+    conv_rows = conv_resp.json() or []
+    if not conv_rows:
+        raise HTTPException(status_code=404, detail="conversation_not_found")
+    conv_row = conv_rows[0]
+    if (conv_row.get("canal") or "").lower() != "webchat":
+        raise HTTPException(status_code=400, detail="unsupported_channel")
+
+    try:
+        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+    except storage.StorageError as exc:
+        logger.exception(
+            "panel.inbox.fetch_conversation_failed",
+            extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="No se pudo recuperar la conversación") from exc
+
+    contact_id = conversation_meta.get("contact_id")
+    if not contact_id:
+        raise HTTPException(status_code=500, detail="conversation_contact_missing")
+
+    session_id = await _resolve_webchat_session_id(str(contact_id))
+    if not session_id:
+        raise HTTPException(status_code=409, detail="session_id_not_found")
+
+    client_message_id = payload.client_message_id or uuid4().hex
+    message_payload = webchat_schemas.MessageRequest(
+        session_id=session_id,
+        author="user",
+        content=content,
+        client_message_id=client_message_id,
+        locale=payload.locale,
+        metadata=payload.metadata,
+    )
+
+    try:
+        assistant_response = await webchat_service.handle_message(
+            message_payload,
+            request=None,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - logging y error genérico
+        logger.exception(
+            "panel.inbox.assistant_failed",
+            extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="Error al invocar al asistente") from exc
+
+    metadata_model = assistant_response.metadata
+    metadata = (
+        metadata_model.model_dump(exclude_none=True)
+        if isinstance(metadata_model, BaseModel)
+        else {}
+    )
+    metadata.setdefault("conversation_id", str(conversacion_id))
+    metadata.setdefault("client_message_id", client_message_id)
+    metadata.setdefault(
+        "manual_mode",
+        bool(metadata_model.manual_mode)
+        if isinstance(metadata_model, webchat_schemas.MessageMetadata)
+        else False,
+    )
+    metadata.setdefault("session_id", session_id)
+    metadata.setdefault("contact_id", str(contact_id))
+
+    return {
+        "ok": True,
+        "reply": assistant_response.reply,
+        "metadata": metadata,
+    }
 
 
 async def _fetch_tablero(token: str, tablero_hint: str | None) -> dict[str, Any]:

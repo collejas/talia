@@ -73,6 +73,7 @@ sudo micro /etc/systemd/system/talia-panel.service
 
 sudo systemctl start talia-panel.service
 sudo systemctl stop talia-panel.service
+sudo systemctl daemon-reload
 sudo systemctl enable talia-panel.service
 sudo systemctl restart talia-panel.service
 sudo systemctl status talia-panel.service

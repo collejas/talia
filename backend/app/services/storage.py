@@ -173,6 +173,47 @@ async def get_webchat_contact_id(session_id: str) -> str | None:
     return str(contact_id) if contact_id else None
 
 
+async def fetch_webchat_session_id(contact_id: str) -> str | None:
+    """Obtiene el session_id asociado al contacto para el canal webchat."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/identidades_canal"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "id_externo",
+        "contacto_id": f"eq.{contact_id}",
+        "canal": "eq.webchat",
+        "limit": "1",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar session_id de contacto: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar session_id de contacto "
+            f"(status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json() or []
+    if not isinstance(data, list) or not data:
+        return None
+    session_id = data[0].get("id_externo")
+    return str(session_id) if session_id else None
+
+
 async def resolve_webchat_conversation_from_session(session_id: str) -> dict[str, Any] | None:
     """Obtiene la última conversación webchat asociada a un session_id."""
     contact_id = await get_webchat_contact_id(session_id)

@@ -1,6 +1,8 @@
 "use server";
 
 import { callSupabaseRpc } from "@/lib/inbox/supabase";
+import { mapMessagesFromRaw } from "@/lib/inbox/transform";
+import type { InboxSummary, InboxThread, InboxPayload } from "@/lib/inbox/types";
 
 type InboxResumenResponse = {
   total?: number;
@@ -36,55 +38,8 @@ type InboxThreadRow = {
   total_rows: number;
 };
 
-export type InboxFolder = {
-  id: string;
-  label: string;
-  count: number;
-};
-
-export type InboxSummary = {
-  total: number;
-  unread: number;
-  awaiting: number;
-  folders: InboxFolder[];
-};
-
-export type InboxMessage = {
-  id: string;
-  author: string;
-  role: "contacto" | "usuario";
-  timestamp: string;
-  body: string[];
-  tipo: string;
-  datos: Record<string, unknown> | null;
-};
-
-export type InboxThread = {
-  id: string;
-  contactoId: string;
-  contactoNombre: string;
-  contactoCorreo: string | null;
-  contactoTelefono: string | null;
-  canal: string;
-  estado: string;
-  prioridad: number;
-  iniciadoEn: string | null;
-  ultimoMensajeEn: string | null;
-  noLeidos: number;
-  asignadoId: string | null;
-  asignadoNombre: string | null;
-  tags: string[];
-  preview: string;
-  previewAt: string | null;
-  messages: InboxMessage[];
-};
-
-export type InboxPayload = {
-  summary: InboxSummary;
-  threads: InboxThread[];
-  totalThreads: number;
-  errors: string[];
-};
+export type { InboxFolder, InboxSummary, InboxThread, InboxPayload, InboxMessage } from "@/lib/inbox/types";
+export type { InboxMessageRow } from "@/lib/inbox/types";
 
 const FOLDER_LABELS: Record<string, string> = {
   inbox: "Bandeja de entrada",
@@ -143,7 +98,7 @@ function mapSummary(payload?: InboxResumenResponse): InboxSummary {
 function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
   if (!payload || !payload.length) return [];
   return payload.map((row) => {
-    const messages = parseMessages(row.messages);
+    const messages = mapMessagesFromRaw(row.messages);
     return {
       id: row.conversacion_id,
       contactoId: row.contacto_id,
@@ -163,42 +118,5 @@ function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       previewAt: row.last_message_at,
       messages,
     };
-  });
-}
-
-function parseMessages(raw: unknown): InboxMessage[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const record = item as Record<string, unknown>;
-    const id = typeof record.message_id === "string" ? record.message_id : undefined;
-    const author = typeof record.author === "string" ? record.author : "Contacto";
-    const role =
-      record.role === "usuario" || record.role === "contacto"
-        ? (record.role as "usuario" | "contacto")
-        : "contacto";
-    const timestamp =
-      typeof record.timestamp === "string" ? record.timestamp : new Date().toISOString();
-    const body = Array.isArray(record.body)
-      ? record.body.map((paragraph) => String(paragraph))
-      : record.body
-        ? [String(record.body)]
-        : ["(mensaje sin texto)"];
-    const tipo = typeof record.tipo_contenido === "string" ? record.tipo_contenido : "texto";
-    const datos =
-      record.datos && typeof record.datos === "object" ? (record.datos as Record<string, unknown>) : null;
-
-    if (!id) return [];
-    return [
-      {
-        id,
-        author,
-        role,
-        timestamp,
-        body,
-        tipo,
-        datos,
-      },
-    ];
   });
 }

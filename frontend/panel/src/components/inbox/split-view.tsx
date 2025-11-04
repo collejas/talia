@@ -8,31 +8,101 @@ import {
   IconSearch,
 } from "@tabler/icons-react";
 
-import type { InboxFolder, InboxThread } from "@/lib/inbox/data";
+import type { InboxFolder, InboxThread, InboxMessage } from "@/lib/inbox/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InboxComposer } from "@/components/inbox/composer";
 
+type ReplyMetadata = {
+  manual_mode?: boolean;
+  [key: string]: unknown;
+};
+
+type InboxReplyPayload = {
+  ok?: boolean;
+  reply?: string | null;
+  metadata?: ReplyMetadata;
+  messages?: unknown;
+  error?: string;
+  detail?: string;
+  message?: string;
+};
+
+function parseReplyPayload(raw: string): InboxReplyPayload {
+  if (!raw) return {};
+  try {
+    const json = JSON.parse(raw);
+    if (typeof json !== "object" || json === null) {
+      return {};
+    }
+    const record = json as Record<string, unknown>;
+    const metadata =
+      typeof record.metadata === "object" && record.metadata !== null
+        ? (record.metadata as ReplyMetadata)
+        : undefined;
+    return {
+      ok: typeof record.ok === "boolean" ? record.ok : undefined,
+      reply:
+        typeof record.reply === "string" || record.reply === null
+          ? (record.reply as string | null)
+          : undefined,
+      metadata,
+      messages: record.messages,
+      error: typeof record.error === "string" ? record.error : undefined,
+      detail: typeof record.detail === "string" ? record.detail : undefined,
+      message: typeof record.message === "string" ? record.message : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function extractMessages(payload: InboxReplyPayload): InboxMessage[] {
+  if (!Array.isArray(payload.messages)) {
+    return [];
+  }
+  return payload.messages as InboxMessage[];
+}
+
+function extractError(payload: InboxReplyPayload): string | undefined {
+  if (payload.error && typeof payload.error === "string" && payload.error.trim().length) {
+    return payload.error;
+  }
+  if (payload.detail && typeof payload.detail === "string" && payload.detail.trim().length) {
+    return payload.detail;
+  }
+  if (payload.message && typeof payload.message === "string" && payload.message.trim().length) {
+    return payload.message;
+  }
+  return undefined;
+}
 type InboxSplitViewProps = {
   folders: InboxFolder[];
   threads: InboxThread[];
 };
 
 export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
+  const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [sending, setSending] = React.useState(false);
+  const [sendError, setSendError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!selectedId && threads.length) {
-      setSelectedId(threads[0]!.id);
+    setThreadItems(threads);
+  }, [threads]);
+
+  React.useEffect(() => {
+    if (!selectedId && threadItems.length) {
+      setSelectedId(threadItems[0]!.id);
     }
-  }, [selectedId, threads]);
+  }, [selectedId, threadItems]);
 
   const filteredThreads = React.useMemo(() => {
-    if (!searchTerm) return threads;
+    if (!searchTerm) return threadItems;
     const term = searchTerm.toLowerCase();
-    return threads.filter((thread) => {
+    return threadItems.filter((thread) => {
       const haystack = [
         thread.contactoNombre,
         thread.canal,
@@ -43,11 +113,79 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
         .toLowerCase();
       return haystack.includes(term);
     });
-  }, [threads, searchTerm]);
+  }, [threadItems, searchTerm]);
 
-  const selectedThread = selectedId
-    ? filteredThreads.find((thread) => thread.id === selectedId) ?? filteredThreads[0] ?? null
-    : filteredThreads[0] ?? null;
+  const selectedThread = React.useMemo(() => {
+    if (!selectedId) {
+      return filteredThreads[0] ?? null;
+    }
+    const withinFiltered = filteredThreads.find((thread) => thread.id === selectedId);
+    if (withinFiltered) {
+      return withinFiltered;
+    }
+    const inAll = threadItems.find((thread) => thread.id === selectedId);
+    return inAll ?? filteredThreads[0] ?? null;
+  }, [selectedId, filteredThreads, threadItems]);
+
+  const handleSendMessage = React.useCallback(
+    async (content: string) => {
+      const targetThread = threadItems.find((thread) => thread.id === selectedId);
+      if (!targetThread) {
+        return false;
+      }
+
+      setSendError(null);
+      setSending(true);
+      try {
+        const response = await fetch(`/api/inbox/${targetThread.id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+
+        const text = await response.text();
+        const payload = parseReplyPayload(text);
+
+        if (!response.ok) {
+          const message = extractError(payload) ?? "No se pudo enviar el mensaje. Inténtalo de nuevo.";
+          setSendError(message);
+          return false;
+        }
+
+        const messages = extractMessages(payload);
+        setThreadItems((current) =>
+          current.map((thread) => {
+            if (thread.id !== targetThread.id) {
+              return thread;
+            }
+            const lastMessage = messages.length ? messages[messages.length - 1]! : null;
+            const manualModeValue =
+              typeof payload.metadata?.manual_mode === "boolean"
+                ? payload.metadata.manual_mode
+                : thread.manualMode;
+            return {
+              ...thread,
+              messages: messages.length ? messages : thread.messages,
+              preview: lastMessage?.body?.[0] ?? thread.preview,
+              previewAt: lastMessage?.timestamp ?? thread.previewAt,
+              ultimoMensajeEn: lastMessage?.timestamp ?? thread.ultimoMensajeEn,
+              noLeidos: 0,
+              manualMode: manualModeValue,
+            };
+          }),
+        );
+        setSendError(null);
+        return true;
+      } catch (error) {
+        console.error("[inbox] send message failed", error);
+        setSendError("Ocurrió un error inesperado al enviar el mensaje.");
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [selectedId, threadItems],
+  );
 
   return (
     <div className="flex gap-4">
@@ -97,8 +235,14 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             <ul className="divide-y">
               {filteredThreads.map((thread) => {
                 const isActive = thread.id === selectedId;
-                const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || "Sin actividad";
+                const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
                 const unread = thread.noLeidos > 0;
+                const formattedTime = (() => {
+                  if (!displayTime) return "—";
+                  const parsed = new Date(displayTime);
+                  if (Number.isNaN(parsed.getTime())) return "—";
+                  return parsed.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+                })();
                 return (
                   <li key={thread.id}>
                     <button
@@ -111,7 +255,7 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
                           <span className="font-medium">{thread.contactoNombre}</span>
                           {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
                         </div>
-                        <span className="text-xs text-muted-foreground">{new Date(displayTime).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-xs text-muted-foreground">{formattedTime}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline" className="uppercase">{thread.canal}</Badge>
@@ -178,6 +322,11 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             </header>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
+              {selectedThread.manualMode ? (
+                <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                  Modo manual activado: el asistente no enviará respuestas automáticas.
+                </div>
+              ) : null}
               <div className="flex flex-col gap-4">
                 {selectedThread.messages.length ? (
                   selectedThread.messages.map((message) => {
@@ -204,7 +353,12 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
               </div>
             </div>
 
-            <InboxComposer conversationId={selectedThread.id} placeholder={`Responder a ${selectedThread.contactoNombre}`} />
+            <InboxComposer
+              placeholder={`Responder a ${selectedThread.contactoNombre}`}
+              pending={sending}
+              error={sendError}
+              onSend={handleSendMessage}
+            />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
