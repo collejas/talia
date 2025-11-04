@@ -80,7 +80,6 @@ export function mapMessagesFromRaw(raw: unknown): InboxMessage[] {
           ? (record.datos as Record<string, unknown>)
           : null,
       creado_en: typeof record.timestamp === "string" ? record.timestamp : null,
-      attachments: normalizeAttachments(record),
     });
   }
   return mapMessageRows(rows);
@@ -88,6 +87,7 @@ export function mapMessagesFromRaw(raw: unknown): InboxMessage[] {
 
 function normalizeAttachments(source: Record<string, unknown> | InboxMessageRow): InboxAttachment[] {
   const results: InboxAttachment[] = [];
+  const seen = new Set<string>();
 
   const candidates: unknown[] = [];
   const direct = (source as InboxMessageRow).attachments;
@@ -114,6 +114,12 @@ function normalizeAttachments(source: Record<string, unknown> | InboxMessageRow)
         const parsed = Number(sizeValue);
         if (!Number.isNaN(parsed)) size = Math.trunc(parsed);
       }
+
+      const key = `${url}::${typeof record.name === "string" ? record.name : ""}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
 
       results.push({
         id: typeof record.id === "string" ? record.id : undefined,
