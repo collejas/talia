@@ -11,6 +11,28 @@ export type InboxSummary = {
   folders: InboxFolder[];
 };
 
+export type InboxThreadRow = {
+  conversacion_id: string;
+  contacto_id: string;
+  contacto_nombre: string | null;
+  contacto_correo: string | null;
+  contacto_telefono: string | null;
+  canal: string | null;
+  estado: string | null;
+  prioridad: number | null;
+  iniciada_en: string | null;
+  ultimo_mensaje_en: string | null;
+  no_leidos: number | null;
+  asignado_id: string | null;
+  asignado_nombre: string | null;
+  tags: string[] | null;
+  manual_override: boolean | null;
+  last_message_preview: string | null;
+  last_message_at: string | null;
+  messages: unknown;
+  total_rows: number;
+};
+
 export type InboxMessage = {
   id: string;
   author: string;

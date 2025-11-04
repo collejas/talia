@@ -1,8 +1,8 @@
 "use server";
 
 import { callSupabaseRpc } from "@/lib/inbox/supabase";
-import { mapMessagesFromRaw } from "@/lib/inbox/transform";
-import type { InboxSummary, InboxThread, InboxPayload } from "@/lib/inbox/types";
+import { mapThreads } from "@/lib/inbox/threads";
+import type { InboxSummary, InboxPayload, InboxThreadRow } from "@/lib/inbox/types";
 
 type InboxResumenResponse = {
   total?: number;
@@ -15,28 +15,6 @@ type InboxResumenResponse = {
     id?: string;
     count?: number;
   }>;
-};
-
-type InboxThreadRow = {
-  conversacion_id: string;
-  contacto_id: string;
-  contacto_nombre: string | null;
-  contacto_correo: string | null;
-  contacto_telefono: string | null;
-  canal: string | null;
-  estado: string | null;
-  prioridad: number | null;
-  iniciada_en: string | null;
-  ultimo_mensaje_en: string | null;
-  no_leidos: number | null;
-  asignado_id: string | null;
-  asignado_nombre: string | null;
-  tags: string[] | null;
-  manual_override: boolean | null;
-  last_message_preview: string | null;
-  last_message_at: string | null;
-  messages: unknown;
-  total_rows: number;
 };
 
 export type { InboxFolder, InboxSummary, InboxThread, InboxPayload, InboxMessage } from "@/lib/inbox/types";
@@ -94,31 +72,4 @@ function mapSummary(payload?: InboxResumenResponse): InboxSummary {
     awaiting: payload?.awaiting ?? 0,
     folders,
   };
-}
-
-function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
-  if (!payload || !payload.length) return [];
-  return payload.map((row) => {
-    const messages = mapMessagesFromRaw(row.messages);
-    return {
-      id: row.conversacion_id,
-      contactoId: row.contacto_id,
-      contactoNombre: row.contacto_nombre?.trim() || "Contacto sin nombre",
-      contactoCorreo: row.contacto_correo,
-      contactoTelefono: row.contacto_telefono,
-      canal: row.canal ?? "webchat",
-      estado: row.estado ?? "abierta",
-      prioridad: row.prioridad ?? 0,
-      iniciadoEn: row.iniciada_en,
-      ultimoMensajeEn: row.ultimo_mensaje_en,
-      noLeidos: row.no_leidos ?? 0,
-      asignadoId: row.asignado_id,
-      asignadoNombre: row.asignado_nombre,
-      tags: row.tags?.filter(Boolean) ?? [],
-      manualMode: Boolean(row.manual_override),
-      preview: row.last_message_preview ?? "",
-      previewAt: row.last_message_at,
-      messages,
-    };
-  });
 }

@@ -16,6 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InboxComposer } from "@/components/inbox/composer";
 
+const THREADS_REFRESH_INTERVAL_MS = 6000;
+const MESSAGES_REFRESH_INTERVAL_MS = 4000;
+
 type ReplyMetadata = {
   manual_mode?: boolean;
   [key: string]: unknown;
@@ -132,6 +135,10 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const [sendError, setSendError] = React.useState<string | null>(null);
   const [manualToggling, setManualToggling] = React.useState(false);
   const [manualToggleError, setManualToggleError] = React.useState<string | null>(null);
+  const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>(threads[0]?.messages ?? []);
+  const threadsRefreshingRef = React.useRef(false);
+  const messagesRefreshingRef = React.useRef<string | null>(null);
+  const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     setThreadItems(threads);
@@ -174,7 +181,134 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   React.useEffect(() => {
     setManualToggleError(null);
     setManualToggling(false);
-  }, [selectedThread?.id]);
+    setCurrentMessages(selectedThread?.messages ?? []);
+  }, [selectedThread?.id, selectedThread?.messages]);
+
+  React.useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const scrollToBottom = () => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    };
+    if ("requestAnimationFrame" in window) {
+      requestAnimationFrame(scrollToBottom);
+    } else {
+      scrollToBottom();
+    }
+  }, [currentMessages, selectedThread?.id]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function refreshThreads() {
+      if (threadsRefreshingRef.current) return;
+      threadsRefreshingRef.current = true;
+      try {
+        const response = await fetch(`/api/inbox/threads?limit=25&message_limit=20`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as { threads?: InboxThread[] };
+        const incoming = Array.isArray(data?.threads) ? (data.threads as InboxThread[]) : [];
+        if (!incoming.length) {
+          return;
+        }
+        setThreadItems((current) => mergeThreadLists(current, incoming));
+      } catch (error) {
+        console.error("[inbox] refresh threads failed", error);
+      } finally {
+        threadsRefreshingRef.current = false;
+      }
+    }
+
+    refreshThreads();
+    const interval = setInterval(() => {
+      if (!cancelled) {
+        refreshThreads();
+      }
+    }, THREADS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      threadsRefreshingRef.current = false;
+    };
+  }, []);
+
+  const refreshMessages = React.useCallback(
+    async (conversationId: string) => {
+      if (!conversationId) return;
+      if (messagesRefreshingRef.current === conversationId) {
+        return;
+      }
+      messagesRefreshingRef.current = conversationId;
+      try {
+        const response = await fetch(`/api/inbox/${conversationId}/messages?limit=100`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as { messages?: InboxMessage[] };
+        const messages = Array.isArray(payload?.messages) ? (payload.messages as InboxMessage[]) : [];
+        if (!messages.length) {
+          return;
+        }
+        setCurrentMessages(messages);
+        setThreadItems((current) =>
+          current.map((thread) => {
+            if (thread.id !== conversationId) {
+              return thread;
+            }
+            const lastMessage = messages[messages.length - 1] ?? null;
+            return {
+              ...thread,
+              messages,
+              preview: lastMessage?.body?.[0] ?? thread.preview,
+              previewAt: lastMessage?.timestamp ?? thread.previewAt,
+              ultimoMensajeEn: lastMessage?.timestamp ?? thread.ultimoMensajeEn,
+              noLeidos: thread.noLeidos,
+            };
+          }),
+        );
+      } catch (error) {
+        console.error("[inbox] refresh messages failed", error);
+      } finally {
+        messagesRefreshingRef.current = null;
+      }
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    if (!selectedThread) {
+      messagesRefreshingRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    const conversationId = selectedThread.id;
+
+    refreshMessages(conversationId);
+    const interval = setInterval(() => {
+      if (!cancelled) {
+        refreshMessages(conversationId);
+      }
+    }, MESSAGES_REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (messagesRefreshingRef.current === conversationId) {
+        messagesRefreshingRef.current = null;
+      }
+    };
+  }, [selectedThread, refreshMessages]);
 
   const handleSendMessage = React.useCallback(
     async (content: string) => {
@@ -202,6 +336,9 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         }
 
         const messages = extractMessages(payload);
+        if (messages.length) {
+          setCurrentMessages(messages);
+        }
         setThreadItems((current) =>
           current.map((thread) => {
             if (thread.id !== targetThread.id) {
@@ -421,7 +558,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4">
               {manualToggleError ? (
                 <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {manualToggleError}
@@ -433,8 +570,8 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 </div>
               ) : null}
               <div className="flex flex-col gap-4">
-                {selectedThread.messages.length ? (
-                  selectedThread.messages.map((message) => {
+                {currentMessages.length ? (
+                  currentMessages.map((message) => {
                     const isAgent = message.role === "usuario";
                     return (
                       <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
@@ -476,4 +613,33 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
       </section>
     </div>
   );
+}
+
+function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): InboxThread[] {
+  if (!incoming.length) {
+    return current;
+  }
+  const currentMap = new Map(current.map((item) => [item.id, item]));
+  const merged: InboxThread[] = incoming.map((thread) => {
+    const existing = currentMap.get(thread.id);
+    if (!existing) {
+      return thread;
+    }
+    const messages = thread.messages.length ? thread.messages : existing.messages;
+    const lastMessage = messages.length ? messages[messages.length - 1]! : null;
+    return {
+      ...thread,
+      messages,
+      preview: thread.preview ?? lastMessage?.body?.[0] ?? existing.preview,
+      previewAt: thread.previewAt ?? lastMessage?.timestamp ?? existing.previewAt,
+      ultimoMensajeEn: thread.ultimoMensajeEn ?? lastMessage?.timestamp ?? existing.ultimoMensajeEn,
+    };
+  });
+
+  for (const thread of current) {
+    if (!incoming.find((candidate) => candidate.id === thread.id)) {
+      merged.push(thread);
+    }
+  }
+  return merged;
 }
