@@ -190,7 +190,7 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
   return (
     <div className="flex gap-4">
       <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
-        <div className="border-b px-4 py-3 space-y-3">
+        <div className="border-b px-4 py-3">
           <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
             <IconSearch className="size-4" />
             <Input
@@ -201,16 +201,6 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
               aria-label="Buscar chats"
             />
           </div>
-          {folders.length ? (
-            <div className="flex flex-wrap gap-2">
-              {folders.map((folder) => (
-                <Badge key={folder.id} variant="outline" className="cursor-pointer text-xs uppercase">
-                  {folder.label}
-                  <span className="ml-1 text-[11px] text-primary">{folder.count}</span>
-                </Badge>
-              ))}
-            </div>
-          ) : null}
         </div>
 
         <div className="flex items-center justify-between border-b px-4 py-3">
@@ -219,15 +209,6 @@ export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
             <IconDots className="size-4" />
             <span className="sr-only">Acciones de bandeja</span>
           </Button>
-        </div>
-
-        <div className="border-b px-2 py-3">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="cursor-pointer">Sin leer</Badge>
-            <Badge variant="outline" className="cursor-pointer">Seguimiento</Badge>
-            <Badge variant="outline" className="cursor-pointer">Alta prioridad</Badge>
-            <Badge variant="outline" className="cursor-pointer">Webchat</Badge>
-          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
