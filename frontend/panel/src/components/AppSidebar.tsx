@@ -42,7 +42,7 @@ const NAVIGATION = {
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
     { title: "Contactos", url: "/contactos", icon: IconAddressBook },
     { title: "Inbox", url: "/inbox", icon: IconInbox },
-    { title: "Embudo", url: "#", icon: IconListDetails },
+    { title: "Embudo", url: "/embudo", icon: IconListDetails },
     { title: "Leads", url: "/leads", icon: IconUsers },
     { title: "Agenda", url: "#", icon: IconCalendar },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
