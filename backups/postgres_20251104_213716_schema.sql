@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict cXBDwDvIcC5t1hOqAz5df6OCdwZV4FK0qNcKWq6B3U5ekIiZtusaAtg6rKo85lU
+\restrict TZMf7XKWsYfqrhFddJeIbnROhrctDVo2kX2toTDhTNQUnXlDr1G4zUvF8lps4eI
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -1527,7 +1527,7 @@ $$;
 -- Name: panel_inbox_threads(text, uuid, integer, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_inbox_threads(p_estado text DEFAULT NULL::text, p_asignado uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0, p_message_limit integer DEFAULT 20) RETURNS TABLE(conversacion_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, canal text, estado text, prioridad integer, iniciada_en timestamp with time zone, ultimo_mensaje_en timestamp with time zone, no_leidos integer, asignado_id uuid, asignado_nombre text, tags text[], last_message_preview text, last_message_at timestamp with time zone, messages jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_inbox_threads(p_estado text DEFAULT NULL::text, p_asignado uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0, p_message_limit integer DEFAULT 20) RETURNS TABLE(conversacion_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, canal text, estado text, prioridad integer, iniciada_en timestamp with time zone, ultimo_mensaje_en timestamp with time zone, no_leidos integer, asignado_id uuid, asignado_nombre text, tags text[], manual_override boolean, last_message_preview text, last_message_at timestamp with time zone, messages jsonb, total_rows bigint)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1548,11 +1548,13 @@ WITH filtered AS (
         asignado.nombre_completo AS asignado_nombre,
         ARRAY(
             SELECT jsonb_array_elements_text(COALESCE(ci.tags, '[]'::jsonb))
-        ) AS tags
+        ) AS tags,
+        COALESCE(cc.manual_override, false) AS manual_override
     FROM public.conversaciones c
     JOIN public.contactos ct ON ct.id = c.contacto_id
     LEFT JOIN public.usuarios asignado ON asignado.id = c.asignado_a_usuario_id
     LEFT JOIN public.conversaciones_insights ci ON ci.conversacion_id = c.id
+    LEFT JOIN public.conversaciones_controles cc ON cc.conversacion_id = c.id
     WHERE public.puede_ver_conversacion(c.id)
       AND (p_estado IS NULL OR lower(c.estado) = lower(p_estado))
       AND (p_asignado IS NULL OR c.asignado_a_usuario_id = p_asignado)
@@ -1579,6 +1581,7 @@ SELECT
     a.asignado_id,
     a.asignado_nombre,
     a.tags,
+    a.manual_override,
     last_msg.preview_text AS last_message_preview,
     last_msg.preview_at AS last_message_at,
     messages.items AS messages,
@@ -10910,5 +10913,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict cXBDwDvIcC5t1hOqAz5df6OCdwZV4FK0qNcKWq6B3U5ekIiZtusaAtg6rKo85lU
+\unrestrict TZMf7XKWsYfqrhFddJeIbnROhrctDVo2kX2toTDhTNQUnXlDr1G4zUvF8lps4eI
 
