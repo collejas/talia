@@ -1731,29 +1731,21 @@ async def reply_conversation(
     if not content:
         raise HTTPException(status_code=422, detail="message_required")
 
-    params = {
-        "select": "id,canal,estado",
-        "id": f"eq.{conversacion_id}",
-        "limit": "1",
-    }
-    conv_resp = await _sb_get("/rest/v1/conversaciones", params=params, token=token)
-    if conv_resp.status_code >= 400:
-        raise _supabase_error(conv_resp, "Error consultando la conversación solicitada")
-    conv_rows = conv_resp.json() or []
-    if not conv_rows:
-        raise HTTPException(status_code=404, detail="conversation_not_found")
-    conv_row = conv_rows[0]
-    if (conv_row.get("canal") or "").lower() != "webchat":
-        raise HTTPException(status_code=400, detail="unsupported_channel")
-
     try:
         conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
     except storage.StorageError as exc:
-        logger.exception(
-            "panel.inbox.fetch_conversation_failed",
-            extra={"conversation_id": str(conversacion_id), "error": str(exc)},
-        )
+        message = str(exc)
+        lowered = message.lower()
+        log_extra = {"conversation_id": str(conversacion_id), "error": message}
+        if "no encontrada" in lowered or "not found" in lowered:
+            logger.warning("panel.inbox.conversation_not_found", extra=log_extra)
+            raise HTTPException(status_code=404, detail="conversation_not_found") from exc
+        logger.exception("panel.inbox.fetch_conversation_failed", extra=log_extra)
         raise HTTPException(status_code=502, detail="No se pudo recuperar la conversación") from exc
+
+    channel = (conversation_meta.get("channel") or "").lower()
+    if channel != "webchat":
+        raise HTTPException(status_code=400, detail="unsupported_channel")
 
     contact_id = conversation_meta.get("contact_id")
     if not contact_id:

@@ -46,7 +46,7 @@ export default async function Page() {
                 <InboxToolbar summary={inboxData.summary} />
               </div>
               <div className="px-4 lg:px-6">
-                <InboxSplitView folders={inboxData.summary.folders} threads={inboxData.threads} />
+                <InboxSplitView threads={inboxData.threads} />
               </div>
             </div>
           </div>

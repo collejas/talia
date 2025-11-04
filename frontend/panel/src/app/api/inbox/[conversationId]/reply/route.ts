@@ -85,9 +85,88 @@ type RouteContext = {
   };
 };
 
+function extractConversationIdFromPath(url: string): string | null {
+  try {
+    const { pathname } = new URL(url);
+    const segments = pathname.split("/").filter(Boolean);
+    if (!segments.length) {
+      return null;
+    }
+
+    const replyIndex = segments.lastIndexOf("reply");
+    if (replyIndex > 0) {
+      const candidate = segments[replyIndex - 1];
+      const trimmed = candidate?.trim();
+      if (trimmed && trimmed !== "inbox" && trimmed !== "api") {
+        return trimmed;
+      }
+    }
+
+    const inboxIndex = segments.indexOf("inbox");
+    if (inboxIndex >= 0 && inboxIndex + 1 < segments.length) {
+      const candidate = segments[inboxIndex + 1];
+      const trimmed = candidate?.trim();
+      if (trimmed && trimmed !== "reply" && trimmed !== "api") {
+        return trimmed;
+      }
+    }
+  } catch {
+    // Si falla el parseo, devolvemos null y dejamos que el flujo principal maneje el error.
+  }
+  return null;
+}
+
+function looksLikeHtml(text: string): boolean {
+  const sample = text.trim().slice(0, 128).toLowerCase();
+  if (!sample.length) return false;
+  return sample.startsWith("<!doctype html") || sample.startsWith("<html") || sample.includes("<body");
+}
+
+function fallbackErrorFromText(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (!trimmed || looksLikeHtml(trimmed)) {
+    return undefined;
+  }
+  return trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
+}
+
+function buildBackendTargets(baseUrl: string, conversationId: string): string[] {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  const targets = new Set<string>();
+
+  if (trimmed.length) {
+    targets.add(`${trimmed}/conversaciones/${conversationId}/responder`);
+  }
+
+  const lowerTrimmed = trimmed.toLowerCase();
+  const hasPanelSuffix = lowerTrimmed.endsWith("/panel") || lowerTrimmed.endsWith("/panel-react");
+  let isLocalHost = false;
+
+  try {
+    const parsed = new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase();
+    isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    // Si no se puede parsear como URL absoluta, asumimos que no es host local explícito.
+  }
+
+  if (!hasPanelSuffix && !isLocalHost) {
+    if (lowerTrimmed.endsWith("/api")) {
+      targets.add(`${trimmed}/panel/conversaciones/${conversationId}/responder`);
+    } else if (/^https?:\/\/[^/]+$/i.test(trimmed)) {
+      targets.add(`${trimmed}/api/panel/conversaciones/${conversationId}/responder`);
+    } else if (!lowerTrimmed.includes("/panel/")) {
+      targets.add(`${trimmed}/panel/conversaciones/${conversationId}/responder`);
+    }
+  }
+
+  return Array.from(targets);
+}
+
 export async function POST(request: Request, context: unknown) {
-  const routeContext = context as RouteContext;
-  const conversationId = routeContext.params?.conversationId;
+  const routeContext = (context as RouteContext | null) ?? {};
+  const conversationId =
+    routeContext.params?.conversationId?.trim() ?? extractConversationIdFromPath(request.url);
   if (!conversationId) {
     return NextResponse.json({ error: "conversation_required" }, { status: 400 });
   }
@@ -124,9 +203,23 @@ export async function POST(request: Request, context: unknown) {
     client_message_id: clientMessageId,
   };
 
-  const backendResponse = await fetch(
-    `${backendBaseUrl}/conversaciones/${conversationId}/responder`,
-    {
+  const backendTargets = buildBackendTargets(backendBaseUrl, conversationId);
+  if (!backendTargets.length) {
+    return NextResponse.json(
+      { error: "backend_url_invalid" },
+      { status: 500 },
+    );
+  }
+
+  console.log("[inbox] reply targets", backendTargets);
+
+  let backendResponse: Response | null = null;
+  let backendText = "";
+  let backendData: BackendReplyResponse = {};
+
+  for (let index = 0; index < backendTargets.length; index++) {
+    const targetUrl = backendTargets[index]!;
+    const response = await fetch(targetUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -134,15 +227,42 @@ export async function POST(request: Request, context: unknown) {
       },
       body: JSON.stringify(backendPayload),
       cache: "no-store",
-    },
-  );
+    });
+    const text = await response.text();
+    const parsed = parseBackendReply(text);
+    const html = looksLikeHtml(text);
 
-  const backendText = await backendResponse.text();
-  const backendData = parseBackendReply(backendText);
+    console.log("[inbox] reply attempt", {
+      target: targetUrl,
+      status: response.status,
+      html,
+      sample: text.slice(0, 120),
+    });
+
+    backendResponse = response;
+    backendText = text;
+    backendData = parsed;
+
+    if (!response.ok && response.status === 404 && html && index + 1 < backendTargets.length) {
+      // Probablemente golpeamos el frontend (HTML). Probamos siguiente target.
+      continue;
+    }
+    break;
+  }
+
+  if (!backendResponse) {
+    return NextResponse.json(
+      { error: "assistant_request_failed" },
+      { status: 502 },
+    );
+  }
 
   if (!backendResponse.ok) {
     const detail = extractBackendError(backendData) ?? "assistant_request_failed";
-    return NextResponse.json({ error: detail }, { status: backendResponse.status });
+    const enrichedDetail = detail === "assistant_request_failed"
+      ? fallbackErrorFromText(backendText) ?? detail
+      : detail;
+    return NextResponse.json({ error: enrichedDetail }, { status: backendResponse.status });
   }
 
   const messagesRpc = await callSupabaseRpc<InboxMessageRow[]>("panel_inbox_messages", {

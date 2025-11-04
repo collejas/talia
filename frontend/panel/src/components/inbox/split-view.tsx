@@ -8,7 +8,7 @@ import {
   IconSearch,
 } from "@tabler/icons-react";
 
-import type { InboxFolder, InboxThread, InboxMessage } from "@/lib/inbox/data";
+import type { InboxThread, InboxMessage } from "@/lib/inbox/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,11 +78,10 @@ function extractError(payload: InboxReplyPayload): string | undefined {
   return undefined;
 }
 type InboxSplitViewProps = {
-  folders: InboxFolder[];
   threads: InboxThread[];
 };
 
-export function InboxSplitView({ folders, threads }: InboxSplitViewProps) {
+export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm, setSearchTerm] = React.useState("");
