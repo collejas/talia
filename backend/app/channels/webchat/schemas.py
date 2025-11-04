@@ -32,6 +32,23 @@ class MessageRequest(BaseModel):
         default=None,
         description="Metadatos opcionales capturados por el cliente (user-agent, etc.).",
     )
+    attachments: list[AttachmentPayload] | None = Field(
+        default=None,
+        description="Adjuntos asociados al mensaje (cargados previamente).",
+    )
+
+
+class AttachmentPayload(BaseModel):
+    """Representa un archivo adjunto transferido por el webchat."""
+
+    url: str = Field(..., description="URL accesible del archivo adjunto.")
+    name: str | None = Field(default=None, description="Nombre de archivo legible.")
+    mime: str | None = Field(default=None, description="Tipo MIME del archivo.")
+    size: int | None = Field(default=None, description="Peso del archivo en bytes.")
+    provider_id: str | None = Field(
+        default=None, description="Identificador interno del almacenamiento."
+    )
+    path: str | None = Field(default=None, description="Ruta interna en el bucket de storage.")
 
 
 class MessageMetadata(BaseModel):
@@ -52,6 +69,7 @@ class MessageResponse(BaseModel):
 
     reply: str | None
     metadata: MessageMetadata
+    attachments: list[Attachment] | None = None
 
 
 class HistoryMessage(BaseModel):
@@ -62,6 +80,7 @@ class HistoryMessage(BaseModel):
     content: str
     created_at: datetime
     metadata: dict[str, Any] | None = None
+    attachments: list[Attachment] = Field(default_factory=list)
 
 
 class HistoryResponse(BaseModel):
@@ -70,6 +89,18 @@ class HistoryResponse(BaseModel):
     conversation_id: str | None = None
     messages: list[HistoryMessage] = Field(default_factory=list)
     manual_mode: bool = False
+
+
+class Attachment(BaseModel):
+    """Adjunto normalizado utilizado en respuestas."""
+
+    id: str | None = None
+    url: str
+    mime: str | None = None
+    size: int | None = None
+    name: str | None = None
+    provider_id: str | None = None
+    path: str | None = None
 
 
 class CloseSessionRequest(BaseModel):
@@ -103,3 +134,14 @@ class ClientConfig(BaseModel):
         default=None,
         description="Horas de inactividad en backend antes de iniciar nueva conversación.",
     )
+
+
+class UploadResponse(BaseModel):
+    """Metadata devuelta tras subir un adjunto al canal webchat."""
+
+    url: str
+    name: str | None = None
+    mime: str | None = None
+    size: int | None = None
+    provider_id: str | None = None
+    path: str | None = None

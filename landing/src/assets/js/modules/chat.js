@@ -20,6 +20,10 @@ const elements = {
   chatLog: null,
   chatForm: null,
   chatInput: null,
+  chatAttachmentButton: null,
+  chatFileInput: null,
+  chatAttachments: null,
+  chatSubmitButton: null,
 };
 
 const state = {
@@ -38,6 +42,9 @@ const state = {
   lifecycleBound: false,
   hiddenTimeoutHandle: null,
   visitRegistered: false,
+  pendingAttachments: [],
+  uploadingAttachments: false,
+  attachmentError: null,
 };
 
 let config = { ...defaultConfig };
@@ -49,6 +56,12 @@ export function initialiseChat(options = {}) {
   elements.chatLog = options.chatLog ?? document.getElementById('chat-log');
   elements.chatForm = options.chatForm ?? document.getElementById('chat-form');
   elements.chatInput = options.chatInput ?? document.getElementById('chat-input');
+  elements.chatAttachmentButton =
+    options.chatAttachmentButton ?? document.getElementById('chat-attachment-button');
+  elements.chatFileInput = options.chatFileInput ?? document.getElementById('chat-file-input');
+  elements.chatAttachments = options.chatAttachments ?? document.getElementById('chat-attachments');
+  elements.chatSubmitButton =
+    options.chatSubmitButton ?? elements.chatForm?.querySelector?.('button[type="submit"]') ?? null;
 
   state.chatEnabled =
     Boolean(elements.chatLog) && Boolean(elements.chatForm) && Boolean(elements.chatInput);
@@ -68,6 +81,15 @@ export function initialiseChat(options = {}) {
   void ensureVisitRegistered();
 
   elements.chatForm.addEventListener('submit', handleSubmit);
+  elements.chatInput.addEventListener('input', updateComposerState);
+
+  if (elements.chatAttachmentButton && elements.chatFileInput) {
+    elements.chatAttachmentButton.addEventListener('click', handleAttachmentButtonClick);
+    elements.chatFileInput.addEventListener('change', handleAttachmentFileChange);
+  }
+
+  renderPendingAttachments();
+  updateComposerState();
 
   void syncHistory({ force: true }).finally(() => {
     startHistoryPolling();
@@ -248,7 +270,7 @@ function maintainViewportBottom(behavior = 'auto', tolerance, force = false) {
   });
 }
 
-function createMessageElement(text, role = 'assistant', metadata = null) {
+function createMessageElement(text, role = 'assistant', metadata = null, attachments = []) {
   const wrapper = document.createElement('div');
   wrapper.className = `message message--${role}`;
   if (role === 'human') {
@@ -261,10 +283,35 @@ function createMessageElement(text, role = 'assistant', metadata = null) {
     label.textContent = `Este mensaje es de 'humano': '${agentName}', ya no hablas con Tal-IA`;
     wrapper.appendChild(label);
   }
-  const body = document.createElement('div');
-  body.className = 'message__body';
-  body.innerText = text;
-  wrapper.appendChild(body);
+  if (text && text.length) {
+    const body = document.createElement('div');
+    body.className = 'message__body';
+    body.innerText = text;
+    wrapper.appendChild(body);
+  }
+
+  if (Array.isArray(attachments) && attachments.length) {
+    const list = document.createElement('div');
+    list.className = 'message__attachments';
+    attachments.forEach((attachment) => {
+      if (!attachment || typeof attachment.url !== 'string') return;
+      const item = document.createElement('a');
+      item.className = 'message__attachment';
+      item.href = attachment.url;
+      item.target = '_blank';
+      item.rel = 'noopener noreferrer';
+      const name = typeof attachment.name === 'string' && attachment.name.length ? attachment.name : attachment.url;
+      item.textContent = name;
+      if (attachment.size) {
+        const size = document.createElement('span');
+        size.className = 'message__attachment-size';
+        size.textContent = `${(attachment.size / 1024).toFixed(1)} KB`;
+        item.appendChild(size);
+      }
+      list.appendChild(item);
+    });
+    wrapper.appendChild(list);
+  }
   return wrapper;
 }
 
@@ -275,12 +322,199 @@ function normalizeScrollOptions(options) {
   return options || {};
 }
 
-function appendMessage(text, role = 'assistant', metadata = null, scrollOptions = {}) {
+function createAttachmentId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function updateComposerState() {
+  if (!elements.chatSubmitButton || !elements.chatInput) return;
+  const hasText = elements.chatInput.value.trim().length > 0;
+  const hasAttachments = state.pendingAttachments.length > 0;
+  elements.chatSubmitButton.disabled = state.uploadingAttachments || (!hasText && !hasAttachments);
+}
+
+function renderPendingAttachments() {
+  if (!elements.chatAttachments) return;
+  elements.chatAttachments.innerHTML = '';
+
+  if (state.uploadingAttachments) {
+    const uploadingNotice = document.createElement('div');
+    uploadingNotice.className = 'composer-attachments__uploading';
+    uploadingNotice.textContent = 'Subiendo archivos…';
+    elements.chatAttachments.appendChild(uploadingNotice);
+  }
+
+  if (state.pendingAttachments.length) {
+    const list = document.createElement('div');
+    list.className = 'composer-attachments__list';
+    state.pendingAttachments.forEach((attachment) => {
+      const item = document.createElement('div');
+      item.className = 'composer-attachments__item';
+
+      const name = document.createElement('span');
+      name.textContent = attachment.name || attachment.url;
+      item.appendChild(name);
+
+      if (attachment.size) {
+        const sizeLabel = document.createElement('span');
+        sizeLabel.className = 'composer-attachments__size';
+        sizeLabel.textContent = `${(attachment.size / 1024).toFixed(1)} KB`;
+        item.appendChild(sizeLabel);
+      }
+
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'composer-attachments__remove';
+      removeButton.textContent = '×';
+      removeButton.addEventListener('click', () => {
+        removePendingAttachment(attachment.id);
+      });
+      item.appendChild(removeButton);
+
+      list.appendChild(item);
+    });
+    elements.chatAttachments.appendChild(list);
+  }
+
+  if (state.attachmentError) {
+    const error = document.createElement('div');
+    error.className = 'composer-attachments__error';
+    error.textContent = state.attachmentError;
+    elements.chatAttachments.appendChild(error);
+  }
+}
+
+function removePendingAttachment(id) {
+  state.pendingAttachments = state.pendingAttachments.filter((item) => item.id !== id);
+  if (!state.pendingAttachments.length) {
+    state.attachmentError = null;
+  }
+  renderPendingAttachments();
+  updateComposerState();
+}
+
+function extractAttachmentsFromMessage(item) {
+  if (!item) return [];
+  const direct = Array.isArray(item.attachments) ? item.attachments : [];
+  const metadataAttachments =
+    item.metadata && Array.isArray(item.metadata.attachments) ? item.metadata.attachments : [];
+
+  const all = [...direct, ...metadataAttachments];
+  const seen = new Set();
+  return all.filter((attachment) => {
+    if (!attachment || typeof attachment.url !== 'string') return false;
+    const key = attachment.url + (attachment.name || '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function handleAttachmentButtonClick(event) {
+  event.preventDefault();
+  if (!elements.chatFileInput || state.uploadingAttachments) return;
+  elements.chatFileInput.click();
+}
+
+async function handleAttachmentFileChange(event) {
+  const input = event.currentTarget;
+  await uploadSelectedFiles(input?.files || null);
+  if (input) {
+    input.value = "";
+  }
+}
+
+async function uploadSelectedFiles(fileList) {
+  if (!fileList || fileList.length === 0) return;
+
+  await ensureVisitRegistered();
+  state.uploadingAttachments = true;
+  state.attachmentError = null;
+  renderPendingAttachments();
+  updateComposerState();
+
+  try {
+    const files = Array.from(fileList);
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      if (state.conversationId) {
+        formData.append("conversation_id", state.conversationId);
+      }
+      if (state.sessionId) {
+        formData.append("session_id", state.sessionId);
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/uploads`, {
+        method: "POST",
+        body: formData,
+        cache: "no-store",
+      });
+
+      const text = await response.text();
+      let payload = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch (error) {
+        console.error("[chat] upload parse failed", error);
+        throw new Error("No se pudo subir el archivo");
+      }
+
+      if (!response.ok) {
+        const message = typeof payload.error === "string" ? payload.error : "No se pudo subir el archivo";
+        throw new Error(message);
+      }
+
+      const urlValue = typeof payload.url === "string" && payload.url.length ? payload.url : null;
+      if (!urlValue) {
+        throw new Error("No se pudo obtener la URL del archivo");
+      }
+
+      const sizeValue = payload.size;
+      let size = typeof sizeValue === "number" ? sizeValue : undefined;
+      if (typeof sizeValue === "string") {
+        const parsed = Number(sizeValue);
+        if (!Number.isNaN(parsed)) {
+          size = parsed;
+        }
+      }
+      if (size === undefined && typeof file.size === "number") {
+        size = file.size;
+      }
+
+      const attachment = {
+        id: createAttachmentId(),
+        url: urlValue,
+        name: typeof payload.name === "string" && payload.name.length ? payload.name : file.name,
+        mime: typeof payload.mime === "string" ? payload.mime : file.type,
+        size,
+        provider_id: typeof payload.provider_id === "string" ? payload.provider_id : null,
+        path: typeof payload.path === "string" ? payload.path : null,
+      };
+      state.pendingAttachments.push(attachment);
+    }
+  } catch (error) {
+    console.error("[chat] attachment upload failed", error);
+    state.attachmentError =
+      error instanceof Error && error.message
+        ? error.message
+        : "No se pudo cargar el archivo. Inténtalo de nuevo.";
+  } finally {
+    state.uploadingAttachments = false;
+    renderPendingAttachments();
+    updateComposerState();
+  }
+}
+
+function appendMessage(text, role = 'assistant', metadata = null, scrollOptions = {}, attachments = []) {
   if (!elements.chatLog) return null;
   const { behavior = 'auto', force = false, tolerance } = normalizeScrollOptions(scrollOptions);
   const container = getScrollContainer();
   const shouldStick = force || isNearViewportBottom(container, tolerance);
-  const element = createMessageElement(text, role, metadata);
+  const element = createMessageElement(text, role, metadata, attachments);
   elements.chatLog.appendChild(element);
   if (shouldStick) {
     maintainViewportBottom(behavior, tolerance, force);
@@ -395,6 +629,7 @@ function appendHistoryDelta(newItems, options = {}) {
     const role = mapHistoryRole(item);
     const text = typeof item.content === 'string' ? item.content : '';
     const metadata = item.metadata || null;
+    const attachments = extractAttachmentsFromMessage(item);
 
     const tail = getLastMessageElement();
     if (tail) {
@@ -410,7 +645,7 @@ function appendHistoryDelta(newItems, options = {}) {
       }
     }
 
-    const el = createMessageElement(text, role, metadata);
+    const el = createMessageElement(text, role, metadata, attachments);
     elements.chatLog.appendChild(el);
   }
 
@@ -433,7 +668,8 @@ function renderHistoryMessages(messages, options = {}) {
   for (const item of messages || []) {
     const role = mapHistoryRole(item);
     const text = typeof item.content === 'string' ? item.content : '';
-    const el = createMessageElement(text, role, item.metadata || null);
+    const attachments = extractAttachmentsFromMessage(item);
+    const el = createMessageElement(text, role, item.metadata || null, attachments);
     elements.chatLog.appendChild(el);
   }
   if (shouldRestoreTyping) {
@@ -620,7 +856,7 @@ async function ensureVisitRegistered(force = false) {
   }
 }
 
-async function sendToAssistant(message, clientMessageId) {
+async function sendToAssistant(message, clientMessageId, attachments = []) {
   if (!state.chatEnabled) return { reply: getFallbackResponse(), metadata: {} };
 
   const MAX_RETRIES = 2;
@@ -648,6 +884,16 @@ async function sendToAssistant(message, clientMessageId) {
     payload.metadata = metaPayload;
     if (clientMessageId) {
       payload.client_message_id = clientMessageId;
+    }
+    if (Array.isArray(attachments) && attachments.length) {
+      payload.attachments = attachments.map((attachment) => ({
+        url: attachment.url,
+        name: attachment.name,
+        mime: attachment.mime,
+        size: attachment.size,
+        provider_id: attachment.provider_id,
+        path: attachment.path,
+      }));
     }
 
     const response = await fetch(`${config.apiBaseUrl}/messages`, {
@@ -683,37 +929,53 @@ async function sendToAssistant(message, clientMessageId) {
 
 async function handleSubmit(event) {
   event.preventDefault();
-  if (!state.chatEnabled || !elements.chatInput || !elements.chatInput.value.trim()) return;
+  if (!state.chatEnabled || !elements.chatInput) return;
 
   const userMessage = elements.chatInput.value.trim();
+  const attachments = state.pendingAttachments.slice();
+
+  if (!userMessage && attachments.length === 0) {
+    return;
+  }
+
   elements.chatInput.value = '';
+  state.pendingAttachments = [];
+  state.attachmentError = null;
+
   const localUserMessage = appendMessage(userMessage, 'user', null, {
     behavior: 'smooth',
     force: true,
-  });
+  }, attachments);
   if (localUserMessage) localUserMessage.setAttribute('data-local', 'true');
   elements.chatInput.focus();
+  renderPendingAttachments();
+  updateComposerState();
 
   const clientMessageId = generateClientMessageId();
-  enqueueAssistantReply(userMessage, clientMessageId);
+  enqueueAssistantReply(userMessage, clientMessageId, attachments);
 }
 
-function enqueueAssistantReply(message, clientMessageId) {
+function enqueueAssistantReply(message, clientMessageId, attachments) {
   if (!state.chatEnabled) return;
   state.assistantQueue = state.assistantQueue
-    .then(() => handleAssistantReply(message, clientMessageId))
+    .then(() => handleAssistantReply(message, clientMessageId, attachments))
     .catch((error) => {
       console.error('[chat] Error en la cola de respuestas:', error);
     });
 }
 
-async function handleAssistantReply(message, clientMessageId) {
+async function handleAssistantReply(message, clientMessageId, attachments) {
   if (!state.chatEnabled) return;
   try {
     renderTypingIndicator();
-    const data = await sendToAssistant(message, clientMessageId);
+    const data = await sendToAssistant(message, clientMessageId, attachments);
     const reply = data.reply;
     const metadata = data && typeof data.metadata === 'object' ? data.metadata : {};
+    const responseAttachments = Array.isArray(data.attachments)
+      ? data.attachments
+      : Array.isArray(metadata.attachments)
+        ? metadata.attachments
+        : [];
     if (metadata.conversation_id) {
       state.conversationId = metadata.conversation_id;
     }
@@ -730,7 +992,7 @@ async function handleAssistantReply(message, clientMessageId) {
       const localAssistant = appendMessage(reply, 'assistant', metadata, {
         behavior: 'smooth',
         force: true,
-      });
+      }, responseAttachments);
       if (localAssistant) localAssistant.setAttribute('data-local', 'true');
     }
     void syncHistory();

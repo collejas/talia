@@ -33,6 +33,16 @@ export type InboxThreadRow = {
   total_rows: number;
 };
 
+export type InboxAttachment = {
+  id?: string;
+  url: string;
+  mime?: string | null;
+  size?: number | null;
+  name?: string | null;
+  provider_id?: string | null;
+  path?: string | null;
+};
+
 export type InboxMessage = {
   id: string;
   author: string;
@@ -41,6 +51,7 @@ export type InboxMessage = {
   body: string[];
   tipo: string;
   datos: Record<string, unknown> | null;
+  attachments: InboxAttachment[];
 };
 
 export type InboxMessageRow = {
@@ -52,6 +63,7 @@ export type InboxMessageRow = {
   tipo_contenido: string | null;
   datos: Record<string, unknown> | null;
   creado_en: string | null;
+  attachments?: InboxAttachment[] | null;
 };
 
 export type InboxThread = {

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict TZMf7XKWsYfqrhFddJeIbnROhrctDVo2kX2toTDhTNQUnXlDr1G4zUvF8lps4eI
+\restrict 3UkUu82kHrx7fukIi5r9hGJw3vWkeYD8hBX0qYot6wEBiyhbLACRfZc8khuyr0Z
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -1445,7 +1445,7 @@ $$;
 -- Name: panel_inbox_messages(uuid, integer, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_inbox_messages(p_conversacion_id uuid, p_limit integer DEFAULT 100, p_before timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE(message_id uuid, conversacion_id uuid, author text, role text, body text[], tipo_contenido text, datos jsonb, creado_en timestamp with time zone)
+CREATE FUNCTION public.panel_inbox_messages(p_conversacion_id uuid, p_limit integer DEFAULT 100, p_before timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE(message_id uuid, conversacion_id uuid, author text, role text, body text[], tipo_contenido text, datos jsonb, creado_en timestamp with time zone, attachments jsonb)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1456,24 +1456,56 @@ WITH authorized AS (
     LEFT JOIN public.usuarios u ON u.id = c.asignado_a_usuario_id
     WHERE c.id = p_conversacion_id
       AND public.puede_ver_conversacion(c.id)
+),
+target_messages AS (
+    SELECT
+        m.id,
+        m.conversacion_id,
+        m.direccion,
+        m.texto,
+        m.tipo_contenido,
+        m.datos,
+        m.creado_en,
+        COALESCE(
+            (
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'id', a.id,
+                        'url', a.url,
+                        'mime', a.mime,
+                        'size', COALESCE(a.size_bytes, a.tamano_bytes),
+                        'name', a.nombre,
+                        'provider_id', a.proveedor_id,
+                        'path', a.path
+                    ) ORDER BY a.creado_en ASC
+                )
+                FROM public.adjuntos a
+                WHERE a.mensaje_id = m.id
+            ),
+            '[]'::jsonb
+        ) AS attachments_json
+    FROM public.mensajes m
+    WHERE m.conversacion_id = p_conversacion_id
+      AND (p_before IS NULL OR m.creado_en < p_before)
+    ORDER BY m.creado_en DESC
+    LIMIT GREATEST(COALESCE(p_limit, 100), 1)
 )
 SELECT
-    m.id AS message_id,
-    m.conversacion_id,
+    tm.id AS message_id,
+    tm.conversacion_id,
     CASE
-        WHEN m.direccion = 'entrante' THEN COALESCE(a.contacto_nombre, 'Visitante')
+        WHEN tm.direccion = 'entrante' THEN COALESCE(a.contacto_nombre, 'Visitante')
         ELSE COALESCE(a.asignado_nombre, 'Equipo Tal-IA')
     END AS author,
-    CASE WHEN m.direccion = 'entrante' THEN 'contacto' ELSE 'usuario' END AS role,
-    ARRAY[COALESCE(NULLIF(m.texto, ''), '(mensaje sin texto)')] AS body,
-    m.tipo_contenido,
-    m.datos,
-    m.creado_en
+    CASE WHEN tm.direccion = 'entrante' THEN 'contacto' ELSE 'usuario' END AS role,
+    ARRAY[COALESCE(NULLIF(tm.texto, ''), '(mensaje sin texto)')] AS body,
+    tm.tipo_contenido,
+    tm.datos,
+    tm.creado_en,
+    tm.attachments_json AS attachments
 FROM authorized a
-JOIN public.mensajes m ON m.conversacion_id = a.id
-WHERE (p_before IS NULL OR m.creado_en < p_before)
-ORDER BY m.creado_en DESC
-LIMIT GREATEST(COALESCE(p_limit, 100), 1);
+JOIN target_messages tm ON tm.conversacion_id = a.id
+ORDER BY tm.creado_en DESC;
 $$;
 
 
@@ -1565,6 +1597,52 @@ annotated AS (
         COUNT(*) OVER () AS total_rows,
         COALESCE(f.ultimo_mensaje_en, f.iniciada_en) AS sort_key
     FROM filtered f
+),
+messages_by_thread AS (
+    SELECT
+        a.conversacion_id,
+        jsonb_agg(
+            jsonb_build_object(
+                'message_id', msg.id,
+                'author', CASE
+                    WHEN msg.direccion = 'entrante' THEN COALESCE(a.contacto_nombre, 'Visitante')
+                    ELSE COALESCE(a.asignado_nombre, 'Equipo Tal-IA')
+                END,
+                'role', CASE WHEN msg.direccion = 'entrante' THEN 'contacto' ELSE 'usuario' END,
+                'timestamp', msg.creado_en,
+                'body', ARRAY[COALESCE(NULLIF(msg.texto, ''), '(mensaje sin texto)')],
+                'tipo_contenido', msg.tipo_contenido,
+                'datos', msg.datos,
+                'attachments', COALESCE(
+                    (
+                        SELECT jsonb_agg(
+                            jsonb_build_object(
+                                'id', adj.id,
+                                'url', adj.url,
+                                'mime', adj.mime,
+                                'size', COALESCE(adj.size_bytes, adj.tamano_bytes),
+                                'name', adj.nombre,
+                                'provider_id', adj.proveedor_id,
+                                'path', adj.path
+                            ) ORDER BY adj.creado_en ASC
+                        )
+                        FROM public.adjuntos adj
+                        WHERE adj.mensaje_id = msg.id
+                    ),
+                    '[]'::jsonb
+                )
+            )
+            ORDER BY msg.creado_en
+        ) FILTER (WHERE msg.id IS NOT NULL) AS items
+    FROM annotated a
+    LEFT JOIN LATERAL (
+        SELECT m.*
+        FROM public.mensajes m
+        WHERE m.conversacion_id = a.conversacion_id
+        ORDER BY m.creado_en DESC
+        LIMIT GREATEST(COALESCE(p_message_limit, 20), 1)
+    ) AS msg ON TRUE
+    GROUP BY a.conversacion_id
 )
 SELECT
     a.conversacion_id,
@@ -1584,7 +1662,7 @@ SELECT
     a.manual_override,
     last_msg.preview_text AS last_message_preview,
     last_msg.preview_at AS last_message_at,
-    messages.items AS messages,
+    COALESCE(messages.items, '[]'::jsonb) AS messages,
     a.total_rows
 FROM annotated a
 LEFT JOIN LATERAL (
@@ -1596,30 +1674,7 @@ LEFT JOIN LATERAL (
     ORDER BY m.creado_en DESC
     LIMIT 1
 ) last_msg ON TRUE
-LEFT JOIN LATERAL (
-    SELECT jsonb_agg(
-        jsonb_build_object(
-            'message_id', msg.id,
-            'author', CASE
-                WHEN msg.direccion = 'entrante' THEN COALESCE(a.contacto_nombre, 'Visitante')
-                ELSE COALESCE(a.asignado_nombre, 'Equipo Tal-IA')
-            END,
-            'role', CASE WHEN msg.direccion = 'entrante' THEN 'contacto' ELSE 'usuario' END,
-            'timestamp', msg.creado_en,
-            'body', ARRAY[COALESCE(NULLIF(msg.texto, ''), '(mensaje sin texto)')],
-            'tipo_contenido', msg.tipo_contenido,
-            'datos', msg.datos
-        )
-        ORDER BY msg.creado_en
-    ) AS items
-    FROM (
-        SELECT m.*
-        FROM public.mensajes m
-        WHERE m.conversacion_id = a.conversacion_id
-        ORDER BY m.creado_en DESC
-        LIMIT GREATEST(COALESCE(p_message_limit, 20), 1)
-    ) AS msg
-) messages ON TRUE
+LEFT JOIN messages_by_thread messages ON messages.conversacion_id = a.conversacion_id
 ORDER BY a.sort_key DESC
 LIMIT COALESCE(NULLIF(p_limit, 0), 50)
 OFFSET GREATEST(p_offset, 0);
@@ -3312,10 +3367,10 @@ $$;
 
 
 --
--- Name: registrar_mensaje_webchat(text, text, text, text, jsonb, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: registrar_mensaje_webchat(text, text, text, text, jsonb, integer, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.registrar_mensaje_webchat(p_session_id text, p_author text, p_content text, p_response_id text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_inactivity_hours integer DEFAULT NULL::integer) RETURNS TABLE(conversacion_id uuid, mensaje_id uuid, conversacion_openai_id text)
+CREATE FUNCTION public.registrar_mensaje_webchat(p_session_id text, p_author text, p_content text, p_response_id text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_inactivity_hours integer DEFAULT NULL::integer, p_attachments jsonb DEFAULT '[]'::jsonb) RETURNS TABLE(conversacion_id uuid, mensaje_id uuid, conversacion_openai_id text)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3326,9 +3381,10 @@ DECLARE
     v_direction text;
     v_estado text;
     v_now timestamptz := now();
-    v_conv_openai text;
     v_last_activity timestamptz;
+    v_conv_openai text;
     v_hours integer := COALESCE(p_inactivity_hours, 24);
+    v_tipo_contenido text := 'texto';
 BEGIN
     IF p_session_id IS NULL OR length(trim(p_session_id)) = 0 THEN
         RAISE EXCEPTION 'session_id requerido';
@@ -3395,6 +3451,12 @@ BEGIN
         v_conv_openai := NULL;
     END IF;
 
+    IF jsonb_typeof(p_attachments) = 'array' AND jsonb_array_length(p_attachments) > 0 THEN
+        IF COALESCE(trim(COALESCE(p_content, '')), '') = '' THEN
+            v_tipo_contenido := 'medio';
+        END IF;
+    END IF;
+
     INSERT INTO public.mensajes (
         conversacion_id,
         direccion,
@@ -3408,14 +3470,35 @@ BEGIN
     VALUES (
         v_conversacion_id,
         v_direction,
-        'texto',
+        v_tipo_contenido,
         p_content,
-        jsonb_build_object('session_id', p_session_id, 'author', p_author) || COALESCE(p_metadata, '{}'::jsonb),
+        jsonb_build_object('session_id', p_session_id, 'author', p_author, 'attachments', COALESCE(p_attachments, '[]'::jsonb))
+            || COALESCE(p_metadata, '{}'::jsonb),
         v_estado,
         v_now,
         0
     )
     RETURNING id INTO v_mensaje_id;
+
+    IF jsonb_typeof(p_attachments) = 'array' AND jsonb_array_length(p_attachments) > 0 THEN
+        INSERT INTO public.adjuntos (mensaje_id, url, mime, tamano_bytes, proveedor_id, nombre, size_bytes, path)
+        SELECT
+            v_mensaje_id,
+            NULLIF(elem->>'url', ''),
+            NULLIF(elem->>'mime', ''),
+            NULLIF(elem->>'size', '')::bigint,
+            NULLIF(elem->>'provider_id', ''),
+            NULLIF(elem->>'name', ''),
+            NULLIF(elem->>'size', '')::bigint,
+            NULLIF(elem->>'path', '')
+        FROM jsonb_array_elements(p_attachments) AS elem;
+
+        UPDATE public.mensajes
+           SET cantidad_medios = (
+               SELECT COUNT(*) FROM public.adjuntos WHERE public.adjuntos.mensaje_id = v_mensaje_id
+           )
+         WHERE id = v_mensaje_id;
+    END IF;
 
     IF v_direction = 'saliente' THEN
         v_conv_openai := COALESCE(v_conv_openai, NULLIF((p_metadata->>'openai_conversation_id'), ''));
@@ -3441,10 +3524,10 @@ $$;
 
 
 --
--- Name: FUNCTION registrar_mensaje_webchat(p_session_id text, p_author text, p_content text, p_response_id text, p_metadata jsonb, p_inactivity_hours integer); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION registrar_mensaje_webchat(p_session_id text, p_author text, p_content text, p_response_id text, p_metadata jsonb, p_inactivity_hours integer, p_attachments jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.registrar_mensaje_webchat(p_session_id text, p_author text, p_content text, p_response_id text, p_metadata jsonb, p_inactivity_hours integer) IS 'Registra mensajes del webchat, garantiza el vínculo con contactos, reinicia conversación si han pasado >24h y persiste el conversation_id de OpenAI (conv_...).';
+COMMENT ON FUNCTION public.registrar_mensaje_webchat(p_session_id text, p_author text, p_content text, p_response_id text, p_metadata jsonb, p_inactivity_hours integer, p_attachments jsonb) IS 'Registra mensajes del webchat con soporte de adjuntos y mantiene la conversación sincronizada.';
 
 
 --
@@ -6245,7 +6328,11 @@ CREATE TABLE public.adjuntos (
     url text,
     mime text,
     tamano_bytes bigint,
-    proveedor_id text
+    proveedor_id text,
+    nombre text,
+    size_bytes bigint,
+    path text,
+    creado_en timestamp with time zone DEFAULT now()
 );
 
 
@@ -10155,6 +10242,20 @@ CREATE POLICY adjuntos_admin_todo ON public.adjuntos USING (public.es_admin(auth
 
 
 --
+-- Name: adjuntos adjuntos_insert_visible; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY adjuntos_insert_visible ON public.adjuntos FOR INSERT TO authenticated WITH CHECK (public.puede_ver_mensaje(mensaje_id));
+
+
+--
+-- Name: adjuntos adjuntos_select_visible; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY adjuntos_select_visible ON public.adjuntos FOR SELECT TO authenticated USING (public.puede_ver_mensaje(mensaje_id));
+
+
+--
 -- Name: busquedas; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -10913,5 +11014,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict TZMf7XKWsYfqrhFddJeIbnROhrctDVo2kX2toTDhTNQUnXlDr1G4zUvF8lps4eI
+\unrestrict 3UkUu82kHrx7fukIi5r9hGJw3vWkeYD8hBX0qYot6wEBiyhbLACRfZc8khuyr0Z
 

@@ -11,6 +11,7 @@ import {
 } from "@tabler/icons-react";
 
 import type { InboxThread, InboxMessage } from "@/lib/inbox/data";
+import type { InboxAttachment } from "@/lib/inbox/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ type InboxReplyPayload = {
   reply?: string | null;
   metadata?: ReplyMetadata;
   messages?: unknown;
+  attachments?: InboxAttachment[];
   error?: string;
   detail?: string;
   message?: string;
@@ -42,6 +44,8 @@ type ManualToggleResponse = {
   message?: string;
 };
 
+type PendingAttachment = InboxAttachment & { id: string };
+
 function parseReplyPayload(raw: string): InboxReplyPayload {
   if (!raw) return {};
   try {
@@ -54,6 +58,9 @@ function parseReplyPayload(raw: string): InboxReplyPayload {
       typeof record.metadata === "object" && record.metadata !== null
         ? (record.metadata as ReplyMetadata)
         : undefined;
+    const attachments = Array.isArray(record.attachments)
+      ? (record.attachments as InboxAttachment[])
+      : undefined;
     return {
       ok: typeof record.ok === "boolean" ? record.ok : undefined,
       reply:
@@ -62,6 +69,7 @@ function parseReplyPayload(raw: string): InboxReplyPayload {
           : undefined,
       metadata,
       messages: record.messages,
+      attachments,
       error: typeof record.error === "string" ? record.error : undefined,
       detail: typeof record.detail === "string" ? record.detail : undefined,
       message: typeof record.message === "string" ? record.message : undefined,
@@ -136,6 +144,9 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const [manualToggling, setManualToggling] = React.useState(false);
   const [manualToggleError, setManualToggleError] = React.useState<string | null>(null);
   const [currentMessages, setCurrentMessages] = React.useState<InboxMessage[]>(threads[0]?.messages ?? []);
+  const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
+  const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
   const threadsRefreshingRef = React.useRef(false);
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -182,6 +193,8 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     setManualToggleError(null);
     setManualToggling(false);
     setCurrentMessages(selectedThread?.messages ?? []);
+    setPendingAttachments([]);
+    setAttachmentError(null);
   }, [selectedThread?.id, selectedThread?.messages]);
 
   React.useEffect(() => {
@@ -285,6 +298,91 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     [],
   );
 
+  const handleAttachmentUpload = React.useCallback(
+    async (files: FileList | null) => {
+      if (!files || !selectedThread) {
+        return;
+      }
+      setAttachmentError(null);
+      setUploadingAttachments(true);
+      try {
+        const candidates = Array.from(files);
+        for (const file of candidates) {
+          const formData = new FormData();
+          formData.append("file", file, file.name);
+          formData.append("conversationId", selectedThread.id);
+
+          const response = await fetch(`/api/inbox/uploads`, {
+            method: "POST",
+            body: formData,
+            cache: "no-store",
+          });
+
+          const text = await response.text();
+          let payload: Record<string, unknown> = {};
+          try {
+            payload = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+          } catch (error) {
+            console.error("[inbox] attach upload parse fail", error);
+            throw new Error("upload_failed");
+          }
+
+          if (!response.ok) {
+            const message = typeof payload.error === "string" ? payload.error : "upload_failed";
+            throw new Error(message);
+          }
+
+          const urlField = payload.url;
+          const url = typeof urlField === "string" && urlField.length ? urlField : null;
+          if (!url) {
+            throw new Error("upload_missing_url");
+          }
+
+          const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          const sizeValue = payload.size;
+          let size: number | undefined = undefined;
+          if (typeof sizeValue === "number") {
+            size = Math.trunc(sizeValue);
+          } else if (typeof sizeValue === "string") {
+            const parsed = Number(sizeValue);
+            if (!Number.isNaN(parsed)) {
+              size = Math.trunc(parsed);
+            }
+          } else if (typeof file.size === "number") {
+            size = file.size;
+          }
+
+          const newAttachment: PendingAttachment = {
+            id,
+            url,
+            name: typeof payload.name === "string" && payload.name.length ? payload.name : file.name,
+            mime: typeof payload.mime === "string" && payload.mime.length ? payload.mime : file.type,
+            size,
+            provider_id: typeof payload.provider_id === "string" ? payload.provider_id : undefined,
+            path: typeof payload.path === "string" ? payload.path : undefined,
+          };
+
+          setPendingAttachments((current) => [...current, newAttachment]);
+        }
+      } catch (error) {
+        console.error("[inbox] attachment upload failed", error);
+        const message =
+          error instanceof Error && error.message && !error.message.startsWith("upload_")
+            ? error.message
+            : "No se pudo cargar uno o más archivos. Inténtalo nuevamente.";
+        setAttachmentError(message);
+      } finally {
+        setUploadingAttachments(false);
+      }
+    },
+    [selectedThread],
+  );
+
+  const handleAttachmentRemove = React.useCallback((id: string) => {
+    setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id));
+    setAttachmentError((prev) => (prev ? null : prev));
+  }, []);
+
   React.useEffect(() => {
     if (!selectedThread) {
       messagesRefreshingRef.current = null;
@@ -311,7 +409,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   }, [selectedThread, refreshMessages]);
 
   const handleSendMessage = React.useCallback(
-    async (content: string) => {
+    async (content: string, outgoingAttachments: PendingAttachment[]) => {
       const targetThread = threadItems.find((thread) => thread.id === selectedId);
       if (!targetThread) {
         return false;
@@ -323,7 +421,17 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         const response = await fetch(`/api/inbox/${targetThread.id}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({
+            content,
+            attachments: outgoingAttachments.map((attachment) => ({
+              url: attachment.url,
+              name: attachment.name,
+              mime: attachment.mime,
+              size: attachment.size,
+              provider_id: attachment.provider_id ?? attachment.path ?? null,
+              path: attachment.path ?? null,
+            })),
+          }),
         });
 
         const text = await response.text();
@@ -336,6 +444,8 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         }
 
         const messages = extractMessages(payload);
+        setPendingAttachments([]);
+        setAttachmentError(null);
         if (messages.length) {
           setCurrentMessages(messages);
         }
@@ -586,6 +696,26 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                             <p key={index}>{paragraph}</p>
                           ))}
                         </div>
+                        {message.attachments.length ? (
+                          <div className="mt-2 flex w-full max-w-xl flex-col gap-1 text-xs">
+                            {message.attachments.map((attachment) => (
+                              <a
+                                key={attachment.id ?? attachment.url}
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 rounded-md border border-muted bg-background/80 px-3 py-2 text-muted-foreground hover:text-foreground"
+                              >
+                                <span className="truncate">{attachment.name ?? attachment.url}</span>
+                                {attachment.size ? (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {(attachment.size / 1024).toFixed(1)} KB
+                                  </span>
+                                ) : null}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })
@@ -598,8 +728,13 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
             <InboxComposer
               placeholder={`Responder a ${selectedThread.contactoNombre}`}
               pending={sending}
+              uploadingAttachments={uploadingAttachments}
+              attachments={pendingAttachments}
+              attachmentError={attachmentError}
               error={sendError}
               onSend={handleSendMessage}
+              onAttachmentAdd={handleAttachmentUpload}
+              onAttachmentRemove={handleAttachmentRemove}
             />
           </>
         ) : (

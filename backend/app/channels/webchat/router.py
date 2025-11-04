@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 
 from app.core.config import settings
 
@@ -22,6 +22,34 @@ async def post_webchat_message(
 ) -> schemas.MessageResponse:
     """Recibe un mensaje del widget, invoca al asistente y responde."""
     return await service.handle_message(payload, request=request)
+
+
+@router.post(
+    "/uploads",
+    response_model=schemas.UploadResponse,
+    summary="Sube un archivo y devuelve metadatos listos para adjuntar al mensaje",
+)
+async def upload_webchat_file(
+    request: Request,
+    file: UploadFile = File(...),
+    session_id: str | None = Form(default=None, description="Identificador de sesión del widget."),
+    conversation_id: str | None = Form(
+        default=None, description="Conversación asociada cuando existe."
+    ),
+) -> schemas.UploadResponse:
+    if not session_id and not conversation_id:
+        raise HTTPException(status_code=400, detail="session_id_or_conversation_required")
+
+    if conversation_id and not session_id:
+        authorization = request.headers.get("authorization")
+        if not authorization:
+            raise HTTPException(status_code=401, detail="auth_required")
+
+    return await service.upload_attachment(
+        file,
+        session_id=session_id,
+        conversation_id=conversation_id,
+    )
 
 
 @router.get(

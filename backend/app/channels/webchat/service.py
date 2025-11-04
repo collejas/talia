@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, UploadFile, status
 from openai import AsyncOpenAI
 
 from app.assistants import registry
@@ -409,6 +409,7 @@ async def handle_message(
         )
 
     metadata_dict = payload.metadata if isinstance(payload.metadata, dict) else None
+    attachments_payload = payload.attachments or []
 
     try:
         registration = await storage.register_webchat_message(
@@ -422,6 +423,7 @@ async def handle_message(
                 "fresh_load": payload.fresh_load,
                 "extra": payload.metadata or {},
             },
+            attachments=[attachment.model_dump(mode="json") for attachment in attachments_payload],
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -454,6 +456,18 @@ async def handle_message(
         client_message_id=payload.client_message_id,
         manual_mode=manual_mode,
     )
+    attachments_models = [
+        schemas.Attachment(
+            id=None,
+            url=attachment.url,
+            mime=attachment.mime,
+            size=attachment.size,
+            name=attachment.name,
+            provider_id=attachment.provider_id,
+            path=attachment.path,
+        )
+        for attachment in attachments_payload
+    ]
 
     if manual_mode:
         log_event(
@@ -462,7 +476,11 @@ async def handle_message(
             conversation_id=str(conversation_id),
             session_id=payload.session_id,
         )
-        return schemas.MessageResponse(reply=None, metadata=metadata)
+        return schemas.MessageResponse(
+            reply=None,
+            metadata=metadata,
+            attachments=attachments_models or None,
+        )
 
     contact_id = conversation_meta.get("contact_id")
     if not contact_id:
@@ -565,7 +583,11 @@ async def handle_message(
                 },
             )
 
-    return schemas.MessageResponse(reply=assistant_reply, metadata=metadata)
+    return schemas.MessageResponse(
+        reply=assistant_reply,
+        metadata=metadata,
+        attachments=attachments_models or None,
+    )
 
 
 async def append_manual_agent_context(
@@ -726,6 +748,46 @@ async def fetch_history(session_id: str, limit: int) -> schemas.HistoryResponse:
                 metadata = json.loads(raw_metadata)
             except json.JSONDecodeError:
                 metadata = None
+
+        raw_attachments = row.get("attachments") or row.get("adjuntos")
+        attachments: list[schemas.Attachment] = []
+
+        candidate_sources: list[Any] = []
+        if raw_attachments is not None:
+            candidate_sources.append(raw_attachments)
+        if metadata and isinstance(metadata.get("attachments"), list):
+            candidate_sources.append(metadata.get("attachments"))
+
+        for source in candidate_sources:
+            if not isinstance(source, list):
+                continue
+            for item in source:
+                if not isinstance(item, dict):
+                    continue
+                size_value = item.get("size")
+                size_int: int | None = None
+                if isinstance(size_value, (int, float)):
+                    size_int = int(size_value)
+                elif isinstance(size_value, str):
+                    try:
+                        size_int = int(size_value)
+                    except ValueError:
+                        size_int = None
+                url_value = item.get("url")
+                if not url_value:
+                    continue
+                attachments.append(
+                    schemas.Attachment(
+                        id=str(item.get("id")) if item.get("id") else None,
+                        url=str(url_value),
+                        mime=item.get("mime"),
+                        size=size_int,
+                        name=item.get("name"),
+                        provider_id=item.get("provider_id"),
+                        path=item.get("path"),
+                    )
+                )
+
         messages.append(
             schemas.HistoryMessage(
                 id=str(row.get("id")),
@@ -733,6 +795,7 @@ async def fetch_history(session_id: str, limit: int) -> schemas.HistoryResponse:
                 content=row.get("texto") or "",
                 created_at=row.get("creado_en"),
                 metadata=metadata,
+                attachments=attachments,
             )
         )
 
@@ -741,6 +804,46 @@ async def fetch_history(session_id: str, limit: int) -> schemas.HistoryResponse:
         messages=messages,
         manual_mode=bool(conversation.get("manual_override")),
     )
+
+
+async def upload_attachment(
+    file: UploadFile,
+    *,
+    session_id: str | None = None,
+    conversation_id: str | None = None,
+) -> schemas.UploadResponse:
+    """Recibe un archivo y lo almacena en el bucket designado."""
+
+    resolved_conversation_id: str | None = conversation_id
+
+    if not resolved_conversation_id and session_id:
+        try:
+            conversation_meta = await storage.resolve_webchat_conversation_from_session(session_id)
+        except storage.StorageError as exc:
+            logger.exception(
+                "webchat.upload.resolve_failed",
+                extra={"session_id": session_id, "error": str(exc)},
+            )
+            raise HTTPException(
+                status_code=502, detail="No se pudo obtener la conversación"
+            ) from exc
+        if conversation_meta:
+            resolved_conversation_id = conversation_meta.get("id")
+
+    try:
+        uploaded = await storage.upload_webchat_attachment(
+            file=file,
+            session_id=session_id,
+            conversation_id=resolved_conversation_id,
+        )
+    except storage.StorageError as exc:
+        logger.exception(
+            "webchat.upload_failed",
+            extra={"error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="No se pudo cargar el archivo") from exc
+
+    return schemas.UploadResponse(**uploaded)
 
 
 async def close_session(

@@ -921,6 +921,35 @@ body.theme-ice .intro p .callout {
   white-space: pre-wrap;
 }
 
+.message__attachments {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.message__attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.05);
+  color: inherit;
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.message__attachment:hover {
+  text-decoration: underline;
+}
+
+.message__attachment-size {
+  font-size: 0.7rem;
+  color: var(--muted-text, #475569);
+}
+
 .message strong {
   color: var(--accent);
   font-weight: 600;
@@ -999,14 +1028,21 @@ body.theme-ice .intro p .callout {
 
 .composer-form {
   display: flex;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.6rem;
   background: var(--surface);
-  border-radius: 999px;
-  padding: 0.35rem 0.4rem;
+  border-radius: 1.25rem;
+  padding: 0.6rem 0.75rem;
   border: 0.8px solid var(--border);
 }
 
-.composer-form input {
+.composer-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.composer-input-row input {
   flex: 1;
   border: none;
   background: transparent;
@@ -1015,23 +1051,99 @@ body.theme-ice .intro p .callout {
   padding: 0.75rem 1rem;
 }
 
-.composer-form input:focus {
+.composer-input-row input:focus {
   outline: none;
 }
 
-.composer-form button {
+.composer-input-row button {
   border: none;
   border-radius: 999px;
   padding: 0.75rem 1.4rem;
   font-weight: 600;
-  background: var(--accent-gradient);
-  color: #0f172a;
   cursor: pointer;
   transition: transform var(--transition-fast);
 }
 
-.composer-form button:hover {
+#chat-submit {
+  background: var(--accent-gradient);
+  color: #0f172a;
+}
+
+#chat-submit:hover {
   transform: translateY(-1px);
+}
+
+.composer-attach {
+  background: var(--surface-secondary, rgba(15, 23, 42, 0.05));
+  color: var(--muted-text, #475569);
+}
+
+.composer-attach:hover {
+  transform: translateY(-1px);
+}
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.composer-attachments__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.composer-attachments__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.04);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--muted-text, #475569);
+}
+
+.composer-attachments__item span {
+  max-width: 140px;
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-attachments__size {
+  font-size: 0.68rem;
+  color: var(--muted-text, #475569);
+}
+
+.composer-attachments__remove {
+  border: none;
+  background: transparent;
+  color: var(--muted-text, #475569);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0.1rem;
+}
+
+.composer-attachments__remove:hover {
+  color: var(--text);
+}
+
+.composer-attachments__error,
+.composer-attachments__uploading {
+  width: 100%;
+  font-size: 0.75rem;
+}
+
+.composer-attachments__error {
+  color: var(--destructive, #dc2626);
+}
+
+.composer-attachments__uploading {
+  color: var(--muted-text, #475569);
 }
 
 .site-footer {
@@ -1216,19 +1328,27 @@ body.theme-ice .intro p .callout {
   }
 
   .composer-form {
-    flex-direction: row;
-    border-radius: 999px;
-    padding: 0.25rem 0.35rem;
-    gap: 0.5rem;
+    border-radius: 1rem;
+    padding: 0.4rem 0.6rem;
+    gap: 0.45rem;
   }
 
-  .composer-form input {
+  .composer-input-row {
+    gap: 0.55rem;
+  }
+
+  .composer-input-row input {
     padding: 0.6rem 0.8rem;
   }
 
-  .composer-form button {
+  .composer-input-row button {
     width: auto;
     padding: 0.6rem 1rem;
+  }
+
+  .composer-attachments__item {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.6rem;
   }
 
   /* En móvil, el área legal se oculta y el alto efectivo del composer es menor */

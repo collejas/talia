@@ -249,14 +249,20 @@
           Talia Es La inteligencia que entiende tu lenguaje de negocio!!!
         </div>
         <form id="chat-form" class="composer-form" autocomplete="off">
-          <input
-            id="chat-input"
-            type="text"
-            name="message"
-            placeholder="Escribe tu pregunta"
-            required
-          />
-          <button type="submit">Enviar</button>
+          <div class="composer-input-row">
+            <button type="button" id="chat-attachment-button" class="composer-attach" aria-label="Adjuntar archivo">
+              Adjuntar
+            </button>
+            <input
+              id="chat-input"
+              type="text"
+              name="message"
+              placeholder="Escribe tu pregunta"
+            />
+            <button type="submit" id="chat-submit">Enviar</button>
+          </div>
+          <input type="file" id="chat-file-input" class="composer-file-input" multiple hidden />
+          <div id="chat-attachments" class="composer-attachments" aria-live="polite"></div>
         </form>
       </div>
     </section>

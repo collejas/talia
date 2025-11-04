@@ -36,7 +36,7 @@ class ManualOverridePayload(BaseModel):
 class ConversationReplyPayload(BaseModel):
     """Payload para enviar mensajes desde el panel y recibir respuesta del asistente."""
 
-    content: str = Field(..., min_length=1, max_length=4000)
+    content: str | None = Field(default=None, max_length=4000)
     locale: str | None = Field(
         default=None, description="Locale del panel (ej. es-MX) para informar al asistente."
     )
@@ -47,6 +47,10 @@ class ConversationReplyPayload(BaseModel):
         default=None,
         max_length=120,
         description="Identificador generado en el cliente para evitar duplicados.",
+    )
+    attachments: list[webchat_schemas.AttachmentPayload] | None = Field(
+        default=None,
+        description="Archivos adjuntos previamente cargados.",
     )
 
 
@@ -1727,8 +1731,13 @@ async def reply_conversation(
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
 
-    content = payload.content.strip()
-    if not content:
+    content_raw = payload.content or ""
+    content = content_raw.strip()
+    has_attachments = bool(payload.attachments)
+    attachments_payload = [
+        attachment.model_dump(mode="json") for attachment in (payload.attachments or [])
+    ]
+    if not content and not has_attachments:
         raise HTTPException(status_code=422, detail="message_required")
 
     try:
@@ -1763,6 +1772,7 @@ async def reply_conversation(
         client_message_id=client_message_id,
         locale=payload.locale,
         metadata=payload.metadata,
+        attachments=payload.attachments,
     )
 
     manual_override = bool(conversation_meta.get("manual_override"))
@@ -1801,6 +1811,7 @@ async def reply_conversation(
                 content=content,
                 inactivity_hours=settings.webchat_inactivity_hours,
                 metadata=extra_metadata,
+                attachments=attachments_payload,
             )
         except storage.StorageError as exc:
             logger.exception(
@@ -1838,6 +1849,8 @@ async def reply_conversation(
             "session_id": session_id,
             "contact_id": str(contact_id),
         }
+        if attachments_payload:
+            metadata["attachments"] = attachments_payload
         return {
             "ok": True,
             "reply": None,

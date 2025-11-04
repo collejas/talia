@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import httpx
+from fastapi import UploadFile
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -26,6 +29,7 @@ async def register_webchat_message(
     response_id: str | None = None,
     metadata: dict[str, Any] | None = None,
     inactivity_hours: int | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, str | None]:
     """Invoca la función RPC `registrar_mensaje_webchat` y retorna IDs clave."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -49,6 +53,8 @@ async def register_webchat_message(
         payload["p_response_id"] = response_id
     if inactivity_hours is not None:
         payload["p_inactivity_hours"] = inactivity_hours
+    if attachments:
+        payload["p_attachments"] = attachments
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -585,7 +591,7 @@ async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list
         "Authorization": f"Bearer {settings.supabase_service_role}",
     }
     params = {
-        "select": "id,direccion,texto,creado_en,datos",
+        "select": "id,direccion,texto,creado_en,datos,attachments:adjuntos(id,url,mime,tamano_bytes,size_bytes,proveedor_id,nombre,path)",
         "conversacion_id": f"eq.{conversation_id}",
         "order": "creado_en.asc",
         "limit": str(limit),
@@ -608,6 +614,75 @@ async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list
     if not isinstance(data, list):
         return []
     return data  # type: ignore[return-value]
+
+
+async def upload_webchat_attachment(
+    *,
+    file: UploadFile,
+    session_id: str | None,
+    conversation_id: str | None,
+) -> dict[str, Any]:
+    """Sube un adjunto al bucket `webchat` y devuelve metadatos normalizados."""
+
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    content = await file.read()
+    if not content:
+        raise StorageError("El archivo a subir está vacío")
+
+    original_name = file.filename or "adjunto"
+    safe_name = Path(original_name).name
+    extension = Path(safe_name).suffix
+    prefix = conversation_id or session_id or "general"
+    key = f"{prefix}/{uuid4().hex}{extension}"
+
+    base_url = settings.supabase_url.rstrip("/")
+    upload_url = f"{base_url}/storage/v1/object/webchat/{key}"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": file.content_type or "application/octet-stream",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                upload_url,
+                headers=headers,
+                content=content,
+                params={"upsert": "true"},
+            )
+    except httpx.RequestError as exc:  # pragma: no cover - errores de red reales
+        msg = f"Error de red al subir adjunto: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al guardar adjunto"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    public_path = (
+        response.json().get("Key")
+        if response.headers.get("content-type") == "application/json"
+        else None
+    )
+    if not public_path:
+        public_path = f"webchat/{key}" if not str(key).startswith("webchat/") else key
+    public_url = f"{base_url}/storage/v1/object/public/{public_path}"
+
+    return {
+        "url": public_url,
+        "name": safe_name,
+        "mime": file.content_type,
+        "size": len(content),
+        "provider_id": public_path,
+        "path": public_path,
+    }
 
 
 async def fetch_contact(contact_id: str) -> dict[str, Any]:
