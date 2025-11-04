@@ -300,8 +300,8 @@ function createMessageElement(text, role = 'assistant', metadata = null, attachm
       item.href = attachment.url;
       item.target = '_blank';
       item.rel = 'noopener noreferrer';
-      const name = typeof attachment.name === 'string' && attachment.name.length ? attachment.name : attachment.url;
-      item.textContent = name;
+      const displayName = resolveAttachmentName(attachment);
+      item.textContent = displayName;
       if (attachment.size) {
         const size = document.createElement('span');
         size.className = 'message__attachment-size';
@@ -327,6 +327,29 @@ function createAttachmentId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function resolveAttachmentName(attachment) {
+  if (!attachment) return 'Archivo adjunto';
+  if (typeof attachment.name === 'string' && attachment.name.trim().length) {
+    return attachment.name.trim();
+  }
+  if (typeof attachment.path === 'string' && attachment.path.trim().length) {
+    const base = attachment.path.split('/').pop();
+    if (base && base.length) return base;
+  }
+  if (typeof attachment.url === 'string' && attachment.url.trim().length) {
+    try {
+      const decoded = decodeURIComponent(attachment.url);
+      const withoutQuery = decoded.split('?')[0];
+      const filename = withoutQuery.split('/').pop();
+      if (filename && filename.length) return filename;
+    } catch (_) {
+      // ignore decode errors
+    }
+    return attachment.url;
+  }
+  return 'Archivo adjunto';
 }
 
 function updateComposerState() {
@@ -355,7 +378,7 @@ function renderPendingAttachments() {
       item.className = 'composer-attachments__item';
 
       const name = document.createElement('span');
-      name.textContent = attachment.name || attachment.url;
+      name.textContent = resolveAttachmentName(attachment);
       item.appendChild(name);
 
       if (attachment.size) {
