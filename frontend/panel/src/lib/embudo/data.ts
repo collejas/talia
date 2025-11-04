@@ -34,6 +34,7 @@ export type EmbudoCard = {
 
 export type EmbudoData = {
   stages: EmbudoStage[];
+  sinConversacion: EmbudoCard[];
   errors: string[];
 };
 
@@ -80,27 +81,20 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
   const errors: string[] = [];
   if (!lista.ok) errors.push(lista.error);
 
-  const stages = mapStages(lista.ok ? lista.data : []);
-  return { stages, errors };
+  const { stages, sinConversacion } = mapStages(lista.ok ? lista.data : []);
+  return { stages, sinConversacion, errors };
 }
 
-function mapStages(rows: LeadListRow[] | undefined): EmbudoStage[] {
-  if (!rows || !rows.length) return [];
+function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; sinConversacion: EmbudoCard[] } {
+  if (!rows || !rows.length) {
+    return { stages: [], sinConversacion: [] };
+  }
+
   const stageMap = new Map<string, EmbudoStage>();
+  const sinConversacion: EmbudoCard[] = [];
 
   for (const row of rows) {
-    const stageId = row.etapa_id;
-    if (!stageMap.has(stageId)) {
-      stageMap.set(stageId, {
-        id: stageId,
-        nombre: row.etapa_nombre,
-        categoria: row.categoria,
-        tarjetas: [],
-      });
-    }
-
-    const stage = stageMap.get(stageId)!;
-    stage.tarjetas.push({
+    const tarjeta: EmbudoCard = {
       tarjetaId: row.tarjeta_id,
       contactoId: row.contacto_id,
       nombre: row.contacto_nombre?.trim() || "Lead sin nombre",
@@ -119,13 +113,36 @@ function mapStages(rows: LeadListRow[] | undefined): EmbudoStage[] {
       actualizadoEn: row.actualizado_en,
       etiquetas: row.tags ?? [],
       metadata: row.metadata ?? {},
-    });
+    };
+
+    if (!row.conversacion_id) {
+      sinConversacion.push(tarjeta);
+      continue;
+    }
+
+    const stage = ensureStage(stageMap, row.etapa_id, row.etapa_nombre, row.categoria);
+    stage.tarjetas.push(tarjeta);
   }
 
   for (const stage of stageMap.values()) {
     stage.tarjetas.sort((a, b) => (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) - (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0));
   }
 
-  const orderedStages = Array.from(stageMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  return orderedStages;
+  const orderedStages = Array.from(stageMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+
+  sinConversacion.sort((a, b) => (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) - (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0));
+
+  return { stages: orderedStages, sinConversacion };
+}
+
+function ensureStage(map: Map<string, EmbudoStage>, id: string, nombre: string, categoria: string): EmbudoStage {
+  if (!map.has(id)) {
+    map.set(id, {
+      id,
+      nombre,
+      categoria,
+      tarjetas: [],
+    });
+  }
+  return map.get(id)!;
 }
