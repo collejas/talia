@@ -17,8 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InboxComposer } from "@/components/inbox/composer";
 
-const THREADS_REFRESH_INTERVAL_MS = 12000;
-const MESSAGES_REFRESH_INTERVAL_MS = 7000;
+const THREADS_REFRESH_INTERVAL_MS = 1600;
+const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 
 const SERVER_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   hour: "2-digit",
