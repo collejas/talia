@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 from uuid import uuid4
 
 import httpx
@@ -19,6 +19,38 @@ logger = get_logger(__name__)
 
 class StorageError(RuntimeError):
     """Errores de persistencia para servicios externos."""
+
+
+def _normalize_manual_override(raw: Any) -> bool:
+    """Normaliza diferentes formas de representar manual_override."""
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    if isinstance(raw, str):
+        lowered = raw.strip().lower()
+        if lowered in {"true", "t", "1", "yes", "y"}:
+            return True
+        if lowered in {"false", "f", "0", "no", "n", ""}:
+            return False
+        return False
+    if isinstance(raw, dict):
+        if "manual_override" in raw:
+            return _normalize_manual_override(raw.get("manual_override"))
+        # Si viene anidado con otra clave, intenta con el primer valor.
+        for value in raw.values():
+            normalized = _normalize_manual_override(value)
+            if normalized:
+                return True
+        return False
+    if isinstance(raw, Iterable):
+        for item in raw:
+            if _normalize_manual_override(item):
+                return True
+        return False
+    return False
 
 
 async def register_webchat_message(
@@ -123,10 +155,8 @@ async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
     if not isinstance(data, list) or not data:
         raise StorageError(f"Conversación {conversation_id} no encontrada")
     row = data[0]
-    ctrl = row.get("conversaciones_controles") or []
-    manual_override = False
-    if isinstance(ctrl, list) and ctrl:
-        manual_override = bool(ctrl[0].get("manual_override"))
+    ctrl = row.get("conversaciones_controles")
+    manual_override = _normalize_manual_override(ctrl)
     return {
         "id": row.get("id"),
         "contact_id": row.get("contacto_id"),
@@ -267,10 +297,8 @@ async def resolve_webchat_conversation_from_session(session_id: str) -> dict[str
     if not isinstance(conv_data, list) or not conv_data:
         return None
     row = conv_data[0]
-    ctrl = row.get("conversaciones_controles") or []
-    manual_override = False
-    if isinstance(ctrl, list) and ctrl:
-        manual_override = bool(ctrl[0].get("manual_override"))
+    ctrl = row.get("conversaciones_controles")
+    manual_override = _normalize_manual_override(ctrl)
     return {
         "id": row.get("id"),
         "contact_id": row.get("contacto_id"),
