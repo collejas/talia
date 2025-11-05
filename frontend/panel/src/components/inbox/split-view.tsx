@@ -17,8 +17,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InboxComposer } from "@/components/inbox/composer";
 
-const THREADS_REFRESH_INTERVAL_MS = 6000;
-const MESSAGES_REFRESH_INTERVAL_MS = 4000;
+const THREADS_REFRESH_INTERVAL_MS = 12000;
+const MESSAGES_REFRESH_INTERVAL_MS = 7000;
+
+const SERVER_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+const SERVER_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+const CLIENT_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const CLIENT_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 type ReplyMetadata = {
   manual_mode?: boolean;
@@ -45,6 +68,22 @@ type ManualToggleResponse = {
 };
 
 type PendingAttachment = InboxAttachment & { id: string };
+
+function formatShortTimeLabel(timestamp: string | null | undefined, hydrated: boolean): string {
+  if (!timestamp) return "—";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "—";
+  const formatter = hydrated ? CLIENT_SHORT_TIME_FORMAT : SERVER_SHORT_TIME_FORMAT;
+  return formatter.format(date);
+}
+
+function formatFullTimeLabel(timestamp: string | null | undefined, hydrated: boolean): string {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  const formatter = hydrated ? CLIENT_FULL_TIME_FORMAT : SERVER_FULL_TIME_FORMAT;
+  return formatter.format(date);
+}
 
 function parseReplyPayload(raw: string): InboxReplyPayload {
   if (!raw) return {};
@@ -147,6 +186,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = React.useState(false);
   const threadsRefreshingRef = React.useRef(false);
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -196,6 +236,10 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     setPendingAttachments([]);
     setAttachmentError(null);
   }, [selectedThread?.id, selectedThread?.messages]);
+
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   React.useEffect(() => {
     const container = messagesContainerRef.current;
@@ -564,12 +608,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 const isActive = thread.id === selectedId;
                 const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
                 const unread = thread.noLeidos > 0;
-                const formattedTime = (() => {
-                  if (!displayTime) return "—";
-                  const parsed = new Date(displayTime);
-                  if (Number.isNaN(parsed.getTime())) return "—";
-                  return parsed.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-                })();
+                const formattedTime = formatShortTimeLabel(displayTime, isHydrated);
                 return (
                   <li key={thread.id}>
                     <button
@@ -680,15 +719,16 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 </div>
               ) : null}
               <div className="flex flex-col gap-4">
-                {currentMessages.length ? (
-                  currentMessages.map((message) => {
-                    const isAgent = message.role === "usuario";
-                    return (
-                      <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">{message.author}</span>
-                          <span>{new Date(message.timestamp).toLocaleString("es-MX", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</span>
-                        </div>
+              {currentMessages.length ? (
+                currentMessages.map((message) => {
+                  const isAgent = message.role === "usuario";
+                  const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
+                  return (
+                    <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{message.author}</span>
+                        <span>{timestampLabel || "—"}</span>
+                      </div>
                         <div
                           className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
                         >

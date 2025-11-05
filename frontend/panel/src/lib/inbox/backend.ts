@@ -54,7 +54,11 @@ export function fallbackErrorFromText(text: string): string | undefined {
   return trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
 }
 
-export function buildBackendTargets(baseUrl: string, conversationId: string, endpoint: "responder" | "manual"): string[] {
+export function buildBackendTargets(
+  baseUrl: string,
+  conversationId: string,
+  endpoint: "responder" | "manual" | "mensajes",
+): string[] {
   const trimmed = baseUrl.replace(/\/+$/, "");
   const targets = new Set<string>();
 

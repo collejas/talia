@@ -1693,20 +1693,69 @@ async def get_messages(
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
     params = {
-        "select": "id,direccion,tipo_contenido,texto,creado_en,datos",
+        "select": (
+            "id,direccion,tipo_contenido,texto,creado_en,datos,"
+            "attachments:adjuntos(id,url,mime,tamano_bytes,size_bytes,proveedor_id,nombre,path)"
+        ),
         "conversacion_id": f"eq.{conversacion_id}",
         "order": "creado_en.asc",
         "limit": str(limit),
     }
     resp = await _sb_get("/rest/v1/mensajes", params=params, token=token)
-    if resp.status_code >= 400:
+    if resp.status_code >= 500:
         raise HTTPException(status_code=502, detail="Error consultando mensajes")
+    if resp.status_code >= 400:
+        logger.warning(
+            "panel.inbox.messages_denied",
+            extra={
+                "status_code": resp.status_code,
+                "conversation_id": conversacion_id,
+                "supabase_body": resp.text[:300],
+            },
+        )
+        return {"ok": True, "items": []}
     raw = resp.json() or []
     items: list[dict[str, Any]] = []
     for row in raw:
         datos = row.get("datos") or {}
         sender_type = datos.get("sender_type")
         metadata = datos if isinstance(datos, dict) else {}
+        raw_attachments = row.get("attachments") or []
+        attachments: list[dict[str, Any]] = []
+        if isinstance(raw_attachments, list):
+            for attachment in raw_attachments:
+                if not isinstance(attachment, dict):
+                    continue
+                url = attachment.get("url")
+                if not url:
+                    continue
+                size_value = (
+                    attachment.get("size")
+                    or attachment.get("size_bytes")
+                    or attachment.get("tamano_bytes")
+                )
+                size: int | None = None
+                if isinstance(size_value, (int, float)):
+                    size = int(size_value)
+                elif isinstance(size_value, str):
+                    try:
+                        size = int(float(size_value))
+                    except (TypeError, ValueError):
+                        size = None
+                name_value = attachment.get("nombre") or attachment.get("name")
+                name = name_value.strip() if isinstance(name_value, str) else None
+                provider_id = attachment.get("proveedor_id") or attachment.get("provider_id")
+                attachments.append(
+                    {
+                        "id": attachment.get("id"),
+                        "url": url,
+                        "mime": attachment.get("mime"),
+                        "size": size,
+                        "name": name,
+                        "provider_id": provider_id,
+                        "path": attachment.get("path"),
+                    }
+                )
         items.append(
             {
                 "id": row.get("id"),
@@ -1716,9 +1765,29 @@ async def get_messages(
                 "creado_en": row.get("creado_en"),
                 "sender_type": sender_type,
                 "metadata": metadata or None,
+                "attachments": attachments or None,
             }
         )
     return {"ok": True, "items": items}
+
+
+@router.get("/inbox/{conversacion_id}/messages")
+async def get_inbox_messages(
+    conversacion_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """
+    Alias compatible con el frontend React (Next.js) que consume `/api/inbox/...`.
+
+    El backend histórico usaba `/api/conversaciones/...`, así que delegamos a esa
+    implementación asegurando que las respuestas sean idénticas.
+    """
+    return await get_messages(
+        conversacion_id=conversacion_id,
+        limit=limit,
+        authorization=authorization,
+    )
 
 
 @router.post("/conversaciones/{conversacion_id}/responder")

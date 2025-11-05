@@ -9,9 +9,7 @@ import {
   fallbackErrorFromText,
   looksLikeHtml,
 } from "@/lib/inbox/backend";
-import { callSupabaseRpc } from "@/lib/inbox/supabase";
-import type { InboxMessageRow } from "@/lib/inbox/data";
-import { mapMessageRows } from "@/lib/inbox/transform";
+import { fetchLatestMessages } from "@/lib/inbox/messages-server";
 
 type ReplyRequestBody = {
   content?: string;
@@ -193,16 +191,12 @@ export async function POST(request: Request, context: unknown) {
     return NextResponse.json({ error: enrichedDetail }, { status: backendResponse.status });
   }
 
-  const messagesRpc = await callSupabaseRpc<InboxMessageRow[]>("panel_inbox_messages", {
-    body: { p_conversacion_id: conversationId, p_limit: 100 },
-  });
-
-  if (!messagesRpc.ok) {
-    const status = messagesRpc.status ?? 500;
-    return NextResponse.json({ error: messagesRpc.error }, { status });
+  const messagesResult = await fetchLatestMessages({ conversationId, limit: 100 });
+  if (!messagesResult.ok) {
+    return NextResponse.json({ error: messagesResult.error }, { status: messagesResult.status });
   }
 
-  const messages = mapMessageRows(messagesRpc.data);
+  const messages = messagesResult.messages;
   return NextResponse.json({
     ok: true,
     reply: backendData.reply ?? null,

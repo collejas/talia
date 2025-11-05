@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { callSupabaseRpc } from "@/lib/inbox/supabase";
-import type { InboxMessageRow } from "@/lib/inbox/data";
-import { mapMessageRows } from "@/lib/inbox/transform";
+import { fetchLatestMessages } from "@/lib/inbox/messages-server";
+import { extractConversationIdFromPath } from "@/lib/inbox/backend";
 
 type RouteContext = {
   params?: {
@@ -12,7 +11,10 @@ type RouteContext = {
 
 export async function GET(request: Request, context: unknown) {
   const routeContext = context as RouteContext;
-  const conversationId = routeContext.params?.conversationId;
+  let conversationId = routeContext.params?.conversationId?.trim() ?? null;
+  if (!conversationId) {
+    conversationId = extractConversationIdFromPath(request.url)?.trim() ?? null;
+  }
   if (!conversationId) {
     return NextResponse.json({ error: "conversation_required" }, { status: 400 });
   }
@@ -25,23 +27,11 @@ export async function GET(request: Request, context: unknown) {
       ? Math.min(500, Math.max(1, Number(limitParam)))
       : 100;
 
-  const body: Record<string, unknown> = {
-    p_conversacion_id: conversationId,
-    p_limit: limit,
-  };
-  if (before) {
-    body.p_before = before;
+  const result = await fetchLatestMessages({ conversationId, limit, before });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  const rpc = await callSupabaseRpc<InboxMessageRow[]>("panel_inbox_messages", {
-    body,
-  });
-
-  if (!rpc.ok) {
-    const status = rpc.status ?? 500;
-    return NextResponse.json({ error: rpc.error }, { status });
-  }
-
-  const messages = mapMessageRows(rpc.data);
+  const messages = result.messages;
   return NextResponse.json({ ok: true, messages });
 }
