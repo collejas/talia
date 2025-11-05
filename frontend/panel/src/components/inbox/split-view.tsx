@@ -85,6 +85,15 @@ function formatFullTimeLabel(timestamp: string | null | undefined, hydrated: boo
   return formatter.format(date);
 }
 
+function fingerprintMessages(items: InboxMessage[]): string {
+  if (!items.length) {
+    return "";
+  }
+  return items
+    .map((item) => `${item.id ?? ""}|${item.timestamp ?? ""}|${item.body?.[0] ?? ""}`)
+    .join("::");
+}
+
 function parseReplyPayload(raw: string): InboxReplyPayload {
   if (!raw) return {};
   try {
@@ -186,10 +195,13 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const [pendingAttachments, setPendingAttachments] = React.useState<PendingAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = React.useState(false);
   const [attachmentError, setAttachmentError] = React.useState<string | null>(null);
+  const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
   const threadsRefreshingRef = React.useRef(false);
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const messagesPollingTimeoutRef = React.useRef<number | null>(null);
+  const lastMessagesFingerprintRef = React.useRef<string>("");
 
   React.useEffect(() => {
     setThreadItems(threads);
@@ -230,11 +242,14 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   }, [selectedId, filteredThreads, threadItems]);
 
   React.useEffect(() => {
+    const initialMessages = selectedThread?.messages ?? [];
     setManualToggleError(null);
     setManualToggling(false);
-    setCurrentMessages(selectedThread?.messages ?? []);
+    setCurrentMessages(initialMessages);
+    lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
     setPendingAttachments([]);
     setAttachmentError(null);
+    setAutoScrollLocked(false);
   }, [selectedThread?.id, selectedThread?.messages]);
 
   React.useEffect(() => {
@@ -242,6 +257,25 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   }, []);
 
   React.useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const SCROLL_THRESHOLD_PX = 72;
+    const handleScroll = () => {
+      const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      setAutoScrollLocked(distanceToBottom > SCROLL_THRESHOLD_PX);
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [selectedThread?.id]);
+
+  React.useEffect(() => {
+    if (autoScrollLocked) return;
     const container = messagesContainerRef.current;
     if (!container) return;
     const scrollToBottom = () => {
@@ -255,7 +289,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     } else {
       scrollToBottom();
     }
-  }, [currentMessages, selectedThread?.id]);
+  }, [currentMessages, selectedThread?.id, autoScrollLocked]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -298,11 +332,15 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   }, []);
 
   const refreshMessages = React.useCallback(
-    async (conversationId: string) => {
+    async (conversationId: string, options: { force?: boolean } = {}) => {
       if (!conversationId) return;
       if (messagesRefreshingRef.current === conversationId) {
         return;
       }
+      if (!options.force && (uploadingAttachments || pendingAttachments.length > 0 || sending)) {
+        return;
+      }
+
       messagesRefreshingRef.current = conversationId;
       try {
         const response = await fetch(`/api/inbox/${conversationId}/messages?limit=100`, {
@@ -313,9 +351,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         }
         const payload = (await response.json()) as { messages?: InboxMessage[] };
         const messages = Array.isArray(payload?.messages) ? (payload.messages as InboxMessage[]) : [];
-        if (!messages.length) {
+        const fingerprint = fingerprintMessages(messages);
+        if (!options.force && fingerprint === lastMessagesFingerprintRef.current) {
           return;
         }
+        lastMessagesFingerprintRef.current = fingerprint;
         setCurrentMessages(messages);
         setThreadItems((current) =>
           current.map((thread) => {
@@ -339,7 +379,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         messagesRefreshingRef.current = null;
       }
     },
-    [],
+    [pendingAttachments.length, uploadingAttachments, sending],
   );
 
   const handleAttachmentUpload = React.useCallback(
@@ -427,30 +467,51 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     setAttachmentError((prev) => (prev ? null : prev));
   }, []);
 
+  const selectedConversationId = selectedThread?.id ?? null;
+
   React.useEffect(() => {
-    if (!selectedThread) {
+    if (!selectedConversationId) {
       messagesRefreshingRef.current = null;
+      setAutoScrollLocked(false);
+      if (messagesPollingTimeoutRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(messagesPollingTimeoutRef.current);
+        messagesPollingTimeoutRef.current = null;
+      }
       return;
     }
 
     let cancelled = false;
-    const conversationId = selectedThread.id;
 
-    refreshMessages(conversationId);
-    const interval = setInterval(() => {
-      if (!cancelled) {
-        refreshMessages(conversationId);
+    const scheduleNext = () => {
+      if (cancelled || typeof window === "undefined") {
+        return;
       }
-    }, MESSAGES_REFRESH_INTERVAL_MS);
+      messagesPollingTimeoutRef.current = window.setTimeout(() => {
+        void refreshMessages(selectedConversationId, { force: false }).finally(() => {
+          if (!cancelled) {
+            scheduleNext();
+          }
+        });
+      }, MESSAGES_REFRESH_INTERVAL_MS);
+    };
+
+    void refreshMessages(selectedConversationId, { force: true }).finally(() => {
+      if (!cancelled) {
+        scheduleNext();
+      }
+    });
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      if (messagesRefreshingRef.current === conversationId) {
+      if (messagesPollingTimeoutRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(messagesPollingTimeoutRef.current);
+        messagesPollingTimeoutRef.current = null;
+      }
+      if (messagesRefreshingRef.current === selectedConversationId) {
         messagesRefreshingRef.current = null;
       }
     };
-  }, [selectedThread, refreshMessages]);
+  }, [selectedConversationId, refreshMessages]);
 
   const handleSendMessage = React.useCallback(
     async (content: string, outgoingAttachments: PendingAttachment[]) => {
@@ -492,6 +553,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         setAttachmentError(null);
         if (messages.length) {
           setCurrentMessages(messages);
+          lastMessagesFingerprintRef.current = fingerprintMessages(messages);
         }
         setThreadItems((current) =>
           current.map((thread) => {

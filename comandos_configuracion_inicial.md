@@ -79,6 +79,8 @@ sudo systemctl start talia-panel.service
 
 sudo systemctl stop talia-panel.service
 
+codex resume 019a5188-8dd9-7df3-acf4-156ef07f115e
+
 npm run lint
 npm run build --webpack
 sudo systemctl restart talia-panel.service
