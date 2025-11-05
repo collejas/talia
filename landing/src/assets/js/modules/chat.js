@@ -396,21 +396,57 @@ function removePendingAttachment(id) {
   updateComposerState();
 }
 
+function coerceAttachmentSize(value) {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length) {
+    const parsed = Number(value.trim());
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 function extractAttachmentsFromMessage(item) {
   if (!item) return [];
   const direct = Array.isArray(item.attachments) ? item.attachments : [];
   const metadataAttachments =
     item.metadata && Array.isArray(item.metadata.attachments) ? item.metadata.attachments : [];
 
-  const all = [...direct, ...metadataAttachments];
-  const seen = new Set();
-  return all.filter((attachment) => {
-    if (!attachment || typeof attachment.url !== 'string') return false;
-    const key = attachment.url + (attachment.name || '');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  const merged = new Map();
+  const sources = [...direct, ...metadataAttachments];
+
+  sources.forEach((attachment) => {
+    if (!attachment || typeof attachment.url !== 'string') return;
+    const url = attachment.url;
+    const existing = merged.get(url) || {};
+
+    const currentSize = coerceAttachmentSize(existing.size);
+    const incomingSize = coerceAttachmentSize(attachment.size);
+    const size = typeof incomingSize === 'number' ? incomingSize : currentSize;
+
+    const name =
+      typeof attachment.name === 'string' && attachment.name.trim().length
+        ? attachment.name.trim()
+        : typeof existing.name === 'string' && existing.name.trim().length
+          ? existing.name
+          : undefined;
+
+    merged.set(url, {
+      ...existing,
+      ...attachment,
+      url,
+      name,
+      size,
+      mime: attachment.mime || existing.mime,
+      provider_id: attachment.provider_id || existing.provider_id,
+      path: attachment.path || existing.path,
+    });
   });
+
+  return Array.from(merged.values());
 }
 
 function handleAttachmentButtonClick(event) {
