@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import HTTPException, Request, UploadFile, status
 from openai import AsyncOpenAI
 
@@ -20,6 +24,27 @@ from . import schemas
 
 logger = get_logger("app.channels.webchat")
 visit_logger = get_logger("app.analytics.visitas")
+
+MAX_ATTACHMENTS_PER_MESSAGE = 3
+MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024  # 8 MB
+MAX_TEXT_ATTACHMENT_CHARS = 4000
+TEXT_MIME_PREFIXES = ("text/",)
+TEXT_MIME_WHITELIST = {
+    "application/json",
+    "application/xml",
+    "application/x-yaml",
+    "application/yaml",
+}
+TEXT_EXTENSION_WHITELIST = {
+    ".txt",
+    ".md",
+    ".markdown",
+    ".csv",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".log",
+}
 
 DEFAULT_FALLBACK = (
     "Tu mensaje quedó registrado, pero tuve un problema momentáneo al responder. "
@@ -103,6 +128,193 @@ def _safe_dict(value: Any) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     return {}
+
+
+def _guess_extension(name: str | None, url: str | None) -> str:
+    candidates: list[str] = []
+    if name:
+        candidates.append(Path(name).suffix.lower())
+    if url:
+        parsed = urlparse(url)
+        candidates.append(Path(parsed.path).suffix.lower())
+    for candidate in candidates:
+        if candidate:
+            return candidate
+    return ""
+
+
+def _is_image_mime(mime: str | None, *, extension: str) -> bool:
+    if not mime and extension:
+        return extension in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff"}
+    return bool(mime and mime.startswith("image/"))
+
+
+def _is_text_attachment(mime: str | None, *, extension: str) -> bool:
+    if mime:
+        if mime.startswith(TEXT_MIME_PREFIXES):
+            return True
+        if mime in TEXT_MIME_WHITELIST:
+            return True
+    if extension in TEXT_EXTENSION_WHITELIST:
+        return True
+    return False
+
+
+def _derive_filename(name: str | None, url: str | None) -> str:
+    if name:
+        return Path(name).name
+    if url:
+        parsed = urlparse(url)
+        candidate = Path(parsed.path).name
+        if candidate:
+            return candidate
+    return "adjunto"
+
+
+def _trim_text_payload(text: str, limit: int) -> tuple[str, bool]:
+    if len(text) <= limit:
+        return text, False
+    return text[:limit], True
+
+
+async def _prepare_user_content_with_attachments(
+    client: AsyncOpenAI,
+    user_message: schemas.MessageRequest,
+) -> list[dict[str, Any]]:
+    """Construye el payload `content` considerando adjuntos compatibles."""
+
+    content_items: list[dict[str, Any]] = [
+        {
+            "type": "input_text",
+            "text": user_message.content,
+        }
+    ]
+    attachments = user_message.attachments or []
+    if not attachments:
+        return content_items
+
+    processed = 0
+    warnings: list[str] = []
+    http_client: httpx.AsyncClient | None = None
+
+    async def _ensure_http_client() -> httpx.AsyncClient:
+        nonlocal http_client
+        if http_client is None:
+            http_client = httpx.AsyncClient(timeout=10.0, follow_redirects=True)
+        return http_client
+
+    try:
+        for attachment in attachments:
+            if processed >= MAX_ATTACHMENTS_PER_MESSAGE:
+                warnings.append(
+                    f"Se ignoraron adjuntos extra; límite {MAX_ATTACHMENTS_PER_MESSAGE} por mensaje."
+                )
+                break
+            url = attachment.url
+            if not url:
+                warnings.append("Se omitió un adjunto sin URL accesible.")
+                continue
+            name = _derive_filename(attachment.name, url)
+            size_hint = attachment.size
+            if size_hint and size_hint > MAX_ATTACHMENT_BYTES:
+                warnings.append(
+                    f"El archivo {name} supera el límite permitido de {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB."
+                )
+                continue
+
+            mime = attachment.mime.lower() if attachment.mime else None
+            extension = _guess_extension(attachment.name, attachment.url)
+
+            if _is_image_mime(mime, extension=extension):
+                content_items.append(
+                    {
+                        "type": "input_image",
+                        "image_url": {"url": url},
+                    }
+                )
+                processed += 1
+                continue
+
+            data_bytes: bytes | None = None
+            try:
+                client_http = await _ensure_http_client()
+                response = await client_http.get(url)
+                response.raise_for_status()
+                data_bytes = response.content
+            except Exception as exc:  # pragma: no cover - dependiente de red
+                logger.warning(
+                    "webchat.attachment_download_failed",
+                    extra={"url": url, "error": str(exc)},
+                )
+                warnings.append(f"No se pudo descargar {name}.")
+                continue
+
+            if len(data_bytes) > MAX_ATTACHMENT_BYTES:
+                warnings.append(
+                    f"El archivo {name} supera el límite permitido de {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB."
+                )
+                continue
+
+            if _is_text_attachment(mime, extension=extension):
+                encoding = "utf-8"
+                try:
+                    text_content = data_bytes.decode(encoding)
+                except UnicodeDecodeError:
+                    text_content = data_bytes.decode("utf-8", errors="replace")
+                trimmed_text, truncated = _trim_text_payload(
+                    text_content, MAX_TEXT_ATTACHMENT_CHARS
+                )
+                if truncated:
+                    trimmed_text += f"\n\n[Nota interna: contenido truncado a {MAX_TEXT_ATTACHMENT_CHARS} caracteres.]"
+                content_items.append(
+                    {
+                        "type": "input_text",
+                        "text": f"Contenido de {name}:\n{trimmed_text}",
+                    }
+                )
+                processed += 1
+                continue
+
+            # Fallback: subir archivo a OpenAI y referenciarlo como input_file
+            file_tuple = (
+                name,
+                io.BytesIO(data_bytes),
+                mime or "application/octet-stream",
+            )
+            try:
+                upload = await client.files.create(file=file_tuple, purpose="assistants")
+            except Exception as exc:  # pragma: no cover - dependiente de API
+                logger.warning(
+                    "webchat.attachment_upload_failed",
+                    extra={"name": name, "error": str(exc)},
+                )
+                warnings.append(f"No se pudo compartir {name} con el asistente.")
+                continue
+
+            content_items.append(
+                {
+                    "type": "input_file",
+                    "file_id": upload.id,
+                }
+            )
+            processed += 1
+    finally:
+        if http_client:
+            await http_client.aclose()
+
+    if warnings:
+        content_items.append(
+            {
+                "type": "input_text",
+                "text": (
+                    "Nota interna: Algunos adjuntos no pudieron procesarse. "
+                    + " ".join(warnings)
+                    + " Pide al visitante que los reenvíe en otro formato."
+                ),
+            }
+        )
+
+    return content_items
 
 
 async def _maybe_enrich_contact_metadata(
@@ -894,10 +1106,28 @@ async def _run_assistant_turn(
     # Elimina claves con valores nulos
     sanitized_metadata = {k: v for k, v in metadata_payload.items() if v is not None}
 
+    try:
+        user_content = await _prepare_user_content_with_attachments(client, user_message)
+    except Exception as exc:  # pragma: no cover - defensivo ante adjuntos inesperados
+        logger.exception(
+            "webchat.build_user_content_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "session_id": context.session_id,
+                "error": str(exc),
+            },
+        )
+        user_content = [
+            {
+                "type": "input_text",
+                "text": user_message.content,
+            }
+        ]
+
     base_input = [
         {
             "role": "user",
-            "content": [{"type": "input_text", "text": user_message.content}],
+            "content": user_content,
         }
     ]
     request_kwargs: dict[str, Any] = {"input": base_input, "store": True}
