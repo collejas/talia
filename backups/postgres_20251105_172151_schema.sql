@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3UkUu82kHrx7fukIi5r9hGJw3vWkeYD8hBX0qYot6wEBiyhbLACRfZc8khuyr0Z
+\restrict qga8B4vq8tbRQ1ob52PLcV7f27r0XdnIb2kmOKB5jPTvlhkYBp7FYl5iqugNM0h
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -5969,7 +5969,8 @@ CREATE TABLE auth.mfa_factors (
     phone text,
     last_challenged_at timestamp with time zone,
     web_authn_credential jsonb,
-    web_authn_aaguid uuid
+    web_authn_aaguid uuid,
+    last_webauthn_challenge_data jsonb
 );
 
 
@@ -5978,6 +5979,13 @@ CREATE TABLE auth.mfa_factors (
 --
 
 COMMENT ON TABLE auth.mfa_factors IS 'auth: stores metadata about factors';
+
+
+--
+-- Name: COLUMN mfa_factors.last_webauthn_challenge_data; Type: COMMENT; Schema: auth; Owner: -
+--
+
+COMMENT ON COLUMN auth.mfa_factors.last_webauthn_challenge_data IS 'Stores the latest WebAuthn challenge data including attestation/assertion for customer verification';
 
 
 --
@@ -6193,7 +6201,9 @@ CREATE TABLE auth.sessions (
     user_agent text,
     ip inet,
     tag text,
-    oauth_client_id uuid
+    oauth_client_id uuid,
+    refresh_token_hmac_key text,
+    refresh_token_counter bigint
 );
 
 
@@ -6209,6 +6219,20 @@ COMMENT ON TABLE auth.sessions IS 'Auth: Stores session data associated to a use
 --
 
 COMMENT ON COLUMN auth.sessions.not_after IS 'Auth: Not after is a nullable column that contains a timestamp after which the session should be regarded as expired.';
+
+
+--
+-- Name: COLUMN sessions.refresh_token_hmac_key; Type: COMMENT; Schema: auth; Owner: -
+--
+
+COMMENT ON COLUMN auth.sessions.refresh_token_hmac_key IS 'Holds a HMAC-SHA256 key used to sign refresh tokens for this session.';
+
+
+--
+-- Name: COLUMN sessions.refresh_token_counter; Type: COMMENT; Schema: auth; Owner: -
+--
+
+COMMENT ON COLUMN auth.sessions.refresh_token_counter IS 'Holds the ID (counter) of the last issued refresh token.';
 
 
 --
@@ -11014,5 +11038,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3UkUu82kHrx7fukIi5r9hGJw3vWkeYD8hBX0qYot6wEBiyhbLACRfZc8khuyr0Z
+\unrestrict qga8B4vq8tbRQ1ob52PLcV7f27r0XdnIb2kmOKB5jPTvlhkYBp7FYl5iqugNM0h
 

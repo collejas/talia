@@ -11,11 +11,21 @@ import {
 } from "@/lib/inbox/backend";
 import { fetchLatestMessages } from "@/lib/inbox/messages-server";
 
+type ReplyRequestAttachment = {
+  url: string;
+  name?: string | null;
+  mime?: string | null;
+  size?: number | null;
+  provider_id?: string | null;
+  path?: string | null;
+};
+
 type ReplyRequestBody = {
   content?: string;
   locale?: string | null;
   metadata?: Record<string, unknown> | null;
   clientMessageId?: string | null;
+  attachments?: ReplyRequestAttachment[];
 };
 
 type BackendReplyResponse = {
@@ -71,13 +81,88 @@ function extractBackendError(payload: BackendReplyResponse): string | undefined 
   return undefined;
 }
 
+function normalizeAttachments(value: unknown): ReplyRequestAttachment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const items: ReplyRequestAttachment[] = [];
+  for (const candidate of value) {
+    if (!isRecord(candidate)) continue;
+    const record = candidate as Record<string, unknown>;
+    const rawUrl = record["url"];
+    const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
+    if (!url) continue;
+
+    const attachment: ReplyRequestAttachment = { url };
+
+    const rawName = record["name"] ?? record["nombre"];
+    if (typeof rawName === "string" && rawName.trim().length) {
+      attachment.name = rawName.trim();
+    }
+
+    const rawMime = record["mime"];
+    if (typeof rawMime === "string" && rawMime.trim().length) {
+      attachment.mime = rawMime.trim();
+    }
+
+    const rawSize = record["size"] ?? record["size_bytes"] ?? record["tamano_bytes"];
+    if (typeof rawSize === "number" && Number.isFinite(rawSize)) {
+      attachment.size = Math.trunc(rawSize);
+    } else if (typeof rawSize === "string") {
+      const parsed = Number(rawSize);
+      if (Number.isFinite(parsed)) {
+        attachment.size = Math.trunc(parsed);
+      }
+    }
+
+    const rawProviderId =
+      record["provider_id"] ?? record["providerId"] ?? record["proveedor_id"];
+    if (typeof rawProviderId === "string" && rawProviderId.trim().length) {
+      attachment.provider_id = rawProviderId.trim();
+    }
+
+    const rawPath = record["path"];
+    if (typeof rawPath === "string" && rawPath.trim().length) {
+      attachment.path = rawPath.trim();
+    }
+
+    items.push(attachment);
+  }
+  return items;
+}
+
 function parseBody(raw: string): ReplyRequestBody {
   try {
-    const data = JSON.parse(raw) as ReplyRequestBody;
-    if (data && typeof data === "object") {
-      return data;
+    const json = JSON.parse(raw);
+    if (!isRecord(json)) {
+      return {};
     }
-    return {};
+    const metadataCandidate = json["metadata"];
+    const metadata = isRecord(metadataCandidate)
+      ? (metadataCandidate as Record<string, unknown>)
+      : null;
+
+    const localeCandidate = json["locale"];
+    const locale =
+      typeof localeCandidate === "string" && localeCandidate.trim().length
+        ? localeCandidate
+        : null;
+
+    const contentCandidate = json["content"];
+    const clientMessageIdCandidate = json["clientMessageId"];
+
+    const attachments = normalizeAttachments(json["attachments"]);
+
+    return {
+      content: typeof contentCandidate === "string" ? contentCandidate : undefined,
+      locale,
+      metadata,
+      clientMessageId:
+        typeof clientMessageIdCandidate === "string" && clientMessageIdCandidate.trim().length
+          ? clientMessageIdCandidate
+          : undefined,
+      attachments,
+    };
   } catch {
     return {};
   }
@@ -100,8 +185,9 @@ export async function POST(request: Request, context: unknown) {
   const rawBody = await request.text();
   const body = parseBody(rawBody);
   const content = (body.content ?? "").trim();
+  const attachments = body.attachments ?? [];
 
-  if (!content.length) {
+  if (!content.length && attachments.length === 0) {
     return NextResponse.json({ error: "message_required" }, { status: 422 });
   }
 
@@ -122,12 +208,23 @@ export async function POST(request: Request, context: unknown) {
   }
 
   const clientMessageId = body.clientMessageId || crypto.randomUUID();
-  const backendPayload = {
+  const backendPayload: Record<string, unknown> = {
     content,
     locale: body.locale ?? null,
     metadata: body.metadata ?? null,
     client_message_id: clientMessageId,
   };
+
+  if (attachments.length) {
+    backendPayload.attachments = attachments.map((attachment) => ({
+      url: attachment.url,
+      name: attachment.name ?? null,
+      mime: attachment.mime ?? null,
+      size: typeof attachment.size === "number" ? Math.trunc(attachment.size) : null,
+      provider_id: attachment.provider_id ?? null,
+      path: attachment.path ?? null,
+    }));
+  }
 
   const backendTargets = buildBackendTargets(backendBaseUrl, conversationId, "responder");
   if (!backendTargets.length) {
@@ -138,6 +235,14 @@ export async function POST(request: Request, context: unknown) {
   }
 
   console.log("[inbox] reply targets", backendTargets);
+  if (attachments.length) {
+    console.log("[inbox] reply attachments", attachments.map((attachment) => ({
+      url: attachment.url,
+      name: attachment.name ?? null,
+      size: attachment.size ?? null,
+      provider_id: attachment.provider_id ?? null,
+    })));
+  }
 
   let backendResponse: Response | null = null;
   let backendText = "";

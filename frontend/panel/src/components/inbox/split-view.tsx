@@ -247,10 +247,13 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     setManualToggling(false);
     setCurrentMessages(initialMessages);
     lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
-    setPendingAttachments([]);
-    setAttachmentError(null);
     setAutoScrollLocked(false);
   }, [selectedThread?.id, selectedThread?.messages]);
+
+  React.useEffect(() => {
+    setPendingAttachments([]);
+    setAttachmentError(null);
+  }, [selectedThread?.id]);
 
   React.useEffect(() => {
     setIsHydrated(true);
