@@ -43,6 +43,11 @@ async def test_crear_cita_demo_usa_rpc_upsert(
     monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
     monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-123")
 
+    async def fake_context(_tarjeta_id: str, _token: str) -> dict[str, str]:
+        return {"contacto_id": str(uuid4()), "conversacion_id": str(uuid4())}
+
+    monkeypatch.setattr(panel, "_resolve_lead_card_context", fake_context)
+
     cita_payload = {
         "tarjeta_id": str(uuid4()),
         "contacto_id": str(uuid4()),
@@ -91,6 +96,11 @@ async def test_crear_cita_demo_traduce_error_supabase(
     monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
     monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-123")
 
+    async def fake_context(_tarjeta_id: str, _token: str) -> dict[str, str]:
+        return {"contacto_id": str(uuid4()), "conversacion_id": str(uuid4())}
+
+    monkeypatch.setattr(panel, "_resolve_lead_card_context", fake_context)
+
     response = await async_client.post(
         "/api/agenda/demos",
         json={
@@ -104,6 +114,53 @@ async def test_crear_cita_demo_traduce_error_supabase(
 
     assert response.status_code == 502
     assert response.json()["detail"] == "Error creando cita demo"
+
+
+@pytest.mark.asyncio
+async def test_crear_cita_demo_con_campos_extra(
+    monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_sb_post(
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        token: str | None = None,
+        prefer: str | None = None,
+    ) -> DummyResponse:
+        captured.update({"path": path, "json": json or {}, "token": token, "prefer": prefer})
+        return DummyResponse(status_code=200, payload={"id": "cita-999"})
+
+    monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
+    monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-123")
+
+    async def fake_context(_tarjeta_id: str, _token: str) -> dict[str, str]:
+        return {"contacto_id": str(uuid4()), "conversacion_id": str(uuid4())}
+
+    monkeypatch.setattr(panel, "_resolve_lead_card_context", fake_context)
+
+    start_iso = datetime(2025, 2, 1, 14, tzinfo=timezone.utc).isoformat()
+    response = await async_client.post(
+        "/api/agenda/demos",
+        json={
+            "tarjeta_id": str(uuid4()),
+            "contacto_id": str(uuid4()),
+            "start_at": start_iso,
+            "scheduled_via": "api",
+            "reminder_status": "programado",
+            "reminder_sent_at": start_iso,
+            "external_join_url": "https://meet.example/id",
+        },
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 201
+    body = captured["json"]
+    assert body["p_reminder_status"] == "programado"
+    assert body["p_reminder_sent_at"] == start_iso
+    assert body["p_external_join_url"] == "https://meet.example/id"
+    assert body["p_scheduled_via"] == "api"
 
 
 @pytest.mark.asyncio
@@ -182,6 +239,10 @@ async def test_actualizar_cita_demo_envia_flags_extra(
             "merge_metadata": False,
             "expected_updated_at": timestamp,
             "remove_provider_event": True,
+            "reminder_sent_at": timestamp,
+            "reminder_status": "enviado",
+            "external_join_url": "https://zoom.example/123",
+            "scheduled_via": "ia",
         },
         headers={"Authorization": "Bearer test-token"},
     )
@@ -192,6 +253,10 @@ async def test_actualizar_cita_demo_envia_flags_extra(
     assert body["p_merge_metadata"] is False
     assert body["p_expected_updated_at"] == timestamp
     assert body["p_remove_provider_event"] is True
+    assert body["p_reminder_sent_at"] == timestamp
+    assert body["p_reminder_status"] == "enviado"
+    assert body["p_external_join_url"] == "https://zoom.example/123"
+    assert body["p_scheduled_via"] == "ia"
 
 
 @pytest.mark.asyncio

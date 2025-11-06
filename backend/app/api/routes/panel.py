@@ -91,6 +91,18 @@ class DemoAppointmentCreatePayload(BaseModel):
     metadata: dict[str, Any] | None = Field(
         default=None, description="Metadatos adicionales a persistir como JSON."
     )
+    reminder_sent_at: datetime | None = Field(
+        default=None, description="Marca de tiempo del último recordatorio enviado."
+    )
+    reminder_status: Literal["pendiente", "programado", "enviado", "fallido"] | None = Field(
+        default=None, description="Estado de recordatorio automatizado."
+    )
+    external_join_url: str | None = Field(
+        default=None, description="Enlace externo generado (Zoom, Meet)."
+    )
+    scheduled_via: Literal["humano", "ia", "api"] | None = Field(
+        default=None, description="Indica si fue creada por un humano, la IA o una integración."
+    )
 
 
 class DemoAppointmentUpdatePayload(BaseModel):
@@ -137,6 +149,18 @@ class DemoAppointmentUpdatePayload(BaseModel):
     remove_provider_event: bool | None = Field(
         default=None,
         description="Cuando es true, se borra el provider_event_id relacionado.",
+    )
+    reminder_sent_at: datetime | None = Field(
+        default=None, description="Actualiza la fecha del último recordatorio enviado."
+    )
+    reminder_status: Literal["pendiente", "programado", "enviado", "fallido"] | None = Field(
+        default=None, description="Estado del recordatorio automatizado."
+    )
+    external_join_url: str | None = Field(
+        default=None, description="Actualiza el enlace externo de la reunión."
+    )
+    scheduled_via: Literal["humano", "ia", "api"] | None = Field(
+        default=None, description="Reasigna el origen de la cita."
     )
 
 
@@ -2750,6 +2774,10 @@ async def _prepare_create_demo_payload(
         "estado": estado,
         "created_by": user_id,
         "updated_by": user_id,
+        "reminder_sent_at": _serialize_datetime(payload.reminder_sent_at),
+        "reminder_status": payload.reminder_status.lower() if payload.reminder_status else None,
+        "external_join_url": payload.external_join_url,
+        "scheduled_via": payload.scheduled_via.lower() if payload.scheduled_via else None,
     }
     return _clean_payload(data)
 
@@ -2781,6 +2809,10 @@ def _prepare_update_demo_payload(
         "expected_updated_at": _serialize_datetime(payload.expected_updated_at),
         "remove_provider_event": payload.remove_provider_event,
         "updated_by": user_id,
+        "reminder_sent_at": _serialize_datetime(payload.reminder_sent_at),
+        "reminder_status": payload.reminder_status.lower() if payload.reminder_status else None,
+        "external_join_url": payload.external_join_url,
+        "scheduled_via": payload.scheduled_via.lower() if payload.scheduled_via else None,
     }
     return _clean_payload(data)
 

@@ -2,7 +2,7 @@ BEGIN;
 
 -- ============================================================================
 -- Función: fn_cita_upsert
--- Inserta o actualiza una cita respetando permisos y devolviendo el registro.
+-- Inserta o actualiza una cita respetando permisos, duración estándar y merge opcional de metadatos.
 -- ============================================================================
 
 DROP FUNCTION IF EXISTS public.fn_cita_upsert(
@@ -26,7 +26,11 @@ DROP FUNCTION IF EXISTS public.fn_cita_upsert(
     uuid,
     boolean,
     timestamptz,
-    boolean
+    boolean,
+    timestamptz,
+    text,
+    text,
+    text
 ) CASCADE;
 
 CREATE FUNCTION public.fn_cita_upsert(
@@ -50,7 +54,11 @@ CREATE FUNCTION public.fn_cita_upsert(
     p_updated_by uuid DEFAULT NULL,
     p_merge_metadata boolean DEFAULT TRUE,
     p_expected_updated_at timestamptz DEFAULT NULL,
-    p_remove_provider_event boolean DEFAULT FALSE
+    p_remove_provider_event boolean DEFAULT FALSE,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
+    p_reminder_status text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_scheduled_via text DEFAULT NULL
 )
 RETURNS public.citas
 LANGUAGE plpgsql
@@ -70,6 +78,8 @@ DECLARE
     v_merge boolean := COALESCE(p_merge_metadata, TRUE);
     v_duration interval := interval '45 minutes';
     v_provider_event_id text;
+    v_reminder_status text;
+    v_scheduled_via text;
 BEGIN
     IF v_uid IS NULL THEN
         RAISE EXCEPTION 'auth_required' USING ERRCODE = '28000';
@@ -104,6 +114,16 @@ BEGIN
 
         v_metadata := jsonb_strip_nulls(COALESCE(p_metadata, '{}'::jsonb));
 
+        v_reminder_status := lower(COALESCE(p_reminder_status, 'pendiente'));
+        IF v_reminder_status NOT IN ('pendiente','programado','enviado','fallido') THEN
+            RAISE EXCEPTION 'reminder_status_invalid' USING ERRCODE = '23514';
+        END IF;
+
+        v_scheduled_via := lower(COALESCE(p_scheduled_via, 'humano'));
+        IF v_scheduled_via NOT IN ('humano','ia','api') THEN
+            RAISE EXCEPTION 'scheduled_via_invalid' USING ERRCODE = '23514';
+        END IF;
+
         INSERT INTO public.citas (
             tarjeta_id,
             contacto_id,
@@ -121,7 +141,11 @@ BEGIN
             metadata,
             created_by,
             updated_by,
-            cancel_reason
+            cancel_reason,
+            reminder_sent_at,
+            reminder_status,
+            external_join_url,
+            scheduled_via
         )
         VALUES (
             p_tarjeta_id,
@@ -132,7 +156,7 @@ BEGIN
             v_timezone,
             COALESCE(p_estado, 'pendiente'),
             v_provider,
-            p_provider_calendar_id,
+            NULLIF(btrim(p_provider_calendar_id), ''),
             NULLIF(btrim(p_provider_event_id), ''),
             NULLIF(btrim(p_meeting_url), ''),
             NULLIF(btrim(p_location), ''),
@@ -140,7 +164,11 @@ BEGIN
             v_metadata,
             COALESCE(p_created_by, v_uid),
             COALESCE(p_updated_by, v_uid),
-            NULLIF(p_cancel_reason, '')
+            NULLIF(p_cancel_reason, ''),
+            p_reminder_sent_at,
+            v_reminder_status,
+            NULLIF(btrim(p_external_join_url), ''),
+            v_scheduled_via
         )
         RETURNING * INTO v_row;
 
@@ -209,6 +237,16 @@ BEGIN
             ELSE v_existing.provider_event_id
         END;
 
+    v_reminder_status := lower(COALESCE(p_reminder_status, v_existing.reminder_status));
+    IF v_reminder_status NOT IN ('pendiente','programado','enviado','fallido') THEN
+        RAISE EXCEPTION 'reminder_status_invalid' USING ERRCODE = '23514';
+    END IF;
+
+    v_scheduled_via := lower(COALESCE(p_scheduled_via, v_existing.scheduled_via));
+    IF v_scheduled_via NOT IN ('humano','ia','api') THEN
+        RAISE EXCEPTION 'scheduled_via_invalid' USING ERRCODE = '23514';
+    END IF;
+
     UPDATE public.citas
     SET
         tarjeta_id = v_target_tarjeta,
@@ -229,6 +267,13 @@ BEGIN
         notes = COALESCE(NULLIF(p_notes, ''), v_existing.notes),
         metadata = v_metadata,
         cancel_reason = COALESCE(NULLIF(p_cancel_reason, ''), v_existing.cancel_reason),
+        reminder_sent_at = COALESCE(p_reminder_sent_at, v_existing.reminder_sent_at),
+        reminder_status = v_reminder_status,
+        external_join_url = COALESCE(
+            NULLIF(btrim(p_external_join_url), ''),
+            v_existing.external_join_url
+        ),
+        scheduled_via = v_scheduled_via,
         updated_by = COALESCE(p_updated_by, v_uid)
     WHERE id = p_id
     RETURNING * INTO v_row;
@@ -239,13 +284,15 @@ $$;
 
 COMMENT ON FUNCTION public.fn_cita_upsert(
     uuid, uuid, uuid, uuid, timestamptz, timestamptz, text, public.cita_estado,
-    text, text, text, text, text, text, jsonb, text, uuid, uuid, boolean, timestamptz, boolean
+    text, text, text, text, text, text, jsonb, text, uuid, uuid, boolean, timestamptz, boolean,
+    timestamptz, text, text, text
 ) IS
     'Inserta o actualiza citas aplicando permisos, duración predeterminada y merge opcional de metadatos.';
 
 GRANT EXECUTE ON FUNCTION public.fn_cita_upsert(
     uuid, uuid, uuid, uuid, timestamptz, timestamptz, text, public.cita_estado,
-    text, text, text, text, text, text, jsonb, text, uuid, uuid, boolean, timestamptz, boolean
+    text, text, text, text, text, text, jsonb, text, uuid, uuid, boolean, timestamptz, boolean,
+    timestamptz, text, text, text
 ) TO postgres, service_role, authenticated;
 
 -- ============================================================================
