@@ -1074,12 +1074,24 @@ body.theme-ice .intro p .callout {
 }
 
 .composer-attach {
-  background: var(--surface-secondary, rgba(15, 23, 42, 0.05));
-  color: var(--muted-text, #475569);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: #d24d91;
+  color: #fff;
 }
 
 .composer-attach:hover {
   transform: translateY(-1px);
+}
+
+.composer-attach svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
 }
 
 .composer-attachments {
