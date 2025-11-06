@@ -19,7 +19,7 @@ from app.assistants import registry
 from app.assistants.manager import AssistantConfig
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
-from app.services import geolocation, leads_geo, storage
+from app.services import calendar_service, geolocation, leads_geo, storage
 from app.services import openai as openai_service
 
 from . import schemas
@@ -1442,8 +1442,10 @@ async def _execute_function_call(
             raise ValueError("No se pudo determinar contacto_id para schedule_demo")
 
         provider = str(arguments.get("provider") or "hosting").strip().lower() or "hosting"
-        if provider not in {"hosting", "google"}:
+        if provider not in {"hosting", "google", "caldav"}:
             raise ValueError("provider inválido para schedule_demo")
+        if provider != "hosting" and not calendar_service.ensure_provider(provider):
+            raise ValueError(f"provider sin configuración disponible: {provider}")
 
         meeting_url = (arguments.get("meeting_url") or "").strip() or None
         external_join_url = (arguments.get("external_join_url") or "").strip() or None
@@ -1498,8 +1500,11 @@ async def _execute_function_call(
         scheduled_via = (arguments.get("scheduled_via") or "").strip().lower() or None
         provider = arguments.get("provider")
         provider_normalized = provider.strip().lower() if isinstance(provider, str) else None
-        if provider_normalized and provider_normalized not in {"hosting", "google"}:
+        if provider_normalized and provider_normalized not in {"hosting", "google", "caldav"}:
             raise ValueError("provider inválido para reschedule_demo")
+        if provider_normalized and provider_normalized != "hosting":
+            if not calendar_service.ensure_provider(provider_normalized):
+                raise ValueError(f"provider sin configuración disponible: {provider_normalized}")
         if reminder_status and reminder_status not in {
             "pendiente",
             "programado",

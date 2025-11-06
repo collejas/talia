@@ -63,6 +63,51 @@ class Settings(BaseSettings):
         default=True,
         description="Controla si el widget reutiliza session_id entre recargas.",
     )
+    calendar_default_provider: str | None = Field(
+        default=None,
+        description="Proveedor de calendario preferido (ej. google, caldav).",
+        validation_alias=AliasChoices("CALENDARIO_DEFAULT_PROVIDER", "CALENDAR_DEFAULT_PROVIDER"),
+    )
+    calendar_username: str | None = Field(
+        default=None,
+        description="Usuario con permisos de agenda en el servidor externo.",
+        validation_alias=AliasChoices("CALENDARIO_USERNAME", "CALENDAR_USERNAME"),
+    )
+    calendar_password: str | None = Field(
+        default=None,
+        description="Contraseña o token para el servidor de calendario.",
+        validation_alias=AliasChoices("CALENDARIO_PASSWORD", "CALENDAR_PASSWORD"),
+    )
+    calendar_server_url: str | None = Field(
+        default=None,
+        description="URL base del servidor CalDAV/CardDAV.",
+        validation_alias=AliasChoices("CALENDARIO_SERVER_URL", "CALENDAR_SERVER_URL"),
+    )
+    calendar_server_port: int | None = Field(
+        default=None,
+        description="Puerto del servidor de calendario (si aplica).",
+        validation_alias=AliasChoices("CALENDARIO_SERVER_PORT", "CALENDAR_SERVER_PORT"),
+    )
+    calendar_server_url_alternate: str | None = Field(
+        default=None,
+        description="Ruta alternativa del principal CalDAV para el usuario.",
+        validation_alias=AliasChoices(
+            "CALENDARIO_SERVER_URL_ALTERNATE", "CALENDAR_SERVER_URL_ALTERNATE"
+        ),
+    )
+    calendar_full_calendar_url: str | None = Field(
+        default=None,
+        description="URL directa al calendario principal (CalDAV).",
+        validation_alias=AliasChoices("CALENDARIO_FULL_CALENDAR_URL", "CALENDAR_FULL_CALENDAR_URL"),
+    )
+    calendar_full_contact_list_url: str | None = Field(
+        default=None,
+        description="URL directa al address book (CardDAV).",
+        validation_alias=AliasChoices(
+            "CALENDARIO_FULL_CONTACT_LIST_URL", "CALENDAR_FULL_CONTACT_LIST_URL"
+        ),
+    )
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 
 

@@ -20,7 +20,7 @@ from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services import leads_geo, storage
+from app.services import calendar_service, leads_geo, storage
 
 router = APIRouter(prefix="", tags=["panel"])
 
@@ -2686,7 +2686,7 @@ async def agenda_demos(
 
 
 _DEMO_ESTADOS = {"pendiente", "confirmada", "reprogramada", "cancelada", "realizada"}
-_DEMO_PROVIDERS = {"hosting", "google"}
+_DEMO_PROVIDERS = {"hosting", "google", "caldav"}
 
 
 def _normalize_demo_estado(value: str | None) -> str | None:
@@ -2704,6 +2704,8 @@ def _normalize_demo_provider(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if normalized not in _DEMO_PROVIDERS:
         raise HTTPException(status_code=400, detail="provider_invalid")
+    if normalized != "hosting" and not calendar_service.ensure_provider(normalized):
+        raise HTTPException(status_code=400, detail="provider_unavailable")
     return normalized
 
 
