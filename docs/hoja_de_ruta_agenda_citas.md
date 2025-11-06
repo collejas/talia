@@ -32,7 +32,7 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
    - Define duración estándar (45 min) cuando no se envía `end_at`, normaliza provider/timezone, soporta merge opcional de metadatos y control de concurrencia con `expected_updated_at`.
 2. ✅ (completado) Función `fn_cita_cancel` que marca `estado = 'cancelada'`, permite limpiar `provider_event_id` y actualiza `updated_by`.
 3. ✅ (completado) Columnas adicionales: `reminder_sent_at`, `reminder_status`, `external_join_url`, `scheduled_via`; expuestas en las vistas y funciones RPC.
-4. Revisar políticas RLS para permitir a integraciones de servicio (por ejemplo, `service_role`) modificar citas tras recibir webhooks externos.
+4. ✅ (completado) Política RLS `citas_service_manage` y grants para `service_role`, habilitando workers/webhooks internos.
 5. Extender índices si se necesitarán consultas adicionales (ej. `provider_event_id`, `created_by`, `estado`).
 
 ## Fase 3 · Backend (FastAPI / servicios internos)
