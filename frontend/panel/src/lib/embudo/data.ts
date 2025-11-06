@@ -8,6 +8,7 @@ export type EmbudoStage = {
   id: string;
   nombre: string;
   categoria: string;
+  orden: number;
   tarjetas: EmbudoCard[];
 };
 
@@ -49,6 +50,7 @@ type LeadListRow = {
   etapa_id: string;
   etapa_nombre: string;
   categoria: string;
+  etapa_orden: number;
   creado_en: string;
   actualizado_en: string | null;
   cerrado_en: string | null;
@@ -120,7 +122,13 @@ function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; si
       continue;
     }
 
-    const stage = ensureStage(stageMap, row.etapa_id, row.etapa_nombre, row.categoria);
+    const stage = ensureStage(
+      stageMap,
+      row.etapa_id,
+      row.etapa_nombre,
+      row.categoria,
+      row.etapa_orden ?? Number.MAX_SAFE_INTEGER
+    );
     stage.tarjetas.push(tarjeta);
   }
 
@@ -128,21 +136,27 @@ function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; si
     stage.tarjetas.sort((a, b) => (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) - (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0));
   }
 
-  const orderedStages = Array.from(stageMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  const orderedStages = Array.from(stageMap.values()).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"));
 
   sinConversacion.sort((a, b) => (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) - (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0));
 
   return { stages: orderedStages, sinConversacion };
 }
 
-function ensureStage(map: Map<string, EmbudoStage>, id: string, nombre: string, categoria: string): EmbudoStage {
+function ensureStage(map: Map<string, EmbudoStage>, id: string, nombre: string, categoria: string, orden: number): EmbudoStage {
   if (!map.has(id)) {
     map.set(id, {
       id,
       nombre,
       categoria,
+      orden,
       tarjetas: [],
     });
+  } else {
+    const stage = map.get(id)!;
+    stage.nombre = nombre;
+    stage.categoria = categoria;
+    stage.orden = orden;
   }
   return map.get(id)!;
 }
