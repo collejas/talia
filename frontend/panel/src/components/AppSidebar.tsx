@@ -44,7 +44,7 @@ const NAVIGATION = {
     { title: "Inbox", url: "/inbox", icon: IconInbox },
     { title: "Embudo", url: "/embudo", icon: IconListDetails },
     { title: "Leads", url: "/leads", icon: IconUsers },
-    { title: "Agenda", url: "#", icon: IconCalendar },
+    { title: "Agenda", url: "/agenda", icon: IconCalendar },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
     { title: "Proyectos", url: "#", icon: IconFolder },
     { title: "Vista 1", url: "/vista-1", icon: IconLayoutGrid },
