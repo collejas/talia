@@ -2785,7 +2785,7 @@ async def create_demo_appointment(
         raise HTTPException(status_code=400, detail="start_at_requerido")
 
     resp = await _sb_post(
-        "/rest/v1/lead_citas_demo",
+        "/rest/v1/citas",
         json=body,
         token=token,
         prefer="return=representation",
@@ -2822,7 +2822,7 @@ async def update_demo_appointment(
 
     params = {"id": f"eq.{cita_id}", "limit": "1"}
     resp = await _sb_patch(
-        "/rest/v1/lead_citas_demo",
+        "/rest/v1/citas",
         params=params,
         json=body,
         token=token,
@@ -2853,7 +2853,7 @@ async def delete_demo_appointment(
 
     params = {"id": f"eq.{cita_id}"}
     resp = await _sb_delete(
-        "/rest/v1/lead_citas_demo",
+        "/rest/v1/citas",
         params=params,
         token=token,
         prefer="return=representation",
