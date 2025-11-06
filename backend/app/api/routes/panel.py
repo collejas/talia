@@ -95,6 +95,18 @@ class DemoAppointmentCreatePayload(BaseModel):
         default=None, description="Marca de tiempo del último recordatorio enviado."
     )
     reminder_status: Literal["pendiente", "programado", "enviado", "fallido"] | None = Field(
+        default=None, description="Estado inicial del recordatorio automático."
+    )
+    external_join_url: str | None = Field(
+        default=None, description="Enlace externo generado por la integración (Zoom, Meet, etc.)."
+    )
+    scheduled_via: Literal["humano", "ia", "api"] | None = Field(
+        default=None, description="Origen que programó la cita. Usa 'ia' para Tal-IA."
+    )
+    reminder_sent_at: datetime | None = Field(
+        default=None, description="Marca de tiempo del último recordatorio enviado."
+    )
+    reminder_status: Literal["pendiente", "programado", "enviado", "fallido"] | None = Field(
         default=None, description="Estado de recordatorio automatizado."
     )
     external_join_url: str | None = Field(
