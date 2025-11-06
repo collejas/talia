@@ -1220,3 +1220,228 @@ async def fetch_leads_municipios(
     if not isinstance(data, dict):
         raise StorageError(f"Respuesta inesperada de leads por municipio: {data!r}")
     return data
+
+
+async def upsert_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
+    """Crea o actualiza una cita demo utilizando la función RPC fn_cita_upsert."""
+    data = await _call_supabase_rpc("fn_cita_upsert", payload)
+    if isinstance(data, list):
+        if not data:
+            raise StorageError("fn_cita_upsert respondió una lista vacía")
+        first = data[0]
+        if not isinstance(first, dict):
+            raise StorageError(f"Respuesta inesperada fn_cita_upsert: {first!r}")
+        return first
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada fn_cita_upsert: {data!r}")
+    return data
+
+
+async def cancel_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
+    """Cancela una cita demo utilizando la función RPC fn_cita_cancel."""
+    data = await _call_supabase_rpc("fn_cita_cancel", payload)
+    if isinstance(data, list):
+        if not data:
+            raise StorageError("fn_cita_cancel respondió una lista vacía")
+        first = data[0]
+        if not isinstance(first, dict):
+            raise StorageError(f"Respuesta inesperada fn_cita_cancel: {first!r}")
+        return first
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada fn_cita_cancel: {data!r}")
+    return data
+
+
+async def ensure_lead_tarjeta(
+    *,
+    tarjeta_id: str | None,
+    conversation_id: str,
+    contact_id: str | None,
+) -> str:
+    """Resuelve o crea una tarjeta de lead asociada a la conversación actual."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/lead_tarjetas"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+
+        async def _fetch(params: dict[str, Any]) -> dict[str, Any] | None:
+            resp = await client.get(url, headers=headers, params=params)
+            if resp.status_code >= 400:
+                msg = (
+                    "Supabase respondió error al consultar lead_tarjetas"
+                    f" (status={resp.status_code}, body={resp.text!r})"
+                )
+                logger.error(msg)
+                raise StorageError(msg)
+            rows = resp.json() or []
+            if isinstance(rows, list) and rows:
+                return rows[0]
+            return None
+
+        async def _update_card(card_id: str, patch: dict[str, Any]) -> None:
+            if not patch:
+                return
+            patch_headers = {
+                **headers,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            }
+            params = {"id": f"eq.{card_id}", "limit": "1"}
+            resp = await client.patch(url, headers=patch_headers, params=params, json=patch)
+            if resp.status_code >= 400:
+                msg = (
+                    "Supabase respondió error al actualizar lead_tarjetas"
+                    f" (status={resp.status_code}, body={resp.text!r})"
+                )
+                logger.warning(msg)
+
+        def _extract_id(row: dict[str, Any]) -> str:
+            resolved_id = row.get("id")
+            if not resolved_id:
+                raise StorageError("La tarjeta de lead recuperada no contiene id")
+            return str(resolved_id)
+
+        # 1. Validar tarjeta explícita.
+        if tarjeta_id:
+            row = await _fetch(
+                {
+                    "id": f"eq.{tarjeta_id}",
+                    "select": "id,conversacion_id,contacto_id",
+                    "limit": "1",
+                }
+            )
+            if not row:
+                logger.warning(
+                    "storage.ensure_lead_tarjeta.id_not_found",
+                    extra={"tarjeta_id": tarjeta_id, "conversation_id": conversation_id},
+                )
+            else:
+                if conversation_id and not row.get("conversacion_id"):
+                    await _update_card(_extract_id(row), {"conversacion_id": conversation_id})
+                return _extract_id(row)
+
+        # 2. Buscar por conversación actual.
+        row = await _fetch(
+            {
+                "conversacion_id": f"eq.{conversation_id}",
+                "select": "id,conversacion_id,contacto_id",
+                "limit": "1",
+            }
+        )
+        if row:
+            return _extract_id(row)
+
+        # 3. Buscar por contacto asociado.
+        if contact_id:
+            row = await _fetch(
+                {
+                    "contacto_id": f"eq.{contact_id}",
+                    "select": "id,conversacion_id,contacto_id",
+                    "order": "creado_en.desc",
+                    "limit": "1",
+                }
+            )
+            if row:
+                if conversation_id and not row.get("conversacion_id"):
+                    await _update_card(_extract_id(row), {"conversacion_id": conversation_id})
+                return _extract_id(row)
+
+        if not contact_id:
+            raise StorageError("No fue posible resolver contacto para crear la tarjeta del lead")
+
+        # 4. Crear tarjeta mínima enlazada a la conversación.
+        insert_headers = {
+            **headers,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+        payload = {
+            "contacto_id": contact_id,
+            "conversacion_id": conversation_id,
+            "fuente": "asistente",
+        }
+        resp = await client.post(url, headers=insert_headers, json=payload)
+        if resp.status_code == 409:
+            # Probablemente ya existe una tarjeta para este contacto/tablero.
+            row = await _fetch(
+                {
+                    "contacto_id": f"eq.{contact_id}",
+                    "select": "id,conversacion_id,contacto_id",
+                    "order": "creado_en.desc",
+                    "limit": "1",
+                }
+            )
+            if row:
+                if conversation_id and not row.get("conversacion_id"):
+                    await _update_card(_extract_id(row), {"conversacion_id": conversation_id})
+                return _extract_id(row)
+            msg = (
+                "Supabase devolvió conflicto al crear lead_tarjetas pero no se encontró la tarjeta"
+                f" (contacto_id={contact_id})"
+            )
+            logger.error(msg)
+            raise StorageError(msg)
+
+        if resp.status_code >= 400:
+            msg = (
+                "Supabase respondió error al crear lead_tarjetas"
+                f" (status={resp.status_code}, body={resp.text!r})"
+            )
+            logger.error(msg)
+            raise StorageError(msg)
+
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            return _extract_id(data[0])
+        if isinstance(data, dict) and data:
+            return _extract_id(data)
+        raise StorageError("Respuesta inesperada al crear la tarjeta del lead")
+
+
+async def _call_supabase_rpc(function_name: str, payload: dict[str, Any]) -> Any:
+    """Invoca una función RPC en Supabase usando el service role."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/rpc/{function_name}"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al llamar {function_name}: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            f"Supabase respondió error en {function_name}"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    if response.status_code == 204:
+        return {}
+
+    try:
+        return response.json()
+    except ValueError as exc:
+        msg = f"Respuesta inválida de {function_name}: {exc}"
+        logger.error(msg)
+        raise StorageError(msg) from exc

@@ -6,10 +6,10 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
 
 ## Estado actual resumido
 
-- Actualmente la tabla se llama `public.lead_citas_demo`; debe renombrarse a `public.citas` para estandarizar la nomenclatura.
-- El disparador `tg_lead_citas_demo_sync_stage` mueve la tarjeta del pipeline a la etapa `demo`; debe renombrarse a `tg_citas_sync_stage` tras el cambio de tabla.
-- Las vistas `panel_agenda_demos` y `panel_agenda_calendario` consumen la tabla actual y deberán actualizarse al nuevo nombre.
-- El prompt de Tal-IA solo captura datos de lead y lo cierra; aún no existe herramienta para crear o gestionar citas.
+- ✅ La tabla ya opera como `public.citas` con triggers, vistas e índices renombrados; las funciones `fn_cita_upsert` y `fn_cita_cancel` están publicadas con soporte para `service_role`.
+- ✅ Tal-IA consume las tools `schedule_demo`, `reschedule_demo` y `cancel_demo`; el orquestador crea/actualiza la tarjeta con `storage.ensure_lead_tarjeta` antes de invocar Supabase, evitando conflictos de FK.
+- ✅ La vista Agenda del panel muestra las nuevas columnas (`reminder_*`, `external_join_url`, `scheduled_via`) y filtros de estado/proveedor/responsable.
+- 🔜 Pendiente integrar proveedor externo (Google Calendar) y workers de recordatorios automatizados.
 
 ## Fase 0 · Descubrimiento y diseño funcional
 
@@ -45,6 +45,7 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
 3. Manejar conversión de zonas horarias y normalizar a `timestamptz`.
 4. Integrar logs estructurados y métricas (tiempo de respuesta, errores de API externa).
 5. Añadir pruebas unitarias y contract tests que simulen respuestas de Calendario (usar mocks).
+6. ✅ (completado) Ajustar el orquestador del webchat para asegurar que siempre exista `lead_tarjetas` antes de agendar, consolidado en `storage.ensure_lead_tarjeta`.
 
 ## Fase 4 · Integración con proveedores de calendario
 
@@ -62,8 +63,8 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
 
 ## Fase 5 · Aplicación conversacional (Tal-IA)
 
-1. Diseñar nueva herramienta `schedule_demo` (y opcionalmente `reschedule_demo`, `cancel_demo`) en `docs/funciones_prompt_openai.md`.
-2. Actualizar prompt `docs/prompt_landing.md` incorporando:
+1. ✅ (completado) Diseñar nueva herramienta `schedule_demo` (y herramientas hermanas) en `docs/funciones_prompt_openai.md`.
+2. ✅ (completado) Actualizar prompt `docs/prompt_landing.md` incorporando:
    - Detección de interés en demo.
    - Preguntas para disponibilidad (fecha/hora preferida, zona horaria).
    - Confirmación de cita y comunicación del resultado (incluyendo URL del meeting).
@@ -75,12 +76,12 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
 
 ## Fase 6 · Frontend y paneles internos
 
-1. Revisar `frontend/` para agregar vistas:
+1. ✅ (completado) Revisar `frontend/` para agregar vistas:
    - Calendario diario/semanal usando datos de `panel_agenda_calendario`.
    - Formulario para crear o editar citas, conectando al backend.
 2. Permitir búsqueda por contacto, estado, vendedor asignado.
 3. Mostrar `cancel_reason`, URL de la reunión y notas internas.
-4. Incluir alertas visuales para citas sin `provider_event_id` (pendientes de sincronizar).
+4. ✅ (completado) Filtros de estado, proveedor y responsable en la vista Agenda (`frontend/panel/src/components/agenda/agenda-table.tsx`).
 5. Añadir acciones rápidas (confirmar asistencia, marcar como realizada) que actualicen la columna `estado`.
 
 ## Fase 7 · Notificaciones y automatización
@@ -111,3 +112,11 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
 2. Explorar sincronización bidireccional con otros proveedores (Microsoft 365, Calendly).
 3. Automatizar asignación de vendedor según disponibilidad (round robin + calendarios personales).
 4. Agregar feedback post-demo (encuesta automática) para cerrar el loop comercial.
+
+---
+
+### Flujo actual end-to-end (2025-11-06)
+- Tal-IA propone horario, valida zona y llama a `schedule_demo`; el backend asegura/crea la tarjeta con `ensure_lead_tarjeta` y luego invoca `fn_cita_upsert`.
+- `_execute_function_call` enruta la solicitud a Supabase y retorna la cita confirmada al visitante.
+- La vista Agenda consume `panel_agenda_demos`, muestra métricas y permite filtrar por estado/proveedor/responsable.
+- Reprogramaciones y cancelaciones siguen el mismo camino (`reschedule_demo` / `cancel_demo` → RPC) con la misma garantía sobre la tarjeta.

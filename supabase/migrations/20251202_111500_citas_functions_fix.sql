@@ -1,10 +1,36 @@
 BEGIN;
 
 -- ============================================================================
--- Función: fn_cita_upsert
--- Inserta o actualiza una cita respetando permisos, duración estándar y merge opcional de metadatos.
+-- Limpieza de versiones anteriores de fn_cita_upsert / fn_cita_cancel y
+-- reinstalación con soporte para service_role.
 -- ============================================================================
 
+-- Versiones antiguas (sin campos de recordatorio).
+DROP FUNCTION IF EXISTS public.fn_cita_upsert(
+    uuid,
+    uuid,
+    uuid,
+    uuid,
+    timestamptz,
+    timestamptz,
+    text,
+    public.cita_estado,
+    text,
+    text,
+    text,
+    text,
+    text,
+    text,
+    jsonb,
+    text,
+    uuid,
+    uuid,
+    boolean,
+    timestamptz,
+    boolean
+) CASCADE;
+
+-- Versiones nuevas (con recordatorios y enlaces externos).
 DROP FUNCTION IF EXISTS public.fn_cita_upsert(
     uuid,
     uuid,
@@ -32,6 +58,9 @@ DROP FUNCTION IF EXISTS public.fn_cita_upsert(
     text,
     text
 ) CASCADE;
+
+DROP FUNCTION IF EXISTS public.fn_cita_cancel(uuid, text, boolean) CASCADE;
+DROP FUNCTION IF EXISTS public.fn_cita_cancel(uuid, text, boolean, uuid) CASCADE;
 
 CREATE FUNCTION public.fn_cita_upsert(
     p_id uuid DEFAULT NULL,
@@ -67,7 +96,15 @@ SET search_path = public, extensions
 AS $$
 DECLARE
     v_uid uuid := auth.uid();
-    v_role text := current_setting('request.jwt.claim.role', true);
+    v_role text := lower(
+        COALESCE(
+            current_setting('request.jwt.claim.role', true),
+            current_setting('postgrest.claims.role', true),
+            current_setting('role', true),
+            current_user,
+            ''
+        )
+    );
     v_row public.citas;
     v_existing public.citas;
     v_target_tarjeta uuid;
@@ -82,9 +119,6 @@ DECLARE
     v_reminder_status text;
     v_scheduled_via text;
 BEGIN
-    IF v_uid IS NULL AND v_role = 'service_role' THEN
-        v_uid := COALESCE(p_created_by, p_updated_by);
-    END IF;
     IF v_uid IS NULL THEN
         v_uid := COALESCE(p_created_by, p_updated_by);
     END IF;
@@ -99,12 +133,11 @@ BEGIN
         IF p_start_at IS NULL THEN
             RAISE EXCEPTION 'start_at_required' USING ERRCODE = '23514';
         END IF;
-        IF v_role IS DISTINCT FROM 'service_role' THEN
-        IF v_role IS DISTINCT FROM 'service_role' THEN
+
+        IF v_role NOT IN ('service_role', 'supabase_admin') THEN
             IF NOT public.puede_ver_lead(p_tarjeta_id) THEN
                 RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
             END IF;
-        END IF;
         END IF;
 
         v_start := p_start_at;
@@ -193,29 +226,21 @@ BEGIN
         RAISE EXCEPTION 'cita_not_found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF p_expected_updated_at IS NOT NULL
-       AND v_existing.actualizado_en IS DISTINCT FROM p_expected_updated_at THEN
-        RAISE EXCEPTION 'concurrency_conflict' USING ERRCODE = '40001';
-    END IF;
-
-    IF v_role IS DISTINCT FROM 'service_role' THEN
-    IF v_role IS DISTINCT FROM 'service_role' THEN
+    IF v_role NOT IN ('service_role', 'supabase_admin') THEN
         IF NOT public.puede_ver_lead(v_existing.tarjeta_id) THEN
             RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
         END IF;
     END IF;
-    END IF;
 
     v_target_tarjeta := COALESCE(p_tarjeta_id, v_existing.tarjeta_id);
-    IF v_role IS DISTINCT FROM 'service_role' THEN
-    IF v_role IS DISTINCT FROM 'service_role' THEN
+    IF v_role NOT IN ('service_role', 'supabase_admin') THEN
         IF NOT public.puede_ver_lead(v_target_tarjeta) THEN
             RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
         END IF;
     END IF;
-    END IF;
 
     v_start := COALESCE(p_start_at, v_existing.start_at);
+
     v_end :=
         CASE
             WHEN p_end_at IS NOT NULL THEN p_end_at
@@ -231,19 +256,19 @@ BEGIN
         ''
     );
 
-    v_provider := lower(COALESCE(p_provider, v_existing.provider));
+    v_provider := lower(COALESCE(p_provider, v_existing.provider, 'hosting'));
     IF v_provider NOT IN ('hosting', 'google') THEN
         RAISE EXCEPTION 'provider_invalid' USING ERRCODE = '23514';
     END IF;
 
     IF p_metadata IS NULL THEN
-        v_metadata := v_existing.metadata;
+        v_metadata := COALESCE(v_existing.metadata, '{}'::jsonb);
     ELSIF v_merge THEN
         v_metadata := jsonb_strip_nulls(
             COALESCE(v_existing.metadata, '{}'::jsonb) || p_metadata
         );
     ELSE
-        v_metadata := jsonb_strip_nulls(p_metadata);
+        v_metadata := jsonb_strip_nulls(COALESCE(p_metadata, '{}'::jsonb));
     END IF;
 
     v_provider_event_id :=
@@ -253,12 +278,12 @@ BEGIN
             ELSE v_existing.provider_event_id
         END;
 
-    v_reminder_status := lower(COALESCE(p_reminder_status, v_existing.reminder_status));
+    v_reminder_status := lower(COALESCE(p_reminder_status, v_existing.reminder_status, 'pendiente'));
     IF v_reminder_status NOT IN ('pendiente','programado','enviado','fallido') THEN
         RAISE EXCEPTION 'reminder_status_invalid' USING ERRCODE = '23514';
     END IF;
 
-    v_scheduled_via := lower(COALESCE(p_scheduled_via, v_existing.scheduled_via));
+    v_scheduled_via := lower(COALESCE(p_scheduled_via, v_existing.scheduled_via, 'humano'));
     IF v_scheduled_via NOT IN ('humano','ia','api') THEN
         RAISE EXCEPTION 'scheduled_via_invalid' USING ERRCODE = '23514';
     END IF;
@@ -290,7 +315,7 @@ BEGIN
             v_existing.external_join_url
         ),
         scheduled_via = v_scheduled_via,
-        updated_by = COALESCE(p_updated_by, v_uid)
+        updated_by = COALESCE(p_updated_by, v_uid, v_existing.updated_by)
     WHERE id = p_id
     RETURNING * INTO v_row;
 
@@ -311,17 +336,11 @@ GRANT EXECUTE ON FUNCTION public.fn_cita_upsert(
     timestamptz, text, text, text
 ) TO postgres, service_role, authenticated;
 
--- ============================================================================
--- Función: fn_cita_cancel
--- Marca la cita como cancelada y permite limpiar el evento externo.
--- ============================================================================
-
-DROP FUNCTION IF EXISTS public.fn_cita_cancel(uuid, text, boolean) CASCADE;
-
 CREATE FUNCTION public.fn_cita_cancel(
     p_id uuid,
     p_reason text DEFAULT NULL,
-    p_remove_provider_event boolean DEFAULT FALSE
+    p_remove_provider_event boolean DEFAULT FALSE,
+    p_updated_by uuid DEFAULT NULL
 )
 RETURNS public.citas
 LANGUAGE plpgsql
@@ -330,16 +349,18 @@ SET search_path = public, extensions
 AS $$
 DECLARE
     v_uid uuid := auth.uid();
+    v_role text := lower(
+        COALESCE(
+            current_setting('request.jwt.claim.role', true),
+            current_setting('postgrest.claims.role', true),
+            current_setting('role', true),
+            current_user,
+            ''
+        )
+    );
     v_row public.citas;
     v_reason text := NULLIF(btrim(COALESCE(p_reason, '')), '');
 BEGIN
-    IF v_uid IS NULL AND v_role = 'service_role' THEN
-        v_uid := COALESCE(p_updated_by, p_created_by);
-    END IF;
-    IF v_uid IS NULL THEN
-        v_uid := COALESCE(p_updated_by, p_created_by);
-    END IF;
-
     SELECT *
     INTO v_row
     FROM public.citas
@@ -350,12 +371,14 @@ BEGIN
         RAISE EXCEPTION 'cita_not_found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF v_role IS DISTINCT FROM 'service_role' THEN
-    IF v_role IS DISTINCT FROM 'service_role' THEN
+    IF v_uid IS NULL THEN
+        v_uid := COALESCE(p_updated_by, v_row.updated_by, v_row.created_by);
+    END IF;
+
+    IF v_role NOT IN ('service_role', 'supabase_admin') THEN
         IF NOT public.puede_ver_lead(v_row.tarjeta_id) THEN
             RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
         END IF;
-    END IF;
     END IF;
 
     UPDATE public.citas
@@ -366,7 +389,7 @@ BEGIN
             WHEN p_remove_provider_event THEN NULL
             ELSE provider_event_id
         END,
-        updated_by = v_uid
+        updated_by = COALESCE(v_uid, v_row.updated_by)
     WHERE id = p_id
     RETURNING * INTO v_row;
 
@@ -374,10 +397,10 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.fn_cita_cancel(uuid, text, boolean) IS
+COMMENT ON FUNCTION public.fn_cita_cancel(uuid, text, boolean, uuid) IS
     'Cancela una cita existente, opcionalmente liberando el identificador del evento externo.';
 
-GRANT EXECUTE ON FUNCTION public.fn_cita_cancel(uuid, text, boolean)
+GRANT EXECUTE ON FUNCTION public.fn_cita_cancel(uuid, text, boolean, uuid)
     TO postgres, service_role, authenticated;
 
 COMMIT;

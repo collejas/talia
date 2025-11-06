@@ -1431,6 +1431,136 @@ async def _execute_function_call(
             "siguiente_accion": siguiente_accion,
         }
 
+    if name == "schedule_demo":
+        start_at = str(arguments.get("start_at") or "").strip()
+        timezone = str(arguments.get("timezone") or "").strip()
+        if not start_at or not timezone:
+            raise ValueError("start_at y timezone son requeridos para schedule_demo")
+
+        contacto_id = str(arguments.get("contacto_id") or context.contact_id or "").strip()
+        if not contacto_id:
+            raise ValueError("No se pudo determinar contacto_id para schedule_demo")
+
+        provider = str(arguments.get("provider") or "hosting").strip().lower() or "hosting"
+        if provider not in {"hosting", "google"}:
+            raise ValueError("provider inválido para schedule_demo")
+
+        meeting_url = (arguments.get("meeting_url") or "").strip() or None
+        external_join_url = (arguments.get("external_join_url") or "").strip() or None
+        location = (arguments.get("location") or "").strip() or None
+        notes = (arguments.get("notes") or "").strip() or None
+        reminder_status = (arguments.get("reminder_status") or "").strip().lower() or None
+        scheduled_via = (arguments.get("scheduled_via") or "ia").strip().lower() or "ia"
+        if reminder_status and reminder_status not in {
+            "pendiente",
+            "programado",
+            "enviado",
+            "fallido",
+        }:
+            raise ValueError("reminder_status inválido para schedule_demo")
+        if scheduled_via not in {"humano", "ia", "api"}:
+            raise ValueError("scheduled_via inválido para schedule_demo")
+        metadata = _safe_dict(arguments.get("metadata"))
+
+        tarjeta_arg = str(arguments.get("tarjeta_id") or "").strip() or None
+        tarjeta_id = await storage.ensure_lead_tarjeta(
+            tarjeta_id=tarjeta_arg,
+            conversation_id=context.conversation_id,
+            contact_id=contacto_id,
+        )
+
+        payload: dict[str, Any] = {
+            "p_tarjeta_id": tarjeta_id,
+            "p_contacto_id": contacto_id,
+            "p_conversacion_id": context.conversation_id,
+            "p_start_at": start_at,
+            "p_timezone": timezone,
+            "p_provider": provider,
+            "p_meeting_url": meeting_url,
+            "p_location": location,
+            "p_notes": notes,
+            "p_metadata": metadata,
+            "p_reminder_sent_at": arguments.get("reminder_sent_at"),
+            "p_reminder_status": reminder_status,
+            "p_external_join_url": external_join_url,
+            "p_scheduled_via": scheduled_via,
+        }
+
+        result = await storage.upsert_demo_cita(payload)
+        return {"status": "ok", "cita": result}
+
+    if name == "reschedule_demo":
+        cita_id = str(arguments.get("cita_id") or "").strip()
+        if not cita_id:
+            raise ValueError("cita_id es requerido para reschedule_demo")
+
+        reminder_status = (arguments.get("reminder_status") or "").strip().lower() or None
+        scheduled_via = (arguments.get("scheduled_via") or "").strip().lower() or None
+        provider = arguments.get("provider")
+        provider_normalized = provider.strip().lower() if isinstance(provider, str) else None
+        if provider_normalized and provider_normalized not in {"hosting", "google"}:
+            raise ValueError("provider inválido para reschedule_demo")
+        if reminder_status and reminder_status not in {
+            "pendiente",
+            "programado",
+            "enviado",
+            "fallido",
+        }:
+            raise ValueError("reminder_status inválido para reschedule_demo")
+        if scheduled_via and scheduled_via not in {"humano", "ia", "api"}:
+            raise ValueError("scheduled_via inválido para reschedule_demo")
+
+        payload: dict[str, Any] = {
+            "p_id": cita_id,
+            "p_conversacion_id": context.conversation_id,
+            "p_start_at": arguments.get("start_at"),
+            "p_end_at": arguments.get("end_at"),
+            "p_timezone": arguments.get("timezone"),
+            "p_estado": arguments.get("estado"),
+            "p_provider": provider_normalized,
+            "p_provider_event_id": arguments.get("provider_event_id"),
+            "p_meeting_url": arguments.get("meeting_url"),
+            "p_location": arguments.get("location"),
+            "p_notes": arguments.get("notes"),
+            "p_metadata": _safe_dict(arguments.get("metadata"))
+            if arguments.get("metadata")
+            else None,
+            "p_merge_metadata": arguments.get("merge_metadata"),
+            "p_expected_updated_at": arguments.get("expected_updated_at"),
+            "p_remove_provider_event": bool(arguments.get("remove_provider_event")),
+            "p_reminder_sent_at": arguments.get("reminder_sent_at"),
+            "p_reminder_status": reminder_status,
+            "p_external_join_url": arguments.get("external_join_url"),
+            "p_scheduled_via": scheduled_via,
+            "p_cancel_reason": arguments.get("cancel_reason"),
+        }
+
+        contacto_id = arguments.get("contacto_id")
+        if contacto_id:
+            payload["p_contacto_id"] = str(contacto_id)
+        conversacion_id = arguments.get("conversacion_id")
+        if conversacion_id:
+            payload["p_conversacion_id"] = str(conversacion_id)
+
+        result = await storage.upsert_demo_cita(payload)
+        return {"status": "ok", "cita": result}
+
+    if name == "cancel_demo":
+        cita_id = str(arguments.get("cita_id") or "").strip()
+        if not cita_id:
+            raise ValueError("cita_id es requerido para cancel_demo")
+        reason = (arguments.get("reason") or "").strip() or None
+        remove_provider_event = bool(arguments.get("remove_provider_event"))
+
+        payload: dict[str, Any] = {"p_id": cita_id}
+        if reason:
+            payload["p_reason"] = reason
+        if remove_provider_event:
+            payload["p_remove_provider_event"] = True
+
+        result = await storage.cancel_demo_cita(payload)
+        return {"status": "ok", "cita": result}
+
     logger.warning(
         "webchat.unknown_tool_call",
         extra={"tool": name, "conversation_id": context.conversation_id},
