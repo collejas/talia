@@ -1,0 +1,79 @@
+# Plan · Interacción avanzada en el embudo
+
+## Objetivo
+
+Permitir a los usuarios:
+
+1. Abrir cualquier tarjeta del embudo para consultar y editar su información.
+2. Actualizar campos clave (monto, probabilidad, asignado, notas, etc.) desde un formulario unificado.
+3. Arrastrar tarjetas (a partir de “Precalificado”) para moverlas entre etapas, registrando la transición en Supabase.
+
+## Arquitectura & stack
+
+- **Frontend**: Next.js 14 (app router), shadcn/ui (Radix), TailwindCSS.
+- **Backend**: Supabase (Postgres + RPC), server actions Next 14.
+- **Estado/AJAX**: server actions con invalidación (`revalidateTag`), optimist updates.
+- **Drag & drop**: `@dnd-kit/core`.
+
+## Fases
+
+### 1. Análisis & diseño
+- Identificar campos editables (`lead_tarjetas`, `contactos`, campos calculados).
+- Definir reglas de movimiento (permitir avanzar/retroceder, restricciones por etapa).
+- Mapear RPC existentes y las nuevas que se requieren.
+
+### 2. Backend / Supabase
+- Crear RPC `panel_lead_update` (SQL) o server action que actualice los campos editables (tarjetas/contactos).
+- Crear RPC `panel_lead_move`:
+  - Actualiza `lead_tarjetas.etapa_id`.
+  - Inserta registro en `lead_movimientos`.
+  - Devuelve la tarjeta actualizada (etapa, orden, categoría, timestamps).
+- Escribir migraciones y pruebas asociadas.
+
+### 3. Frontend – datos compartidos
+- Extender `loadEmbudoData` para traer `etapa_orden` y cualquier atributo adicional requerido por el Drawer.
+- Aplicar `unstable_cache` + `revalidateTag('embudo')` para mantener sincronizado el embudo tras cada acción.
+
+### 4. Drawer de detalle (`LeadDrawer`)
+- Implementar `LeadDrawer` con shadcn/ui (`Drawer`/`Dialog` según viewport).
+- Tabs con Radix: “Resumen”, “Notas”, “Historial”.
+- Formulario con React Hook Form + zod.
+- Server action `updateLead` → llama RPC y devuelve la tarjeta actualizada.
+- Toasts de feedback (éxito/error).
+
+### 5. Drag & drop
+- Integrar `@dnd-kit/core` en `EmbudoBoard`.
+- Habilitar drag solo en columnas con `orden ≥ 2`.
+- Destacar columnas válidas cuando una tarjeta está en drag.
+- Server action `moveLead`:
+  - Invoca `panel_lead_move`.
+  - Actualiza estado local (optimist update) y revierte ante error.
+- Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario.
+
+### 6. Historial & notas
+- Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas.
+- Cargar datos lazy al abrir el Drawer (RPC dedicada).
+- Botón para agregar nota/comentario (Nuevo registro en `lead_movimientos.metadata`).
+
+### 7. QA & UX
+- Pruebas manuales: abrir → editar → guardar → mover → revertir.
+- Validar integridad en Supabase (registros y movimientos).
+- Revisar accesibilidad (enfoque, drag con teclado).
+- Documentar flujos y comandos (`README`/`docs`).
+
+### 8. Deploy
+- Ejecutar migraciones Supabase.
+- Desplegar backend/frontend.
+- Comunicar cambios al equipo (changelog interno).
+
+## Dependencias y tareas previas
+
+- Alinear con equipo de negocio qué campos son editables y cómo impactan en reportes.
+- Confirmar políticas RLS (nuevas RPC deben respetar `puede_ver_lead` y service role).
+- Verificar compatibilidad SSR de `@dnd-kit/core` (componentes cliente).
+
+## Próximos pasos sugeridos
+
+1. Implementar y probar las RPC nuevas (`panel_lead_update`, `panel_lead_move`).
+2. Montar el Drawer con el formulario y server action `updateLead`.
+3. Integrar drag & drop con `moveLead` y feedback visual.
