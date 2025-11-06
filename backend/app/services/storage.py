@@ -1252,6 +1252,41 @@ async def cancel_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+async def get_demo_cita(cita_id: str) -> dict[str, Any] | None:
+    """Obtiene una cita demo por ID directo desde Supabase."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/citas"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {"id": f"eq.{cita_id}", "limit": "1"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=headers, params=params)
+
+    if resp.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar citas"
+            f" (status={resp.status_code}, body={resp.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = resp.json() or []
+    if isinstance(rows, list) and rows:
+        first = rows[0]
+        if isinstance(first, dict):
+            return first
+    if isinstance(rows, dict):
+        return rows
+    return None
+
+
 async def ensure_lead_tarjeta(
     *,
     tarjeta_id: str | None,

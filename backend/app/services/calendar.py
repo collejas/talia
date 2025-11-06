@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import json
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol, runtime_checkable
+from urllib.parse import urljoin
+
+import httpx
+from zoneinfo import ZoneInfo
 
 from app.core.config import settings
 from app.core.logging import get_logger
 
+from . import storage
+
 logger = get_logger(__name__)
+
+CALDAV_TIMEOUT_SECONDS = 10.0
+CALDAV_SUCCESS_CODES = {200, 201, 204}
+PRODID = "-//Tal-IA//CalendarService//ES"
 
 
 @dataclass(slots=True)
@@ -35,6 +47,123 @@ class CalendarEventResult:
 
 class CalendarProviderError(RuntimeError):
     """Errores específicos al interactuar con proveedores externos."""
+
+
+def _escape_ics(value: str | None) -> str:
+    if not value:
+        return ""
+    return (
+        value.replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\r\n", "\\n")
+        .replace("\n", "\\n")
+    )
+
+
+def _resolve_timezone(dt: datetime, tz_name: str | None) -> datetime:
+    if dt.tzinfo is None:
+        if tz_name:
+            try:
+                dt = dt.replace(tzinfo=ZoneInfo(tz_name))
+            except Exception:  # pragma: no cover - fallback a UTC
+                dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _format_ics_datetime(dt: datetime) -> str:
+    return dt.strftime("%Y%m%dT%H%M%SZ")
+
+
+def _coerce_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError:
+            logger.warning("calendar.invalid_datetime", extra={"value": value})
+            return None
+    return None
+
+
+def _normalize_metadata(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("calendar.metadata_invalid_json")
+            return {}
+        if isinstance(data, dict):
+            return dict(data)
+    return {}
+
+
+def build_event_from_cita(cita: dict[str, Any]) -> CalendarEvent:
+    """Convierte una cita de Supabase en un evento genérico para el proveedor."""
+
+    metadata = _normalize_metadata(cita.get("metadata"))
+    start = _coerce_datetime(cita.get("start_at"))
+    if start is None:
+        raise CalendarProviderError("La cita no contiene fecha de inicio válida.")
+
+    end = _coerce_datetime(cita.get("end_at"))
+    if end is None:
+        duration = metadata.get("duration_minutes")
+        if isinstance(duration, (int, float)) and duration > 0:
+            end = start + timedelta(minutes=float(duration))
+        else:
+            end = start + timedelta(minutes=45)
+
+    timezone = cita.get("timezone") or metadata.get("timezone")
+    summary = (
+        metadata.get("summary")
+        or metadata.get("title")
+        or metadata.get("titulo")
+        or "Demostración Tal-IA"
+    )
+    description = cita.get("notes") or metadata.get("description") or metadata.get("notes")
+    location = cita.get("location") or metadata.get("location")
+
+    attendees: list[str] = []
+    raw_attendees = metadata.get("attendees") if isinstance(metadata, dict) else None
+    if isinstance(raw_attendees, list):
+        for entry in raw_attendees:
+            if isinstance(entry, str) and entry.strip():
+                attendees.append(entry.strip())
+            elif isinstance(entry, dict):
+                email = entry.get("email")
+                if isinstance(email, str) and email.strip():
+                    attendees.append(email.strip())
+
+    enriched_metadata = dict(metadata)
+    enriched_metadata.setdefault("cita_id", cita.get("id"))
+    enriched_metadata.setdefault("tarjeta_id", cita.get("tarjeta_id"))
+    enriched_metadata.setdefault("provider_calendar_id", cita.get("provider_calendar_id"))
+    if cita.get("meeting_url"):
+        enriched_metadata.setdefault("meeting_url", cita.get("meeting_url"))
+    if cita.get("external_join_url"):
+        enriched_metadata.setdefault("join_url", cita.get("external_join_url"))
+
+    return CalendarEvent(
+        summary=summary,
+        start=start,
+        end=end,
+        timezone=timezone,
+        description=description,
+        location=location,
+        attendees=attendees,
+        metadata=enriched_metadata,
+    )
 
 
 @runtime_checkable
@@ -77,7 +206,46 @@ class CalDAVProvider:
         self._config = config
 
     async def create_event(self, event: CalendarEvent) -> CalendarEventResult:
-        raise CalendarProviderError("CalDAV provider is not implemented yet")
+        uid = self._ensure_uid(event)
+        resource_url, resource_name = self._build_event_url(
+            event.metadata.get("provider_event_id"), uid
+        )
+        payload = self._build_ics_payload(uid, event)
+        headers = {
+            "Content-Type": "text/calendar; charset=utf-8",
+            "If-None-Match": "*",
+        }
+
+        logger.info(
+            "calendar.caldav.create_attempt",
+            extra={
+                "url": resource_url,
+                "provider_event_id": event.metadata.get("provider_event_id"),
+            },
+        )
+        response = await self._request("PUT", resource_url, content=payload, headers=headers)
+        if response.status_code not in CALDAV_SUCCESS_CODES:
+            raise CalendarProviderError(
+                f"CalDAV create failed ({response.status_code}): {response.text}"
+            )
+
+        join_url = event.metadata.get("join_url") or event.metadata.get("meeting_url")
+        raw_payload = {
+            "status": response.status_code,
+            "url": resource_url,
+            "etag": response.headers.get("ETag"),
+        }
+        logger.info(
+            "calendar.caldav.create_success",
+            extra={
+                "url": resource_url,
+                "status": response.status_code,
+                "etag": raw_payload["etag"],
+            },
+        )
+        return CalendarEventResult(
+            event_id=resource_name, join_url=join_url, raw_response=raw_payload
+        )
 
     async def update_event(
         self,
@@ -86,10 +254,166 @@ class CalDAVProvider:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> CalendarEventResult:
-        raise CalendarProviderError("CalDAV provider is not implemented yet")
+        if not event_id:
+            raise CalendarProviderError("Event ID requerido para actualizar evento CalDAV")
+        resource_hint = event_id.split("/")[-1]
+        if resource_hint.endswith(".ics"):
+            resource_hint = resource_hint[:-4]
+        uid = self._ensure_uid(event, fallback=resource_hint)
+        resource_url, resource_name = self._build_event_url(event_id, uid)
+        payload = self._build_ics_payload(uid, event)
+        headers: dict[str, str] = {
+            "Content-Type": "text/calendar; charset=utf-8",
+        }
+        if metadata and isinstance(metadata, dict):
+            etag = metadata.get("etag") or metadata.get("caldav_etag")
+            if isinstance(etag, str) and etag:
+                headers["If-Match"] = etag
+
+        logger.info(
+            "calendar.caldav.update_attempt",
+            extra={"event_id": event_id, "url": resource_url, "etag": headers.get("If-Match")},
+        )
+        response = await self._request("PUT", resource_url, content=payload, headers=headers)
+        if response.status_code not in CALDAV_SUCCESS_CODES:
+            raise CalendarProviderError(
+                f"CalDAV update failed ({response.status_code}): {response.text}"
+            )
+
+        join_url = event.metadata.get("join_url") or event.metadata.get("meeting_url")
+        raw_payload = {
+            "status": response.status_code,
+            "url": resource_url,
+            "etag": response.headers.get("ETag"),
+        }
+        logger.info(
+            "calendar.caldav.update_success",
+            extra={
+                "event_id": event_id,
+                "status": response.status_code,
+                "etag": raw_payload["etag"],
+            },
+        )
+        return CalendarEventResult(
+            event_id=resource_name, join_url=join_url, raw_response=raw_payload
+        )
 
     async def delete_event(self, event_id: str) -> None:
-        raise CalendarProviderError("CalDAV provider is not implemented yet")
+        if not event_id:
+            raise CalendarProviderError("Event ID requerido para eliminar evento CalDAV")
+        resource_url, _ = self._build_event_url(event_id, uid=uuid.uuid4().hex)
+        logger.info(
+            "calendar.caldav.delete_attempt",
+            extra={"event_id": event_id, "url": resource_url},
+        )
+        response = await self._request("DELETE", resource_url)
+        if response.status_code not in CALDAV_SUCCESS_CODES and response.status_code != 404:
+            raise CalendarProviderError(
+                f"CalDAV delete failed ({response.status_code}): {response.text}"
+            )
+        logger.info(
+            "calendar.caldav.delete_success",
+            extra={"event_id": event_id, "status": response.status_code},
+        )
+
+    def _calendar_base(self) -> str:
+        calendar_url = (self._config.calendar_url or "").strip()
+        if not calendar_url:
+            raise CalendarProviderError("CalDAV calendar_url no está configurado")
+        return calendar_url.rstrip("/") + "/"
+
+    def _build_event_url(self, event_id: str | None, uid: str) -> tuple[str, str]:
+        if event_id:
+            event_id = event_id.strip()
+            if event_id.startswith(("http://", "https://")):
+                return event_id, event_id.rstrip("/").split("/")[-1]
+            resource_name = event_id.lstrip("/")
+            return urljoin(self._calendar_base(), resource_name), resource_name
+        resource_name = f"{uid}.ics"
+        return urljoin(self._calendar_base(), resource_name), resource_name
+
+    @staticmethod
+    def _ensure_uid(event: CalendarEvent, fallback: str | None = None) -> str:
+        raw_uid = (
+            event.metadata.get("caldav_uid")
+            or event.metadata.get("uid")
+            or event.metadata.get("provider_event_id")
+        )
+        if isinstance(raw_uid, str) and raw_uid.strip():
+            uid = raw_uid.strip()
+        elif fallback:
+            uid = fallback.strip()
+        else:
+            uid = uuid.uuid4().hex
+        event.metadata["caldav_uid"] = uid
+        return uid
+
+    def _build_ics_payload(self, uid: str, event: CalendarEvent) -> str:
+        tz_name = event.timezone or event.metadata.get("timezone")
+        start = _resolve_timezone(event.start, tz_name)
+        end_reference = event.end or (event.start + timedelta(minutes=45))
+        end = _resolve_timezone(end_reference, tz_name)
+        now_utc = datetime.now(timezone.utc)
+
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            f"PRODID:{PRODID}",
+            "CALSCALE:GREGORIAN",
+            "BEGIN:VEVENT",
+            f"UID:{_escape_ics(uid)}",
+            f"DTSTAMP:{_format_ics_datetime(now_utc)}",
+            f"DTSTART:{_format_ics_datetime(start)}",
+            f"DTEND:{_format_ics_datetime(end)}",
+        ]
+
+        summary = _escape_ics(event.summary)
+        if summary:
+            lines.append(f"SUMMARY:{summary}")
+
+        description = _escape_ics(event.description)
+        if description:
+            lines.append(f"DESCRIPTION:{description}")
+
+        location = _escape_ics(event.location)
+        if location:
+            lines.append(f"LOCATION:{location}")
+
+        join_url = event.metadata.get("join_url") or event.metadata.get("meeting_url")
+        if isinstance(join_url, str) and join_url.strip():
+            lines.append(f"URL:{_escape_ics(join_url.strip())}")
+
+        for attendee in event.attendees:
+            attendee_value = attendee.strip()
+            if not attendee_value:
+                continue
+            escaped = _escape_ics(attendee_value)
+            lines.append(f"ATTENDEE;CN={escaped}:mailto:{escaped}")
+
+        lines.append("END:VEVENT")
+        lines.append("END:VCALENDAR")
+        return "\r\n".join(lines) + "\r\n"
+
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        content: str | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
+        auth = httpx.BasicAuth(self._config.username, self._config.password)
+        try:
+            async with httpx.AsyncClient(auth=auth, timeout=CALDAV_TIMEOUT_SECONDS) as client:
+                response = await client.request(
+                    method,
+                    url,
+                    headers=headers,
+                    content=content.encode("utf-8") if isinstance(content, str) else content,
+                )
+        except httpx.RequestError as exc:  # pragma: no cover - falla de red
+            raise CalendarProviderError(f"Error conectando a CalDAV: {exc}") from exc
+        return response
 
 
 class GoogleCalendarProvider:
@@ -123,13 +447,14 @@ class CalendarService:
         username = settings.calendar_username
         password = settings.calendar_password
         server_url = settings.calendar_server_url
-        if not username or not password or not server_url:
+        calendar_url = settings.calendar_full_calendar_url
+        if not username or not password or not server_url or not calendar_url:
             raise CalendarProviderError("CalDAV configuration is incomplete")
         config = CalDAVConfig(
             username=username,
             password=password,
             server_url=server_url,
-            calendar_url=settings.calendar_full_calendar_url,
+            calendar_url=calendar_url,
             contacts_url=settings.calendar_full_contact_list_url,
             principal_url=settings.calendar_server_url_alternate,
         )
@@ -179,3 +504,209 @@ class CalendarService:
 
 
 calendar_service = CalendarService()
+
+
+async def sync_cita_after_create(cita: dict[str, Any]) -> dict[str, Any]:
+    """Crea evento externo tras registrar la cita en Supabase."""
+
+    provider = str(cita.get("provider") or "hosting").lower()
+    if provider == "hosting":
+        return cita
+    cita_id = cita.get("id")
+    if not cita_id:
+        return cita
+
+    try:
+        event = build_event_from_cita(cita)
+    except CalendarProviderError as exc:
+        logger.warning(
+            "calendar.event_build_failed",
+            extra={"provider": provider, "error": str(exc), "cita_id": cita_id},
+        )
+        return cita
+
+    logger.info(
+        "calendar.sync_create_start",
+        extra={"cita_id": cita_id, "provider": provider},
+    )
+    try:
+        result = await calendar_service.create_event(provider, event)
+    except CalendarProviderError as exc:
+        logger.warning(
+            "calendar.create_failed",
+            extra={"provider": provider, "error": str(exc), "cita_id": cita_id},
+        )
+        return cita
+
+    logger.info(
+        "calendar.sync_create_success",
+        extra={
+            "cita_id": cita_id,
+            "provider": provider,
+            "event_id": result.event_id,
+            "join_url": result.join_url,
+        },
+    )
+    update_payload: dict[str, Any] = {"p_id": cita_id}
+    metadata_updates: dict[str, Any] = {}
+    changed = False
+    if result.event_id and result.event_id != cita.get("provider_event_id"):
+        update_payload["p_provider_event_id"] = result.event_id
+        changed = True
+    if result.join_url and result.join_url != cita.get("external_join_url"):
+        update_payload["p_external_join_url"] = result.join_url
+        changed = True
+    uid_value = event.metadata.get("caldav_uid")
+    if isinstance(uid_value, str) and uid_value:
+        metadata_updates["caldav_uid"] = uid_value
+    etag_value = None
+    if isinstance(result.raw_response, dict):
+        etag_value = result.raw_response.get("etag")
+    if isinstance(etag_value, str) and etag_value:
+        metadata_updates["caldav_etag"] = etag_value
+    if metadata_updates:
+        update_payload["p_metadata"] = metadata_updates
+        update_payload["p_merge_metadata"] = True
+        changed = True
+
+    if not changed:
+        return cita
+
+    try:
+        updated = await storage.upsert_demo_cita(update_payload)
+        return updated
+    except storage.StorageError as exc:
+        logger.warning(
+            "calendar.sync_update_failed",
+            extra={"provider": provider, "error": str(exc), "cita_id": cita_id},
+        )
+        return cita
+
+
+async def sync_cita_after_update(
+    cita: dict[str, Any],
+    *,
+    provider_hint: str | None = None,
+) -> dict[str, Any]:
+    """Actualiza o crea el evento externo tras modificar la cita."""
+
+    provider = provider_hint or cita.get("provider") or "hosting"
+    provider = str(provider).strip().lower()
+    if provider == "hosting":
+        return cita
+    cita_id = cita.get("id")
+    if not cita_id:
+        return cita
+
+    try:
+        event = build_event_from_cita(cita)
+    except CalendarProviderError as exc:
+        logger.warning(
+            "calendar.event_build_failed",
+            extra={"provider": provider, "error": str(exc), "cita_id": cita_id},
+        )
+        return cita
+
+    raw_event_id = cita.get("provider_event_id")
+    event_id = str(raw_event_id).strip() if raw_event_id else ""
+
+    try:
+        if event_id:
+            logger.info(
+                "calendar.sync_update_start",
+                extra={"cita_id": cita_id, "provider": provider, "event_id": event_id},
+            )
+            result = await calendar_service.update_event(
+                provider, event_id, event, metadata=event.metadata
+            )
+        else:
+            logger.info(
+                "calendar.sync_update_fallback_create",
+                extra={"cita_id": cita_id, "provider": provider},
+            )
+            result = await calendar_service.create_event(provider, event)
+            event_id = result.event_id
+    except CalendarProviderError as exc:
+        logger.warning(
+            "calendar.update_failed",
+            extra={"provider": provider, "error": str(exc), "cita_id": cita_id},
+        )
+        return cita
+
+    logger.info(
+        "calendar.sync_update_success",
+        extra={
+            "cita_id": cita_id,
+            "provider": provider,
+            "event_id": event_id,
+            "join_url": result.join_url,
+        },
+    )
+    update_payload: dict[str, Any] = {"p_id": cita_id}
+    metadata_updates: dict[str, Any] = {}
+    changed = False
+    if event_id and event_id != cita.get("provider_event_id"):
+        update_payload["p_provider_event_id"] = event_id
+        changed = True
+    if result.join_url and result.join_url != cita.get("external_join_url"):
+        update_payload["p_external_join_url"] = result.join_url
+        changed = True
+    uid_value = event.metadata.get("caldav_uid")
+    if isinstance(uid_value, str) and uid_value:
+        metadata_updates["caldav_uid"] = uid_value
+    if isinstance(result.raw_response, dict):
+        etag_value = result.raw_response.get("etag")
+        if isinstance(etag_value, str) and etag_value:
+            metadata_updates["caldav_etag"] = etag_value
+    if metadata_updates:
+        update_payload["p_metadata"] = metadata_updates
+        update_payload["p_merge_metadata"] = True
+        changed = True
+
+    if not changed:
+        return cita
+
+    try:
+        updated = await storage.upsert_demo_cita(update_payload)
+        return updated
+    except storage.StorageError as exc:
+        logger.warning(
+            "calendar.sync_update_failed",
+            extra={"provider": provider, "error": str(exc), "cita_id": cita_id},
+        )
+        return cita
+
+
+async def sync_cita_after_cancel(
+    *,
+    previous: dict[str, Any] | None,
+    updated: dict[str, Any],
+    remove_event: bool,
+) -> None:
+    """Elimina el evento externo cuando la cita se cancela."""
+
+    if not remove_event:
+        return
+
+    base = previous or updated
+    provider = str(base.get("provider") or "hosting").lower()
+    if provider == "hosting":
+        return
+
+    raw_event_id = base.get("provider_event_id") or updated.get("provider_event_id")
+    event_id = str(raw_event_id).strip() if raw_event_id else ""
+    if not event_id:
+        return
+
+    try:
+        await calendar_service.delete_event(provider, event_id)
+    except CalendarProviderError as exc:
+        logger.warning(
+            "calendar.delete_failed",
+            extra={"provider": provider, "event_id": event_id, "error": str(exc)},
+        )
+        return
+    logger.info(
+        "calendar.sync_delete_success",
+        extra={"provider": provider, "event_id": event_id},
+    )

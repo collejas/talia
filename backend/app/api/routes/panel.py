@@ -20,7 +20,14 @@ from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services import calendar_service, leads_geo, storage
+from app.services import (
+    calendar_service,
+    leads_geo,
+    storage,
+    sync_cita_after_cancel,
+    sync_cita_after_create,
+    sync_cita_after_update,
+)
 
 router = APIRouter(prefix="", tags=["panel"])
 
@@ -2699,9 +2706,10 @@ def _normalize_demo_estado(value: str | None) -> str | None:
 
 
 def _normalize_demo_provider(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.strip().lower()
+    candidate = value
+    if candidate is None or (isinstance(candidate, str) and not candidate.strip()):
+        candidate = settings.calendar_default_provider or "hosting"
+    normalized = str(candidate).strip().lower()
     if normalized not in _DEMO_PROVIDERS:
         raise HTTPException(status_code=400, detail="provider_invalid")
     if normalized != "hosting" and not calendar_service.ensure_provider(normalized):
@@ -2862,6 +2870,7 @@ async def create_demo_appointment(
     if not isinstance(item, dict) or "id" not in item:
         raise HTTPException(status_code=502, detail="Respuesta inesperada creando cita demo")
 
+    item = await sync_cita_after_create(item)
     return {"ok": True, "item": item}
 
 
@@ -2901,6 +2910,7 @@ async def update_demo_appointment(
             raise HTTPException(status_code=404, detail="cita_not_found")
         raise HTTPException(status_code=502, detail="Respuesta inesperada actualizando cita demo")
 
+    item = await sync_cita_after_update(item, provider_hint=body.get("provider"))
     return {"ok": True, "item": item}
 
 
@@ -2916,11 +2926,22 @@ async def delete_demo_appointment(
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
 
-    rpc_payload: dict[str, Any] = {"p_id": str(cita_id)}
+    cita_id_str = str(cita_id)
+    rpc_payload: dict[str, Any] = {"p_id": cita_id_str}
     if reason is not None and reason.strip():
         rpc_payload["p_reason"] = reason
     if remove_provider_event:
         rpc_payload["p_remove_provider_event"] = True
+
+    existing_cita: dict[str, Any] | None = None
+    if remove_provider_event:
+        try:
+            existing_cita = await storage.get_demo_cita(cita_id_str)
+        except storage.StorageError as exc:
+            logger.warning(
+                "calendar.fetch_before_cancel_failed",
+                extra={"cita_id": cita_id_str, "error": str(exc)},
+            )
 
     resp = await _sb_post(
         "/rest/v1/rpc/fn_cita_cancel",
@@ -2939,6 +2960,10 @@ async def delete_demo_appointment(
         if resp.status_code == 404:
             raise HTTPException(status_code=404, detail="cita_not_found")
         raise HTTPException(status_code=502, detail="Respuesta inesperada cancelando cita demo")
+
+    await sync_cita_after_cancel(
+        previous=existing_cita, updated=item, remove_event=remove_provider_event
+    )
 
     return {"ok": True, "item": item}
 

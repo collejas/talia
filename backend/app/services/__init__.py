@@ -5,7 +5,11 @@ from .calendar import (
     CalendarEventResult,
     CalendarProviderError,
     CalendarService,
+    build_event_from_cita,
     calendar_service,
+    sync_cita_after_cancel,
+    sync_cita_after_create,
+    sync_cita_after_update,
 )
 
 __all__ = [
@@ -13,5 +17,9 @@ __all__ = [
     "CalendarEventResult",
     "CalendarProviderError",
     "CalendarService",
+    "build_event_from_cita",
     "calendar_service",
+    "sync_cita_after_cancel",
+    "sync_cita_after_create",
+    "sync_cita_after_update",
 ]

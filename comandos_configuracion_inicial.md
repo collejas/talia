@@ -74,15 +74,13 @@ sudo micro /etc/systemd/system/talia-panel.service
 
 
 sudo systemctl daemon-reload
-sudo systemctl enable talia-panel.service
-sudo systemctl start talia-panel.service
 
 sudo systemctl stop talia-panel.service
-
-codex resume 019a5188-8dd9-7df3-acf4-156ef07f115e
+sudo systemctl stop talia-api.service
 
 npm run lint
 npm run build --webpack
+
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
@@ -176,5 +174,15 @@ NEXT_CALENDARIO_SERVER_PORT=2080
 NEXT_CALENDARIO_SERVER_URL_ALTERNATE=https://mail.talia.mx:2080/principals/hola@talia.mx
 NEXT_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar
 NEXT_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/hola@talia.mx/addressbook
+
+
+
+
+
+curl -u 'hola@talia.mx:+WG~E[DOcInu4ssd3' \
+  -X PROPFIND \
+  -H 'Depth: 0' \
+  'https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar'
+
 
 

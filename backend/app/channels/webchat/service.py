@@ -19,7 +19,15 @@ from app.assistants import registry
 from app.assistants.manager import AssistantConfig
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
-from app.services import calendar_service, geolocation, leads_geo, storage
+from app.services import (
+    calendar_service,
+    geolocation,
+    leads_geo,
+    storage,
+    sync_cita_after_cancel,
+    sync_cita_after_create,
+    sync_cita_after_update,
+)
 from app.services import openai as openai_service
 
 from . import schemas
@@ -1441,7 +1449,14 @@ async def _execute_function_call(
         if not contacto_id:
             raise ValueError("No se pudo determinar contacto_id para schedule_demo")
 
-        provider = str(arguments.get("provider") or "hosting").strip().lower() or "hosting"
+        default_provider = (
+            settings.calendar_default_provider or "hosting"
+        ).strip().lower() or "hosting"
+        provider_raw = arguments.get("provider")
+        if isinstance(provider_raw, str):
+            provider = provider_raw.strip().lower() or default_provider
+        else:
+            provider = default_provider
         if provider not in {"hosting", "google", "caldav"}:
             raise ValueError("provider inválido para schedule_demo")
         if provider != "hosting" and not calendar_service.ensure_provider(provider):
@@ -1489,6 +1504,7 @@ async def _execute_function_call(
         }
 
         result = await storage.upsert_demo_cita(payload)
+        result = await sync_cita_after_create(result)
         return {"status": "ok", "cita": result}
 
     if name == "reschedule_demo":
@@ -1548,6 +1564,7 @@ async def _execute_function_call(
             payload["p_conversacion_id"] = str(conversacion_id)
 
         result = await storage.upsert_demo_cita(payload)
+        result = await sync_cita_after_update(result, provider_hint=provider_normalized)
         return {"status": "ok", "cita": result}
 
     if name == "cancel_demo":
@@ -1562,8 +1579,20 @@ async def _execute_function_call(
             payload["p_reason"] = reason
         if remove_provider_event:
             payload["p_remove_provider_event"] = True
+        existing_cita: dict[str, Any] | None = None
+        if remove_provider_event:
+            try:
+                existing_cita = await storage.get_demo_cita(cita_id)
+            except storage.StorageError as exc:
+                logger.warning(
+                    "calendar.fetch_before_cancel_failed",
+                    extra={"cita_id": cita_id, "error": str(exc)},
+                )
 
         result = await storage.cancel_demo_cita(payload)
+        await sync_cita_after_cancel(
+            previous=existing_cita, updated=result, remove_event=remove_provider_event
+        )
         return {"status": "ok", "cita": result}
 
     logger.warning(
