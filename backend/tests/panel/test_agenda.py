@@ -25,7 +25,7 @@ class DummyResponse:
 
 
 @pytest.mark.asyncio
-async def test_crear_cita_demo_envia_a_tabla_citas(
+async def test_crear_cita_demo_usa_rpc_upsert(
     monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
 ) -> None:
     captured: dict[str, Any] = {}
@@ -38,7 +38,7 @@ async def test_crear_cita_demo_envia_a_tabla_citas(
         prefer: str | None = None,
     ) -> DummyResponse:
         captured.update({"path": path, "json": json or {}, "token": token, "prefer": prefer})
-        return DummyResponse(status_code=201, payload=[{"id": "cita-123"}])
+        return DummyResponse(status_code=200, payload={"id": "cita-123"})
 
     monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
     monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-123")
@@ -63,15 +63,15 @@ async def test_crear_cita_demo_envia_a_tabla_citas(
 
     assert response.status_code == 201
     assert response.json() == {"ok": True, "item": {"id": "cita-123"}}
-    assert captured["path"] == "/rest/v1/citas"
+    assert captured["path"] == "/rest/v1/rpc/fn_cita_upsert"
     assert captured["token"] == "test-token"
-    assert captured["prefer"] == "return=representation"
+    assert captured["prefer"] is None
     body = captured["json"]
-    assert body["tarjeta_id"] == cita_payload["tarjeta_id"]
-    assert body["contacto_id"] == cita_payload["contacto_id"]
-    assert body["conversacion_id"] == cita_payload["conversacion_id"]
-    assert body["created_by"] == "user-123"
-    assert body["updated_by"] == "user-123"
+    assert body["p_tarjeta_id"] == cita_payload["tarjeta_id"]
+    assert body["p_contacto_id"] == cita_payload["contacto_id"]
+    assert body["p_conversacion_id"] == cita_payload["conversacion_id"]
+    assert body["p_created_by"] == "user-123"
+    assert body["p_updated_by"] == "user-123"
 
 
 @pytest.mark.asyncio
@@ -85,6 +85,7 @@ async def test_crear_cita_demo_traduce_error_supabase(
         token: str | None = None,
         prefer: str | None = None,
     ) -> DummyResponse:
+        assert path == "/rest/v1/rpc/fn_cita_upsert"
         return DummyResponse(status_code=409, payload={"message": "dup"})
 
     monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
@@ -106,15 +107,14 @@ async def test_crear_cita_demo_traduce_error_supabase(
 
 
 @pytest.mark.asyncio
-async def test_actualizar_cita_demo_envia_patch_a_citas(
+async def test_actualizar_cita_demo_usa_rpc_upsert(
     monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
 ) -> None:
     captured: dict[str, Any] = {}
 
-    async def fake_sb_patch(
+    async def fake_sb_post(
         path: str,
         *,
-        params: dict[str, str] | None = None,
         json: dict[str, Any] | None = None,
         token: str | None = None,
         prefer: str | None = None,
@@ -122,17 +122,14 @@ async def test_actualizar_cita_demo_envia_patch_a_citas(
         captured.update(
             {
                 "path": path,
-                "params": params or {},
                 "json": json or {},
                 "token": token,
                 "prefer": prefer,
             }
         )
-        return DummyResponse(
-            status_code=200, payload=[{"id": "cita-123", "estado": "reprogramada"}]
-        )
+        return DummyResponse(status_code=200, payload={"id": "cita-123", "estado": "reprogramada"})
 
-    monkeypatch.setattr(panel, "_sb_patch", fake_sb_patch)
+    monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
     monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-123")
 
     cita_id = str(uuid4())
@@ -147,31 +144,76 @@ async def test_actualizar_cita_demo_envia_patch_a_citas(
 
     assert response.status_code == 200
     assert response.json() == {"ok": True, "item": {"id": "cita-123", "estado": "reprogramada"}}
-    assert captured["path"] == "/rest/v1/citas"
-    assert captured["params"] == {"id": f"eq.{cita_id}", "limit": "1"}
+    assert captured["path"] == "/rest/v1/rpc/fn_cita_upsert"
     assert captured["token"] == "test-token"
-    assert captured["prefer"] == "return=representation"
-    assert captured["json"]["updated_by"] == "user-123"
-    assert captured["json"]["estado"] == "reprogramada"
+    assert captured["prefer"] is None
+    body = captured["json"]
+    assert body["p_id"] == str(cita_id)
+    assert body["p_updated_by"] == "user-123"
+    assert body["p_estado"] == "reprogramada"
 
 
 @pytest.mark.asyncio
-async def test_eliminar_cita_demo_envia_delete_a_citas(
+async def test_actualizar_cita_demo_envia_flags_extra(
     monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
 ) -> None:
     captured: dict[str, Any] = {}
 
-    async def fake_sb_delete(
+    async def fake_sb_post(
         path: str,
         *,
-        params: dict[str, str] | None = None,
+        json: dict[str, Any] | None = None,
         token: str | None = None,
         prefer: str | None = None,
     ) -> DummyResponse:
-        captured.update({"path": path, "params": params or {}, "token": token, "prefer": prefer})
-        return DummyResponse(status_code=204, payload=None)
+        captured.update({"path": path, "json": json or {}, "token": token, "prefer": prefer})
+        payload = json or {}
+        return DummyResponse(status_code=200, payload={"id": payload.get("p_id", "cita-xyz")})
 
-    monkeypatch.setattr(panel, "_sb_delete", fake_sb_delete)
+    monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
+    monkeypatch.setattr(panel, "_jwt_verify_and_sub", lambda token: "user-123")
+
+    cita_id = str(uuid4())
+    timestamp = datetime(2025, 1, 4, 12, 0, tzinfo=timezone.utc).isoformat()
+    response = await async_client.patch(
+        f"/api/agenda/demos/{cita_id}",
+        json={
+            "metadata": {"notas": "algo"},
+            "merge_metadata": False,
+            "expected_updated_at": timestamp,
+            "remove_provider_event": True,
+        },
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    assert captured["path"] == "/rest/v1/rpc/fn_cita_upsert"
+    body = captured["json"]
+    assert body["p_merge_metadata"] is False
+    assert body["p_expected_updated_at"] == timestamp
+    assert body["p_remove_provider_event"] is True
+
+
+@pytest.mark.asyncio
+async def test_eliminar_cita_demo_usa_rpc_cancel(
+    monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_sb_post(
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        token: str | None = None,
+        prefer: str | None = None,
+    ) -> DummyResponse:
+        captured.update({"path": path, "json": json or {}, "token": token, "prefer": prefer})
+        payload = json or {}
+        return DummyResponse(
+            status_code=200, payload={"id": payload.get("p_id"), "estado": "cancelada"}
+        )
+
+    monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
 
     cita_id = str(uuid4())
     response = await async_client.delete(
@@ -180,8 +222,39 @@ async def test_eliminar_cita_demo_envia_delete_a_citas(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True}
-    assert captured["path"] == "/rest/v1/citas"
-    assert captured["params"] == {"id": f"eq.{cita_id}"}
+    assert response.json() == {"ok": True, "item": {"id": cita_id, "estado": "cancelada"}}
+    assert captured["path"] == "/rest/v1/rpc/fn_cita_cancel"
+    assert captured["json"] == {"p_id": cita_id}
     assert captured["token"] == "test-token"
-    assert captured["prefer"] == "return=representation"
+    assert captured["prefer"] is None
+
+
+@pytest.mark.asyncio
+async def test_eliminar_cita_demo_con_motivo_y_flag(
+    monkeypatch: pytest.MonkeyPatch, async_client: AsyncClient
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_sb_post(
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        token: str | None = None,
+        prefer: str | None = None,
+    ) -> DummyResponse:
+        captured.update({"path": path, "json": json or {}, "token": token, "prefer": prefer})
+        return DummyResponse(status_code=200, payload={"id": json["p_id"], "estado": "cancelada"})
+
+    monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
+
+    cita_id = str(uuid4())
+    response = await async_client.delete(
+        f"/api/agenda/demos/{cita_id}?remove_provider_event=true&reason=Cambio%20de%20agenda",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["item"]["id"] == cita_id
+    assert captured["json"]["p_id"] == cita_id
+    assert captured["json"]["p_reason"] == "Cambio de agenda"
+    assert captured["json"]["p_remove_provider_event"] is True

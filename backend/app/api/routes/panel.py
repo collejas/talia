@@ -126,6 +126,18 @@ class DemoAppointmentUpdatePayload(BaseModel):
     cancel_reason: str | None = Field(
         default=None, description="Motivo de cancelación (se usa junto con estado 'cancelada')."
     )
+    merge_metadata: bool | None = Field(
+        default=None,
+        description="True (por defecto) fusiona los metadatos existentes; False reemplaza el JSON completo.",
+    )
+    expected_updated_at: datetime | None = Field(
+        default=None,
+        description="Marca de tiempo esperada de la fila (control de concurrencia optimista).",
+    )
+    remove_provider_event: bool | None = Field(
+        default=None,
+        description="Cuando es true, se borra el provider_event_id relacionado.",
+    )
 
 
 class DepartamentoCreatePayload(BaseModel):
@@ -2765,6 +2777,9 @@ def _prepare_update_demo_payload(
         "contacto_id": _uuid_to_str(payload.contacto_id),
         "conversacion_id": _uuid_to_str(payload.conversacion_id),
         "cancel_reason": payload.cancel_reason,
+        "merge_metadata": payload.merge_metadata,
+        "expected_updated_at": _serialize_datetime(payload.expected_updated_at),
+        "remove_provider_event": payload.remove_provider_event,
         "updated_by": user_id,
     }
     return _clean_payload(data)
@@ -2784,11 +2799,11 @@ async def create_demo_appointment(
     if "start_at" not in body:
         raise HTTPException(status_code=400, detail="start_at_requerido")
 
+    rpc_payload = {f"p_{key}": value for key, value in body.items()}
     resp = await _sb_post(
-        "/rest/v1/citas",
-        json=body,
+        "/rest/v1/rpc/fn_cita_upsert",
+        json=rpc_payload,
         token=token,
-        prefer="return=representation",
     )
     if resp.status_code >= 400:
         logger.error(
@@ -2797,11 +2812,11 @@ async def create_demo_appointment(
         )
         raise HTTPException(status_code=502, detail="Error creando cita demo")
 
-    rows = resp.json() or []
-    if not rows:
+    item = resp.json() or {}
+    if not isinstance(item, dict) or "id" not in item:
         raise HTTPException(status_code=502, detail="Respuesta inesperada creando cita demo")
 
-    return {"ok": True, "item": rows[0]}
+    return {"ok": True, "item": item}
 
 
 @router.patch("/agenda/demos/{cita_id}")
@@ -2820,13 +2835,12 @@ async def update_demo_appointment(
     if not non_meta_keys:
         raise HTTPException(status_code=400, detail="no_changes")
 
-    params = {"id": f"eq.{cita_id}", "limit": "1"}
-    resp = await _sb_patch(
-        "/rest/v1/citas",
-        params=params,
-        json=body,
+    rpc_payload = {f"p_{key}": value for key, value in body.items()}
+    rpc_payload["p_id"] = str(cita_id)
+    resp = await _sb_post(
+        "/rest/v1/rpc/fn_cita_upsert",
+        json=rpc_payload,
         token=token,
-        prefer="return=representation",
     )
     if resp.status_code >= 400:
         logger.error(
@@ -2835,28 +2849,37 @@ async def update_demo_appointment(
         )
         raise HTTPException(status_code=502, detail="Error actualizando cita demo")
 
-    rows = resp.json() or []
-    if not rows:
-        raise HTTPException(status_code=404, detail="cita_not_found")
+    item = resp.json() or {}
+    if not isinstance(item, dict) or "id" not in item:
+        if resp.status_code == 404:
+            raise HTTPException(status_code=404, detail="cita_not_found")
+        raise HTTPException(status_code=502, detail="Respuesta inesperada actualizando cita demo")
 
-    return {"ok": True, "item": rows[0]}
+    return {"ok": True, "item": item}
 
 
+# pylint: disable-next=too-many-arguments
 @router.delete("/agenda/demos/{cita_id}")
 async def delete_demo_appointment(
     cita_id: UUID,
+    remove_provider_event: bool = Query(default=False),
+    reason: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
 
-    params = {"id": f"eq.{cita_id}"}
-    resp = await _sb_delete(
-        "/rest/v1/citas",
-        params=params,
+    rpc_payload: dict[str, Any] = {"p_id": str(cita_id)}
+    if reason is not None and reason.strip():
+        rpc_payload["p_reason"] = reason
+    if remove_provider_event:
+        rpc_payload["p_remove_provider_event"] = True
+
+    resp = await _sb_post(
+        "/rest/v1/rpc/fn_cita_cancel",
+        json=rpc_payload,
         token=token,
-        prefer="return=representation",
     )
     if resp.status_code >= 400:
         logger.error(
@@ -2865,12 +2888,13 @@ async def delete_demo_appointment(
         )
         raise HTTPException(status_code=502, detail="Error eliminando cita demo")
 
-    if resp.status_code == 200:
-        deleted = resp.json() or []
-        if not deleted:
+    item = resp.json() or {}
+    if not isinstance(item, dict) or "id" not in item:
+        if resp.status_code == 404:
             raise HTTPException(status_code=404, detail="cita_not_found")
+        raise HTTPException(status_code=502, detail="Respuesta inesperada cancelando cita demo")
 
-    return {"ok": True}
+    return {"ok": True, "item": item}
 
 
 def _ensure_state_code(value: str) -> str:

@@ -28,8 +28,9 @@ Lograr que Tal-IA pueda **agendar, actualizar y cancelar citas de demostración*
 ## Fase 2 · Supabase y capa de datos
 
 0. ✅ (completado) Renombrar `public.lead_citas_demo` → `public.citas`, el enum `cita_demo_estado` → `cita_estado`, los triggers, índices y claves foráneas asociadas (por ejemplo `lead_citas_demo_active_unique` → `citas_active_unique`), y actualizar las vistas dependientes.
-1. Crear función RPC `fn_cita_upsert` con validaciones de permisos (`public.puede_ver_lead`), manejo de estado y retorno del registro completo.
-2. Implementar función `fn_cita_cancel` que marque `estado = 'cancelada'`, capture `cancel_reason` y elimine `provider_event_id` cuando corresponda.
+1. ✅ (completado) Función RPC `fn_cita_upsert` con validaciones de permisos (`public.puede_ver_lead`), manejo de estado y retorno del registro completo.
+   - Define duración estándar (45 min) cuando no se envía `end_at`, normaliza provider/timezone, soporta merge opcional de metadatos y control de concurrencia con `expected_updated_at`.
+2. ✅ (completado) Función `fn_cita_cancel` que marca `estado = 'cancelada'`, permite limpiar `provider_event_id` y actualiza `updated_by`.
 3. Añadir columnas requeridas (si aplica): `reminder_sent_at`, `external_join_url`, indicadores de origen (IA vs humano) dentro de `metadata`.
 4. Revisar políticas RLS para permitir a integraciones de servicio (por ejemplo, `service_role`) modificar citas tras recibir webhooks externos.
 5. Extender índices si se necesitarán consultas adicionales (ej. `provider_event_id`, `created_by`, `estado`).
