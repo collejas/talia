@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import io
 import json
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from xml.etree import ElementTree as ET
 
 import httpx
 from fastapi import HTTPException, Request, UploadFile, status
@@ -26,7 +28,7 @@ logger = get_logger("app.channels.webchat")
 visit_logger = get_logger("app.analytics.visitas")
 
 MAX_ATTACHMENTS_PER_MESSAGE = 3
-MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024  # 8 MB
+MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024  # 8 MB
 MAX_TEXT_ATTACHMENT_CHARS = 4000
 TEXT_MIME_PREFIXES = ("text/",)
 TEXT_MIME_WHITELIST = {
@@ -225,16 +227,6 @@ async def _prepare_user_content_with_attachments(
             mime = attachment.mime.lower() if attachment.mime else None
             extension = _guess_extension(attachment.name, attachment.url)
 
-            if _is_image_mime(mime, extension=extension):
-                content_items.append(
-                    {
-                        "type": "input_image",
-                        "image_url": {"url": url},
-                    }
-                )
-                processed += 1
-                continue
-
             data_bytes: bytes | None = None
             try:
                 client_http = await _ensure_http_client()
@@ -253,6 +245,60 @@ async def _prepare_user_content_with_attachments(
                 warnings.append(
                     f"El archivo {name} supera el límite permitido de {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB."
                 )
+                continue
+
+            if _is_image_mime(mime, extension=extension):
+                content_items.append(
+                    {
+                        "type": "input_image",
+                        "image_url": url,
+                    }
+                )
+                processed += 1
+                continue
+
+            if extension == ".docx":
+                try:
+                    doc_text = _extract_docx_text(data_bytes)
+                except Exception as exc:  # pragma: no cover - archivos corruptos
+                    logger.warning(
+                        "webchat.attachment_docx_parse_failed",
+                        extra={"name": name, "error": str(exc)},
+                    )
+                    warnings.append(f"No pude leer {name} (DOCX).")
+                    continue
+                trimmed_text, truncated = _trim_text_payload(doc_text, MAX_TEXT_ATTACHMENT_CHARS)
+                if truncated:
+                    trimmed_text += f"\n\n[Nota interna: contenido truncado a {MAX_TEXT_ATTACHMENT_CHARS} caracteres.]"
+                content_items.append(
+                    {
+                        "type": "input_text",
+                        "text": f"Contenido de {name} (extraído de DOCX):\n{trimmed_text}",
+                    }
+                )
+                processed += 1
+                continue
+
+            if extension in {".xlsx", ".xlsm"}:
+                try:
+                    sheet_text = _extract_xlsx_text(data_bytes)
+                except Exception as exc:  # pragma: no cover - archivos corruptos
+                    logger.warning(
+                        "webchat.attachment_xlsx_parse_failed",
+                        extra={"name": name, "error": str(exc)},
+                    )
+                    warnings.append(f"No pude leer {name} (XLSX).")
+                    continue
+                trimmed_text, truncated = _trim_text_payload(sheet_text, MAX_TEXT_ATTACHMENT_CHARS)
+                if truncated:
+                    trimmed_text += f"\n\n[Nota interna: contenido truncado a {MAX_TEXT_ATTACHMENT_CHARS} caracteres.]"
+                content_items.append(
+                    {
+                        "type": "input_text",
+                        "text": f"Contenido de {name} (extraído de Excel):\n{trimmed_text}",
+                    }
+                )
+                processed += 1
                 continue
 
             if _is_text_attachment(mime, extension=extension):
@@ -1240,6 +1286,70 @@ async def _run_assistant_turn(
         tool_call_ids,
         latest_openai_conversation,
     )
+
+
+def _extract_docx_text(data: bytes) -> str:
+    """Extrae texto legible de un archivo DOCX."""
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        try:
+            xml_bytes = archive.read("word/document.xml")
+        except KeyError as exc:
+            raise ValueError("Documento DOCX sin document.xml") from exc
+
+    root = ET.fromstring(xml_bytes)
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs: list[str] = []
+    for para in root.findall(".//w:p", ns):
+        runs = []
+        for text_node in para.findall(".//w:t", ns):
+            if text_node.text:
+                runs.append(text_node.text)
+        if runs:
+            paragraphs.append("".join(runs))
+    return "\n\n".join(paragraphs).strip()
+
+
+def _extract_xlsx_text(data: bytes) -> str:
+    """Extrae texto tabular de un archivo XLSX/XLSM."""
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        shared_strings: list[str] = []
+        ns = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+
+        if "xl/sharedStrings.xml" in archive.namelist():
+            shared_root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+            for si in shared_root.findall(".//main:si", ns):
+                fragments: list[str] = []
+                for text_node in si.findall(".//main:t", ns):
+                    if text_node.text:
+                        fragments.append(text_node.text)
+                shared_strings.append("".join(fragments))
+
+        rows_out: list[str] = []
+        for name in archive.namelist():
+            if not name.startswith("xl/worksheets/") or not name.endswith(".xml"):
+                continue
+            sheet_root = ET.fromstring(archive.read(name))
+            for row in sheet_root.findall(".//main:row", ns):
+                values: list[str] = []
+                for cell in row.findall("main:c", ns):
+                    cell_type = cell.get("t")
+                    value_text = ""
+                    if cell_type == "s":
+                        idx_text = cell.findtext("main:v", default="", namespaces=ns)
+                        if idx_text.isdigit():
+                            idx = int(idx_text)
+                            if 0 <= idx < len(shared_strings):
+                                value_text = shared_strings[idx]
+                    elif cell_type == "inlineStr":
+                        value_text = "".join(t.text or "" for t in cell.findall(".//main:t", ns))
+                    else:
+                        raw = cell.findtext("main:v", default="", namespaces=ns)
+                        value_text = raw
+                    values.append(value_text.strip())
+                if any(values):
+                    rows_out.append("\t".join(values).strip())
+
+        return "\n".join(rows_out).strip()
 
 
 async def _execute_function_call(
