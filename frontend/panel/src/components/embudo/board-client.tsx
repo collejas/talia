@@ -265,7 +265,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
             Aún no hay etapas configuradas en tu embudo.
           </div>
         ) : (
-          <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
+          <div className="flex flex-1 gap-4 overflow-x-auto pb-2 pr-2">
             <div className="w-[320px] shrink-0">
               <section className="flex h-full min-h-[420px] flex-col rounded-xl border border-primary/60 bg-primary/5">
                 <div className="px-4 py-4">

@@ -24,7 +24,7 @@ export default async function Page() {
       <AppSidebar variant='inset' />
       <SidebarInset>
         <SiteHeader title='Embudo' />
-        <div className='flex flex-1 flex-col'>
+        <div className='flex h-[calc(100vh-var(--header-height))] flex-1 flex-col overflow-hidden'>
           <div className='@container/main flex flex-1 flex-col gap-2'>
             <div className='flex flex-1 flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6'>
               <SessionRecovery errors={embudo.errors} />

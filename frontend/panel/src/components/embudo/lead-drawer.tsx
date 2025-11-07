@@ -586,7 +586,7 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-md">
+      <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden">
         <DrawerHeader className="items-start">
           <DrawerTitle>{card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
           <DrawerDescription className="flex flex-col gap-1 text-left">
@@ -598,7 +598,7 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as typeof activeTab)}
-          className="flex h-full flex-col"
+          className="flex h-full min-h-0 flex-col"
         >
           <TabsList className="mx-4 grid h-auto grid-cols-3 gap-1 rounded-lg border bg-muted/60 p-1">
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
@@ -606,10 +606,10 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
             <TabsTrigger value="historial">Historial</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="resumen" className="flex flex-1 flex-col overflow-hidden">
+          <TabsContent value="resumen" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
             <form
               onSubmit={handleSubmit(onSubmitForm)}
-              className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4"
+              className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-4"
             >
               <section className="space-y-3">
                 <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
@@ -780,8 +780,8 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
             </form>
           </TabsContent>
 
-          <TabsContent value="notas" className="flex-1 overflow-y-auto px-4 pb-6">
-            <div className="flex h-full flex-col gap-4">
+          <TabsContent value="notas" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
+            <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-6">
               <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
                 <div>
                   <h4 className="text-sm font-semibold text-foreground">Agregar nota</h4>
@@ -844,8 +844,8 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
             </div>
           </TabsContent>
 
-          <TabsContent value="historial" className="flex-1 overflow-y-auto px-4 pb-6">
-            <div className="space-y-3">
+          <TabsContent value="historial" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
+            <div className="flex flex-1 min-h-0 flex-col space-y-3 overflow-y-auto px-4 pb-6">
               {historyState.status === "loading" && historyState.data.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
                   Cargando historial...
