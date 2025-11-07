@@ -1,4 +1,6 @@
+import { type HTMLAttributes } from "react"
 import { IconMessageCircle, IconUser } from "@tabler/icons-react"
+import type { DraggableSyntheticListeners } from "@dnd-kit/core"
 
 import type { EmbudoCard } from "@/lib/embudo/data"
 import { cn } from "@/lib/utils"
@@ -8,9 +10,18 @@ type EmbudoCardItemProps = {
   isDragging?: boolean
   onClick?: () => void
   disabled?: boolean
+  dragAttributes?: HTMLAttributes<HTMLButtonElement>
+  dragListeners?: DraggableSyntheticListeners
 }
 
-export function EmbudoCardItem({ card, isDragging = false, onClick, disabled = false }: EmbudoCardItemProps) {
+export function EmbudoCardItem({
+  card,
+  isDragging = false,
+  onClick,
+  disabled = false,
+  dragAttributes,
+  dragListeners,
+}: EmbudoCardItemProps) {
   return (
     <button
       type="button"
@@ -20,6 +31,8 @@ export function EmbudoCardItem({ card, isDragging = false, onClick, disabled = f
         "w-full text-left transition",
         disabled && "cursor-not-allowed opacity-80",
       )}
+      {...dragAttributes}
+      {...dragListeners}
     >
       <article
         className={cn(

@@ -44,14 +44,14 @@ Permitir a los usuarios:
 - Server action `updateLead` → llama RPC y devuelve la tarjeta actualizada.
 - Toasts de feedback (éxito/error).
 
-### 5. Drag & drop
-- Integrar `@dnd-kit/core` en `EmbudoBoard`. 🔜
-- Habilitar drag solo en columnas con `orden ≥ 2`.
-- Destacar columnas válidas cuando una tarjeta está en drag.
+### 5. Drag & drop ✅
+- Integrar `@dnd-kit/core` en `EmbudoBoard`. ✔️
+- Habilitar drag solo en columnas con `orden ≥ 2`. ✔️
+- Destacar columnas válidas cuando una tarjeta está en drag. ✔️
 - Server action `moveLead`:
-  - Invoca `panel_lead_move`.
-  - Actualiza estado local (optimist update) y revierte ante error.
-- Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario.
+  - Invoca `panel_lead_move`. ✔️
+  - Actualiza estado local (optimist update) y revierte ante error. ✔️
+- Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario. ✔️
 
 ### 6. Historial & notas
 - Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas.
@@ -77,6 +77,6 @@ Permitir a los usuarios:
 
 ## Próximos pasos sugeridos
 
-1. Implementar y probar las RPC nuevas (`panel_lead_update`, `panel_lead_move`).
-2. Montar el Drawer con el formulario y server action `updateLead`.
-3. Integrar drag & drop con `moveLead` y feedback visual.
+1. Implementar y probar las RPC nuevas (`panel_lead_update`, `panel_lead_move`). ✅
+2. Montar el Drawer con el formulario y server action `updateLead`. ✅
+3. Integrar drag & drop con `moveLead` y feedback visual. ✅
