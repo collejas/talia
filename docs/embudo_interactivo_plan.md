@@ -22,17 +22,19 @@ Permitir a los usuarios:
 - Definir reglas de movimiento (permitir avanzar/retroceder, restricciones por etapa).
 - Mapear RPC existentes y las nuevas que se requieren.
 
-### 2. Backend / Supabase
-- Crear RPC `panel_lead_update` (SQL) o server action que actualice los campos editables (tarjetas/contactos).
+### 2. Backend / Supabase ✅
+- Crear RPC `panel_lead_update` (SQL) o server action que actualice los campos editables (tarjetas/contactos). **(Listo)**  
+  ↳ `20251203_102500_panel_lead_actions.sql` define `panel_lead_update` y `panel_lead_move`, con permisos agregados en `20251203_103500_panel_lead_permissions.sql`.
 - Crear RPC `panel_lead_move`:
-  - Actualiza `lead_tarjetas.etapa_id`.
-  - Inserta registro en `lead_movimientos`.
-  - Devuelve la tarjeta actualizada (etapa, orden, categoría, timestamps).
-- Escribir migraciones y pruebas asociadas.
+  - Actualiza `lead_tarjetas.etapa_id`. ✔️
+  - Inserta registro en `lead_movimientos`. ✔️
+  - Devuelve la tarjeta actualizada (etapa, orden, categoría, timestamps). ✔️
+- Escribir migraciones y pruebas asociadas. ✔️ (Migraciones aplicadas; falta cobertura de pruebas)
 
-### 3. Frontend – datos compartidos
-- Extender `loadEmbudoData` para traer `etapa_orden` y cualquier atributo adicional requerido por el Drawer.
-- Aplicar `unstable_cache` + `revalidateTag('embudo')` para mantener sincronizado el embudo tras cada acción.
+### 3. Frontend – datos compartidos ✅
+- Extender `loadEmbudoData` para traer `etapa_orden` y cualquier atributo adicional requerido por el Drawer. ✔️ (`EmbudoStage` incluye `orden`).
+- Utilizar server actions con invalidación (`revalidateTag('embudo', 'default')`) para mantener sincronizado el embudo tras cada acción. ✔️  
+  ↳ `updateLeadCard` y `moveLeadCard` consumen las RPC y normalizan la respuesta.
 
 ### 4. Drawer de detalle (`LeadDrawer`)
 - Implementar `LeadDrawer` con shadcn/ui (`Drawer`/`Dialog` según viewport).
