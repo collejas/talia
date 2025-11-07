@@ -1,6 +1,6 @@
 "use server";
 
-import { callSupabaseRpc } from "@/lib/leads/supabase";
+import { callSupabaseRest, callSupabaseRpc } from "@/lib/leads/supabase";
 
 const DEFAULT_LIMIT = 200;
 
@@ -74,36 +74,96 @@ type LeadListRow = {
   total_rows: number;
 };
 
-export async function loadEmbudoData(): Promise<EmbudoData> {
-  const lista = await callSupabaseRpc<LeadListRow[]>("panel_leads_list", {
-    body: {
-      p_limit: DEFAULT_LIMIT,
-      p_offset: 0,
-      p_order_by: "actualizado_en",
-      p_order_dir: "desc",
-    },
-  });
+type LeadStageRow = {
+  id: string;
+  tablero_id: string;
+  codigo: string;
+  nombre: string;
+  categoria: string;
+  orden: number | null;
+  metadatos: Record<string, unknown> | null;
+};
 
-  const errors: string[] = [];
-  if (!lista.ok) errors.push(lista.error);
-
-  const { stages, sinConversacion } = mapStages(lista.ok ? lista.data : []);
-  return { stages, sinConversacion, errors };
+function parseMetadatos(input: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+  return input;
 }
 
-function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; sinConversacion: EmbudoCard[] } {
-  if (!rows || !rows.length) {
-    return { stages: [], sinConversacion: [] };
-  }
+function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
+  const value = metadatos["is_counter_only"];
+  return value === true || value === "true";
+}
 
+export async function loadEmbudoData(): Promise<EmbudoData> {
+  const [stageResult, listResult] = await Promise.all([
+    callSupabaseRest<LeadStageRow[]>("lead_etapas", {
+      query: {
+        select: "id,tablero_id,codigo,nombre,categoria,orden,metadatos",
+        order: "orden.asc,nombre.asc",
+      },
+    }),
+    callSupabaseRpc<LeadListRow[]>("panel_leads_list", {
+      body: {
+        p_limit: DEFAULT_LIMIT,
+        p_offset: 0,
+        p_order_by: "actualizado_en",
+        p_order_dir: "desc",
+      },
+    }),
+  ]);
+
+  const errors: string[] = [];
+  if (!stageResult.ok) errors.push(stageResult.error);
+  if (!listResult.ok) errors.push(listResult.error);
+
+  const { stages, sinConversacion } = mapStages(
+    stageResult.ok ? stageResult.data : [],
+    listResult.ok ? listResult.data : [],
+  );
+
+  return { stages, sinConversacion, errors: Array.from(new Set(errors)) };
+}
+
+function mapStages(
+  stageRows: LeadStageRow[] | undefined,
+  rows: LeadListRow[] | undefined,
+): { stages: EmbudoStage[]; sinConversacion: EmbudoCard[] } {
   const stageMap = new Map<string, EmbudoStage>();
   const sinConversacion: EmbudoCard[] = [];
 
+  if (stageRows && stageRows.length) {
+    for (const stageRow of stageRows) {
+      const metadatos = parseMetadatos(stageRow.metadatos);
+      if (isCounterOnlyStage(metadatos)) {
+        continue;
+      }
+
+      stageMap.set(stageRow.id, {
+        id: stageRow.id,
+        nombre: stageRow.nombre,
+        codigo: stageRow.codigo,
+        categoria: stageRow.categoria,
+        orden: typeof stageRow.orden === "number" ? stageRow.orden : Number.MAX_SAFE_INTEGER,
+        metadatos,
+        tarjetas: [],
+      });
+    }
+  }
+
+  if (!rows || !rows.length) {
+    const orderedStages = Array.from(stageMap.values()).sort(
+      (a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"),
+    );
+    return { stages: orderedStages, sinConversacion };
+  }
+
   for (const row of rows) {
-    const stageMetadatos =
-      row.etapa_metadatos && typeof row.etapa_metadatos === "object" && !Array.isArray(row.etapa_metadatos)
-        ? (row.etapa_metadatos as Record<string, unknown>)
-        : {};
+    const stageMetadatos = parseMetadatos(row.etapa_metadatos);
+    if (isCounterOnlyStage(stageMetadatos)) {
+      continue;
+    }
 
     const tarjeta: EmbudoCard = {
       tarjetaId: row.tarjeta_id,
@@ -138,7 +198,7 @@ function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; si
       row.etapa_nombre,
       row.categoria,
       row.etapa_orden ?? Number.MAX_SAFE_INTEGER,
-      stageMetadatos
+      stageMetadatos,
     );
     stage.tarjetas.push(tarjeta);
   }
@@ -179,7 +239,9 @@ function ensureStage(
     stage.codigo = codigo;
     stage.categoria = categoria;
     stage.orden = orden;
-    stage.metadatos = metadatos;
+    if (Object.keys(metadatos).length) {
+      stage.metadatos = metadatos;
+    }
   }
   return map.get(id)!;
 }

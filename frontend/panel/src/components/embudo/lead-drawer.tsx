@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { LeadActionResult } from "@/lib/embudo/actions";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+const EMPTY_SELECT_VALUE = "__talia_empty__";
 
 const formSchema = z.object({
   nombre: z.string().trim().max(120).optional().or(z.literal("")),
@@ -518,7 +519,11 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
         );
       }
       case "select": {
-        const value = typeof rawValue === "string" ? rawValue : "";
+        const stringValue = typeof rawValue === "string" ? rawValue : "";
+        const hasValue = stringValue.length > 0;
+        const selectValue = (hasValue ? stringValue : field.required ? undefined : EMPTY_SELECT_VALUE) as
+          | string
+          | undefined;
         const options = field.options ?? [];
         return (
           <div className="grid gap-2">
@@ -527,15 +532,19 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
               {field.required ? " *" : ""}
             </label>
             <Select
-              value={value}
-              onValueChange={(next) => handleStageFieldChange(stageCode, field, next)}
+              value={selectValue}
+              onValueChange={(next) =>
+                handleStageFieldChange(stageCode, field, next === EMPTY_SELECT_VALUE ? "" : next)
+              }
               disabled={pending || !options.length}
             >
               <SelectTrigger id={`${baseId}-select`} size="default">
                 <SelectValue placeholder={field.placeholder ?? "Selecciona una opción"} />
               </SelectTrigger>
               <SelectContent>
-                {!field.required ? <SelectItem value="">Sin seleccionar</SelectItem> : null}
+                {!field.required ? (
+                  <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
+                ) : null}
                 {options.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
