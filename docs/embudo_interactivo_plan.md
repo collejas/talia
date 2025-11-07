@@ -53,7 +53,7 @@ Permitir a los usuarios:
   - Invoca `panel_lead_move`. ✔️
   - Actualiza estado local (optimist update) y revierte ante error. ✔️
 - Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario. ✔️
-  ↳ **Pendiente ejecutar** `20251204_090000_panel_lead_move_type_fix.sql` y `20251204_110000_panel_stage_drawer_prep.sql` en Supabase.
+  ↳ **Pendiente ejecutar** `20251204_090000_panel_lead_move_type_fix.sql`, `20251204_110000_panel_stage_drawer_prep.sql` y `20251204_140500_panel_lead_rpc_return_fix.sql` en Supabase.
 
 ### 6. Historial & notas
 - Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas. ✅ (`LeadDrawer` consume `panel_lead_movimientos` vía `/api/embudo/leads/[tarjetaId]/history`).
@@ -61,10 +61,10 @@ Permitir a los usuarios:
 - Botón para agregar nota/comentario (Nuevo registro en `lead_movimientos.metadata`). ✅ (Notas se guardan con `panel_lead_add_nota` y se reflejan inmediatamente en ambas pestañas).
 
 ### 7. QA & UX
-- Pruebas manuales: abrir → editar → guardar → mover → revertir.
-- Validar integridad en Supabase (registros y movimientos).
-- Revisar accesibilidad (enfoque, drag con teclado).
-- Documentar flujos y comandos (`README`/`docs`).
+- Pruebas manuales: abrir → editar → guardar → mover → revertir. ⚠️ *Pendiente validar en entorno real (sugerido: seguir checklist en `docs/qa_embudo_manual.md`)*
+- Validar integridad en Supabase (registros y movimientos). ⚠️ *Pendiente confirmar (`panel_lead_movimientos`, `lead_movimientos` y `metadata.stage_prep`).*
+- Revisar accesibilidad (enfoque, drag con teclado). ⚠️ *Pendiente ejecutar revisión (navegación con teclado y lector de pantalla).*
+- Documentar flujos y comandos (`README`/`docs`). ✅ (`docs/qa_embudo_manual.md` incluye pasos sugeridos; lint/build documentados en esta sesión).
 
 ### 8. Deploy
 - Ejecutar migraciones Supabase.
