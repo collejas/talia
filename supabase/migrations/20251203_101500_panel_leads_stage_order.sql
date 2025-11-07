@@ -203,3 +203,17 @@ OFFSET GREATEST(p_offset, 0);
 $function$;
 
 COMMIT;
+
+GRANT EXECUTE ON FUNCTION public.panel_leads_list(
+    uuid,
+    uuid,
+    public.lead_categoria,
+    uuid,
+    timestamptz,
+    timestamptz,
+    text,
+    text,
+    text,
+    integer,
+    integer
+) TO postgres, service_role, authenticated;

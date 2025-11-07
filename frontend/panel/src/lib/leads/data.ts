@@ -34,6 +34,7 @@ type LeadsListRow = {
   canal: string | null;
   etapa_id: string;
   etapa_nombre: string;
+  etapa_orden: number;
   categoria: "abierta" | "ganada" | "perdida";
   creado_en: string;
   actualizado_en: string;
