@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
 import { Button } from "@/components/ui/button";
@@ -22,8 +25,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { LeadActionResult } from "@/lib/embudo/actions";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+const formSchema = z.object({
+  nombre: z.string().trim().max(120).optional().or(z.literal("")),
+  correo: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || EMAIL_REGEX.test(value), { message: "Ingresa un correo válido." }),
+  telefono: z.string().trim().optional(),
+  monto: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || !Number.isNaN(Number(value)), {
+      message: "El monto debe ser un número válido.",
+    }),
+  moneda: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => !value || value.length === 3, {
+      message: "La moneda debe tener exactamente 3 caracteres.",
+    }),
+  probabilidad: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => {
+      if (!value) return true;
+      const parsed = Number(value);
+      return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
+    }, { message: "La probabilidad debe estar entre 0 y 100." }),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 export type LeadDrawerSubmitPayload = {
   contacto: Record<string, unknown>;
@@ -38,15 +79,6 @@ type LeadDrawerProps = {
   allStages: EmbudoStage[];
   card: EmbudoCard | null;
   onSubmit: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
-};
-
-type FormState = {
-  nombre: string;
-  correo: string;
-  telefono: string;
-  monto: string;
-  moneda: string;
-  probabilidad: string;
 };
 
 type DrawerPrepOption = {
@@ -101,15 +133,6 @@ type DrawerStageGroup = {
   sections: DrawerPrepSectionDefinition[];
 };
 
-const EMPTY_STATE: FormState = {
-  nombre: "",
-  correo: "",
-  telefono: "",
-  monto: "",
-  moneda: "MXN",
-  probabilidad: "",
-};
-
 const ALLOWED_TYPES: Set<DrawerPrepFieldType> = new Set([
   "text",
   "textarea",
@@ -123,6 +146,23 @@ const ALLOWED_TYPES: Set<DrawerPrepFieldType> = new Set([
 
 export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, onSubmit }: LeadDrawerProps) {
   const stageName = currentStage?.nombre ?? "Sin etapa";
+  const [activeTab, setActiveTab] = useState<"resumen" | "notas" | "historial">("resumen");
+
+  const defaultFormValues = useMemo<FormValues>(() => {
+    const monto = typeof card?.monto === "number" && !Number.isNaN(card.monto) ? String(card.monto) : "";
+    const probabilidad =
+      typeof card?.probabilidad === "number" && !Number.isNaN(card.probabilidad)
+        ? String(Math.round(card.probabilidad))
+        : "";
+    return {
+      nombre: card?.nombre ?? "",
+      correo: card?.correo ?? "",
+      telefono: card?.telefono ?? "",
+      monto,
+      moneda: card?.moneda ?? "",
+      probabilidad,
+    };
+  }, [card]);
 
   const drawerDefinitions = useMemo(() => buildDrawerDefinitions(allStages), [allStages]);
 
@@ -143,37 +183,38 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
     [allStages, currentStage, drawerDefinitions],
   );
 
-  const initialFormState = useMemo<FormState>(() => {
-    if (!card) return EMPTY_STATE;
-    return {
-      nombre: card.nombre ?? "",
-      correo: card.correo ?? "",
-      telefono: card.telefono ?? "",
-      monto: typeof card.monto === "number" ? String(card.monto) : "",
-      moneda: card.moneda || "MXN",
-      probabilidad:
-        typeof card.probabilidad === "number" && !Number.isNaN(card.probabilidad)
-          ? String(Math.round(card.probabilidad))
-          : "",
-    };
-  }, [card]);
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: defaultFormValues,
+    mode: "onBlur",
+  });
 
-  const [form, setForm] = useState<FormState>(initialFormState);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors },
+  } = form;
+
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm(initialFormState);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    reset(defaultFormValues);
     setStagePrep(initialStagePrepState);
     setError(null);
     setPending(false);
-  }, [initialFormState, initialStagePrepState, open]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [defaultFormValues, initialStagePrepState, reset, open]);
 
-  const handleInputChange = (field: keyof FormState) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  useEffect(() => {
+    if (!open) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setActiveTab("resumen");
+    }
+  }, [open]);
 
   const handleStageFieldChange = (stageCode: string, field: DrawerPrepFieldDefinition, value: string | boolean) => {
     setStagePrep((prev) => {
@@ -204,8 +245,7 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
     });
   };
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const onSubmitForm = async (values: FormValues) => {
     if (!card) {
       setError("No se encontró la tarjeta seleccionada.");
       return;
@@ -214,45 +254,41 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
     const contactoUpdates: Record<string, unknown> = {};
     const tarjetaUpdates: Record<string, unknown> = {};
 
-    if (form.nombre !== initialFormState.nombre) {
-      contactoUpdates.nombre_completo = form.nombre.trim() === "" ? null : form.nombre.trim();
-    }
-    if (form.correo !== initialFormState.correo) {
-      contactoUpdates.correo = form.correo.trim() === "" ? null : form.correo.trim();
-    }
-    if (form.telefono !== initialFormState.telefono) {
-      contactoUpdates.telefono_e164 = form.telefono.trim() === "" ? null : form.telefono.trim();
+    const nombre = (values.nombre ?? "").trim();
+    if (nombre !== (defaultFormValues.nombre ?? "").trim()) {
+      contactoUpdates.nombre_completo = nombre === "" ? null : nombre;
     }
 
-    const montoValue = form.monto.trim();
-    if (montoValue !== initialFormState.monto) {
+    const correo = (values.correo ?? "").trim();
+    if (correo !== (defaultFormValues.correo ?? "").trim()) {
+      contactoUpdates.correo = correo === "" ? null : correo;
+    }
+
+    const telefono = (values.telefono ?? "").trim();
+    if (telefono !== (defaultFormValues.telefono ?? "").trim()) {
+      contactoUpdates.telefono_e164 = telefono === "" ? null : telefono;
+    }
+
+    const montoValue = (values.monto ?? "").trim();
+    if (montoValue !== (defaultFormValues.monto ?? "").trim()) {
       if (montoValue === "") {
         tarjetaUpdates.monto_estimado = null;
       } else {
-        const parsed = Number(montoValue);
-        if (Number.isNaN(parsed)) {
-          setError("El monto debe ser un número válido.");
-          return;
-        }
-        tarjetaUpdates.monto_estimado = parsed;
+        tarjetaUpdates.monto_estimado = Number(montoValue);
       }
     }
 
-    if (form.moneda !== initialFormState.moneda) {
-      tarjetaUpdates.moneda = form.moneda.trim() === "" ? "MXN" : form.moneda.trim().toUpperCase();
+    const monedaValue = (values.moneda ?? "").trim().toUpperCase();
+    if (monedaValue !== (defaultFormValues.moneda ?? "").trim().toUpperCase()) {
+      tarjetaUpdates.moneda = monedaValue === "" ? null : monedaValue;
     }
 
-    const probValue = form.probabilidad.trim();
-    if (probValue !== initialFormState.probabilidad) {
+    const probValue = (values.probabilidad ?? "").trim();
+    if (probValue !== (defaultFormValues.probabilidad ?? "").trim()) {
       if (probValue === "") {
         tarjetaUpdates.probabilidad_override = null;
       } else {
-        const parsed = Number(probValue);
-        if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
-          setError("La probabilidad debe ser un número entre 0 y 100.");
-          return;
-        }
-        tarjetaUpdates.probabilidad_override = parsed;
+        tarjetaUpdates.probabilidad_override = Number(probValue);
       }
     }
 
@@ -293,9 +329,9 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
 
     setError(null);
     onOpenChange(false);
-  }
+  };
 
-  const renderField = (stageCode: string, field: DrawerPrepFieldDefinition) => {
+  const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition) => {
     const stageValues = stagePrep[stageCode] ?? {};
     const rawValue = stageValues[field.key];
     const baseId = `${stageCode}-${field.key}`;
@@ -365,9 +401,7 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
                 <SelectValue placeholder={field.placeholder ?? "Selecciona una opción"} />
               </SelectTrigger>
               <SelectContent>
-                {!field.required ? (
-                  <SelectItem value="">Sin seleccionar</SelectItem>
-                ) : null}
+                {!field.required ? <SelectItem value="">Sin seleccionar</SelectItem> : null}
                 {options.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
@@ -384,25 +418,24 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
       default: {
         const value = typeof rawValue === "string" ? rawValue : "";
         const inputType = resolveInputType(field.type);
-        const placeholder = field.placeholder;
-        const displayValue =
-          field.type === "datetime" ? toDateTimeLocalInput(value) : value;
+        const displayValue = field.type === "datetime" ? toDateTimeLocalInput(value) : value;
         return (
           <div className="grid gap-2">
             <label className="text-xs font-medium text-muted-foreground" htmlFor={baseId}>
               {field.label}
               {field.required ? " *" : ""}
-              {field.suffix ? <span className="ml-1 text-[11px] text-muted-foreground">({field.suffix})</span> : null}
+              {field.suffix ? (
+                <span className="ml-1 text-[11px] text-muted-foreground">({field.suffix})</span>
+              ) : null}
             </label>
             <Input
               id={baseId}
               type={inputType}
               value={displayValue}
-              placeholder={placeholder}
+              placeholder={field.placeholder}
               disabled={pending}
               onChange={(event) => {
-                const nextValue =
-                  field.type === "datetime" ? event.target.value : event.target.value;
+                const nextValue = field.type === "datetime" ? event.target.value : event.target.value;
                 handleStageFieldChange(stageCode, field, nextValue);
               }}
             />
@@ -428,155 +461,199 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
           </DrawerDescription>
         </DrawerHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
-          <section className="space-y-3">
-            <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-nombre">
-                Nombre
-              </label>
-              <Input
-                id="lead-nombre"
-                value={form.nombre}
-                onChange={handleInputChange("nombre")}
-                placeholder="Nombre del contacto"
-                disabled={pending}
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-correo">
-                Correo
-              </label>
-              <Input
-                id="lead-correo"
-                value={form.correo}
-                onChange={handleInputChange("correo")}
-                placeholder="correo@ejemplo.com"
-                type="email"
-                disabled={pending}
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-telefono">
-                Teléfono (E.164)
-              </label>
-              <Input
-                id="lead-telefono"
-                value={form.telefono}
-                onChange={handleInputChange("telefono")}
-                placeholder="+52..."
-                disabled={pending}
-              />
-            </div>
-          </section>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as typeof activeTab)}
+          className="flex h-full flex-col"
+        >
+          <TabsList className="mx-4 grid h-auto grid-cols-3 gap-1 rounded-lg border bg-muted/60 p-1">
+            <TabsTrigger value="resumen">Resumen</TabsTrigger>
+            <TabsTrigger value="notas">Notas</TabsTrigger>
+            <TabsTrigger value="historial">Historial</TabsTrigger>
+          </TabsList>
 
-          <section className="space-y-3">
-            <h4 className="text-sm font-semibold text-foreground">Lead</h4>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-monto">
-                Monto estimado
-              </label>
-              <Input
-                id="lead-monto"
-                value={form.monto}
-                onChange={handleInputChange("monto")}
-                placeholder="0"
-                disabled={pending}
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-moneda">
-                Moneda
-              </label>
-              <Input
-                id="lead-moneda"
-                value={form.moneda}
-                onChange={handleInputChange("moneda")}
-                placeholder="MXN"
-                maxLength={3}
-                disabled={pending}
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-probabilidad">
-                Probabilidad (%)
-              </label>
-              <Input
-                id="lead-probabilidad"
-                value={form.probabilidad}
-                onChange={handleInputChange("probabilidad")}
-                placeholder="0-100"
-                disabled={pending}
-              />
-            </div>
-          </section>
-
-          {hasUpcomingSections ? (
-            <section className="space-y-4">
-              <div className="space-y-1">
-                <h4 className="text-sm font-semibold text-foreground">Próximas etapas</h4>
-                <p className="text-xs text-muted-foreground">
-                  Completa la información para preparar el avance del lead en cada etapa.
-                </p>
-              </div>
-              <div className="space-y-4">
-                {upcomingStageGroups.map(({ stage, sections }) => {
-                  const stageDescription = readStageMetaString(stage.metadatos, "descripcion");
-                  return (
-                    <div key={stage.id} className="space-y-4 rounded-lg border border-border/60 p-4">
-                      <div>
-                        <h5 className="text-sm font-semibold text-foreground">{stage.nombre}</h5>
-                        {stageDescription ? (
-                          <p className="text-xs text-muted-foreground">{stageDescription}</p>
-                        ) : null}
-                      </div>
-                      {sections.map((section) => (
-                      <div key={`${stage.codigo}-${section.key}`} className="space-y-3">
-                        <div>
-                          <h6 className="text-xs font-semibold uppercase text-muted-foreground">
-                            {section.title}
-                          </h6>
-                          {section.description ? (
-                            <p className="text-xs text-muted-foreground">{section.description}</p>
-                          ) : null}
-                        </div>
-                        <div className="space-y-3">
-                          {section.fields.map((field) => (
-                            <div key={`${stage.codigo}-${field.key}`} className="space-y-2">
-                              {renderField(stage.codigo, field)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-
-          {error ? (
-            <p className="rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
-
-          <DrawerFooter className="mt-4 space-y-2">
-            <Button type="submit" disabled={pending || !card} className="w-full">
-              {pending ? "Guardando..." : "Guardar cambios"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full"
-              onClick={() => onOpenChange(false)}
-              disabled={pending}
+          <TabsContent value="resumen" className="flex flex-1 flex-col overflow-hidden">
+            <form
+              onSubmit={handleSubmit(onSubmitForm)}
+              className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4"
             >
-              Cancelar
-            </Button>
-          </DrawerFooter>
-        </form>
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-nombre">
+                    Nombre
+                  </label>
+                  <Input
+                    id="lead-nombre"
+                    placeholder="Nombre del contacto"
+                    disabled={pending}
+                    aria-invalid={errors.nombre ? "true" : "false"}
+                    {...register("nombre")}
+                  />
+                  {errors.nombre ? (
+                    <p className="text-xs text-destructive">{errors.nombre.message}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-correo">
+                    Correo
+                  </label>
+                  <Input
+                    id="lead-correo"
+                    type="email"
+                    placeholder="correo@ejemplo.com"
+                    disabled={pending}
+                    aria-invalid={errors.correo ? "true" : "false"}
+                    {...register("correo")}
+                  />
+                  {errors.correo ? (
+                    <p className="text-xs text-destructive">{errors.correo.message}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-telefono">
+                    Teléfono (E.164)
+                  </label>
+                  <Input
+                    id="lead-telefono"
+                    placeholder="+52..."
+                    disabled={pending}
+                    aria-invalid={errors.telefono ? "true" : "false"}
+                    {...register("telefono")}
+                  />
+                  {errors.telefono ? (
+                    <p className="text-xs text-destructive">{errors.telefono.message}</p>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">Lead</h4>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-monto">
+                    Monto estimado
+                  </label>
+                  <Input
+                    id="lead-monto"
+                    placeholder="0"
+                    disabled={pending}
+                    aria-invalid={errors.monto ? "true" : "false"}
+                    {...register("monto")}
+                  />
+                  {errors.monto ? (
+                    <p className="text-xs text-destructive">{errors.monto.message}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-moneda">
+                    Moneda
+                  </label>
+                  <Input
+                    id="lead-moneda"
+                    placeholder="MXN"
+                    maxLength={3}
+                    disabled={pending}
+                    aria-invalid={errors.moneda ? "true" : "false"}
+                    {...register("moneda")}
+                    onBlur={(event) => setValue("moneda", event.target.value.toUpperCase())}
+                  />
+                  {errors.moneda ? (
+                    <p className="text-xs text-destructive">{errors.moneda.message}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-probabilidad">
+                    Probabilidad (%)
+                  </label>
+                  <Input
+                    id="lead-probabilidad"
+                    placeholder="0-100"
+                    disabled={pending}
+                    aria-invalid={errors.probabilidad ? "true" : "false"}
+                    {...register("probabilidad")}
+                  />
+                  {errors.probabilidad ? (
+                    <p className="text-xs text-destructive">{errors.probabilidad.message}</p>
+                  ) : null}
+                </div>
+              </section>
+
+              {hasUpcomingSections ? (
+                <section className="space-y-4">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-foreground">Próximas etapas</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Completa la información para preparar el avance del lead en cada etapa.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    {upcomingStageGroups.map(({ stage, sections }) => {
+                      const stageDescription = readStageMetaString(stage.metadatos, "descripcion");
+                      return (
+                        <div key={stage.id} className="space-y-4 rounded-lg border border-border/60 p-4">
+                          <div>
+                            <h5 className="text-sm font-semibold text-foreground">{stage.nombre}</h5>
+                            {stageDescription ? (
+                              <p className="text-xs text-muted-foreground">{stageDescription}</p>
+                            ) : null}
+                          </div>
+                          {sections.map((section) => (
+                          <div key={`${stage.codigo}-${section.key}`} className="space-y-3">
+                            <div>
+                              <h6 className="text-xs font-semibold uppercase text-muted-foreground">
+                                {section.title}
+                              </h6>
+                              {section.description ? (
+                                <p className="text-xs text-muted-foreground">{section.description}</p>
+                              ) : null}
+                            </div>
+                            <div className="space-y-3">
+                              {section.fields.map((field) => (
+                                <div key={`${stage.codigo}-${field.key}`} className="space-y-2">
+                                  {renderStageField(stage.codigo, field)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+
+              {error ? (
+                <p className="rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {error}
+                </p>
+              ) : null}
+
+              <DrawerFooter className="mt-4 space-y-2">
+                <Button type="submit" disabled={pending || !card} className="w-full">
+                  {pending ? "Guardando..." : "Guardar cambios"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => onOpenChange(false)}
+                  disabled={pending}
+                >
+                  Cancelar
+                </Button>
+              </DrawerFooter>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="notas" className="flex-1 overflow-y-auto px-4 pb-6">
+            {renderNotesSection(card)}
+          </TabsContent>
+
+          <TabsContent value="historial" className="flex-1 overflow-y-auto px-4 pb-6">
+            {renderHistorySection(card)}
+          </TabsContent>
+        </Tabs>
       </DrawerContent>
     </Drawer>
   );
@@ -864,9 +941,7 @@ function areStagePrepsEqual(a: StagePrepPayload, b: StagePrepPayload): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function resolveInputType(
-  fieldType: DrawerPrepFieldType,
-): "text" | "number" | "date" | "datetime-local" | "url" {
+function resolveInputType(fieldType: DrawerPrepFieldType): "text" | "number" | "date" | "datetime-local" | "url" {
   switch (fieldType) {
     case "date":
       return "date";
@@ -903,4 +978,66 @@ function readStageMetaString(meta: Record<string, unknown> | undefined, key: str
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : undefined;
+}
+
+function extractStringArray(metadata: Record<string, unknown> | undefined, keys: string[]): string[] {
+  if (!metadata) return [];
+  for (const key of keys) {
+    const value = metadata[key];
+    if (Array.isArray(value)) {
+      return value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }
+    if (typeof value === "string" && value.trim()) {
+      return [value.trim()];
+    }
+  }
+  return [];
+}
+
+function renderNotesSection(card: EmbudoCard | null) {
+  const notes = extractStringArray(card?.metadata, ["notes", "notas"]);
+  if (!notes.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-sm text-muted-foreground">
+        No hay notas registradas para este lead. Puedes agregarlas desde el historial una vez que integremos la
+        captura de comentarios.
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {notes.map((note, index) => (
+        <li key={`${index}-${note.slice(0, 8)}`} className="space-y-1 rounded-lg border border-border/60 p-3">
+          <p className="text-sm text-foreground whitespace-pre-wrap">{note}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function renderHistorySection(card: EmbudoCard | null) {
+  const historyItems = extractStringArray(card?.metadata, ["historial", "history"]);
+  if (!historyItems.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-sm text-muted-foreground">
+        Aquí aparecerán los movimientos recientes del lead (fuente: <code>lead_movimientos</code>) cuando conectemos
+        el historial con Supabase.
+      </div>
+    );
+  }
+
+  return (
+    <ol className="space-y-3">
+      {historyItems.map((item, index) => (
+        <li key={`${index}-${item.slice(0, 8)}`} className="space-y-1 rounded-lg border border-border/60 p-3">
+          <p className="text-xs font-medium uppercase text-muted-foreground">Evento #{index + 1}</p>
+          <p className="text-sm text-foreground whitespace-pre-wrap">{item}</p>
+        </li>
+      ))}
+    </ol>
+  );
 }

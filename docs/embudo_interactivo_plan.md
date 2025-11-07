@@ -39,8 +39,8 @@ Permitir a los usuarios:
 ### 4. Drawer de detalle (`LeadDrawer`)
 - Implementar `LeadDrawer` con shadcn/ui (`Drawer`/`Dialog` según viewport). ✅
 - Capturar datos del lead (nombre, correo, teléfono, monto, probabilidad) y guardarlos vía `panel_lead_update`. ✅
-- Tabs con Radix: “Resumen”, “Notas”, “Historial”.
-- Formulario con React Hook Form + zod.
+- Tabs con Radix: “Resumen”, “Notas”, “Historial”. ✅ (`LeadDrawer` usa `Tabs` para agrupar formulario, notas e historial en `frontend/panel/src/components/embudo/lead-drawer.tsx`).
+- Formulario con React Hook Form + zod. ✅ (`react-hook-form` y `zod` validan y envían los cambios desde el Drawer).
 - Server action `updateLead` → llama RPC y devuelve la tarjeta actualizada.
 - Toasts de feedback (éxito/error).
   ↳ **Extensión implementada**: secciones cronológicas para etapas futuras leyendo `metadatos.drawer_prep`; capturan y persisten `metadata.stage_prep` desde el Drawer (ver “Próximas etapas”).
