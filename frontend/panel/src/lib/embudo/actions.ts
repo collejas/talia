@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
 
 import { callSupabaseRpc } from "@/lib/leads/supabase";
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
@@ -117,7 +117,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     return { ok: false, error: "No se recibió información del lead actualizado." };
   }
 
-  revalidateTag("embudo", "default");
+  updateTag("embudo");
   const mapped = mapRowToStage(row);
   return { ok: true, stage: mapped.stage, card: mapped.card };
 }
@@ -145,7 +145,7 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
     return { ok: false, error: "No se recibió información del movimiento del lead." };
   }
 
-  revalidateTag("embudo", "default");
+  updateTag("embudo");
   const mapped = mapRowToStage(row);
   return { ok: true, stage: mapped.stage, card: mapped.card };
 }

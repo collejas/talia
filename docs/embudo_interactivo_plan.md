@@ -29,7 +29,7 @@ Permitir a los usuarios:
   - Actualiza `lead_tarjetas.etapa_id`. ✔️
   - Inserta registro en `lead_movimientos`. ✔️
   - Devuelve la tarjeta actualizada (etapa, orden, categoría, timestamps). ✔️
-- Escribir migraciones y pruebas asociadas. ✔️ (Migraciones aplicadas; falta cobertura de pruebas)
+- Escribir migraciones y pruebas asociadas. ✔️ (Migraciones listas en repo; **pendiente ejecutar en Supabase** `20251203_110000_panel_lead_move_fix.sql` y `20251203_112000_citas_provider_expand.sql` para habilitar `provider = 'caldav'` y el nuevo retorno de `panel_lead_move`)
 
 ### 3. Frontend – datos compartidos ✅
 - Extender `loadEmbudoData` para traer `etapa_orden` y cualquier atributo adicional requerido por el Drawer. ✔️ (`EmbudoStage` incluye `orden`).
