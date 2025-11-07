@@ -37,14 +37,15 @@ Permitir a los usuarios:
   ↳ `updateLeadCard` y `moveLeadCard` consumen las RPC y normalizan la respuesta.
 
 ### 4. Drawer de detalle (`LeadDrawer`)
-- Implementar `LeadDrawer` con shadcn/ui (`Drawer`/`Dialog` según viewport).
+- Implementar `LeadDrawer` con shadcn/ui (`Drawer`/`Dialog` según viewport). ✅
+- Capturar datos del lead (nombre, correo, teléfono, monto, probabilidad) y guardarlos vía `panel_lead_update`. ✅
 - Tabs con Radix: “Resumen”, “Notas”, “Historial”.
 - Formulario con React Hook Form + zod.
 - Server action `updateLead` → llama RPC y devuelve la tarjeta actualizada.
 - Toasts de feedback (éxito/error).
 
 ### 5. Drag & drop
-- Integrar `@dnd-kit/core` en `EmbudoBoard`.
+- Integrar `@dnd-kit/core` en `EmbudoBoard`. 🔜
 - Habilitar drag solo en columnas con `orden ≥ 2`.
 - Destacar columnas válidas cuando una tarjeta está en drag.
 - Server action `moveLead`:
