@@ -43,6 +43,7 @@ Permitir a los usuarios:
 - Formulario con React Hook Form + zod.
 - Server action `updateLead` → llama RPC y devuelve la tarjeta actualizada.
 - Toasts de feedback (éxito/error).
+  ↳ **Extensión propuesta**: añadir secciones cronológicas para etapas futuras leyendo `metadatos.drawer_prep` de cada etapa; documentado en “Próximas Etapas” abajo.
 
 ### 5. Drag & drop ✅
 - Integrar `@dnd-kit/core` en `EmbudoBoard`. ✔️
@@ -69,6 +70,16 @@ Permitir a los usuarios:
 - Ejecutar migraciones Supabase.
 - Desplegar backend/frontend.
 - Comunicar cambios al equipo (changelog interno).
+
+## Próximas etapas (secciones en el Drawer)
+
+- **Migración** `202512XX_stage_drawer_prep.sql` (pendiente): agrega/actualiza `lead_etapas.metadatos.drawer_prep` con la definición de formularios por etapa (orden, título, campos y validaciones).
+- Actualizar `panel_leads_list`, `panel_lead_update` y `panel_lead_move` para devolver `etapa_codigo` y `etapa_metadatos`, permitiendo que el frontend renderice las secciones dinámicamente y las server actions conserven la configuración.
+- Frontend:
+  - Extender `EmbudoStage` y `LeadRow` (`frontend/panel/src/lib/embudo/data.ts`) con `codigo` y `metadatos`.
+  - Pasar la lista completa de etapas a `LeadDrawer` y renderizar un bloque “Próximas etapas” que filtra `orden` > etapa actual, usando `stage.metadatos.drawer_prep.sections`.
+  - Guardar los valores dentro de `card.metadata.stage_prep` para que `panel_lead_update` los mezcle (`mergeMetadata = true`) y se preserven entre movimientos.
+- Validar llenado de formularios futuros: migraciones aplicadas → recargar `/embudo` → abrir Drawer → capturar datos → verificar `lead_tarjetas.metadata->'stage_prep'`.
 
 ## Dependencias y tareas previas
 
