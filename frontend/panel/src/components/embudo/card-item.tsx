@@ -1,3 +1,5 @@
+"use client";
+
 import { type HTMLAttributes } from "react"
 import { IconMessageCircle, IconUser } from "@tabler/icons-react"
 import type { DraggableSyntheticListeners } from "@dnd-kit/core"
