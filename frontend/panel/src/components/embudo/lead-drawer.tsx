@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -144,6 +144,31 @@ const ALLOWED_TYPES: Set<DrawerPrepFieldType> = new Set([
   "url",
 ]);
 
+type LeadHistoryEntry = {
+  movimiento_id: string;
+  tarjeta_id: string;
+  tipo: string | null;
+  cambiado_por: string | null;
+  cambiado_nombre: string | null;
+  cambiado_en: string;
+  fuente: string | null;
+  etapa_origen_id: string | null;
+  etapa_origen_nombre: string | null;
+  etapa_destino_id: string | null;
+  etapa_destino_nombre: string | null;
+  motivo: string | null;
+  nota: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+type HistoryState = {
+  status: "idle" | "loading" | "loaded" | "error";
+  data: LeadHistoryEntry[];
+  error?: string;
+};
+
+const HISTORY_FETCH_LIMIT = 100;
+
 export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, onSubmit }: LeadDrawerProps) {
   const stageName = currentStage?.nombre ?? "Sin etapa";
   const [activeTab, setActiveTab] = useState<"resumen" | "notas" | "historial">("resumen");
@@ -199,19 +224,32 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
+  const [noteText, setNoteText] = useState("");
+  const [notePending, setNotePending] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
     reset(defaultFormValues);
     setStagePrep(initialStagePrepState);
     setError(null);
     setPending(false);
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [defaultFormValues, initialStagePrepState, reset, open]);
 
   useEffect(() => {
+    setHistoryState({ status: "idle", data: [] });
+    setNoteText("");
+    setNoteError(null);
+  }, [card?.tarjetaId]);
+
+  useEffect(() => {
+    if (noteError && noteText.trim()) {
+      setNoteError(null);
+    }
+  }, [noteText, noteError]);
+
+  useEffect(() => {
     if (!open) {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect */
       setActiveTab("resumen");
     }
   }, [open]);
@@ -244,6 +282,102 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
       };
     });
   };
+
+  const fetchHistory = useCallback(async () => {
+    if (!card) return;
+
+    setHistoryState((prev) => {
+      if (prev.status === "loading") return prev;
+      return { status: "loading", data: prev.data, error: undefined };
+    });
+
+    try {
+      const response = await fetch(
+        `/api/embudo/leads/${card.tarjetaId}/history?limit=${HISTORY_FETCH_LIMIT}`,
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        setHistoryState((prev) => ({
+          status: "error",
+          data: prev.data,
+          error: message,
+        }));
+        return;
+      }
+      const rows = Array.isArray(body.data) ? (body.data as LeadHistoryEntry[]) : [];
+      setHistoryState({ status: "loaded", data: rows, error: undefined });
+    } catch (fetchError) {
+      setHistoryState((prev) => ({
+        status: "error",
+        data: prev.data,
+        error:
+          fetchError instanceof Error
+            ? fetchError.message
+            : "No se pudo cargar el historial.",
+      }));
+    }
+  }, [card]);
+
+  useEffect(() => {
+    if (!open || !card?.tarjetaId) return;
+    if (activeTab === "notas" || activeTab === "historial") {
+      if (historyState.status === "idle") {
+        void fetchHistory();
+      }
+    }
+  }, [open, card?.tarjetaId, activeTab, historyState.status, fetchHistory]);
+
+  const noteEntries = useMemo(
+    () =>
+      historyState.data.filter(
+        (entry) => (entry.tipo ?? "") === "nota" || (entry.nota || "").trim() !== "",
+      ),
+    [historyState.data],
+  );
+
+  const handleAddNote = useCallback(async () => {
+    if (!card) return;
+
+    const trimmed = noteText.trim();
+    if (!trimmed) {
+      setNoteError("Escribe una nota antes de guardar.");
+      return;
+    }
+
+    setNotePending(true);
+    setNoteError(null);
+
+    try {
+      const response = await fetch(`/api/embudo/leads/${card.tarjetaId}/history`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: trimmed }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        setNoteError(message);
+      } else {
+        const rows = Array.isArray(body.data) ? (body.data as LeadHistoryEntry[]) : [];
+        setNoteText("");
+        setHistoryState((prev) => {
+          const existing =
+            prev.status === "loaded" || prev.status === "loading" ? prev.data : [];
+          const merged = dedupeHistoryEntries(rows, existing);
+          return { status: "loaded", data: merged, error: undefined };
+        });
+      }
+    } catch (postError) {
+      setNoteError(
+        postError instanceof Error ? postError.message : "No se pudo guardar la nota.",
+      );
+    } finally {
+      setNotePending(false);
+    }
+  }, [card, noteText]);
 
   const onSubmitForm = async (values: FormValues) => {
     if (!card) {
@@ -647,11 +781,118 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
           </TabsContent>
 
           <TabsContent value="notas" className="flex-1 overflow-y-auto px-4 pb-6">
-            {renderNotesSection(card)}
+            <div className="flex h-full flex-col gap-4">
+              <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">Agregar nota</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Las notas quedan registradas en el historial y visibles para el equipo.
+                  </p>
+                </div>
+                <Textarea
+                  value={noteText}
+                  onChange={(event) => setNoteText(event.target.value)}
+                  placeholder="Escribe una nota interna..."
+                  disabled={notePending || pending}
+                  minLength={1}
+                />
+                {noteError ? (
+                  <p className="text-xs text-destructive">{noteError}</p>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleAddNote}
+                    disabled={notePending || pending}
+                  >
+                    {notePending ? "Guardando..." : "Guardar nota"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {historyState.status === "loading" && noteEntries.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+                    Cargando notas...
+                  </p>
+                ) : null}
+
+                {historyState.status === "error" ? (
+                  <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                    {historyState.error ?? "No se pudieron cargar las notas."}
+                  </p>
+                ) : null}
+
+                {noteEntries.length ? (
+                  noteEntries.map((entry) => (
+                    <div key={entry.movimiento_id} className="space-y-2 rounded-lg border border-border/60 p-3">
+                      <p className="text-sm text-foreground whitespace-pre-wrap">
+                        {entry.nota ?? ""}
+                      </p>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>{entry.cambiado_nombre ?? "Usuario desconocido"}</span>
+                        <span>{formatDateTime(entry.cambiado_en)}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : historyState.status === "loaded" ? (
+                  <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+                    Aún no hay notas registradas para este lead.
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="historial" className="flex-1 overflow-y-auto px-4 pb-6">
-            {renderHistorySection(card)}
+            <div className="space-y-3">
+              {historyState.status === "loading" && historyState.data.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+                  Cargando historial...
+                </p>
+              ) : null}
+
+              {historyState.status === "error" ? (
+                <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  {historyState.error ?? "No se pudo cargar el historial del lead."}
+                </p>
+              ) : null}
+
+              {historyState.data.length ? (
+                historyState.data.map((entry) => (
+                  <div key={entry.movimiento_id} className="space-y-2 rounded-lg border border-border/60 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          {describeHistoryEntry(entry)}
+                        </p>
+                        {entry.motivo ? (
+                          <p className="text-xs text-muted-foreground">
+                            Motivo: {entry.motivo}
+                          </p>
+                        ) : null}
+                        {entry.tipo === "nota" && entry.nota ? (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                            {entry.nota}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(entry.cambiado_en)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <span>{entry.cambiado_nombre ?? "Usuario desconocido"}</span>
+                      {entry.fuente ? <span>Fuente: {entry.fuente}</span> : null}
+                    </div>
+                  </div>
+                ))
+              ) : historyState.status === "loaded" ? (
+                <p className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-xs text-muted-foreground">
+                  No hay movimientos registrados todavía.
+                </p>
+              ) : null}
+            </div>
           </TabsContent>
         </Tabs>
       </DrawerContent>
@@ -980,64 +1221,52 @@ function readStageMetaString(meta: Record<string, unknown> | undefined, key: str
   return trimmed.length ? trimmed : undefined;
 }
 
-function extractStringArray(metadata: Record<string, unknown> | undefined, keys: string[]): string[] {
-  if (!metadata) return [];
-  for (const key of keys) {
-    const value = metadata[key];
-    if (Array.isArray(value)) {
-      return value
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-    }
-    if (typeof value === "string" && value.trim()) {
-      return [value.trim()];
-    }
+function dedupeHistoryEntries(
+  incoming: LeadHistoryEntry[],
+  existing: LeadHistoryEntry[],
+): LeadHistoryEntry[] {
+  const result: LeadHistoryEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of [...incoming, ...existing]) {
+    const key = entry.movimiento_id;
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    result.push(entry);
   }
-  return [];
+
+  return result;
 }
 
-function renderNotesSection(card: EmbudoCard | null) {
-  const notes = extractStringArray(card?.metadata, ["notes", "notas"]);
-  if (!notes.length) {
-    return (
-      <div className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-sm text-muted-foreground">
-        No hay notas registradas para este lead. Puedes agregarlas desde el historial una vez que integremos la
-        captura de comentarios.
-      </div>
-    );
+function formatDateTime(value: string): string {
+  try {
+    return new Date(value).toLocaleString("es-MX", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  } catch {
+    return value;
   }
-
-  return (
-    <ul className="space-y-3">
-      {notes.map((note, index) => (
-        <li key={`${index}-${note.slice(0, 8)}`} className="space-y-1 rounded-lg border border-border/60 p-3">
-          <p className="text-sm text-foreground whitespace-pre-wrap">{note}</p>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
-function renderHistorySection(card: EmbudoCard | null) {
-  const historyItems = extractStringArray(card?.metadata, ["historial", "history"]);
-  if (!historyItems.length) {
-    return (
-      <div className="rounded-lg border border-dashed border-muted-foreground/40 p-4 text-sm text-muted-foreground">
-        Aquí aparecerán los movimientos recientes del lead (fuente: <code>lead_movimientos</code>) cuando conectemos
-        el historial con Supabase.
-      </div>
-    );
+function describeHistoryEntry(entry: LeadHistoryEntry): string {
+  if ((entry.tipo ?? "") === "nota") {
+    return "Nota interna";
   }
 
-  return (
-    <ol className="space-y-3">
-      {historyItems.map((item, index) => (
-        <li key={`${index}-${item.slice(0, 8)}`} className="space-y-1 rounded-lg border border-border/60 p-3">
-          <p className="text-xs font-medium uppercase text-muted-foreground">Evento #{index + 1}</p>
-          <p className="text-sm text-foreground whitespace-pre-wrap">{item}</p>
-        </li>
-      ))}
-    </ol>
-  );
+  const destino = entry.etapa_destino_nombre ?? entry.etapa_destino_id ?? "Etapa desconocida";
+  const origen = entry.etapa_origen_nombre ?? entry.etapa_origen_id;
+
+  if (destino && origen) {
+    if (destino === origen) {
+      return `Actualización en ${destino}`;
+    }
+    return `Movimiento a ${destino} (desde ${origen})`;
+  }
+
+  if (destino) {
+    return `Movimiento a ${destino}`;
+  }
+
+  return "Movimiento del lead";
 }

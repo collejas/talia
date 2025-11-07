@@ -56,9 +56,9 @@ Permitir a los usuarios:
   ↳ **Pendiente ejecutar** `20251204_090000_panel_lead_move_type_fix.sql` y `20251204_110000_panel_stage_drawer_prep.sql` en Supabase.
 
 ### 6. Historial & notas
-- Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas.
-- Cargar datos lazy al abrir el Drawer (RPC dedicada).
-- Botón para agregar nota/comentario (Nuevo registro en `lead_movimientos.metadata`).
+- Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas. ✅ (`LeadDrawer` consume `panel_lead_movimientos` vía `/api/embudo/leads/[tarjetaId]/history`).
+- Cargar datos lazy al abrir el Drawer (RPC dedicada). ✅ (`20251204_130000_panel_lead_history.sql` define `panel_lead_movimientos` y `panel_lead_add_nota`; se cargan on-demand al abrir pestañas Notas/Historial).
+- Botón para agregar nota/comentario (Nuevo registro en `lead_movimientos.metadata`). ✅ (Notas se guardan con `panel_lead_add_nota` y se reflejan inmediatamente en ambas pestañas).
 
 ### 7. QA & UX
 - Pruebas manuales: abrir → editar → guardar → mover → revertir.
