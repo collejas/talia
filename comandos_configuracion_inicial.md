@@ -71,8 +71,6 @@ pg_restore --clean --if-exists --no-owner --no-acl \
 sudo nano /etc/systemd/system/talia-panel.service
 sudo micro /etc/systemd/system/talia-panel.service
 
-
-
 sudo systemctl daemon-reload
 
 sudo systemctl stop talia-panel.service

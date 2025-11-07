@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict qga8B4vq8tbRQ1ob52PLcV7f27r0XdnIb2kmOKB5jPTvlhkYBp7FYl5iqugNM0h
+\restrict 42faeGoijXDPB2x9AhJn9TiNi76yxVwRNKnoKgHfeeGBUNa0aXkSGlN2jt9wJOd
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -292,10 +292,10 @@ CREATE TYPE auth.one_time_token_type AS ENUM (
 
 
 --
--- Name: cita_demo_estado; Type: TYPE; Schema: public; Owner: -
+-- Name: cita_estado; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.cita_demo_estado AS ENUM (
+CREATE TYPE public.cita_estado AS ENUM (
     'pendiente',
     'confirmada',
     'reprogramada',
@@ -1169,6 +1169,392 @@ $$;
 COMMENT ON FUNCTION public.es_admin(uid uuid) IS 'Devuelve true si el usuario tiene el rol admin. SECURITY DEFINER para evitar recursión con RLS.';
 
 
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: citas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.citas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tarjeta_id uuid NOT NULL,
+    contacto_id uuid NOT NULL,
+    conversacion_id uuid,
+    start_at timestamp with time zone NOT NULL,
+    end_at timestamp with time zone,
+    timezone text,
+    estado public.cita_estado DEFAULT 'pendiente'::public.cita_estado NOT NULL,
+    provider text DEFAULT 'hosting'::text NOT NULL,
+    provider_calendar_id text,
+    provider_event_id text,
+    meeting_url text,
+    location text,
+    notes text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_by uuid,
+    updated_by uuid,
+    cancel_reason text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    reminder_sent_at timestamp with time zone,
+    reminder_status text DEFAULT 'pendiente'::text NOT NULL,
+    external_join_url text,
+    scheduled_via text DEFAULT 'humano'::text NOT NULL,
+    CONSTRAINT citas_provider_check CHECK ((provider = ANY (ARRAY['hosting'::text, 'google'::text, 'caldav'::text]))),
+    CONSTRAINT citas_reminder_status_check CHECK ((reminder_status = ANY (ARRAY['pendiente'::text, 'programado'::text, 'enviado'::text, 'fallido'::text]))),
+    CONSTRAINT citas_scheduled_via_check CHECK ((scheduled_via = ANY (ARRAY['humano'::text, 'ia'::text, 'api'::text]))),
+    CONSTRAINT citas_time_check CHECK (((end_at IS NULL) OR (end_at >= start_at)))
+);
+
+
+--
+-- Name: TABLE citas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.citas IS 'Citas de demostración asociadas a leads; sincroniza con calendario externo.';
+
+
+--
+-- Name: COLUMN citas.provider; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.citas.provider IS 'Origen de la cita (hosting propio vs Google Calendar).';
+
+
+--
+-- Name: COLUMN citas.reminder_sent_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.citas.reminder_sent_at IS 'Último recordatorio automático enviado para la cita.';
+
+
+--
+-- Name: COLUMN citas.reminder_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.citas.reminder_status IS 'Estado del recordatorio automático (pendiente, programado, enviado, fallido).';
+
+
+--
+-- Name: COLUMN citas.external_join_url; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.citas.external_join_url IS 'Enlace externo generado por integraciones (Zoom, Meet, etc.).';
+
+
+--
+-- Name: COLUMN citas.scheduled_via; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.citas.scheduled_via IS 'Indica si la cita la creó un humano, la IA o una integración API.';
+
+
+--
+-- Name: fn_cita_cancel(uuid, text, boolean, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_cita_cancel(p_id uuid, p_reason text DEFAULT NULL::text, p_remove_provider_event boolean DEFAULT false, p_updated_by uuid DEFAULT NULL::uuid) RETURNS public.citas
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'extensions'
+    AS $$
+DECLARE
+    v_uid uuid := auth.uid();
+    v_role text := lower(
+        COALESCE(
+            current_setting('request.jwt.claim.role', true),
+            current_setting('postgrest.claims.role', true),
+            current_setting('role', true),
+            current_user,
+            ''
+        )
+    );
+    v_row public.citas;
+    v_reason text := NULLIF(btrim(COALESCE(p_reason, '')), '');
+BEGIN
+    SELECT *
+    INTO v_row
+    FROM public.citas
+    WHERE id = p_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'cita_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_uid IS NULL THEN
+        v_uid := COALESCE(p_updated_by, v_row.updated_by, v_row.created_by);
+    END IF;
+
+    IF v_role NOT IN ('service_role', 'supabase_admin') THEN
+        IF NOT public.puede_ver_lead(v_row.tarjeta_id) THEN
+            RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    UPDATE public.citas
+    SET
+        estado = 'cancelada',
+        cancel_reason = COALESCE(v_reason, cancel_reason),
+        provider_event_id = CASE
+            WHEN p_remove_provider_event THEN NULL
+            ELSE provider_event_id
+        END,
+        updated_by = COALESCE(v_uid, v_row.updated_by)
+    WHERE id = p_id
+    RETURNING * INTO v_row;
+
+    RETURN v_row;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_cita_cancel(p_id uuid, p_reason text, p_remove_provider_event boolean, p_updated_by uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_cita_cancel(p_id uuid, p_reason text, p_remove_provider_event boolean, p_updated_by uuid) IS 'Cancela una cita existente, opcionalmente liberando el identificador del evento externo.';
+
+
+--
+-- Name: fn_cita_upsert(uuid, uuid, uuid, uuid, timestamp with time zone, timestamp with time zone, text, public.cita_estado, text, text, text, text, text, text, jsonb, text, uuid, uuid, boolean, timestamp with time zone, boolean, timestamp with time zone, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_cita_upsert(p_id uuid DEFAULT NULL::uuid, p_tarjeta_id uuid DEFAULT NULL::uuid, p_contacto_id uuid DEFAULT NULL::uuid, p_conversacion_id uuid DEFAULT NULL::uuid, p_start_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_timezone text DEFAULT NULL::text, p_estado public.cita_estado DEFAULT NULL::public.cita_estado, p_provider text DEFAULT NULL::text, p_provider_calendar_id text DEFAULT NULL::text, p_provider_event_id text DEFAULT NULL::text, p_meeting_url text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_metadata jsonb DEFAULT NULL::jsonb, p_cancel_reason text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid, p_updated_by uuid DEFAULT NULL::uuid, p_merge_metadata boolean DEFAULT true, p_expected_updated_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_remove_provider_event boolean DEFAULT false, p_reminder_sent_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_reminder_status text DEFAULT NULL::text, p_external_join_url text DEFAULT NULL::text, p_scheduled_via text DEFAULT NULL::text) RETURNS public.citas
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'extensions'
+    AS $$
+DECLARE
+    v_uid uuid := auth.uid();
+    v_role text := lower(
+        COALESCE(
+            current_setting('request.jwt.claim.role', true),
+            current_setting('postgrest.claims.role', true),
+            current_setting('role', true),
+            current_user,
+            ''
+        )
+    );
+    v_row public.citas;
+    v_existing public.citas;
+    v_target_tarjeta uuid;
+    v_start timestamptz;
+    v_end timestamptz;
+    v_timezone text;
+    v_provider text;
+    v_metadata jsonb;
+    v_merge boolean := COALESCE(p_merge_metadata, TRUE);
+    v_duration interval := interval '45 minutes';
+    v_provider_event_id text;
+    v_reminder_status text;
+    v_scheduled_via text;
+BEGIN
+    IF v_uid IS NULL THEN
+        v_uid := COALESCE(p_created_by, p_updated_by);
+    END IF;
+
+    IF p_id IS NULL THEN
+        IF p_tarjeta_id IS NULL THEN
+            RAISE EXCEPTION 'tarjeta_required' USING ERRCODE = '23514';
+        END IF;
+        IF p_contacto_id IS NULL THEN
+            RAISE EXCEPTION 'contacto_required' USING ERRCODE = '23514';
+        END IF;
+        IF p_start_at IS NULL THEN
+            RAISE EXCEPTION 'start_at_required' USING ERRCODE = '23514';
+        END IF;
+
+        IF v_role NOT IN ('service_role', 'supabase_admin') THEN
+            IF NOT public.puede_ver_lead(p_tarjeta_id) THEN
+                RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+            END IF;
+        END IF;
+
+        v_start := p_start_at;
+        v_end := COALESCE(p_end_at, v_start + v_duration);
+        IF v_end < v_start THEN
+            RAISE EXCEPTION 'end_before_start' USING ERRCODE = '23514';
+        END IF;
+
+        v_timezone := NULLIF(btrim(COALESCE(p_timezone, '')), '');
+
+        v_provider := lower(COALESCE(p_provider, 'hosting'));
+        IF v_provider NOT IN ('hosting', 'google', 'caldav') THEN
+            RAISE EXCEPTION 'provider_invalid' USING ERRCODE = '23514';
+        END IF;
+
+        v_metadata := jsonb_strip_nulls(COALESCE(p_metadata, '{}'::jsonb));
+
+        v_reminder_status := lower(COALESCE(p_reminder_status, 'pendiente'));
+        IF v_reminder_status NOT IN ('pendiente','programado','enviado','fallido') THEN
+            RAISE EXCEPTION 'reminder_status_invalid' USING ERRCODE = '23514';
+        END IF;
+
+        v_scheduled_via := lower(COALESCE(p_scheduled_via, 'humano'));
+        IF v_scheduled_via NOT IN ('humano','ia','api') THEN
+            RAISE EXCEPTION 'scheduled_via_invalid' USING ERRCODE = '23514';
+        END IF;
+
+        INSERT INTO public.citas (
+            tarjeta_id,
+            contacto_id,
+            conversacion_id,
+            start_at,
+            end_at,
+            timezone,
+            estado,
+            provider,
+            provider_calendar_id,
+            provider_event_id,
+            meeting_url,
+            location,
+            notes,
+            metadata,
+            created_by,
+            updated_by,
+            cancel_reason,
+            reminder_sent_at,
+            reminder_status,
+            external_join_url,
+            scheduled_via
+        )
+        VALUES (
+            p_tarjeta_id,
+            p_contacto_id,
+            p_conversacion_id,
+            v_start,
+            v_end,
+            v_timezone,
+            COALESCE(p_estado, 'pendiente'),
+            v_provider,
+            NULLIF(btrim(p_provider_calendar_id), ''),
+            NULLIF(btrim(p_provider_event_id), ''),
+            NULLIF(btrim(p_meeting_url), ''),
+            NULLIF(btrim(p_location), ''),
+            NULLIF(p_notes, ''),
+            v_metadata,
+            COALESCE(p_created_by, v_uid),
+            COALESCE(p_updated_by, v_uid),
+            NULLIF(p_cancel_reason, ''),
+            p_reminder_sent_at,
+            v_reminder_status,
+            NULLIF(btrim(p_external_join_url), ''),
+            v_scheduled_via
+        )
+        RETURNING * INTO v_row;
+
+        RETURN v_row;
+    END IF;
+
+    SELECT *
+    INTO v_existing
+    FROM public.citas
+    WHERE id = p_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'cita_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_role NOT IN ('service_role', 'supabase_admin') THEN
+        IF NOT public.puede_ver_lead(v_existing.tarjeta_id) THEN
+            RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    v_target_tarjeta := COALESCE(p_tarjeta_id, v_existing.tarjeta_id);
+    IF v_role NOT IN ('service_role', 'supabase_admin') THEN
+        IF NOT public.puede_ver_lead(v_target_tarjeta) THEN
+            RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    v_start := COALESCE(p_start_at, v_existing.start_at);
+
+    v_end :=
+        CASE
+            WHEN p_end_at IS NOT NULL THEN p_end_at
+            WHEN v_existing.end_at IS NOT NULL THEN v_existing.end_at
+            ELSE v_start + v_duration
+        END;
+    IF v_end < v_start THEN
+        RAISE EXCEPTION 'end_before_start' USING ERRCODE = '23514';
+    END IF;
+
+    v_timezone := NULLIF(
+        btrim(COALESCE(p_timezone, v_existing.timezone, '')),
+        ''
+    );
+
+    v_provider := lower(COALESCE(p_provider, v_existing.provider, 'hosting'));
+    IF v_provider NOT IN ('hosting', 'google', 'caldav') THEN
+        RAISE EXCEPTION 'provider_invalid' USING ERRCODE = '23514';
+    END IF;
+
+    IF p_metadata IS NULL THEN
+        v_metadata := COALESCE(v_existing.metadata, '{}'::jsonb);
+    ELSIF v_merge THEN
+        v_metadata := jsonb_strip_nulls(
+            COALESCE(v_existing.metadata, '{}'::jsonb) || p_metadata
+        );
+    ELSE
+        v_metadata := jsonb_strip_nulls(COALESCE(p_metadata, '{}'::jsonb));
+    END IF;
+
+    v_provider_event_id :=
+        CASE
+            WHEN p_remove_provider_event THEN NULL
+            WHEN p_provider_event_id IS NOT NULL THEN NULLIF(btrim(p_provider_event_id), '')
+            ELSE v_existing.provider_event_id
+        END;
+
+    v_reminder_status := lower(COALESCE(p_reminder_status, v_existing.reminder_status, 'pendiente'));
+    IF v_reminder_status NOT IN ('pendiente','programado','enviado','fallido') THEN
+        RAISE EXCEPTION 'reminder_status_invalid' USING ERRCODE = '23514';
+    END IF;
+
+    v_scheduled_via := lower(COALESCE(p_scheduled_via, v_existing.scheduled_via, 'humano'));
+    IF v_scheduled_via NOT IN ('humano','ia','api') THEN
+        RAISE EXCEPTION 'scheduled_via_invalid' USING ERRCODE = '23514';
+    END IF;
+
+    UPDATE public.citas
+    SET
+        tarjeta_id = v_target_tarjeta,
+        contacto_id = COALESCE(p_contacto_id, v_existing.contacto_id),
+        conversacion_id = COALESCE(p_conversacion_id, v_existing.conversacion_id),
+        start_at = v_start,
+        end_at = v_end,
+        timezone = v_timezone,
+        estado = COALESCE(p_estado, v_existing.estado),
+        provider = v_provider,
+        provider_calendar_id = COALESCE(
+            NULLIF(btrim(p_provider_calendar_id), ''),
+            v_existing.provider_calendar_id
+        ),
+        provider_event_id = v_provider_event_id,
+        meeting_url = COALESCE(NULLIF(btrim(p_meeting_url), ''), v_existing.meeting_url),
+        location = COALESCE(NULLIF(btrim(p_location), ''), v_existing.location),
+        notes = COALESCE(NULLIF(p_notes, ''), v_existing.notes),
+        metadata = v_metadata,
+        cancel_reason = COALESCE(NULLIF(p_cancel_reason, ''), v_existing.cancel_reason),
+        reminder_sent_at = COALESCE(p_reminder_sent_at, v_existing.reminder_sent_at),
+        reminder_status = v_reminder_status,
+        external_join_url = COALESCE(
+            NULLIF(btrim(p_external_join_url), ''),
+            v_existing.external_join_url
+        ),
+        scheduled_via = v_scheduled_via,
+        updated_by = COALESCE(p_updated_by, v_uid, v_existing.updated_by)
+    WHERE id = p_id
+    RETURNING * INTO v_row;
+
+    RETURN v_row;
+END;
+$$;
+
+
 --
 -- Name: manejar_usuario_auth_nuevo(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1682,6 +2068,412 @@ $$;
 
 
 --
+-- Name: panel_lead_move(uuid, uuid, uuid, text, text, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_lead_move(p_tarjeta_id uuid, p_etapa_destino uuid, p_cambiado_por uuid DEFAULT NULL::uuid, p_fuente text DEFAULT 'humano'::text, p_motivo text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_expected_etapa uuid DEFAULT NULL::uuid) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_lead public.lead_tarjetas%ROWTYPE;
+    v_dest public.lead_etapas%ROWTYPE;
+    v_origin public.lead_etapas%ROWTYPE;
+    v_user uuid;
+    v_now timestamptz := now();
+    v_new_motivo text;
+    v_new_cerrado timestamptz;
+    v_metadata jsonb := COALESCE(p_metadata, '{}'::jsonb);
+BEGIN
+    IF p_fuente NOT IN ('humano', 'asistente', 'api') THEN
+        RAISE EXCEPTION 'invalid_source' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT lt.*
+    INTO v_lead
+    FROM public.lead_tarjetas lt
+    WHERE lt.id = p_tarjeta_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF NOT public.puede_ver_lead(v_lead.id) THEN
+        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+    END IF;
+
+    IF p_expected_etapa IS NOT NULL AND v_lead.etapa_id <> p_expected_etapa THEN
+        RAISE EXCEPTION 'concurrency_conflict' USING ERRCODE = '40001';
+    END IF;
+
+    SELECT * INTO v_dest FROM public.lead_etapas WHERE id = p_etapa_destino;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'dest_stage_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_lead.etapa_id = v_dest.id THEN
+        RETURN QUERY
+        SELECT
+            lt.id AS tarjeta_id,
+            lt.contacto_id,
+            ct.nombre_completo AS contacto_nombre,
+            ct.correo AS contacto_correo,
+            ct.telefono_e164 AS contacto_telefono,
+            COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
+            COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
+            le.id AS etapa_id,
+            le.nombre AS etapa_nombre,
+            le.orden AS etapa_orden,
+            le.categoria,
+            lt.creado_en,
+            lt.actualizado_en,
+            lt.cerrado_en,
+            lt.monto_estimado,
+            lt.moneda,
+            COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
+            lt.lead_score,
+            lt.asignado_a_usuario_id AS asignado_id,
+            asignado.nombre_completo AS asignado_nombre,
+            lt.propietario_usuario_id AS propietario_id,
+            propietario.nombre_completo AS propietario_nombre,
+            lt.conversacion_id,
+            conv.ultimo_mensaje_en,
+            lt.motivo_cierre,
+            lt.tags,
+            lt.metadata,
+            1::bigint AS total_rows
+        FROM public.lead_tarjetas lt
+        JOIN public.lead_etapas le ON le.id = lt.etapa_id
+        JOIN public.contactos ct ON ct.id = lt.contacto_id
+        LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
+        LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
+        LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
+        WHERE lt.id = p_tarjeta_id;
+        RETURN;
+    END IF;
+
+    SELECT * INTO v_origin FROM public.lead_etapas WHERE id = v_lead.etapa_id;
+
+    v_user := COALESCE(auth.uid(), p_cambiado_por, v_lead.asignado_a_usuario_id, v_lead.propietario_usuario_id);
+
+    IF v_dest.categoria = 'ganada' THEN
+        v_new_cerrado := COALESCE(v_lead.cerrado_en, v_now);
+        v_new_motivo := COALESCE(NULLIF(p_motivo, ''), v_lead.motivo_cierre);
+    ELSIF v_dest.categoria = 'perdida' THEN
+        v_new_cerrado := COALESCE(v_lead.cerrado_en, v_now);
+        v_new_motivo := COALESCE(NULLIF(p_motivo, ''), v_lead.motivo_cierre);
+    ELSE
+        v_new_cerrado := NULL;
+        v_new_motivo := NULLIF(p_motivo, '');
+    END IF;
+
+    UPDATE public.lead_tarjetas
+    SET
+        etapa_id = v_dest.id,
+        actualizado_en = v_now,
+        cerrado_en = v_new_cerrado,
+        motivo_cierre = v_new_motivo
+    WHERE id = p_tarjeta_id
+    RETURNING * INTO v_lead;
+
+    INSERT INTO public.lead_movimientos (
+        tarjeta_id,
+        etapa_origen_id,
+        etapa_destino_id,
+        cambiado_por,
+        cambiado_en,
+        motivo,
+        fuente,
+        metadata
+    )
+    VALUES (
+        p_tarjeta_id,
+        v_origin.id,
+        v_dest.id,
+        v_user,
+        v_now,
+        NULLIF(p_motivo, ''),
+        p_fuente,
+        COALESCE(v_metadata, '{}'::jsonb)
+    );
+
+    RETURN QUERY
+    SELECT
+        lt.id AS tarjeta_id,
+        lt.contacto_id,
+        ct.nombre_completo AS contacto_nombre,
+        ct.correo AS contacto_correo,
+        ct.telefono_e164 AS contacto_telefono,
+        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
+        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
+        le.id AS etapa_id,
+        le.nombre AS etapa_nombre,
+        le.orden AS etapa_orden,
+        le.categoria,
+        lt.creado_en,
+        lt.actualizado_en,
+        lt.cerrado_en,
+        lt.monto_estimado,
+        lt.moneda,
+        COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
+        lt.lead_score,
+        lt.asignado_a_usuario_id AS asignado_id,
+        asignado.nombre_completo AS asignado_nombre,
+        lt.propietario_usuario_id AS propietario_id,
+        propietario.nombre_completo AS propietario_nombre,
+        lt.conversacion_id,
+        conv.ultimo_mensaje_en,
+        lt.motivo_cierre,
+        lt.tags,
+        lt.metadata,
+        1::bigint AS total_rows
+    FROM public.lead_tarjetas lt
+    JOIN public.lead_etapas le ON le.id = lt.etapa_id
+    JOIN public.contactos ct ON ct.id = lt.contacto_id
+    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
+    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
+    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
+    WHERE lt.id = p_tarjeta_id;
+END;
+$$;
+
+
+--
+-- Name: panel_lead_update(uuid, jsonb, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_lead_update(p_tarjeta_id uuid, p_contacto jsonb DEFAULT '{}'::jsonb, p_tarjeta jsonb DEFAULT '{}'::jsonb, p_merge_metadata boolean DEFAULT true) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_lead public.lead_tarjetas%ROWTYPE;
+    v_contact public.contactos%ROWTYPE;
+    v_contact_updates jsonb := COALESCE(p_contacto, '{}'::jsonb);
+    v_card_updates jsonb := COALESCE(p_tarjeta, '{}'::jsonb);
+    v_merge boolean := COALESCE(p_merge_metadata, TRUE);
+    v_now timestamptz := now();
+BEGIN
+    SELECT lt.*
+    INTO v_lead
+    FROM public.lead_tarjetas lt
+    WHERE lt.id = p_tarjeta_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF NOT public.puede_ver_lead(v_lead.id) THEN
+        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+    END IF;
+
+    SELECT *
+    INTO v_contact
+    FROM public.contactos
+    WHERE id = v_lead.contacto_id
+    FOR UPDATE;
+
+    IF jsonb_typeof(v_contact_updates) IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'invalid_contact_payload' USING ERRCODE = '22023';
+    END IF;
+    IF jsonb_typeof(v_card_updates) IS DISTINCT FROM 'object' THEN
+        RAISE EXCEPTION 'invalid_lead_payload' USING ERRCODE = '22023';
+    END IF;
+
+    IF v_contact_updates <> '{}'::jsonb THEN
+        UPDATE public.contactos c
+        SET
+            nombre_completo = CASE
+                WHEN v_contact_updates ? 'nombre_completo' THEN
+                    CASE jsonb_typeof(v_contact_updates->'nombre_completo')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(btrim(v_contact_updates->>'nombre_completo'), '')
+                    END
+                ELSE c.nombre_completo
+            END,
+            correo = CASE
+                WHEN v_contact_updates ? 'correo' THEN
+                    CASE jsonb_typeof(v_contact_updates->'correo')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(btrim(lower(v_contact_updates->>'correo')), '')
+                    END
+                ELSE c.correo
+            END,
+            telefono_e164 = CASE
+                WHEN v_contact_updates ? 'telefono_e164' THEN
+                    CASE jsonb_typeof(v_contact_updates->'telefono_e164')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(btrim(v_contact_updates->>'telefono_e164'), '')
+                    END
+                ELSE c.telefono_e164
+            END,
+            company_name = CASE
+                WHEN v_contact_updates ? 'company_name' THEN
+                    CASE jsonb_typeof(v_contact_updates->'company_name')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(btrim(v_contact_updates->>'company_name'), '')
+                    END
+                ELSE c.company_name
+            END,
+            notes = CASE
+                WHEN v_contact_updates ? 'notes' THEN
+                    CASE jsonb_typeof(v_contact_updates->'notes')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(v_contact_updates->>'notes', '')
+                    END
+                ELSE c.notes
+            END,
+            necesidad_proposito = CASE
+                WHEN v_contact_updates ? 'necesidad_proposito' THEN
+                    CASE jsonb_typeof(v_contact_updates->'necesidad_proposito')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(v_contact_updates->>'necesidad_proposito', '')
+                    END
+                ELSE c.necesidad_proposito
+            END
+        WHERE c.id = v_contact.id;
+    END IF;
+
+    IF v_card_updates <> '{}'::jsonb THEN
+        UPDATE public.lead_tarjetas lt
+        SET
+            monto_estimado = CASE
+                WHEN v_card_updates ? 'monto_estimado' THEN
+                    CASE jsonb_typeof(v_card_updates->'monto_estimado')
+                        WHEN 'null' THEN NULL
+                        ELSE (v_card_updates->>'monto_estimado')::numeric
+                    END
+                ELSE lt.monto_estimado
+            END,
+            moneda = CASE
+                WHEN v_card_updates ? 'moneda' THEN
+                    CASE jsonb_typeof(v_card_updates->'moneda')
+                        WHEN 'null' THEN lt.moneda
+                        ELSE upper(NULLIF(btrim(v_card_updates->>'moneda'), ''))
+                    END
+                ELSE lt.moneda
+            END,
+            probabilidad_override = CASE
+                WHEN v_card_updates ? 'probabilidad_override' THEN
+                    CASE jsonb_typeof(v_card_updates->'probabilidad_override')
+                        WHEN 'null' THEN NULL
+                        ELSE (v_card_updates->>'probabilidad_override')::numeric
+                    END
+                ELSE lt.probabilidad_override
+            END,
+            asignado_a_usuario_id = CASE
+                WHEN v_card_updates ? 'asignado_id' THEN
+                    CASE jsonb_typeof(v_card_updates->'asignado_id')
+                        WHEN 'null' THEN NULL
+                        ELSE (v_card_updates->>'asignado_id')::uuid
+                    END
+                ELSE lt.asignado_a_usuario_id
+            END,
+            propietario_usuario_id = CASE
+                WHEN v_card_updates ? 'propietario_id' THEN
+                    CASE jsonb_typeof(v_card_updates->'propietario_id')
+                        WHEN 'null' THEN NULL
+                        ELSE (v_card_updates->>'propietario_id')::uuid
+                    END
+                ELSE lt.propietario_usuario_id
+            END,
+            lead_score = CASE
+                WHEN v_card_updates ? 'lead_score' THEN
+                    CASE jsonb_typeof(v_card_updates->'lead_score')
+                        WHEN 'null' THEN NULL
+                        ELSE (v_card_updates->>'lead_score')::integer
+                    END
+                ELSE lt.lead_score
+            END,
+            motivo_cierre = CASE
+                WHEN v_card_updates ? 'motivo_cierre' THEN
+                    CASE jsonb_typeof(v_card_updates->'motivo_cierre')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(v_card_updates->>'motivo_cierre', '')
+                    END
+                ELSE lt.motivo_cierre
+            END,
+            cerrado_en = CASE
+                WHEN v_card_updates ? 'cerrado_en' THEN
+                    CASE jsonb_typeof(v_card_updates->'cerrado_en')
+                        WHEN 'null' THEN NULL
+                        ELSE (v_card_updates->>'cerrado_en')::timestamptz
+                    END
+                ELSE lt.cerrado_en
+            END,
+            tags = CASE
+                WHEN v_card_updates ? 'tags' THEN
+                    CASE jsonb_typeof(v_card_updates->'tags')
+                        WHEN 'null' THEN NULL
+                        WHEN 'array' THEN ARRAY(
+                            SELECT NULLIF(btrim(value), '')
+                            FROM jsonb_array_elements_text(v_card_updates->'tags') AS value
+                        )
+                        ELSE lt.tags
+                    END
+                ELSE lt.tags
+            END,
+            metadata = CASE
+                WHEN v_card_updates ? 'metadata' THEN
+                    CASE
+                        WHEN v_merge THEN coalesce(lt.metadata, '{}'::jsonb) || COALESCE(v_card_updates->'metadata', '{}'::jsonb)
+                        ELSE COALESCE(v_card_updates->'metadata', '{}'::jsonb)
+                    END
+                ELSE lt.metadata
+            END,
+            actualizado_en = v_now
+        WHERE lt.id = p_tarjeta_id
+        RETURNING * INTO v_lead;
+    ELSE
+        UPDATE public.lead_tarjetas
+        SET actualizado_en = v_now
+        WHERE id = p_tarjeta_id;
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        lt.id AS tarjeta_id,
+        lt.contacto_id,
+        ct.nombre_completo AS contacto_nombre,
+        ct.correo AS contacto_correo,
+        ct.telefono_e164 AS contacto_telefono,
+        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
+        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
+        le.id AS etapa_id,
+        le.nombre AS etapa_nombre,
+        le.orden AS etapa_orden,
+        le.categoria,
+        lt.creado_en,
+        lt.actualizado_en,
+        lt.cerrado_en,
+        lt.monto_estimado,
+        lt.moneda,
+        COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
+        lt.lead_score,
+        lt.asignado_a_usuario_id AS asignado_id,
+        asignado.nombre_completo AS asignado_nombre,
+        lt.propietario_usuario_id AS propietario_id,
+        propietario.nombre_completo AS propietario_nombre,
+        lt.conversacion_id,
+        conv.ultimo_mensaje_en,
+        lt.motivo_cierre,
+        lt.tags,
+        lt.metadata,
+        1::bigint AS total_rows
+    FROM public.lead_tarjetas lt
+    JOIN public.lead_etapas le ON le.id = lt.etapa_id
+    JOIN public.contactos ct ON ct.id = lt.contacto_id
+    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
+    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
+    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
+    WHERE lt.id = p_tarjeta_id;
+END;
+$$;
+
+
+--
 -- Name: panel_leads_geo_base(text, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1905,7 +2697,7 @@ $$;
 -- Name: panel_leads_list(uuid, uuid, public.lead_categoria, uuid, timestamp with time zone, timestamp with time zone, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -1920,6 +2712,7 @@ WITH filtered AS (
         COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
         le.id AS etapa_id,
         le.nombre AS etapa_nombre,
+        le.orden AS etapa_orden,
         le.categoria,
         lt.creado_en,
         lt.actualizado_en,
@@ -2020,6 +2813,7 @@ SELECT
     canal,
     etapa_id,
     etapa_nombre,
+    etapa_orden,
     categoria,
     creado_en,
     actualizado_en,
@@ -3544,6 +4338,56 @@ end;$$;
 
 
 --
+-- Name: tg_citas_sync_stage(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_citas_sync_stage() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_tablero_id uuid;
+    v_demo_stage uuid;
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.estado IS NOT DISTINCT FROM OLD.estado THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.estado IN ('pendiente','confirmada','reprogramada') THEN
+        SELECT lt.tablero_id
+          INTO v_tablero_id
+          FROM public.lead_tarjetas lt
+         WHERE lt.id = NEW.tarjeta_id;
+
+        IF v_tablero_id IS NOT NULL THEN
+            SELECT le.id
+              INTO v_demo_stage
+              FROM public.lead_etapas le
+             WHERE le.tablero_id = v_tablero_id
+               AND le.codigo = 'demo'
+             LIMIT 1;
+
+            IF v_demo_stage IS NOT NULL THEN
+                UPDATE public.lead_tarjetas lt
+                   SET etapa_id = v_demo_stage
+                 WHERE lt.id = NEW.tarjeta_id
+                   AND lt.etapa_id <> v_demo_stage;
+            END IF;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION tg_citas_sync_stage(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_citas_sync_stage() IS 'Asegura que la tarjeta se mueva a la etapa Demo cuando hay una cita activa.';
+
+
+--
 -- Name: tg_contactos_auto_asignacion(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3761,56 +4605,6 @@ $$;
 --
 
 COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta de lead cuando inicia una conversación con interacción entrante.';
-
-
---
--- Name: tg_lead_citas_demo_sync_stage(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.tg_lead_citas_demo_sync_stage() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    v_tablero_id uuid;
-    v_demo_stage uuid;
-BEGIN
-    IF TG_OP = 'UPDATE' AND NEW.estado IS NOT DISTINCT FROM OLD.estado THEN
-        RETURN NEW;
-    END IF;
-
-    IF NEW.estado IN ('pendiente','confirmada','reprogramada') THEN
-        SELECT lt.tablero_id
-          INTO v_tablero_id
-          FROM public.lead_tarjetas lt
-         WHERE lt.id = NEW.tarjeta_id;
-
-        IF v_tablero_id IS NOT NULL THEN
-            SELECT le.id
-              INTO v_demo_stage
-              FROM public.lead_etapas le
-             WHERE le.tablero_id = v_tablero_id
-               AND le.codigo = 'demo'
-             LIMIT 1;
-
-            IF v_demo_stage IS NOT NULL THEN
-                UPDATE public.lead_tarjetas lt
-                   SET etapa_id = v_demo_stage
-                 WHERE lt.id = NEW.tarjeta_id
-                   AND lt.etapa_id <> v_demo_stage;
-            END IF;
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-
---
--- Name: FUNCTION tg_lead_citas_demo_sync_stage(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.tg_lead_citas_demo_sync_stage() IS 'Asegura que la tarjeta se mueva a la etapa Demo cuando hay una cita activa.';
 
 
 --
@@ -5809,10 +6603,6 @@ END;
 $$;
 
 
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
 --
 -- Name: audit_log_entries; Type: TABLE; Schema: auth; Owner: -
 --
@@ -6705,50 +7495,6 @@ CREATE TABLE public.identidades_canal (
 
 
 --
--- Name: lead_citas_demo; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.lead_citas_demo (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    tarjeta_id uuid NOT NULL,
-    contacto_id uuid NOT NULL,
-    conversacion_id uuid,
-    start_at timestamp with time zone NOT NULL,
-    end_at timestamp with time zone,
-    timezone text,
-    estado public.cita_demo_estado DEFAULT 'pendiente'::public.cita_demo_estado NOT NULL,
-    provider text DEFAULT 'hosting'::text NOT NULL,
-    provider_calendar_id text,
-    provider_event_id text,
-    meeting_url text,
-    location text,
-    notes text,
-    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_by uuid,
-    updated_by uuid,
-    cancel_reason text,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT lead_citas_demo_provider_check CHECK ((provider = ANY (ARRAY['hosting'::text, 'google'::text]))),
-    CONSTRAINT lead_citas_demo_time_check CHECK (((end_at IS NULL) OR (end_at >= start_at)))
-);
-
-
---
--- Name: TABLE lead_citas_demo; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.lead_citas_demo IS 'Citas de demostración asociadas a leads; sincroniza con calendario externo.';
-
-
---
--- Name: COLUMN lead_citas_demo.provider; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.lead_citas_demo.provider IS 'Origen de la cita (hosting propio vs Google Calendar).';
-
-
---
 -- Name: lead_etapas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6919,23 +7665,27 @@ CREATE MATERIALIZED VIEW public.mv_resultados_por_actividad AS
 -- Name: panel_agenda_calendario; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.panel_agenda_calendario AS
- SELECT lcd.id,
-    lcd.tarjeta_id,
-    lcd.contacto_id,
-    c.nombre_completo AS contacto_nombre,
-    lcd.start_at,
-    lcd.end_at,
-    lcd.timezone,
-    lcd.estado,
-    lcd.provider,
-    lcd.meeting_url,
-    lcd.location,
-    lcd.notes,
-    lcd.provider_event_id,
-    lcd.provider_calendar_id,
-    lcd.metadata,
-    (COALESCE(c.nombre_completo, 'Lead'::text) || ' • Demo'::text) AS titulo,
+CREATE VIEW public.panel_agenda_calendario WITH (security_invoker='on') AS
+ SELECT c.id,
+    c.tarjeta_id,
+    c.contacto_id,
+    cto.nombre_completo AS contacto_nombre,
+    c.start_at,
+    c.end_at,
+    c.timezone,
+    c.estado,
+    c.provider,
+    c.meeting_url,
+    c.location,
+    c.notes,
+    c.provider_event_id,
+    c.provider_calendar_id,
+    c.metadata,
+    c.reminder_sent_at,
+    c.reminder_status,
+    c.external_join_url,
+    c.scheduled_via,
+    (COALESCE(cto.nombre_completo, 'Lead'::text) || ' • Demo'::text) AS titulo,
     lt.tablero_id,
     lt.etapa_id,
     le.codigo AS etapa_codigo,
@@ -6944,12 +7694,12 @@ CREATE VIEW public.panel_agenda_calendario AS
     ua.nombre_completo AS asignado_nombre,
     lt.propietario_usuario_id,
     up.nombre_completo AS propietario_nombre
-   FROM (((((public.lead_citas_demo lcd
-     JOIN public.lead_tarjetas lt ON ((lt.id = lcd.tarjeta_id)))
+   FROM (((((public.citas c
+     JOIN public.lead_tarjetas lt ON ((lt.id = c.tarjeta_id)))
      LEFT JOIN public.lead_etapas le ON ((le.id = lt.etapa_id)))
      LEFT JOIN public.usuarios ua ON ((ua.id = lt.asignado_a_usuario_id)))
      LEFT JOIN public.usuarios up ON ((up.id = lt.propietario_usuario_id)))
-     LEFT JOIN public.contactos c ON ((c.id = lcd.contacto_id)));
+     LEFT JOIN public.contactos cto ON ((cto.id = c.contacto_id)));
 
 
 --
@@ -6964,26 +7714,30 @@ COMMENT ON VIEW public.panel_agenda_calendario IS 'Vista simplificada para mostr
 --
 
 CREATE VIEW public.panel_agenda_demos AS
- SELECT lcd.id,
-    lcd.tarjeta_id,
-    lcd.contacto_id,
-    lcd.conversacion_id,
-    lcd.start_at,
-    lcd.end_at,
-    lcd.timezone,
-    lcd.estado,
-    lcd.provider,
-    lcd.provider_calendar_id,
-    lcd.provider_event_id,
-    lcd.meeting_url,
-    lcd.location,
-    lcd.notes,
-    lcd.metadata,
-    lcd.created_by,
-    lcd.updated_by,
-    lcd.cancel_reason,
-    lcd.creado_en,
-    lcd.actualizado_en,
+ SELECT c.id,
+    c.tarjeta_id,
+    c.contacto_id,
+    c.conversacion_id,
+    c.start_at,
+    c.end_at,
+    c.timezone,
+    c.estado,
+    c.provider,
+    c.provider_calendar_id,
+    c.provider_event_id,
+    c.meeting_url,
+    c.location,
+    c.notes,
+    c.metadata,
+    c.created_by,
+    c.updated_by,
+    c.cancel_reason,
+    c.reminder_sent_at,
+    c.reminder_status,
+    c.external_join_url,
+    c.scheduled_via,
+    c.creado_en,
+    c.actualizado_en,
     lt.tablero_id AS tarjeta_tablero_id,
     lt.etapa_id AS tarjeta_etapa_id,
     le.codigo AS etapa_codigo,
@@ -6996,28 +7750,21 @@ CREATE VIEW public.panel_agenda_demos AS
     ua.nombre_completo AS asignado_nombre,
     lt.propietario_usuario_id,
     up.nombre_completo AS propietario_nombre,
-    c.nombre_completo AS contacto_nombre,
-    c.correo AS contacto_correo,
-    c.telefono_e164 AS contacto_telefono,
-    c.company_name AS contacto_empresa,
-    c.origen AS contacto_origen,
+    cto.nombre_completo AS contacto_nombre,
+    cto.correo AS contacto_correo,
+    cto.telefono_e164 AS contacto_telefono,
+    cto.company_name AS contacto_empresa,
+    cto.origen AS contacto_origen,
     conv.estado AS conversacion_estado,
     conv.ultimo_mensaje_en AS conversacion_ultimo_mensaje_en,
     conv.canal AS conversacion_canal
-   FROM ((((((public.lead_citas_demo lcd
-     JOIN public.lead_tarjetas lt ON ((lt.id = lcd.tarjeta_id)))
+   FROM ((((((public.citas c
+     JOIN public.lead_tarjetas lt ON ((lt.id = c.tarjeta_id)))
      LEFT JOIN public.lead_etapas le ON ((le.id = lt.etapa_id)))
      LEFT JOIN public.usuarios ua ON ((ua.id = lt.asignado_a_usuario_id)))
      LEFT JOIN public.usuarios up ON ((up.id = lt.propietario_usuario_id)))
-     LEFT JOIN public.contactos c ON ((c.id = lcd.contacto_id)))
-     LEFT JOIN public.conversaciones conv ON ((conv.id = lcd.conversacion_id)));
-
-
---
--- Name: VIEW panel_agenda_demos; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.panel_agenda_demos IS 'Agregación de citas demo con datos de tarjetas, contactos y conversaciones para el panel.';
+     LEFT JOIN public.contactos cto ON ((cto.id = c.contacto_id)))
+     LEFT JOIN public.conversaciones conv ON ((conv.id = c.conversacion_id)));
 
 
 --
@@ -7941,6 +8688,14 @@ ALTER TABLE ONLY public.identidades_canal
 
 
 --
+-- Name: citas citas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.citas
+    ADD CONSTRAINT citas_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: contactos contacts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8034,14 +8789,6 @@ ALTER TABLE ONLY public.eventos_entrega
 
 ALTER TABLE ONLY public.eventos_auditoria
     ADD CONSTRAINT events_audit_pkey PRIMARY KEY (id);
-
-
---
--- Name: lead_citas_demo lead_citas_demo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_citas_demo
-    ADD CONSTRAINT lead_citas_demo_pkey PRIMARY KEY (id);
 
 
 --
@@ -8781,6 +9528,55 @@ CREATE INDEX agentes_canal_idx ON public.agentes USING btree (canal);
 
 
 --
+-- Name: citas_active_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX citas_active_unique ON public.citas USING btree (tarjeta_id) WHERE (estado = ANY (ARRAY['pendiente'::public.cita_estado, 'confirmada'::public.cita_estado, 'reprogramada'::public.cita_estado]));
+
+
+--
+-- Name: citas_created_by_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX citas_created_by_idx ON public.citas USING btree (created_by) WHERE (created_by IS NOT NULL);
+
+
+--
+-- Name: citas_estado_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX citas_estado_idx ON public.citas USING btree (estado, start_at);
+
+
+--
+-- Name: citas_provider_event_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX citas_provider_event_id_idx ON public.citas USING btree (provider_event_id) WHERE (provider_event_id IS NOT NULL);
+
+
+--
+-- Name: citas_start_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX citas_start_idx ON public.citas USING btree (start_at);
+
+
+--
+-- Name: citas_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX citas_tarjeta_idx ON public.citas USING btree (tarjeta_id);
+
+
+--
+-- Name: citas_updated_by_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX citas_updated_by_idx ON public.citas USING btree (updated_by) WHERE (updated_by IS NOT NULL);
+
+
+--
 -- Name: contactos_datos_gin; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9023,34 +9819,6 @@ CREATE INDEX ix_resultados_name_trgm ON public.resultados USING gist (name publi
 --
 
 CREATE INDEX ix_resultados_tsv ON public.resultados USING gin (tsv);
-
-
---
--- Name: lead_citas_demo_active_unique; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX lead_citas_demo_active_unique ON public.lead_citas_demo USING btree (tarjeta_id) WHERE (estado = ANY (ARRAY['pendiente'::public.cita_demo_estado, 'confirmada'::public.cita_demo_estado, 'reprogramada'::public.cita_demo_estado]));
-
-
---
--- Name: lead_citas_demo_estado_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX lead_citas_demo_estado_idx ON public.lead_citas_demo USING btree (estado, start_at);
-
-
---
--- Name: lead_citas_demo_start_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX lead_citas_demo_start_idx ON public.lead_citas_demo USING btree (start_at);
-
-
---
--- Name: lead_citas_demo_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX lead_citas_demo_tarjeta_idx ON public.lead_citas_demo USING btree (tarjeta_id);
 
 
 --
@@ -9376,6 +10144,20 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 
 
 --
+-- Name: citas citas_sync_stage; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER citas_sync_stage AFTER INSERT OR UPDATE ON public.citas FOR EACH ROW EXECUTE FUNCTION public.tg_citas_sync_stage();
+
+
+--
+-- Name: citas citas_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER citas_touch_updated_at BEFORE UPDATE ON public.citas FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
 -- Name: contactos contactos_auto_asignacion; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -9401,20 +10183,6 @@ CREATE TRIGGER contactos_captura_estado BEFORE INSERT OR UPDATE OF nombre_comple
 --
 
 CREATE TRIGGER conversaciones_auto_tarjeta AFTER INSERT ON public.conversaciones FOR EACH ROW EXECUTE FUNCTION public.tg_conversaciones_auto_tarjeta();
-
-
---
--- Name: lead_citas_demo lead_citas_demo_sync_stage; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_citas_demo_sync_stage AFTER INSERT OR UPDATE ON public.lead_citas_demo FOR EACH ROW EXECUTE FUNCTION public.tg_lead_citas_demo_sync_stage();
-
-
---
--- Name: lead_citas_demo lead_citas_demo_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_citas_demo_touch_updated_at BEFORE UPDATE ON public.lead_citas_demo FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -9717,6 +10485,46 @@ ALTER TABLE ONLY public.identidades_canal
 
 
 --
+-- Name: citas citas_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.citas
+    ADD CONSTRAINT citas_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
+
+
+--
+-- Name: citas citas_conversacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.citas
+    ADD CONSTRAINT citas_conversacion_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id) ON DELETE SET NULL;
+
+
+--
+-- Name: citas citas_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.citas
+    ADD CONSTRAINT citas_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: citas citas_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.citas
+    ADD CONSTRAINT citas_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: citas citas_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.citas
+    ADD CONSTRAINT citas_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
 -- Name: contactos contacts_owner_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9826,46 +10634,6 @@ ALTER TABLE ONLY public.eventos_entrega
 
 ALTER TABLE ONLY public.eventos_auditoria
     ADD CONSTRAINT events_audit_actor_user_id_fkey FOREIGN KEY (actor_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
-
-
---
--- Name: lead_citas_demo lead_citas_demo_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_citas_demo
-    ADD CONSTRAINT lead_citas_demo_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
-
-
---
--- Name: lead_citas_demo lead_citas_demo_conversacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_citas_demo
-    ADD CONSTRAINT lead_citas_demo_conversacion_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id) ON DELETE SET NULL;
-
-
---
--- Name: lead_citas_demo lead_citas_demo_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_citas_demo
-    ADD CONSTRAINT lead_citas_demo_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.usuarios(id) ON DELETE SET NULL;
-
-
---
--- Name: lead_citas_demo lead_citas_demo_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_citas_demo
-    ADD CONSTRAINT lead_citas_demo_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE;
-
-
---
--- Name: lead_citas_demo lead_citas_demo_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_citas_demo
-    ADD CONSTRAINT lead_citas_demo_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.usuarios(id) ON DELETE SET NULL;
 
 
 --
@@ -10286,6 +11054,61 @@ CREATE POLICY adjuntos_select_visible ON public.adjuntos FOR SELECT TO authentic
 ALTER TABLE public.busquedas ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: citas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.citas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: citas citas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY citas_admin_all ON public.citas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: citas citas_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY citas_delete ON public.citas FOR DELETE USING (public.puede_ver_lead(tarjeta_id));
+
+
+--
+-- Name: citas citas_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY citas_insert ON public.citas FOR INSERT WITH CHECK (public.puede_ver_lead(tarjeta_id));
+
+
+--
+-- Name: citas citas_modify; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY citas_modify ON public.citas FOR UPDATE USING (public.puede_ver_lead(tarjeta_id)) WITH CHECK (public.puede_ver_lead(tarjeta_id));
+
+
+--
+-- Name: citas citas_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY citas_select ON public.citas FOR SELECT USING (public.puede_ver_lead(tarjeta_id));
+
+
+--
+-- Name: citas citas_service_manage; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY citas_service_manage ON public.citas TO service_role USING (true) WITH CHECK (true);
+
+
+--
+-- Name: POLICY citas_service_manage ON citas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON POLICY citas_service_manage ON public.citas IS 'Permite a service_role (workers / integraciones internas) gestionar citas sin restricciones adicionales.';
+
+
+--
 -- Name: contactos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -10515,47 +11338,6 @@ ALTER TABLE public.identidades_canal ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY identidades_canal_admin_todo ON public.identidades_canal USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: lead_citas_demo; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.lead_citas_demo ENABLE ROW LEVEL SECURITY;
-
---
--- Name: lead_citas_demo lead_citas_demo_admin_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_citas_demo_admin_all ON public.lead_citas_demo USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: lead_citas_demo lead_citas_demo_delete; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_citas_demo_delete ON public.lead_citas_demo FOR DELETE USING (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: lead_citas_demo lead_citas_demo_insert; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_citas_demo_insert ON public.lead_citas_demo FOR INSERT WITH CHECK (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: lead_citas_demo lead_citas_demo_modify; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_citas_demo_modify ON public.lead_citas_demo FOR UPDATE USING (public.puede_ver_lead(tarjeta_id)) WITH CHECK (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: lead_citas_demo lead_citas_demo_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_citas_demo_select ON public.lead_citas_demo FOR SELECT USING (public.puede_ver_lead(tarjeta_id));
 
 
 --
@@ -11038,5 +11820,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict qga8B4vq8tbRQ1ob52PLcV7f27r0XdnIb2kmOKB5jPTvlhkYBp7FYl5iqugNM0h
+\unrestrict 42faeGoijXDPB2x9AhJn9TiNi76yxVwRNKnoKgHfeeGBUNa0aXkSGlN2jt9wJOd
 

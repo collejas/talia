@@ -51,7 +51,8 @@ Permitir a los usuarios:
 - Server action `moveLead`:
   - Invoca `panel_lead_move`. ✔️
   - Actualiza estado local (optimist update) y revierte ante error. ✔️
-- Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario. ✔️
+  - Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario. ✔️
+  ↳ **Pendiente ejecutar** `20251204_090000_panel_lead_move_type_fix.sql` para alinear los tipos que devuelve la RPC y evitar el error “structure of query does not match function result type”.
 
 ### 6. Historial & notas
 - Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas.
