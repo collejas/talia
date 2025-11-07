@@ -64,9 +64,6 @@ pg_restore --clean --if-exists --no-owner --no-acl \
   supabase/migrations/20251023_131845_full.dump
 
 
-
-
-
 # NUEVO ARRANQUE CON SYSTEM, EDICION Y ESTATUS
 sudo nano /etc/systemd/system/talia-panel.service
 sudo micro /etc/systemd/system/talia-panel.service
@@ -81,6 +78,8 @@ npm run build --webpack
 
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
+
+codex resume 019a5d14-8753-7250-aacc-d602e9e5c69f
 
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service

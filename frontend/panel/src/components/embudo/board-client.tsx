@@ -27,8 +27,7 @@ type EmbudoBoardClientProps = {
 };
 
 type SelectedCard = {
-  stageId: string;
-  stageNombre: string;
+  stage: EmbudoStage;
   card: EmbudoCard;
 };
 
@@ -83,8 +82,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
 
   const handleCardClick = (stage: EmbudoStage, card: EmbudoCard) => {
     setSelected({
-      stageId: stage.id,
-      stageNombre: stage.nombre,
+      stage,
       card,
     });
     setDrawerOpen(true);
@@ -100,8 +98,10 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
           return {
             ...item,
             nombre: stage.nombre,
+            codigo: stage.codigo,
             categoria: stage.categoria,
             orden: stage.orden,
+            metadatos: stage.metadatos,
             tarjetas: sortCards([...filtered, card]),
           };
         }
@@ -132,8 +132,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
       );
     });
     setSelected({
-      stageId: stage.id,
-      stageNombre: stage.nombre,
+      stage,
       card,
     });
   }
@@ -168,7 +167,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
     for (const stage of stages) {
       const card = stage.tarjetas.find((item) => item.tarjetaId === cardId);
       if (card) {
-        return { stageId: stage.id, stageNombre: stage.nombre, card };
+        return { stage, card };
       }
     }
     return null;
@@ -179,10 +178,9 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
     const stageInfo = findCardById(cardId);
     if (!stageInfo) return;
 
-    const stage = stages.find((item) => item.id === stageInfo.stageId);
-    if (!stage) return;
+    const sourceStage = stages.find((item) => item.id === stageInfo.stage.id) ?? stageInfo.stage;
 
-    if (stage.orden != null && stage.orden < 2) {
+    if (sourceStage.orden != null && sourceStage.orden < 2) {
       setDragMessage("Solo puedes arrastrar leads a partir de la etapa Precalificado.");
       setActiveDragId(null);
       setActiveDragCard(null);
@@ -193,7 +191,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
     setDragMessage(null);
     setActiveDragId(cardId);
     setActiveDragCard(stageInfo.card);
-    setActiveDragStage(stage);
+    setActiveDragStage(sourceStage);
   };
 
   const handleDragCancel = () => {
@@ -327,7 +325,8 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
       <LeadDrawer
         open={drawerOpen && !!selected}
         onOpenChange={handleDrawerOpenChange}
-        stageName={selected?.stageNombre ?? null}
+        currentStage={selected?.stage ?? null}
+        allStages={stages}
         card={selected?.card ?? null}
         onSubmit={handleLeadSubmit}
       />

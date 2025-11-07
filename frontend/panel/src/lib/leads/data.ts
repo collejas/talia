@@ -34,6 +34,8 @@ type LeadsListRow = {
   canal: string | null;
   etapa_id: string;
   etapa_nombre: string;
+  etapa_codigo: string;
+  etapa_metadatos: Record<string, unknown> | null;
   etapa_orden: number;
   categoria: "abierta" | "ganada" | "perdida";
   creado_en: string;
@@ -191,6 +193,8 @@ function mapTable(payload?: LeadsListRow[] | null): LeadTableRow[] {
         contacto_id: row.contacto_id,
         etapa_id: row.etapa_id,
         etapa_nombre: row.etapa_nombre,
+        etapa_codigo: row.etapa_codigo,
+        etapa_metadatos: row.etapa_metadatos,
         categoria,
         canal: row.canal,
         creado_en: row.creado_en,

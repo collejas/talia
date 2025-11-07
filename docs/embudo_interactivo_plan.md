@@ -43,7 +43,7 @@ Permitir a los usuarios:
 - Formulario con React Hook Form + zod.
 - Server action `updateLead` → llama RPC y devuelve la tarjeta actualizada.
 - Toasts de feedback (éxito/error).
-  ↳ **Extensión propuesta**: añadir secciones cronológicas para etapas futuras leyendo `metadatos.drawer_prep` de cada etapa; documentado en “Próximas Etapas” abajo.
+  ↳ **Extensión implementada**: secciones cronológicas para etapas futuras leyendo `metadatos.drawer_prep`; capturan y persisten `metadata.stage_prep` desde el Drawer (ver “Próximas etapas”).
 
 ### 5. Drag & drop ✅
 - Integrar `@dnd-kit/core` en `EmbudoBoard`. ✔️
@@ -52,8 +52,8 @@ Permitir a los usuarios:
 - Server action `moveLead`:
   - Invoca `panel_lead_move`. ✔️
   - Actualiza estado local (optimist update) y revierte ante error. ✔️
-  - Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario. ✔️
-  ↳ **Pendiente ejecutar** `20251204_090000_panel_lead_move_type_fix.sql` para alinear los tipos que devuelve la RPC y evitar el error “structure of query does not match function result type”.
+- Validaciones: bloquear drops en etapas no permitidas y mostrar feedback al usuario. ✔️
+  ↳ **Pendiente ejecutar** `20251204_090000_panel_lead_move_type_fix.sql` y `20251204_110000_panel_stage_drawer_prep.sql` en Supabase.
 
 ### 6. Historial & notas
 - Mostrar en el Drawer una lista de movimientos (`lead_movimientos`) y notas.
@@ -73,13 +73,12 @@ Permitir a los usuarios:
 
 ## Próximas etapas (secciones en el Drawer)
 
-- **Migración** `202512XX_stage_drawer_prep.sql` (pendiente): agrega/actualiza `lead_etapas.metadatos.drawer_prep` con la definición de formularios por etapa (orden, título, campos y validaciones).
-- Actualizar `panel_leads_list`, `panel_lead_update` y `panel_lead_move` para devolver `etapa_codigo` y `etapa_metadatos`, permitiendo que el frontend renderice las secciones dinámicamente y las server actions conserven la configuración.
+- **Migración** `20251204_110000_panel_stage_drawer_prep.sql`: define `drawer_prep` para etapas clave (Precalificado, Demo, Negociación, Cerrado Ganado/Perdido) y actualiza las RPC para exponer `etapa_codigo` y `etapa_metadatos`.
+- Backend listo: `panel_leads_list`, `panel_lead_update` y `panel_lead_move` devuelven las nuevas columnas y conservan `metadata.stage_prep` con `mergeMetadata = true`.
 - Frontend:
-  - Extender `EmbudoStage` y `LeadRow` (`frontend/panel/src/lib/embudo/data.ts`) con `codigo` y `metadatos`.
-  - Pasar la lista completa de etapas a `LeadDrawer` y renderizar un bloque “Próximas etapas” que filtra `orden` > etapa actual, usando `stage.metadatos.drawer_prep.sections`.
-  - Guardar los valores dentro de `card.metadata.stage_prep` para que `panel_lead_update` los mezcle (`mergeMetadata = true`) y se preserven entre movimientos.
-- Validar llenado de formularios futuros: migraciones aplicadas → recargar `/embudo` → abrir Drawer → capturar datos → verificar `lead_tarjetas.metadata->'stage_prep'`.
+  - `EmbudoStage`/`LeadRow` incluyen `codigo` y `metadatos`.
+  - `LeadDrawer` recibe todas las etapas, renderiza “Próximas etapas” según `orden` y persiste los valores en `card.metadata.stage_prep`.
+- Validación recomendada tras ejecutar migraciones: recargar `/embudo`, abrir un lead, completar los formularios de etapas futuras y confirmar los valores en `lead_tarjetas.metadata->'stage_prep'`.
 
 ## Dependencias y tareas previas
 

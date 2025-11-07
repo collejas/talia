@@ -7,8 +7,10 @@ const DEFAULT_LIMIT = 200;
 export type EmbudoStage = {
   id: string;
   nombre: string;
+  codigo: string;
   categoria: string;
   orden: number;
+  metadatos: Record<string, unknown>;
   tarjetas: EmbudoCard[];
 };
 
@@ -49,8 +51,10 @@ type LeadListRow = {
   canal: string | null;
   etapa_id: string;
   etapa_nombre: string;
+  etapa_codigo: string;
   categoria: string;
   etapa_orden: number;
+  etapa_metadatos: Record<string, unknown> | null;
   creado_en: string;
   actualizado_en: string | null;
   cerrado_en: string | null;
@@ -96,6 +100,11 @@ function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; si
   const sinConversacion: EmbudoCard[] = [];
 
   for (const row of rows) {
+    const stageMetadatos =
+      row.etapa_metadatos && typeof row.etapa_metadatos === "object" && !Array.isArray(row.etapa_metadatos)
+        ? (row.etapa_metadatos as Record<string, unknown>)
+        : {};
+
     const tarjeta: EmbudoCard = {
       tarjetaId: row.tarjeta_id,
       contactoId: row.contacto_id,
@@ -125,9 +134,11 @@ function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; si
     const stage = ensureStage(
       stageMap,
       row.etapa_id,
+      row.etapa_codigo,
       row.etapa_nombre,
       row.categoria,
-      row.etapa_orden ?? Number.MAX_SAFE_INTEGER
+      row.etapa_orden ?? Number.MAX_SAFE_INTEGER,
+      stageMetadatos
     );
     stage.tarjetas.push(tarjeta);
   }
@@ -143,20 +154,32 @@ function mapStages(rows: LeadListRow[] | undefined): { stages: EmbudoStage[]; si
   return { stages: orderedStages, sinConversacion };
 }
 
-function ensureStage(map: Map<string, EmbudoStage>, id: string, nombre: string, categoria: string, orden: number): EmbudoStage {
+function ensureStage(
+  map: Map<string, EmbudoStage>,
+  id: string,
+  codigo: string,
+  nombre: string,
+  categoria: string,
+  orden: number,
+  metadatos: Record<string, unknown>,
+): EmbudoStage {
   if (!map.has(id)) {
     map.set(id, {
       id,
       nombre,
+      codigo,
       categoria,
       orden,
+      metadatos,
       tarjetas: [],
     });
   } else {
     const stage = map.get(id)!;
     stage.nombre = nombre;
+    stage.codigo = codigo;
     stage.categoria = categoria;
     stage.orden = orden;
+    stage.metadatos = metadatos;
   }
   return map.get(id)!;
 }

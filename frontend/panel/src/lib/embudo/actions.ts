@@ -15,6 +15,8 @@ type LeadRow = {
   canal: string | null;
   etapa_id: string;
   etapa_nombre: string;
+  etapa_codigo: string;
+  etapa_metadatos: Record<string, unknown> | null;
   etapa_orden: number;
   categoria: "abierta" | "ganada" | "perdida";
   creado_en: string;
@@ -57,11 +59,18 @@ export type LeadActionResult =
   | { ok: false; error: string };
 
 function mapRowToStage(row: LeadRow): { stage: EmbudoStage; card: EmbudoCard } {
+  const stageMetadata =
+    row.etapa_metadatos && typeof row.etapa_metadatos === "object" && !Array.isArray(row.etapa_metadatos)
+      ? (row.etapa_metadatos as Record<string, unknown>)
+      : {};
+
   const stage: EmbudoStage = {
     id: row.etapa_id,
     nombre: row.etapa_nombre,
+    codigo: row.etapa_codigo || "",
     categoria: row.categoria,
     orden: row.etapa_orden ?? Number.MAX_SAFE_INTEGER,
+    metadatos: stageMetadata,
     tarjetas: [],
   };
 
