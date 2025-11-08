@@ -10,6 +10,7 @@ export type EmbudoStage = {
   codigo: string;
   categoria: string;
   orden: number;
+  tableroId: string;
   metadatos: Record<string, unknown>;
   tarjetas: EmbudoCard[];
 };
@@ -146,6 +147,7 @@ function mapStages(
         codigo: stageRow.codigo,
         categoria: stageRow.categoria,
         orden: typeof stageRow.orden === "number" ? stageRow.orden : Number.MAX_SAFE_INTEGER,
+        tableroId: stageRow.tablero_id,
         metadatos,
         tarjetas: [],
       });
@@ -186,11 +188,7 @@ function mapStages(
       metadata: row.metadata ?? {},
     };
 
-    if (!row.conversacion_id) {
-      sinConversacion.push(tarjeta);
-      continue;
-    }
-
+    const existingStage = stageMap.get(row.etapa_id);
     const stage = ensureStage(
       stageMap,
       row.etapa_id,
@@ -199,8 +197,21 @@ function mapStages(
       row.categoria,
       row.etapa_orden ?? Number.MAX_SAFE_INTEGER,
       stageMetadatos,
+      existingStage?.tableroId,
     );
     stage.tarjetas.push(tarjeta);
+
+    let createdVia: string | undefined;
+    if (tarjeta.metadata && typeof tarjeta.metadata === "object" && !Array.isArray(tarjeta.metadata)) {
+      const record = tarjeta.metadata as Record<string, unknown>;
+      createdVia = typeof record.created_via === "string" ? record.created_via : undefined;
+    }
+
+    const isManualLead = createdVia === "embudo_manual";
+
+    if (!row.conversacion_id && !isManualLead) {
+      sinConversacion.push(tarjeta);
+    }
   }
 
   for (const stage of stageMap.values()) {
@@ -222,6 +233,7 @@ function ensureStage(
   categoria: string,
   orden: number,
   metadatos: Record<string, unknown>,
+  tableroId?: string,
 ): EmbudoStage {
   if (!map.has(id)) {
     map.set(id, {
@@ -230,6 +242,7 @@ function ensureStage(
       codigo,
       categoria,
       orden,
+      tableroId: tableroId ?? "",
       metadatos,
       tarjetas: [],
     });
@@ -239,6 +252,9 @@ function ensureStage(
     stage.codigo = codigo;
     stage.categoria = categoria;
     stage.orden = orden;
+    if (tableroId && !stage.tableroId) {
+      stage.tableroId = tableroId;
+    }
     if (Object.keys(metadatos).length) {
       stage.metadatos = metadatos;
     }

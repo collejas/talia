@@ -28,6 +28,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { LeadActionResult } from "@/lib/embudo/actions";
+import { cn } from "@/lib/utils";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
@@ -73,13 +74,22 @@ export type LeadDrawerSubmitPayload = {
   mergeMetadata?: boolean;
 };
 
+export type LeadDrawerCreatePayload = {
+  stageId: string;
+  tableroId: string;
+  contacto: Record<string, unknown>;
+  tarjeta: Record<string, unknown>;
+};
+
 type LeadDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentStage: EmbudoStage | null;
   allStages: EmbudoStage[];
   card: EmbudoCard | null;
-  onSubmit: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
+  mode?: "create" | "edit";
+  onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
+  onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
 };
 
 type DrawerPrepOption = {
@@ -170,7 +180,17 @@ type HistoryState = {
 
 const HISTORY_FETCH_LIMIT = 100;
 
-export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, onSubmit }: LeadDrawerProps) {
+export function LeadDrawer({
+  open,
+  onOpenChange,
+  currentStage,
+  allStages,
+  card,
+  mode = "edit",
+  onSubmit,
+  onCreate,
+}: LeadDrawerProps) {
+  const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
   const [activeTab, setActiveTab] = useState<"resumen" | "notas" | "historial">("resumen");
 
@@ -254,6 +274,12 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
       setActiveTab("resumen");
     }
   }, [open]);
+
+  useEffect(() => {
+    if (isCreateMode || !card) {
+      setActiveTab("resumen");
+    }
+  }, [isCreateMode, card]);
 
   const handleStageFieldChange = (stageCode: string, field: DrawerPrepFieldDefinition, value: string | boolean) => {
     setStagePrep((prev) => {
@@ -381,53 +407,15 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
   }, [card, noteText]);
 
   const onSubmitForm = async (values: FormValues) => {
-    if (!card) {
-      setError("No se encontró la tarjeta seleccionada.");
-      return;
-    }
+    const nombreRaw = (values.nombre ?? "").trim();
+    const correoRaw = (values.correo ?? "").trim();
+    const telefonoRaw = (values.telefono ?? "").trim();
+    const montoRaw = (values.monto ?? "").trim();
+    const monedaRaw = (values.moneda ?? "").trim().toUpperCase();
+    const probRaw = (values.probabilidad ?? "").trim();
 
-    const contactoUpdates: Record<string, unknown> = {};
-    const tarjetaUpdates: Record<string, unknown> = {};
-
-    const nombre = (values.nombre ?? "").trim();
-    if (nombre !== (defaultFormValues.nombre ?? "").trim()) {
-      contactoUpdates.nombre_completo = nombre === "" ? null : nombre;
-    }
-
-    const correo = (values.correo ?? "").trim();
-    if (correo !== (defaultFormValues.correo ?? "").trim()) {
-      contactoUpdates.correo = correo === "" ? null : correo;
-    }
-
-    const telefono = (values.telefono ?? "").trim();
-    if (telefono !== (defaultFormValues.telefono ?? "").trim()) {
-      contactoUpdates.telefono_e164 = telefono === "" ? null : telefono;
-    }
-
-    const montoValue = (values.monto ?? "").trim();
-    if (montoValue !== (defaultFormValues.monto ?? "").trim()) {
-      if (montoValue === "") {
-        tarjetaUpdates.monto_estimado = null;
-      } else {
-        tarjetaUpdates.monto_estimado = Number(montoValue);
-      }
-    }
-
-    const monedaValue = (values.moneda ?? "").trim().toUpperCase();
-    if (monedaValue !== (defaultFormValues.moneda ?? "").trim().toUpperCase()) {
-      tarjetaUpdates.moneda = monedaValue === "" ? null : monedaValue;
-    }
-
-    const probValue = (values.probabilidad ?? "").trim();
-    if (probValue !== (defaultFormValues.probabilidad ?? "").trim()) {
-      if (probValue === "") {
-        tarjetaUpdates.probabilidad_override = null;
-      } else {
-        tarjetaUpdates.probabilidad_override = Number(probValue);
-      }
-    }
-
-    const missingRequired = findMissingRequiredField(upcomingStageGroups, stagePrep);
+    const missingRequired =
+      isCreateMode ? null : findMissingRequiredField(upcomingStageGroups, stagePrep);
     if (missingRequired) {
       setError(
         `Completa el campo “${missingRequired.field.label}” en la etapa “${missingRequired.stage.nombre}”.`,
@@ -436,8 +424,101 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
     }
 
     const normalizedStagePrep = buildStagePrepPayload(stagePrep, drawerDefinitions);
-    const stagePrepChanged = !areStagePrepsEqual(normalizedStagePrep, initialStagePrepPayload);
 
+    if (isCreateMode) {
+      if (!currentStage || !currentStage.tableroId) {
+        setError("Selecciona una etapa válida para crear el lead.");
+        return;
+      }
+      if (!onCreate) {
+        setError("No es posible crear leads en este momento.");
+        return;
+      }
+
+      const contactoPayload: Record<string, unknown> = {
+        nombre_completo: nombreRaw.length ? nombreRaw : null,
+        correo: correoRaw.length ? correoRaw : null,
+        telefono_e164: telefonoRaw.length ? telefonoRaw : null,
+      };
+
+      const tarjetaPayload: Record<string, unknown> = {};
+      if (montoRaw.length) {
+        tarjetaPayload.monto_estimado = Number(montoRaw);
+      }
+      if (monedaRaw.length) {
+        tarjetaPayload.moneda = monedaRaw;
+      }
+      if (probRaw.length) {
+        tarjetaPayload.probabilidad_override = Number(probRaw);
+      }
+
+      const metadata: Record<string, unknown> = {
+        created_via: "embudo_manual",
+        created_stage_id: currentStage.id,
+        created_stage_code: currentStage.codigo,
+      };
+      if (Object.keys(normalizedStagePrep).length) {
+        metadata.stage_prep = normalizedStagePrep;
+      }
+      tarjetaPayload.metadata = metadata;
+
+      setPending(true);
+      const result = await onCreate({
+        stageId: currentStage.id,
+        tableroId: currentStage.tableroId,
+        contacto: contactoPayload,
+        tarjeta: tarjetaPayload,
+      });
+      setPending(false);
+
+      if (!result.ok) {
+        setError(result.error || "Ocurrió un error al crear el lead.");
+        return;
+      }
+
+      setError(null);
+      onOpenChange(false);
+      return;
+    }
+
+    if (!card) {
+      setError("No se encontró la tarjeta seleccionada.");
+      return;
+    }
+
+    if (!onSubmit) {
+      setError("No es posible actualizar este lead en este momento.");
+      return;
+    }
+
+    const contactoUpdates: Record<string, unknown> = {};
+    if (nombreRaw !== (defaultFormValues.nombre ?? "").trim()) {
+      contactoUpdates.nombre_completo = nombreRaw.length ? nombreRaw : null;
+    }
+
+    if (correoRaw !== (defaultFormValues.correo ?? "").trim()) {
+      contactoUpdates.correo = correoRaw.length ? correoRaw : null;
+    }
+
+    if (telefonoRaw !== (defaultFormValues.telefono ?? "").trim()) {
+      contactoUpdates.telefono_e164 = telefonoRaw.length ? telefonoRaw : null;
+    }
+
+    const tarjetaUpdates: Record<string, unknown> = {};
+    if (montoRaw !== (defaultFormValues.monto ?? "").trim()) {
+      tarjetaUpdates.monto_estimado = montoRaw.length ? Number(montoRaw) : null;
+    }
+
+    const defaultMoneda = (defaultFormValues.moneda ?? "").trim().toUpperCase();
+    if (monedaRaw !== defaultMoneda) {
+      tarjetaUpdates.moneda = monedaRaw.length ? monedaRaw : null;
+    }
+
+    if (probRaw !== (defaultFormValues.probabilidad ?? "").trim()) {
+      tarjetaUpdates.probabilidad_override = probRaw.length ? Number(probRaw) : null;
+    }
+
+    const stagePrepChanged = !areStagePrepsEqual(normalizedStagePrep, initialStagePrepPayload);
     if (stagePrepChanged) {
       tarjetaUpdates.metadata = {
         stage_prep: normalizedStagePrep,
@@ -597,10 +678,12 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden">
         <DrawerHeader className="items-start">
-          <DrawerTitle>{card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
+          <DrawerTitle>{isCreateMode ? "Nuevo lead" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
           <DrawerDescription className="flex flex-col gap-1 text-left">
-            <span>Etapa: {stageName}</span>
-            <span className="text-xs text-muted-foreground">ID: {card?.tarjetaId ?? "—"}</span>
+            <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
+            {!isCreateMode ? (
+              <span className="text-xs text-muted-foreground">ID: {card?.tarjetaId ?? "—"}</span>
+            ) : null}
           </DrawerDescription>
         </DrawerHeader>
 
@@ -609,10 +692,19 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
           onValueChange={(value) => setActiveTab(value as typeof activeTab)}
           className="flex h-full min-h-0 flex-col"
         >
-          <TabsList className="mx-4 grid h-auto grid-cols-3 gap-1 rounded-lg border bg-muted/60 p-1">
+          <TabsList
+            className={cn(
+              "mx-4 grid h-auto gap-1 rounded-lg border bg-muted/60 p-1",
+              isCreateMode || !card ? "grid-cols-1" : "grid-cols-3",
+            )}
+          >
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
-            <TabsTrigger value="notas">Notas</TabsTrigger>
-            <TabsTrigger value="historial">Historial</TabsTrigger>
+            {!isCreateMode && card ? (
+              <>
+                <TabsTrigger value="notas">Notas</TabsTrigger>
+                <TabsTrigger value="historial">Historial</TabsTrigger>
+              </>
+            ) : null}
           </TabsList>
 
           <TabsContent value="resumen" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
@@ -773,8 +865,18 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
               ) : null}
 
               <DrawerFooter className="mt-4 space-y-2">
-                <Button type="submit" disabled={pending || !card} className="w-full">
-                  {pending ? "Guardando..." : "Guardar cambios"}
+                <Button
+                  type="submit"
+                  disabled={pending || (!card && !isCreateMode)}
+                  className="w-full"
+                >
+                  {pending
+                    ? isCreateMode
+                      ? "Creando..."
+                      : "Guardando..."
+                    : isCreateMode
+                      ? "Crear lead"
+                      : "Guardar cambios"}
                 </Button>
                 <Button
                   type="button"
@@ -789,6 +891,7 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
             </form>
           </TabsContent>
 
+          {!isCreateMode && card ? (
           <TabsContent value="notas" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
             <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-6">
               <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
@@ -852,7 +955,9 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
               </div>
             </div>
           </TabsContent>
+          ) : null}
 
+          {!isCreateMode && card ? (
           <TabsContent value="historial" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
             <div className="flex flex-1 min-h-0 flex-col space-y-3 overflow-y-auto px-4 pb-6">
               {historyState.status === "loading" && historyState.data.length === 0 ? (
@@ -903,6 +1008,7 @@ export function LeadDrawer({ open, onOpenChange, currentStage, allStages, card, 
               ) : null}
             </div>
           </TabsContent>
+          ) : null}
         </Tabs>
       </DrawerContent>
     </Drawer>

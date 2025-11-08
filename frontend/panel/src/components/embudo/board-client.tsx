@@ -18,15 +18,19 @@ import { CSS } from "@dnd-kit/utilities";
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
 import { EmbudoStageColumn } from "@/components/embudo/stage-column";
 import { EmbudoCardItem } from "@/components/embudo/card-item";
-import { moveLeadCard, updateLeadCard, type LeadActionResult } from "@/lib/embudo/actions";
-import { LeadDrawer, type LeadDrawerSubmitPayload } from "@/components/embudo/lead-drawer";
+import { createLeadCard, moveLeadCard, updateLeadCard, type LeadActionResult } from "@/lib/embudo/actions";
+import {
+  LeadDrawer,
+  type LeadDrawerCreatePayload,
+  type LeadDrawerSubmitPayload,
+} from "@/components/embudo/lead-drawer";
 
 type EmbudoBoardClientProps = {
   etapas: EmbudoStage[];
   sinConversacion: EmbudoCard[];
 };
 
-type SelectedCard = {
+type StageCardPair = {
   stage: EmbudoStage;
   card: EmbudoCard;
 };
@@ -59,7 +63,9 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
   );
 
   const [stages, setStages] = useState<EmbudoStage[]>(initialStages);
-  const [selected, setSelected] = useState<SelectedCard | null>(null);
+  const [selectedStage, setSelectedStage] = useState<EmbudoStage | null>(null);
+  const [selectedCard, setSelectedCard] = useState<EmbudoCard | null>(null);
+  const [drawerMode, setDrawerMode] = useState<"edit" | "create">("edit");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [dragMessage, setDragMessage] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -81,10 +87,16 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
   }, [initialStages]);
 
   const handleCardClick = (stage: EmbudoStage, card: EmbudoCard) => {
-    setSelected({
-      stage,
-      card,
-    });
+    setSelectedStage(stage);
+    setSelectedCard(card);
+    setDrawerMode("edit");
+    setDrawerOpen(true);
+  };
+
+  const handleAddLead = (stage: EmbudoStage) => {
+    setSelectedStage(stage);
+    setSelectedCard(null);
+    setDrawerMode("create");
     setDrawerOpen(true);
   };
 
@@ -97,6 +109,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
           const filtered = (item.tarjetas ?? []).filter((existing) => existing.tarjetaId !== card.tarjetaId);
           return {
             ...item,
+            tableroId: stage.tableroId || item.tableroId,
             nombre: stage.nombre,
             codigo: stage.codigo,
             categoria: stage.categoria,
@@ -121,6 +134,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
             ...updated,
             {
               ...stage,
+              tableroId: stage.tableroId || selectedStage?.tableroId || stage.tableroId,
               tarjetas: [card],
             },
           ];
@@ -131,19 +145,18 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
         })),
       );
     });
-    setSelected({
-      stage,
-      card,
-    });
+    setSelectedStage(stage);
+    setSelectedCard(card);
+    setDrawerMode("edit");
   }
 
   async function handleLeadSubmit(payload: LeadDrawerSubmitPayload) {
-    if (!selected) {
+    if (!selectedCard) {
       return { ok: false as const, error: "No se encontró el lead seleccionado." };
     }
 
     const result = await updateLeadCard({
-      tarjetaId: selected.card.tarjetaId,
+      tarjetaId: selectedCard.tarjetaId,
       contacto: payload.contacto,
       tarjeta: payload.tarjeta,
       mergeMetadata: payload.mergeMetadata ?? true,
@@ -156,14 +169,24 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
     return result;
   }
 
+  async function handleLeadCreate(payload: LeadDrawerCreatePayload) {
+    const result = await createLeadCard(payload);
+    if (result.ok) {
+      applyLeadResult(result);
+    }
+    return result;
+  }
+
   const handleDrawerOpenChange = (open: boolean) => {
     setDrawerOpen(open);
     if (!open) {
-      setSelected((prev) => (prev ? { ...prev } : null));
+      setSelectedStage(null);
+      setSelectedCard(null);
+      setDrawerMode("edit");
     }
   };
 
-  const findCardById = (cardId: string): SelectedCard | null => {
+  const findCardById = (cardId: string): StageCardPair | null => {
     for (const stage of stages) {
       const card = stage.tarjetas.find((item) => item.tarjetaId === cardId);
       if (card) {
@@ -291,6 +314,7 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
                 <EmbudoStageColumn
                   stage={stage}
                   onCardClick={(card) => handleCardClick(stage, card)}
+                  onAddLead={() => handleAddLead(stage)}
                   droppableId={stage.id}
                   canDrop={(stage.orden ?? Number.MAX_SAFE_INTEGER) >= 2}
                   dropDisabled={(stage.orden ?? Number.MAX_SAFE_INTEGER) < 2}
@@ -323,12 +347,14 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
       ) : null}
 
       <LeadDrawer
-        open={drawerOpen && !!selected}
+        open={drawerOpen && !!selectedStage}
         onOpenChange={handleDrawerOpenChange}
-        currentStage={selected?.stage ?? null}
+        currentStage={selectedStage}
         allStages={stages}
-        card={selected?.card ?? null}
+        card={selectedCard}
+        mode={drawerMode}
         onSubmit={handleLeadSubmit}
+        onCreate={handleLeadCreate}
       />
     </>
   );
