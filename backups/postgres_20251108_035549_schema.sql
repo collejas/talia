@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict jBSeTrequKqDwSSQPobGbXbjaJC6KQGdanasAnkFKMuCgMbS5lkGEP24iCCHj6n
+\restrict g1fWuoHCS4vdTgAWxrA34wgk7Abui6aSZGHqYXWCewZ9RvLDem8XhxzRtbD3cMz
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -2068,10 +2068,93 @@ $$;
 
 
 --
+-- Name: panel_lead_add_nota(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_lead_add_nota(p_tarjeta_id uuid, p_texto text, p_metadata jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(movimiento_id uuid, tarjeta_id uuid, tipo text, cambiado_por uuid, cambiado_nombre text, cambiado_en timestamp with time zone, fuente text, etapa_origen_id uuid, etapa_origen_nombre text, etapa_destino_id uuid, etapa_destino_nombre text, motivo text, nota text, metadata jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_trimmed text := btrim(COALESCE(p_texto, ''));
+    v_lead public.lead_tarjetas%ROWTYPE;
+    v_now timestamptz := now();
+    v_actor uuid := auth.uid();
+    v_inserted public.lead_movimientos%ROWTYPE;
+BEGIN
+    IF v_trimmed = '' THEN
+        RAISE EXCEPTION 'note_empty' USING ERRCODE = '22023', MESSAGE = 'La nota no puede estar vacía.';
+    END IF;
+
+    SELECT *
+    INTO v_lead
+    FROM public.lead_tarjetas
+    WHERE id = p_tarjeta_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF NOT public.puede_ver_lead(v_lead.id) THEN
+        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+    END IF;
+
+    INSERT INTO public.lead_movimientos (
+        tarjeta_id,
+        etapa_origen_id,
+        etapa_destino_id,
+        cambiado_por,
+        cambiado_en,
+        motivo,
+        fuente,
+        metadata
+    )
+    VALUES (
+        v_lead.id,
+        v_lead.etapa_id,
+        v_lead.etapa_id,
+        v_actor,
+        v_now,
+        NULL,
+        'humano',
+        jsonb_build_object(
+            'tipo', 'nota',
+            'nota', v_trimmed
+        ) || COALESCE(p_metadata, '{}'::jsonb)
+    )
+    RETURNING *
+    INTO v_inserted;
+
+    RETURN QUERY
+    SELECT
+        lm.id AS movimiento_id,
+        lm.tarjeta_id,
+        COALESCE(NULLIF(lm.metadata ->> 'tipo', ''), 'movimiento') AS tipo,
+        lm.cambiado_por,
+        u.nombre_completo AS cambiado_nombre,
+        lm.cambiado_en,
+        lm.fuente,
+        lm.etapa_origen_id,
+        origen.nombre AS etapa_origen_nombre,
+        lm.etapa_destino_id,
+        destino.nombre AS etapa_destino_nombre,
+        lm.motivo,
+        NULLIF(lm.metadata ->> 'nota', '') AS nota,
+        lm.metadata
+    FROM public.lead_movimientos lm
+    LEFT JOIN public.lead_etapas origen ON origen.id = lm.etapa_origen_id
+    LEFT JOIN public.lead_etapas destino ON destino.id = lm.etapa_destino_id
+    LEFT JOIN public.usuarios u ON u.id = lm.cambiado_por
+    WHERE lm.id = v_inserted.id;
+END;
+$$;
+
+
+--
 -- Name: panel_lead_move(uuid, uuid, uuid, text, text, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_lead_move(p_tarjeta_id uuid, p_etapa_destino uuid, p_cambiado_por uuid DEFAULT NULL::uuid, p_fuente text DEFAULT 'humano'::text, p_motivo text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_expected_etapa uuid DEFAULT NULL::uuid) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_lead_move(p_tarjeta_id uuid, p_etapa_destino uuid, p_cambiado_por uuid DEFAULT NULL::uuid, p_fuente text DEFAULT 'humano'::text, p_motivo text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_expected_etapa uuid DEFAULT NULL::uuid) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2119,41 +2202,52 @@ BEGIN
     IF v_lead.etapa_id = v_dest.id THEN
         RETURN QUERY
         SELECT
-            lt.id::uuid AS tarjeta_id,
-            lt.contacto_id::uuid AS contacto_id,
-            ct.nombre_completo::text AS contacto_nombre,
-            ct.correo::text AS contacto_correo,
-            ct.telefono_e164::text AS contacto_telefono,
-            COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, ''))::text AS contacto_estado,
-            COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, ''))::text AS canal,
-            le.id::uuid AS etapa_id,
-            le.nombre::text AS etapa_nombre,
-            le.orden::smallint AS etapa_orden,
-            le.categoria::public.lead_categoria AS categoria,
-            lt.creado_en::timestamptz AS creado_en,
-            lt.actualizado_en::timestamptz AS actualizado_en,
-            lt.cerrado_en::timestamptz AS cerrado_en,
-            lt.monto_estimado::numeric AS monto_estimado,
-            lt.moneda::text AS moneda,
-            COALESCE(lt.probabilidad_override, le.probabilidad)::numeric AS probabilidad,
-            lt.lead_score::integer AS lead_score,
-            lt.asignado_a_usuario_id::uuid AS asignado_id,
-            asignado.nombre_completo::text AS asignado_nombre,
-            lt.propietario_usuario_id::uuid AS propietario_id,
-            propietario.nombre_completo::text AS propietario_nombre,
-            lt.conversacion_id::uuid AS conversacion_id,
-            conv.ultimo_mensaje_en::timestamptz AS ultimo_mensaje_en,
-            lt.motivo_cierre::text AS motivo_cierre,
-            lt.tags::text[] AS tags,
-            lt.metadata::jsonb AS metadata,
-            1::bigint AS total_rows
-        FROM public.lead_tarjetas lt
-        JOIN public.lead_etapas le ON le.id = lt.etapa_id
-        JOIN public.contactos ct ON ct.id = lt.contacto_id
-        LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
-        LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
-        LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
-        WHERE lt.id = p_tarjeta_id;
+            ls.tarjeta_id,
+            ls.contacto_id,
+            ls.contacto_nombre,
+            ls.contacto_correo,
+            ls.contacto_telefono,
+            ls.contacto_empresa,
+            ls.contacto_notas,
+            ls.contacto_estado,
+            ls.canal,
+            ls.etapa_id,
+            ls.etapa_nombre,
+            ls.etapa_codigo,
+            ls.etapa_metadatos,
+            ls.etapa_orden,
+            ls.categoria,
+            ls.creado_en,
+            ls.actualizado_en,
+            ls.cerrado_en,
+            ls.monto_estimado,
+            ls.moneda,
+            ls.probabilidad,
+            ls.lead_score,
+            ls.asignado_id,
+            ls.asignado_nombre,
+            ls.propietario_id,
+            ls.propietario_nombre,
+            ls.conversacion_id,
+            ls.ultimo_mensaje_en,
+            ls.motivo_cierre,
+            ls.tags,
+            ls.metadata,
+            ls.total_rows
+        FROM public.panel_leads_list(
+            p_tablero => v_lead.tablero_id,
+            p_etapa => NULL,
+            p_categoria => NULL,
+            p_asignado => NULL,
+            p_from => NULL,
+            p_to => NULL,
+            p_search => NULL,
+            p_order_by => 'actualizado_en',
+            p_order_dir => 'desc',
+            p_limit => 1,
+            p_offset => 0
+        ) AS ls
+        WHERE ls.tarjeta_id = p_tarjeta_id;
         RETURN;
     END IF;
 
@@ -2202,46 +2296,101 @@ BEGIN
         v_now,
         NULLIF(p_motivo, ''),
         p_fuente,
-        v_metadata
+        COALESCE(v_metadata, '{}'::jsonb)
     );
 
     RETURN QUERY
     SELECT
-        lt.id::uuid AS tarjeta_id,
-        lt.contacto_id::uuid AS contacto_id,
-        ct.nombre_completo::text AS contacto_nombre,
-        ct.correo::text AS contacto_correo,
-        ct.telefono_e164::text AS contacto_telefono,
-        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, ''))::text AS contacto_estado,
-        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, ''))::text AS canal,
-        le.id::uuid AS etapa_id,
-        le.nombre::text AS etapa_nombre,
-        le.orden::smallint AS etapa_orden,
-        le.categoria::public.lead_categoria AS categoria,
-        lt.creado_en::timestamptz AS creado_en,
-        lt.actualizado_en::timestamptz AS actualizado_en,
-        lt.cerrado_en::timestamptz AS cerrado_en,
-        lt.monto_estimado::numeric AS monto_estimado,
-        lt.moneda::text AS moneda,
-        COALESCE(lt.probabilidad_override, le.probabilidad)::numeric AS probabilidad,
-        lt.lead_score::integer AS lead_score,
-        lt.asignado_a_usuario_id::uuid AS asignado_id,
-        asignado.nombre_completo::text AS asignado_nombre,
-        lt.propietario_usuario_id::uuid AS propietario_id,
-        propietario.nombre_completo::text AS propietario_nombre,
-        lt.conversacion_id::uuid AS conversacion_id,
-        conv.ultimo_mensaje_en::timestamptz AS ultimo_mensaje_en,
-        lt.motivo_cierre::text AS motivo_cierre,
-        lt.tags::text[] AS tags,
-        lt.metadata::jsonb AS metadata,
-        1::bigint AS total_rows
-    FROM public.lead_tarjetas lt
-    JOIN public.lead_etapas le ON le.id = lt.etapa_id
-    JOIN public.contactos ct ON ct.id = lt.contacto_id
-    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
-    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
-    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
-    WHERE lt.id = p_tarjeta_id;
+        ls.tarjeta_id,
+        ls.contacto_id,
+        ls.contacto_nombre,
+        ls.contacto_correo,
+        ls.contacto_telefono,
+        ls.contacto_empresa,
+        ls.contacto_notas,
+        ls.contacto_estado,
+        ls.canal,
+        ls.etapa_id,
+        ls.etapa_nombre,
+        ls.etapa_codigo,
+        ls.etapa_metadatos,
+        ls.etapa_orden,
+        ls.categoria,
+        ls.creado_en,
+        ls.actualizado_en,
+        ls.cerrado_en,
+        ls.monto_estimado,
+        ls.moneda,
+        ls.probabilidad,
+        ls.lead_score,
+        ls.asignado_id,
+        ls.asignado_nombre,
+        ls.propietario_id,
+        ls.propietario_nombre,
+        ls.conversacion_id,
+        ls.ultimo_mensaje_en,
+        ls.motivo_cierre,
+        ls.tags,
+        ls.metadata,
+        ls.total_rows
+    FROM public.panel_leads_list(
+        p_tablero => v_lead.tablero_id,
+        p_etapa => NULL,
+        p_categoria => NULL,
+        p_asignado => NULL,
+        p_from => NULL,
+        p_to => NULL,
+        p_search => NULL,
+        p_order_by => 'actualizado_en',
+        p_order_dir => 'desc',
+        p_limit => 1,
+        p_offset => 0
+    ) AS ls
+    WHERE ls.tarjeta_id = p_tarjeta_id;
+END;
+$$;
+
+
+--
+-- Name: panel_lead_movimientos(uuid, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_lead_movimientos(p_tarjeta_id uuid, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0) RETURNS TABLE(movimiento_id uuid, tarjeta_id uuid, tipo text, cambiado_por uuid, cambiado_nombre text, cambiado_en timestamp with time zone, fuente text, etapa_origen_id uuid, etapa_origen_nombre text, etapa_destino_id uuid, etapa_destino_nombre text, motivo text, nota text, metadata jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_limit integer := COALESCE(NULLIF(p_limit, 0), 50);
+    v_offset integer := GREATEST(p_offset, 0);
+BEGIN
+    IF NOT public.puede_ver_lead(p_tarjeta_id) THEN
+        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        lm.id AS movimiento_id,
+        lm.tarjeta_id,
+        COALESCE(NULLIF(lm.metadata ->> 'tipo', ''), 'movimiento') AS tipo,
+        lm.cambiado_por,
+        u.nombre_completo AS cambiado_nombre,
+        lm.cambiado_en,
+        lm.fuente,
+        lm.etapa_origen_id,
+        origen.nombre AS etapa_origen_nombre,
+        lm.etapa_destino_id,
+        destino.nombre AS etapa_destino_nombre,
+        lm.motivo,
+        NULLIF(lm.metadata ->> 'nota', '') AS nota,
+        lm.metadata
+    FROM public.lead_movimientos lm
+    LEFT JOIN public.lead_etapas origen ON origen.id = lm.etapa_origen_id
+    LEFT JOIN public.lead_etapas destino ON destino.id = lm.etapa_destino_id
+    LEFT JOIN public.usuarios u ON u.id = lm.cambiado_por
+    WHERE lm.tarjeta_id = p_tarjeta_id
+    ORDER BY lm.cambiado_en DESC, lm.id DESC
+    LIMIT v_limit
+    OFFSET v_offset;
 END;
 $$;
 
@@ -2250,7 +2399,7 @@ $$;
 -- Name: panel_lead_update(uuid, jsonb, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_lead_update(p_tarjeta_id uuid, p_contacto jsonb DEFAULT '{}'::jsonb, p_tarjeta jsonb DEFAULT '{}'::jsonb, p_merge_metadata boolean DEFAULT true) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_lead_update(p_tarjeta_id uuid, p_contacto jsonb DEFAULT '{}'::jsonb, p_tarjeta jsonb DEFAULT '{}'::jsonb, p_merge_metadata boolean DEFAULT true) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2386,14 +2535,6 @@ BEGIN
                     END
                 ELSE lt.propietario_usuario_id
             END,
-            lead_score = CASE
-                WHEN v_card_updates ? 'lead_score' THEN
-                    CASE jsonb_typeof(v_card_updates->'lead_score')
-                        WHEN 'null' THEN NULL
-                        ELSE (v_card_updates->>'lead_score')::integer
-                    END
-                ELSE lt.lead_score
-            END,
             motivo_cierre = CASE
                 WHEN v_card_updates ? 'motivo_cierre' THEN
                     CASE jsonb_typeof(v_card_updates->'motivo_cierre')
@@ -2425,7 +2566,7 @@ BEGIN
             metadata = CASE
                 WHEN v_card_updates ? 'metadata' THEN
                     CASE
-                        WHEN v_merge THEN coalesce(lt.metadata, '{}'::jsonb) || COALESCE(v_card_updates->'metadata', '{}'::jsonb)
+                        WHEN v_merge THEN COALESCE(lt.metadata, '{}'::jsonb) || COALESCE(v_card_updates->'metadata', '{}'::jsonb)
                         ELSE COALESCE(v_card_updates->'metadata', '{}'::jsonb)
                     END
                 ELSE lt.metadata
@@ -2441,41 +2582,52 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        lt.id AS tarjeta_id,
-        lt.contacto_id,
-        ct.nombre_completo AS contacto_nombre,
-        ct.correo AS contacto_correo,
-        ct.telefono_e164 AS contacto_telefono,
-        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
-        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
-        le.id AS etapa_id,
-        le.nombre AS etapa_nombre,
-        le.orden AS etapa_orden,
-        le.categoria,
-        lt.creado_en,
-        lt.actualizado_en,
-        lt.cerrado_en,
-        lt.monto_estimado,
-        lt.moneda,
-        COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
-        lt.lead_score,
-        lt.asignado_a_usuario_id AS asignado_id,
-        asignado.nombre_completo AS asignado_nombre,
-        lt.propietario_usuario_id AS propietario_id,
-        propietario.nombre_completo AS propietario_nombre,
-        lt.conversacion_id,
-        conv.ultimo_mensaje_en,
-        lt.motivo_cierre,
-        lt.tags,
-        lt.metadata,
-        1::bigint AS total_rows
-    FROM public.lead_tarjetas lt
-    JOIN public.lead_etapas le ON le.id = lt.etapa_id
-    JOIN public.contactos ct ON ct.id = lt.contacto_id
-    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
-    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
-    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
-    WHERE lt.id = p_tarjeta_id;
+        ls.tarjeta_id,
+        ls.contacto_id,
+        ls.contacto_nombre,
+        ls.contacto_correo,
+        ls.contacto_telefono,
+        ls.contacto_empresa,
+        ls.contacto_notas,
+        ls.contacto_estado,
+        ls.canal,
+        ls.etapa_id,
+        ls.etapa_nombre,
+        ls.etapa_codigo,
+        ls.etapa_metadatos,
+        ls.etapa_orden,
+        ls.categoria,
+        ls.creado_en,
+        ls.actualizado_en,
+        ls.cerrado_en,
+        ls.monto_estimado,
+        ls.moneda,
+        ls.probabilidad,
+        ls.lead_score,
+        ls.asignado_id,
+        ls.asignado_nombre,
+        ls.propietario_id,
+        ls.propietario_nombre,
+        ls.conversacion_id,
+        ls.ultimo_mensaje_en,
+        ls.motivo_cierre,
+        ls.tags,
+        ls.metadata,
+        ls.total_rows
+    FROM public.panel_leads_list(
+        p_tablero => v_lead.tablero_id,
+        p_etapa => NULL,
+        p_categoria => NULL,
+        p_asignado => NULL,
+        p_from => NULL,
+        p_to => NULL,
+        p_search => NULL,
+        p_order_by => 'actualizado_en',
+        p_order_dir => 'desc',
+        p_limit => 1,
+        p_offset => 0
+    ) AS ls
+    WHERE ls.tarjeta_id = p_tarjeta_id;
 END;
 $$;
 
@@ -2704,7 +2856,7 @@ $$;
 -- Name: panel_leads_list(uuid, uuid, public.lead_categoria, uuid, timestamp with time zone, timestamp with time zone, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -2715,10 +2867,14 @@ WITH filtered AS (
         ct.nombre_completo AS contacto_nombre,
         ct.correo AS contacto_correo,
         ct.telefono_e164 AS contacto_telefono,
+        NULLIF(ct.company_name, '') AS contacto_empresa,
+        NULLIF(ct.notes, '') AS contacto_notas,
         COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
         COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
         le.id AS etapa_id,
         le.nombre AS etapa_nombre,
+        le.codigo AS etapa_codigo,
+        le.metadatos AS etapa_metadatos,
         le.orden AS etapa_orden,
         le.categoria,
         lt.creado_en,
@@ -2816,10 +2972,14 @@ SELECT
     contacto_nombre,
     contacto_correo,
     contacto_telefono,
+    contacto_empresa,
+    contacto_notas,
     contacto_estado,
     canal,
     etapa_id,
     etapa_nombre,
+    etapa_codigo,
+    etapa_metadatos,
     etapa_orden,
     categoria,
     creado_en,
@@ -11827,5 +11987,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict jBSeTrequKqDwSSQPobGbXbjaJC6KQGdanasAnkFKMuCgMbS5lkGEP24iCCHj6n
+\unrestrict g1fWuoHCS4vdTgAWxrA34wgk7Abui6aSZGHqYXWCewZ9RvLDem8XhxzRtbD3cMz
 
