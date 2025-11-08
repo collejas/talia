@@ -30,6 +30,8 @@ type LeadsListRow = {
   contacto_nombre: string | null;
   contacto_correo: string | null;
   contacto_telefono: string | null;
+  contacto_empresa: string | null;
+  contacto_notas: string | null;
   contacto_estado: string | null;
   canal: string | null;
   etapa_id: string;
@@ -208,6 +210,8 @@ function mapTable(payload?: LeadsListRow[] | null): LeadTableRow[] {
         propietario_nombre: row.propietario_nombre,
         contacto_correo: row.contacto_correo,
         contacto_telefono: row.contacto_telefono,
+        contacto_empresa: row.contacto_empresa,
+        contacto_notas: row.contacto_notas,
         contacto_estado: row.contacto_estado,
         motivo_cierre: row.motivo_cierre,
         lead_score: row.lead_score,

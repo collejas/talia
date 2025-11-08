@@ -206,11 +206,11 @@ export function LeadDrawer({
       nombre: card?.nombre ?? "",
       correo: card?.correo ?? "",
       telefono: card?.telefono ?? "",
-      empresa: "",
+      empresa: card?.empresa ?? "",
       monto,
       moneda: card?.moneda ?? "",
       probabilidad,
-      notas: "",
+      notas: card?.notas ?? "",
     };
   }, [card]);
 
@@ -446,11 +446,11 @@ export function LeadDrawer({
         correo: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       };
-      if (empresaRaw.length) {
-        contactoPayload.company_name = empresaRaw;
-      }
-      if (notasRaw.length) {
-        contactoPayload.notes = notasRaw;
+    if (empresaRaw.length) {
+      contactoPayload.company_name = empresaRaw;
+    }
+    if (notasRaw.length) {
+      contactoPayload.notes = notasRaw;
       }
 
       const tarjetaPayload: Record<string, unknown> = {};
@@ -514,6 +514,14 @@ export function LeadDrawer({
 
     if (telefonoRaw !== (defaultFormValues.telefono ?? "").trim()) {
       contactoUpdates.telefono_e164 = telefonoRaw.length ? telefonoRaw : null;
+    }
+
+    if (empresaRaw !== (defaultFormValues.empresa ?? "").trim()) {
+      contactoUpdates.company_name = empresaRaw.length ? empresaRaw : null;
+    }
+
+    if (notasRaw !== (defaultFormValues.notas ?? "").trim()) {
+      contactoUpdates.notes = notasRaw.length ? notasRaw : null;
     }
 
     const tarjetaUpdates: Record<string, unknown> = {};
@@ -772,32 +780,28 @@ export function LeadDrawer({
                     <p className="text-xs text-destructive">{errors.telefono.message}</p>
                   ) : null}
               </div>
-              {isCreateMode ? (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-empresa">
-                      Empresa
-                    </label>
-                    <Input
-                      id="lead-empresa"
-                      placeholder="Nombre de la empresa"
-                      disabled={pending}
-                      {...register("empresa")}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-notas">
-                      Notas
-                    </label>
-                    <Textarea
-                      id="lead-notas"
-                      placeholder="Notas sobre el contacto"
-                      disabled={pending}
-                      {...register("notas")}
-                    />
-                  </div>
-                </>
-              ) : null}
+              <div className="grid gap-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-empresa">
+                  Empresa
+                </label>
+                <Input
+                  id="lead-empresa"
+                  placeholder="Nombre de la empresa"
+                  disabled={pending}
+                  {...register("empresa")}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-notas">
+                  Notas
+                </label>
+                <Textarea
+                  id="lead-notas"
+                  placeholder="Notas sobre el contacto"
+                  disabled={pending}
+                  {...register("notas")}
+                />
+              </div>
             </section>
 
               <section className="space-y-3">

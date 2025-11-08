@@ -15,6 +15,8 @@ type LeadRow = {
   contacto_nombre: string | null;
   contacto_correo: string | null;
   contacto_telefono: string | null;
+  contacto_empresa: string | null;
+  contacto_notas: string | null;
   contacto_estado: string | null;
   canal: string | null;
   etapa_id: string;
@@ -165,6 +167,8 @@ function mapRowToStage(row: LeadRow): { stage: EmbudoStage; card: EmbudoCard } {
     nombre: row.contacto_nombre?.trim() || "Lead sin nombre",
     correo: row.contacto_correo,
     telefono: row.contacto_telefono,
+    empresa: row.contacto_empresa ?? null,
+    notas: row.contacto_notas ?? null,
     canal: row.canal,
     estado: row.contacto_estado,
     etapaId: row.etapa_id,
