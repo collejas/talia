@@ -145,3 +145,28 @@ class UploadResponse(BaseModel):
     size: int | None = None
     provider_id: str | None = None
     path: str | None = None
+
+
+class AvailabilitySlot(BaseModel):
+    """Horario disponible sugerido para una demo."""
+
+    start_at: datetime
+    end_at: datetime
+    timezone: str
+    label: str | None = None
+    local_date: str | None = None
+    local_time: str | None = None
+    weekday: int | None = None
+
+
+class AvailabilityResponse(BaseModel):
+    """Respuesta del endpoint de disponibilidad de demos."""
+
+    status: str
+    conversation_id: str | None = None
+    timezone: str
+    generated_at: datetime
+    window_start: datetime
+    window_end: datetime
+    slot_duration_minutes: int
+    slots: list[AvailabilitySlot] = Field(default_factory=list)

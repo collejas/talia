@@ -129,6 +129,87 @@ class Settings(BaseSettings):
             "TALIA_CALENDARIO_FULL_CONTACT_LIST_URL",
         ),
     )
+    demo_availability_timezone: str = Field(
+        default="America/Mexico_City",
+        description="Zona horaria predeterminada para sugerir horarios de demo.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_TIMEZONE",
+            "CALENDARIO_DEMO_TIMEZONE",
+            "TALIA_DEMO_AVAILABILITY_TIMEZONE",
+        ),
+    )
+    demo_availability_work_days: str | None = Field(
+        default="0,1,2,3,4",
+        description="Días laborales permitidos para demos (0=Lunes ... 6=Domingo).",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_WORK_DAYS",
+            "CALENDARIO_DEMO_WORK_DAYS",
+            "TALIA_DEMO_AVAILABILITY_WORK_DAYS",
+        ),
+    )
+    demo_availability_work_hours: str | None = Field(
+        default="09:00-18:00",
+        description="Bloques horarios laborales en formato HH:MM-HH:MM separados por coma.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_WORK_HOURS",
+            "CALENDARIO_DEMO_WORK_HOURS",
+            "TALIA_DEMO_AVAILABILITY_WORK_HOURS",
+        ),
+    )
+    demo_availability_slot_minutes: int = Field(
+        default=45,
+        description="Duración estándar de cada demo en minutos.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_SLOT_MINUTES",
+            "CALENDARIO_DEMO_SLOT_MINUTES",
+            "TALIA_DEMO_AVAILABILITY_SLOT_MINUTES",
+        ),
+    )
+    demo_availability_buffer_minutes: int = Field(
+        default=15,
+        description="Minutos de colchón antes y después de cada cita para evitar traslapes.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_BUFFER_MINUTES",
+            "CALENDARIO_DEMO_BUFFER_MINUTES",
+            "TALIA_DEMO_AVAILABILITY_BUFFER_MINUTES",
+        ),
+    )
+    demo_availability_lead_minutes: int = Field(
+        default=120,
+        description="Anticipación mínima (en minutos) entre la hora actual y la primera demo sugerida.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_LEAD_MINUTES",
+            "CALENDARIO_DEMO_LEAD_MINUTES",
+            "TALIA_DEMO_AVAILABILITY_LEAD_MINUTES",
+        ),
+    )
+    demo_availability_lookahead_days: int = Field(
+        default=21,
+        description="Número de días hacia adelante que se analizan para sugerir horarios.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_LOOKAHEAD_DAYS",
+            "CALENDARIO_DEMO_LOOKAHEAD_DAYS",
+            "TALIA_DEMO_AVAILABILITY_LOOKAHEAD_DAYS",
+        ),
+    )
+    demo_availability_max_slots: int = Field(
+        default=5,
+        description="Número máximo de horarios que se devolverán por consulta.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_MAX_SLOTS",
+            "CALENDARIO_DEMO_MAX_SLOTS",
+            "TALIA_DEMO_AVAILABILITY_MAX_SLOTS",
+        ),
+    )
+    demo_availability_holidays: str | None = Field(
+        default=None,
+        description="Fechas feriadas (YYYY-MM-DD) separadas por coma que deben excluirse de la agenda.",
+        validation_alias=AliasChoices(
+            "DEMO_AVAILABILITY_HOLIDAYS",
+            "CALENDARIO_DEMO_HOLIDAYS",
+            "TALIA_DEMO_AVAILABILITY_HOLIDAYS",
+        ),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 

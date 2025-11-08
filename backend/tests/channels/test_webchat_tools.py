@@ -3,12 +3,82 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from zoneinfo import ZoneInfo
 
 from app.channels.webchat.service import WebchatContext, _execute_function_call
 from app.services import storage
+
+
+@pytest.mark.asyncio
+async def test_list_demo_slots_invoca_servicio(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_compute(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {
+            "status": "ok",
+            "timezone": kwargs.get("timezone_name"),
+            "slots": [
+                {
+                    "start_at": "2025-11-10T11:00:00-06:00",
+                    "end_at": "2025-11-10T11:45:00-06:00",
+                    "timezone": kwargs.get("timezone_name"),
+                }
+            ],
+        }
+
+    monkeypatch.setattr("app.channels.webchat.service.compute_demo_availability", fake_compute)
+
+    context = WebchatContext(
+        conversation_id="conv-list",
+        contact_id="contact-ctx",
+        session_id="session-list",
+    )
+    result = await _execute_function_call(
+        "list_demo_slots",
+        {
+            "timezone": "America/Mexico_City",
+            "earliest_start_at": "2025-11-10T09:00:00-06:00",
+            "preferred_start_at": "2025-11-11T11:30:00-06:00",
+            "days": 10,
+            "max_slots": 4,
+            "slot_minutes": 50,
+        },
+        context,
+    )
+
+    assert result["status"] == "ok"
+    assert len(result["slots"]) == 1
+    assert captured["conversation_id"] == "conv-list"
+    assert captured["timezone_name"] == "America/Mexico_City"
+    assert captured["days"] == 10
+    assert captured["max_slots"] == 4
+    assert captured["slot_minutes"] == 50
+    assert captured["earliest_start"].isoformat().startswith("2025-11-10T09:00:00-06:00")
+    assert captured["preferred_start"].isoformat().startswith("2025-11-11T11:30:00-06:00")
+
+
+@pytest.mark.asyncio
+async def test_list_demo_slots_valida_rangos(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_compute(**kwargs: Any) -> dict[str, Any]:
+        return {"status": "ok", "slots": [], "timezone": kwargs.get("timezone_name")}
+
+    monkeypatch.setattr("app.channels.webchat.service.compute_demo_availability", fake_compute)
+
+    context = WebchatContext(
+        conversation_id="conv-invalid",
+        contact_id="contact-ctx",
+        session_id="session-invalid",
+    )
+    with pytest.raises(ValueError):
+        await _execute_function_call(
+            "list_demo_slots",
+            {"max_slots": "tres"},
+            context,
+        )
 
 
 @pytest.mark.asyncio

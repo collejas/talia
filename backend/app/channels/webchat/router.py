@@ -5,8 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 
 from app.core.config import settings
+from app.services import compute_demo_availability, storage
+from app.services.storage import StorageError
 
 from . import schemas, service
+from .service import _parse_start_datetime
 
 router = APIRouter(prefix="/webchat", tags=["webchat"])
 
@@ -111,3 +114,94 @@ async def get_webchat_config() -> schemas.ClientConfig:
         persist_session=settings.webchat_persist_session,
         inactivity_timeout_hours=settings.webchat_inactivity_hours,
     )
+
+
+@router.get(
+    "/availability",
+    response_model=schemas.AvailabilityResponse,
+    summary="Obtiene horarios disponibles para agendar una demo",
+)
+async def get_demo_availability(
+    session_id: str | None = Query(
+        default=None,
+        min_length=4,
+        description="Identificador de sesión del widget webchat.",
+    ),
+    conversation_id: str | None = Query(
+        default=None,
+        min_length=8,
+        description="ID de conversación webchat ya existente.",
+    ),
+    timezone: str | None = Query(
+        default=None,
+        description="Zona horaria IANA preferida (ej. America/Mexico_City).",
+    ),
+    earliest_start_at: str | None = Query(
+        default=None,
+        description="Fecha mínima desde la cual sugerir horarios (ISO 8601).",
+    ),
+    preferred_start_at: str | None = Query(
+        default=None,
+        description="Fecha sugerida por el prospecto (ISO 8601) para priorizar disponibilidad.",
+    ),
+    days: int | None = Query(
+        default=None,
+        ge=1,
+        le=60,
+        description="Rango de días hacia adelante para buscar horarios.",
+    ),
+    max_slots: int | None = Query(
+        default=None,
+        ge=1,
+        le=20,
+        description="Número máximo de opciones a devolver.",
+    ),
+    slot_minutes: int | None = Query(
+        default=None,
+        ge=1,
+        le=240,
+        description="Duración (en minutos) de cada bloque sugerido.",
+    ),
+) -> schemas.AvailabilityResponse:
+    """Devuelve una lista acotada de horarios disponibles para demos."""
+
+    tz_default = (settings.demo_availability_timezone or "America/Mexico_City").strip()
+    tz_name = (timezone or "").strip() or tz_default or "America/Mexico_City"
+
+    conv_id = (conversation_id or "").strip()
+    if not conv_id:
+        if not session_id:
+            raise HTTPException(status_code=400, detail="conversation_or_session_required")
+        try:
+            conversation = await storage.resolve_webchat_conversation_from_session(session_id)
+        except StorageError as exc:
+            raise HTTPException(status_code=502, detail="conversation_lookup_failed") from exc
+        if not conversation or not conversation.get("id"):
+            raise HTTPException(status_code=404, detail="conversation_not_found")
+        conv_id = str(conversation["id"])
+
+    earliest_dt = None
+    if earliest_start_at:
+        try:
+            earliest_dt = _parse_start_datetime(earliest_start_at, tz_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="earliest_start_at_invalid") from exc
+
+    preferred_dt = None
+    if preferred_start_at:
+        try:
+            preferred_dt = _parse_start_datetime(preferred_start_at, tz_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="preferred_start_at_invalid") from exc
+
+    availability = await compute_demo_availability(
+        conversation_id=conv_id,
+        timezone_name=tz_name,
+        earliest_start=earliest_dt,
+        preferred_start=preferred_dt,
+        days=days,
+        max_slots=max_slots,
+        slot_minutes=slot_minutes,
+    )
+
+    return schemas.AvailabilityResponse(**availability)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
@@ -1285,6 +1285,63 @@ async def get_demo_cita(cita_id: str) -> dict[str, Any] | None:
     if isinstance(rows, dict):
         return rows
     return None
+
+
+async def fetch_demo_citas_range(
+    *,
+    start_at: datetime,
+    end_at: datetime,
+    estados: Iterable[str] | None = None,
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    """Recupera citas dentro de un rango para validar disponibilidad."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    if end_at <= start_at:
+        return []
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/panel_agenda_calendario"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+
+    start_iso = start_at.astimezone(timezone.utc).isoformat()
+    end_iso = end_at.astimezone(timezone.utc).isoformat()
+    params: dict[str, Any] = {
+        "select": "id,start_at,end_at,timezone,estado,metadata,tarjeta_id,contacto_id,provider",
+        "order": "start_at.asc",
+        "limit": str(max(1, limit)),
+        "and": f"(start_at.gte.{start_iso},start_at.lte.{end_iso})",
+    }
+    estados_norm = (
+        [str(item).strip().lower() for item in estados if str(item).strip()] if estados else None
+    )
+    if estados_norm:
+        if len(estados_norm) == 1:
+            params["estado"] = f"eq.{estados_norm[0]}"
+        else:
+            params["estado"] = f"in.({','.join(sorted(set(estados_norm)))})"
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=headers, params=params)
+
+    if resp.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar citas para disponibilidad"
+            f" (status={resp.status_code}, body={resp.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = resp.json() or []
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)]
+    if isinstance(data, dict):
+        return [data]
+    return []
 
 
 async def ensure_lead_tarjeta(

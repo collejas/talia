@@ -134,6 +134,57 @@
 ---
 
 {
+  "name": "list_demo_slots",
+  "description": "Recuperar horarios disponibles para demos dentro de las próximas semanas, respetando horarios laborales y días festivos configurados.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual. Permite registrar que la consulta corresponde a este lead."
+      },
+      "timezone": {
+        "type": "string",
+        "description": "Zona horaria IANA preferida por el prospecto. Si se omite, el backend usará la predeterminada (America/Mexico_City)."
+      },
+      "earliest_start_at": {
+        "type": "string",
+        "description": "Fecha/hora mínima (ISO 8601) a partir de la cual se deben sugerir horarios. Si no se envía, se usa 'ahora' + buffer."
+      },
+      "preferred_start_at": {
+        "type": "string",
+        "description": "Fecha/hora (ISO 8601) sugerida por el prospecto para intentar priorizar disponibilidad cercana."
+      },
+      "days": {
+        "type": "integer",
+        "description": "Número de días hacia adelante que se deben considerar al buscar disponibilidad."
+      },
+      "max_slots": {
+        "type": "integer",
+        "description": "Número máximo de horarios a devolver."
+      },
+      "slot_minutes": {
+        "type": "integer",
+        "description": "Duración en minutos de cada bloque sugerido."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "timezone",
+      "earliest_start_at",
+      "preferred_start_at",
+      "days",
+      "max_slots",
+      "slot_minutes"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
   "name": "schedule_demo",
   "description": "Crear una cita de demostración para el lead actual en la agenda.",
   "strict": false,

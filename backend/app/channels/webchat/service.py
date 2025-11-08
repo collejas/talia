@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import (
     calendar_service,
+    compute_demo_availability,
     geolocation,
     leads_geo,
     storage,
@@ -1459,6 +1460,60 @@ async def _execute_function_call(
             "necesidad_proposito": necesidad,
             "siguiente_accion": siguiente_accion,
         }
+
+    if name == "list_demo_slots":
+        tz_default = (settings.demo_availability_timezone or "America/Mexico_City").strip()
+        timezone_arg = arguments.get("timezone")
+        if timezone_arg is None:
+            tz_name = tz_default or "America/Mexico_City"
+        elif isinstance(timezone_arg, str):
+            tz_name = timezone_arg.strip() or tz_default or "America/Mexico_City"
+        else:
+            raise ValueError("timezone inválido para list_demo_slots")
+
+        earliest_arg = arguments.get("earliest_start_at")
+        earliest_dt: datetime | None = None
+        if earliest_arg is not None:
+            if not isinstance(earliest_arg, str):
+                raise ValueError("earliest_start_at inválido para list_demo_slots")
+            earliest_dt = _parse_start_datetime(earliest_arg, tz_name)
+
+        preferred_arg = arguments.get("preferred_start_at")
+        preferred_dt: datetime | None = None
+        if preferred_arg is not None:
+            if not isinstance(preferred_arg, str):
+                raise ValueError("preferred_start_at inválido para list_demo_slots")
+            preferred_dt = _parse_start_datetime(preferred_arg, tz_name)
+
+        days_arg = arguments.get("days")
+        if days_arg is not None:
+            if not isinstance(days_arg, int):
+                raise ValueError("days inválido para list_demo_slots")
+            if not 1 <= days_arg <= 60:
+                raise ValueError("days fuera de rango para list_demo_slots")
+        max_slots_arg = arguments.get("max_slots")
+        if max_slots_arg is not None:
+            if not isinstance(max_slots_arg, int):
+                raise ValueError("max_slots inválido para list_demo_slots")
+            if not 1 <= max_slots_arg <= 20:
+                raise ValueError("max_slots fuera de rango para list_demo_slots")
+        slot_minutes_arg = arguments.get("slot_minutes")
+        if slot_minutes_arg is not None:
+            if not isinstance(slot_minutes_arg, int):
+                raise ValueError("slot_minutes inválido para list_demo_slots")
+            if slot_minutes_arg <= 0 or slot_minutes_arg > 240:
+                raise ValueError("slot_minutes fuera de rango para list_demo_slots")
+
+        availability = await compute_demo_availability(
+            conversation_id=context.conversation_id,
+            timezone_name=tz_name,
+            earliest_start=earliest_dt,
+            preferred_start=preferred_dt,
+            days=days_arg if isinstance(days_arg, int) else None,
+            max_slots=max_slots_arg if isinstance(max_slots_arg, int) else None,
+            slot_minutes=slot_minutes_arg if isinstance(slot_minutes_arg, int) else None,
+        )
+        return availability
 
     if name == "schedule_demo":
         start_at = str(arguments.get("start_at") or "").strip()
