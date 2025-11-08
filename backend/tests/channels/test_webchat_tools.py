@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
+from zoneinfo import ZoneInfo
 
 from app.channels.webchat.service import WebchatContext, _execute_function_call
 from app.services import storage
@@ -37,13 +40,19 @@ async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) ->
         contact_id="contact-ctx",
         session_id="session-1",
     )
+    tz = ZoneInfo("America/Mexico_City")
+    now_local = datetime.now(tz)
+    future_local = now_local.replace(hour=16, minute=0, second=0, microsecond=0)
+    if future_local <= now_local:
+        future_local += timedelta(days=1)
+    start_iso = future_local.isoformat()
 
     result = await _execute_function_call(
         "schedule_demo",
         {
             "tarjeta_id": "lead-1",
             "contacto_id": "contact-1",
-            "start_at": "2025-02-15T16:00:00-06:00",
+            "start_at": start_iso,
             "timezone": "America/Mexico_City",
             "provider": "google",
             "metadata": {"duracion_min": 45},
@@ -66,10 +75,41 @@ async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) ->
     assert payload["p_conversacion_id"] == "conv-1"
     assert payload["p_provider"] == "google"
     assert payload["p_timezone"] == "America/Mexico_City"
+    assert payload["p_start_at"] == start_iso
     assert payload["p_reminder_status"] == "programado"
     assert payload["p_external_join_url"] == "https://zoom.example/abc"
     assert payload["p_scheduled_via"] == "ia"
     assert payload["p_metadata"] == {"duracion_min": 45}
+
+
+@pytest.mark.asyncio
+async def test_schedule_demo_rechaza_fecha_pasada(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_ensure(**_: str) -> str:
+        return "lead-1"
+
+    async def fake_upsert(payload: dict[str, str | None]) -> dict[str, str | None]:
+        return payload
+
+    monkeypatch.setattr(storage, "ensure_lead_tarjeta", fake_ensure)
+    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+
+    context = WebchatContext(
+        conversation_id="conv-err",
+        contact_id="contact-ctx",
+        session_id="session-err",
+    )
+    past_start = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+
+    with pytest.raises(ValueError):
+        await _execute_function_call(
+            "schedule_demo",
+            {
+                "tarjeta_id": "lead-1",
+                "start_at": past_start,
+                "timezone": "UTC",
+            },
+            context,
+        )
 
 
 @pytest.mark.asyncio
@@ -125,6 +165,17 @@ async def test_cancel_demo_elimina_cita(monkeypatch: pytest.MonkeyPatch) -> None
         return {"id": payload["p_id"], "estado": "cancelada"}
 
     monkeypatch.setattr(storage, "cancel_demo_cita", fake_cancel)
+
+    async def fake_get_demo_cita(cita_id: str) -> dict[str, str]:
+        return {"id": cita_id, "provider": "hosting"}
+
+    async def fake_sync_cancel(
+        *, previous: dict[str, str] | None, updated: dict[str, str], remove_event: bool
+    ) -> None:  # type: ignore[override]
+        return None
+
+    monkeypatch.setattr(storage, "get_demo_cita", fake_get_demo_cita)
+    monkeypatch.setattr("app.channels.webchat.service.sync_cita_after_cancel", fake_sync_cancel)
 
     context = WebchatContext(
         conversation_id="conv-3",

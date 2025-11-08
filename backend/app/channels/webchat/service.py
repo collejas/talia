@@ -6,6 +6,8 @@ import io
 import json
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -14,6 +16,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from fastapi import HTTPException, Request, UploadFile, status
 from openai import AsyncOpenAI
+from zoneinfo import ZoneInfo
 
 from app.assistants import registry
 from app.assistants.manager import AssistantConfig
@@ -138,6 +141,24 @@ def _safe_dict(value: Any) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     return {}
+
+
+def _parse_start_datetime(text: str, tz_name: str) -> datetime:
+    """Normaliza una marca ISO y asegura información de zona horaria."""
+    candidate = text.strip()
+    if candidate.endswith("Z"):
+        candidate = f"{candidate[:-1]}+00:00"
+    try:
+        when = datetime.fromisoformat(candidate)
+    except ValueError as exc:
+        raise ValueError("start_at inválido para schedule_demo") from exc
+    if when.tzinfo is None:
+        try:
+            tzinfo = ZoneInfo(tz_name)
+        except Exception:
+            tzinfo = dt_timezone.utc
+        when = when.replace(tzinfo=tzinfo)
+    return when
 
 
 def _guess_extension(name: str | None, url: str | None) -> str:
@@ -1441,9 +1462,16 @@ async def _execute_function_call(
 
     if name == "schedule_demo":
         start_at = str(arguments.get("start_at") or "").strip()
-        timezone = str(arguments.get("timezone") or "").strip()
-        if not start_at or not timezone:
+        tz_name = str(arguments.get("timezone") or "").strip()
+        if not start_at or not tz_name:
             raise ValueError("start_at y timezone son requeridos para schedule_demo")
+        try:
+            parsed_start = _parse_start_datetime(start_at, tz_name)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        now_utc = datetime.now(dt_timezone.utc) - timedelta(minutes=1)
+        if parsed_start.astimezone(dt_timezone.utc) <= now_utc:
+            raise ValueError("start_at debe ser una fecha/hora futura para schedule_demo")
 
         contacto_id = str(arguments.get("contacto_id") or context.contact_id or "").strip()
         if not contacto_id:
@@ -1490,8 +1518,8 @@ async def _execute_function_call(
             "p_tarjeta_id": tarjeta_id,
             "p_contacto_id": contacto_id,
             "p_conversacion_id": context.conversation_id,
-            "p_start_at": start_at,
-            "p_timezone": timezone,
+            "p_start_at": parsed_start.isoformat(),
+            "p_timezone": tz_name,
             "p_provider": provider,
             "p_meeting_url": meeting_url,
             "p_location": location,

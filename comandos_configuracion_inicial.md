@@ -168,7 +168,7 @@ NEXT_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/ho
 
 
 
-curl -u 'hola@talia.mx:+WG~E[DOcInu4ssd3' \
+curl -u 'hola@talia.mx:DE_se479156376421' \
   -X PROPFIND \
   -H 'Depth: 0' \
   'https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar'
