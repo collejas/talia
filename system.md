@@ -1,4 +1,25 @@
-```
+# systemd/system/talia-api.service
+
+[Unit]
+Description=TalIA FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/devuser/talia/backend
+ExecStart=/home/devuser/talia/backend/scripts/run_api.sh
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+
+---
+
+# systemd/system/talia-panel.service
+
 [Unit]
 Description=Tal-IA Panel (Next.js)
 After=network-online.target
@@ -22,4 +43,3 @@ StandardError=append:/home/devuser/talia/logs/panel-error.log
 
 [Install]
 WantedBy=multi-user.target
-```
