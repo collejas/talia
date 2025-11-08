@@ -1595,6 +1595,25 @@ async def _execute_function_call(
         if not cita_id:
             raise ValueError("cita_id es requerido para reschedule_demo")
 
+        start_arg = arguments.get("start_at")
+        end_arg = arguments.get("end_at")
+        timezone_arg = arguments.get("timezone")
+        tz_fallback = (settings.demo_availability_timezone or "America/Mexico_City").strip()
+        if isinstance(timezone_arg, str) and timezone_arg.strip():
+            tz_name = timezone_arg.strip()
+        else:
+            tz_name = tz_fallback or "America/Mexico_City"
+
+        computed_end_at: str | None = None
+        if start_arg is not None and end_arg is None:
+            if not isinstance(start_arg, str):
+                raise ValueError("start_at inválido para reschedule_demo")
+            parsed_start = _parse_start_datetime(start_arg, tz_name)
+            slot_minutes = settings.demo_availability_slot_minutes or 45
+            if slot_minutes <= 0:
+                slot_minutes = 45
+            computed_end_at = (parsed_start + timedelta(minutes=slot_minutes)).isoformat()
+
         reminder_status = (arguments.get("reminder_status") or "").strip().lower() or None
         scheduled_via = (arguments.get("scheduled_via") or "").strip().lower() or None
         provider = arguments.get("provider")
@@ -1617,9 +1636,9 @@ async def _execute_function_call(
         payload: dict[str, Any] = {
             "p_id": cita_id,
             "p_conversacion_id": context.conversation_id,
-            "p_start_at": arguments.get("start_at"),
-            "p_end_at": arguments.get("end_at"),
-            "p_timezone": arguments.get("timezone"),
+            "p_start_at": start_arg,
+            "p_end_at": computed_end_at or end_arg,
+            "p_timezone": timezone_arg,
             "p_estado": arguments.get("estado"),
             "p_provider": provider_normalized,
             "p_provider_event_id": arguments.get("provider_event_id"),

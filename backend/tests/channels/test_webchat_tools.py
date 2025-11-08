@@ -9,6 +9,7 @@ import pytest
 from zoneinfo import ZoneInfo
 
 from app.channels.webchat.service import WebchatContext, _execute_function_call
+from app.core.config import settings
 from app.services import storage
 
 
@@ -224,6 +225,48 @@ async def test_reschedule_demo_actualiza_cita(monkeypatch: pytest.MonkeyPatch) -
     assert payload["p_metadata"] == {"duracion_min": 60}
     assert payload["p_reminder_status"] == "enviado"
     assert payload["p_scheduled_via"] == "api"
+
+
+@pytest.mark.asyncio
+async def test_reschedule_demo_infiere_end_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, dict[str, str | None]] = {}
+
+    async def fake_upsert(payload: dict[str, str | None]) -> dict[str, str | None]:
+        captured["payload"] = payload
+        return {"id": payload["p_id"], "estado": payload.get("p_estado")}
+
+    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+
+    context = WebchatContext(
+        conversation_id="conv-auto",
+        contact_id="contact-ctx",
+        session_id="session-auto",
+    )
+
+    start_text = "2025-03-01T10:30:00-06:00"
+
+    result = await _execute_function_call(
+        "reschedule_demo",
+        {
+            "cita_id": "cita-auto",
+            "start_at": start_text,
+            "timezone": "America/Mexico_City",
+            "estado": "reprogramada",
+        },
+        context,
+    )
+
+    assert result["status"] == "ok"
+    payload = captured["payload"]
+    assert payload["p_id"] == "cita-auto"
+    assert payload["p_start_at"] == start_text
+    expected_end = (
+        datetime.fromisoformat(start_text)
+        + timedelta(minutes=settings.demo_availability_slot_minutes or 45)
+    ).isoformat()
+    assert payload["p_end_at"] == expected_end
+    assert payload["p_timezone"] == "America/Mexico_City"
+    assert payload["p_conversacion_id"] == "conv-auto"
 
 
 @pytest.mark.asyncio

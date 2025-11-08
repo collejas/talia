@@ -273,7 +273,11 @@
       },
       "start_at": {
         "type": "string",
-        "description": "Nueva fecha y hora de inicio en formato ISO 8601 con zona horaria."
+        "description": "Nueva fecha y hora de inicio en formato ISO 8601 con zona horaria. Siempre acompaña este valor con `end_at`."
+      },
+      "end_at": {
+        "type": "string",
+        "description": "Nuevo fin de la demo en formato ISO 8601. Calcula este valor sumando la duración acordada al nuevo `start_at`."
       },
       "timezone": {
         "type": "string",

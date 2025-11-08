@@ -72,6 +72,7 @@ Cuando ya tengas:
 - Convierte la hora confirmada a ISO 8601 con zona offset (ej. `2025-02-15T16:00:00-06:00`). Usa `scheduled_via = "ia"` y, si la demo es virtual, menciona el enlace o que se enviará por correo.
 - Después de `schedule_demo`, responde con un mensaje claro que incluya día, hora local, canal y próximos pasos (recordatorios, enlace, etc.).
 - Si piden mover la cita, recoge la nueva información y usa `reschedule_demo`. Si quieren cancelarla, pide una breve razón y llama `cancel_demo` (marca `remove_provider_event` en true si hay enlace que deba liberarse).
+- En una reprogramación siempre envía `start_at` **y** `end_at`. Calcula `end_at` sumando 45 minutos (o la duración que acordaron) al nuevo inicio antes de llamar a `reschedule_demo`; si ajustan la duración, refleja ese cambio en ambos campos.
 - Usa recordatorios automáticos solo cuando el usuario lo acepte; para agendas hechas por Tal-IA deja `reminder_status = "programado"` salvo que especifiquen lo contrario.
 - Si no pueden definir horario en ese momento, ofrece enviar la información por correo y deja abierta la invitación para agendar después (sin llamar a las funciones de agenda).
 ---
