@@ -15,20 +15,25 @@ Al confirmar una cita con `schedule_demo`, enviar automáticamente al prospecto 
 
 ### 2. Cambios en el prompt / tools
 1. Ajustar `docs/prompt_landing.md`: cuando Tal-IA cierre la cita y tenga correo, indicarle que confirmará el envío de invitación por correo.
-2. Documentar en `docs/funciones_prompt_openai.md` que `schedule_demo` debe incluir `metadata.send_calendar_invite = true` (y correo del lead) para disparar la automatización.
+2. Documentar en `docs/funciones_prompt_openai.md` que:
+   - `schedule_demo` debe incluir `metadata.send_calendar_invite = true` (y correo del lead) para disparar la invitación inicial.
+   - `reschedule_demo` debe incluir `metadata.send_calendar_update = true` (o reutilizar el flag) para forzar envío de actualización.
+   - `cancel_demo` no necesita bandera adicional; basta con confirmar al usuario que enviaremos la cancelación por correo.
 
 ---
 
 ### 3. Backend (FastAPI)
-1. Crear helper `build_ics_event(cita, contacto)` que devuelva texto ICS + UID único.
-2. Extender `_execute_function_call` (`schedule_demo` branch):
-   - Tras `storage.upsert_demo_cita`, verificar `metadata.send_calendar_invite`.
-   - Recuperar contacto (`storage.get_contact(contact_id)`) para obtener correo.
-   - Encolar evento en nueva tabla `citas_invites` o ejecutar envío inmediato.
+1. Crear helper `build_ics_event(cita, contacto, *, method)` que devuelva texto ICS + UID único.
+2. Extender `_execute_function_call`:
+   - `schedule_demo`: si `metadata.send_calendar_invite` es `true`, enviar correo METHOD:REQUEST.
+   - `reschedule_demo`: si llega flag (o detectamos cambios en horario), enviar re-invitación METHOD:REQUEST reutilizando UID.
+   - `cancel_demo`: si existe correo, enviar METHOD:CANCEL.
+   - En todos los casos, recuperar contacto (`storage.fetch_contact`) para obtener correo y guardarlo en `metadata`.
+   - Registrar resultado (éxito/error) en Supabase.
 3. Implementar servicio `email_service.send_calendar_invite(...)` (SMTP u otro) con:
    - Asunto, cuerpo en HTML/Texto.
    - Adjuntar ICS y establecer headers `Content-Class: urn:content-classes:calendarmessage`.
-4. Registrar en BD: éxito/fracaso (`citas.metadata.invite_status`, `invite_sent_at`).
+4. Registrar en BD: éxito/fracaso (`invite_status`, `invite_sent_at`, `invite_message_id`).
 5. Manejar reintentos y logs (`app.channels.webchat`).
 
 ---
@@ -44,7 +49,10 @@ Al confirmar una cita con `schedule_demo`, enviar automáticamente al prospecto 
 
 ### 5. Pruebas y QA
 1. Unit tests: generación ICS, envío SMTP (mock).
-2. Tests de integración: flujo `schedule_demo` → email enviado.
+2. Tests de integración:
+   - `schedule_demo` → email invitación (METHOD:REQUEST).
+   - `reschedule_demo` → email de actualización (METHOD:REQUEST / UID misma).
+   - `cancel_demo` → email de cancelación (METHOD:CANCEL).
 3. Validar invitación en Gmail/Outlook (aceptar, reprogramar, cancelar).
 4. Incluir casuística sin correo (no enviar) y contactos con dominio inválido.
 
@@ -65,6 +73,6 @@ Al confirmar una cita con `schedule_demo`, enviar automáticamente al prospecto 
 ---
 
 ### 7. Iteraciones futuras
-- Reenvío automático al reprogramar (`reschedule_demo`) o cancelar (`cancel_demo` con METHOD:CANCEL).
-- Integración con proveedores externos (Google API / Microsoft Graph).
-- Portal interno para descargar ICS / reenviar invitación desde el panel.
+1. Reenvío proactivo al detectar que el cliente no respondió (24h antes).
+2. Integración con proveedores externos (Google API / Microsoft Graph).
+3. Portal interno para reenviar invitación o descargar ICS manualmente.
