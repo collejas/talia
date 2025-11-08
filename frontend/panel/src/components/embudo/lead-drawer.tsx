@@ -41,6 +41,7 @@ const formSchema = z.object({
     .optional()
     .refine((value) => !value || EMAIL_REGEX.test(value), { message: "Ingresa un correo válido." }),
   telefono: z.string().trim().optional(),
+  empresa: z.string().trim().max(160).optional().or(z.literal("")),
   monto: z
     .string()
     .trim()
@@ -64,6 +65,7 @@ const formSchema = z.object({
       const parsed = Number(value);
       return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
     }, { message: "La probabilidad debe estar entre 0 y 100." }),
+  notas: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -204,9 +206,11 @@ export function LeadDrawer({
       nombre: card?.nombre ?? "",
       correo: card?.correo ?? "",
       telefono: card?.telefono ?? "",
+      empresa: "",
       monto,
       moneda: card?.moneda ?? "",
       probabilidad,
+      notas: "",
     };
   }, [card]);
 
@@ -413,6 +417,8 @@ export function LeadDrawer({
     const montoRaw = (values.monto ?? "").trim();
     const monedaRaw = (values.moneda ?? "").trim().toUpperCase();
     const probRaw = (values.probabilidad ?? "").trim();
+    const empresaRaw = (values.empresa ?? "").trim();
+    const notasRaw = (values.notas ?? "").trim();
 
     const missingRequired =
       isCreateMode ? null : findMissingRequiredField(upcomingStageGroups, stagePrep);
@@ -440,6 +446,12 @@ export function LeadDrawer({
         correo: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       };
+      if (empresaRaw.length) {
+        contactoPayload.company_name = empresaRaw;
+      }
+      if (notasRaw.length) {
+        contactoPayload.notes = notasRaw;
+      }
 
       const tarjetaPayload: Record<string, unknown> = {};
       if (montoRaw.length) {
@@ -745,11 +757,11 @@ export function LeadDrawer({
                     <p className="text-xs text-destructive">{errors.correo.message}</p>
                   ) : null}
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-telefono">
-                    Teléfono (E.164)
-                  </label>
-                  <Input
+              <div className="grid gap-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-telefono">
+                  Teléfono (E.164)
+                </label>
+                <Input
                     id="lead-telefono"
                     placeholder="+52..."
                     disabled={pending}
@@ -759,8 +771,34 @@ export function LeadDrawer({
                   {errors.telefono ? (
                     <p className="text-xs text-destructive">{errors.telefono.message}</p>
                   ) : null}
-                </div>
-              </section>
+              </div>
+              {isCreateMode ? (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-empresa">
+                      Empresa
+                    </label>
+                    <Input
+                      id="lead-empresa"
+                      placeholder="Nombre de la empresa"
+                      disabled={pending}
+                      {...register("empresa")}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-notas">
+                      Notas
+                    </label>
+                    <Textarea
+                      id="lead-notas"
+                      placeholder="Notas sobre el contacto"
+                      disabled={pending}
+                      {...register("notas")}
+                    />
+                  </div>
+                </>
+              ) : null}
+            </section>
 
               <section className="space-y-3">
                 <h4 className="text-sm font-semibold text-foreground">Lead</h4>
