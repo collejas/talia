@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Inventario de Datos y Brechas
+## 1. Inventario de Datos y Brechas ✅ completado
 
 1. **Dataset actual Webchat (IP)**
    - Fuentes: `webchat_visitantes`, `panel_visitantes_sin_chat_*`, `panel_webchat_visitas_detalle`.
@@ -23,13 +23,13 @@
    - Definir si necesitaremos nueva vista materializada (p. ej. `panel_leads_geo_etapas`) para rendimiento.
 
 ### Entregable 1
-- Documento de mapeo de campos (fuente → destino → uso en UI).
-- Lista de brechas técnicas (ej. “faltan etapas en `panel_leads_geo_*`”).
-- Aprobar alcance con stakeholder.
+- ✅ Documento de mapeo de campos y análisis en `docs/demografia_datasets.md`.
+- ✅ Brechas técnicas identificadas (campos país/etapa, municipalización).
+- Queda pendiente validación formal con stakeholders.
 
 ---
 
-## 2. Diseño de API / Servicios
+## 2. Diseño de API / Servicios ✅ en producción
 
 1. **Wrapper de datos**
    - Endpoint server-side único que agregue:
@@ -39,75 +39,71 @@
    - Parametrizable por rango de fechas, canal y etapa.
 
 2. **Nuevas funciones/RPC en Supabase**
-   - Extender `panel_leads_geo_base` o crear `panel_leads_geo_resumen` con breakdown de etapas.
-   - Crear `panel_visitantes_geo_resumen` con posibilidad de agrupar por país/estado/municipio.
+   - ✅ `panel_leads_geo_base_ext`, `panel_leads_geo_resumen`, `panel_visitantes_geo_resumen` (`supabase/migrations/20251215_100000_demografia_geo_base_ext.sql`).
 
 3. **Backend FastAPI**
-   - Exponer `/api/kpis/demografia/…` que orqueste las llamadas a Supabase y devuelva JSON listo para el Wrapper.
-   - Gestionar cache/batching para evitar múltiples round-trips desde el frontend.
+   - ✅ Endpoints `/api/kpis/demografia/resumen` y `/api/kpis/demografia/mapa`.
+   - Pendiente: políticas de cache/batching (evaluar tras pruebas de carga).
 
 ### Entregable 2
-- Especificación técnica de endpoints + contrato de respuesta.
-- Migraciones SQL o scripts de prueba listos para revisión.
+- ✅ Migraciones y endpoints implementados.
+- 🎯 Documentar contratos en `docs/mapa_de_conversion.md` (próxima tarea).
 
 ---
 
-## 3. Diseño de UI (dentro de `Wrapper`)
+## 3. Diseño de UI (dentro de `Wrapper`) ▶️ en progreso
 
 1. **Wrapper**
-   - Componente que reciba `slots` para: filtros, KPIs, mapa, tabla detalle, tendencias.
-   - Props: `level` (país/estado/municipio), `channel`, `stage`, `onLevelChange`…
-   - Responsividad (grid adaptable, manejo de skeleton/loading/error).
+   - ✅ Base reutilizada de `vista-2` con layout responsive.
+   - ✅ Filtros de nivel/canales (`DemografiaControls`).
+   - 🔜 Incorporar estados de carga/skeletons y buscador de municipios.
 
 2. **Subcomponentes**
-   - **Selector jerárquico**: drop-down o breadcrumbs (País → Estado → Municipio/LADA → Ciudad).
-   - **Mapas**:
-     - World map (país) para resumen global.
-     - Choropleth nacional (estados/municipios) para Webchat/WhatsApp.
-   - **Gráfico comparativo** (stacked bars o heatmap) por canal y etapa.
-   - **Tabla detalle** con paginación: nombre de ubicación, visitas por canal, leads por etapa, variación vs periodo anterior.
+   - **Selector jerárquico**: ✅ nivel país/estado, faltan municipio/LADA y breadcrumbs.
+   - **Mapas**: ❌ pendiente (actualmente solo barras comparativas).
+   - **Gráfico comparativo**: ✅ barras apiladas por canal.
+  - **Tabla detalle**: ✅ lista de ubicaciones, faltan variaciones vs periodo anterior.
 
 3. **Interacción**
-   - Al cambiar nivel en Wrapper, todos los children actualizan su dataset.
-   - Mantener estado global (ej. `useDemographicsStore`) para sincronizar selección con URL/params.
+   - ✅ URL params mantienen nivel/canales.
+   - 🔜 Global store para estados más complejos (periodo, municipio seleccionado).
 
 ### Entregable 3
-- Wireframes de alta fidelidad.
-- Checklist de componentes React a implementar (incluyendo reutilización de existentes).
+- ✅ Checklist actualizado en esta vista.
+- 🔜 Definir wireframes para mapas/municipios antes de implementarlos.
 
 ---
 
 ## 4. Implementación Iterativa
 
 1. **Sprint 1: Datos**
-   - Migraciones Supabase + tests.
-   - Endpoints FastAPI con dummy response y logging.
+   - ✅ Migraciones y endpoints operativos (logs en FastAPI).
 
 2. **Sprint 2: Wrapper + filtros básicos**
-   - Crear `Wrapper` (estructura, loading states).
-   - Primer submódulo: KPIs y gráfico comparativo (usando datos reales).
+   - ✅ Wrapper y filtros (nivel/canales).
+   - ✅ KPIs + gráfico conectados a datos reales.
 
 3. **Sprint 3: Mapas + tablas**
-   - Integrar GeoJSON (paises/estados/municipios).
-   - Añadir tabla detalle y tooltips por canal/etapa.
+   - 🔜 Integrar GeoJSON y mapa interactivo.
+   - ✅ Tabla detalle básica (falta paginación y métricas adicionales).
 
 4. **Sprint 4: Pulido**
-   - Optimizaciones, fallback de datos, documentación final.
-   - QA con dataset real + pruebas de performance.
+   - 🔜 Skeletons, cache y tests de performance.
+   - 🔜 QA en staging con dataset real.
 
 ---
 
 ## 5. Documentación y QA
 
-- Actualizar manuales (`docs/mapa_de_conversion.md`) con nuevo flujo.
-- Añadir guías de operación (cómo interpretar choropleth, etapas, LADA).
-- Plan de pruebas: datos sintéticos, ambientes staging, validación cruzada con reportes actuales.
+- 🔜 Actualizar `docs/mapa_de_conversion.md` con flujos reales.
+- 🔜 Guías de interpretación (etapas, canal, LADA).
+- 🔜 Plan de pruebas aún pendiente.
 
 ---
 
 ### Próximos pasos inmediatos
-1. Validar este plan con stakeholders y definir prioridades (¿todos los canales en primera versión o incremental?).
-2. Confirmar disponibilidad de recursos para migraciones (DBA/Supabase) y diseño (UX/UI).
-3. Programar kickoff de Sprint 1 tras aprobación, asignando responsables por entregable.
+1. Integrar mapa GeoJSON (nivel país/estado) y preparar capa municipio/LADA.
+2. Extender tabla y KPIs con variaciones vs periodo anterior.
+3. Completar documentación/QA y definir plan de lanzamiento con stakeholders.
 
 `Wrapper` será el núcleo de la implementación: sin él no se comienza ningún submódulo.
