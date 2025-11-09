@@ -230,7 +230,7 @@
       },
       "metadata": {
         "type": "object",
-        "description": "Datos adicionales libres (pueden incluir duración, idioma, participantes).",
+        "description": "Datos adicionales libres (duración, idioma, etc.). Si el lead compartió correo, agrega `\"send_calendar_invite\": true` para que reciba la invitación automáticamente.",
         "additionalProperties": true
       },
       "reminder_status": {
@@ -311,7 +311,7 @@
       },
       "metadata": {
         "type": "object",
-        "description": "Metadatos adicionales. Se fusionan con los existentes por defecto.",
+        "description": "Metadatos adicionales. Se fusionan con los existentes por defecto. Para reenviar la invitación al reprogramar, agrega `\"send_calendar_update\": true` junto con el nuevo horario.",
         "additionalProperties": true
       },
       "remove_provider_event": {

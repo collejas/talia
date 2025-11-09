@@ -211,6 +211,65 @@ class Settings(BaseSettings):
         ),
     )
 
+    mail_username: str | None = Field(
+        default=None,
+        description="Usuario/correo remitente para invitaciones y notificaciones.",
+        validation_alias=AliasChoices(
+            "MAIL_USERNAME",
+            "TALIA_MAIL_USERNAME",
+        ),
+    )
+    mail_password: str | None = Field(
+        default=None,
+        description="Contraseña del buzón del asistente.",
+        validation_alias=AliasChoices(
+            "MAIL_PASSWORD",
+            "MAIL_CONTRASENA",
+            "TALIA_MAIL_PASSWORD",
+            "TALIA_MAIL_CONTRASENA",
+        ),
+    )
+    mail_incoming_server: str | None = Field(
+        default=None,
+        description="Servidor IMAP/POP del buzón.",
+        validation_alias=AliasChoices(
+            "MAIL_INCOMING_SERVER",
+            "TALIA_MAIL_INCOMING_SERVER",
+        ),
+    )
+    mail_incoming_port_imap: int | None = Field(
+        default=None,
+        description="Puerto IMAP para el buzón.",
+        validation_alias=AliasChoices(
+            "MAIL_INCOMING_PORT_IMAP",
+            "TALIA_MAIL_INCOMING_PORT_IMAP",
+        ),
+    )
+    mail_outgoing_server: str | None = Field(
+        default=None,
+        description="Servidor SMTP saliente.",
+        validation_alias=AliasChoices(
+            "MAIL_OUTGOING_SERVER",
+            "TALIA_MAIL_OUTGOING_SERVER",
+        ),
+    )
+    mail_outgoing_port_smtp: int | None = Field(
+        default=None,
+        description="Puerto SMTP para envíos.",
+        validation_alias=AliasChoices(
+            "MAIL_OUTGOING_PORT_SMTP",
+            "TALIA_MAIL_OUTGOING_PORT_SMTP",
+        ),
+    )
+    mail_use_tls: bool = Field(
+        default=True,
+        description="Indica si SMTP requiere STARTTLS/TLS.",
+        validation_alias=AliasChoices(
+            "MAIL_USE_TLS",
+            "TALIA_MAIL_USE_TLS",
+        ),
+    )
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 
 

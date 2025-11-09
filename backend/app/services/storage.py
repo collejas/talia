@@ -1455,6 +1455,7 @@ async def ensure_lead_tarjeta(
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         }
+
         payload = {
             "contacto_id": contact_id,
             "conversacion_id": conversation_id,
@@ -1537,3 +1538,74 @@ async def _call_supabase_rpc(function_name: str, payload: dict[str, Any]) -> Any
         msg = f"Respuesta inválida de {function_name}: {exc}"
         logger.error(msg)
         raise StorageError(msg) from exc
+
+
+async def update_cita_fields(cita_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+    """Actualiza columnas directas de la cita mediante REST."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    payload = {key: value for key, value in fields.items() if value is not None}
+    if not payload:
+        raise StorageError("No se proporcionaron campos para actualizar la cita")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/citas"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    params = {"id": f"eq.{cita_id}", "limit": "1"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.patch(url, headers=headers, params=params, json=payload)
+
+    if resp.status_code >= 400:
+        msg = (
+            "Supabase respondió error al actualizar la cita"
+            f" (status={resp.status_code}, body={resp.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = resp.json() or []
+    if isinstance(data, list) and data:
+        first = data[0]
+        if isinstance(first, dict):
+            return first
+    if isinstance(data, dict):
+        return data
+    raise StorageError("Respuesta inesperada al actualizar la cita")
+
+
+async def merge_cita_metadata(
+    cita_id: str,
+    current_metadata: dict[str, Any] | None,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Combina metadatos existentes con un diccionario nuevo."""
+    base_metadata = dict(current_metadata or {})
+    merged = {**base_metadata, **updates}
+    return await update_cita_fields(cita_id, {"metadata": merged})
+
+
+async def update_cita_invite_status(
+    cita_id: str,
+    status: str,
+    *,
+    sent_at: datetime | None = None,
+    message_id: str | None = None,
+) -> dict[str, Any]:
+    """Actualiza columnas de invitación de la cita."""
+    if status not in {"pendiente", "enviado", "fallido"}:
+        raise StorageError(f"Estado de invitación inválido: {status}")
+
+    payload: dict[str, Any] = {"invite_status": status}
+    if sent_at is not None:
+        payload["invite_sent_at"] = sent_at.astimezone(timezone.utc).isoformat()
+    if message_id is not None:
+        payload["invite_message_id"] = message_id
+
+    return await update_cita_fields(cita_id, payload)

@@ -154,6 +154,61 @@ async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
+async def test_schedule_demo_envia_invitacion(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_upsert(payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": "cita-999",
+            "start_at": payload["p_start_at"],
+            "end_at": payload.get("p_end_at"),
+            "timezone": payload["p_timezone"],
+            "metadata": payload.get("p_metadata") or {},
+        }
+
+    async def fake_send_invite(
+        *, action: str, cita: dict[str, Any], contact: dict[str, Any], metadata_flag: str | None
+    ) -> dict[str, Any]:
+        return {"id": cita["id"], "invite_status": "enviado"}
+
+    async def fake_resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
+        return {"id": contact_id, "correo": "lead@example.com", "nombre_completo": "Lead"}
+
+    async def fake_sync_create(result: dict[str, Any]) -> dict[str, Any]:
+        return result
+
+    async def fake_ensure_lead_tarjeta(**_: Any) -> str:
+        return "lead-1"
+
+    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "ensure_lead_tarjeta", fake_ensure_lead_tarjeta)
+    monkeypatch.setattr("app.channels.webchat.service.sync_cita_after_create", fake_sync_create)
+    monkeypatch.setattr(
+        "app.channels.webchat.service._maybe_send_calendar_invitation", fake_send_invite
+    )
+    monkeypatch.setattr("app.channels.webchat.service._resolve_contact", fake_resolve_contact)
+
+    context = WebchatContext(
+        conversation_id="conv-invite",
+        contact_id="contact-ctx",
+        session_id="session-invite",
+    )
+
+    result = await _execute_function_call(
+        "schedule_demo",
+        {
+            "tarjeta_id": "lead-1",
+            "contacto_id": "contact-1",
+            "start_at": "2025-11-10T11:00:00-06:00",
+            "timezone": "America/Mexico_City",
+            "metadata": {"send_calendar_invite": True},
+        },
+        context,
+    )
+
+    assert result["status"] == "ok"
+    assert result["cita"]["invite_status"] == "enviado"
+
+
+@pytest.mark.asyncio
 async def test_schedule_demo_rechaza_fecha_pasada(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_ensure(**_: str) -> str:
         return "lead-1"
@@ -228,6 +283,58 @@ async def test_reschedule_demo_actualiza_cita(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.asyncio
+async def test_reschedule_demo_envia_actualizacion(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_upsert(payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": payload["p_id"],
+            "start_at": payload["p_start_at"],
+            "end_at": payload["p_end_at"],
+            "timezone": payload["p_timezone"],
+            "metadata": payload["p_metadata"],
+        }
+
+    async def fake_send_invite(
+        *, action: str, cita: dict[str, Any], contact: dict[str, Any], metadata_flag: str | None
+    ) -> dict[str, Any]:
+        return {"id": cita["id"], "invite_status": "enviado"}
+
+    async def fake_resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
+        return {"id": contact_id, "correo": "lead@example.com", "nombre_completo": "Lead"}
+
+    async def fake_sync_update(
+        result: dict[str, Any], provider_hint: str | None = None
+    ) -> dict[str, Any]:
+        return result
+
+    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr("app.channels.webchat.service.sync_cita_after_update", fake_sync_update)
+    monkeypatch.setattr(
+        "app.channels.webchat.service._maybe_send_calendar_invitation", fake_send_invite
+    )
+    monkeypatch.setattr("app.channels.webchat.service._resolve_contact", fake_resolve_contact)
+
+    context = WebchatContext(
+        conversation_id="conv-update",
+        contact_id="contact-ctx",
+        session_id="session-update",
+    )
+
+    result = await _execute_function_call(
+        "reschedule_demo",
+        {
+            "cita_id": "cita-update",
+            "start_at": "2025-11-11T12:00:00-06:00",
+            "timezone": "America/Mexico_City",
+            "metadata": {"send_calendar_update": True},
+        },
+        context,
+    )
+
+    assert result["status"] == "ok"
+    assert result["cita"]["invite_status"] == "enviado"
+
+
+@pytest.mark.asyncio
 async def test_reschedule_demo_infiere_end_at(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, dict[str, str | None]] = {}
 
@@ -290,6 +397,19 @@ async def test_cancel_demo_elimina_cita(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(storage, "get_demo_cita", fake_get_demo_cita)
     monkeypatch.setattr("app.channels.webchat.service.sync_cita_after_cancel", fake_sync_cancel)
 
+    async def fake_resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
+        return {"id": contact_id, "correo": "lead@example.com", "nombre_completo": "Lead"}
+
+    async def fake_send_invite(
+        *, action: str, cita: dict[str, Any], contact: dict[str, Any], metadata_flag: str | None
+    ) -> dict[str, Any]:
+        return {"id": cita["id"], "invite_status": "enviado"}
+
+    monkeypatch.setattr("app.channels.webchat.service._resolve_contact", fake_resolve_contact)
+    monkeypatch.setattr(
+        "app.channels.webchat.service._maybe_send_calendar_invitation", fake_send_invite
+    )
+
     context = WebchatContext(
         conversation_id="conv-3",
         contact_id="contact-ctx",
@@ -306,11 +426,15 @@ async def test_cancel_demo_elimina_cita(monkeypatch: pytest.MonkeyPatch) -> None
         context,
     )
 
-    assert result == {"status": "ok", "cita": {"id": "cita-789", "estado": "cancelada"}}
+    assert result == {
+        "status": "ok",
+        "cita": {"id": "cita-789", "estado": "cancelada", "invite_status": "enviado"},
+    }
     payload = captured["payload"]
     assert payload["p_id"] == "cita-789"
     assert payload["p_reason"] == "El prospecto solicitó reagendar después"
     assert payload["p_remove_provider_event"] is True
+    assert result["cita"]["invite_status"] == "enviado"
 
 
 @pytest.mark.asyncio

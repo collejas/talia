@@ -79,7 +79,7 @@ npm run build --webpack
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
-codex resume 019a5d14-8753-7250-aacc-d602e9e5c69f
+codex resume 019a64d8-77e3-7d22-a36c-8d2a06560fa7
 
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
@@ -173,25 +173,3 @@ curl -u 'hola@talia.mx:DE_se479156376421' \
   -H 'Depth: 0' \
   'https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar'
 
-
-
-
-¡Genial! El problema lo resolvimos en tres frentes para replicar el comportamiento del drawer de Contactos:
-
-  1. Layout principal del embudo
-     frontend/panel/src/app/embudo/page.tsx:22
-     Ajusté el contenedor que envuelve el board para que use h-[calc(100vh-var(--header-height))] flex-1 flex-col overflow-hidden. Así la
-     vista completa respeta el alto del viewport menos el header (exactamente igual que en Contactos), evitando que el tablero “crezca”
-     infinitamente y tape al drawer.
-  2. Drawer global reutilizable
-     frontend/panel/src/components/ui/drawer.tsx:27
-     El DrawerContent ahora se renderiza como flex h-full flex-col overflow-hidden, con max-h-screen y max-w-lg cuando se abre por la
-     derecha/izquierda. Esto garantiza que el overlay encapsule todo el contenido dentro de la ventana y centraliza el comportamiento
-     para cualquier drawer que usemos.
-  3. Drawer específico del embudo
-     frontend/panel/src/components/embudo/lead-drawer.tsx:598 y siguientes
-     Añadí min-h-0 y overflow-y-auto donde corresponde (Tabs, TabsContent, formulario de “Resumen”, paneles de Notas/Historial) para que
-     cada sección use el espacio disponible y el scroll interno funcione aun con muchos campos.
-
-  Con esos tres ajustes, el drawer queda contenido, desplaza correctamente todo su contenido y se alinea con el patrón que ya funcionaba
-  en la vista de Contactos.

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
+import uuid
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
@@ -23,16 +25,19 @@ from app.assistants.manager import AssistantConfig
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import (
+    EmailSendError,
     calendar_service,
     compute_demo_availability,
     geolocation,
     leads_geo,
+    send_email,
     storage,
     sync_cita_after_cancel,
     sync_cita_after_create,
     sync_cita_after_update,
 )
 from app.services import openai as openai_service
+from app.services.storage import StorageError
 
 from . import schemas
 
@@ -160,6 +165,315 @@ def _parse_start_datetime(text: str, tz_name: str) -> datetime:
             tzinfo = dt_timezone.utc
         when = when.replace(tzinfo=tzinfo)
     return when
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if candidate.endswith("Z"):
+        candidate = f"{candidate[:-1]}+00:00"
+    try:
+        return datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+
+
+def _format_ics_datetime(dt: datetime) -> str:
+    return dt.astimezone(dt_timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _escape_ics_text(value: str | None) -> str:
+    if not value:
+        return ""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("\r\n", "\\n")
+        .replace("\n", "\\n")
+        .replace(",", "\\,")
+        .replace(";", "\\;")
+    )
+
+
+async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
+    if not contact_id:
+        return None
+    try:
+        return await storage.fetch_contact(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "calendar.invite.contact_lookup_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        return None
+
+
+def _build_calendar_ics(
+    *,
+    uid: str,
+    sequence: int,
+    method: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    summary: str,
+    description: str,
+    location: str | None,
+    organizer_name: str | None,
+    organizer_email: str,
+    attendee_name: str | None,
+    attendee_email: str,
+) -> str:
+    dtstamp = _format_ics_datetime(datetime.now(dt_timezone.utc))
+    dtstart = _format_ics_datetime(start_dt)
+    dtend = _format_ics_datetime(end_dt)
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "PRODID:-//Tal-IA//Calendar Invite//ES",
+        "VERSION:2.0",
+        f"METHOD:{method}",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        f"SEQUENCE:{sequence}",
+        f"DTSTAMP:{dtstamp}",
+        f"DTSTART:{dtstart}",
+        f"DTEND:{dtend}",
+        f"SUMMARY:{_escape_ics_text(summary)}",
+        f"DESCRIPTION:{_escape_ics_text(description)}",
+    ]
+    if location:
+        lines.append(f"LOCATION:{_escape_ics_text(location)}")
+    if organizer_email:
+        organizer_cn = _escape_ics_text(organizer_name or organizer_email)
+        lines.append(f"ORGANIZER;CN={organizer_cn}:MAILTO:{organizer_email}")
+    if attendee_email:
+        attendee_cn = _escape_ics_text(attendee_name or attendee_email)
+        lines.append(f"ATTENDEE;CN={attendee_cn};ROLE=REQ-PARTICIPANT:MAILTO:{attendee_email}")
+    if method.upper() == "CANCEL":
+        lines.append("STATUS:CANCELLED")
+    lines.append("END:VEVENT")
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines)
+
+
+async def _maybe_send_calendar_invitation(
+    *,
+    action: Literal["create", "update", "cancel"],
+    cita: dict[str, Any],
+    contact: dict[str, Any],
+    metadata_flag: str | None = None,
+) -> dict[str, Any] | None:
+    organizer_email = (settings.mail_username or "").strip()
+    if not organizer_email:
+        logger.info(
+            "calendar.invite.skip_no_config",
+            extra={"cita_id": cita.get("id"), "action": action},
+        )
+        return None
+
+    contact_email = (contact.get("correo") or "").strip()
+    if not contact_email:
+        logger.info(
+            "calendar.invite.skip_no_email",
+            extra={"cita_id": cita.get("id"), "contact_id": contact.get("id")},
+        )
+        return None
+
+    cita_id = str(cita.get("id") or "").strip()
+    if not cita_id:
+        logger.warning("calendar.invite.skip_no_cita_id", extra={"action": action})
+        return None
+
+    metadata = _safe_dict(cita.get("metadata"))
+    uid = metadata.get("calendar_uid") or f"demo-{uuid.uuid4()}"
+    sequence_raw = metadata.get("calendar_sequence")
+    try:
+        sequence = int(sequence_raw)
+    except (TypeError, ValueError):
+        sequence = 0
+    if action in {"update", "cancel"}:
+        sequence += 1
+
+    start_dt = _parse_iso_datetime(cita.get("start_at"))
+    if start_dt is None:
+        logger.warning("calendar.invite.skip_no_start", extra={"cita_id": cita_id})
+        return None
+    end_dt = _parse_iso_datetime(cita.get("end_at"))
+    if end_dt is None:
+        default_minutes = settings.demo_availability_slot_minutes or 45
+        try:
+            default_minutes = int(default_minutes)
+        except (TypeError, ValueError):
+            default_minutes = 45
+        end_dt = start_dt + timedelta(minutes=max(default_minutes, 15))
+
+    tz_candidate = (
+        cita.get("timezone") or metadata.get("timezone") or settings.demo_availability_timezone
+    ) or "America/Mexico_City"
+    tz_candidate = tz_candidate.strip() or "America/Mexico_City"
+    try:
+        local_tz = ZoneInfo(tz_candidate)
+    except Exception:
+        local_tz = ZoneInfo("America/Mexico_City")
+        tz_candidate = "America/Mexico_City"
+
+    start_local = start_dt.astimezone(local_tz)
+
+    contact_name = (contact.get("nombre_completo") or contact.get("company_name") or "").strip()
+    summary = (
+        metadata.get("summary")
+        or metadata.get("titulo")
+        or metadata.get("title")
+        or "Demostración Tal-IA"
+    )
+    notes = metadata.get("notes") if isinstance(metadata.get("notes"), str) else None
+    description = (
+        metadata.get("description")
+        or notes
+        or "Sesión para descubrir cómo automatizar ventas y atención con Tal-IA."
+    )
+    cancel_reason = (cita.get("cancel_reason") or metadata.get("cancel_reason") or "").strip()
+    meeting_url = (
+        metadata.get("meeting_url")
+        or cita.get("meeting_url")
+        or metadata.get("external_join_url")
+        or cita.get("external_join_url")
+    )
+    location = cita.get("location") or metadata.get("location")
+
+    date_str = start_local.strftime("%d/%m/%Y")
+    time_str = start_local.strftime("%H:%M")
+    timezone_label = tz_candidate.replace("_", " ")
+
+    details_lines = [
+        f"- Fecha: {date_str}",
+        f"- Hora: {time_str} ({timezone_label})",
+    ]
+    if meeting_url:
+        details_lines.append(f"- Enlace: {meeting_url}")
+    if location:
+        details_lines.append(f"- Lugar: {location}")
+
+    header = contact_name or "equipo"
+    if action == "create":
+        subject = f"Invitación demo Geoactiv – {date_str} {time_str} ({timezone_label})"
+        intro = "Confirmamos tu demo para conocer Tal-IA."
+    elif action == "update":
+        subject = f"Actualización de demo Geoactiv – {date_str} {time_str} ({timezone_label})"
+        intro = "Actualizamos la hora de tu demo."
+    else:  # cancel
+        subject = f"Cancelación demo Geoactiv – {date_str}"
+        intro = "Cancelamos la sesión que teníamos agendada."
+
+    body_lines = [f"Hola {header},".strip(), "", intro, "", *details_lines]
+    if action == "cancel" and cancel_reason:
+        body_lines.extend(["", f"Motivo: {cancel_reason}"])
+    if action != "cancel":
+        body_lines.extend(
+            [
+                "",
+                "Si necesitas reprogramar o tienes preguntas, responde a este correo.",
+            ]
+        )
+    else:
+        body_lines.extend(
+            [
+                "",
+                "Avísanos si deseas agendar una nueva sesión.",
+            ]
+        )
+    body_lines.extend(["", "Equipo Geoactiv"])
+    body_text = "\n".join(body_lines)
+
+    method = "CANCEL" if action == "cancel" else "REQUEST"
+    organizer_name = metadata.get("organizer_name") or "Equipo Geoactiv"
+    ics_text = _build_calendar_ics(
+        uid=uid,
+        sequence=sequence,
+        method=method,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        summary=summary,
+        description=description,
+        location=meeting_url or location,
+        organizer_name=organizer_name,
+        organizer_email=organizer_email,
+        attendee_name=contact_name or contact_email,
+        attendee_email=contact_email,
+    )
+
+    recipients = [contact_email]
+    if organizer_email.lower() not in {recipient.lower() for recipient in recipients}:
+        recipients.append(organizer_email)
+
+    attachments = [
+        {
+            "content": ics_text.encode("utf-8"),
+            "maintype": "text",
+            "subtype": "calendar",
+            "filename": "demo.ics",
+            "headers": {
+                "Content-Type": f'text/calendar; method={method}; charset="utf-8"; name="demo.ics"',
+                "Content-Disposition": 'attachment; filename="demo.ics"',
+            },
+        }
+    ]
+
+    try:
+        message_id = await asyncio.to_thread(
+            send_email,
+            subject=subject,
+            body_text=body_text,
+            recipients=recipients,
+            body_html=None,
+            attachments=attachments,
+        )
+    except EmailSendError as exc:
+        logger.error(
+            "calendar.invite.send_failed",
+            extra={"cita_id": cita_id, "action": action, "error": str(exc)},
+        )
+        await storage.update_cita_invite_status(cita_id, "fallido")
+        return None
+    except Exception:  # pragma: no cover - errores no controlados
+        logger.exception(
+            "calendar.invite.send_unexpected", extra={"cita_id": cita_id, "action": action}
+        )
+        await storage.update_cita_invite_status(cita_id, "fallido")
+        return None
+
+    metadata_updates = {
+        "calendar_uid": uid,
+        "calendar_sequence": sequence,
+    }
+    if metadata_flag:
+        metadata_updates[metadata_flag] = False
+    if action == "cancel":
+        metadata_updates["calendar_cancelled"] = True
+
+    merged_row = await storage.merge_cita_metadata(cita_id, metadata, metadata_updates)
+    if isinstance(merged_row, dict) and "metadata" in merged_row:
+        cita["metadata"] = merged_row["metadata"]
+    sent_row = await storage.update_cita_invite_status(
+        cita_id,
+        "enviado",
+        sent_at=datetime.now(dt_timezone.utc),
+        message_id=message_id,
+    )
+    if isinstance(sent_row, dict):
+        cita.update(sent_row)
+    logger.info(
+        "calendar.invite.sent",
+        extra={
+            "cita_id": cita_id,
+            "action": action,
+            "recipients": recipients,
+            "message_id": message_id,
+        },
+    )
+    return sent_row
 
 
 def _guess_extension(name: str | None, url: str | None) -> str:
@@ -1561,6 +1875,7 @@ async def _execute_function_call(
         if scheduled_via not in {"humano", "ia", "api"}:
             raise ValueError("scheduled_via inválido para schedule_demo")
         metadata = _safe_dict(arguments.get("metadata"))
+        send_calendar_invite = bool(metadata.get("send_calendar_invite"))
 
         tarjeta_arg = str(arguments.get("tarjeta_id") or "").strip() or None
         tarjeta_id = await storage.ensure_lead_tarjeta(
@@ -1588,6 +1903,17 @@ async def _execute_function_call(
 
         result = await storage.upsert_demo_cita(payload)
         result = await sync_cita_after_create(result)
+        if send_calendar_invite:
+            contact = await _resolve_contact(contacto_id)
+            if contact:
+                updated_row = await _maybe_send_calendar_invitation(
+                    action="create",
+                    cita=result,
+                    contact=contact,
+                    metadata_flag="send_calendar_invite",
+                )
+                if isinstance(updated_row, dict):
+                    result.update(updated_row)
         return {"status": "ok", "cita": result}
 
     if name == "reschedule_demo":
@@ -1603,6 +1929,9 @@ async def _execute_function_call(
             tz_name = timezone_arg.strip()
         else:
             tz_name = tz_fallback or "America/Mexico_City"
+
+        metadata_input = _safe_dict(arguments.get("metadata"))
+        send_calendar_update = bool(metadata_input.get("send_calendar_update"))
 
         computed_end_at: str | None = None
         if start_arg is not None and end_arg is None:
@@ -1645,9 +1974,7 @@ async def _execute_function_call(
             "p_meeting_url": arguments.get("meeting_url"),
             "p_location": arguments.get("location"),
             "p_notes": arguments.get("notes"),
-            "p_metadata": _safe_dict(arguments.get("metadata"))
-            if arguments.get("metadata")
-            else None,
+            "p_metadata": metadata_input if metadata_input else None,
             "p_merge_metadata": arguments.get("merge_metadata"),
             "p_expected_updated_at": arguments.get("expected_updated_at"),
             "p_remove_provider_event": bool(arguments.get("remove_provider_event")),
@@ -1658,15 +1985,31 @@ async def _execute_function_call(
             "p_cancel_reason": arguments.get("cancel_reason"),
         }
 
-        contacto_id = arguments.get("contacto_id")
-        if contacto_id:
-            payload["p_contacto_id"] = str(contacto_id)
+        contacto_id_arg = arguments.get("contacto_id")
+        contacto_id_value = (
+            str(contacto_id_arg).strip()
+            if contacto_id_arg is not None
+            else str(context.contact_id or "").strip()
+        )
+        if contacto_id_value:
+            payload["p_contacto_id"] = contacto_id_value
         conversacion_id = arguments.get("conversacion_id")
         if conversacion_id:
             payload["p_conversacion_id"] = str(conversacion_id)
 
         result = await storage.upsert_demo_cita(payload)
         result = await sync_cita_after_update(result, provider_hint=provider_normalized)
+        if send_calendar_update:
+            contact = await _resolve_contact(contacto_id_value or result.get("contacto_id"))
+            if contact:
+                updated_row = await _maybe_send_calendar_invitation(
+                    action="update",
+                    cita=result,
+                    contact=contact,
+                    metadata_flag="send_calendar_update",
+                )
+                if isinstance(updated_row, dict):
+                    result.update(updated_row)
         return {"status": "ok", "cita": result}
 
     if name == "cancel_demo":
@@ -1695,6 +2038,16 @@ async def _execute_function_call(
         await sync_cita_after_cancel(
             previous=existing_cita, updated=result, remove_event=remove_provider_event
         )
+        contact = await _resolve_contact(context.contact_id or result.get("contacto_id"))
+        if contact:
+            updated_row = await _maybe_send_calendar_invitation(
+                action="cancel",
+                cita=result,
+                contact=contact,
+                metadata_flag=None,
+            )
+            if isinstance(updated_row, dict):
+                result.update(updated_row)
         return {"status": "ok", "cita": result}
 
     logger.warning(

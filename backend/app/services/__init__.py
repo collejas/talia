@@ -12,6 +12,7 @@ from .calendar import (
     sync_cita_after_create,
     sync_cita_after_update,
 )
+from .email import EmailSendError, send_email
 
 __all__ = [
     "CalendarEvent",
@@ -24,4 +25,6 @@ __all__ = [
     "sync_cita_after_cancel",
     "sync_cita_after_create",
     "sync_cita_after_update",
+    "EmailSendError",
+    "send_email",
 ]
