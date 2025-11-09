@@ -315,9 +315,6 @@ export function EmbudoBoardClient({
                     Estos visitantes cerraron el webchat sin enviar mensajes. Úsalos como señal temprana
                     para optimizar el embudo.
                   </p>
-                  <p className="text-[11px] text-muted-foreground/80">
-                    Leads en CRM sin conversación: {sinConversacion.length}
-                  </p>
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
