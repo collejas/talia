@@ -102,6 +102,41 @@
 
 ---
 
+## Plan Detallado para la vista jerárquica (pendiente)
+
+### 5.1 SQL / Supabase
+- ➕ Versionar `panel_leads_geo_resumen` (o crear `panel_leads_geo_resumen_ext`) para devolver, por ubicación y canal, los totales segmentados por `etapa_codigo`, manteniendo las agregaciones actuales.
+- ➕ Extender `panel_visitantes_geo_resumen` para incluir totales por canal (`webchat_total`, `webchat_sin_chat`, `webchat_con_chat`, `whatsapp_total`, `voz_total`) y un indicador `has_data` por polígono.
+- ➕ Incorporar filtros opcionales de etapas (`p_etapas` como array de códigos/categorías) en los RPC geo para que el backend pueda limitar resultados a etapas específicas.
+- ⚠️ Evaluar materializar las agregaciones si las consultas en producción superan los tiempos aceptables (benchmark en staging).
+
+### 5.2 Backend FastAPI (`demografia_service`)
+- Actualizar `fetch_leads_resumen` para normalizar las etapas en: `sin_conversacion`, `captado`, `post_captado` (etapas con orden > captado), `ganadas`, `perdidas`.
+- Ajustar `fetch_visitantes_resumen` al nuevo contrato y garantizar totales consistentes por canal.
+- Reescribir `build_map_dataset` para:
+  - Publicar `visitas_total`, `webchat_total`, `webchat_sin_conversacion`, `webchat_captado`, `webchat_post_captado`, `whatsapp_total`, `voz_total`.
+  - Filtrar polígonos sin datos y adjuntar metadatos de navegación (`next_level`).
+- Actualizar `/api/kpis/demografia/mapa` con la nueva estructura y controles de drill-down (país → estado → municipio).
+- Añadir soporte para filtros de etapas en los endpoints (`?etapas=`), propagando el parámetro a Supabase y conservando los totales globales para referencia.
+
+### 5.3 Frontend (`panel`)
+- Actualizar tipos en `@/lib/mapa-conversion/api` y propagar el nuevo contrato a la página y tabla.
+- Reconfigurar `LocationComparisonChart`:
+  - Pintar únicamente polígonos con datos (`visitas_total > 0`).
+  - Mostrar un tooltip con la jerarquía solicitada (totales, webchat con subniveles, whatsapp, voz).
+  - Manejar eventos de clic para cambiar de nivel y resaltar la selección.
+  - Incorporar breadcrumbs/controles que permitan volver al nivel superior y filtrar estados/municipios sin datos.
+- Ajustar `page.tsx` para soportar los parámetros `nivel` y `estado`, estados de carga/skeleton y mensaje vacío en el Wrapper.
+- Extender la tabla con columnas derivadas (ej. totales por canal, etapa principal post captado).
+- Añadir controles de filtrado por etapa (chips/select multi-etapa) sincronizados con la URL y el backend.
+
+### 5.4 QA y documentación
+- Validar la clasificación `captado` vs `post_captado` con el dump `postgres_20251109`.
+- Documentar el contrato final en `docs/mapa_de_conversion.md` con ejemplos de los tres niveles.
+- Preparar pruebas unitarias ligeras para `build_map_dataset` y plan de QA manual (navegación jerárquica y consistencia de totales).
+
+---
+
 ### Próximos pasos inmediatos
 1. Integrar mapa GeoJSON (nivel país/estado) y preparar capa municipio/LADA.
 2. Extender tabla y KPIs con variaciones vs periodo anterior.
