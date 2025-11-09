@@ -3065,6 +3065,85 @@ async def demografia_resumen(
     }
 
 
+@router.get("/kpis/demografia/mapa")
+async def demografia_mapa(
+    nivel: str = Query(default="estado"),
+    estado: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    nivel_normalizado = nivel.lower()
+    if nivel_normalizado not in {"pais", "estado", "municipio"}:
+        raise HTTPException(status_code=400, detail="nivel_invalid")
+
+    state_code: str | None = None
+    if nivel_normalizado == "municipio":
+        if not estado:
+            raise HTTPException(status_code=400, detail="estado_required")
+        state_code = _ensure_state_code(estado)
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    channel_values = _parse_channels_param(canales)
+
+    try:
+        leads_payload = await demografia_service.fetch_leads_resumen(
+            nivel=nivel_normalizado,
+            channels=channel_values,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        visitantes_payload = await demografia_service.fetch_visitantes_resumen(
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        dataset = demografia_service.build_map_dataset(
+            nivel=nivel_normalizado,
+            leads_payload=leads_payload,
+            visitantes_payload=visitantes_payload,
+            state_filter=state_code,
+        )
+    except demografia_service.DemografiaServiceError as exc:
+        logger.exception("demografia.mapa_fetch_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando demografía"
+        ) from exc
+
+    try:
+        if nivel_normalizado == "pais":
+            geojson = leads_geo.load_world_countries_geojson()
+        elif nivel_normalizado == "estado":
+            geojson = leads_geo.load_full_states_geojson()
+        else:
+            geojson = leads_geo.load_state_municipalities_geojson(state_code or "00")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="estado_not_found") from exc
+
+    return {
+        "ok": True,
+        "nivel": nivel_normalizado,
+        "estado": state_code,
+        "canales": channel_values,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "totales_leads": leads_payload.get("totals") if isinstance(leads_payload, dict) else {},
+        "totales_visitantes": visitantes_payload.get("totals")
+        if isinstance(visitantes_payload, dict)
+        else {},
+        "totales_leads_por_canal": leads_payload.get("totals_by_channel")
+        if isinstance(leads_payload, dict)
+        else {},
+        "dataset": dataset,
+        "geojson": geojson,
+    }
+
+
 @router.get("/kpis/visitantes/estados")
 async def visitantes_estado_metrics(
     rango: str | None = Query(default=None),

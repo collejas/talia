@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -174,3 +175,94 @@ async def fetch_visitantes_resumen(
         "items": items,
         "totals": totals,
     }
+
+
+def build_map_dataset(
+    *,
+    nivel: str,
+    leads_payload: dict[str, Any],
+    visitantes_payload: dict[str, Any],
+    state_filter: str | None = None,
+) -> list[dict[str, Any]]:
+    state_filter = (state_filter or "").strip()
+    if state_filter and len(state_filter) == 1:
+        state_filter = state_filter.zfill(2)
+
+    leads_items = leads_payload.get("items") if isinstance(leads_payload, dict) else []
+    visitantes_items = (
+        visitantes_payload.get("items") if isinstance(visitantes_payload, dict) else []
+    )
+
+    combined: dict[str, dict[str, Any]] = {}
+
+    def _should_include(key: str) -> bool:
+        if nivel != "municipio" or not state_filter:
+            return True
+        return key.startswith(state_filter)
+
+    for item in leads_items or []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "UNK")
+        if not _should_include(key):
+            continue
+        entry = combined.setdefault(
+            key,
+            {
+                "key": key,
+                "name": str(item.get("name") or "Desconocido"),
+                "leads_total": 0,
+                "leads_por_canal": defaultdict(int),
+                "leads_por_etapa": defaultdict(int),
+                "visitantes_total": 0,
+                "visitantes_con_chat": 0,
+                "visitantes_sin_chat": 0,
+            },
+        )
+        entry["leads_total"] += _to_number(item.get("total"))
+        entry["leads_por_canal"][item.get("canal") or "desconocido"] += _to_number(
+            item.get("total")
+        )
+        entry["leads_por_etapa"]["abiertas"] += _to_number(item.get("abiertas"))
+        entry["leads_por_etapa"]["ganadas"] += _to_number(item.get("ganadas"))
+        entry["leads_por_etapa"]["perdidas"] += _to_number(item.get("perdidas"))
+
+    for item in visitantes_items or []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "UNK")
+        if not _should_include(key):
+            continue
+        entry = combined.setdefault(
+            key,
+            {
+                "key": key,
+                "name": str(item.get("name") or "Desconocido"),
+                "leads_total": 0,
+                "leads_por_canal": defaultdict(int),
+                "leads_por_etapa": defaultdict(int),
+                "visitantes_total": 0,
+                "visitantes_con_chat": 0,
+                "visitantes_sin_chat": 0,
+            },
+        )
+        entry["visitantes_total"] += _to_number(item.get("total"))
+        entry["visitantes_con_chat"] += _to_number(item.get("con_chat"))
+        entry["visitantes_sin_chat"] += _to_number(item.get("sin_chat"))
+
+    result = []
+    for entry in combined.values():
+        normalized_entry = {
+            "key": entry["key"],
+            "name": entry["name"],
+            "leads_total": entry["leads_total"],
+            "leads_por_canal": dict(entry["leads_por_canal"]),
+            "leads_por_etapa": dict(entry["leads_por_etapa"]),
+            "visitantes_total": entry["visitantes_total"],
+            "visitantes_con_chat": entry["visitantes_con_chat"],
+            "visitantes_sin_chat": entry["visitantes_sin_chat"],
+        }
+        result.append(normalized_entry)
+
+    result.sort(key=lambda item: (item["leads_total"], item["visitantes_total"]), reverse=True)
+    return result
