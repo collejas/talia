@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.services import (
     calendar_service,
+    demografia_service,
     leads_geo,
     storage,
     sync_cita_after_cancel,
@@ -3014,6 +3015,54 @@ async def leads_geo_paises() -> dict[str, Any]:
         logger.exception("geo.world_missing")
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
     return {"ok": True, "geojson": geojson}
+
+
+@router.get("/kpis/demografia/resumen")
+async def demografia_resumen(
+    nivel: str = Query(default="estado"),
+    canales: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    nivel_normalizado = nivel.lower()
+    if nivel_normalizado not in {"pais", "estado", "municipio"}:
+        raise HTTPException(status_code=400, detail="nivel_invalid")
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    channel_values = _parse_channels_param(canales)
+
+    try:
+        leads_payload = await demografia_service.fetch_leads_resumen(
+            nivel=nivel_normalizado,
+            channels=channel_values,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        visitantes_payload = await demografia_service.fetch_visitantes_resumen(
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except demografia_service.DemografiaServiceError as exc:
+        logger.exception("demografia.resumen_fetch_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando demografía"
+        ) from exc
+
+    return {
+        "ok": True,
+        "nivel": nivel_normalizado,
+        "canales": channel_values,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "leads": leads_payload,
+        "visitantes": visitantes_payload,
+    }
 
 
 @router.get("/kpis/visitantes/estados")
