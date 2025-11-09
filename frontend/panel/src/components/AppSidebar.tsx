@@ -20,6 +20,7 @@ import {
   IconAddressBook,
   IconLayoutGrid,
   IconLayoutKanban,
+  IconMap,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -48,6 +49,7 @@ const NAVIGATION = {
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
     { title: "Proyectos", url: "#", icon: IconFolder },
     { title: "Vista 1", url: "/vista-1", icon: IconLayoutGrid },
+    { title: "Mapa de Conversión", url: "/mapa-de-conversion", icon: IconMap },
     { title: "Vista 2", url: "/vista-2", icon: IconLayoutKanban },
   ],
   documents: [
