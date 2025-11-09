@@ -4,35 +4,37 @@ import { cookies } from "next/headers";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
 
-type DemografiaTotals = {
+type DemografiaSummaryItem = {
+  level: string;
+  key: string;
+  name: string;
+  canal: string;
   total: number;
-  abiertas?: number;
-  ganadas?: number;
-  perdidas?: number;
-  [key: string]: number | undefined;
+  abiertas: number;
+  ganadas: number;
+  perdidas: number;
 };
 
-type DemografiaSummaryResponse = {
+type DemografiaMapDataset = {
+  key: string;
+  name: string;
+  leads_total: number;
+  leads_por_canal: Record<string, number>;
+  leads_por_etapa: Record<string, number>;
+  visitantes_total: number;
+  visitantes_con_chat: number;
+  visitantes_sin_chat: number;
+};
+
+export type DemografiaSummaryResponse = {
   ok: boolean;
   nivel: string;
   canales: string[] | null;
   range: Record<string, unknown>;
   leads: {
-    items: Array<{
-      level: string;
-      key: string;
-      name: string;
-      canal: string;
-      total: number;
-      abiertas: number;
-      ganadas: number;
-      perdidas: number;
-    }>;
-    totals: DemografiaTotals;
-    totals_by_channel: Record<
-      string,
-      { total: number; abiertas: number; ganadas: number; perdidas: number }
-    >;
+    items: DemografiaSummaryItem[];
+    totals: Record<string, number>;
+    totals_by_channel: Record<string, Record<string, number>>;
   };
   visitantes: {
     items: Array<{
@@ -51,30 +53,19 @@ type DemografiaSummaryResponse = {
   };
 };
 
-export type DemografiaMapDataset = {
-  key: string;
-  name: string;
-  leads_total: number;
-  leads_por_canal: Record<string, number>;
-  leads_por_etapa: Record<string, number>;
-  visitantes_total: number;
-  visitantes_con_chat: number;
-  visitantes_sin_chat: number;
-};
-
-type DemografiaMapResponse = {
+export type DemografiaMapResponse = {
   ok: boolean;
   nivel: string;
   estado: string | null;
   canales: string[] | null;
   range: Record<string, unknown>;
-  totales_leads: DemografiaTotals;
+  totales_leads: Record<string, number>;
   totales_visitantes: {
     total: number;
     con_chat: number;
     sin_chat: number;
   };
-  totales_leads_por_canal: Record<string, DemografiaTotals>;
+  totales_leads_por_canal: Record<string, Record<string, number>>;
   dataset: DemografiaMapDataset[];
   geojson: Record<string, unknown>;
 };
@@ -85,31 +76,31 @@ export type DemografiaData = {
 };
 
 async function resolveAuthToken(): Promise<string> {
-  const cookieStore = await cookies();
-  const accessToken =
-    cookieStore.get("talia.access_token")?.value ||
-    cookieStore.get("sb-access-token")?.value ||
-    cookieStore.get("access_token")?.value;
-  if (accessToken && accessToken.trim()) {
-    return accessToken;
+  const store = await cookies();
+  const cookieToken =
+    store.get("talia.access_token")?.value ||
+    store.get("sb-access-token")?.value ||
+    store.get("access_token")?.value;
+  if (cookieToken && cookieToken.trim().length) {
+    return cookieToken;
   }
   const serviceRole =
     process.env.SUPABASE_SERVICE_ROLE ||
     process.env.SUPABASE_SERVICE_KEY ||
     process.env.SUPABASE_SERVICE_API_KEY;
   if (!serviceRole) {
-    throw new Error("No se encontró token de autenticación para llamar al backend.");
+    throw new Error("No se encontró token para consultar el backend del panel.");
   }
   return serviceRole;
 }
 
 async function callDemografiaEndpoint<T>(
-  path: string,
+  endpoint: string,
   params: URLSearchParams,
 ): Promise<T> {
   const baseUrl = getPanelApiBaseUrl();
   const token = await resolveAuthToken();
-  const url = `${baseUrl.replace(/\/+$/, "")}/kpis/demografia/${path}?${params.toString()}`;
+  const url = `${baseUrl}/kpis/demografia/${endpoint}?${params.toString()}`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -122,7 +113,7 @@ async function callDemografiaEndpoint<T>(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Backend respondió ${response.status} en ${path}: ${text}`);
+    throw new Error(`Backend respondió ${response.status} (${endpoint}): ${text}`);
   }
 
   return (await response.json()) as T;
@@ -130,24 +121,23 @@ async function callDemografiaEndpoint<T>(
 
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
-  options: { canales?: string[]; estado?: string | null } = {},
+  options: { estado?: string | null; canales?: string[] } = {},
 ): Promise<DemografiaData> {
-  const paramsResumen = new URLSearchParams({ nivel });
-  if (options.canales && options.canales.length) {
-    paramsResumen.set("canales", options.canales.join(","));
-  }
+  const resumenParams = new URLSearchParams({ nivel });
+  const mapaParams = new URLSearchParams({ nivel });
 
-  const paramsMapa = new URLSearchParams({ nivel });
-  if (options.canales && options.canales.length) {
-    paramsMapa.set("canales", options.canales.join(","));
+  if (options.canales?.length) {
+    const joined = options.canales.join(",");
+    resumenParams.set("canales", joined);
+    mapaParams.set("canales", joined);
   }
   if (nivel === "municipio" && options.estado) {
-    paramsMapa.set("estado", options.estado);
+    mapaParams.set("estado", options.estado);
   }
 
   const [summary, map] = await Promise.all([
-    callDemografiaEndpoint<DemografiaSummaryResponse>("resumen", paramsResumen),
-    callDemografiaEndpoint<DemografiaMapResponse>("mapa", paramsMapa),
+    callDemografiaEndpoint<DemografiaSummaryResponse>("resumen", resumenParams),
+    callDemografiaEndpoint<DemografiaMapResponse>("mapa", mapaParams),
   ]);
 
   return { summary, map };
