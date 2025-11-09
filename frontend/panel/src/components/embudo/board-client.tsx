@@ -28,6 +28,7 @@ import {
 type EmbudoBoardClientProps = {
   etapas: EmbudoStage[];
   sinConversacion: EmbudoCard[];
+  visitantesSinChat: number;
 };
 
 type StageCardPair = {
@@ -50,7 +51,11 @@ function sortCards(cards: EmbudoCard[]): EmbudoCard[] {
   });
 }
 
-export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClientProps) {
+export function EmbudoBoardClient({
+  etapas,
+  sinConversacion,
+  visitantesSinChat,
+}: EmbudoBoardClientProps) {
   const initialStages = useMemo(
     () =>
       sortStages(
@@ -72,6 +77,12 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
   const [activeDragCard, setActiveDragCard] = useState<EmbudoCard | null>(null);
   const [activeDragStage, setActiveDragStage] = useState<EmbudoStage | null>(null);
   const [movePending, setMovePending] = useState(false);
+
+  const visitantesDisplay = useMemo(() => {
+    const formatter = new Intl.NumberFormat("es-MX");
+    const safeValue = Number.isFinite(visitantesSinChat) ? Math.max(visitantesSinChat, 0) : 0;
+    return formatter.format(safeValue);
+  }, [visitantesSinChat]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -272,7 +283,10 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
     handleDragCancel();
   };
 
-  const hasContent = stages.some((stage) => stage.tarjetas.length > 0) || sinConversacion.length > 0;
+  const hasContent =
+    stages.some((stage) => stage.tarjetas.length > 0) ||
+    sinConversacion.length > 0 ||
+    visitantesSinChat > 0;
 
   return (
     <>
@@ -293,11 +307,17 @@ export function EmbudoBoardClient({ etapas, sinConversacion }: EmbudoBoardClient
               <section className="flex h-full min-h-[420px] flex-col rounded-xl border border-primary/60 bg-primary/5">
                 <div className="px-4 py-4">
                   <h3 className="text-sm font-semibold text-primary">Sin conversación</h3>
-                  <p className="text-xs text-muted-foreground">Leads creados manualmente</p>
-                  <p className="mt-3 text-3xl font-bold text-primary">{sinConversacion.length}</p>
+                  <p className="text-xs text-muted-foreground">Visitas al webchat sin iniciar chat</p>
+                  <p className="mt-3 text-3xl font-bold text-primary">{visitantesDisplay}</p>
                 </div>
                 <div className="mt-2 space-y-2 px-4 pb-4 text-xs text-muted-foreground">
-                  <p>Estos leads no tienen conversación asociada. Puedes asignarlos manualmente a una etapa cuando estén listos.</p>
+                  <p>
+                    Estos visitantes cerraron el webchat sin enviar mensajes. Úsalos como señal temprana
+                    para optimizar el embudo.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    Leads en CRM sin conversación: {sinConversacion.length}
+                  </p>
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"

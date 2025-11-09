@@ -41,6 +41,7 @@ export type EmbudoCard = {
 export type EmbudoData = {
   stages: EmbudoStage[];
   sinConversacion: EmbudoCard[];
+  visitantesSinChat: number;
   errors: string[];
 };
 
@@ -89,6 +90,10 @@ type LeadStageRow = {
   metadatos: Record<string, unknown> | null;
 };
 
+type VisitantesCounterRow = {
+  total: number | string | null | undefined;
+};
+
 function parseMetadatos(input: Record<string, unknown> | null | undefined): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return {};
@@ -102,7 +107,7 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
 }
 
 export async function loadEmbudoData(): Promise<EmbudoData> {
-  const [stageResult, listResult] = await Promise.all([
+  const [stageResult, listResult, visitantesResult] = await Promise.all([
     callSupabaseRest<LeadStageRow[]>("lead_etapas", {
       query: {
         select: "id,tablero_id,codigo,nombre,categoria,orden,metadatos",
@@ -117,18 +122,40 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
         p_order_dir: "desc",
       },
     }),
+    callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>("embudo_visitantes_contador", {
+      body: {
+        p_closed_after: null,
+        p_closed_before: null,
+      },
+    }),
   ]);
 
   const errors: string[] = [];
   if (!stageResult.ok) errors.push(stageResult.error);
   if (!listResult.ok) errors.push(listResult.error);
+  if (!visitantesResult.ok) errors.push(visitantesResult.error);
 
   const { stages, sinConversacion } = mapStages(
     stageResult.ok ? stageResult.data : [],
     listResult.ok ? listResult.data : [],
   );
 
-  return { stages, sinConversacion, errors: Array.from(new Set(errors)) };
+  let visitantesSinChat = 0;
+  if (visitantesResult.ok) {
+    const payload = visitantesResult.data;
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    const value = row?.total;
+    if (typeof value === "number") {
+      visitantesSinChat = value;
+    } else if (typeof value === "string") {
+      const parsed = parseInt(value, 10);
+      if (!Number.isNaN(parsed)) {
+        visitantesSinChat = parsed;
+      }
+    }
+  }
+
+  return { stages, sinConversacion, visitantesSinChat, errors: Array.from(new Set(errors)) };
 }
 
 function mapStages(

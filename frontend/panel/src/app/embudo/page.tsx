@@ -38,7 +38,11 @@ export default async function Page() {
                   </ul>
                 </div>
               ) : null}
-              <EmbudoBoard etapas={embudo.stages} sinConversacion={embudo.sinConversacion} />
+              <EmbudoBoard
+                etapas={embudo.stages}
+                sinConversacion={embudo.sinConversacion}
+                visitantesSinChat={embudo.visitantesSinChat}
+              />
             </div>
           </div>
         </div>
