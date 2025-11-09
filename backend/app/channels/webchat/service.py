@@ -1514,12 +1514,30 @@ async def _run_assistant_turn(
             }
         ]
 
-    base_input = [
+    has_attachments = bool(user_message.attachments)
+    base_input: list[dict[str, Any]] = []
+    if not has_attachments:
+        base_input.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Nota interna: este turno no incluye adjuntos. "
+                            "Si el usuario no menciona explícitamente archivos, responde sin "
+                            "inventarlos."
+                        ),
+                    }
+                ],
+            }
+        )
+    base_input.append(
         {
             "role": "user",
             "content": user_content,
         }
-    ]
+    )
     request_kwargs: dict[str, Any] = {"input": base_input, "store": True}
     if assistant.is_prompt:
         prompt_payload = _build_prompt_payload(assistant, context)
