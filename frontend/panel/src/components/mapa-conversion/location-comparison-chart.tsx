@@ -113,13 +113,14 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
       : ([19.43, -99.13] as [number, number]);
 
   return (
-    <div className="h-[320px] w-full overflow-hidden rounded-lg border">
+    <div className="relative z-0 h-[320px] w-full overflow-hidden rounded-lg border">
       <MapContainer
         center={center}
         zoom={nivel === "pais" ? 2 : 5}
         className="h-full w-full"
         attributionControl={false}
         zoomControl={false}
+        style={{ zIndex: 0 }}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {enhancedGeojson ? (

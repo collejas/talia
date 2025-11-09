@@ -88,7 +88,7 @@ export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) 
           <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Nivel" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="z-50">
             <SelectItem value="pais">
               <div className="flex items-center gap-2">
                 <IconWorld className="size-4" />
@@ -111,7 +111,7 @@ export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) 
               Canales
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[180px]">
+          <DropdownMenuContent align="start" className="z-50 w-[180px]">
             {CHANNEL_OPTIONS.map((item) => (
               <DropdownMenuCheckboxItem
                 key={item.value}
