@@ -1,108 +1,149 @@
 "use client";
 
-import * as React from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { useMemo } from "react";
+import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+import type { GeoJSONProps } from "react-leaflet";
+import type { GeoJSON as GeoJSONType, Feature, FeatureCollection } from "geojson";
+import "leaflet/dist/leaflet.css";
+import type { Layer as LeafletLayer, Path as LeafletPath } from "leaflet";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
 import type { DemografiaMapResponse } from "@/lib/mapa-conversion/api";
 
 type LocationComparisonChartProps = {
   data: DemografiaMapResponse["dataset"];
   nivel: DemografiaMapResponse["nivel"];
+  shape: GeoJSONType | null;
 };
 
-const chartConfig = {
-  webchatVisitors: {
-    label: "Visitantes Webchat (sin chat)",
-    color: "var(--primary)",
-  },
-  webchatLeads: {
-    label: "Leads Webchat",
-    color: "hsl(142 71% 45%)",
-  },
-  whatsappLeads: {
-    label: "Leads WhatsApp/Voz",
-    color: "var(--destructive)",
-  },
-} satisfies ChartConfig;
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("es-MX").format(value);
+function resolveFeatureKey(feature: Feature): string {
+  const props = feature.properties || {};
+  const candidates = [
+    props.cvegeo,
+    props.cve_ent,
+    props.cve_entidad,
+    props.iso_a3,
+    props.iso_a2,
+    props.id,
+    props.name,
+  ];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.length);
+  if (!value) return "UNK";
+  return value.toString().trim();
 }
 
-function normalizeDataset(dataset: LocationComparisonChartProps["data"]) {
-  return dataset.map((entry) => ({
-    location: entry.name,
-    webchatVisitors: entry.visitantes_sin_chat,
-    webchatLeads: entry.leads_por_canal?.webchat ?? 0,
-    whatsappLeads:
-      (entry.leads_por_canal?.whatsapp ?? 0) + (entry.leads_por_canal?.voz ?? 0),
-  }));
-}
+export function LocationComparisonChart({ data, nivel, shape }: LocationComparisonChartProps) {
+  const datasetMap = useMemo(() => {
+    const map = new Map<string, (typeof data)[number]>();
+    for (const entry of data) {
+      map.set((entry.key || "UNK").toString(), entry);
+    }
+    return map;
+  }, [data]);
 
-export function LocationComparisonChart({ data, nivel }: LocationComparisonChartProps) {
-  const chartData = React.useMemo(() => normalizeDataset(data), [data]);
+  const enhancedGeojson = useMemo<GeoJSONType | null>(() => {
+    if (!shape || typeof shape !== "object") return null;
+    if (shape.type !== "FeatureCollection") return null;
 
-  const hasData = chartData.some(
-    (row) =>
-      row.webchatVisitors > 0 || row.webchatLeads > 0 || row.whatsappLeads > 0,
-  );
+    const collection = shape as FeatureCollection;
 
-  const title =
+    const features = (collection.features || []).map((feature) => {
+      const key = resolveFeatureKey(feature);
+      const entry = datasetMap.get(key) || datasetMap.get(key.padStart(2, "0")) || datasetMap.get(key.toUpperCase());
+
+      const properties = {
+        ...(feature.properties || {}),
+        dataset_key: key,
+        dataset_name: entry?.name ?? feature.properties?.name ?? "Sin datos",
+        dataset_leads: entry?.leads_total ?? 0,
+        dataset_visitantes: entry?.visitantes_total ?? 0,
+        dataset_webchat: entry?.leads_por_canal?.webchat ?? 0,
+        dataset_whatsapp: entry?.leads_por_canal?.whatsapp ?? 0,
+        dataset_voz: entry?.leads_por_canal?.voz ?? 0,
+      };
+
+      return {
+        ...feature,
+        properties,
+      } as Feature;
+    });
+
+    return {
+      ...collection,
+      features,
+    } satisfies FeatureCollection;
+  }, [shape, datasetMap]);
+
+  const maxLeads = useMemo(() => {
+    return data.reduce((max, entry) => Math.max(max, entry.leads_total ?? 0), 0) || 1;
+  }, [data]);
+
+  const style = (feature?: Feature) => {
+    const leads = typeof feature?.properties?.dataset_leads === "number" ? feature.properties.dataset_leads : 0;
+    const intensity = Math.min(1, leads / maxLeads);
+    const hue = 220 - intensity * 160;
+    const fillColor = `hsl(${hue} 70% ${40 + intensity * 15}%)`;
+    return {
+      color: "hsl(var(--foreground)/0.12)",
+      weight: 1,
+      fillColor,
+      fillOpacity: 0.65,
+    };
+  };
+
+  const onEachFeature = (feature: Feature, layer: LeafletLayer) => {
+    const props = feature.properties as Record<string, unknown> | undefined;
+    if (!props || !("bindTooltip" in layer)) return;
+    const tooltip = `
+      <div style="font-size: 12px">
+        <strong>${props.dataset_name ?? "Sin nombre"}</strong><br/>
+        Leads: ${formatNumber(props.dataset_leads as number)}<br/>
+        Visitantes sin chat: ${formatNumber(props.dataset_visitantes as number)}<br/>
+        Webchat: ${formatNumber(props.dataset_webchat as number)} · WhatsApp: ${formatNumber(props.dataset_whatsapp as number)} · Voz: ${formatNumber(props.dataset_voz as number)}
+      </div>
+    `;
+    const pathLayer = layer as LeafletPath;
+    if (typeof pathLayer.bindTooltip === "function") {
+      pathLayer.bindTooltip(tooltip, { sticky: true });
+    }
+  };
+
+  const center =
     nivel === "pais"
-      ? "Comparativa geográfica por país"
-      : nivel === "municipio"
-        ? "Comparativa geográfica por municipio"
-        : "Comparativa geográfica por estado";
+      ? ([20, 0] as [number, number])
+      : ([19.43, -99.13] as [number, number]);
 
   return (
-    <Card className="@container/card">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>
-          Volumen de visitantes webchat versus leads generados (webchat y WhatsApp/Voz) agrupados por ubicación.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-0 pb-6">
-        <ChartContainer config={chartConfig} className="h-[360px] w-full @[768px]/card:h-[420px]">
-          <ResponsiveContainer>
-            <BarChart data={chartData} barCategoryGap="18%" maxBarSize={48} margin={{ left: 4, right: 12 }}>
-              <CartesianGrid vertical={false} strokeDasharray="4 4" />
-              <XAxis dataKey="location" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickFormatter={formatNumber} width={72} axisLine={false} tickLine={false} />
-              <ChartTooltip
-                cursor={{ fill: "hsl(var(--foreground)/0.06)" }}
-                content={
-                  <ChartTooltipContent
-                    formatter={(value, name) => (
-                      <span className="font-medium text-foreground">
-                        {formatNumber(Number(value))}
-                        <span className="ml-1 text-muted-foreground">
-                          {chartConfig[name as keyof typeof chartConfig]?.label}
-                        </span>
-                      </span>
-                    )}
-                  />
-                }
-              />
-              <Bar dataKey="webchatVisitors" stackId="webchat" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="webchatLeads" stackId="webchat" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="whatsappLeads" radius={[4, 4, 0, 0]} barSize={32} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartContainer>
-        {!hasData ? (
-          <p className="px-4 pt-4 text-sm text-muted-foreground">
-            Aún no hay datos georreferenciados para los filtros seleccionados.
-          </p>
+    <div className="h-[320px] w-full overflow-hidden rounded-lg border">
+      <MapContainer
+        center={center}
+        zoom={nivel === "pais" ? 2 : 5}
+        className="h-full w-full"
+        attributionControl={false}
+        zoomControl={false}
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {enhancedGeojson ? (
+          <GeoJSON
+            {...({
+              data: enhancedGeojson,
+              style,
+              onEachFeature,
+            } as unknown as GeoJSONProps)}
+            key={JSON.stringify(enhancedGeojson)}
+          />
         ) : null}
-      </CardContent>
-    </Card>
+      </MapContainer>
+    </div>
   );
+}
+
+function formatNumber(value: unknown): string {
+  const numberValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : 0;
+  if (!Number.isFinite(numberValue)) return "0";
+  return new Intl.NumberFormat("es-MX").format(numberValue);
 }

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import type { GeoJSON as GeoJSONType } from "geojson";
 
 import { AppSidebar } from "@/components/AppSidebar";
 import { DataTable } from "@/components/data-table";
@@ -126,6 +127,14 @@ export default async function Page({
   const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
   const chartDataset = demografiaResponse ? demografiaResponse.map.dataset.slice(0, 12) : [];
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;
+  const mapShape = (() => {
+    const raw = demografiaResponse?.map.geojson;
+    if (!raw || typeof raw !== "object") return null;
+    if (raw && typeof (raw as { type?: unknown }).type === "string") {
+      return raw as unknown as GeoJSONType;
+    }
+    return null;
+  })();
 
   return (
     <SidebarProvider
@@ -147,7 +156,7 @@ export default async function Page({
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">
-                  <LocationComparisonChart data={chartDataset} nivel={nivelChart} />
+                  <LocationComparisonChart data={chartDataset} nivel={nivelChart} shape={mapShape} />
                 </div>
               ) : null}
               {tableData.length ? (

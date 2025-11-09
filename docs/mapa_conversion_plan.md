@@ -60,9 +60,10 @@
 
 2. **Subcomponentes**
    - **Selector jerárquico**: ✅ nivel país/estado, faltan municipio/LADA y breadcrumbs.
-   - **Mapas**: ❌ pendiente (actualmente solo barras comparativas).
-   - **Gráfico comparativo**: ✅ barras apiladas por canal.
-  - **Tabla detalle**: ✅ lista de ubicaciones, faltan variaciones vs periodo anterior.
+   - **Mapas**: 🟡 Leaflet integrado para país/estado; siguiente iteración: selección de estado → municipios y derivar localidades por LADA.
+   - **Estilos del mapa**: 🔜 definir escala de colores/tooltip enriquecido (porcentaje, leads) y resaltar ubicación activa.
+   - **Gráfico comparativo**: ✅ barras apiladas por canal; 🔜 añadir selector temporal (7/30 días) para ver evolución por canal.
+   - **Tabla detalle**: ✅ lista de ubicaciones, faltan variaciones vs periodo anterior y vista municipio/LADA.
 
 3. **Interacción**
    - ✅ URL params mantienen nivel/canales.
@@ -84,8 +85,8 @@
    - ✅ KPIs + gráfico conectados a datos reales.
 
 3. **Sprint 3: Mapas + tablas**
-   - 🔜 Integrar GeoJSON y mapa interactivo.
-   - ✅ Tabla detalle básica (falta paginación y métricas adicionales).
+   - 🟡 GeoJSON + Leaflet operativo para país/estado; siguiente iteración: nivel municipio/LADA, estilos/tooltip avanzados.
+   - ✅ Tabla detalle básica (falta paginación, variaciones vs periodo y métricas adicionales).
 
 4. **Sprint 4: Pulido**
    - 🔜 Skeletons, cache y tests de performance.
