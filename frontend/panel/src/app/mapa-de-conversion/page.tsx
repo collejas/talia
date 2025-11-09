@@ -10,6 +10,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { DemografiaControls } from "@/components/mapa-conversion/controls";
 import { LocationComparisonChart } from "@/components/mapa-conversion/location-comparison-chart";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import type { LeadCards } from "@/lib/leads/data";
@@ -72,12 +73,32 @@ function formatNumber(value: number | undefined): string {
   return new Intl.NumberFormat("es-MX").format(value)
 }
 
-export default async function Page() {
+type PageSearchParams = Record<string, string | string[] | undefined>;
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<PageSearchParams>;
+}) {
+  const params = searchParams ? await searchParams : {};
+
+  const nivelParam = typeof params.nivel === "string" ? params.nivel.toLowerCase() : "estado";
+  const nivel: "pais" | "estado" =
+    nivelParam === "pais" ? "pais" : "estado";
+  const canalesParam = typeof params.canales === "string" ? params.canales : "";
+  const canales =
+    canalesParam.trim().length > 0
+      ? canalesParam
+          .split(",")
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean)
+      : ["webchat", "whatsapp", "voz"];
+
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
   const errores: string[] = [];
 
   try {
-    demografiaResponse = await loadDemografiaData("estado");
+    demografiaResponse = await loadDemografiaData(nivel, { canales });
   } catch (error) {
     errores.push(
       error instanceof Error
@@ -104,7 +125,7 @@ export default async function Page() {
 
   const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
   const chartDataset = demografiaResponse ? demografiaResponse.map.dataset.slice(0, 12) : [];
-  const nivelChart = demografiaResponse?.map.nivel ?? "estado";
+  const nivelChart = demografiaResponse?.map.nivel ?? nivel;
 
   return (
     <SidebarProvider
@@ -121,6 +142,7 @@ export default async function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <DemografiaControls nivel={nivel} canales={canales} />
               <SectionCards data={cardsData} />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
