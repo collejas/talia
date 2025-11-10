@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -11,6 +13,45 @@ from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+COUNTRY_NAME_MAP: dict[str, str] = {}
+
+
+def _load_country_name_map() -> dict[str, str]:
+    try:
+        geo_path = Path(__file__).resolve().parent.parent / "data/geo/world.geojson"
+        with geo_path.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except Exception:
+        return {}
+
+    mapping: dict[str, str] = {}
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return mapping
+
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        name = properties.get("ADMIN") or properties.get("NAME_LONG") or properties.get("NAME")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        codes = {
+            properties.get("ISO_A2"),
+            properties.get("ISO_A3"),
+            properties.get("ADM0_A3"),
+            properties.get("WB_A2"),
+            properties.get("WB_A3"),
+        }
+        for code in codes:
+            if isinstance(code, str) and code and code != "-99":
+                mapping[code.upper()] = name
+    return mapping
+
+
+COUNTRY_NAME_MAP = _load_country_name_map()
 
 
 class DemografiaServiceError(RuntimeError):
@@ -549,6 +590,11 @@ def build_map_dataset(
                     target["total_visitas"] += unknown["total_visitas"]
                 target["has_data"] = True
             result = [item for item in result if item["key"] != "UNK"]
+        for entry in result:
+            code = str(entry.get("key") or "").upper()
+            friendly = COUNTRY_NAME_MAP.get(code)
+            if friendly:
+                entry["name"] = friendly
 
     result.sort(key=lambda item: item["total_visitas"], reverse=True)
     return result
