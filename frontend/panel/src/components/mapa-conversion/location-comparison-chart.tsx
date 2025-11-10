@@ -72,7 +72,7 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
   }, [shape]);
 
   const maxTotal = useMemo(() => {
-    return data.reduce((max, entry) => Math.max(max, entry.total_canales ?? 0), 0) || 1;
+    return data.reduce((max, entry) => Math.max(max, entry.total_visitas ?? 0), 0) || 1;
   }, [data]);
 
   const handleFeatureClick = useCallback(
@@ -99,7 +99,7 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
     (feature?: Feature) => {
       const key = resolveFeatureKey(feature ?? ({} as Feature));
       const entry = datasetMap.get(key);
-      const total = entry?.total_canales ?? 0;
+      const total = entry?.total_visitas ?? 0;
 
       if (!entry || !entry.has_data || maxTotal <= 0 || total <= 0) {
         return {
@@ -161,16 +161,13 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
       const tooltip = `
         <div style="font-size: 12px; line-height: 1.45;">
           <strong>${entry?.name ?? feature.properties?.name ?? "Sin nombre"}</strong><br/>
-          Total canales: ${formatNumber(entry?.total_canales ?? 0)}<br/>
-          &bull; WhatsApp: ${formatNumber(totalesPorCanal.whatsapp ?? 0)}<br/>
-          &bull; Webchat: ${formatNumber(totalesPorCanal.webchat ?? 0)}<br/>
+          Total visitas (todos los canales): ${formatNumber(entry?.total_visitas ?? 0)}<br/>
+          &bull; Canal WhatsApp: ${formatNumber(totalesPorCanal.whatsapp ?? 0)}<br/>
+          &bull; Canal Webchat: ${formatNumber(totalesPorCanal.webchat ?? 0)}<br/>
           &ensp;· Sin conversación: ${formatNumber(webchat.sin_conversacion ?? 0)}<br/>
-          &ensp;· Captado: ${formatNumber(webchat.captado ?? 0)}<br/>
-          &ensp;· > Captado: ${formatNumber(webchat.post_captado ?? 0)}<br/>
-          &bull; Voz: ${formatNumber(totalesPorCanal.voz ?? 0)}<br/>
-          Visitas Webchat: ${formatNumber(entry?.visitantes_total ?? 0)}<br/>
-          &ensp;· Con conversación: ${formatNumber(entry?.visitantes_con_chat ?? 0)}<br/>
-          &ensp;· Sin conversación: ${formatNumber(entry?.visitantes_sin_chat ?? 0)}
+          &ensp;· Etapa Captado: ${formatNumber(webchat.captado ?? 0)}<br/>
+          &ensp;· > Etapa Captado: ${formatNumber(webchat.post_captado ?? 0)}<br/>
+          &bull; Canal Voz: ${formatNumber(totalesPorCanal.voz ?? 0)}
         </div>
       `;
 

@@ -22,9 +22,9 @@ type DemografiaDataset = Awaited<ReturnType<typeof loadDemografiaData>>["map"]["
 
 function selectTopLocation(dataset: DemografiaDataset) {
   if (!dataset.length) {
-    return { name: "—", leads_total: 0 };
+    return { name: "—", leads_total: 0, total_visitas: 0 } as DemografiaDataset[number];
   }
-  return [...dataset].sort((a, b) => (b.total_canales ?? 0) - (a.total_canales ?? 0))[0];
+  return [...dataset].sort((a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0))[0];
 }
 
 function buildCardsData(
@@ -43,7 +43,7 @@ function buildCardsData(
     montoTotal: visitantesTotals.total ?? 0,
     topVendedor: {
       nombre: topUbicacion.name,
-      total: topUbicacion.leads_total ?? 0,
+      total: topUbicacion.total_visitas ?? 0,
     },
   };
 }
@@ -60,8 +60,8 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
       id: index + 1,
       header: entry.name,
       type: canalPrincipal,
-      status: entry.has_data ? "Con datos" : "Sin datos",
-      target: formatNumber(entry.total_canales ?? 0),
+      status: entry.has_data ? "Con visitas" : "Sin visitas",
+      target: formatNumber(entry.total_visitas ?? 0),
       limit: formatNumber(entry.visitantes_total ?? 0),
       reviewer: etapaPrincipal,
       raw: entry,
@@ -142,7 +142,7 @@ export default async function Page({
   const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
   const mapDataset = demografiaResponse
     ? [...demografiaResponse.map.dataset].sort(
-        (a, b) => (b.total_canales ?? 0) - (a.total_canales ?? 0),
+        (a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0),
       )
     : [];
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;

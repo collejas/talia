@@ -56,7 +56,7 @@ export type DemografiaMapDataset = {
   visitantes_total: number;
   visitantes_con_chat: number;
   visitantes_sin_chat: number;
-  total_canales: number;
+  total_visitas: number;
   has_data: boolean;
   next_level: "estado" | "municipio" | null;
   parent_state: string | null;

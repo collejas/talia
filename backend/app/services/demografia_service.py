@@ -286,6 +286,7 @@ def build_map_dataset(
                 "name": name or "Desconocido",
                 "nivel": nivel,
                 "leads_total": 0,
+                "leads_totales_por_canal": {"webchat": 0, "whatsapp": 0, "voz": 0},
                 "totales_por_canal": {"webchat": 0, "whatsapp": 0, "voz": 0},
                 "webchat_breakdown": {
                     "sin_conversacion": 0,
@@ -295,7 +296,7 @@ def build_map_dataset(
                 "visitantes_total": 0,
                 "visitantes_con_chat": 0,
                 "visitantes_sin_chat": 0,
-                "total_canales": 0,
+                "total_visitas": 0,
                 "has_data": False,
                 "parent_state": key[:2] if nivel == "municipio" else None,
             }
@@ -316,12 +317,13 @@ def build_map_dataset(
             continue
         canal = str(row.get("canal") or "desconocido")
         entry["leads_total"] += total
-        entry["totales_por_canal"][canal] = entry["totales_por_canal"].get(canal, 0) + total
+        entry["leads_totales_por_canal"][canal] = (
+            entry["leads_totales_por_canal"].get(canal, 0) + total
+        )
         if canal == "webchat":
             webchat_bucket = str(row.get("webchat_bucket") or "")
             if webchat_bucket in entry["webchat_breakdown"]:
                 entry["webchat_breakdown"][webchat_bucket] += total
-        entry["has_data"] = entry["has_data"] or total > 0
 
     for row in visitantes_rows or []:
         if not isinstance(row, dict):
@@ -333,27 +335,36 @@ def build_map_dataset(
         entry["visitantes_total"] += _to_number(row.get("total"))
         entry["visitantes_con_chat"] += _to_number(row.get("con_chat"))
         entry["visitantes_sin_chat"] += _to_number(row.get("sin_chat"))
-        if bool(row.get("has_data")):
+        if _to_number(row.get("total")) > 0:
             entry["has_data"] = True
 
     result = []
     for entry in combined.values():
-        entry["totales_por_canal"] = dict(entry["totales_por_canal"])
+        entry["leads_totales_por_canal"] = dict(entry["leads_totales_por_canal"])
         entry["webchat_breakdown"] = {
-            "sin_conversacion": entry["webchat_breakdown"].get("sin_conversacion", 0),
+            "sin_conversacion": entry["visitantes_sin_chat"],
             "captado": entry["webchat_breakdown"].get("captado", 0),
             "post_captado": entry["webchat_breakdown"].get("post_captado", 0),
         }
-        entry["total_canales"] = entry["visitantes_total"] + sum(
-            entry["totales_por_canal"].values()
+        entry["totales_por_canal"] = {
+            "webchat": entry["visitantes_total"],
+            "whatsapp": entry["leads_totales_por_canal"].get("whatsapp", 0),
+            "voz": entry["leads_totales_por_canal"].get("voz", 0),
+        }
+        entry["total_visitas"] = (
+            entry["totales_por_canal"]["webchat"]
+            + entry["totales_por_canal"]["whatsapp"]
+            + entry["totales_por_canal"]["voz"]
         )
-        entry["has_data"] = entry["has_data"] or entry["total_canales"] > 0
+        entry["has_data"] = entry["has_data"] or entry["visitantes_total"] > 0
+        if entry["key"] in {"", "UNK"}:
+            entry["has_data"] = False
         entry["next_level"] = (
             "estado" if nivel == "pais" else "municipio" if nivel == "estado" else None
         )
-        if entry["key"] in {"", "UNK"} or not entry["has_data"]:
+        if not entry["has_data"]:
             entry["next_level"] = None
-        if entry["total_canales"] <= 0:
+        if entry["visitantes_total"] <= 0:
             continue
 
         normalized_entry = {
@@ -366,12 +377,12 @@ def build_map_dataset(
             "visitantes_total": entry["visitantes_total"],
             "visitantes_con_chat": entry["visitantes_con_chat"],
             "visitantes_sin_chat": entry["visitantes_sin_chat"],
-            "total_canales": entry["total_canales"],
+            "total_visitas": entry["total_visitas"],
             "has_data": entry["has_data"],
             "next_level": entry["next_level"],
             "parent_state": entry["parent_state"],
         }
         result.append(normalized_entry)
 
-    result.sort(key=lambda item: item["total_canales"], reverse=True)
+    result.sort(key=lambda item: item["total_visitas"], reverse=True)
     return result
