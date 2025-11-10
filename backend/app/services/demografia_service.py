@@ -521,5 +521,31 @@ def build_map_dataset(
         }
         result.append(normalized_entry)
 
+    if nivel == "pais":
+        unknown_entries = [item for item in result if item["key"] == "UNK"]
+        if unknown_entries:
+            target = next(
+                (item for item in result if item["key"] != "UNK" and item["has_data"]), None
+            )
+            if target:
+                for unknown in unknown_entries:
+                    for key, value in unknown["etapas_totales"].items():
+                        target["etapas_totales"][key] = target["etapas_totales"].get(key, 0) + value
+                    for key, value in unknown["totales_por_canal"].items():
+                        target["totales_por_canal"][key] = (
+                            target["totales_por_canal"].get(key, 0) + value
+                        )
+                    for key, value in unknown["conversacion_totales"].items():
+                        target["conversacion_totales"][key] = (
+                            target["conversacion_totales"].get(key, 0) + value
+                        )
+                    target["leads_total"] += unknown["leads_total"]
+                    target["visitantes_total"] += unknown["visitantes_total"]
+                    target["visitantes_con_chat"] += unknown["visitantes_con_chat"]
+                    target["visitantes_sin_chat"] += unknown["visitantes_sin_chat"]
+                    target["total_visitas"] += unknown["total_visitas"]
+                target["has_data"] = True
+            result = [item for item in result if item["key"] != "UNK"]
+
     result.sort(key=lambda item: item["total_visitas"], reverse=True)
     return result

@@ -14,6 +14,13 @@ export type LocationComparisonChartProps = {
   nivel: DemografiaMapResponse["nivel"];
   shape: GeoJSONType | null;
   colorMode: "sequential" | "channel";
+  globalStages?: {
+    captado: number;
+    precalificado: number;
+    negociacion: number;
+    ganado: number;
+    perdido: number;
+  };
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
@@ -83,7 +90,13 @@ const CHANNEL_COLORS: Record<string, [number, number, number]> = {
 };
 const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
 
-export function LocationComparisonChart({ data, nivel, shape, colorMode }: LocationComparisonChartProps) {
+export function LocationComparisonChart({
+  data,
+  nivel,
+  shape,
+  colorMode,
+  globalStages,
+}: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -104,8 +117,11 @@ export function LocationComparisonChart({ data, nivel, shape, colorMode }: Locat
     if (manualSelectedKey && data.some((entry) => entry.key === manualSelectedKey)) {
       return manualSelectedKey;
     }
+    if (nivel === "pais") {
+      return null;
+    }
     return data.find((entry) => entry.has_data)?.key ?? data[0]?.key ?? null;
-  }, [data, manualSelectedKey]);
+  }, [data, manualSelectedKey, nivel]);
 
   const enhancedGeojson = useMemo<GeoJSONType | null>(() => {
     if (!shape || typeof shape !== "object") return null;
@@ -148,6 +164,23 @@ export function LocationComparisonChart({ data, nivel, shape, colorMode }: Locat
   const hoveredEntry = hoveredKey ? datasetMap.get(hoveredKey) ?? null : null;
   const activeEntry = hoveredEntry ?? selectedEntry ?? null;
 
+  const aggregatedStages = useMemo(
+    () =>
+      data.reduce(
+        (acc, entry) => {
+          const stages = entry.etapas_totales || {};
+          acc.captado += stages.captado ?? 0;
+          acc.precalificado += stages.precalificado ?? 0;
+          acc.negociacion += stages.negociacion ?? 0;
+          acc.ganado += stages.ganado ?? 0;
+          acc.perdido += stages.perdido ?? 0;
+          return acc;
+        },
+        { captado: 0, precalificado: 0, negociacion: 0, ganado: 0, perdido: 0 },
+      ),
+    [data],
+  );
+
   const datasetSummary = useMemo<MetricsPayload>(() => {
     const summary: MetricsPayload = {
       scope: "dataset",
@@ -166,13 +199,15 @@ export function LocationComparisonChart({ data, nivel, shape, colorMode }: Locat
         whatsapp: 0,
         voz: 0,
       },
-      stages: {
-        captado: 0,
-        precalificado: 0,
-        negociacion: 0,
-        ganado: 0,
-        perdido: 0,
-      },
+      stages: globalStages
+        ? { ...globalStages }
+        : {
+            captado: 0,
+            precalificado: 0,
+            negociacion: 0,
+            ganado: 0,
+            perdido: 0,
+          },
     };
 
     for (const entry of data) {
@@ -186,12 +221,9 @@ export function LocationComparisonChart({ data, nivel, shape, colorMode }: Locat
       summary.channels.webchat += entry.totales_por_canal?.webchat ?? entry.visitantes_total ?? 0;
       summary.channels.whatsapp += entry.totales_por_canal?.whatsapp ?? 0;
       summary.channels.voz += entry.totales_por_canal?.voz ?? 0;
-      summary.stages.captado += entry.etapas_totales?.captado ?? 0;
-      summary.stages.precalificado += entry.etapas_totales?.precalificado ?? 0;
-      summary.stages.negociacion += entry.etapas_totales?.negociacion ?? 0;
-      summary.stages.ganado += entry.etapas_totales?.ganado ?? 0;
-      summary.stages.perdido += entry.etapas_totales?.perdido ?? 0;
     }
+
+    summary.stages = globalStages ? { ...globalStages } : { ...aggregatedStages };
 
     const locationSubtitle =
       data.length === 1
@@ -199,7 +231,7 @@ export function LocationComparisonChart({ data, nivel, shape, colorMode }: Locat
         : `${formatNumber(data.length)} ubicaciones`;
     summary.subtitle = `${formatNumber(summary.totalVisitas)} visitas totales · ${locationSubtitle}`;
     return summary;
-  }, [data]);
+  }, [aggregatedStages, data, globalStages]);
 
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;

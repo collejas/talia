@@ -15,4 +15,3 @@ const DynamicLocationComparisonChart = dynamic(
 export function LocationComparisonChartClient(props: LocationComparisonChartProps) {
   return <DynamicLocationComparisonChart {...props} />;
 }
-

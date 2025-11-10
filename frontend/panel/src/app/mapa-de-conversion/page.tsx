@@ -167,6 +167,20 @@ export default async function Page({
       )
     : [];
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;
+  const globalStages = demografiaResponse
+    ? demografiaResponse.map.dataset.reduce(
+        (acc, entry) => {
+          const stages = entry.etapas_totales || {};
+          acc.captado += stages.captado ?? 0;
+          acc.precalificado += stages.precalificado ?? 0;
+          acc.negociacion += stages.negociacion ?? 0;
+          acc.ganado += stages.ganado ?? 0;
+          acc.perdido += stages.perdido ?? 0;
+          return acc;
+        },
+        { captado: 0, precalificado: 0, negociacion: 0, ganado: 0, perdido: 0 },
+      )
+    : { captado: 0, precalificado: 0, negociacion: 0, ganado: 0, perdido: 0 };
   const mapShape = (() => {
     const raw = demografiaResponse?.map.geojson;
     if (!raw || typeof raw !== "object") return null;
@@ -202,6 +216,7 @@ export default async function Page({
                     nivel={nivelChart}
                     shape={mapShape}
                     colorMode={colorMode}
+                    globalStages={globalStages}
                   />
                 </div>
               ) : null}
