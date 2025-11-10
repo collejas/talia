@@ -2987,6 +2987,17 @@ def _parse_channels_param(canales: str | None) -> list[str]:
     return values
 
 
+def _parse_stages_param(etapas: str | None) -> list[str]:
+    if not etapas:
+        return []
+    values: list[str] = []
+    for chunk in etapas.split(","):
+        val = chunk.strip().lower()
+        if val:
+            values.append(val)
+    return values
+
+
 @router.get("/kpis/leads/geo/estados")
 async def leads_geo_estados() -> dict[str, Any]:
     try:
@@ -3021,6 +3032,7 @@ async def leads_geo_paises() -> dict[str, Any]:
 async def demografia_resumen(
     nivel: str = Query(default="estado"),
     canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -3036,11 +3048,13 @@ async def demografia_resumen(
 
     date_from, date_to = _resolve_date_range(rango, desde, hasta)
     channel_values = _parse_channels_param(canales)
+    stage_values = _parse_stages_param(etapas)
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
             nivel=nivel_normalizado,
             channels=channel_values,
+            stages=stage_values,
             date_from=date_from,
             date_to=date_to,
         )
@@ -3059,6 +3073,7 @@ async def demografia_resumen(
         "ok": True,
         "nivel": nivel_normalizado,
         "canales": channel_values,
+        "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
         "leads": leads_payload,
         "visitantes": visitantes_payload,
@@ -3070,6 +3085,7 @@ async def demografia_mapa(
     nivel: str = Query(default="estado"),
     estado: str | None = Query(default=None),
     canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -3091,11 +3107,13 @@ async def demografia_mapa(
 
     date_from, date_to = _resolve_date_range(rango, desde, hasta)
     channel_values = _parse_channels_param(canales)
+    stage_values = _parse_stages_param(etapas)
 
     try:
         leads_payload = await demografia_service.fetch_leads_resumen(
             nivel=nivel_normalizado,
             channels=channel_values,
+            stages=stage_values,
             date_from=date_from,
             date_to=date_to,
         )
@@ -3131,6 +3149,7 @@ async def demografia_mapa(
         "nivel": nivel_normalizado,
         "estado": state_code,
         "canales": channel_values,
+        "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
         "totales_leads": leads_payload.get("totals") if isinstance(leads_payload, dict) else {},
         "totales_visitantes": visitantes_payload.get("totals")
@@ -3139,6 +3158,9 @@ async def demografia_mapa(
         "totales_leads_por_canal": leads_payload.get("totals_by_channel")
         if isinstance(leads_payload, dict)
         else {},
+        "captado_orden": leads_payload.get("captado_orden")
+        if isinstance(leads_payload, dict)
+        else None,
         "dataset": dataset,
         "geojson": geojson,
     }

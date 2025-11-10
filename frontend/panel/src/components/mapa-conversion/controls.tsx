@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { IconFilter, IconWorld, IconMapPin, IconCurrencyDollar } from "@tabler/icons-react";
+import {
+  IconCurrencyDollar,
+  IconFilter,
+  IconMapPin,
+  IconTimeline,
+  IconWorld,
+  IconBuildingCommunity,
+} from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,9 +38,10 @@ const DEFAULT_CHANNELS = CHANNEL_OPTIONS.map((item) => item.value);
 type DemografiaControlsProps = {
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
+  etapas: string[];
 };
 
-export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) {
+export function DemografiaControls({ nivel, canales, etapas }: DemografiaControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -41,6 +49,11 @@ export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) 
     if (!canales.length) return new Set(DEFAULT_CHANNELS);
     return new Set(canales);
   }, [canales]);
+
+  const hasCaptadoPlus = React.useMemo(() => {
+    if (!etapas.length) return false;
+    return etapas.some((value) => value.trim().toLowerCase() === "captado_plus");
+  }, [etapas]);
 
   function updateParams(next: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -57,6 +70,13 @@ export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) 
   function handleNivelChange(value: string) {
     updateParams({
       nivel: value,
+      estado: value === "municipio" ? searchParams.get("estado") : null,
+    });
+  }
+
+  function toggleEtapasCaptadoPlus() {
+    updateParams({
+      etapas: hasCaptadoPlus ? null : "captado_plus",
     });
   }
 
@@ -101,6 +121,12 @@ export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) 
                 Estado
               </div>
             </SelectItem>
+            <SelectItem value="municipio" disabled>
+              <div className="flex items-center gap-2">
+                <IconBuildingCommunity className="size-4" />
+                Municipio (clic en mapa)
+              </div>
+            </SelectItem>
           </SelectContent>
         </Select>
 
@@ -130,6 +156,17 @@ export function DemografiaControls({ nivel, canales }: DemografiaControlsProps) 
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Button
+          type="button"
+          size="sm"
+          variant={hasCaptadoPlus ? "default" : "outline"}
+          className="inline-flex items-center gap-2"
+          onClick={toggleEtapasCaptadoPlus}
+        >
+          <IconTimeline className="size-4" />
+          Desde captado
+        </Button>
       </div>
     </div>
   );

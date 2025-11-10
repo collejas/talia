@@ -4,37 +4,75 @@ import { cookies } from "next/headers";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
 
-type DemografiaSummaryItem = {
+export type DemografiaLeadsRow = {
   level: string;
   key: string;
   name: string;
   canal: string;
   total: number;
+  etapa_codigo: string;
+  etapa_categoria: string;
+  etapa_orden: number;
+  captado_orden: number;
+  webchat_bucket: string | null;
+};
+
+type DemografiaLeadsTotals = {
+  total: number;
   abiertas: number;
   ganadas: number;
   perdidas: number;
+  webchat_sin_conversacion: number;
+  webchat_captado: number;
+  webchat_post_captado: number;
 };
 
-type DemografiaMapDataset = {
+export type DemografiaLeadsChannelsTotals = Record<
+  string,
+  {
+    total: number;
+    abiertas: number;
+    ganadas: number;
+    perdidas: number;
+    webchat_breakdown?: {
+      sin_conversacion: number;
+      captado: number;
+      post_captado: number;
+    };
+  }
+>;
+
+export type DemografiaMapDataset = {
   key: string;
   name: string;
+  nivel: string;
   leads_total: number;
-  leads_por_canal: Record<string, number>;
-  leads_por_etapa: Record<string, number>;
+  totales_por_canal: Record<string, number>;
+  webchat_breakdown: {
+    sin_conversacion: number;
+    captado: number;
+    post_captado: number;
+  };
   visitantes_total: number;
   visitantes_con_chat: number;
   visitantes_sin_chat: number;
+  total_canales: number;
+  has_data: boolean;
+  next_level: "estado" | "municipio" | null;
+  parent_state: string | null;
 };
 
 export type DemografiaSummaryResponse = {
   ok: boolean;
   nivel: string;
   canales: string[] | null;
+  etapas: string[] | null;
   range: Record<string, unknown>;
   leads: {
-    items: DemografiaSummaryItem[];
-    totals: Record<string, number>;
-    totals_by_channel: Record<string, Record<string, number>>;
+    rows: DemografiaLeadsRow[];
+    captado_orden: number;
+    totals: DemografiaLeadsTotals;
+    totals_by_channel: DemografiaLeadsChannelsTotals;
   };
   visitantes: {
     items: Array<{
@@ -44,11 +82,19 @@ export type DemografiaSummaryResponse = {
       total: number;
       con_chat: number;
       sin_chat: number;
+      webchat_total: number;
+      webchat_con_chat: number;
+      webchat_sin_chat: number;
+      whatsapp_total: number;
+      voz_total: number;
+      has_data: boolean;
     }>;
     totals: {
       total: number;
       con_chat: number;
       sin_chat: number;
+      webchat_con_chat: number;
+      webchat_sin_chat: number;
     };
   };
 };
@@ -58,14 +104,18 @@ export type DemografiaMapResponse = {
   nivel: string;
   estado: string | null;
   canales: string[] | null;
+  etapas: string[] | null;
   range: Record<string, unknown>;
-  totales_leads: Record<string, number>;
+  totales_leads: DemografiaLeadsTotals;
   totales_visitantes: {
     total: number;
     con_chat: number;
     sin_chat: number;
+    webchat_con_chat: number;
+    webchat_sin_chat: number;
   };
-  totales_leads_por_canal: Record<string, Record<string, number>>;
+  totales_leads_por_canal: DemografiaLeadsChannelsTotals;
+  captado_orden: number | null;
   dataset: DemografiaMapDataset[];
   geojson: Record<string, unknown>;
 };
@@ -121,7 +171,7 @@ async function callDemografiaEndpoint<T>(
 
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
-  options: { estado?: string | null; canales?: string[] } = {},
+  options: { estado?: string | null; canales?: string[]; etapas?: string[] } = {},
 ): Promise<DemografiaData> {
   const resumenParams = new URLSearchParams({ nivel });
   const mapaParams = new URLSearchParams({ nivel });
@@ -130,6 +180,11 @@ export async function loadDemografiaData(
     const joined = options.canales.join(",");
     resumenParams.set("canales", joined);
     mapaParams.set("canales", joined);
+  }
+  if (options.etapas?.length) {
+    const joinedStages = options.etapas.join(",");
+    resumenParams.set("etapas", joinedStages);
+    mapaParams.set("etapas", joinedStages);
   }
   if (nivel === "municipio" && options.estado) {
     mapaParams.set("estado", options.estado);

@@ -130,8 +130,8 @@ def load_states_geojson() -> dict[str, Any]:
 
 @lru_cache(maxsize=None)
 def load_full_states_geojson() -> dict[str, Any]:
-    """GeoJSON completo de estados (mayor detalle)."""
-    return _load_json("geo/mexico_states.geojson")
+    """GeoJSON de estados con claves INEGI (usamos versión compacta)."""
+    return _load_json("geo/mexico_states_mini.geojson")
 
 
 @lru_cache(maxsize=None)

@@ -24,7 +24,7 @@ function selectTopLocation(dataset: DemografiaDataset) {
   if (!dataset.length) {
     return { name: "—", leads_total: 0 };
   }
-  return [...dataset].sort((a, b) => (b.leads_total ?? 0) - (a.leads_total ?? 0))[0];
+  return [...dataset].sort((a, b) => (b.total_canales ?? 0) - (a.total_canales ?? 0))[0];
 }
 
 function buildCardsData(
@@ -50,18 +50,18 @@ function buildCardsData(
 
 function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"]) {
   return dataset.map((entry, index) => {
-    const canales = entry.leads_por_canal || {}
+    const canales = entry.totales_por_canal || {}
     const canalPrincipal = Object.entries(canales)
       .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin canal"
-    const etapaPrincipal = Object.entries(entry.leads_por_etapa || {})
+    const etapaPrincipal = Object.entries(entry.webchat_breakdown || {})
       .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin etapa"
 
     return {
       id: index + 1,
       header: entry.name,
       type: canalPrincipal,
-      status: entry.leads_total > 0 ? "Con leads" : "Sin leads",
-      target: formatNumber(entry.leads_total ?? 0),
+      status: entry.has_data ? "Con datos" : "Sin datos",
+      target: formatNumber(entry.total_canales ?? 0),
       limit: formatNumber(entry.visitantes_total ?? 0),
       reviewer: etapaPrincipal,
       raw: entry,
@@ -84,8 +84,11 @@ export default async function Page({
   const params = searchParams ? await searchParams : {};
 
   const nivelParam = typeof params.nivel === "string" ? params.nivel.toLowerCase() : "estado";
-  const nivel: "pais" | "estado" =
-    nivelParam === "pais" ? "pais" : "estado";
+  const requestedNivel = nivelParam === "pais" ? "pais" : nivelParam === "municipio" ? "municipio" : "estado";
+  const estadoParam = typeof params.estado === "string" ? params.estado : null;
+  const normalizedEstado = estadoParam && estadoParam.trim().length ? estadoParam.trim().padStart(2, "0") : null;
+  const nivel: "pais" | "estado" | "municipio" =
+    requestedNivel === "municipio" && !normalizedEstado ? "estado" : requestedNivel;
   const canalesParam = typeof params.canales === "string" ? params.canales : "";
   const canales =
     canalesParam.trim().length > 0
@@ -94,12 +97,24 @@ export default async function Page({
           .map((item) => item.trim().toLowerCase())
           .filter(Boolean)
       : ["webchat", "whatsapp", "voz"];
+  const etapasParam = typeof params.etapas === "string" ? params.etapas : "";
+  const etapas =
+    etapasParam.trim().length > 0
+      ? etapasParam
+          .split(",")
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean)
+      : [];
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
   const errores: string[] = [];
 
   try {
-    demografiaResponse = await loadDemografiaData(nivel, { canales });
+    demografiaResponse = await loadDemografiaData(nivel, {
+      canales,
+      etapas,
+      estado: nivel === "municipio" ? normalizedEstado : null,
+    });
   } catch (error) {
     errores.push(
       error instanceof Error
@@ -125,7 +140,11 @@ export default async function Page({
       };
 
   const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
-  const chartDataset = demografiaResponse ? demografiaResponse.map.dataset.slice(0, 12) : [];
+  const mapDataset = demografiaResponse
+    ? [...demografiaResponse.map.dataset].sort(
+        (a, b) => (b.total_canales ?? 0) - (a.total_canales ?? 0),
+      )
+    : [];
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;
   const mapShape = (() => {
     const raw = demografiaResponse?.map.geojson;
@@ -151,12 +170,16 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <DemografiaControls nivel={nivel} canales={canales} />
+              <DemografiaControls nivel={nivel} canales={canales} etapas={etapas} />
               <SectionCards data={cardsData} />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">
-                  <LocationComparisonChart data={chartDataset} nivel={nivelChart} shape={mapShape} />
+                  <LocationComparisonChart
+                    data={mapDataset}
+                    nivel={nivelChart}
+                    shape={mapShape}
+                  />
                 </div>
               ) : null}
               {tableData.length ? (
