@@ -55,6 +55,44 @@
   }
 }
 
+@layer components {
+  .leaflet-tooltip.talia-map-tooltip {
+    background-color: transparent !important;
+    color: inherit !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    min-width: 0 !important;
+    box-shadow: none !important;
+    white-space: normal !important;
+    backdrop-filter: none !important;
+  }
+
+  .leaflet-tooltip.talia-map-tooltip:before {
+    content: none !important;
+    border-top-color: transparent !important;
+    border-right-color: transparent !important;
+    border-bottom-color: transparent !important;
+    border-left-color: transparent !important;
+  }
+
+  .leaflet-tooltip.talia-map-tooltip.leaflet-tooltip-top:before {
+    border-top-color: var(--border) !important;
+  }
+
+  .leaflet-tooltip.talia-map-tooltip.leaflet-tooltip-bottom:before {
+    border-bottom-color: var(--border) !important;
+  }
+
+  .leaflet-tooltip.talia-map-tooltip.leaflet-tooltip-left:before {
+    border-left-color: var(--border) !important;
+  }
+
+  .leaflet-tooltip.talia-map-tooltip.leaflet-tooltip-right:before {
+    border-right-color: var(--border) !important;
+  }
+}
+
 @layer utilities {
   .shadow-panel {
     box-shadow: var(--shadow-panel);

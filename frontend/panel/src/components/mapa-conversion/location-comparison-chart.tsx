@@ -6,8 +6,10 @@ import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import type { GeoJSONProps } from "react-leaflet";
 import type { GeoJSON as GeoJSONType, Feature, FeatureCollection } from "geojson";
 import type { Layer as LeafletLayer, Path as LeafletPath } from "leaflet";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import type { DemografiaMapResponse } from "@/lib/mapa-conversion/api";
+import { cn } from "@/lib/utils";
 
 export type LocationComparisonChartProps = {
   data: DemografiaMapResponse["dataset"];
@@ -385,17 +387,46 @@ export function LocationComparisonChart({
         .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0];
       const topChannelLabel = topChannel ? topChannel[0] : null;
 
-      const tooltip = `
-        <div style="font-size: 12px; line-height: 1.45;">
-          <strong>${entry.name ?? feature.properties?.name ?? "Sin nombre"}</strong><br/>
-          Visitas totales: ${formatNumber(entry.total_visitas ?? 0)}<br/>
-          Con conversación: ${formatNumber(conversation.con_conversacion ?? 0)}<br/>
-          Sin conversación: ${formatNumber(conversation.sin_conversacion ?? 0)}<br/>
-          ${topChannelLabel ? `Canal principal: ${topChannelLabel} (${formatNumber(topChannel?.[1] ?? 0)})` : ""}
-        </div>
-      `;
+      const tooltip = renderToStaticMarkup(
+        <MapTooltipContent
+          title={entry.name ?? (feature.properties?.name?.toString() ?? "Sin nombre")}
+          rows={[
+            {
+              key: "total",
+              label: "Visitas totales",
+              value: formatNumber(entry.total_visitas ?? 0),
+            },
+            {
+              key: "conversationYes",
+              label: "Con conversación",
+              value: formatNumber(conversation.con_conversacion ?? 0),
+            },
+            {
+              key: "conversationNo",
+              label: "Sin conversación",
+              value: formatNumber(conversation.sin_conversacion ?? 0),
+            },
+            ...(topChannelLabel
+              ? [
+                  {
+                    key: "channel",
+                    label: "Canal principal",
+                    value: `${topChannelLabel} (${formatNumber(topChannel?.[1] ?? 0)})`,
+                    monospace: false,
+                    valueClassName: "capitalize",
+                  } satisfies MapTooltipRow,
+                ]
+              : []),
+          ]}
+        />,
+      );
 
-      tooltipLayer.bindTooltip?.(tooltip, { sticky: true });
+      const tooltipOptions: ExtendedLeafletTooltipOptions = {
+        sticky: true,
+        className: "talia-map-tooltip",
+      };
+
+      tooltipLayer.bindTooltip?.(tooltip, tooltipOptions);
     },
     [datasetMap, handleFeatureClick, setHoveredKey],
   );
@@ -619,6 +650,44 @@ function matchesFeatureKey(candidate: string, target: string): boolean {
   return variants.some((value) => value === normalizedTarget || value === normalizedTarget.toUpperCase());
 }
 type LeafletTooltipOptions = Parameters<NonNullable<LeafletPath["bindTooltip"]>>[1];
+type ExtendedLeafletTooltipOptions = LeafletTooltipOptions & { className?: string };
+
+type MapTooltipRow = {
+  key: string;
+  label: string;
+  value: string;
+  monospace?: boolean;
+  valueClassName?: string;
+};
+
+type MapTooltipContentProps = {
+  title: string;
+  rows: MapTooltipRow[];
+};
+
+function MapTooltipContent({ title, rows }: MapTooltipContentProps) {
+  return (
+    <div className="border-border/50 bg-background grid min-w-[8rem] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+      <div className="font-medium text-foreground">{title}</div>
+      <div className="grid gap-1.5">
+        {rows.map((row) => (
+          <div key={row.key} className="text-muted-foreground flex items-center justify-between gap-2">
+            <span className="text-muted-foreground">{row.label}</span>
+            <span
+              className={cn(
+                "text-foreground font-medium",
+                row.monospace === false ? "font-sans" : "font-mono tabular-nums",
+                row.valueClassName,
+              )}
+            >
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type LeafletGeoJSONFactory = (geojson?: GeoJSONType, options?: LeafletGeoJSONOptions) => {
   getBounds?: () => {
