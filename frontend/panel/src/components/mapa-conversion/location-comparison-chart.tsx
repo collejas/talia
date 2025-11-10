@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import type { GeoJSONProps } from "react-leaflet";
@@ -395,16 +395,19 @@ export function LocationComparisonChart({
               key: "total",
               label: "Visitas totales",
               value: formatNumber(entry.total_visitas ?? 0),
+              color: "var(--chart-1)",
             },
             {
               key: "conversationYes",
               label: "Con conversación",
               value: formatNumber(conversation.con_conversacion ?? 0),
+              color: "var(--chart-2)",
             },
             {
               key: "conversationNo",
               label: "Sin conversación",
               value: formatNumber(conversation.sin_conversacion ?? 0),
+              color: "var(--chart-3)",
             },
             ...(topChannelLabel
               ? [
@@ -414,6 +417,7 @@ export function LocationComparisonChart({
                     value: `${topChannelLabel} (${formatNumber(topChannel?.[1] ?? 0)})`,
                     monospace: false,
                     valueClassName: "capitalize",
+                    color: resolveChannelColor(topChannelLabel),
                   } satisfies MapTooltipRow,
                 ]
               : []),
@@ -658,6 +662,7 @@ type MapTooltipRow = {
   value: string;
   monospace?: boolean;
   valueClassName?: string;
+  color?: string;
 };
 
 type MapTooltipContentProps = {
@@ -667,12 +672,16 @@ type MapTooltipContentProps = {
 
 function MapTooltipContent({ title, rows }: MapTooltipContentProps) {
   return (
-    <div className="border-border/50 bg-background grid min-w-[8rem] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+    <div className="border-border/50 bg-background grid min-w-[12rem] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
       <div className="font-medium text-foreground">{title}</div>
       <div className="grid gap-1.5">
         {rows.map((row) => (
-          <div key={row.key} className="text-muted-foreground flex items-center justify-between gap-2">
-            <span className="text-muted-foreground">{row.label}</span>
+          <div key={row.key} className="text-muted-foreground flex items-center gap-2">
+            <span
+              className="bg-muted h-2.5 w-2.5 shrink-0 rounded-[2px]"
+              style={row.color ? ({ backgroundColor: row.color } as CSSProperties) : undefined}
+            />
+            <span className="text-muted-foreground flex-1">{row.label}</span>
             <span
               className={cn(
                 "text-foreground font-medium",
@@ -687,6 +696,13 @@ function MapTooltipContent({ title, rows }: MapTooltipContentProps) {
       </div>
     </div>
   );
+}
+
+function resolveChannelColor(channel: string | null | undefined): string {
+  if (!channel) return "var(--chart-4)";
+  const normalized = channel.toLowerCase();
+  const color = CHANNEL_COLORS[normalized] ?? DEFAULT_CHANNEL_COLOR;
+  return `rgb(${color.join(", ")})`;
 }
 
 type LeafletGeoJSONFactory = (geojson?: GeoJSONType, options?: LeafletGeoJSONOptions) => {
