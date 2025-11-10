@@ -75,6 +75,7 @@ sudo systemctl stop talia-api.service
 
 npm run lint
 npm run build --webpack
+npm run build --webpack && npm start
 
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service

@@ -12,13 +12,15 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
-import { LocationComparisonChart } from "@/components/mapa-conversion/location-comparison-chart";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import type { LeadCards } from "@/lib/leads/data";
+import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
 
 export const dynamic = "force-dynamic";
 
 type DemografiaDataset = Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"];
+
+const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz"];
 
 function selectTopLocation(dataset: DemografiaDataset) {
   if (!dataset.length) {
@@ -99,13 +101,19 @@ export default async function Page({
   const nivel: "pais" | "estado" | "municipio" =
     requestedNivel === "municipio" && !normalizedEstado ? "estado" : requestedNivel;
   const canalesParam = typeof params.canales === "string" ? params.canales : "";
-  const canales =
+  const canalesSelected =
     canalesParam.trim().length > 0
       ? canalesParam
           .split(",")
           .map((item) => item.trim().toLowerCase())
           .filter(Boolean)
-      : ["webchat", "whatsapp", "voz"];
+      : DEFAULT_CHANNELS;
+  const defaultChannelsSorted = [...DEFAULT_CHANNELS].sort();
+  const selectedChannelsSorted = [...canalesSelected].sort();
+  const canalesDefaultSelected =
+    canalesSelected.length === DEFAULT_CHANNELS.length &&
+    selectedChannelsSorted.every((value, index) => value === defaultChannelsSorted[index]);
+  const canalesFilter = canalesDefaultSelected ? undefined : canalesSelected;
   const etapasParam = typeof params.etapas === "string" ? params.etapas : "";
   const etapas =
     etapasParam.trim().length > 0
@@ -119,8 +127,8 @@ export default async function Page({
   const errores: string[] = [];
 
   try {
-    demografiaResponse = await loadDemografiaData(nivel, {
-      canales,
+        demografiaResponse = await loadDemografiaData(nivel, {
+      canales: canalesFilter,
       etapas,
       estado: nivel === "municipio" ? normalizedEstado : null,
     });
@@ -179,12 +187,12 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <DemografiaControls nivel={nivel} canales={canales} etapas={etapas} />
+              <DemografiaControls nivel={nivel} canales={canalesSelected} etapas={etapas} />
               <SectionCards data={cardsData} />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">
-                  <LocationComparisonChart
+                  <LocationComparisonChartClient
                     data={mapDataset}
                     nivel={nivelChart}
                     shape={mapShape}

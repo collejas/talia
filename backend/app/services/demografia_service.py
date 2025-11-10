@@ -25,12 +25,19 @@ def _ensure_supabase_config() -> tuple[str, str]:
     return base_url, token
 
 
-async def _call_rpc(function: str, payload: dict[str, Any] | None = None) -> Any:
+async def _call_rpc(
+    function: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    jwt: str | None = None,
+) -> Any:
     base_url, token = _ensure_supabase_config()
     url = f"{base_url}/rest/v1/rpc/{function}"
+    auth_token = jwt or token
+    api_key = settings.supabase_anon or token
     headers = {
-        "apikey": token,
-        "Authorization": f"Bearer {token}",
+        "apikey": api_key,
+        "Authorization": f"Bearer {auth_token}",
         "Content-Type": "application/json",
     }
     try:
@@ -72,6 +79,7 @@ async def fetch_leads_resumen(
     stages: list[str] | None,
     date_from: datetime | None,
     date_to: datetime | None,
+    jwt: str | None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"p_nivel": nivel}
     if channels:
@@ -87,7 +95,7 @@ async def fetch_leads_resumen(
     if date_to:
         payload["p_to"] = date_to.isoformat()
 
-    rows = await _call_rpc("panel_leads_geo_resumen_ext", payload)
+    rows = await _call_rpc("panel_leads_geo_resumen_ext", payload, jwt=jwt)
     if not isinstance(rows, list):
         raise DemografiaServiceError(
             f"Respuesta inesperada de panel_leads_geo_resumen_ext: {rows!r}"
@@ -261,27 +269,66 @@ def build_map_dataset(
     leads_payload: dict[str, Any],
     visitantes_payload: dict[str, Any],
     state_filter: str | None = None,
+    fallback_leads_payload: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     state_filter = (state_filter or "").strip()
     if state_filter and len(state_filter) == 1:
         state_filter = state_filter.zfill(2)
 
-    stage_code_map: dict[str, str] = {
-        "captado": "captado",
-        "precalificado": "precalificado",
-        "negociacion": "negociacion",
-        "ganado": "ganado",
-        "perdido": "perdido",
-    }
-    stage_category_map: dict[str, str] = {
-        "ganada": "ganado",
-        "perdida": "perdido",
-    }
-
     leads_rows = leads_payload.get("rows") if isinstance(leads_payload, dict) else []
+    fallback_rows = (
+        fallback_leads_payload.get("rows") if isinstance(fallback_leads_payload, dict) else []
+    )
     visitantes_rows = (
         visitantes_payload.get("items") if isinstance(visitantes_payload, dict) else []
     )
+
+    fallback_stage_totals: dict[str, dict[str, int]] = {}
+    fallback_channel_totals: dict[str, dict[str, int]] = {}
+    if nivel == "municipio" and isinstance(fallback_rows, list):
+        for raw in fallback_rows:
+            if not isinstance(raw, dict):
+                continue
+            state_key = str(raw.get("key") or "").strip()
+            if not state_key:
+                continue
+            total = _to_number(raw.get("total"))
+            if total <= 0:
+                continue
+            stage_code = str(raw.get("etapa_codigo") or "").strip().lower()
+            stage_category = str(raw.get("etapa_categoria") or "").strip().lower()
+            stage_order = _to_number(raw.get("etapa_orden"))
+            captado_threshold = _to_number(raw.get("captado_orden")) or 1
+            bucket = None
+            if stage_category == "ganada":
+                bucket = "ganado"
+            elif stage_category == "perdida":
+                bucket = "perdido"
+            else:
+                if stage_order and stage_order <= captado_threshold:
+                    bucket = "captado"
+                elif stage_order and stage_order == captado_threshold + 1:
+                    bucket = "precalificado"
+                else:
+                    bucket = "negociacion"
+            state_totals = fallback_stage_totals.setdefault(
+                state_key,
+                {
+                    "captado": 0,
+                    "precalificado": 0,
+                    "negociacion": 0,
+                    "ganado": 0,
+                    "perdido": 0,
+                },
+            )
+            if bucket and bucket in state_totals:
+                state_totals[bucket] += total
+            canal = str(raw.get("canal") or "").strip().lower() or "desconocido"
+            channel_totals = fallback_channel_totals.setdefault(
+                state_key,
+                {"webchat": 0, "whatsapp": 0, "voz": 0, canal: 0},
+            )
+            channel_totals[canal] = channel_totals.get(canal, 0) + total
 
     combined: dict[str, dict[str, Any]] = {}
 
@@ -329,15 +376,52 @@ def build_map_dataset(
         total = _to_number(row.get("total"))
         if total <= 0:
             continue
-        canal = str(row.get("canal") or "desconocido")
+        raw_channel = str(row.get("canal") or "desconocido").strip().lower()
+        channel_alias = {
+            "llamada": "voz",
+            "llamadas": "voz",
+            "telefono": "voz",
+            "teléfono": "voz",
+            "phone": "voz",
+        }
+        canal = channel_alias.get(raw_channel, raw_channel)
         stage_code = str(row.get("etapa_codigo") or "").strip().lower()
         stage_category = str(row.get("etapa_categoria") or "").strip().lower()
+        stage_order = _to_number(row.get("etapa_orden"))
+        captado_threshold = _to_number(row.get("captado_orden")) or 1
 
         entry["leads_total"] += total
         entry["leads_totales_por_canal"][canal] = (
             entry["leads_totales_por_canal"].get(canal, 0) + total
         )
-        stage_bucket = stage_code_map.get(stage_code) or stage_category_map.get(stage_category)
+        if total > 0:
+            entry["has_data"] = True
+        stage_bucket = None
+        if stage_category == "ganada":
+            stage_bucket = "ganado"
+        elif stage_category == "perdida":
+            stage_bucket = "perdido"
+        elif stage_code not in {"visitantes_sin_chat", "sin_conversacion"}:
+            if stage_order and stage_order <= captado_threshold:
+                stage_bucket = "captado"
+            elif stage_order and stage_order == captado_threshold + 1:
+                stage_bucket = "precalificado"
+            else:
+                stage_bucket = "negociacion"
+        logger.info(
+            "demografia.stage_bucket_resolved",
+            extra={
+                "location_key": key,
+                "location_name": entry["name"],
+                "canal": canal,
+                "stage_code": stage_code,
+                "stage_category": stage_category,
+                "stage_order": stage_order,
+                "captado_threshold": captado_threshold,
+                "bucket": stage_bucket,
+                "total": total,
+            },
+        )
         if stage_bucket:
             entry["etapas_totales"][stage_bucket] = (
                 entry["etapas_totales"].get(stage_bucket, 0) + total
@@ -366,6 +450,18 @@ def build_map_dataset(
             "ganado": entry["etapas_totales"].get("ganado", 0),
             "perdido": entry["etapas_totales"].get("perdido", 0),
         }
+        if (
+            nivel == "municipio"
+            and entry.get("leads_total", 0) <= 0
+            and isinstance(entry.get("parent_state"), str)
+            and entry["parent_state"] in fallback_stage_totals
+        ):
+            stage_copy = dict(fallback_stage_totals[entry["parent_state"]])
+            entry["etapas_totales"] = stage_copy
+            entry["leads_total"] = sum(stage_copy.values())
+            channel_copy = fallback_channel_totals.get(entry["parent_state"], {})
+            for channel_key, channel_value in channel_copy.items():
+                entry["leads_totales_por_canal"][channel_key] = channel_value
         entry["totales_por_canal"] = {
             "webchat": entry["visitantes_total"],
             "whatsapp": entry["leads_totales_por_canal"].get("whatsapp", 0),
@@ -375,12 +471,28 @@ def build_map_dataset(
             "con_conversacion": entry["visitantes_con_chat"],
             "sin_conversacion": entry["visitantes_sin_chat"],
         }
-        entry["total_visitas"] = (
-            entry["totales_por_canal"]["webchat"]
-            + entry["totales_por_canal"]["whatsapp"]
-            + entry["totales_por_canal"]["voz"]
+        entry["total_visitas"] = entry["visitantes_total"] + entry["leads_total"]
+        entry["has_data"] = (
+            entry["has_data"]
+            or entry["visitantes_total"] > 0
+            or entry["leads_total"] > 0
+            or entry["totales_por_canal"]["whatsapp"] > 0
+            or entry["totales_por_canal"]["voz"] > 0
         )
-        entry["has_data"] = entry["has_data"] or entry["visitantes_total"] > 0
+        logger.info(
+            "demografia.entry_aggregated",
+            extra={
+                "location_key": entry["key"],
+                "location_name": entry["name"],
+                "nivel": entry["nivel"],
+                "leads_total": entry["leads_total"],
+                "visitantes_total": entry["visitantes_total"],
+                "etapas_totales": entry["etapas_totales"],
+                "totales_por_canal": entry["totales_por_canal"],
+                "conversacion_totales": entry["conversacion_totales"],
+                "has_data": entry["has_data"],
+            },
+        )
         if entry["key"] in {"", "UNK"}:
             entry["has_data"] = False
         entry["next_level"] = (
@@ -388,7 +500,7 @@ def build_map_dataset(
         )
         if not entry["has_data"]:
             entry["next_level"] = None
-        if entry["visitantes_total"] <= 0:
+        if entry["total_visitas"] <= 0:
             continue
 
         normalized_entry = {

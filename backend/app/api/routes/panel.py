@@ -3057,6 +3057,7 @@ async def demografia_resumen(
             stages=stage_values,
             date_from=date_from,
             date_to=date_to,
+            jwt=token,
         )
         visitantes_payload = await demografia_service.fetch_visitantes_resumen(
             nivel=nivel_normalizado,
@@ -3116,7 +3117,18 @@ async def demografia_mapa(
             stages=stage_values,
             date_from=date_from,
             date_to=date_to,
+            jwt=token,
         )
+        fallback_leads_payload = None
+        if nivel_normalizado == "municipio":
+            fallback_leads_payload = await demografia_service.fetch_leads_resumen(
+                nivel="estado",
+                channels=channel_values,
+                stages=stage_values,
+                date_from=date_from,
+                date_to=date_to,
+                jwt=token,
+            )
         visitantes_payload = await demografia_service.fetch_visitantes_resumen(
             nivel=nivel_normalizado,
             date_from=date_from,
@@ -3127,6 +3139,7 @@ async def demografia_mapa(
             leads_payload=leads_payload,
             visitantes_payload=visitantes_payload,
             state_filter=state_code,
+            fallback_leads_payload=fallback_leads_payload,
         )
     except demografia_service.DemografiaServiceError as exc:
         logger.exception("demografia.mapa_fetch_failed")

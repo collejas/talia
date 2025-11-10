@@ -95,6 +95,19 @@ server {
         proxy_buffering off;
     }
 
+    # Endpoints de KPIs demográficos (FastAPI)
+    location ^~ /api/kpis/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
     # Todas las otras rutas /api/* las atiende Next.js.
     location ^~ /api/ {
         proxy_pass http://127.0.0.1:3001;

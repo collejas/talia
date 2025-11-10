@@ -5,13 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import type { GeoJSONProps } from "react-leaflet";
 import type { GeoJSON as GeoJSONType, Feature, FeatureCollection } from "geojson";
-import "leaflet/dist/leaflet.css";
-import * as L from "leaflet";
 import type { Layer as LeafletLayer, Path as LeafletPath } from "leaflet";
 
 import type { DemografiaMapResponse } from "@/lib/mapa-conversion/api";
 
-type LocationComparisonChartProps = {
+export type LocationComparisonChartProps = {
   data: DemografiaMapResponse["dataset"];
   nivel: DemografiaMapResponse["nivel"];
   shape: GeoJSONType | null;
@@ -441,42 +439,42 @@ function FitToData({
 
   useEffect(() => {
     if (!shape || shape.type !== "FeatureCollection") return;
-    const geoJsonFactory = (L as unknown as {
-      geoJSON?: (geojson?: GeoJSONType, options?: LeafletGeoJSONOptions) => unknown;
-    }).geoJSON;
-    if (!geoJsonFactory) return;
+    let cancelled = false;
 
-    const layer = geoJsonFactory(shape as FeatureCollection, {
-      filter: (feature) => {
-        if (!activeKeys.size) return true;
-        const key = resolveFeatureKey(feature as Feature);
-        return (
-          activeKeys.has(key) ||
-          activeKeys.has(key.padStart(2, "0")) ||
-          activeKeys.has(key.toUpperCase())
-        );
-      },
-    }) as {
-      getBounds?: () => {
-        isValid: () => boolean;
-      } & Record<string, unknown>;
-    };
-    const bounds = layer.getBounds?.();
-    if (bounds?.isValid?.()) {
-      const leafletMap = map as unknown as {
-        flyToBounds?: (
-          b: typeof bounds,
-          options?: {
-            padding?: [number, number];
-            maxZoom?: number;
-          },
-        ) => void;
-      };
-      leafletMap.flyToBounds?.(bounds, {
-        padding: [24, 24],
-        maxZoom: nivel === "pais" ? 5 : nivel === "estado" ? 8 : 12,
+    const loadLeaflet = async () => {
+      if (typeof window === "undefined") return;
+      const [{ default: Leaflet }] = await Promise.all([import("leaflet"), import("leaflet/dist/leaflet.css")]);
+      if (cancelled) return;
+      const geoJsonFactory: LeafletGeoJSONFactory | undefined =
+        (Leaflet as { geoJSON?: LeafletGeoJSONFactory }).geoJSON;
+      if (!geoJsonFactory) return;
+
+      const layer = geoJsonFactory(shape as FeatureCollection, {
+        filter: (feature) => {
+          if (!activeKeys.size) return true;
+          const key = resolveFeatureKey(feature as Feature);
+          return (
+            activeKeys.has(key) ||
+            activeKeys.has(key.padStart(2, "0")) ||
+            activeKeys.has(key.toUpperCase())
+          );
+        },
       });
-    }
+      const bounds = layer?.getBounds?.();
+      if (bounds?.isValid?.()) {
+        const leafletMap = map as unknown as LeafletMapType;
+        leafletMap.flyToBounds?.(bounds, {
+          padding: [24, 24],
+          maxZoom: nivel === "pais" ? 5 : nivel === "estado" ? 8 : 12,
+        });
+      }
+    };
+
+    void loadLeaflet();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeKeys, map, nivel, shape]);
 
   return null;
@@ -517,3 +515,13 @@ function formatNumber(value: unknown): string {
   return new Intl.NumberFormat("es-MX").format(numberValue);
 }
 type LeafletTooltipOptions = Parameters<NonNullable<LeafletPath["bindTooltip"]>>[1];
+
+type LeafletGeoJSONFactory = (geojson?: GeoJSONType, options?: LeafletGeoJSONOptions) => {
+  getBounds?: () => {
+    isValid?: () => boolean;
+  } & Record<string, unknown>;
+};
+
+type LeafletMapType = {
+  flyToBounds?: (bounds: unknown, options?: { padding?: [number, number]; maxZoom?: number }) => void;
+};
