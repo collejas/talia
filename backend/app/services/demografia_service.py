@@ -364,12 +364,9 @@ def build_map_dataset(
             )
             if bucket and bucket in state_totals:
                 state_totals[bucket] += total
-            canal = str(raw.get("canal") or "").strip().lower() or "desconocido"
-            channel_totals = fallback_channel_totals.setdefault(
-                state_key,
-                {"webchat": 0, "whatsapp": 0, "voz": 0, canal: 0},
-            )
-            channel_totals[canal] = channel_totals.get(canal, 0) + total
+        canal = str(raw.get("canal") or "").strip().lower() or "desconocido"
+        channel_totals = fallback_channel_totals.setdefault(state_key, {})
+        channel_totals[canal] = channel_totals.get(canal, 0) + total
 
     combined: dict[str, dict[str, Any]] = {}
 
@@ -386,8 +383,9 @@ def build_map_dataset(
                 "name": name or "Desconocido",
                 "nivel": nivel,
                 "leads_total": 0,
-                "leads_totales_por_canal": {"webchat": 0, "whatsapp": 0, "voz": 0},
-                "totales_por_canal": {"webchat": 0, "whatsapp": 0, "voz": 0},
+                "leads_totales_por_canal": {},
+                "visitantes_totales_por_canal": {},
+                "totales_por_canal": {},
                 "etapas_totales": {
                     "captado": 0,
                     "precalificado": 0,
@@ -483,7 +481,6 @@ def build_map_dataset(
 
     result = []
     for entry in combined.values():
-        entry["leads_totales_por_canal"] = dict(entry["leads_totales_por_canal"])
         entry["etapas_totales"] = {
             "captado": entry["etapas_totales"].get("captado", 0),
             "precalificado": entry["etapas_totales"].get("precalificado", 0),
@@ -502,12 +499,27 @@ def build_map_dataset(
             entry["leads_total"] = sum(stage_copy.values())
             channel_copy = fallback_channel_totals.get(entry["parent_state"], {})
             for channel_key, channel_value in channel_copy.items():
-                entry["leads_totales_por_canal"][channel_key] = channel_value
-        entry["totales_por_canal"] = {
-            "webchat": entry["visitantes_total"],
-            "whatsapp": entry["leads_totales_por_canal"].get("whatsapp", 0),
-            "voz": entry["leads_totales_por_canal"].get("voz", 0),
-        }
+                entry["leads_totales_por_canal"][channel_key] = (
+                    entry["leads_totales_por_canal"].get(channel_key, 0) + channel_value
+                )
+
+        leads_channels_sorted = dict(
+            sorted(entry["leads_totales_por_canal"].items(), key=lambda item: item[0])
+        )
+        entry["leads_totales_por_canal"] = leads_channels_sorted
+
+        visitantes_channels: dict[str, int] = {}
+        if entry["visitantes_total"] > 0:
+            visitantes_channels["webchat"] = entry["visitantes_total"]
+        entry["visitantes_totales_por_canal"] = visitantes_channels
+
+        totales_por_canal: dict[str, int] = dict(leads_channels_sorted)
+        if visitantes_channels:
+            totales_por_canal["webchat"] = totales_por_canal.get("webchat", 0) + (
+                visitantes_channels.get("webchat", 0)
+            )
+        entry["totales_por_canal"] = totales_por_canal
+
         entry["conversacion_totales"] = {
             "con_conversacion": entry["visitantes_con_chat"],
             "sin_conversacion": entry["visitantes_sin_chat"],
@@ -552,12 +564,14 @@ def build_map_dataset(
             "name": entry["name"],
             "nivel": entry["nivel"],
             "leads_total": entry["leads_total"],
+            "leads_totales_por_canal": entry["leads_totales_por_canal"],
             "totales_por_canal": entry["totales_por_canal"],
             "etapas_totales": entry["etapas_totales"],
             "conversacion_totales": entry["conversacion_totales"],
             "visitantes_total": entry["visitantes_total"],
             "visitantes_con_chat": entry["visitantes_con_chat"],
             "visitantes_sin_chat": entry["visitantes_sin_chat"],
+            "visitantes_totales_por_canal": entry["visitantes_totales_por_canal"],
             "total_visitas": entry["total_visitas"],
             "has_data": entry["has_data"],
             "next_level": entry["next_level"],
@@ -578,6 +592,14 @@ def build_map_dataset(
                     for key, value in unknown["totales_por_canal"].items():
                         target["totales_por_canal"][key] = (
                             target["totales_por_canal"].get(key, 0) + value
+                        )
+                    for key, value in unknown["leads_totales_por_canal"].items():
+                        target["leads_totales_por_canal"][key] = (
+                            target["leads_totales_por_canal"].get(key, 0) + value
+                        )
+                    for key, value in unknown["visitantes_totales_por_canal"].items():
+                        target["visitantes_totales_por_canal"][key] = (
+                            target["visitantes_totales_por_canal"].get(key, 0) + value
                         )
                     for key, value in unknown["conversacion_totales"].items():
                         target["conversacion_totales"][key] = (

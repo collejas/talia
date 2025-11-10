@@ -47,7 +47,9 @@ export type DemografiaMapDataset = {
   name: string;
   nivel: string;
   leads_total: number;
+  leads_totales_por_canal: Record<string, number>;
   totales_por_canal: Record<string, number>;
+  visitantes_totales_por_canal: Record<string, number>;
   conversacion_totales: {
     con_conversacion: number;
     sin_conversacion: number;

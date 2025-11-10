@@ -124,6 +124,14 @@ type ColumnMeta = {
   reorderable?: boolean
 }
 
+type ColumnLabels = {
+  header?: string
+  type?: string
+  status?: string
+  target?: string
+  reviewer?: string
+}
+
 const COLUMN_DRAG_PREFIX = "column:"
 const NON_REORDERABLE_COLUMN_IDS = new Set(["drag-handle", "row-select"])
 const BADGE_VARIANTS = new Set(["default", "secondary", "destructive", "outline"])
@@ -172,194 +180,203 @@ function DragHandle({ id }: { id: number }) {
   )
 }
 
-const baseColumns: ColumnDef<TableRowData>[] = [
-  {
-    id: "drag-handle",
-    header: () => null,
-    cell: ({ row }) => <DragHandle id={row.original.id} />,
-    meta: { label: "Mover fila", reorderable: false } satisfies ColumnMeta,
-  },
-  {
-    id: "row-select",
-    header: ({ table }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-    meta: { label: "Seleccionar", reorderable: false } satisfies ColumnMeta,
-  },
-  {
-    accessorKey: "header",
-    id: "session",
-    header: "Sesión",
-    cell: ({ row }) => {
-      return <TableCellViewer item={row.original} />
+function createBaseColumns(labels: ColumnLabels = {}): ColumnDef<TableRowData>[] {
+  const headerLabel = labels.header ?? "Sesión"
+  const typeLabel = labels.type ?? "Ubicación / Etapa"
+  const statusLabel = labels.status ?? "Chat"
+  const targetLabel = labels.target ?? "Visitas / Valor"
+  const reviewerLabel = labels.reviewer ?? "Vendedor Asig."
+
+  return [
+    {
+      id: "drag-handle",
+      header: () => null,
+      cell: ({ row }) => <DragHandle id={row.original.id} />,
+      meta: { label: "Mover fila", reorderable: false } satisfies ColumnMeta,
     },
-    meta: { label: "Sesión" } satisfies ColumnMeta,
-  },
-  {
-    accessorKey: "type",
-    id: "type",
-    header: "Ubicación / Etapa",
-    cell: ({ row }) => (
-      <div className="w-32">
-        <Badge variant="outline" className="text-muted-foreground px-1.5">
-          {row.original.type}
-        </Badge>
-      </div>
-    ),
-    meta: { label: "Estado o País" } satisfies ColumnMeta,
-  },
-  {
-    accessorKey: "status",
-    id: "chat",
-    header: "Chat",
-    cell: ({ row }) => {
-      const raw = row.original.raw as Record<string, unknown> | undefined
-      const statusMeta =
-        raw && typeof raw === "object"
-          ? (raw as { status_meta?: { label?: string; variant?: string } }).status_meta
-          : undefined
-      if (statusMeta?.label) {
-        const variant = BADGE_VARIANTS.has(statusMeta.variant ?? "")
-          ? (statusMeta.variant as "default" | "secondary" | "destructive" | "outline")
-          : "outline"
+    {
+      id: "row-select",
+      header: ({ table }) => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+          />
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        </div>
+      ),
+      enableSorting: false,
+      enableHiding: false,
+      meta: { label: "Seleccionar", reorderable: false } satisfies ColumnMeta,
+    },
+    {
+      accessorKey: "header",
+      id: "session",
+      header: headerLabel,
+      cell: ({ row }) => {
+        return <TableCellViewer item={row.original} />
+      },
+      meta: { label: headerLabel } satisfies ColumnMeta,
+    },
+    {
+      accessorKey: "type",
+      id: "type",
+      header: typeLabel,
+      cell: ({ row }) => (
+        <div className="w-32">
+          <Badge variant="outline" className="text-muted-foreground px-1.5">
+            {row.original.type}
+          </Badge>
+        </div>
+      ),
+      meta: { label: typeLabel } satisfies ColumnMeta,
+    },
+    {
+      accessorKey: "status",
+      id: "chat",
+      header: statusLabel,
+      cell: ({ row }) => {
+        const raw = row.original.raw as Record<string, unknown> | undefined
+        const statusMeta =
+          raw && typeof raw === "object"
+            ? (raw as { status_meta?: { label?: string; variant?: string } }).status_meta
+            : undefined
+        if (statusMeta?.label) {
+          const variant = BADGE_VARIANTS.has(statusMeta.variant ?? "")
+            ? (statusMeta.variant as "default" | "secondary" | "destructive" | "outline")
+            : "outline"
+          return (
+            <Badge variant={variant} className="text-muted-foreground px-1.5">
+              {statusMeta.label}
+            </Badge>
+          )
+        }
+        const hasChat = row.original.status === "Done"
         return (
-          <Badge variant={variant} className="text-muted-foreground px-1.5">
-            {statusMeta.label}
+          <Badge
+            variant={hasChat ? "default" : "outline"}
+            className="text-muted-foreground px-1.5"
+          >
+            {hasChat ? (
+              <>
+                <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
+                Con chat
+              </>
+            ) : (
+              <>
+                <IconLoader />
+                Sin chat
+              </>
+            )}
           </Badge>
         )
-      }
-      const hasChat = row.original.status === "Done"
-      return (
-        <Badge
-          variant={hasChat ? "default" : "outline"}
-          className="text-muted-foreground px-1.5"
-        >
-          {hasChat ? (
-            <>
-              <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
-              Con chat
-            </>
-          ) : (
-            <>
-              <IconLoader />
-              Sin chat
-            </>
-          )}
-        </Badge>
-      )
+      },
+      meta: { label: statusLabel } satisfies ColumnMeta,
     },
-    meta: { label: "Chat" } satisfies ColumnMeta,
-  },
-  {
-    accessorKey: "target",
-    id: "visits",
-    header: () => <div className="w-full text-right">Visitas / Valor</div>,
-    meta: { label: "Visitas / Valor" } satisfies ColumnMeta,
-    cell: ({ row }) => {
-      const raw = row.original.raw as Record<string, unknown> | undefined
-      const metricMeta =
-        raw && typeof raw === "object"
-          ? (raw as { metric_meta?: { formatted?: string; value?: unknown } }).metric_meta
-          : undefined
-      if (metricMeta?.formatted) {
-        return <div className="text-right tabular-nums">{metricMeta.formatted}</div>
-      }
-      const rawCount =
-        raw && typeof raw === "object"
-          ? (raw as { visit_count?: unknown }).visit_count
-          : undefined
-      const fallback = Number(row.original.target)
-      const value = typeof rawCount === "number" && Number.isFinite(rawCount)
-        ? rawCount
-        : fallback
-      const formatted = Number.isFinite(value)
-        ? value.toLocaleString("es-MX")
-        : row.original.target
-      return <div className="text-right tabular-nums">{formatted}</div>
+    {
+      accessorKey: "target",
+      id: "visits",
+      header: () => <div className="w-full text-right">{targetLabel}</div>,
+      meta: { label: targetLabel } satisfies ColumnMeta,
+      cell: ({ row }) => {
+        const raw = row.original.raw as Record<string, unknown> | undefined
+        const metricMeta =
+          raw && typeof raw === "object"
+            ? (raw as { metric_meta?: { formatted?: string; value?: unknown } }).metric_meta
+            : undefined
+        if (metricMeta?.formatted) {
+          return <div className="text-right tabular-nums">{metricMeta.formatted}</div>
+        }
+        const rawCount =
+          raw && typeof raw === "object"
+            ? (raw as { visit_count?: unknown }).visit_count
+            : undefined
+        const fallback = Number(row.original.target)
+        const value =
+          typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : fallback
+        const formatted = Number.isFinite(value)
+          ? value.toLocaleString("es-MX")
+          : row.original.target
+        return <div className="text-right tabular-nums">{formatted}</div>
+      },
     },
-  },
-  {
-    accessorKey: "reviewer",
-    id: "reviewer",
-    header: "Vendedor Asig.",
-    cell: ({ row }) => {
-      const isAssigned = row.original.reviewer !== "Assign reviewer"
+    {
+      accessorKey: "reviewer",
+      id: "reviewer",
+      header: reviewerLabel,
+      cell: ({ row }) => {
+        const isAssigned = row.original.reviewer !== "Assign reviewer"
 
-      if (isAssigned) {
-        return row.original.reviewer
-      }
+        if (isAssigned) {
+          return row.original.reviewer
+        }
 
-      return (
-        <>
-          <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Vendedor Asig.
-          </Label>
-          <Select>
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              id={`${row.original.id}-reviewer`}
+        return (
+          <>
+            <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
+              {reviewerLabel}
+            </Label>
+            <Select>
+              <SelectTrigger
+                className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
+                size="sm"
+                id={`${row.original.id}-reviewer`}
+              >
+                <SelectValue placeholder="Assign reviewer" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
+                <SelectItem value="Jamik Tashpulatov">
+                  Jamik Tashpulatov
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        )
+      },
+      meta: { label: reviewerLabel } satisfies ColumnMeta,
+    },
+    {
+      id: "actions",
+      cell: () => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
+              size="icon"
             >
-              <SelectValue placeholder="Assign reviewer" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-              <SelectItem value="Jamik Tashpulatov">
-                Jamik Tashpulatov
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </>
-      )
+              <IconDotsVertical />
+              <span className="sr-only">Open menu</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32">
+            <DropdownMenuItem>Edit</DropdownMenuItem>
+            <DropdownMenuItem>Make a copy</DropdownMenuItem>
+            <DropdownMenuItem>Favorite</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+      meta: { label: "Acciones", reorderable: false } satisfies ColumnMeta,
     },
-    meta: { label: "Vendedor Asig." } satisfies ColumnMeta,
-  },
-  {
-    id: "actions",
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
-            size="icon"
-          >
-            <IconDotsVertical />
-            <span className="sr-only">Open menu</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
-    meta: { label: "Acciones", reorderable: false } satisfies ColumnMeta,
-  },
-]
+  ]
+}
+
+const baseColumns: ColumnDef<TableRowData>[] = createBaseColumns()
 
 type SortableColumnHeaderProps = {
   header: Header<TableRowData, unknown>
@@ -427,11 +444,13 @@ export function DataTable({
   extraColumns = [],
   initialVisibility,
   storageKey,
+  columnLabels,
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
   initialVisibility?: VisibilityState
   storageKey?: string
+  columnLabels?: ColumnLabels
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
@@ -453,14 +472,20 @@ export function DataTable({
     useSensor(KeyboardSensor, {})
   )
 
+
   const dataIds = React.useMemo<UniqueIdentifier[]>(
     () => data?.map(({ id }) => id) || [],
     [data]
   )
 
+  const resolvedBaseColumns = React.useMemo(
+    () => (columnLabels ? createBaseColumns(columnLabels) : baseColumns),
+    [columnLabels]
+  )
+
   const mergedColumns = React.useMemo(
-    () => [...baseColumns, ...extraColumns],
-    [extraColumns]
+    () => [...resolvedBaseColumns, ...extraColumns],
+    [resolvedBaseColumns, extraColumns]
   )
 
   const defaultColumnOrder = React.useMemo(() => {
@@ -934,7 +959,7 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
           )}
           <form className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
-          <Label htmlFor="header">Sesión</Label>
+              <Label htmlFor="header">Sesión</Label>
               <Input id="header" defaultValue={item.header} />
             </div>
             <div className="grid grid-cols-2 gap-4">

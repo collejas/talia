@@ -61,22 +61,52 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
   }
 
   return dataset.map((entry, index) => {
-    const canales = entry.totales_por_canal || {}
-    const canalPrincipal = Object.entries(canales)
-      .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin canal"
+    const leadsPorCanal = entry.leads_totales_por_canal || {}
+    const visitantesPorCanal = entry.visitantes_totales_por_canal || {}
+    const combinados = new Map<string, number>()
+    for (const [channel, total] of Object.entries(leadsPorCanal)) {
+      combinados.set(channel || "desconocido", (combinados.get(channel || "desconocido") ?? 0) + (total ?? 0))
+    }
+    for (const [channel, total] of Object.entries(visitantesPorCanal)) {
+      const key = channel || "desconocido"
+      combinados.set(key, (combinados.get(key) ?? 0) + (total ?? 0))
+    }
+    const canalPrincipal =
+      Array.from(combinados.entries())
+        .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin canal"
+    const canalLabel = formatChannelLabel(canalPrincipal)
     const etapaPrincipalRaw = Object.entries(entry.etapas_totales || {})
       .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin etapa"
     const etapaPrincipal = stageLabels[etapaPrincipalRaw] ?? etapaPrincipalRaw
+    const totalVisitas = entry.total_visitas ?? 0
+    const visitantesTotal = entry.visitantes_total ?? 0
+    const hasDatos = Boolean(entry.has_data && totalVisitas > 0)
 
     return {
       id: index + 1,
       header: entry.name,
-      type: canalPrincipal,
-      status: entry.has_data ? "Con visitas" : "Sin visitas",
-      target: formatNumber(entry.total_visitas ?? 0),
-      limit: formatNumber(entry.visitantes_total ?? 0),
+      type: canalLabel,
+      status: hasDatos ? "con_datos" : "sin_datos",
+      target: String(totalVisitas),
+      limit: String(visitantesTotal),
       reviewer: etapaPrincipal,
-      raw: entry,
+      raw: {
+        ...entry,
+        status_meta: {
+          label: hasDatos ? "Con datos" : "Sin datos",
+          variant: hasDatos ? "default" : "outline",
+        },
+        metric_meta: {
+          value: totalVisitas,
+          formatted: formatNumber(totalVisitas),
+        },
+        canal_meta: {
+          principal: canalPrincipal,
+          leads: leadsPorCanal,
+          visitantes: visitantesPorCanal,
+          combinado: Object.fromEntries(combinados),
+        },
+      },
     }
   })
 }
@@ -84,6 +114,13 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
 function formatNumber(value: number | undefined): string {
   if (!value) return "0"
   return new Intl.NumberFormat("es-MX").format(value)
+}
+
+function formatChannelLabel(value: string | null | undefined): string {
+  if (!value) return "Sin canal"
+  const normalized = value.replace(/_/g, " ").trim()
+  if (!normalized.length) return "Sin canal"
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
 }
 
 type PageSearchParams = Record<string, string | string[] | undefined>;
@@ -220,7 +257,17 @@ export default async function Page({
               ) : null}
               {tableData.length ? (
                 <div className="px-4 lg:px-6">
-                  <DataTable data={tableData} storageKey="mapa-conversion-table-column-order" />
+                  <DataTable
+                    data={tableData}
+                    storageKey="mapa-conversion-table-column-order"
+                    columnLabels={{
+                      header: "Ubicación",
+                      type: "Canal principal",
+                      status: "Estado de datos",
+                      target: "Visitas totales",
+                      reviewer: "Etapa principal",
+                    }}
+                  />
                 </div>
               ) : null}
             </div>
