@@ -283,7 +283,7 @@ export function LocationComparisonChart({ data, nivel, shape, colorMode }: Locat
 
       const intensity = Math.min(1, total / maxTotal);
       if (colorMode === "channel") {
-        const { fillColor, fillOpacity } = resolveChannelStyle(entry, intensity, isSelected || isHovered);
+        const { fillColor, fillOpacity } = resolveChannelStyle(entry, intensity, Boolean(isSelected || isHovered));
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.6)" : "hsl(var(--foreground)/0.18)",
           weight: isSelected || isHovered ? 2.2 : 1,
