@@ -118,6 +118,7 @@ export const schema = z.object({
 })
 
 type TableRowData = z.infer<typeof schema>
+export type DataTableRow = TableRowData
 
 type ColumnMeta = {
   label?: string
@@ -130,6 +131,12 @@ type ColumnLabels = {
   status?: string
   target?: string
   reviewer?: string
+}
+
+type MetricColumnConfig = {
+  id: string
+  label: string
+  metricKey: string
 }
 
 const COLUMN_DRAG_PREFIX = "column:"
@@ -378,6 +385,24 @@ function createBaseColumns(labels: ColumnLabels = {}): ColumnDef<TableRowData>[]
 
 const baseColumns: ColumnDef<TableRowData>[] = createBaseColumns()
 
+function extractMetric(row: TableRowData, key: string): number {
+  const raw = row.raw as { metrics?: Record<string, unknown> } | undefined
+  const metrics = raw && typeof raw === "object" ? raw.metrics : undefined
+  if (!metrics) return 0
+  const value = metrics[key]
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return 0
+}
+
+function formatMetric(value: number): string {
+  if (!Number.isFinite(value)) return "0"
+  return new Intl.NumberFormat("es-MX").format(value)
+}
+
 type SortableColumnHeaderProps = {
   header: Header<TableRowData, unknown>
   id: string
@@ -445,12 +470,14 @@ export function DataTable({
   initialVisibility,
   storageKey,
   columnLabels,
+  metricColumns = [],
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
   initialVisibility?: VisibilityState
   storageKey?: string
   columnLabels?: ColumnLabels
+  metricColumns?: MetricColumnConfig[]
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
@@ -483,9 +510,23 @@ export function DataTable({
     [columnLabels]
   )
 
+  const metricColumnDefs = React.useMemo<ColumnDef<TableRowData>[]>(() => {
+    if (!metricColumns.length) return []
+    return metricColumns.map((config) => ({
+      id: config.id,
+      accessorFn: (row) => extractMetric(row, config.metricKey),
+      header: () => <div className="w-full text-right">{config.label}</div>,
+      cell: ({ row }) => {
+        const value = extractMetric(row.original, config.metricKey)
+        return <div className="text-right tabular-nums">{formatMetric(value)}</div>
+      },
+      meta: { label: config.label },
+    }))
+  }, [metricColumns])
+
   const mergedColumns = React.useMemo(
-    () => [...resolvedBaseColumns, ...extraColumns],
-    [resolvedBaseColumns, extraColumns]
+    () => [...resolvedBaseColumns, ...metricColumnDefs, ...extraColumns],
+    [resolvedBaseColumns, metricColumnDefs, extraColumns]
   )
 
   const defaultColumnOrder = React.useMemo(() => {

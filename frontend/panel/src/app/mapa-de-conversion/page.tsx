@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { GeoJSON as GeoJSONType } from "geojson";
+import type { VisibilityState } from "@tanstack/react-table";
 
 import { AppSidebar } from "@/components/AppSidebar";
 import { DataTable } from "@/components/data-table";
@@ -81,6 +82,26 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
     const totalVisitas = entry.total_visitas ?? 0
     const visitantesTotal = entry.visitantes_total ?? 0
     const hasDatos = Boolean(entry.has_data && totalVisitas > 0)
+    const visitantesConChat =
+      entry.conversacion_totales?.con_conversacion ?? entry.visitantes_con_chat ?? 0
+    const visitantesSinChat =
+      entry.conversacion_totales?.sin_conversacion ?? entry.visitantes_sin_chat ?? 0
+    const metrics = {
+      leads_total: entry.leads_total ?? 0,
+      visitantes_total: visitantesTotal,
+      visitantes_con_chat: visitantesConChat,
+      visitantes_sin_chat: visitantesSinChat,
+      leads_webchat: entry.leads_totales_por_canal?.webchat ?? 0,
+      leads_whatsapp: entry.leads_totales_por_canal?.whatsapp ?? 0,
+      leads_voz: entry.leads_totales_por_canal?.voz ?? 0,
+      total_whatsapp: entry.totales_por_canal?.whatsapp ?? 0,
+      total_voz: entry.totales_por_canal?.voz ?? 0,
+      etapa_captado: entry.etapas_totales?.captado ?? 0,
+      etapa_precalificado: entry.etapas_totales?.precalificado ?? 0,
+      etapa_negociacion: entry.etapas_totales?.negociacion ?? 0,
+      etapa_ganado: entry.etapas_totales?.ganado ?? 0,
+      etapa_perdido: entry.etapas_totales?.perdido ?? 0,
+    }
 
     return {
       id: index + 1,
@@ -106,6 +127,7 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
           visitantes: visitantesPorCanal,
           combinado: Object.fromEntries(combinados),
         },
+        metrics,
       },
     }
   })
@@ -121,6 +143,32 @@ function formatChannelLabel(value: string | null | undefined): string {
   const normalized = value.replace(/_/g, " ").trim()
   if (!normalized.length) return "Sin canal"
   return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
+const METRIC_COLUMNS: Array<{ id: string; label: string; metricKey: string }> = [
+  { id: "leads_total", label: "Leads totales", metricKey: "leads_total" },
+  { id: "visitantes_total", label: "Visitantes totales", metricKey: "visitantes_total" },
+  { id: "visitantes_con_chat", label: "Visitantes con chat", metricKey: "visitantes_con_chat" },
+  { id: "visitantes_sin_chat", label: "Visitantes sin chat", metricKey: "visitantes_sin_chat" },
+  { id: "leads_webchat", label: "Leads Webchat", metricKey: "leads_webchat" },
+  { id: "leads_whatsapp", label: "Leads WhatsApp", metricKey: "leads_whatsapp" },
+  { id: "leads_voz", label: "Leads Voz", metricKey: "leads_voz" },
+  { id: "total_whatsapp", label: "Total WhatsApp", metricKey: "total_whatsapp" },
+  { id: "total_voz", label: "Total Voz", metricKey: "total_voz" },
+  { id: "etapa_captado", label: "Captado", metricKey: "etapa_captado" },
+  { id: "etapa_precalificado", label: "Precalificado", metricKey: "etapa_precalificado" },
+  { id: "etapa_negociacion", label: "Negociación", metricKey: "etapa_negociacion" },
+  { id: "etapa_ganado", label: "Ganado", metricKey: "etapa_ganado" },
+  { id: "etapa_perdido", label: "Perdido", metricKey: "etapa_perdido" },
+]
+
+function buildInitialVisibility(columns: Array<{ id: string }>): VisibilityState {
+  return columns.reduce<VisibilityState>((state, column) => {
+    if (column.id) {
+      state[column.id] = false
+    }
+    return state
+  }, {})
 }
 
 type PageSearchParams = Record<string, string | string[] | undefined>;
@@ -197,6 +245,8 @@ export default async function Page({
       };
 
   const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
+  const metricColumns = METRIC_COLUMNS;
+  const metricColumnsVisibility = buildInitialVisibility(metricColumns);
   const mapDataset = demografiaResponse
     ? [...demografiaResponse.map.dataset].sort(
         (a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0),
@@ -267,6 +317,8 @@ export default async function Page({
                       target: "Visitas totales",
                       reviewer: "Etapa principal",
                     }}
+                    metricColumns={metricColumns}
+                    initialVisibility={metricColumnsVisibility}
                   />
                 </div>
               ) : null}
