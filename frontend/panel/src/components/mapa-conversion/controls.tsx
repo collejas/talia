@@ -49,9 +49,10 @@ type DemografiaControlsProps = {
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
   etapas: string[];
+  color: "sequential" | "channel";
 };
 
-export function DemografiaControls({ nivel, canales, etapas }: DemografiaControlsProps) {
+export function DemografiaControls({ nivel, canales, etapas, color }: DemografiaControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -222,6 +223,30 @@ export function DemografiaControls({ nivel, canales, etapas }: DemografiaControl
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Modo de color
+          </span>
+          <div className="inline-flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={color === "sequential" ? "default" : "outline"}
+              onClick={() => updateParams({ color: null })}
+            >
+              Escala por volumen
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={color === "channel" ? "default" : "outline"}
+              onClick={() => updateParams({ color: "channel" })}
+            >
+              Canal predominante
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
-import { ColorModeToggle } from "@/components/mapa-conversion/color-mode-toggle";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
@@ -205,12 +204,11 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <DemografiaControls nivel={nivel} canales={canalesSelected} etapas={etapas} />
+              <DemografiaControls nivel={nivel} canales={canalesSelected} etapas={etapas} color={colorMode} />
               <SectionCards data={cardsData} />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">
-                  <ColorModeToggle mode={colorMode} />
                   <LocationComparisonChartClient
                     data={mapDataset}
                     nivel={nivelChart}
