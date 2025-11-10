@@ -495,9 +495,12 @@ def build_map_dataset(
         )
         if entry["key"] in {"", "UNK"}:
             entry["has_data"] = False
-        entry["next_level"] = (
-            "estado" if nivel == "pais" else "municipio" if nivel == "estado" else None
-        )
+        if nivel == "pais":
+            entry["next_level"] = "estado" if entry["key"] == "MX" else None
+        elif nivel == "estado":
+            entry["next_level"] = "municipio"
+        else:
+            entry["next_level"] = None
         if not entry["has_data"]:
             entry["next_level"] = None
         if entry["total_visitas"] <= 0:

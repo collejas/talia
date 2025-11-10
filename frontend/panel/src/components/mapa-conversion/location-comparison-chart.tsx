@@ -429,7 +429,12 @@ export function LocationComparisonChart({
                 } as unknown as GeoJSONProps)}
                 key={JSON.stringify(enhancedGeojson)}
               />
-              <FitToData activeKeys={keysWithData} nivel={nivel} shape={enhancedGeojson} />
+              <FitToData
+                activeKeys={keysWithData}
+                selectedKey={selectedKey}
+                nivel={nivel}
+                shape={enhancedGeojson}
+              />
             </>
           ) : null}
         </MapContainer>
@@ -479,10 +484,12 @@ export function LocationComparisonChart({
 function FitToData({
   shape,
   activeKeys,
+  selectedKey,
   nivel,
 }: {
   shape: GeoJSONType | null;
   activeKeys: Set<string>;
+  selectedKey?: string | null;
   nivel: DemografiaMapResponse["nivel"];
 }) {
   const map = useMap();
@@ -490,6 +497,7 @@ function FitToData({
   useEffect(() => {
     if (!shape || shape.type !== "FeatureCollection") return;
     let cancelled = false;
+    const hasSelected = typeof selectedKey === "string" && selectedKey.trim().length > 0;
 
     const loadLeaflet = async () => {
       if (typeof window === "undefined") return;
@@ -503,6 +511,9 @@ function FitToData({
         filter: (feature) => {
           if (!activeKeys.size) return true;
           const key = resolveFeatureKey(feature as Feature);
+          if (hasSelected && selectedKey) {
+            return matchesFeatureKey(key, selectedKey);
+          }
           return (
             activeKeys.has(key) ||
             activeKeys.has(key.padStart(2, "0")) ||
@@ -525,7 +536,7 @@ function FitToData({
     return () => {
       cancelled = true;
     };
-  }, [activeKeys, map, nivel, shape]);
+  }, [activeKeys, map, nivel, selectedKey, shape]);
 
   return null;
 }
@@ -592,6 +603,20 @@ function mixWithWhite(color: [number, number, number], factor: number): [number,
     number,
   ];
   return mix;
+}
+
+function matchesFeatureKey(candidate: string, target: string): boolean {
+  if (!target) return false;
+  const normalizedTarget = target.trim();
+  if (!normalizedTarget) return false;
+  const variants = [
+    candidate,
+    candidate.toUpperCase(),
+    candidate.toLowerCase(),
+    candidate.padStart(2, "0"),
+    candidate.padStart(2, "0").toUpperCase(),
+  ];
+  return variants.some((value) => value === normalizedTarget || value === normalizedTarget.toUpperCase());
 }
 type LeafletTooltipOptions = Parameters<NonNullable<LeafletPath["bindTooltip"]>>[1];
 
