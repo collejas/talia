@@ -204,8 +204,8 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <DemografiaControls nivel={nivel} canales={canalesSelected} etapas={etapas} color={colorMode} />
               <SectionCards data={cardsData} />
+              <DemografiaControls nivel={nivel} canales={canalesSelected} etapas={etapas} color={colorMode} />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">
