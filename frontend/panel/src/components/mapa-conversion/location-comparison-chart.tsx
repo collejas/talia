@@ -268,8 +268,8 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.4)" : "hsl(var(--foreground)/0.1)",
           weight: isSelected || isHovered ? 1.75 : 1,
-          fillColor: "hsl(var(--muted-foreground)/0.25)",
-          fillOpacity: isSelected || isHovered ? 0.36 : 0.12,
+          fillColor: "transparent",
+          fillOpacity: 0,
         };
       }
 
