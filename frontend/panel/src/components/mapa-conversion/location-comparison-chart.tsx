@@ -13,6 +13,7 @@ export type LocationComparisonChartProps = {
   data: DemografiaMapResponse["dataset"];
   nivel: DemografiaMapResponse["nivel"];
   shape: GeoJSONType | null;
+  colorMode: "sequential" | "channel";
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
@@ -75,7 +76,14 @@ function resolveFeatureKey(feature: Feature): string {
   return value.toString().trim();
 }
 
-export function LocationComparisonChart({ data, nivel, shape }: LocationComparisonChartProps) {
+const CHANNEL_COLORS: Record<string, [number, number, number]> = {
+  webchat: [59, 130, 246], // #3b82f6
+  whatsapp: [34, 197, 94], // #22c55e
+  voz: [249, 115, 22], // #f97316
+};
+const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
+
+export function LocationComparisonChart({ data, nivel, shape, colorMode }: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -274,6 +282,16 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
       }
 
       const intensity = Math.min(1, total / maxTotal);
+      if (colorMode === "channel") {
+        const { fillColor, fillOpacity } = resolveChannelStyle(entry, intensity, isSelected || isHovered);
+        return {
+          color: isSelected || isHovered ? "hsl(var(--primary)/0.6)" : "hsl(var(--foreground)/0.18)",
+          weight: isSelected || isHovered ? 2.2 : 1,
+          fillColor,
+          fillOpacity,
+        };
+      }
+
       const hue = 210 - intensity * 150;
       const fillColor = `hsl(${hue} 70% ${38 + intensity * 18}%)`;
 
@@ -284,7 +302,7 @@ export function LocationComparisonChart({ data, nivel, shape }: LocationComparis
         fillOpacity: isSelected || isHovered ? 0.82 : 0.72,
       };
     },
-    [datasetMap, hoveredKey, maxTotal, selectedKey],
+    [colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
   );
 
   const onEachFeature = useCallback(
@@ -513,6 +531,35 @@ function formatNumber(value: unknown): string {
         : 0;
   if (!Number.isFinite(numberValue)) return "0";
   return new Intl.NumberFormat("es-MX").format(numberValue);
+}
+
+function resolveChannelStyle(
+  entry: DemografiaMapResponse["dataset"][number],
+  intensity: number,
+  isActive: boolean,
+): { fillColor: string; fillOpacity: number } {
+  const totals = entry.totales_por_canal || {};
+  const sorted = Object.entries(totals).sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0));
+  const topChannel = sorted.find(([, value]) => (value ?? 0) > 0)?.[0] ?? "webchat";
+  const baseColor = CHANNEL_COLORS[topChannel] ?? DEFAULT_CHANNEL_COLOR;
+  const factor = Math.min(1, Math.max(0, Math.pow(intensity || 0.25, 0.75)));
+  const [r, g, b] = mixWithWhite(baseColor, factor);
+  const baseOpacity = 0.55 + factor * 0.35;
+  const fillOpacity = isActive ? Math.min(1, baseOpacity + 0.15) : baseOpacity;
+  return {
+    fillColor: `rgb(${r}, ${g}, ${b})`,
+    fillOpacity,
+  };
+}
+
+function mixWithWhite(color: [number, number, number], factor: number): [number, number, number] {
+  const clamped = Math.min(1, Math.max(0, factor));
+  const mix = color.map((component) => Math.round(255 + (component - 255) * clamped)) as [
+    number,
+    number,
+    number,
+  ];
+  return mix;
 }
 type LeafletTooltipOptions = Parameters<NonNullable<LeafletPath["bindTooltip"]>>[1];
 

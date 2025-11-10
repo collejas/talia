@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
+import { ColorModeToggle } from "@/components/mapa-conversion/color-mode-toggle";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
@@ -21,6 +22,7 @@ export const dynamic = "force-dynamic";
 type DemografiaDataset = Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"];
 
 const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz"];
+type ColorMode = "sequential" | "channel";
 
 function selectTopLocation(dataset: DemografiaDataset) {
   if (!dataset.length) {
@@ -122,12 +124,14 @@ export default async function Page({
           .map((item) => item.trim().toLowerCase())
           .filter(Boolean)
       : [];
+  const colorParam = typeof params.color === "string" ? params.color.toLowerCase() : "";
+  const colorMode: ColorMode = colorParam === "channel" ? "channel" : "sequential";
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
   const errores: string[] = [];
 
   try {
-        demografiaResponse = await loadDemografiaData(nivel, {
+    demografiaResponse = await loadDemografiaData(nivel, {
       canales: canalesFilter,
       etapas,
       estado: nivel === "municipio" ? normalizedEstado : null,
@@ -192,10 +196,12 @@ export default async function Page({
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">
+                  <ColorModeToggle mode={colorMode} />
                   <LocationComparisonChartClient
                     data={mapDataset}
                     nivel={nivelChart}
                     shape={mapShape}
+                    colorMode={colorMode}
                   />
                 </div>
               ) : null}
