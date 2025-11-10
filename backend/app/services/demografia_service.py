@@ -266,6 +266,18 @@ def build_map_dataset(
     if state_filter and len(state_filter) == 1:
         state_filter = state_filter.zfill(2)
 
+    stage_code_map: dict[str, str] = {
+        "captado": "captado",
+        "precalificado": "precalificado",
+        "negociacion": "negociacion",
+        "ganado": "ganado",
+        "perdido": "perdido",
+    }
+    stage_category_map: dict[str, str] = {
+        "ganada": "ganado",
+        "perdida": "perdido",
+    }
+
     leads_rows = leads_payload.get("rows") if isinstance(leads_payload, dict) else []
     visitantes_rows = (
         visitantes_payload.get("items") if isinstance(visitantes_payload, dict) else []
@@ -288,10 +300,12 @@ def build_map_dataset(
                 "leads_total": 0,
                 "leads_totales_por_canal": {"webchat": 0, "whatsapp": 0, "voz": 0},
                 "totales_por_canal": {"webchat": 0, "whatsapp": 0, "voz": 0},
-                "webchat_breakdown": {
-                    "sin_conversacion": 0,
+                "etapas_totales": {
                     "captado": 0,
-                    "post_captado": 0,
+                    "precalificado": 0,
+                    "negociacion": 0,
+                    "ganado": 0,
+                    "perdido": 0,
                 },
                 "visitantes_total": 0,
                 "visitantes_con_chat": 0,
@@ -316,14 +330,18 @@ def build_map_dataset(
         if total <= 0:
             continue
         canal = str(row.get("canal") or "desconocido")
+        stage_code = str(row.get("etapa_codigo") or "").strip().lower()
+        stage_category = str(row.get("etapa_categoria") or "").strip().lower()
+
         entry["leads_total"] += total
         entry["leads_totales_por_canal"][canal] = (
             entry["leads_totales_por_canal"].get(canal, 0) + total
         )
-        if canal == "webchat":
-            webchat_bucket = str(row.get("webchat_bucket") or "")
-            if webchat_bucket in entry["webchat_breakdown"]:
-                entry["webchat_breakdown"][webchat_bucket] += total
+        stage_bucket = stage_code_map.get(stage_code) or stage_category_map.get(stage_category)
+        if stage_bucket:
+            entry["etapas_totales"][stage_bucket] = (
+                entry["etapas_totales"].get(stage_bucket, 0) + total
+            )
 
     for row in visitantes_rows or []:
         if not isinstance(row, dict):
@@ -341,15 +359,21 @@ def build_map_dataset(
     result = []
     for entry in combined.values():
         entry["leads_totales_por_canal"] = dict(entry["leads_totales_por_canal"])
-        entry["webchat_breakdown"] = {
-            "sin_conversacion": entry["visitantes_sin_chat"],
-            "captado": entry["webchat_breakdown"].get("captado", 0),
-            "post_captado": entry["webchat_breakdown"].get("post_captado", 0),
+        entry["etapas_totales"] = {
+            "captado": entry["etapas_totales"].get("captado", 0),
+            "precalificado": entry["etapas_totales"].get("precalificado", 0),
+            "negociacion": entry["etapas_totales"].get("negociacion", 0),
+            "ganado": entry["etapas_totales"].get("ganado", 0),
+            "perdido": entry["etapas_totales"].get("perdido", 0),
         }
         entry["totales_por_canal"] = {
             "webchat": entry["visitantes_total"],
             "whatsapp": entry["leads_totales_por_canal"].get("whatsapp", 0),
             "voz": entry["leads_totales_por_canal"].get("voz", 0),
+        }
+        entry["conversacion_totales"] = {
+            "con_conversacion": entry["visitantes_con_chat"],
+            "sin_conversacion": entry["visitantes_sin_chat"],
         }
         entry["total_visitas"] = (
             entry["totales_por_canal"]["webchat"]
@@ -373,7 +397,8 @@ def build_map_dataset(
             "nivel": entry["nivel"],
             "leads_total": entry["leads_total"],
             "totales_por_canal": entry["totales_por_canal"],
-            "webchat_breakdown": entry["webchat_breakdown"],
+            "etapas_totales": entry["etapas_totales"],
+            "conversacion_totales": entry["conversacion_totales"],
             "visitantes_total": entry["visitantes_total"],
             "visitantes_con_chat": entry["visitantes_con_chat"],
             "visitantes_sin_chat": entry["visitantes_sin_chat"],

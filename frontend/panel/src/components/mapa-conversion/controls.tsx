@@ -35,6 +35,16 @@ const CHANNEL_OPTIONS = [
 
 const DEFAULT_CHANNELS = CHANNEL_OPTIONS.map((item) => item.value);
 
+const STAGE_OPTIONS = [
+  { value: "captado", label: "Captado" },
+  { value: "precalificado", label: "Precalificado" },
+  { value: "negociacion", label: "Negociación" },
+  { value: "ganado", label: "Ganado" },
+  { value: "perdido", label: "Perdido" },
+];
+
+const DEFAULT_STAGES = STAGE_OPTIONS.map((item) => item.value);
+
 type DemografiaControlsProps = {
   nivel: "pais" | "estado" | "municipio";
   canales: string[];
@@ -50,9 +60,13 @@ export function DemografiaControls({ nivel, canales, etapas }: DemografiaControl
     return new Set(canales);
   }, [canales]);
 
-  const hasCaptadoPlus = React.useMemo(() => {
-    if (!etapas.length) return false;
-    return etapas.some((value) => value.trim().toLowerCase() === "captado_plus");
+  const normalizedStages = React.useMemo(() => {
+    if (!etapas.length) return new Set(DEFAULT_STAGES);
+    return new Set(
+      etapas
+        .map((value) => value.trim().toLowerCase())
+        .filter((value) => value && DEFAULT_STAGES.includes(value)),
+    );
   }, [etapas]);
 
   function updateParams(next: Record<string, string | null>) {
@@ -74,12 +88,6 @@ export function DemografiaControls({ nivel, canales, etapas }: DemografiaControl
     });
   }
 
-  function toggleEtapasCaptadoPlus() {
-    updateParams({
-      etapas: hasCaptadoPlus ? null : "captado_plus",
-    });
-  }
-
   function toggleChannel(value: string) {
     const next = new Set(normalizedCanales);
     if (next.has(value)) {
@@ -93,6 +101,32 @@ export function DemografiaControls({ nivel, canales, etapas }: DemografiaControl
 
     updateParams({
       canales: final,
+    });
+  }
+
+  function toggleStage(value: string) {
+    const current = etapas.length
+      ? new Set(
+          etapas
+            .map((item) => item.trim().toLowerCase())
+            .filter((item) => item && DEFAULT_STAGES.includes(item)),
+        )
+      : new Set(DEFAULT_STAGES);
+
+    if (current.has(value)) {
+      current.delete(value);
+    } else {
+      current.add(value);
+    }
+
+    if (!current.size || current.size === DEFAULT_STAGES.length) {
+      updateParams({ etapas: null });
+      return;
+    }
+
+    const ordered = DEFAULT_STAGES.filter((stage) => current.has(stage));
+    updateParams({
+      etapas: ordered.join(","),
     });
   }
 
@@ -157,16 +191,37 @@ export function DemografiaControls({ nivel, canales, etapas }: DemografiaControl
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          type="button"
-          size="sm"
-          variant={hasCaptadoPlus ? "default" : "outline"}
-          className="inline-flex items-center gap-2"
-          onClick={toggleEtapasCaptadoPlus}
-        >
-          <IconTimeline className="size-4" />
-          Desde captado
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant={etapas.length ? "default" : "outline"}
+              className="inline-flex items-center gap-2"
+            >
+              <IconTimeline className="size-4" />
+              Etapas
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="z-50 w-[200px]">
+            {STAGE_OPTIONS.map((item) => (
+              <DropdownMenuCheckboxItem
+                key={item.value}
+                checked={normalizedStages.has(item.value)}
+                onCheckedChange={() => toggleStage(item.value)}
+              >
+                {item.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={normalizedStages.size === DEFAULT_STAGES.length}
+              onCheckedChange={() => updateParams({ etapas: null })}
+            >
+              Seleccionar todas
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

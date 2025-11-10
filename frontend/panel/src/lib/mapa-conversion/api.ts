@@ -48,10 +48,16 @@ export type DemografiaMapDataset = {
   nivel: string;
   leads_total: number;
   totales_por_canal: Record<string, number>;
-  webchat_breakdown: {
+  conversacion_totales: {
+    con_conversacion: number;
     sin_conversacion: number;
+  };
+  etapas_totales: {
     captado: number;
-    post_captado: number;
+    precalificado: number;
+    negociacion: number;
+    ganado: number;
+    perdido: number;
   };
   visitantes_total: number;
   visitantes_con_chat: number;

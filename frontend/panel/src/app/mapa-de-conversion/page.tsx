@@ -49,12 +49,21 @@ function buildCardsData(
 }
 
 function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"]) {
+  const stageLabels: Record<string, string> = {
+    captado: "Captado",
+    precalificado: "Precalificado",
+    negociacion: "Negociación",
+    ganado: "Ganado",
+    perdido: "Perdido",
+  }
+
   return dataset.map((entry, index) => {
     const canales = entry.totales_por_canal || {}
     const canalPrincipal = Object.entries(canales)
       .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin canal"
-    const etapaPrincipal = Object.entries(entry.webchat_breakdown || {})
+    const etapaPrincipalRaw = Object.entries(entry.etapas_totales || {})
       .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin etapa"
+    const etapaPrincipal = stageLabels[etapaPrincipalRaw] ?? etapaPrincipalRaw
 
     return {
       id: index + 1,
