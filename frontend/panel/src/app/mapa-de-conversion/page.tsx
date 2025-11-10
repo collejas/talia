@@ -96,12 +96,12 @@ export default async function Page({
 }) {
   const params = searchParams ? await searchParams : {};
 
-  const nivelParam = typeof params.nivel === "string" ? params.nivel.toLowerCase() : "estado";
+  const nivelParam = typeof params.nivel === "string" ? params.nivel.toLowerCase() : "pais";
   const requestedNivel = nivelParam === "pais" ? "pais" : nivelParam === "municipio" ? "municipio" : "estado";
   const estadoParam = typeof params.estado === "string" ? params.estado : null;
   const normalizedEstado = estadoParam && estadoParam.trim().length ? estadoParam.trim().padStart(2, "0") : null;
   const nivel: "pais" | "estado" | "municipio" =
-    requestedNivel === "municipio" && !normalizedEstado ? "estado" : requestedNivel;
+    requestedNivel === "municipio" && !normalizedEstado ? "pais" : requestedNivel;
   const canalesParam = typeof params.canales === "string" ? params.canales : "";
   const canalesSelected =
     canalesParam.trim().length > 0
