@@ -174,3 +174,31 @@ curl -u 'hola@talia.mx:DE_se479156376421' \
   -H 'Depth: 0' \
   'https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar'
 
+
+
+
+
+› ahora explicame esto:   la tabla muestra campos consolidados y no particulares ???
+
+
+  etapas y canales para ese punto. No estamos listando leads individuales ni visitas sueltas; son métricas consolidadas por ubicación.
+  Por eso, al activar nuevas columnas desde “Customize Columns” lo que aparece son totales/contadores (p. ej. Leads WhatsApp,
+  Visitantes con chat, Ganado, etc.) correspondientes a esa ubicación, no registros particulares.
+
+
+› ok, perfecto!!! entendido, ahora SOLO RESPONDE CON IDEAS:  cuando le das clic a una linea en la columna de Ubicacion, se abre un
+  side panel a la derecha ahy podriamos exponer en la grafica por ejemplo los estados, O QUE PROPONES PAR AUSAR EL SIDE PANE DE LA
+  DERECHA AL DARLE CLIC A UN LINEA QUE MUESTRA DATOS CONSOLIDADOS?
+
+
+• - Mostrar un gráfico de barras con el desglose por municipio/estado (según nivel) para comparar rápidamente los subsegmentos más
+    fuertes dentro de esa ubicación.
+  - Incluir un timeline tipo área para ver la evolución de visitantes/leads en los últimos meses, de modo que el operador entienda si
+    el desempeño es reciente o sostenido.
+  - Agregar tarjetas con métricas clave (conversion rate, share de cada canal, ratio con-chat vs sin-chat) y mostrar variaciones vs.
+    periodo anterior.
+  - Listar las etapas con badges y explicar cuántos leads hay en cada una, resaltando dónde se pierden más oportunidades.
+  - Mostrar los principales leads/contactos asociados (top N) con enlaces rápidos para abrirlos en el panel, a fin de dar contexto
+    operativo inmediato.
+  - Exponer la trazabilidad de canales (ej. embudo: visitantes → chats → leads → ganados) para esa ubicación, ayudando a detectar
+    cuellos de botella.

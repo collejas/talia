@@ -3,7 +3,6 @@ import type { GeoJSON as GeoJSONType } from "geojson";
 import type { VisibilityState } from "@tanstack/react-table";
 
 import { AppSidebar } from "@/components/AppSidebar";
-import { DataTable } from "@/components/data-table";
 import { SectionCards } from "@/components/section-cards";
 import { SessionRecovery } from "@/components/session-recovery";
 import { SiteHeader } from "@/components/site-header";
@@ -16,6 +15,7 @@ import { DemografiaControls } from "@/components/mapa-conversion/controls";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
+import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
 
 export const dynamic = "force-dynamic";
 
@@ -305,9 +305,9 @@ export default async function Page({
                   />
                 </div>
               ) : null}
-              {tableData.length ? (
+              {tableData.length && demografiaResponse ? (
                 <div className="px-4 lg:px-6">
-                  <DataTable
+                  <MapaConversionTableClient
                     data={tableData}
                     storageKey="mapa-conversion-table-column-order"
                     columnLabels={{
@@ -319,6 +319,8 @@ export default async function Page({
                     }}
                     metricColumns={metricColumns}
                     initialVisibility={metricColumnsVisibility}
+                    nivel={nivel}
+                    summary={demografiaResponse.summary}
                   />
                 </div>
               ) : null}
