@@ -30,6 +30,7 @@
   - [ ] `agenda_disponibilidad` (usuario/asesor, día de la semana, hora inicio/fin, capacidad, proveedor).
   - [ ] `agenda_bloqueos` (usuario/asesor, `tstzrange`, motivo, origen).
   - [ ] `agenda_excepciones` o calendario laboral (días festivos, cierres especiales).
+- [ ] Validar el diseño detallado en `docs/diseno_disponibilidad.md` y ajustar según feedback del equipo.
 - [ ] Evaluar reutilización de campos existentes en `public.citas` (ej. `provider_calendar_id`, `scheduled_via`) y definir columnas adicionales necesarias (capacidad, tipo de demo, canal); mantener compatibilidad con `TALIA_CALENDARIO_DEFAULT_PROVIDER=caldav`.
 - [ ] Planear constraints e índices:
   - [ ] `EXCLUDE USING gist` en `public.citas` por `(provider_calendar_id, tstzrange(start_at, end_at))` para evitar traslapes.
