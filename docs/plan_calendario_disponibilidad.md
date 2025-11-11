@@ -17,6 +17,7 @@
   - [ ] Cancelar o reprogramar manualmente las citas con empalmes.
   - [ ] Acordar qué registros históricos permanecerán y cuáles se archivarán.
   - [ ] Preparar script SQL para consolidar las citas existentes (estatus finales, notas de auditoría).
+  - [ ] Seguir los pasos de `docs/scripts_limpieza_citas.md` para ejecutar consultas de respaldo, detección de empalmes y cancelaciones durante el corte.
 - [ ] Congelar creación de nuevas citas en todos los puntos:
   - [ ] Desactivar `schedule_demo` en el orquestador webchat (`backend/app/channels/webchat/service.py:1850`) y su endpoint `/availability` (`backend/app/channels/webchat/router.py:120`) durante el mantenimiento.
   - [ ] Bloquear rutas del panel `/agenda/demos` (`backend/app/api/routes/panel.py:2830`) que llaman `fn_cita_upsert`.
@@ -60,6 +61,7 @@
   - [ ] Implementar sincronización/bloqueo contra CalDAV en los nuevos endpoints (lectura y escritura).
   - [ ] Mantener actualizaciones bidireccionales si la agenda externa cambia (webhooks o polling).
 - [ ] Refactorizar `compute_demo_availability` para delegar en la nueva RPC y reflejar disponibilidad real del proveedor externo.
+- [ ] Ejecutar el protocolo de validación descrito en `docs/procedimiento_validacion_caldav.md` antes de reactivar el flujo de agendado.
 - [ ] Revisar RLS para nuevas tablas y funciones (asegurar acceso solo a roles `service_role` y asistentes IA).
 - [ ] Añadir logging/telemetría para identificar rechazos por doble booking.
 - [ ] Documentar payloads y ejemplos en `docs/api` o colección Postman/Bruno.
