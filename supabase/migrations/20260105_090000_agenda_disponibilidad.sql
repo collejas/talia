@@ -267,15 +267,15 @@ BEGIN
     END IF;
 
     IF p_calendario_id IS NOT NULL THEN
-        SELECT id, timezone INTO v_calendario, v_timezone
-        FROM public.agenda_calendarios
-        WHERE id = p_calendario_id AND activo IS TRUE
+        SELECT ac.id, ac.timezone INTO v_calendario, v_timezone
+        FROM public.agenda_calendarios ac
+        WHERE ac.id = p_calendario_id AND ac.activo IS TRUE
         LIMIT 1;
     ELSE
-        SELECT id, timezone INTO v_calendario, v_timezone
-        FROM public.agenda_calendarios
-        WHERE activo IS TRUE
-        ORDER BY creado_en
+        SELECT ac.id, ac.timezone INTO v_calendario, v_timezone
+        FROM public.agenda_calendarios ac
+        WHERE ac.activo IS TRUE
+        ORDER BY ac.creado_en
         LIMIT 1;
     END IF;
 
@@ -298,26 +298,26 @@ BEGIN
         SELECT generate_series(v_fecha_inicio, v_fecha_fin, interval '1 day')::date AS day_date
     ),
     cerrados AS (
-        SELECT fecha
-        FROM public.agenda_excepciones
-        WHERE calendario_id = v_calendario
-          AND tipo = 'cerrado'
-          AND fecha BETWEEN v_fecha_inicio AND v_fecha_fin
+        SELECT ae.fecha
+        FROM public.agenda_excepciones ae
+        WHERE ae.calendario_id = v_calendario
+          AND ae.tipo = 'cerrado'
+          AND ae.fecha BETWEEN v_fecha_inicio AND v_fecha_fin
     ),
     especiales AS (
         SELECT
-            fecha,
-            tipo,
-            start_time,
-            end_time,
-            COALESCE((metadata ->> 'capacidad')::int, 1) AS capacidad,
-            metadata
-        FROM public.agenda_excepciones
-        WHERE calendario_id = v_calendario
-          AND tipo IN ('especial','abierto_extra')
-          AND fecha BETWEEN v_fecha_inicio AND v_fecha_fin
-          AND start_time IS NOT NULL
-          AND end_time IS NOT NULL
+            ae.fecha,
+            ae.tipo,
+            ae.start_time,
+            ae.end_time,
+            COALESCE((ae.metadata ->> 'capacidad')::int, 1) AS capacidad,
+            ae.metadata
+        FROM public.agenda_excepciones ae
+        WHERE ae.calendario_id = v_calendario
+          AND ae.tipo IN ('especial','abierto_extra')
+          AND ae.fecha BETWEEN v_fecha_inicio AND v_fecha_fin
+          AND ae.start_time IS NOT NULL
+          AND ae.end_time IS NOT NULL
     ),
     base_blocks AS (
         SELECT
@@ -332,8 +332,8 @@ BEGIN
           ON ad.calendario_id = v_calendario
          AND ad.activo IS TRUE
          AND ((extract(dow FROM d.day_date)::int + 6) % 7) = ad.weekday
-        WHERE d.day_date NOT IN (SELECT fecha FROM cerrados)
-          AND d.day_date NOT IN (SELECT fecha FROM especiales WHERE tipo = 'especial')
+        WHERE d.day_date NOT IN (SELECT c.fecha FROM cerrados c)
+          AND d.day_date NOT IN (SELECT e.fecha FROM especiales e WHERE e.tipo = 'especial')
     ),
     especial_blocks AS (
         SELECT
@@ -352,38 +352,38 @@ BEGIN
     ),
     blocks_local AS (
         SELECT
-            day_date,
-            (day_date + start_time)::timestamp AS local_start,
-            (day_date + end_time)::timestamp AS local_end,
-            capacidad,
-            source,
-            metadata
-        FROM all_blocks
-        WHERE end_time > start_time
+            ab.day_date,
+            (ab.day_date + ab.start_time)::timestamp AS local_start,
+            (ab.day_date + ab.end_time)::timestamp AS local_end,
+            ab.capacidad,
+            ab.source,
+            ab.metadata
+        FROM all_blocks ab
+        WHERE ab.end_time > ab.start_time
     ),
     blocks_tz AS (
         SELECT
-            day_date,
-            (local_start AT TIME ZONE v_timezone) AS block_start,
-            (local_end AT TIME ZONE v_timezone) AS block_end,
-            capacidad,
-            source,
-            metadata
-        FROM blocks_local
+            bl.day_date,
+            (bl.local_start AT TIME ZONE v_timezone) AS block_start,
+            (bl.local_end AT TIME ZONE v_timezone) AS block_end,
+            bl.capacidad,
+            bl.source,
+            bl.metadata
+        FROM blocks_local bl
     ),
     busy_citas AS (
-        SELECT public.cita_slot_range(start_at, end_at) AS slot_range
-        FROM public.citas
-        WHERE calendario_id = v_calendario
-          AND estado IN ('pendiente','confirmada','reprogramada')
-          AND (p_exclude_cita_id IS NULL OR id <> p_exclude_cita_id)
-          AND public.cita_slot_range(start_at, end_at) && tstzrange(v_window_start, v_window_end, '[)')
+        SELECT public.cita_slot_range(c.start_at, c.end_at) AS slot_range
+        FROM public.citas c
+        WHERE c.calendario_id = v_calendario
+          AND c.estado IN ('pendiente','confirmada','reprogramada')
+          AND (p_exclude_cita_id IS NULL OR c.id <> p_exclude_cita_id)
+          AND public.cita_slot_range(c.start_at, c.end_at) && tstzrange(v_window_start, v_window_end, '[)')
     ),
     busy_bloqueos AS (
-        SELECT range AS slot_range
-        FROM public.agenda_bloqueos
-        WHERE calendario_id = v_calendario
-          AND range && tstzrange(v_window_start, v_window_end, '[)')
+        SELECT ab.range AS slot_range
+        FROM public.agenda_bloqueos ab
+        WHERE ab.calendario_id = v_calendario
+          AND ab.range && tstzrange(v_window_start, v_window_end, '[)')
     ),
     busy_all AS (
         SELECT slot_range FROM busy_citas
@@ -417,7 +417,13 @@ BEGIN
         WHERE bt.block_end > bt.block_start
     ),
     filtered_slots AS (
-        SELECT cs.*
+        SELECT cs.slot_start,
+               cs.slot_end,
+               cs.block_start,
+               cs.block_end,
+               cs.capacidad,
+               cs.source,
+               cs.metadata
         FROM candidate_slots cs
         WHERE cs.slot_end <= cs.block_end
           AND NOT EXISTS (
@@ -501,12 +507,21 @@ $$;
 -- Función: fn_cita_schedule
 -- ===========================================================================
 
-DROP FUNCTION IF EXISTS public.fn_cita_schedule(
-    uuid, uuid, uuid, timestamptz, uuid, timestamptz, text, jsonb, text, text, uuid, uuid, text, text, boolean
-);
-DROP FUNCTION IF EXISTS public.fn_cita_schedule(
-    uuid, uuid, uuid, uuid, timestamptz, timestamptz, text, jsonb, text, text, uuid, uuid, text, text, boolean
-);
+DO $$
+DECLARE
+    rec record;
+BEGIN
+    FOR rec IN
+        SELECT pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public'
+          AND p.proname = 'fn_cita_schedule'
+    LOOP
+        EXECUTE format('DROP FUNCTION IF EXISTS public.fn_cita_schedule(%s);', rec.args);
+    END LOOP;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.fn_cita_schedule(
     p_tarjeta_id uuid,
@@ -519,6 +534,10 @@ CREATE OR REPLACE FUNCTION public.fn_cita_schedule(
     p_metadata jsonb DEFAULT NULL,
     p_notes text DEFAULT NULL,
     p_provider text DEFAULT NULL,
+    p_meeting_url text DEFAULT NULL,
+    p_location text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
     p_created_by uuid DEFAULT NULL,
     p_updated_by uuid DEFAULT NULL,
     p_scheduled_via text DEFAULT 'ia',
@@ -550,15 +569,15 @@ BEGIN
     v_slot_minutes := GREATEST(CEIL(EXTRACT(EPOCH FROM (v_end_at - p_start_at)) / 60)::int, 1);
 
     IF p_calendario_id IS NOT NULL THEN
-        SELECT id, timezone, provider INTO v_calendario, v_timezone, v_provider
-        FROM public.agenda_calendarios
-        WHERE id = p_calendario_id AND activo IS TRUE
+        SELECT ac.id, ac.timezone, ac.provider INTO v_calendario, v_timezone, v_provider
+        FROM public.agenda_calendarios ac
+        WHERE ac.id = p_calendario_id AND ac.activo IS TRUE
         LIMIT 1;
     ELSE
-        SELECT id, timezone, provider INTO v_calendario, v_timezone, v_provider
-        FROM public.agenda_calendarios
-        WHERE activo IS TRUE
-        ORDER BY creado_en
+        SELECT ac.id, ac.timezone, ac.provider INTO v_calendario, v_timezone, v_provider
+        FROM public.agenda_calendarios ac
+        WHERE ac.activo IS TRUE
+        ORDER BY ac.creado_en
         LIMIT 1;
     END IF;
 
@@ -606,8 +625,12 @@ BEGIN
         p_end_at => v_end_at,
         p_timezone => v_timezone,
         p_provider => v_provider,
+        p_meeting_url => p_meeting_url,
+        p_location => p_location,
         p_notes => p_notes,
         p_metadata => p_metadata,
+        p_external_join_url => p_external_join_url,
+        p_reminder_sent_at => p_reminder_sent_at,
         p_created_by => p_created_by,
         p_updated_by => p_updated_by,
         p_merge_metadata => p_merge_metadata,
@@ -628,54 +651,8 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.fn_cita_schedule(
-    uuid, uuid, uuid, timestamptz, uuid, timestamptz, text, jsonb, text, text, uuid, uuid, text, text, boolean
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz, text, jsonb, text, text, text, text, text, timestamptz, uuid, uuid, text, text, boolean
 ) IS 'Agenda una cita validando disponibilidad real y asignando calendario.';
-
-CREATE OR REPLACE FUNCTION public.fn_cita_schedule(
-    p_calendario_id uuid,
-    p_tarjeta_id uuid,
-    p_contacto_id uuid,
-    p_conversacion_id uuid,
-    p_start_at timestamptz,
-    p_end_at timestamptz DEFAULT NULL,
-    p_timezone text DEFAULT NULL,
-    p_metadata jsonb DEFAULT NULL,
-    p_notes text DEFAULT NULL,
-    p_provider text DEFAULT NULL,
-    p_created_by uuid DEFAULT NULL,
-    p_updated_by uuid DEFAULT NULL,
-    p_scheduled_via text DEFAULT 'ia',
-    p_reminder_status text DEFAULT NULL,
-    p_merge_metadata boolean DEFAULT TRUE
-) RETURNS public.citas
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, extensions
-AS $$
-BEGIN
-    RETURN public.fn_cita_schedule(
-        p_tarjeta_id => p_tarjeta_id,
-        p_contacto_id => p_contacto_id,
-        p_conversacion_id => p_conversacion_id,
-        p_start_at => p_start_at,
-        p_calendario_id => p_calendario_id,
-        p_end_at => p_end_at,
-        p_timezone => p_timezone,
-        p_metadata => p_metadata,
-        p_notes => p_notes,
-        p_provider => p_provider,
-        p_created_by => p_created_by,
-        p_updated_by => p_updated_by,
-        p_scheduled_via => p_scheduled_via,
-        p_reminder_status => p_reminder_status,
-        p_merge_metadata => p_merge_metadata
-    );
-END;
-$$;
-
-COMMENT ON FUNCTION public.fn_cita_schedule(
-    uuid, uuid, uuid, uuid, timestamptz, timestamptz, text, jsonb, text, text, uuid, uuid, text, text, boolean
-) IS 'Agenda una cita validando disponibilidad real y asignando calendario (wrapper compatibilidad).';
 
 -- ===========================================================================
 -- Función: fn_cita_reschedule

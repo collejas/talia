@@ -46,8 +46,9 @@
 ### 5. Dependencias de código identificadas
 - **Webchat / Orquestador IA**:
   - `list_demo_slots`, `schedule_demo`, `reschedule_demo`, `cancel_demo` se manejan en `backend/app/channels/webchat/service.py:1839` en adelante.
-  - `schedule_demo` ahora llama `storage.schedule_demo_cita` (RPC `fn_cita_schedule`) tras asegurar la tarjeta. `reschedule_demo` delega en `storage.reschedule_demo_cita` (`fn_cita_reschedule`).
+  - `schedule_demo` ahora llama `storage.schedule_demo_cita` (RPC `fn_cita_schedule_v2`) tras asegurar la tarjeta. `reschedule_demo` delega en `storage.reschedule_demo_cita` (`fn_cita_reschedule`).
   - La validación de horarios (`compute_demo_availability`) delega en `storage.fetch_agenda_slots`, que invoca `fn_agenda_slots_disponibles` para considerar disponibilidad real.
+  - Las respuestas del asistente que incluyen `metadata.availability` se renderizan como calendario interactivo en el widget (`landing/src/assets/js/modules/chat.js#L430`).
 - **Servicio de calendario**:
   - `compute_demo_availability` genera slots usando configuración estática (horarios laborales, buffer) y citas existentes (`backend/app/services/calendar.py:853`).
   - Interacción con providers externos (`CalDAV`, `Google`) administrada por `CalendarService` (`backend/app/services/calendar.py:203` y `backend/app/services/calendar.py:446`).
@@ -73,4 +74,4 @@
    - `reschedule_demo` y `cancel_demo` siguen rutas similares, actualizando la cita mediante `fn_cita_upsert` o `fn_cita_cancel`, y luego sincronizan cambios con el proveedor externo (`backend/app/channels/webchat/service.py:1937` y `backend/app/services/calendar.py:306`).
 4. **Limitaciones detectadas**  
 - La disponibilidad ahora se obtiene desde `fn_agenda_slots_disponibles`, que combina `agenda_*`, `citas` y `bloqueos` CalDAV.  
-- `fn_cita_schedule`/`fn_cita_reschedule` delegan en `fn_cita_upsert`, pero la constraint `citas_calendario_range_excl` evita empalmes para calendarios con capacidad 1.
+- `fn_cita_schedule_v2`/`fn_cita_reschedule` delegan en `fn_cita_upsert`, pero la constraint `citas_calendario_range_excl` evita empalmes para calendarios con capacidad 1.

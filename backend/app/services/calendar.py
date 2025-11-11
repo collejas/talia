@@ -978,6 +978,17 @@ async def compute_demo_availability(
             break
 
     window_end = (base_start + timedelta(days=lookahead_days)).replace(second=0, microsecond=0)
+    if not slots:
+        logger.info(
+            "calendar.availability.empty",
+            extra={
+                "conversation_id": conversation_id,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "timezone": tz_name,
+                "slot_minutes": slot_length_minutes,
+            },
+        )
     return {
         "status": "ok",
         "conversation_id": conversation_id,

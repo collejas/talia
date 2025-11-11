@@ -80,7 +80,9 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
-codex resume 019a64d8-77e3-7d22-a36c-8d2a06560fa7
+codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
+codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
+codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
 
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
@@ -215,3 +217,29 @@ curl -u 'hola@talia.mx:DE_se479156376421' \
     un calendario Tal‑IA con horario 09:00–18:00 y verificar que los bloques quedaron cargados.
   - Actualicé la documentación de diseño (docs/diseno_disponibilidad.md:121) con la firma real de las funciones, referencias a la
     migración y pasos para aplicar/rollback del seed.
+
+
+
+
+
+
+
+export ACCESS_TOKEN='CmMKHwja4aa//sf+AxIGZW50OndhIgZUYWxpYSBQ8qTNyAYaQEiXWskHwVDB0MixsLr8Bu9W5iPojp9I0Zx+LNRHwi9+F+3Yn4uvZJaxklOI3oc2/3YRoRi91c2jEhLSt62GCQkSMG0IG/fTjvzk8Fqzt5qtaS2RWefgWMH1LV4+JYVFOtxeHG7KpU/tP2Dsxq4btcPGfg=='
+export PHONE_NUMBER_ID='1503845540664342'
+export DESTINO='5214443354450'
+
+
+curl -X POST "https://graph.facebook.com/v17.0/1503845540664342/messages" \
+  -H "Authorization: Bearer CmMKHwja4aa//sf+AxIGZW50OndhIgZUYWxpYSBQ8qTNyAYaQEiXWskHwVDB0MixsLr8Bu9W5iPojp9I0Zx+LNRHwi9+F+3Yn4uvZJaxklOI3oc2/3YRoRi91c2jEhLSt62GCQkSMG0IG/fTjvzk8Fqzt5qtaS2RWefgWMH1LV4+JYVFOtxeHG7KpU/tP2Dsxq4btcPGfg==" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messaging_product": "whatsapp",
+    "to": "DESTINO",
+    "type": "text",
+    "text": { "body": "Hola 👋 probando el envío desde la API de WhatsApp Cloud!" }
+  }'
+
+
+
+   psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require" \
+       -f supabase/migrations/20260105_090000_agenda_disponibilidad.sql

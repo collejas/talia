@@ -47,6 +47,194 @@ const state = {
   attachmentError: null,
 };
 
+function capitalize(text) {
+  if (!text) return '';
+  const value = String(text).trim();
+  if (!value.length) return '';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normaliseTimezoneLabel(timezone) {
+  if (!timezone || typeof timezone !== 'string') return 'America/Mexico City';
+  return timezone.replace(/_/g, ' ');
+}
+
+function handleCalendarSlotSelection(slot, fallbackTimezone) {
+  if (!elements.chatInput) return;
+  const inputTimezone = slot.timezone || fallbackTimezone || 'America/Mexico_City';
+  const startDate = slot.start_at ? new Date(slot.start_at) : null;
+  if (!startDate || Number.isNaN(startDate.getTime())) return;
+
+  const locale = 'es-MX';
+  const dayFormatter = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: inputTimezone,
+  });
+  const timeFormatter = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: inputTimezone,
+  });
+
+  const dayLabel = capitalize(dayFormatter.format(startDate));
+  const timeLabel = timeFormatter.format(startDate);
+  const message = `Me acomoda la demo el ${dayLabel} a las ${timeLabel} (${normaliseTimezoneLabel(
+    inputTimezone,
+  )}).`;
+
+  elements.chatInput.value = message;
+  elements.chatInput.focus();
+  elements.chatInput.setSelectionRange(message.length, message.length);
+  updateComposerState();
+}
+
+function renderAvailabilityCalendar(availability) {
+  const timezone = availability?.timezone || 'America/Mexico_City';
+  const slots = Array.isArray(availability?.slots) ? availability.slots : [];
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message__calendar';
+
+  const header = document.createElement('div');
+  header.className = 'message__calendar-header';
+  const title = document.createElement('div');
+  title.className = 'message__calendar-title';
+  title.textContent = 'Horarios disponibles';
+  header.appendChild(title);
+
+  const subtitle = document.createElement('div');
+  subtitle.className = 'message__calendar-subtitle';
+  subtitle.textContent = `Zona horaria: ${normaliseTimezoneLabel(timezone)}`;
+  header.appendChild(subtitle);
+
+  if (availability?.window_start && availability?.window_end) {
+    const rangeStart = new Date(availability.window_start);
+    const rangeEnd = new Date(availability.window_end);
+    if (!Number.isNaN(rangeStart.getTime()) && !Number.isNaN(rangeEnd.getTime())) {
+      const rangeFormatter = new Intl.DateTimeFormat('es-MX', {
+        month: 'short',
+        day: '2-digit',
+      });
+      const rangeText = document.createElement('div');
+      rangeText.className = 'message__calendar-window';
+      rangeText.textContent = `Disponible del ${rangeFormatter.format(rangeStart)} al ${rangeFormatter.format(
+        rangeEnd,
+      )}`;
+      header.appendChild(rangeText);
+    }
+  }
+
+  wrapper.appendChild(header);
+
+  if (!slots.length) {
+    const empty = document.createElement('div');
+    empty.className = 'message__calendar-empty';
+    empty.textContent = 'Por ahora no hay espacios libres. Avísame si quieres que revise otra fecha.';
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  const groups = new Map();
+  const locale = 'es-MX';
+  slots
+    .filter((slot) => slot && slot.start_at)
+    .forEach((slot) => {
+      const slotTimezone = slot.timezone || timezone;
+      const slotStart = new Date(slot.start_at);
+      if (Number.isNaN(slotStart.getTime())) return;
+      const key =
+        slot.local_date ||
+        new Intl.DateTimeFormat('en-CA', { timeZone: slotTimezone }).format(slotStart);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          date: slotStart,
+          timezone: slotTimezone,
+          slots: [],
+        });
+      }
+      groups.get(key).slots.push(slot);
+    });
+
+  const dayCards = Array.from(groups.values()).sort(
+    (a, b) => a.date.getTime() - b.date.getTime(),
+  );
+  const grid = document.createElement('div');
+  grid.className = 'message__calendar-grid';
+
+  dayCards.forEach((group) => {
+    const dayCard = document.createElement('div');
+    dayCard.className = 'message__calendar-day';
+    const dayFormatter = new Intl.DateTimeFormat(locale, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      timeZone: group.timezone,
+    });
+    const dayTitle = document.createElement('div');
+    dayTitle.className = 'message__calendar-day-title';
+    dayTitle.textContent = capitalize(dayFormatter.format(group.date));
+    dayCard.appendChild(dayTitle);
+
+    const daySubtitle = document.createElement('div');
+    daySubtitle.className = 'message__calendar-day-subtitle';
+    daySubtitle.textContent =
+      group.slots.length === 1 ? '1 horario disponible' : `${group.slots.length} horarios disponibles`;
+    dayCard.appendChild(daySubtitle);
+
+    const slotList = document.createElement('div');
+    slotList.className = 'message__calendar-slots';
+
+    const timeFormatter = new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: group.timezone,
+    });
+
+    group.slots
+      .slice()
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
+      .forEach((slot) => {
+        const slotStart = new Date(slot.start_at);
+        const timeLabel = slot.local_time || timeFormatter.format(slotStart);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message__calendar-slot-button';
+        button.textContent = timeLabel;
+        button.setAttribute('data-slot-start', slot.start_at);
+        if (slot.calendario_id) {
+          button.setAttribute('data-calendario-id', slot.calendario_id);
+        }
+        const slotTimezone = slot.timezone || group.timezone;
+        button.addEventListener('click', () =>
+          handleCalendarSlotSelection(
+            {
+              start_at: slot.start_at,
+              timezone: slotTimezone,
+            },
+            timezone,
+          ),
+        );
+        slotList.appendChild(button);
+      });
+
+    dayCard.appendChild(slotList);
+    grid.appendChild(dayCard);
+  });
+
+  wrapper.appendChild(grid);
+
+  const hint = document.createElement('p');
+  hint.className = 'message__calendar-hint';
+  hint.textContent = 'Toca un horario para colocarlo en el mensaje y confirmarlo con Tal-IA.';
+  wrapper.appendChild(hint);
+
+  return wrapper;
+}
+
 let config = { ...defaultConfig };
 let freshLoad = true;
 
@@ -288,6 +476,11 @@ function createMessageElement(text, role = 'assistant', metadata = null, attachm
     body.className = 'message__body';
     body.innerText = text;
     wrapper.appendChild(body);
+  }
+
+  if (metadata && typeof metadata === 'object' && metadata.availability) {
+    const calendar = renderAvailabilityCalendar(metadata.availability);
+    wrapper.appendChild(calendar);
   }
 
   if (Array.isArray(attachments) && attachments.length) {

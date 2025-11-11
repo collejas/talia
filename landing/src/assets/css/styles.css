@@ -950,6 +950,138 @@ body.theme-ice .intro p .callout {
   color: var(--muted-text, #475569);
 }
 
+.message__calendar {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: rgba(148, 163, 184, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.message__calendar-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.message__calendar-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.message__calendar-subtitle,
+.message__calendar-window {
+  font-size: 0.75rem;
+  color: var(--muted-text, #556275);
+}
+
+.message__calendar-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.message__calendar-day {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  border-radius: 0.85rem;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.message__calendar-day-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.message__calendar-day-subtitle {
+  font-size: 0.72rem;
+  color: var(--muted-text, #556275);
+}
+
+.message__calendar-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.message__calendar-slot-button {
+  width: 100%;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.message__calendar-slot-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.15);
+}
+
+.message__calendar-slot-button:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.65);
+  outline-offset: 2px;
+}
+
+.message__calendar-hint {
+  font-size: 0.72rem;
+  color: var(--muted-text, #556275);
+}
+
+.message__calendar-empty {
+  font-size: 0.8rem;
+  color: var(--muted-text, #556275);
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .message__calendar-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+}
+
+body[data-theme='dark'] .message__calendar {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+body[data-theme='dark'] .message__calendar-subtitle,
+body[data-theme='dark'] .message__calendar-window,
+body[data-theme='dark'] .message__calendar-day-subtitle,
+body[data-theme='dark'] .message__calendar-hint,
+body[data-theme='dark'] .message__calendar-empty {
+  color: rgba(203, 213, 225, 0.82);
+}
+
+body[data-theme='dark'] .message__calendar-day {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+body[data-theme='dark'] .message__calendar-slot-button {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #f8fafc;
+}
+
+body[data-theme='dark'] .message__calendar-slot-button:hover {
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.45);
+  border-color: rgba(96, 165, 250, 0.6);
+}
+
 .message strong {
   color: var(--accent);
   font-weight: 600;

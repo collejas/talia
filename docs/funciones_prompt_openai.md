@@ -146,38 +146,10 @@
       },
       "timezone": {
         "type": "string",
-        "description": "Zona horaria IANA preferida por el prospecto. Si se omite, el backend usará la predeterminada (America/Mexico_City)."
-      },
-      "earliest_start_at": {
-        "type": "string",
-        "description": "Fecha/hora mínima (ISO 8601) a partir de la cual se deben sugerir horarios. Si no se envía, se usa 'ahora' + buffer."
-      },
-      "preferred_start_at": {
-        "type": "string",
-        "description": "Fecha/hora (ISO 8601) sugerida por el prospecto para intentar priorizar disponibilidad cercana."
-      },
-      "days": {
-        "type": "integer",
-        "description": "Número de días hacia adelante que se deben considerar al buscar disponibilidad."
-      },
-      "max_slots": {
-        "type": "integer",
-        "description": "Número máximo de horarios a devolver."
-      },
-      "slot_minutes": {
-        "type": "integer",
-        "description": "Duración en minutos de cada bloque sugerido."
+        "description": "Zona horaria IANA preferida por el prospecto. Si se omite en la llamada, envía 'America/Mexico_City'."
       }
     },
-    "required": [
-      "conversacion_id",
-      "timezone",
-      "earliest_start_at",
-      "preferred_start_at",
-      "days",
-      "max_slots",
-      "slot_minutes"
-    ],
+    "required": ["conversacion_id", "timezone"],
     "additionalProperties": false
   }
 }
@@ -199,6 +171,10 @@
         "type": "string",
         "description": "ID de la tarjeta de lead asociada a la cita."
       },
+      "calendario_id": {
+        "type": "string",
+        "description": "Identificador del calendario donde se reservará el slot. Si no se envía, se asigna el calendario principal disponible."
+      },
       "start_at": {
         "type": "string",
         "description": "Fecha y hora de inicio en formato ISO 8601 con zona horaria. Ej: '2025-02-15T16:00:00-06:00'."
@@ -209,8 +185,8 @@
       },
       "provider": {
         "type": "string",
-        "enum": ["hosting", "google"],
-        "description": "Proveedor del calendario donde se registrará la demo. 'hosting' por defecto."
+        "enum": ["hosting", "google", "caldav"],
+        "description": "Proveedor del calendario donde se registrará la demo. 'caldav' representa el calendario interno de Tal-IA."
       },
       "contacto_id": {
         "type": "string",
@@ -249,7 +225,6 @@
       }
     },
     "required": [
-      "conversacion_id",
       "tarjeta_id",
       "start_at",
       "timezone"
@@ -290,7 +265,7 @@
       },
       "provider": {
         "type": "string",
-        "enum": ["hosting", "google"],
+        "enum": ["hosting", "google", "caldav"],
         "description": "Proveedor de calendario si cambia."
       },
       "provider_event_id": {

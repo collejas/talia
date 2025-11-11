@@ -78,6 +78,7 @@ class WebchatContext:
     conversation_id: str
     contact_id: str
     session_id: str
+    latest_availability: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -1160,20 +1161,29 @@ async def handle_message(
     )
     metadata.tools_called = tools_called or None
     metadata.tool_call_ids = tool_call_ids or None
+    availability_payload: dict[str, Any] | None = None
+    if context.latest_availability and isinstance(context.latest_availability, dict):
+        slots_payload = context.latest_availability.get("slots")
+        if isinstance(slots_payload, list) and slots_payload:
+            availability_payload = context.latest_availability
+    metadata.availability = availability_payload
 
     if assistant_reply:
         try:
+            message_metadata = {
+                "openai_conversation_id": metadata.openai_conversation_id,
+                "tools_called": tools_called,
+                "tool_call_ids": tool_call_ids,
+            }
+            if availability_payload is not None:
+                message_metadata["availability"] = availability_payload
             await storage.register_webchat_message(
                 session_id=payload.session_id,
                 author="assistant",
                 content=assistant_reply,
                 response_id=metadata.assistant_response_id,
                 inactivity_hours=settings.webchat_inactivity_hours,
-                metadata={
-                    "openai_conversation_id": metadata.openai_conversation_id,
-                    "tools_called": tools_called,
-                    "tool_call_ids": tool_call_ids,
-                },
+                metadata=message_metadata,
             )
         except storage.StorageError as exc:
             logger.exception(
@@ -1184,6 +1194,7 @@ async def handle_message(
                     "error": str(exc),
                 },
             )
+    context.latest_availability = None
 
     return schemas.MessageResponse(
         reply=assistant_reply,
@@ -1845,6 +1856,7 @@ async def _execute_function_call(
             max_slots=max_slots_arg if isinstance(max_slots_arg, int) else None,
             slot_minutes=slot_minutes_arg if isinstance(slot_minutes_arg, int) else None,
         )
+        context.latest_availability = availability
         return availability
 
     if name == "schedule_demo":
@@ -1908,6 +1920,7 @@ async def _execute_function_call(
         payload: dict[str, Any] = {
             "p_tarjeta_id": tarjeta_id,
             "p_contacto_id": contacto_id,
+            "p_conversacion_id": context.conversation_id,
             "p_start_at": parsed_start.isoformat(),
             "p_end_at": end_at_value.isoformat(),
             "p_calendario_id": arguments.get("calendario_id"),
@@ -1939,6 +1952,7 @@ async def _execute_function_call(
                 )
                 if isinstance(updated_row, dict):
                     result.update(updated_row)
+        context.latest_availability = None
         return {"status": "ok", "cita": result}
 
     if name == "reschedule_demo":
@@ -2042,6 +2056,7 @@ async def _execute_function_call(
                 )
                 if isinstance(updated_row, dict):
                     result.update(updated_row)
+        context.latest_availability = None
         return {"status": "ok", "cita": result}
 
     if name == "cancel_demo":

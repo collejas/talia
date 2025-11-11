@@ -1253,8 +1253,8 @@ async def cancel_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def schedule_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
-    """Agenda una cita utilizando la función RPC fn_cita_schedule."""
-    data = await _call_supabase_rpc("fn_cita_schedule", payload)
+    """Agenda una cita utilizando la función RPC fn_cita_schedule_v2."""
+    data = await _call_supabase_rpc("fn_cita_schedule_v2", payload)
     if isinstance(data, list):
         if not data:
             raise StorageError("fn_cita_schedule respondió una lista vacía")
