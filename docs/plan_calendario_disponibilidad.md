@@ -61,7 +61,7 @@
   - [ ] Confirmar conexión con `TALIA_CALENDARIO_*` (usuario `hola@talia.mx`, servidor `mail.talia.mx:2080`).
   - [ ] Implementar sincronización/bloqueo contra CalDAV en los nuevos endpoints (lectura y escritura).
   - [ ] Mantener actualizaciones bidireccionales si la agenda externa cambia (webhooks o polling).
-- [ ] Refactorizar `compute_demo_availability` para delegar en la nueva RPC y reflejar disponibilidad real del proveedor externo.
+- [x] Refactorizar `compute_demo_availability` para delegar en la nueva RPC y reflejar disponibilidad real del proveedor externo.
 - [ ] Ejecutar el protocolo de validación descrito en `docs/procedimiento_validacion_caldav.md` antes de reactivar el flujo de agendado.
 - [ ] Revisar RLS para nuevas tablas y funciones (asegurar acceso solo a roles `service_role` y asistentes IA).
 - [ ] Añadir logging/telemetría para identificar rechazos por doble booking.

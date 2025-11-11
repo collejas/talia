@@ -231,3 +231,11 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
   1. `psql "$SUPABASE_DATABASE_URL" -f supabase/seeds/agenda_calendarios_seed.sql`.
   2. Confirmar con `SELECT * FROM public.agenda_calendarios` y `public.agenda_disponibilidad`.
   3. Para rollback, `DELETE FROM public.agenda_disponibilidad WHERE calendario_id = '00000000-0000-4000-8000-000000000001'; DELETE FROM public.agenda_calendarios WHERE id = '00000000-0000-4000-8000-000000000001';`.
+
+### 11. Pruebas backend tras la integración
+- **Disponibilidad**: ejecutar\
+  `SELECT * FROM public.fn_agenda_slots_disponibles('00000000-0000-4000-8000-000000000999'::uuid, '2025-01-01', '2025-01-07', '00000000-0000-4000-8000-000000000001', 45, 15, 'America/Mexico_City', 20, NULL);`\
+  para verificar que sólo devuelve franjas libres; repetir después de insertar una cita para confirmar que el slot desaparece.
+- **schedule_demo (RPC)**: desde `poetry run python` u otra consola, llamar `fn_cita_schedule` vía `storage.schedule_demo_cita` y confirmar que el resultado incluye `calendario_id` y respeta el constraint anti-empalmes.
+- **reschedule_demo (RPC)**: agendar un slot, reprogramarlo con `fn_cita_reschedule` y validar que el nuevo horario está disponible (el anterior se libera) y que las actualizaciones de proveedor se disparan (`source` dentro del `metadata`).
+- **compute_demo_availability**: invocar el endpoint `/webchat/availability` en staging y comprobar que los slots coinciden con el resultado directo del RPC (mismas fechas y horas).

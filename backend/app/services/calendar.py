@@ -880,11 +880,7 @@ async def compute_demo_availability(
         earliest_local = earliest_start.astimezone(tz)
         if earliest_local > base_start:
             base_start = earliest_local
-    preferred_local = preferred_start.astimezone(tz) if preferred_start else None
-
     base_start = base_start.replace(second=0, microsecond=0)
-    if preferred_local:
-        preferred_local = preferred_local.replace(second=0, microsecond=0)
 
     lookahead_days = days if isinstance(days, int) else None
     if lookahead_days is None:
@@ -896,153 +892,90 @@ async def compute_demo_availability(
         slots_limit = settings.demo_availability_max_slots
     slots_limit = max(1, min(slots_limit, 12))
 
+    preferred_local = preferred_start.astimezone(tz) if preferred_start else None
+    if preferred_local:
+        preferred_local = preferred_local.replace(second=0, microsecond=0)
+
     slot_length_minutes = slot_minutes if isinstance(slot_minutes, int) else None
     if slot_length_minutes is None or slot_length_minutes <= 0:
         slot_length_minutes = settings.demo_availability_slot_minutes or 45
     slot_duration = timedelta(minutes=slot_length_minutes)
-    default_duration = slot_duration
-    buffer_delta = timedelta(minutes=max(settings.demo_availability_buffer_minutes, 0))
 
-    work_days = _parse_work_days(settings.demo_availability_work_days)
-    work_hours = _parse_work_hours(settings.demo_availability_work_hours)
-    holidays = _parse_holidays(settings.demo_availability_holidays)
+    buffer_minutes = max(settings.demo_availability_buffer_minutes, 0)
 
-    fetch_start = base_start - buffer_delta
-    fetch_end = base_start + timedelta(days=lookahead_days + 1)
+    start_date = base_start.date()
+    end_date = (base_start + timedelta(days=lookahead_days - 1)).date()
+    if end_date < start_date:
+        end_date = start_date
+
+    rpc_max_slots = max(slots_limit * 3, slots_limit)
 
     try:
-        busy_rows = await storage.fetch_demo_citas_range(
-            start_at=fetch_start.astimezone(timezone.utc),
-            end_at=fetch_end.astimezone(timezone.utc),
-            estados=_BUSY_STATES,
-            limit=600,
+        raw_slots = await storage.fetch_agenda_slots(
+            conversation_id=conversation_id,
+            start_date=start_date,
+            end_date=end_date,
+            calendario_id=None,
+            slot_minutes=slot_length_minutes,
+            buffer_minutes=buffer_minutes,
+            timezone_name=tz_name,
+            max_slots=rpc_max_slots,
         )
     except storage.StorageError as exc:
         logger.warning(
             "calendar.availability.fetch_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
-        busy_rows = []
-
-    busy_by_day: dict[date, list[tuple[datetime, datetime]]] = {}
-    for row in busy_rows:
-        estado = str(row.get("estado") or "").strip().lower()
-        if estado not in _BUSY_STATES:
-            continue
-        interval = _extract_event_interval(row, tz, default_duration)
-        if not interval:
-            continue
-        interval_start, interval_end = interval
-        day_cursor = interval_start
-        while day_cursor.date() <= interval_end.date():
-            day_date = day_cursor.date()
-            day_start = datetime.combine(day_date, time(0, 0), tzinfo=tz)
-            day_end = day_start + timedelta(days=1)
-            overlap_start = max(interval_start, day_start)
-            overlap_end = min(interval_end, day_end)
-            if overlap_start < overlap_end:
-                busy_by_day.setdefault(day_date, []).append((overlap_start, overlap_end))
-            day_cursor = day_end
-
-    candidates: list[tuple[int, int, date]] = []
-    for idx in range(lookahead_days):
-        candidate_date = (base_start + timedelta(days=idx)).date()
-        priority = idx
-        if preferred_local:
-            priority = abs((candidate_date - preferred_local.date()).days)
-        candidates.append((priority, idx, candidate_date))
-    candidates.sort()
+        raw_slots = []
 
     slots: list[dict[str, Any]] = []
-    seen_starts: set[str] = set()
 
-    def _append_slot(start_dt: datetime) -> None:
-        nonlocal slots, seen_starts
-        start_dt = start_dt.replace(second=0, microsecond=0)
-        end_dt = start_dt + slot_duration
-        if end_dt <= start_dt:
-            return
-        start_iso = start_dt.isoformat()
-        if start_iso in seen_starts:
-            return
-        seen_starts.add(start_iso)
-        weekday_idx = start_dt.weekday()
+    def _slot_order(row: dict[str, Any]) -> tuple[Any, Any]:
+        start_value = _coerce_datetime(row.get("start_at"))
+        if start_value is None:
+            return (1, datetime.max)
+        start_local = start_value.astimezone(tz)
+        diff = abs((start_local - preferred_local).total_seconds()) if preferred_local else 0
+        return (diff, start_local)
+
+    for row in sorted(raw_slots, key=_slot_order):
+        start_value = _coerce_datetime(row.get("start_at"))
+        if start_value is None:
+            continue
+        end_value = _coerce_datetime(row.get("end_at")) or (start_value + slot_duration)
+        start_local = start_value.astimezone(tz)
+        if start_local < base_start:
+            continue
+        if start_local.date() < start_date or start_local.date() > end_date:
+            continue
+        weekday_idx = start_local.weekday()
         label_day = (
             _DAY_NAMES_ES[weekday_idx]
             if 0 <= weekday_idx < len(_DAY_NAMES_ES)
-            else start_dt.strftime("%A")
+            else start_local.strftime("%A")
         )
-        label = f"{label_day} {start_dt.day:02d}/{start_dt.month:02d} · {start_dt.strftime('%H:%M')} {tz_name}"
-        slots.append(
-            {
-                "start_at": start_iso,
-                "end_at": end_dt.isoformat(),
-                "timezone": tz_name,
-                "weekday": start_dt.isoweekday(),
-                "label": label,
-                "local_date": start_dt.date().isoformat(),
-                "local_time": start_dt.strftime("%H:%M"),
-            }
-        )
-
-    for _, order_idx, day_date in candidates:
+        label = f"{label_day} {start_local.day:02d}/{start_local.month:02d} · {start_local.strftime('%H:%M')} {tz_name}"
+        slot_entry = {
+            "start_at": start_value.isoformat(),
+            "end_at": end_value.isoformat(),
+            "timezone": tz_name,
+            "weekday": start_local.isoweekday(),
+            "label": label,
+            "local_date": start_local.date().isoformat(),
+            "local_time": start_local.strftime("%H:%M"),
+        }
+        metadata = row.get("metadata")
+        if isinstance(metadata, dict):
+            slot_entry["metadata"] = metadata
+        calendario_id = row.get("calendario_id")
+        if calendario_id:
+            slot_entry["calendario_id"] = calendario_id
+        source = row.get("source")
+        if source:
+            slot_entry["source"] = source
+        slots.append(slot_entry)
         if len(slots) >= slots_limit:
             break
-        if day_date.weekday() not in work_days:
-            continue
-        if day_date in holidays:
-            continue
-        day_busy = busy_by_day.get(day_date, [])
-        merged_busy = _merge_intervals(day_busy)
-        for start_time, end_time in work_hours:
-            block_start = datetime.combine(day_date, start_time, tzinfo=tz)
-            block_end = datetime.combine(day_date, end_time, tzinfo=tz)
-            if block_end <= base_start:
-                continue
-            cursor = max(block_start, base_start)
-            segments: list[tuple[datetime, datetime]] = []
-            for busy_start, busy_end in merged_busy:
-                expanded_start = busy_start - buffer_delta
-                expanded_end = busy_end + buffer_delta
-                if expanded_end <= block_start or expanded_start >= block_end:
-                    continue
-                segments.append(
-                    (
-                        max(block_start, expanded_start),
-                        min(block_end, expanded_end),
-                    )
-                )
-            blocked = _merge_intervals(segments)
-
-            pointer = cursor
-            for busy_start, busy_end in blocked:
-                if pointer < busy_start:
-                    segment_end = busy_start
-                    candidate_start = _round_up_to_minute(pointer)
-                    while (
-                        candidate_start + slot_duration <= segment_end and len(slots) < slots_limit
-                    ):
-                        _append_slot(candidate_start)
-                        candidate_start += slot_duration
-                    pointer = segment_end
-                pointer = max(pointer, busy_end)
-                if pointer >= block_end or len(slots) >= slots_limit:
-                    break
-
-            if len(slots) >= slots_limit:
-                break
-
-            if pointer < block_end:
-                segment_end = block_end
-                candidate_start = _round_up_to_minute(pointer)
-                while candidate_start + slot_duration <= segment_end and len(slots) < slots_limit:
-                    _append_slot(candidate_start)
-                    candidate_start += slot_duration
-
-            if len(slots) >= slots_limit:
-                break
-
-    slots.sort(key=lambda item: item["start_at"])
 
     window_end = (base_start + timedelta(days=lookahead_days)).replace(second=0, microsecond=0)
     return {
@@ -1053,5 +986,5 @@ async def compute_demo_availability(
         "window_start": base_start.isoformat(),
         "window_end": window_end.isoformat(),
         "slot_duration_minutes": slot_length_minutes,
-        "slots": slots[:slots_limit],
+        "slots": slots,
     }

@@ -1902,11 +1902,15 @@ async def _execute_function_call(
             contact_id=contacto_id,
         )
 
+        slot_minutes = settings.demo_availability_slot_minutes or 45
+        end_at_value = parsed_start + timedelta(minutes=slot_minutes)
+
         payload: dict[str, Any] = {
             "p_tarjeta_id": tarjeta_id,
             "p_contacto_id": contacto_id,
-            "p_conversacion_id": context.conversation_id,
             "p_start_at": parsed_start.isoformat(),
+            "p_end_at": end_at_value.isoformat(),
+            "p_calendario_id": arguments.get("calendario_id"),
             "p_timezone": tz_name,
             "p_provider": provider,
             "p_meeting_url": meeting_url,
@@ -1919,7 +1923,10 @@ async def _execute_function_call(
             "p_scheduled_via": scheduled_via,
         }
 
-        result = await storage.upsert_demo_cita(payload)
+        if payload["p_calendario_id"] is None:
+            payload.pop("p_calendario_id")
+
+        result = await storage.schedule_demo_cita(payload)
         result = await sync_cita_after_create(result)
         if send_calendar_invite:
             contact = await _resolve_contact(contacto_id)
@@ -1982,18 +1989,14 @@ async def _execute_function_call(
 
         payload: dict[str, Any] = {
             "p_id": cita_id,
-            "p_conversacion_id": context.conversation_id,
             "p_start_at": start_arg,
             "p_end_at": computed_end_at or end_arg,
-            "p_timezone": timezone_arg,
-            "p_estado": arguments.get("estado"),
-            "p_provider": provider_normalized,
-            "p_provider_event_id": arguments.get("provider_event_id"),
-            "p_meeting_url": arguments.get("meeting_url"),
-            "p_location": arguments.get("location"),
-            "p_notes": arguments.get("notes"),
+            "p_timezone": tz_name,
             "p_metadata": metadata_input if metadata_input else None,
-            "p_merge_metadata": arguments.get("merge_metadata"),
+            "p_notes": arguments.get("notes"),
+            "p_merge_metadata": arguments.get("merge_metadata")
+            if arguments.get("merge_metadata") is not None
+            else True,
             "p_expected_updated_at": arguments.get("expected_updated_at"),
             "p_remove_provider_event": bool(arguments.get("remove_provider_event")),
             "p_reminder_sent_at": arguments.get("reminder_sent_at"),
@@ -2002,6 +2005,22 @@ async def _execute_function_call(
             "p_scheduled_via": scheduled_via,
             "p_cancel_reason": arguments.get("cancel_reason"),
         }
+        if provider_normalized:
+            payload["p_provider"] = provider_normalized
+        if arguments.get("estado"):
+            payload["p_estado"] = arguments["estado"]
+        if arguments.get("provider_event_id"):
+            payload["p_provider_event_id"] = arguments["provider_event_id"]
+        if arguments.get("meeting_url"):
+            payload["p_meeting_url"] = arguments["meeting_url"]
+        if arguments.get("location"):
+            payload["p_location"] = arguments["location"]
+        if arguments.get("reminder_sent_at"):
+            payload["p_reminder_sent_at"] = arguments["reminder_sent_at"]
+        if arguments.get("external_join_url"):
+            payload["p_external_join_url"] = arguments["external_join_url"]
+        if arguments.get("timezone"):
+            payload["p_timezone"] = tz_name
 
         contacto_id_arg = arguments.get("contacto_id")
         contacto_id_value = (
@@ -2009,13 +2028,8 @@ async def _execute_function_call(
             if contacto_id_arg is not None
             else str(context.contact_id or "").strip()
         )
-        if contacto_id_value:
-            payload["p_contacto_id"] = contacto_id_value
-        conversacion_id = arguments.get("conversacion_id")
-        if conversacion_id:
-            payload["p_conversacion_id"] = str(conversacion_id)
 
-        result = await storage.upsert_demo_cita(payload)
+        result = await storage.reschedule_demo_cita(payload)
         result = await sync_cita_after_update(result, provider_hint=provider_normalized)
         if send_calendar_update:
             contact = await _resolve_contact(contacto_id_value or result.get("contacto_id"))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
@@ -1252,6 +1252,36 @@ async def cancel_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+async def schedule_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
+    """Agenda una cita utilizando la función RPC fn_cita_schedule."""
+    data = await _call_supabase_rpc("fn_cita_schedule", payload)
+    if isinstance(data, list):
+        if not data:
+            raise StorageError("fn_cita_schedule respondió una lista vacía")
+        first = data[0]
+        if not isinstance(first, dict):
+            raise StorageError(f"Respuesta inesperada fn_cita_schedule: {first!r}")
+        return first
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada fn_cita_schedule: {data!r}")
+    return data
+
+
+async def reschedule_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
+    """Reprograma una cita utilizando la función RPC fn_cita_reschedule."""
+    data = await _call_supabase_rpc("fn_cita_reschedule", payload)
+    if isinstance(data, list):
+        if not data:
+            raise StorageError("fn_cita_reschedule respondió una lista vacía")
+        first = data[0]
+        if not isinstance(first, dict):
+            raise StorageError(f"Respuesta inesperada fn_cita_reschedule: {first!r}")
+        return first
+    if not isinstance(data, dict):
+        raise StorageError(f"Respuesta inesperada fn_cita_reschedule: {data!r}")
+    return data
+
+
 async def get_demo_cita(cita_id: str) -> dict[str, Any] | None:
     """Obtiene una cita demo por ID directo desde Supabase."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -1342,6 +1372,41 @@ async def fetch_demo_citas_range(
     if isinstance(data, dict):
         return [data]
     return []
+
+
+async def fetch_agenda_slots(
+    *,
+    conversation_id: str,
+    start_date: date,
+    end_date: date,
+    calendario_id: str | None,
+    slot_minutes: int,
+    buffer_minutes: int,
+    timezone_name: str,
+    max_slots: int,
+    exclude_cita_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Consulta la disponibilidad real desde fn_agenda_slots_disponibles."""
+    payload: dict[str, Any] = {
+        "p_conversacion_id": conversation_id,
+        "p_fecha_inicio": start_date.isoformat(),
+        "p_fecha_fin": end_date.isoformat(),
+        "p_slot_minutes": slot_minutes,
+        "p_buffer_minutes": buffer_minutes,
+        "p_timezone": timezone_name,
+        "p_max_slots": max_slots,
+    }
+    if calendario_id:
+        payload["p_calendario_id"] = calendario_id
+    if exclude_cita_id:
+        payload["p_exclude_cita_id"] = exclude_cita_id
+
+    data = await _call_supabase_rpc("fn_agenda_slots_disponibles", payload)
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)]
+    if isinstance(data, dict):
+        return [data]
+    raise StorageError(f"Respuesta inesperada fn_agenda_slots_disponibles: {data!r}")
 
 
 async def ensure_lead_tarjeta(

@@ -10,6 +10,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.api.routes import panel
+from app.services import storage
 
 
 class DummyResponse:
@@ -311,6 +312,15 @@ async def test_eliminar_cita_demo_con_motivo_y_flag(
         return DummyResponse(status_code=200, payload={"id": json["p_id"], "estado": "cancelada"})
 
     monkeypatch.setattr(panel, "_sb_post", fake_sb_post)
+
+    async def fake_get_demo_cita(_: str) -> dict[str, Any]:
+        return {"id": str(uuid4()), "provider": "caldav", "provider_event_id": "evt-123"}
+
+    async def fake_sync_cancel(**_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(storage, "get_demo_cita", fake_get_demo_cita)
+    monkeypatch.setattr(panel, "sync_cita_after_cancel", fake_sync_cancel)
 
     cita_id = str(uuid4())
     response = await async_client.delete(

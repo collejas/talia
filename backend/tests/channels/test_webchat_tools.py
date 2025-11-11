@@ -86,7 +86,7 @@ async def test_list_demo_slots_valida_rangos(monkeypatch: pytest.MonkeyPatch) ->
 async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, dict[str, str | None]] = {}
 
-    async def fake_upsert(payload: dict[str, str | None]) -> dict[str, str]:
+    async def fake_schedule(payload: dict[str, str | None]) -> dict[str, str]:
         captured["payload"] = payload
         return {"id": "cita-123", "tarjeta_id": payload["p_tarjeta_id"]}
 
@@ -103,7 +103,7 @@ async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) ->
         }
         return tarjeta_id or "lead-1"
 
-    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "schedule_demo_cita", fake_schedule)
     monkeypatch.setattr(storage, "ensure_lead_tarjeta", fake_ensure)
 
     context = WebchatContext(
@@ -143,10 +143,15 @@ async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) ->
     payload = captured["payload"]
     assert payload["p_tarjeta_id"] == "lead-1"
     assert payload["p_contacto_id"] == "contact-1"
-    assert payload["p_conversacion_id"] == "conv-1"
     assert payload["p_provider"] == "google"
     assert payload["p_timezone"] == "America/Mexico_City"
     assert payload["p_start_at"] == start_iso
+    expected_end = (
+        datetime.fromisoformat(start_iso)
+        + timedelta(minutes=settings.demo_availability_slot_minutes or 45)
+    ).isoformat()
+    assert payload["p_end_at"] == expected_end
+    assert "p_calendario_id" not in payload
     assert payload["p_reminder_status"] == "programado"
     assert payload["p_external_join_url"] == "https://zoom.example/abc"
     assert payload["p_scheduled_via"] == "ia"
@@ -155,7 +160,10 @@ async def test_schedule_demo_invoca_supabase(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_schedule_demo_envia_invitacion(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_upsert(payload: dict[str, Any]) -> dict[str, Any]:
+    captured: dict[str, Any] = {}
+
+    async def fake_schedule(payload: dict[str, Any]) -> dict[str, Any]:
+        captured["payload"] = payload
         return {
             "id": "cita-999",
             "start_at": payload["p_start_at"],
@@ -178,7 +186,7 @@ async def test_schedule_demo_envia_invitacion(monkeypatch: pytest.MonkeyPatch) -
     async def fake_ensure_lead_tarjeta(**_: Any) -> str:
         return "lead-1"
 
-    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "schedule_demo_cita", fake_schedule)
     monkeypatch.setattr(storage, "ensure_lead_tarjeta", fake_ensure_lead_tarjeta)
     monkeypatch.setattr("app.channels.webchat.service.sync_cita_after_create", fake_sync_create)
     monkeypatch.setattr(
@@ -192,12 +200,19 @@ async def test_schedule_demo_envia_invitacion(monkeypatch: pytest.MonkeyPatch) -
         session_id="session-invite",
     )
 
+    tz = ZoneInfo("America/Mexico_City")
+    now_local = datetime.now(tz)
+    start_local = now_local.replace(hour=11, minute=0, second=0, microsecond=0)
+    if start_local <= now_local:
+        start_local += timedelta(days=1)
+    start_iso = start_local.isoformat()
+
     result = await _execute_function_call(
         "schedule_demo",
         {
             "tarjeta_id": "lead-1",
             "contacto_id": "contact-1",
-            "start_at": "2025-11-10T11:00:00-06:00",
+            "start_at": start_iso,
             "timezone": "America/Mexico_City",
             "metadata": {"send_calendar_invite": True},
         },
@@ -206,6 +221,12 @@ async def test_schedule_demo_envia_invitacion(monkeypatch: pytest.MonkeyPatch) -
 
     assert result["status"] == "ok"
     assert result["cita"]["invite_status"] == "enviado"
+    payload = captured["payload"]
+    assert payload["p_start_at"] == start_iso
+    expected_end = (
+        start_local + timedelta(minutes=settings.demo_availability_slot_minutes or 45)
+    ).isoformat()
+    assert payload["p_end_at"] == expected_end
 
 
 @pytest.mark.asyncio
@@ -213,11 +234,8 @@ async def test_schedule_demo_rechaza_fecha_pasada(monkeypatch: pytest.MonkeyPatc
     async def fake_ensure(**_: str) -> str:
         return "lead-1"
 
-    async def fake_upsert(payload: dict[str, str | None]) -> dict[str, str | None]:
-        return payload
-
     monkeypatch.setattr(storage, "ensure_lead_tarjeta", fake_ensure)
-    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "schedule_demo_cita", lambda payload: payload)
 
     context = WebchatContext(
         conversation_id="conv-err",
@@ -242,11 +260,11 @@ async def test_schedule_demo_rechaza_fecha_pasada(monkeypatch: pytest.MonkeyPatc
 async def test_reschedule_demo_actualiza_cita(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, dict[str, str | None]] = {}
 
-    async def fake_upsert(payload: dict[str, str | None]) -> dict[str, str | None]:
+    async def fake_reschedule(payload: dict[str, str | None]) -> dict[str, str | None]:
         captured["payload"] = payload
         return {"id": payload["p_id"], "estado": payload.get("p_estado")}
 
-    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "reschedule_demo_cita", fake_reschedule)
 
     context = WebchatContext(
         conversation_id="conv-2",
@@ -273,18 +291,18 @@ async def test_reschedule_demo_actualiza_cita(monkeypatch: pytest.MonkeyPatch) -
     assert result == {"status": "ok", "cita": {"id": "cita-456", "estado": "reprogramada"}}
     payload = captured["payload"]
     assert payload["p_id"] == "cita-456"
-    assert payload["p_conversacion_id"] == "conv-2"
     assert payload["p_provider"] == "hosting"
     assert payload["p_remove_provider_event"] is True
     assert payload["p_merge_metadata"] is False
     assert payload["p_metadata"] == {"duracion_min": 60}
     assert payload["p_reminder_status"] == "enviado"
     assert payload["p_scheduled_via"] == "api"
+    assert "p_conversacion_id" not in payload
 
 
 @pytest.mark.asyncio
 async def test_reschedule_demo_envia_actualizacion(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_upsert(payload: dict[str, Any]) -> dict[str, Any]:
+    async def fake_reschedule(payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": payload["p_id"],
             "start_at": payload["p_start_at"],
@@ -306,7 +324,7 @@ async def test_reschedule_demo_envia_actualizacion(monkeypatch: pytest.MonkeyPat
     ) -> dict[str, Any]:
         return result
 
-    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "reschedule_demo_cita", fake_reschedule)
     monkeypatch.setattr("app.channels.webchat.service.sync_cita_after_update", fake_sync_update)
     monkeypatch.setattr(
         "app.channels.webchat.service._maybe_send_calendar_invitation", fake_send_invite
@@ -338,11 +356,11 @@ async def test_reschedule_demo_envia_actualizacion(monkeypatch: pytest.MonkeyPat
 async def test_reschedule_demo_infiere_end_at(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, dict[str, str | None]] = {}
 
-    async def fake_upsert(payload: dict[str, str | None]) -> dict[str, str | None]:
+    async def fake_reschedule(payload: dict[str, str | None]) -> dict[str, str | None]:
         captured["payload"] = payload
         return {"id": payload["p_id"], "estado": payload.get("p_estado")}
 
-    monkeypatch.setattr(storage, "upsert_demo_cita", fake_upsert)
+    monkeypatch.setattr(storage, "reschedule_demo_cita", fake_reschedule)
 
     context = WebchatContext(
         conversation_id="conv-auto",
@@ -373,7 +391,6 @@ async def test_reschedule_demo_infiere_end_at(monkeypatch: pytest.MonkeyPatch) -
     ).isoformat()
     assert payload["p_end_at"] == expected_end
     assert payload["p_timezone"] == "America/Mexico_City"
-    assert payload["p_conversacion_id"] == "conv-auto"
 
 
 @pytest.mark.asyncio
@@ -442,7 +459,7 @@ async def test_schedule_demo_valida_provider(monkeypatch: pytest.MonkeyPatch) ->
     async def fail_ensure(**_: str) -> str:
         raise AssertionError("ensure_lead_tarjeta no debe ejecutarse para provider inválido")
 
-    monkeypatch.setattr(storage, "upsert_demo_cita", lambda payload: payload)
+    monkeypatch.setattr(storage, "schedule_demo_cita", lambda payload: payload)
     monkeypatch.setattr(storage, "ensure_lead_tarjeta", fail_ensure)
 
     context = WebchatContext(
