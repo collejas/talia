@@ -202,3 +202,16 @@ curl -u 'hola@talia.mx:DE_se479156376421' \
     operativo inmediato.
   - Exponer la trazabilidad de canales (ej. embudo: visitantes → chats → leads → ganados) para esa ubicación, ayudando a detectar
     cuellos de botella.
+
+
+
+
+• Cambios clave
+
+  - Reescribí la migración supabase/migrations/20260105_090000_agenda_disponibilidad.sql:1 para incluir todo el esquema de agenda
+    (tablas agenda_*, constraint anti-empalmes con cita_slot_range) y añadí las nuevas funciones fn_agenda_slots_disponibles,
+    fn_cita_schedule y fn_cita_reschedule que validan disponibilidad real antes de reservar.
+  - Añadí seeds de apoyo (supabase/seeds/agenda_calendarios_seed.sql:1, supabase/seeds/agenda_disponibilidad_check.sql:1) para poblar
+    un calendario Tal‑IA con horario 09:00–18:00 y verificar que los bloques quedaron cargados.
+  - Actualicé la documentación de diseño (docs/diseno_disponibilidad.md:121) con la firma real de las funciones, referencias a la
+    migración y pasos para aplicar/rollback del seed.

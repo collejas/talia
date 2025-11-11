@@ -118,16 +118,18 @@
 
 ### 5. Función `public.fn_agenda_slots_disponibles`
 
-**Firma recomendada**  
+**Firma implementada (`supabase/migrations/20260105_090000_agenda_disponibilidad.sql`)**
 ```sql
 CREATE FUNCTION public.fn_agenda_slots_disponibles(
-    p_calendario_id uuid,
+    p_conversacion_id uuid,
     p_fecha_inicio date,
     p_fecha_fin date,
+    p_calendario_id uuid DEFAULT NULL,
     p_slot_minutes integer DEFAULT 45,
     p_buffer_minutes integer DEFAULT 15,
-    p_timezone text DEFAULT 'America/Mexico_City',
-    p_max_slots integer DEFAULT 100
+    p_timezone text DEFAULT NULL,
+    p_max_slots integer DEFAULT 100,
+    p_exclude_cita_id uuid DEFAULT NULL
 ) RETURNS TABLE (
     calendario_id uuid,
     start_at timestamptz,
@@ -139,8 +141,10 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
 );
 ```
 
+> Para mantener compatibilidad, también se crea un wrapper con la firma anterior (sin `p_calendario_id`) que simplemente delega al cuerpo principal usando `NULL`.
+
 **Lógica principal**
-1. Validar inputs (`fecha_fin >= fecha_inicio`, duraciones positivas).
+1. Validar inputs (`fecha_fin >= fecha_inicio`, duraciones positivas). `p_conversacion_id` queda reservado por si se requiere auditoría o RLS personalizada.
 2. Obtener bloques de `agenda_disponibilidad` por día hábil.
 3. Aplicar excepciones (`agenda_excepciones`):
    - Si `tipo='cerrado'`, omitir el día completo.
@@ -150,6 +154,7 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
    - Citas activas en `public.citas` (`estado` ∈ activos, `calendario_id` coincidente).
    - Bloqueos en `agenda_bloqueos` (`range && slot`).
    - Eventos del proveedor externo (sincronizados a `agenda_bloqueos` o consultados en tiempo real).
+   - Parámetro `p_exclude_cita_id` permite ignorar una cita específica (usado al reprogramar).
 6. Ajustar respuesta:
    - Devolver `metadata` con etiquetas (`weekday`, `label`, `local_date`).
    - Incluir `source='calculated'` o `source='special'`.
@@ -164,15 +169,17 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
 ### 6. Wrappers para operaciones de cita
 
 #### 6.1 `public.fn_cita_schedule`
-- Validar disponibilidad usando `fn_agenda_slots_disponibles` (llamada interna).
-- Insertar en `public.citas` con `scheduled_via = 'ia'` por defecto.
-- Crear bloqueo correspondiente en `agenda_bloqueos` (`origen='caldav'`) si se requiere garantizar la sincronización previa.
-- Retornar fila completa (`public.citas`).
+- Ya implementada (`supabase/migrations/20260105_090000_agenda_disponibilidad.sql`).
+- Firma: `(p_tarjeta_id uuid, p_contacto_id uuid, p_conversacion_id uuid, p_start_at timestamptz, p_calendario_id uuid DEFAULT NULL, ...)`.
+- Valida disponibilidad llamando `fn_agenda_slots_disponibles` para el día/slot exacto.
+- Usa `fn_cita_upsert` y actualiza `public.citas.calendario_id`; por defecto `scheduled_via = 'ia'`.
+- Propaga errores claros (`slot_not_available`, `provider_invalid`, etc.).
+- Se mantiene un wrapper con la firma anterior (calendario como primer parámetro) para compatibilidad.
 
 #### 6.2 `public.fn_cita_reschedule`
-- Validar nuevo horario (slot disponible).
-- Actualizar cita y, de ser necesario, mover bloqueo en `agenda_bloqueos`.
-- Reutilizar `EXCLUDE` para evitar traslapes.
+- Implementada en la misma migración.
+- Recupera la cita, valida el nuevo slot excluyendo la propia cita (`p_exclude_cita_id`).
+- Delegada a `fn_cita_upsert` para consolidar cambios manteniendo metadata y recordatorios.
 
 #### 6.3 `public.fn_cita_cancel`
 - Limpiar bloqueo asociado si la cita fue creada por Tal-IA.
@@ -208,8 +215,19 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
   - Crea `agenda_calendarios`, `agenda_disponibilidad`, `agenda_excepciones`, `agenda_bloqueos` con índices y triggers de `tg_touch_updated_at`.
   - Añade columna `calendario_id` a `public.citas`, índice filtrado y constraint `citas_calendario_range_excl` (requiere `btree_gist`).
   - Define función `public.cita_slot_range(start_at, end_at)` marcada `IMMUTABLE` para apoyar el constraint de exclusión.
+  - Implementa `fn_agenda_slots_disponibles`, `fn_cita_schedule` y `fn_cita_reschedule`.
 - Pasos sugeridos de despliegue:
   1. Ejecutar migración en staging y poblar registros de ejemplo.
   2. Verificar que `EXCLUDE` evita empalmes con pruebas concurrentes.
   3. Poblar `agenda_calendarios` con el calendario principal (`provider='caldav'`, URL actual).
   4. Asociar citas existentes a `calendario_id` antes de activar constraint en producción (si aplica).
+
+### 10. Seed de ejemplo
+- Archivo: `supabase/seeds/agenda_calendarios_seed.sql`.
+- Inserta:
+  - Calendario principal (`uuid 00000000-0000-4000-8000-000000000001`, provider `caldav`).
+  - Bloques de disponibilidad lunes-viernes 09:00–18:00.
+- Uso recomendado:
+  1. `psql "$SUPABASE_DATABASE_URL" -f supabase/seeds/agenda_calendarios_seed.sql`.
+  2. Confirmar con `SELECT * FROM public.agenda_calendarios` y `public.agenda_disponibilidad`.
+  3. Para rollback, `DELETE FROM public.agenda_disponibilidad WHERE calendario_id = '00000000-0000-4000-8000-000000000001'; DELETE FROM public.agenda_calendarios WHERE id = '00000000-0000-4000-8000-000000000001';`.
