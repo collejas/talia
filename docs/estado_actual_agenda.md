@@ -29,6 +29,10 @@
   - `TALIA_CALENDARIO_SERVER_URL=https://mail.talia.mx:2080`
   - `TALIA_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar`
   - Servicio actualmente operativo; se seguirá utilizando como fuente de disponibilidad real.
+- **Parámetros de disponibilidad** (ver `backend/app/core/config.py:70`):
+  - Zona horaria por defecto `demo_availability_timezone` (alias `CALENDARIO_DEMO_TIMEZONE`).
+  - Horarios laborales `demo_availability_work_hours` (por defecto `09:00-18:00`) y días hábiles `demo_availability_work_days` (lunes-viernes).
+  - Duración estándar (`demo_availability_slot_minutes=45`), colchón (`demo_availability_buffer_minutes=15`) y lookahead (`demo_availability_lookahead_days=21`).
 
 ### 3. Flujo actual de agendado
 - El webchat ofrece horarios sin consultar la base (opciones repetidas). El prompt (`docs/prompt_landing.md:65`) instruye llamar `list_demo_slots`, pero esa función no está implementada en Supabase ni en el backend.

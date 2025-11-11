@@ -17,7 +17,11 @@
   - [ ] Cancelar o reprogramar manualmente las citas con empalmes.
   - [ ] Acordar qué registros históricos permanecerán y cuáles se archivarán.
   - [ ] Preparar script SQL para consolidar las citas existentes (estatus finales, notas de auditoría).
-- [ ] Actualizar temporalmente el prompt y el front para pausar nuevas agendas mientras se completa la migración (mensaje informativo al usuario).
+- [ ] Congelar creación de nuevas citas en todos los puntos:
+  - [ ] Desactivar `schedule_demo` en el orquestador webchat (`backend/app/channels/webchat/service.py:1850`) y su endpoint `/availability` (`backend/app/channels/webchat/router.py:120`) durante el mantenimiento.
+  - [ ] Bloquear rutas del panel `/agenda/demos` (`backend/app/api/routes/panel.py:2830`) que llaman `fn_cita_upsert`.
+  - [ ] Ajustar prompt/tools (`docs/prompt_landing.md:65`, `docs/funciones_prompt_openai.md:136`) para informar mantenimiento.
+  - [ ] Notificar al equipo que cree citas manualmente vía CalDAV si es urgente, mientras dura el corte.
 
 ## Fase 2 · Diseño de disponibilidad y modelo de datos
 - [ ] Definir responsables (asesores) y fuentes de disponibilidad: horario fijo, sincronización con el servicio CalDAV existente (`mail.talia.mx`), y bloques manuales.
@@ -36,6 +40,7 @@
 - [ ] Diseñar `public.fn_agenda_slots_disponibles(asesor_id, fecha_inicio, fecha_fin, duracion, timezone, max_slots)`:
   - [ ] Implementar generación de slots con `generate_series`.
   - [ ] Filtrar contra `agenda_disponibilidad`, `agenda_bloqueos` y `public.citas` activas.
+  - [ ] Integrar bloqueos provenientes del proveedor CalDAV (consultar eventos vigentes vía API antes de exponer el slot).
   - [ ] Normalizar respuesta (ISO 8601, etiquetas de día, canal, capacidad).
 - [ ] Actualizar/crear funciones para reservar:
   - [ ] `public.fn_cita_schedule` (envoltura de `fn_cita_upsert` con validación de choque de horarios, `scheduled_via = 'ia'` por defecto, metadatos de invitaciones).
@@ -54,6 +59,7 @@
   - [ ] Confirmar conexión con `TALIA_CALENDARIO_*` (usuario `hola@talia.mx`, servidor `mail.talia.mx:2080`).
   - [ ] Implementar sincronización/bloqueo contra CalDAV en los nuevos endpoints (lectura y escritura).
   - [ ] Mantener actualizaciones bidireccionales si la agenda externa cambia (webhooks o polling).
+- [ ] Refactorizar `compute_demo_availability` para delegar en la nueva RPC y reflejar disponibilidad real del proveedor externo.
 - [ ] Revisar RLS para nuevas tablas y funciones (asegurar acceso solo a roles `service_role` y asistentes IA).
 - [ ] Añadir logging/telemetría para identificar rechazos por doble booking.
 - [ ] Documentar payloads y ejemplos en `docs/api` o colección Postman/Bruno.
