@@ -459,12 +459,13 @@ async def upsert_conversation_insights(
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
     }
-    payload = {
-        "conversacion_id": conversation_id,
-        "resumen": resumen,
-        "intencion": intencion,
-        "siguiente_accion": siguiente_accion,
-    }
+    payload: dict[str, Any] = {"conversacion_id": conversation_id}
+    if resumen is not None:
+        payload["resumen"] = resumen
+    if intencion is not None:
+        payload["intencion"] = intencion
+    if siguiente_accion is not None:
+        payload["siguiente_accion"] = siguiente_accion
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, headers=headers, json=payload)

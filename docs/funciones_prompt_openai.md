@@ -351,3 +351,75 @@
     "additionalProperties": false
   }
 }
+
+---
+
+{
+  "name": "send_information_email",
+  "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual para registrar el seguimiento."
+      },
+      "email": {
+        "type": "string",
+        "description": "Correo de destino confirmado con el prospecto."
+      },
+      "full_name": {
+        "type": ["string", "null"],
+        "description": "Nombre de la persona a quien va dirigido el correo. Opcional si ya se registró."
+      },
+      "company_name": {
+        "type": ["string", "null"],
+        "description": "Nombre de la empresa o marca del prospecto para personalizar el asunto."
+      },
+      "summary": {
+        "type": ["string", "null"],
+        "description": "Resumen breve (1-2 frases) sobre la necesidad u objetivo principal del lead."
+      },
+      "highlights": {
+        "type": ["array", "null"],
+        "description": "Lista de beneficios concretos que quieres remarcar en el correo.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "resources": {
+        "type": ["array", "null"],
+        "description": "Enlaces adicionales que quieras compartir (ej. video, ficha técnica).",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "Texto que describe el recurso."
+            },
+            "url": {
+              "type": "string",
+              "description": "Enlace completo al recurso."
+            }
+          },
+          "required": [
+            "label",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "email",
+      "full_name",
+      "company_name",
+      "summary",
+      "highlights",
+      "resources"
+    ],
+    "additionalProperties": false
+  }
+}

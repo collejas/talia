@@ -70,6 +70,17 @@ DEFAULT_FALLBACK = (
     "Intentemos nuevamente en unos instantes."
 )
 
+INFORMATION_EMAIL_DEFAULT_HIGHLIGHTS = [
+    "Automatiza la atención 24/7 en webchat, WhatsApp y voz con un solo asistente.",
+    "Califica prospectos y agenda demos o recordatorios sin cargar al equipo comercial.",
+    "Centraliza conversaciones, métricas y tareas en el panel de Tal-IA para dar seguimiento inteligente.",
+]
+
+INFORMATION_EMAIL_DEFAULT_RESOURCES = [
+    {"label": "Sitio de Tal-IA", "url": "https://talia.mx/"},
+    {"label": "Geoactiv · Casos y soluciones", "url": "https://geoactiv.ai/"},
+]
+
 
 @dataclass(slots=True)
 class WebchatContext:
@@ -2097,6 +2108,149 @@ async def _execute_function_call(
             if isinstance(updated_row, dict):
                 result.update(updated_row)
         return {"status": "ok", "cita": result}
+
+    if name == "send_information_email":
+        email_value = str(arguments.get("email") or "").strip()
+        if not email_value:
+            raise ValueError("email es requerido para send_information_email")
+
+        full_name = str(arguments.get("full_name") or "").strip() or None
+        company_name = str(arguments.get("company_name") or "").strip() or None
+        summary = str(arguments.get("summary") or "").strip() or None
+
+        highlight_lines: list[str] = []
+        highlights_raw = arguments.get("highlights")
+        if isinstance(highlights_raw, list):
+            for item in highlights_raw:
+                if isinstance(item, str):
+                    trimmed = item.strip()
+                    if trimmed:
+                        highlight_lines.append(trimmed)
+
+        resources: list[dict[str, str]] = []
+        resources_raw = arguments.get("resources")
+        if isinstance(resources_raw, list):
+            for item in resources_raw:
+                if isinstance(item, dict):
+                    label = str(item.get("label") or "").strip()
+                    url = str(item.get("url") or "").strip()
+                    if label and url:
+                        resources.append({"label": label, "url": url})
+
+        contact = await _resolve_contact(context.contact_id)
+        contact_notes = None
+        contact_need = None
+        if contact:
+            contact_name = str(contact.get("nombre_completo") or "").strip() or None
+            contact_company = str(contact.get("company_name") or "").strip() or None
+            contact_email = str(contact.get("correo") or "").strip() or None
+            contact_notes = str(contact.get("notes") or "").strip() or None
+            contact_need = str(contact.get("necesidad_proposito") or "").strip() or None
+            if not full_name:
+                full_name = contact_name
+            if not company_name:
+                company_name = contact_company
+            if not summary:
+                summary = contact_need or contact_notes
+            if contact_email and contact_email.lower() != email_value.lower():
+                try:
+                    await storage.update_contact(
+                        contact.get("id") or context.contact_id, {"correo": email_value.lower()}
+                    )
+                except storage.StorageError as exc:
+                    logger.warning(
+                        "info_email.sync_contact_failed",
+                        extra={
+                            "contact_id": contact.get("id") or context.contact_id,
+                            "error": str(exc),
+                        },
+                    )
+        else:
+            contact_need = None
+
+        if not highlight_lines:
+            highlight_lines = list(INFORMATION_EMAIL_DEFAULT_HIGHLIGHTS)
+        if not resources:
+            resources = list(INFORMATION_EMAIL_DEFAULT_RESOURCES)
+
+        subject_target = company_name or full_name
+        subject = (
+            f"Tal-IA · Información para {subject_target}"
+            if subject_target
+            else "Tal-IA · Información solicitada"
+        )
+
+        greeting = f"Hola {full_name}," if full_name else "Hola,"
+        body_lines = [
+            greeting,
+            "",
+            "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
+        ]
+        if summary:
+            body_lines.extend(["", summary])
+        if highlight_lines:
+            body_lines.append("")
+            body_lines.append("Puntos clave para tu equipo:")
+            for item in highlight_lines:
+                body_lines.append(f"- {item}")
+        if resources:
+            body_lines.append("")
+            body_lines.append("Recursos para profundizar:")
+            for resource in resources:
+                body_lines.append(f"- {resource['label']}: {resource['url']}")
+        body_lines.extend(
+            [
+                "",
+                "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+                "",
+                "Saludos,",
+                "Equipo Geoactiv · Tal-IA",
+            ]
+        )
+        body_text = "\n".join(body_lines)
+
+        try:
+            message_id = await asyncio.to_thread(
+                send_email,
+                subject=subject,
+                body_text=body_text,
+                recipients=[email_value],
+                body_html=None,
+                attachments=None,
+            )
+        except EmailSendError as exc:
+            logger.error(
+                "info_email.send_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+            raise ValueError(
+                "No se pudo enviar el correo en este momento. Inténtalo nuevamente más tarde."
+            ) from exc
+        except Exception as exc:  # pragma: no cover - errores inesperados
+            logger.exception(
+                "info_email.send_unexpected",
+                extra={"conversation_id": context.conversation_id},
+            )
+            raise ValueError("Ocurrió un error inesperado al enviar el correo.") from exc
+
+        try:
+            await storage.upsert_conversation_insights(
+                conversation_id=context.conversation_id,
+                resumen=summary or contact_notes,
+                intencion=contact_need,
+                siguiente_accion="informacion_enviada_email",
+            )
+        except storage.StorageError as exc:
+            logger.warning(
+                "info_email.insights_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+
+        return {
+            "status": "sent",
+            "email": email_value,
+            "message_id": message_id,
+        }
 
     logger.warning(
         "webchat.unknown_tool_call",

@@ -269,6 +269,14 @@ class Settings(BaseSettings):
             "TALIA_MAIL_USE_TLS",
         ),
     )
+    mail_use_ssl: bool = Field(
+        default=False,
+        description="Usa conexión SMTP sobre SSL/TLS implícito (por ejemplo puerto 465).",
+        validation_alias=AliasChoices(
+            "MAIL_USE_SSL",
+            "TALIA_MAIL_USE_SSL",
+        ),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 

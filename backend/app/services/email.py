@@ -89,12 +89,18 @@ def send_email(
                 part[header_name] = str(value)
 
     context = ssl.create_default_context()
+    use_ssl = bool(getattr(settings, "mail_use_ssl", False))
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            if settings.mail_use_tls:
-                server.starttls(context=context)
-            server.login(username, password)
-            server.send_message(message)
+        if use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
+                server.login(username, password)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                if settings.mail_use_tls:
+                    server.starttls(context=context)
+                server.login(username, password)
+                server.send_message(message)
     except Exception as exc:  # pragma: no cover - errores de red reales
         logger.error("email.send_failed", extra={"error": str(exc)})
         raise EmailSendError(str(exc)) from exc

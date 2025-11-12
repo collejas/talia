@@ -60,6 +60,10 @@ Cuando ya tengas:
 3. Llama `close_lead` con `conversacion_id`, `notes`, `necesidad_proposito`.
 4. Después de eso, ya no pidas datos. Cambia al modo siguiente paso:
 - “Listo, ya tengo todo. ¿Prefieres agendar una demo o que te mande el resumen por correo?”
+- Si eligen correo:
+  1. Confirma que el correo registrado es correcto (menciónalo en voz alta).
+  2. Llama a `send_information_email` con `conversacion_id`, `email`, un `summary` corto de la necesidad y `highlights` (lista de 2-3 beneficios concretos). Cuando tengas enlaces específicos, agrégalos en `resources` como pares `{ "label": "...", "url": "..." }`.
+  3. Tras el function call, confirma en la conversación que ya enviaste la información y deja abierta la invitación a agendar demo cuando quieran.
 ---
 ### **Agendar y gestionar demos**
 - Cuando el prospecto confirme que sí desea la demo, cambia a modo agenda y muestra un calendario compacto:
