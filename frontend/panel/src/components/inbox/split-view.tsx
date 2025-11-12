@@ -795,37 +795,48 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                   const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
                   return (
                     <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">{message.author}</span>
+                      <div
+                        className={`flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${isAgent ? "justify-end" : ""}`}
+                      >
+                        {isAgent ? (
+                          <Badge
+                            variant="secondary"
+                            className="border-amber-500/60 bg-amber-500/15 text-amber-700 shadow-sm"
+                          >
+                            Humano: {message.author}
+                          </Badge>
+                        ) : (
+                          <span className="font-medium text-foreground">{message.author}</span>
+                        )}
                         <span>{timestampLabel || "—"}</span>
                       </div>
-                        <div
-                          className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                        >
-                          {message.body.map((paragraph, index) => (
-                            <p key={index}>{paragraph}</p>
+                      <div
+                        className={`max-w-xl whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${isAgent ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+                      >
+                        {message.body.map((paragraph, index) => (
+                          <p key={index}>{paragraph}</p>
+                        ))}
+                      </div>
+                      {message.attachments.length ? (
+                        <div className="mt-2 flex w-full max-w-xl flex-col gap-1 text-xs">
+                          {message.attachments.map((attachment) => (
+                            <a
+                              key={attachment.id ?? attachment.url}
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 rounded-md border border-muted bg-background/80 px-3 py-2 text-muted-foreground hover:text-foreground"
+                            >
+                              <span className="truncate">{attachment.name ?? attachment.url}</span>
+                              {attachment.size ? (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {(attachment.size / 1024).toFixed(1)} KB
+                                </span>
+                              ) : null}
+                            </a>
                           ))}
                         </div>
-                        {message.attachments.length ? (
-                          <div className="mt-2 flex w-full max-w-xl flex-col gap-1 text-xs">
-                            {message.attachments.map((attachment) => (
-                              <a
-                                key={attachment.id ?? attachment.url}
-                                href={attachment.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 rounded-md border border-muted bg-background/80 px-3 py-2 text-muted-foreground hover:text-foreground"
-                              >
-                                <span className="truncate">{attachment.name ?? attachment.url}</span>
-                                {attachment.size ? (
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {(attachment.size / 1024).toFixed(1)} KB
-                                  </span>
-                                ) : null}
-                              </a>
-                            ))}
-                          </div>
-                        ) : null}
+                      ) : null}
                       </div>
                     );
                   })
@@ -888,4 +899,3 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
   }
   return merged;
 }
-
