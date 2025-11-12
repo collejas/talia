@@ -458,17 +458,56 @@ function maintainViewportBottom(behavior = 'auto', tolerance, force = false) {
   });
 }
 
+function resolveAgentName(metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    return '';
+  }
+  const direct = metadata.agent_name;
+  if (typeof direct === 'string' && direct.trim().length) {
+    return direct.trim();
+  }
+  const manualAuthor = metadata.manual_author || metadata.manualAuthor;
+  if (typeof manualAuthor === 'string' && manualAuthor.trim().length) {
+    return manualAuthor.trim();
+  }
+  const agent = metadata.agent;
+  if (agent && typeof agent === 'object') {
+    const agentName =
+      agent.name ||
+      agent.display_name ||
+      agent.displayName ||
+      agent.full_name ||
+      agent.fullName;
+    if (typeof agentName === 'string' && agentName.trim().length) {
+      return agentName.trim();
+    }
+  }
+  const ownerName = metadata.owner_name || metadata.owner;
+  if (typeof ownerName === 'string' && ownerName.trim().length) {
+    return ownerName.trim();
+  }
+  const user = metadata.user;
+  if (user && typeof user === 'object') {
+    const userName = user.name || user.full_name || user.display_name;
+    if (typeof userName === 'string' && userName.trim().length) {
+      return userName.trim();
+    }
+  }
+  const author = metadata.author || metadata.author_name || metadata.authorName;
+  if (typeof author === 'string' && author.trim().length) {
+    return author.trim();
+  }
+  return '';
+}
+
 function createMessageElement(text, role = 'assistant', metadata = null, attachments = []) {
   const wrapper = document.createElement('div');
   wrapper.className = `message message--${role}`;
   if (role === 'human') {
     const label = document.createElement('span');
-    label.className = 'message__label';
-    const agentName =
-      metadata && typeof metadata.agent_name === 'string' && metadata.agent_name.trim()
-        ? metadata.agent_name.trim()
-        : 'sin nombre';
-    label.textContent = `Este mensaje es de 'humano': '${agentName}', ya no hablas con Tal-IA`;
+    const agentName = resolveAgentName(metadata) || 'Miembro del equipo';
+    label.className = 'message__label message__label--human';
+    label.textContent = `Humano: ${agentName}`;
     wrapper.appendChild(label);
   }
   if (text && text.length) {
@@ -782,13 +821,84 @@ function removeTypingIndicator({ preservePending = false } = {}) {
   }
 }
 
+function normaliseSenderType(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed.length) return null;
+  if (trimmed.startsWith('human')) return 'human';
+  if (trimmed.startsWith('assistant')) return 'assistant';
+  if (trimmed.startsWith('user')) return 'user';
+  return null;
+}
+
+function extractSenderTypeFromMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+  const record = metadata;
+  const candidates = [
+    record.sender_type,
+    record.senderType,
+    record.sender,
+    record.author_type,
+    record.agent_type,
+  ];
+  const sender = record.sender;
+  if (sender && typeof sender === 'object') {
+    candidates.push(sender.type, sender.sender_type, sender.senderType);
+  }
+  const agent = record.agent;
+  if (agent && typeof agent === 'object') {
+    candidates.push(agent.type, agent.sender_type, agent.senderType);
+  }
+  for (const candidate of candidates) {
+    const resolved = normaliseSenderType(candidate);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  const manualFlag =
+    record.manual_override ??
+    record.manualOverride ??
+    record.manual_mode ??
+    record.manualMode;
+  if (typeof manualFlag === 'boolean' && manualFlag) {
+    return 'human';
+  }
+
+  const origin = record.origin;
+  if (typeof origin === 'string' && origin.toLowerCase().includes('manual')) {
+    return 'human';
+  }
+  const source = record.source;
+  if (typeof source === 'string' && source.toLowerCase().includes('manual')) {
+    return 'human';
+  }
+
+  return null;
+}
+
 function mapHistoryRole(message) {
   if (!message || message.direction !== 'saliente') {
     return 'user';
   }
-  const senderType =
-    typeof message.sender_type === 'string' ? message.sender_type.toLowerCase() : '';
-  if (senderType.startsWith('human')) return 'human';
+  const direct = normaliseSenderType(message.sender_type);
+  if (direct === 'human') {
+    return 'human';
+  }
+  if (direct && direct !== 'human') {
+    return 'assistant';
+  }
+  const metadataType = extractSenderTypeFromMetadata(message.metadata);
+  if (metadataType === 'human') {
+    return 'human';
+  }
+  if (metadataType && metadataType !== 'human') {
+    return 'assistant';
+  }
   return 'assistant';
 }
 

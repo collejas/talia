@@ -688,11 +688,23 @@ body.theme-void .intro p .callout {
 }
 
 .message__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  opacity: 0.75;
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--accent-strong, #2563eb);
+}
+
+.message__label--human {
+  background: rgba(217, 119, 6, 0.22);
+  color: #fcd34d;
+  border: 1px solid rgba(251, 191, 36, 0.38);
 }
 
 .message__body {
