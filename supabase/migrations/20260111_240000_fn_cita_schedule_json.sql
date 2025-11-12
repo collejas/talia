@@ -1,22 +1,52 @@
 BEGIN;
 
-DO $$
-DECLARE
-    rec record;
-BEGIN
-    FOR rec IN
-        SELECT pg_get_function_identity_arguments(p.oid) AS args
-        FROM pg_proc p
-        JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname = 'public'
-          AND p.proname = 'fn_cita_schedule_v2'
-    LOOP
-        EXECUTE format('DROP FUNCTION IF EXISTS public.fn_cita_schedule_v2(%s);', rec.args);
-    END LOOP;
-END;
-$$;
+-- Elimina versiones anteriores para impedir que PostgREST conserve firmas antiguas
+DROP FUNCTION IF EXISTS public.fn_cita_schedule(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
 
-CREATE OR REPLACE FUNCTION public.fn_cita_schedule_v2(
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_v2(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
+
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_v3(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
+
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_rpc(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
+
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_json(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
+
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_json_v1(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
+
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_json_v1_rpc(jsonb);
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_json_payload_v1(jsonb);
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_json_payload_v2(jsonb);
+DROP FUNCTION IF EXISTS public.fn_cita_schedule_json_v2(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz,
+    text, jsonb, text, text, text, text, text,
+    timestamptz, uuid, uuid, text, text, boolean
+);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_schedule_json_v1(
     p_tarjeta_id uuid,
     p_contacto_id uuid,
     p_conversacion_id uuid,
@@ -143,8 +173,66 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.fn_cita_schedule_v2(
+COMMENT ON FUNCTION public.fn_cita_schedule_json_v1(
     uuid, uuid, uuid, timestamptz, uuid, timestamptz, text, jsonb, text, text, text, text, text, timestamptz, uuid, uuid, text, text, boolean
 ) IS 'Agenda una cita y devuelve la fila completa de public.citas en formato JSON.';
+
+CREATE OR REPLACE FUNCTION public.fn_cita_schedule_json_v2(
+    p_tarjeta_id uuid,
+    p_contacto_id uuid,
+    p_conversacion_id uuid,
+    p_start_at timestamptz,
+    p_calendario_id uuid DEFAULT NULL,
+    p_end_at timestamptz DEFAULT NULL,
+    p_timezone text DEFAULT NULL,
+    p_metadata jsonb DEFAULT NULL,
+    p_notes text DEFAULT NULL,
+    p_provider text DEFAULT NULL,
+    p_meeting_url text DEFAULT NULL,
+    p_location text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
+    p_created_by uuid DEFAULT NULL,
+    p_updated_by uuid DEFAULT NULL,
+    p_scheduled_via text DEFAULT 'ia',
+    p_reminder_status text DEFAULT NULL,
+    p_merge_metadata boolean DEFAULT TRUE
+) RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+    SELECT public.fn_cita_schedule_json_v1(
+        p_tarjeta_id,
+        p_contacto_id,
+        p_conversacion_id,
+        p_start_at,
+        p_calendario_id,
+        p_end_at,
+        p_timezone,
+        p_metadata,
+        p_notes,
+        p_provider,
+        p_meeting_url,
+        p_location,
+        p_external_join_url,
+        p_reminder_sent_at,
+        p_created_by,
+        p_updated_by,
+        p_scheduled_via,
+        p_reminder_status,
+        p_merge_metadata
+    );
+$$;
+
+COMMENT ON FUNCTION public.fn_cita_schedule_json_v2(
+    uuid, uuid, uuid, timestamptz, uuid, timestamptz, text, jsonb, text, text, text, text, text, timestamptz, uuid, uuid, text, text, boolean
+) IS 'Wrapper RPC que delega en fn_cita_schedule_json_v1 con firma posicional.';
+
+-- Fuerza a PostgREST a refrescar el caché de firmas cuando la migración se ejecute
+NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload config';
+NOTIFY postgrest, 'reload schema';
+NOTIFY postgrest, 'reload config';
 
 COMMIT;

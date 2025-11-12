@@ -168,8 +168,8 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
 
 ### 6. Wrappers para operaciones de cita
 
-#### 6.1 `public.fn_cita_schedule_v2`
-- Implementada en `supabase/migrations/20260111_220000_fn_cita_schedule_v2.sql`.
+#### 6.1 `public.fn_cita_schedule_json_v1`
+- Implementada en `supabase/migrations/20260111_240000_fn_cita_schedule_json.sql`.
 - Firma: `(p_tarjeta_id uuid, p_contacto_id uuid, p_conversacion_id uuid, p_start_at timestamptz, p_calendario_id uuid DEFAULT NULL, ...)`.
 - Valida disponibilidad llamando `fn_agenda_slots_disponibles` para el día/slot exacto.
 - Usa `fn_cita_upsert` y actualiza `public.citas.calendario_id`; por defecto `scheduled_via = 'ia'`.
@@ -189,7 +189,7 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
 ### 7. Integración con CalDAV
 - Crear worker/tarea que sincronice eventos externos → `agenda_bloqueos` (mismo `provider_event_id`).
 - Cuando la IA agenda una cita:
-  1. Llama a `fn_cita_schedule_v2`.
+1. Llama a `fn_cita_schedule_json_v1` (vía RPC `fn_cita_schedule_json_payload_v2`).
   2. El backend genera evento CalDAV y guarda UID/Etag.
   3. Se inserta bloqueo con `metadata` (`caldav_uid`, `etag`).
 - Para eventos creados manualmente en CalDAV:
@@ -202,7 +202,7 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
 1. Implementar migración SQL con las tablas y constraints anteriores.
 2. Construir `fn_agenda_slots_disponibles` con pruebas unitarias (datos ficticios).
 3. Ajustar `compute_demo_availability` en el backend para utilizar la nueva función.
-4. Actualizar `schedule_demo` en el backend para usar `fn_cita_schedule_v2`.
+4. Actualizar `schedule_demo` en el backend para usar `fn_cita_schedule_json_payload_v2`.
 5. Ajustar prompts/funciones (`docs/funciones_prompt_openai.md`) y frontend para consumir los datos enriquecidos (calendario mensual).
 6. Probar flujo end-to-end con datos de desarrollo antes de mover a producción.
 
@@ -214,7 +214,7 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
   - Crea `agenda_calendarios`, `agenda_disponibilidad`, `agenda_excepciones`, `agenda_bloqueos` con índices y triggers de `tg_touch_updated_at`.
   - Añade columna `calendario_id` a `public.citas`, índice filtrado y constraint `citas_calendario_range_excl` (requiere `btree_gist`).
   - Define función `public.cita_slot_range(start_at, end_at)` marcada `IMMUTABLE` para apoyar el constraint de exclusión.
-  - Implementa `fn_agenda_slots_disponibles`, `fn_cita_schedule_v2` y `fn_cita_reschedule`.
+- Implementa `fn_agenda_slots_disponibles`, `fn_cita_schedule_json_v1` y `fn_cita_schedule_json_payload_v2`, además de `fn_cita_reschedule`.
 - Pasos sugeridos de despliegue:
   1. Ejecutar migración en staging y poblar registros de ejemplo.
   2. Verificar que `EXCLUDE` evita empalmes con pruebas concurrentes.
@@ -235,6 +235,6 @@ CREATE FUNCTION public.fn_agenda_slots_disponibles(
 - **Disponibilidad**: ejecutar\
   `SELECT * FROM public.fn_agenda_slots_disponibles('00000000-0000-4000-8000-000000000999'::uuid, '2025-01-01', '2025-01-07', '00000000-0000-4000-8000-000000000001', 45, 15, 'America/Mexico_City', 20, NULL);`\
   para verificar que sólo devuelve franjas libres; repetir después de insertar una cita para confirmar que el slot desaparece.
-- **schedule_demo (RPC)**: desde `poetry run python` u otra consola, llamar `fn_cita_schedule_v2` vía `storage.schedule_demo_cita` y confirmar que el resultado incluye `calendario_id` y respeta el constraint anti-empalmes.
+- **schedule_demo (RPC)**: desde `poetry run python` u otra consola, llamar `fn_cita_schedule_json_payload_v2` vía `storage.schedule_demo_cita` y confirmar que el resultado incluye `calendario_id` y respeta el constraint anti-empalmes.
 - **reschedule_demo (RPC)**: agendar un slot, reprogramarlo con `fn_cita_reschedule` y validar que el nuevo horario está disponible (el anterior se libera) y que las actualizaciones de proveedor se disparan (`source` dentro del `metadata`).
 - **compute_demo_availability**: invocar el endpoint `/webchat/availability` en staging y comprobar que los slots coinciden con el resultado directo del RPC (mismas fechas y horas).

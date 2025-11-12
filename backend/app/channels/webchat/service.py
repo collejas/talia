@@ -1934,6 +1934,7 @@ async def _execute_function_call(
             "p_reminder_status": reminder_status,
             "p_external_join_url": external_join_url,
             "p_scheduled_via": scheduled_via,
+            "p_merge_metadata": True,
         }
 
         if payload["p_calendario_id"] is None:

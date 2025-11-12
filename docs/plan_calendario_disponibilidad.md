@@ -45,7 +45,7 @@
   - [ ] Integrar bloqueos provenientes del proveedor CalDAV (consultar eventos vigentes vía API antes de exponer el slot).
   - [ ] Normalizar respuesta (ISO 8601, etiquetas de día, canal, capacidad).
 - [ ] Actualizar/crear funciones para reservar:
-  - [ ] `public.fn_cita_schedule_v2` (envoltura de `fn_cita_upsert` con validación de choque de horarios, `scheduled_via = 'ia'` por defecto, metadatos de invitaciones).
+  - [ ] `public.fn_cita_schedule_json_v1` (envoltura de `fn_cita_upsert` con validación de choque de horarios, `scheduled_via = 'ia'` por defecto, metadatos de invitaciones) y `fn_cita_schedule_json_payload_v2` (acepta JSON). Implementadas en `supabase/migrations/20260111_240000_fn_cita_schedule_json.sql`.
   - [ ] `public.fn_cita_reschedule` y `public.fn_cita_cancel` revisadas para usar la nueva validación y limpiar `provider_event_id` cuando sea necesario.
 - [ ] Crear vistas de soporte para el panel (ej. `public.v_agenda_slots` para auditoría).
 - [ ] Escribir pruebas manuales SQL (scripts) que demuestren:
@@ -56,7 +56,7 @@
 ## Fase 4 · Backend Supabase/Edge Functions
 - [ ] Actualizar o crear RPC/REST:
   - [ ] Endpoint `list_demo_slots` → llama `fn_agenda_slots_disponibles`, parametriza rango por mes, traduce zonas horarias.
-  - [ ] Endpoint `schedule_demo` → se ajusta para usar `fn_cita_schedule_v2`, manejar errores de concurrencia y devolver `cita_id`, `start_at`, `end_at`, `timezone`, `meeting_url`.
+  - [ ] Endpoint `schedule_demo` → se ajusta para usar `fn_cita_schedule_json_payload_v2`, manejar errores de concurrencia y devolver `cita_id`, `start_at`, `end_at`, `timezone`, `meeting_url`.
 - [ ] Reutilizar el servicio externo de agenda (CalDAV) ya configurado:
   - [ ] Confirmar conexión con `TALIA_CALENDARIO_*` (usuario `hola@talia.mx`, servidor `mail.talia.mx:2080`).
   - [ ] Implementar sincronización/bloqueo contra CalDAV en los nuevos endpoints (lectura y escritura).

@@ -72,8 +72,6 @@ async def register_webchat_message(
     headers = {
         "apikey": settings.supabase_service_role,
         "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
     }
     payload: dict[str, Any] = {
         "p_session_id": session_id,
@@ -1253,8 +1251,19 @@ async def cancel_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def schedule_demo_cita(payload: dict[str, Any]) -> dict[str, Any]:
-    """Agenda una cita utilizando la función RPC fn_cita_schedule_v2."""
-    data = await _call_supabase_rpc("fn_cita_schedule_v2", payload)
+    """Agenda una cita utilizando la función RPC fn_cita_schedule_json_v2."""
+    normalized: dict[str, Any] = {}
+    for key, value in payload.items():
+        if isinstance(value, datetime):
+            normalized[key] = value.isoformat()
+        elif isinstance(value, date):
+            normalized[key] = datetime.combine(
+                value, datetime.min.time(), tzinfo=timezone.utc
+            ).isoformat()
+        else:
+            normalized[key] = value
+
+    data = await _call_supabase_rpc("fn_cita_schedule_json_v2", normalized)
     if isinstance(data, list):
         if not data:
             raise StorageError("fn_cita_schedule respondió una lista vacía")
