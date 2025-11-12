@@ -202,6 +202,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
   const lastMessagesFingerprintRef = React.useRef<string>("");
+  const previousSelectedIdRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     setThreadItems(threads);
@@ -247,7 +248,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     setManualToggling(false);
     setCurrentMessages(initialMessages);
     lastMessagesFingerprintRef.current = fingerprintMessages(initialMessages);
-    setAutoScrollLocked(false);
+    const currentId = selectedThread?.id ?? null;
+    if (previousSelectedIdRef.current !== currentId) {
+      setAutoScrollLocked(false);
+    }
+    previousSelectedIdRef.current = currentId;
   }, [selectedThread?.id, selectedThread?.messages]);
 
   React.useEffect(() => {
@@ -883,3 +888,4 @@ function mergeThreadLists(current: InboxThread[], incoming: InboxThread[]): Inbo
   }
   return merged;
 }
+
