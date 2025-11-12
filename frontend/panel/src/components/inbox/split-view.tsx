@@ -773,7 +773,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
 
   const handleAttachmentUpload = React.useCallback(
     async (files: FileList | null) => {
-      if (!files || !selectedThread) {
+      if (!files || !selectedThread || !selectedThread.manualMode) {
         return;
       }
       setAttachmentError(null);
@@ -906,6 +906,10 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
     async (content: string, outgoingAttachments: PendingAttachment[]) => {
       const targetThread = threadItems.find((thread) => thread.id === selectedId);
       if (!targetThread) {
+        return false;
+      }
+      if (!targetThread.manualMode) {
+        setSendError('Activa "Pausar asistente" para responder manualmente.');
         return false;
       }
 
@@ -1261,7 +1265,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
             </div>
 
             <InboxComposer
-              placeholder={`Responder a ${selectedThread.contactoNombre}`}
+              placeholder={
+                selectedThread.manualMode
+                  ? `Responder a ${selectedThread.contactoNombre || "este contacto"}`
+                  : 'Activa "Pausar asistente" para responder manualmente'
+              }
               pending={sending}
               uploadingAttachments={uploadingAttachments}
               attachments={pendingAttachments}
@@ -1270,6 +1278,8 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
               onSend={handleSendMessage}
               onAttachmentAdd={handleAttachmentUpload}
               onAttachmentRemove={handleAttachmentRemove}
+              disabled={!selectedThread.manualMode}
+              disabledMessage='Activa "Pausar asistente" para escribir manualmente.'
             />
           </>
         ) : (
