@@ -131,116 +131,13 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
 
 
 
-NEXT_ENVIRONMENT=development
-NEXT_LOG_LEVEL=info
-NEXT_REQUEST_LOG_LEVEL=info
-
-NEXT_OPENAI_API_KEY=sk-proj-XXXXX
-NEXT_OPENAI_ASSISTANT_ID=pmpt_69001211f6688194b2e27f3cf50e959f08c8cd898208331e
-NEXT_OPENAI_PROMPT_VERSION=24
-NEXT_OPENAI_PROJECT_ID=sk-proj-XXX
-NEXT_TWILIO_ACCOUNT_SID=AC...
-NEXT_TWILIO_AUTH_TOKEN=...
-NEXT_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
-NEXT_SUPABASE_DATABASE_URL=postgresql://postgres:XXXXXX@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
-NEXT_SUPABASE_SERVICE_ROLE=XXXXXX
-NEXT_SUPABASE_ANON_KEY=XXXXXXXXX
-NEXT_SUPABASE_LEGACY_JWT_SECRET=XXXXX
-NEXT_SUPABASE_ACCES_TOKEN=XXXXXXXXX
-NEXT_DATABASE_URL=postgresql://postgres:XXXXXXX@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
-NEXT_SUPABASE_DB_PASSWORD=XXXXXX
-NEXT_WEBCHAT_INACTIVITY_HOURS=2
-NEXT_WEBCHAT_PERSIST_SESSION=false
-
-# CORREO #
-NEXT_MAIL_USERNAME=hola@talia.mx
-NEXT_MAIL_CONTRASENA=XXXXXX
-NEXT_MAIL_INCOMING_SERVER=mail.talia.mx
-NEXT_MAIL_INCOMING_PORT_IMAP=993
-NEXT_MAIL_OUTGOING_SERVER=mail.talia.mx 
-NEXT_MAIL_OUTGOING_PORT_SMTP=465
-
-# CALENDARIO #
-NEXT_CALENDARIO_USERNAME=hola@talia.mx
-NEXT_CALENDARIO_SERVER_URL=https://mail.talia.mx:2080
-NEXT_CALENDARIO_SERVER_PORT=2080
-NEXT_CALENDARIO_SERVER_URL_ALTERNATE=https://mail.talia.mx:2080/principals/hola@talia.mx
-NEXT_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar
-NEXT_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/hola@talia.mx/addressbook
+# ALGO QUE HAY QUE HACER 
+  Pasos opcionales a considerar:
 
 
+  2. Hacer una prueba end-to-end real desde https://talia.mx/inbox para confirmar que, tras el envío, la etiqueta siguiente_accion en
+     Supabase se actualiza como esperamos.
+  3. Si quieres personalizar más el correo (p. ej. distintos recursos según el giro), podemos extender la lógica con condiciones a
+     futuro.
 
-
-
-curl -u 'hola@talia.mx:DE_se479156376421' \
-  -X PROPFIND \
-  -H 'Depth: 0' \
-  'https://mail.talia.mx:2080/calendars/hola@talia.mx/calendar'
-
-
-
-
-
-› ahora explicame esto:   la tabla muestra campos consolidados y no particulares ???
-
-
-  etapas y canales para ese punto. No estamos listando leads individuales ni visitas sueltas; son métricas consolidadas por ubicación.
-  Por eso, al activar nuevas columnas desde “Customize Columns” lo que aparece son totales/contadores (p. ej. Leads WhatsApp,
-  Visitantes con chat, Ganado, etc.) correspondientes a esa ubicación, no registros particulares.
-
-
-› ok, perfecto!!! entendido, ahora SOLO RESPONDE CON IDEAS:  cuando le das clic a una linea en la columna de Ubicacion, se abre un
-  side panel a la derecha ahy podriamos exponer en la grafica por ejemplo los estados, O QUE PROPONES PAR AUSAR EL SIDE PANE DE LA
-  DERECHA AL DARLE CLIC A UN LINEA QUE MUESTRA DATOS CONSOLIDADOS?
-
-
-• - Mostrar un gráfico de barras con el desglose por municipio/estado (según nivel) para comparar rápidamente los subsegmentos más
-    fuertes dentro de esa ubicación.
-  - Incluir un timeline tipo área para ver la evolución de visitantes/leads en los últimos meses, de modo que el operador entienda si
-    el desempeño es reciente o sostenido.
-  - Agregar tarjetas con métricas clave (conversion rate, share de cada canal, ratio con-chat vs sin-chat) y mostrar variaciones vs.
-    periodo anterior.
-  - Listar las etapas con badges y explicar cuántos leads hay en cada una, resaltando dónde se pierden más oportunidades.
-  - Mostrar los principales leads/contactos asociados (top N) con enlaces rápidos para abrirlos en el panel, a fin de dar contexto
-    operativo inmediato.
-  - Exponer la trazabilidad de canales (ej. embudo: visitantes → chats → leads → ganados) para esa ubicación, ayudando a detectar
-    cuellos de botella.
-
-
-
-
-• Cambios clave
-
-  - Reescribí la migración supabase/migrations/20260105_090000_agenda_disponibilidad.sql:1 para incluir todo el esquema de agenda
-    (tablas agenda_*, constraint anti-empalmes con cita_slot_range) y añadí las nuevas funciones fn_agenda_slots_disponibles,
-    fn_cita_schedule y fn_cita_reschedule que validan disponibilidad real antes de reservar.
-  - Añadí seeds de apoyo (supabase/seeds/agenda_calendarios_seed.sql:1, supabase/seeds/agenda_disponibilidad_check.sql:1) para poblar
-    un calendario Tal‑IA con horario 09:00–18:00 y verificar que los bloques quedaron cargados.
-  - Actualicé la documentación de diseño (docs/diseno_disponibilidad.md:121) con la firma real de las funciones, referencias a la
-    migración y pasos para aplicar/rollback del seed.
-
-
-
-
-
-
-
-export ACCESS_TOKEN='CmMKHwja4aa//sf+AxIGZW50OndhIgZUYWxpYSBQ8qTNyAYaQEiXWskHwVDB0MixsLr8Bu9W5iPojp9I0Zx+LNRHwi9+F+3Yn4uvZJaxklOI3oc2/3YRoRi91c2jEhLSt62GCQkSMG0IG/fTjvzk8Fqzt5qtaS2RWefgWMH1LV4+JYVFOtxeHG7KpU/tP2Dsxq4btcPGfg=='
-export PHONE_NUMBER_ID='1503845540664342'
-export DESTINO='5214443354450'
-
-
-curl -X POST "https://graph.facebook.com/v17.0/1503845540664342/messages" \
-  -H "Authorization: Bearer CmMKHwja4aa//sf+AxIGZW50OndhIgZUYWxpYSBQ8qTNyAYaQEiXWskHwVDB0MixsLr8Bu9W5iPojp9I0Zx+LNRHwi9+F+3Yn4uvZJaxklOI3oc2/3YRoRi91c2jEhLSt62GCQkSMG0IG/fTjvzk8Fqzt5qtaS2RWefgWMH1LV4+JYVFOtxeHG7KpU/tP2Dsxq4btcPGfg==" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messaging_product": "whatsapp",
-    "to": "DESTINO",
-    "type": "text",
-    "text": { "body": "Hola 👋 probando el envío desde la API de WhatsApp Cloud!" }
-  }'
-
-
-
-   psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require" \
-       -f supabase/migrations/20260105_090000_agenda_disponibilidad.sql
+  Cuando quieras retomamos con eso.

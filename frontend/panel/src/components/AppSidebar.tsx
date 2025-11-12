@@ -21,6 +21,7 @@ import {
   IconLayoutGrid,
   IconLayoutKanban,
   IconMap,
+  IconMail,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -58,7 +59,14 @@ const NAVIGATION = {
     { name: "Templates", url: "#", icon: IconFileWord },
   ],
   navSecondary: [
-    { title: "Settings", url: "#", icon: IconSettings },
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: IconSettings,
+      children: [
+        { title: "Formato de correos", url: "/settings/email", icon: IconMail },
+      ],
+    },
     { title: "Get Help", url: "#", icon: IconHelp },
     { title: "Search", url: "#", icon: IconSearch },
   ],

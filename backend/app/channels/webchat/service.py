@@ -70,16 +70,69 @@ DEFAULT_FALLBACK = (
     "Intentemos nuevamente en unos instantes."
 )
 
-INFORMATION_EMAIL_DEFAULT_HIGHLIGHTS = [
-    "Automatiza la atención 24/7 en webchat, WhatsApp y voz con un solo asistente.",
-    "Califica prospectos y agenda demos o recordatorios sin cargar al equipo comercial.",
-    "Centraliza conversaciones, métricas y tareas en el panel de Tal-IA para dar seguimiento inteligente.",
-]
+INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
+    "intro": "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
+    "highlights": [
+        "Automatiza la atención 24/7 en webchat, WhatsApp y voz con un solo asistente.",
+        "Califica prospectos y agenda demos o recordatorios sin cargar al equipo comercial.",
+        "Centraliza conversaciones, métricas y tareas en el panel de Tal-IA para dar seguimiento inteligente.",
+    ],
+    "resources": [
+        {"label": "Sitio de Tal-IA", "url": "https://talia.mx/"},
+        {"label": "Geoactiv · Casos y soluciones", "url": "https://geoactiv.ai/"},
+    ],
+    "closing": "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+}
 
-INFORMATION_EMAIL_DEFAULT_RESOURCES = [
-    {"label": "Sitio de Tal-IA", "url": "https://talia.mx/"},
-    {"label": "Geoactiv · Casos y soluciones", "url": "https://geoactiv.ai/"},
-]
+
+def _clone_information_email_template() -> dict[str, Any]:
+    template = INFORMATION_EMAIL_DEFAULT_TEMPLATE
+    return {
+        "intro": template["intro"],
+        "highlights": list(template["highlights"]),
+        "resources": [dict(resource) for resource in template["resources"]],
+        "closing": template["closing"],
+    }
+
+
+def _resolve_information_email_template(custom: dict[str, Any] | None) -> dict[str, Any]:
+    template = _clone_information_email_template()
+    if not custom:
+        return template
+
+    intro = custom.get("intro")
+    if isinstance(intro, str) and intro.strip():
+        template["intro"] = intro.strip()
+
+    closing = custom.get("closing")
+    if isinstance(closing, str) and closing.strip():
+        template["closing"] = closing.strip()
+
+    highlights = custom.get("highlights")
+    if isinstance(highlights, list):
+        sanitized: list[str] = []
+        for item in highlights:
+            if isinstance(item, str):
+                trimmed = item.strip()
+                if trimmed:
+                    sanitized.append(trimmed)
+        if sanitized:
+            template["highlights"] = sanitized
+
+    resources = custom.get("resources")
+    if isinstance(resources, list):
+        sanitized_resources: list[dict[str, str]] = []
+        for entry in resources:
+            if not isinstance(entry, dict):
+                continue
+            label = str(entry.get("label") or "").strip()
+            url = str(entry.get("url") or "").strip()
+            if label and url:
+                sanitized_resources.append({"label": label, "url": url})
+        if sanitized_resources:
+            template["resources"] = sanitized_resources
+
+    return template
 
 
 @dataclass(slots=True)
@@ -2168,10 +2221,20 @@ async def _execute_function_call(
         else:
             contact_need = None
 
+        template_row: dict[str, Any] | None = None
+        try:
+            template_row = await storage.fetch_email_template()
+        except storage.StorageError as exc:
+            logger.warning(
+                "info_email.template_fetch_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        template_data = _resolve_information_email_template(template_row)
+
         if not highlight_lines:
-            highlight_lines = list(INFORMATION_EMAIL_DEFAULT_HIGHLIGHTS)
+            highlight_lines = list(template_data["highlights"])
         if not resources:
-            resources = list(INFORMATION_EMAIL_DEFAULT_RESOURCES)
+            resources = [dict(resource) for resource in template_data["resources"]]
 
         subject_target = company_name or full_name
         subject = (
@@ -2181,11 +2244,7 @@ async def _execute_function_call(
         )
 
         greeting = f"Hola {full_name}," if full_name else "Hola,"
-        body_lines = [
-            greeting,
-            "",
-            "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
-        ]
+        body_lines = [greeting, "", template_data["intro"]]
         if summary:
             body_lines.extend(["", summary])
         if highlight_lines:
@@ -2201,7 +2260,7 @@ async def _execute_function_call(
         body_lines.extend(
             [
                 "",
-                "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+                template_data["closing"],
                 "",
                 "Saludos,",
                 "Equipo Geoactiv · Tal-IA",
