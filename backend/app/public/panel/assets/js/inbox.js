@@ -57,7 +57,31 @@ function renderConversations(items) {
     previewWrap.style.fontSize = '12px';
     previewWrap.style.marginTop = '4px';
     previewWrap.dataset.role = 'preview';
-    const who = it.preview_direccion === 'saliente' ? 'Agente' : (it.preview_direccion ? 'Usuario' : '');
+    const isOutgoing = it.preview_direccion === 'saliente';
+    const rawAuthor =
+      typeof it.preview_author === 'string' && it.preview_author.trim().length
+        ? it.preview_author.trim()
+        : '';
+    const senderType =
+      typeof it.preview_sender_type === 'string' && it.preview_sender_type.trim().length
+        ? it.preview_sender_type.trim().toLowerCase()
+        : '';
+    let who = '';
+  if (isOutgoing) {
+    if (rawAuthor) {
+      if (senderType === 'human' && rawAuthor.toLowerCase() === 'agent') {
+        who = getCurrentAgentName();
+      } else {
+        who = rawAuthor;
+      }
+    } else if (senderType === 'human') {
+      who = getCurrentAgentName();
+    } else {
+      who = 'Tal-IA';
+    }
+    } else if (it.preview_direccion) {
+      who = rawAuthor || 'Usuario';
+    }
     const preview = typeof it.preview === 'string' ? it.preview : '';
     const previewText = `${who ? `${who}: ` : ''}${preview}`;
     previewWrap.textContent = previewText;
@@ -85,15 +109,34 @@ function resolveSenderLabel(it) {
   }
   const normalised = normaliseSenderType(it);
   const meta = it.metadata || {};
+  let extra = null;
+  if (meta && typeof meta.extra === 'string') {
+    try {
+      extra = JSON.parse(meta.extra);
+    } catch {
+      extra = null;
+    }
+  } else if (meta && typeof meta.extra === 'object') {
+    extra = meta.extra;
+  }
   const agentName =
     typeof meta.agent_name === 'string' && meta.agent_name.trim()
       ? meta.agent_name.trim()
-      : 'sin nombre';
+      : typeof meta.manual_author === 'string' && meta.manual_author.trim()
+        ? meta.manual_author.trim()
+        : extra && typeof extra.agent_name === 'string' && extra.agent_name.trim()
+          ? extra.agent_name.trim()
+          : extra && typeof extra.manual_author === 'string' && extra.manual_author.trim()
+            ? extra.manual_author.trim()
+            : getCurrentAgentName();
+  const normalized = agentName.trim().toLowerCase();
+  const displayName =
+    normalized === 'agent' || normalized === 'agente' ? getCurrentAgentName() : agentName;
   if (normalised && normalised.startsWith('human')) {
-    const label = `Este mensaje es de 'humano': '${agentName}', ya no hablas con Tal-IA`;
+    const label = `Humano: ${displayName}`;
     return { label, senderType: 'human_agent' };
   }
-  return { label: 'TalIA', senderType: 'assistant' };
+  return { label: 'Tal-IA', senderType: 'assistant' };
 }
 
 function appendMessage(it) {
@@ -196,6 +239,128 @@ const manualToggle = document.getElementById('manual-toggle');
 const manualStatus = document.getElementById('manual-status');
 let _session = null;
 let _manualOverride = false;
+let _currentAgentName = 'Agente';
+
+function deriveAgentNameFromSession(user) {
+  if (!user || typeof user !== 'object') {
+    return 'Agente';
+  }
+  const meta = user.user_metadata || {};
+  const primaryCandidates = [
+    meta.full_name,
+    meta.fullName,
+    meta.nombre_completo,
+    meta.nombreCompleto,
+    meta.name,
+    meta.display_name,
+    meta.displayName,
+    meta.preferred_name,
+    meta.preferredName,
+    meta.username,
+    meta.user_name,
+  ];
+  for (const candidate of primaryCandidates) {
+    if (typeof candidate === 'string' && candidate.trim().length) {
+      return candidate.trim();
+    }
+  }
+  const first =
+    (typeof meta.first_name === 'string' && meta.first_name.trim()) ||
+    (typeof meta.firstName === 'string' && meta.firstName.trim()) ||
+    (typeof meta.given_name === 'string' && meta.given_name.trim()) ||
+    (typeof meta.givenName === 'string' && meta.givenName.trim()) ||
+    (typeof meta.nombre === 'string' && meta.nombre.trim()) ||
+    (typeof meta.nombres === 'string' && meta.nombres.trim()) ||
+    '';
+  const last =
+    (typeof meta.last_name === 'string' && meta.last_name.trim()) ||
+    (typeof meta.lastName === 'string' && meta.lastName.trim()) ||
+    (typeof meta.family_name === 'string' && meta.family_name.trim()) ||
+    (typeof meta.familyName === 'string' && meta.familyName.trim()) ||
+    (typeof meta.apellido === 'string' && meta.apellido.trim()) ||
+    (typeof meta.apellidos === 'string' && meta.apellidos.trim()) ||
+    '';
+  if (first && last) {
+    return `${first} ${last}`.trim();
+  }
+  if (first) {
+    return first;
+  }
+  if (last) {
+    return last;
+  }
+  const secondaryCandidates = [
+    meta.alias,
+    meta.nick,
+    meta.nick_name,
+    meta.nickName,
+  ];
+  for (const candidate of secondaryCandidates) {
+    if (typeof candidate === 'string' && candidate.trim().length) {
+      return candidate.trim();
+    }
+  }
+  if (typeof user.email === 'string' && user.email.trim().length) {
+    return user.email.trim();
+  }
+  if (typeof meta.email === 'string' && meta.email.trim().length) {
+    return meta.email.trim();
+  }
+  if (typeof user.phone === 'string' && user.phone.trim().length) {
+    return user.phone.trim();
+  }
+  return 'Agente';
+}
+
+function getCurrentAgentName() {
+  if (_currentAgentName && _currentAgentName.trim().length && _currentAgentName.trim().toLowerCase() !== 'agente') {
+    return _currentAgentName.trim();
+  }
+  const email = _session?.user?.email;
+  if (typeof email === 'string' && email.trim().length) {
+    return email.trim();
+  }
+  const metaEmail = _session?.user?.user_metadata?.email;
+  if (typeof metaEmail === 'string' && metaEmail.trim().length) {
+    return metaEmail.trim();
+  }
+  return 'Miembro del equipo';
+}
+
+async function refreshAgentName() {
+  const initialName = deriveAgentNameFromSession(_session?.user);
+  if (initialName && initialName !== 'Agente') {
+    _currentAgentName = initialName;
+  }
+  const sb = createSupabase();
+  const userId = _session?.user?.id;
+  if (!sb || !userId) {
+    return;
+  }
+  try {
+    let builder = sb.from('usuarios').select('nombre_completo,correo').eq('id', userId).limit(1);
+    let response;
+    if (typeof builder.maybeSingle === 'function') {
+      response = await builder.maybeSingle();
+    } else if (typeof builder.single === 'function') {
+      response = await builder.single();
+    } else {
+      response = await builder;
+    }
+    const { data, error } = response || {};
+    if (!error && data) {
+      if (typeof data.nombre_completo === 'string' && data.nombre_completo.trim().length) {
+        _currentAgentName = data.nombre_completo.trim();
+        return;
+      }
+      if (typeof data.correo === 'string' && data.correo.trim().length) {
+        _currentAgentName = data.correo.trim();
+      }
+    }
+  } catch (error) {
+    console.warn('[panel] No se pudo refrescar el nombre del agente', error);
+  }
+}
 
 function updateManualDisplay(state) {
   if (manualToggle) manualToggle.checked = Boolean(state);
@@ -300,6 +465,8 @@ function setupRealtime(convId) {
 
 async function main() {
   _session = await ensureSession();
+  _currentAgentName = deriveAgentNameFromSession(_session?.user);
+  await refreshAgentName();
   setManualToggleAvailability(false);
   await loadConversations();
   ensurePolling();
@@ -466,12 +633,13 @@ async function main() {
       const content = sendInput.value.trim();
       const url = `/api/conversaciones/${encodeURIComponent(_currentConv)}/mensajes`;
       const user = _session?.user || {};
+      const agentName = getCurrentAgentName();
       const metadata = {
-        agent_name:
-          (user.user_metadata &&
-            (user.user_metadata.full_name || user.user_metadata.name || user.user_metadata.display_name)) ||
-          user.email ||
-          'Operador',
+        agent_name: agentName,
+        manual_author: agentName,
+        sender_type: 'human',
+        author_type: 'human',
+        manual_mode: true,
         agent_email: user.email || null,
       };
       try {
@@ -500,6 +668,8 @@ async function main() {
                 ..._lastList[idx],
                 preview: content,
                 preview_direccion: 'saliente',
+                preview_author: agentName,
+                preview_sender_type: 'human',
                 ultimo_mensaje_en: nowIso,
                 no_leidos: 0,
               };
@@ -510,7 +680,7 @@ async function main() {
               if (btn) {
                 const previewWrap = btn.querySelector('[data-role="preview"]');
                 if (previewWrap) {
-                  previewWrap.textContent = `Agente: ${content}`;
+                  previewWrap.textContent = `${agentName}: ${content}`;
                 }
               }
             }

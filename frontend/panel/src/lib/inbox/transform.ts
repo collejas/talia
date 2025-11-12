@@ -1,5 +1,110 @@
 import type { InboxAttachment, InboxMessage, InboxMessageRow } from "@/lib/inbox/types";
 
+function coerceMetadata(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function extractNameCandidate(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+function extractAgentNameFromMetadata(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata) return null;
+
+  const directKeys = ["manual_author", "manualAuthor", "agent_name", "agentName", "author", "author_name", "authorName"];
+  for (const key of directKeys) {
+    const candidate = extractNameCandidate(metadata[key]);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const agent = metadata["agent"];
+  if (agent && typeof agent === "object") {
+    const agentRecord = agent as Record<string, unknown>;
+    const agentKeys = ["name", "display_name", "displayName", "full_name", "fullName"];
+    for (const key of agentKeys) {
+      const candidate = extractNameCandidate(agentRecord[key]);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  const extraRaw = metadata["extra"];
+  const extra = coerceMetadata(extraRaw);
+  if (extra) {
+    const fromExtra = extractAgentNameFromMetadata(extra);
+    if (fromExtra) {
+      return fromExtra;
+    }
+  }
+
+  return null;
+}
+
+function resolveAuthorForRow(row: InboxMessageRow, role: "contacto" | "usuario"): string {
+  const baseAuthor = extractNameCandidate(row.author);
+  if (role === "usuario") {
+    const metadata = coerceMetadata(row.datos);
+    const agentName = extractAgentNameFromMetadata(metadata);
+    if (agentName) {
+      const normalised = agentName.toLowerCase();
+      if (normalised !== "agent" && normalised !== "agente") {
+        return agentName;
+      }
+    }
+    if (metadata) {
+      let emailCandidate =
+        extractNameCandidate(metadata["agent_email"]) ??
+        extractNameCandidate(metadata["agentEmail"]) ??
+        null;
+      if (!emailCandidate) {
+        const extra = coerceMetadata(metadata["extra"]);
+        if (extra) {
+          emailCandidate =
+            extractNameCandidate(extra["agent_email"]) ??
+            extractNameCandidate(extra["agentEmail"]) ??
+            null;
+        }
+      }
+      if (emailCandidate) {
+        return emailCandidate;
+      }
+    }
+    if (baseAuthor && baseAuthor.toLowerCase() !== "equipo tal-ia") {
+      return baseAuthor;
+    }
+    if (agentName && agentName.trim().length) {
+      return agentName;
+    }
+    return "Miembro del equipo";
+  }
+
+  return baseAuthor ?? "Contacto";
+}
+
 export function mapMessageRows(rows?: InboxMessageRow[] | null): InboxMessage[] {
   if (!rows || !rows.length) return [];
   return rows.flatMap((row) => {
@@ -21,15 +126,9 @@ export function mapMessageRows(rows?: InboxMessageRow[] | null): InboxMessage[] 
       typeof row.tipo_contenido === "string" && row.tipo_contenido.length
         ? row.tipo_contenido
         : "texto";
-    const datos =
-      row.datos && typeof row.datos === "object" ? (row.datos as Record<string, unknown>) : null;
+    const datos = coerceMetadata(row.datos);
 
-    const author =
-      typeof row.author === "string" && row.author.trim().length
-        ? row.author.trim()
-        : role === "usuario"
-          ? "Equipo Tal-IA"
-          : "Contacto";
+    const author = resolveAuthorForRow(row, role);
 
     const attachments: InboxAttachment[] = normalizeAttachments(row);
 
@@ -66,6 +165,8 @@ export function mapMessagesFromRaw(raw: unknown): InboxMessage[] {
       : record.body != null
         ? [String(record.body)]
         : null;
+    const metadata = coerceMetadata(record.datos);
+
     rows.push({
       message_id: id,
       conversacion_id:
@@ -75,10 +176,7 @@ export function mapMessagesFromRaw(raw: unknown): InboxMessage[] {
       body,
       tipo_contenido:
         typeof record.tipo_contenido === "string" ? record.tipo_contenido : null,
-      datos:
-        record.datos && typeof record.datos === "object"
-          ? (record.datos as Record<string, unknown>)
-          : null,
+      datos: metadata,
       creado_en: typeof record.timestamp === "string" ? record.timestamp : null,
     });
   }

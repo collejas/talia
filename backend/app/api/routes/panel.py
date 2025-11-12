@@ -486,6 +486,14 @@ def _single_related(value: Any) -> Any:
     return value
 
 
+def _clean_str(value: Any) -> str | None:
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate:
+            return candidate
+    return None
+
+
 def _parse_bearer(authorization: str | None) -> str | None:
     if not authorization:
         return None
@@ -1508,6 +1516,226 @@ async def eliminar_lead(
     return {"ok": True}
 
 
+def _normalise_sender_type(value: Any) -> str | None:
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if not lowered:
+            return None
+        if lowered.startswith("human"):
+            return "human"
+        if lowered.startswith("assistant"):
+            return "assistant"
+        if lowered.startswith("user"):
+            return "user"
+    return None
+
+
+def _coerce_metadata(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        parsed = value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+    else:
+        return None
+
+    extra = parsed.get("extra")
+    if isinstance(extra, str):
+        try:
+            parsed["extra"] = json.loads(extra)
+        except json.JSONDecodeError:
+            parsed["extra"] = None
+    return parsed
+
+
+def _extract_sender_type(metadata: dict[str, Any] | None) -> str | None:
+    if not metadata:
+        return None
+    candidates: list[Any] = [
+        metadata.get("sender_type"),
+        metadata.get("senderType"),
+        metadata.get("sender"),
+        metadata.get("author_type"),
+        metadata.get("agent_type"),
+    ]
+    sender = metadata.get("sender")
+    if isinstance(sender, dict):
+        candidates.extend([sender.get("type"), sender.get("sender_type"), sender.get("senderType")])
+    agent = metadata.get("agent")
+    if isinstance(agent, dict):
+        candidates.extend([agent.get("type"), agent.get("sender_type"), agent.get("senderType")])
+    extra = metadata.get("extra")
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except json.JSONDecodeError:
+            extra = None
+    if isinstance(extra, dict):
+        candidates.extend(
+            [
+                extra.get("sender_type"),
+                extra.get("senderType"),
+                extra.get("sender"),
+                extra.get("author_type"),
+                extra.get("agent_type"),
+            ]
+        )
+        sender_extra = extra.get("sender")
+        if isinstance(sender_extra, dict):
+            candidates.extend(
+                [
+                    sender_extra.get("type"),
+                    sender_extra.get("sender_type"),
+                    sender_extra.get("senderType"),
+                ]
+            )
+        agent_extra = extra.get("agent")
+        if isinstance(agent_extra, dict):
+            candidates.extend(
+                [
+                    agent_extra.get("type"),
+                    agent_extra.get("sender_type"),
+                    agent_extra.get("senderType"),
+                ]
+            )
+    for candidate in candidates:
+        match = _normalise_sender_type(candidate)
+        if match:
+            return match
+
+    manual_flag = metadata.get("manual_override") or metadata.get("manualOverride")
+    if manual_flag is None:
+        manual_flag = metadata.get("manual_mode") or metadata.get("manualMode")
+    if isinstance(manual_flag, bool) and manual_flag:
+        return "human"
+
+    origin = metadata.get("origin")
+    if isinstance(origin, str) and "manual" in origin.lower():
+        return "human"
+    source = metadata.get("source")
+    if isinstance(source, str) and "manual" in source.lower():
+        return "human"
+    if isinstance(extra, dict):
+        extra_origin = extra.get("origin")
+        if isinstance(extra_origin, str) and "manual" in extra_origin.lower():
+            return "human"
+        extra_source = extra.get("source")
+        if isinstance(extra_source, str) and "manual" in extra_source.lower():
+            return "human"
+
+    return None
+
+
+def _extract_agent_name(metadata: dict[str, Any] | None) -> str | None:
+    if not metadata:
+        return None
+    direct = metadata.get("agent_name")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    manual_author = metadata.get("manual_author") or metadata.get("manualAuthor")
+    if isinstance(manual_author, str) and manual_author.strip():
+        return manual_author.strip()
+    agent = metadata.get("agent")
+    if isinstance(agent, dict):
+        for key in ("name", "display_name", "displayName", "full_name", "fullName"):
+            candidate = agent.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    owner = metadata.get("owner") or metadata.get("owner_name")
+    if isinstance(owner, str) and owner.strip():
+        return owner.strip()
+    user = metadata.get("user")
+    if isinstance(user, dict):
+        for key in ("name", "full_name", "fullName", "display_name", "displayName"):
+            candidate = user.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    author = metadata.get("author") or metadata.get("author_name") or metadata.get("authorName")
+    if isinstance(author, str) and author.strip():
+        return author.strip()
+    extra = metadata.get("extra")
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except json.JSONDecodeError:
+            extra = None
+    if isinstance(extra, dict):
+        for key in ("agent_name", "manual_author", "manualAuthor"):
+            candidate = extra.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        agent_extra = extra.get("agent")
+        if isinstance(agent_extra, dict):
+            for key in ("name", "display_name", "displayName", "full_name", "fullName"):
+                candidate = agent_extra.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+        for key in ("owner_name", "owner"):
+            candidate = extra.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        user_extra = extra.get("user")
+        if isinstance(user_extra, dict):
+            for key in ("name", "full_name", "fullName", "display_name", "displayName"):
+                candidate = user_extra.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+        author_extra = extra.get("author") or extra.get("author_name") or extra.get("authorName")
+        if isinstance(author_extra, str) and author_extra.strip():
+            return author_extra.strip()
+    return None
+
+
+def _extract_agent_email(metadata: dict[str, Any] | None) -> str | None:
+    if not metadata:
+        return None
+    email_keys = ("manual_email", "manualEmail", "agent_email", "agentEmail", "email")
+    for key in email_keys:
+        candidate = metadata.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    user = metadata.get("user")
+    if isinstance(user, dict):
+        for key in ("email", "correo", "mail"):
+            candidate = user.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    agent = metadata.get("agent")
+    if isinstance(agent, dict):
+        for key in ("email", "correo"):
+            candidate = agent.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    extra = metadata.get("extra")
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except json.JSONDecodeError:
+            extra = None
+    if isinstance(extra, dict):
+        for key in email_keys:
+            candidate = extra.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        user_extra = extra.get("user")
+        if isinstance(user_extra, dict):
+            for key in ("email", "correo", "mail"):
+                candidate = user_extra.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+        agent_extra = extra.get("agent")
+        if isinstance(agent_extra, dict):
+            for key in ("email", "correo"):
+                candidate = agent_extra.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+    return None
+
+
 @router.get("/inbox")
 async def get_inbox(
     limit: int = Query(default=25, ge=1, le=200),
@@ -1522,7 +1750,7 @@ async def get_inbox(
     select = (
         "id,canal,estado,prioridad,iniciada_en,ultimo_mensaje_en,no_leidos,"
         "contacto:contactos(nombre_completo,telefono_e164,correo,company_name,notes,necesidad_proposito),"
-        "ultimo_mensaje:mensajes!conversaciones_ultimo_mensaje_fk(texto,direccion,creado_en)"
+        "ultimo_mensaje:mensajes!conversaciones_ultimo_mensaje_fk(texto,direccion,creado_en,datos)"
     )
     params: dict[str, str] = {
         "select": select,
@@ -1553,6 +1781,20 @@ async def get_inbox(
         contacto = row.get("contacto") or {}
         ultimo = row.get("ultimo_mensaje") or {}
         conv_id = row.get("id")
+        metadata = _coerce_metadata(ultimo.get("datos"))
+        preview_sender_type = _extract_sender_type(metadata) if metadata else None
+        preview_direction = ultimo.get("direccion")
+        preview_author: str | None = None
+        if preview_direction == "saliente":
+            if preview_sender_type == "human":
+                preview_author = _extract_agent_name(metadata)
+            elif preview_sender_type == "assistant":
+                preview_author = "Tal-IA"
+            else:
+                preview_author = _extract_agent_name(metadata) or "Tal-IA"
+        elif preview_direction == "entrante":
+            preview_author = contacto.get("nombre_completo") or "Usuario"
+
         items.append(
             {
                 "id": conv_id,
@@ -1569,8 +1811,10 @@ async def get_inbox(
                 "contacto_notas": contacto.get("notes"),
                 "contacto_necesidad_proposito": contacto.get("necesidad_proposito"),
                 "preview": (ultimo.get("texto") or "")[:160],
-                "preview_direccion": ultimo.get("direccion"),
+                "preview_direccion": preview_direction,
                 "preview_ts": ultimo.get("creado_en"),
+                "preview_sender_type": preview_sender_type,
+                "preview_author": preview_author,
                 "manual_override": bool(manual_lookup.get(conv_id or "")),
             }
         )
@@ -1846,6 +2090,53 @@ async def get_inbox_messages(
     )
 
 
+async def _fetch_panel_user_profile(user_id: str) -> dict[str, Any] | None:
+    params = {
+        "id": f"eq.{user_id}",
+        "select": "id,nombre_completo,correo",
+        "limit": "1",
+    }
+    try:
+        resp = await _sb_get("/rest/v1/usuarios", params=params, token=None)
+    except HTTPException as exc:  # pragma: no cover - red propagada
+        logger.warning(
+            "panel.inbox.manual_user_lookup_failed",
+            extra={"user_id": user_id, "error": getattr(exc, "detail", str(exc))},
+        )
+        return None
+    except Exception as exc:  # pragma: no cover - red variada
+        logger.exception(
+            "panel.inbox.manual_user_lookup_exception",
+            extra={"user_id": user_id, "error": str(exc)},
+        )
+        return None
+
+    if resp.status_code >= 400:
+        logger.warning(
+            "panel.inbox.manual_user_lookup_http_error",
+            extra={
+                "user_id": user_id,
+                "status": resp.status_code,
+                "body_sample": resp.text[:120],
+            },
+        )
+        return None
+    try:
+        payload = resp.json()
+    except ValueError:
+        logger.warning(
+            "panel.inbox.manual_user_lookup_parse_error",
+            extra={"user_id": user_id},
+        )
+        return None
+    if not isinstance(payload, list) or not payload:
+        return None
+    record = payload[0]
+    if isinstance(record, dict):
+        return record
+    return None
+
+
 @router.post("/conversaciones/{conversacion_id}/responder")
 async def reply_conversation(
     conversacion_id: UUID,
@@ -1921,14 +2212,107 @@ async def reply_conversation(
 
     if manual_override:
         extra_metadata: dict[str, Any] = {
+            "conversation_id": str(conversacion_id),
             "client_message_id": client_message_id,
             "manual_override": True,
+            "manual_mode": True,
             "origin": "panel_manual",
+            "sender_type": "human",
+            "author_type": "human",
         }
         if payload.locale:
             extra_metadata["locale"] = payload.locale
+        manual_user_id = _jwt_verify_and_sub(token)
+        manual_user_id = manual_user_id.strip() if isinstance(manual_user_id, str) else None
+
+        agent_payload: dict[str, Any] = {}
         if payload.metadata and isinstance(payload.metadata, dict):
-            extra_metadata["extra"] = payload.metadata
+            agent_payload.update(payload.metadata)
+
+        manual_name = _extract_agent_name(agent_payload) if agent_payload else None
+        if manual_name and manual_name.strip().lower() in {"agent", "agente"}:
+            manual_name = None
+        manual_email = _extract_agent_email(agent_payload) if agent_payload else None
+
+        if manual_user_id:
+            for key in (
+                "user_id",
+                "userId",
+                "manual_user_id",
+                "manualUserId",
+                "agent_id",
+                "agentId",
+            ):
+                agent_payload.setdefault(key, manual_user_id)
+
+        profile: dict[str, Any] | None = None
+        if manual_user_id and (manual_name is None or manual_email is None):
+            profile = await _fetch_panel_user_profile(manual_user_id)
+
+        if profile:
+            if manual_name is None:
+                profile_name = _clean_str(profile.get("nombre_completo")) or _clean_str(
+                    profile.get("correo")
+                )
+                if profile_name:
+                    manual_name = profile_name
+            if manual_email is None:
+                profile_email = _clean_str(profile.get("correo"))
+                if profile_email:
+                    manual_email = profile_email
+
+        if manual_name is None and manual_email:
+            local_part = manual_email.split("@")[0]
+            fallback_name = local_part.strip() or manual_email
+            manual_name = fallback_name
+
+        if manual_name:
+            for key in ("manual_author", "manualAuthor", "agent_name", "agentName"):
+                agent_payload.setdefault(key, manual_name)
+        if manual_email:
+            for key in ("manual_email", "manualEmail", "agent_email", "agentEmail"):
+                agent_payload.setdefault(key, manual_email)
+
+        if manual_user_id or manual_name or manual_email:
+            user_section = agent_payload.get("user")
+            if isinstance(user_section, dict):
+                user_payload = dict(user_section)
+            else:
+                user_payload = {}
+            if manual_user_id and "id" not in user_payload:
+                user_payload["id"] = manual_user_id
+            if manual_name and "name" not in user_payload:
+                user_payload["name"] = manual_name
+            if manual_email and "email" not in user_payload:
+                user_payload["email"] = manual_email
+            if user_payload:
+                user_payload.setdefault("type", "human")
+                agent_payload["user"] = user_payload
+
+        if agent_payload:
+            agent_payload.setdefault("origin", agent_payload.get("origin") or "panel_manual")
+            agent_payload.setdefault("source", agent_payload.get("source") or "panel_manual")
+            agent_payload.setdefault("sender_type", agent_payload.get("sender_type") or "human")
+            agent_payload.setdefault("senderType", agent_payload.get("senderType") or "human")
+            agent_payload.setdefault("author_type", agent_payload.get("author_type") or "human")
+            agent_payload.setdefault("authorType", agent_payload.get("authorType") or "human")
+
+            for key, value in agent_payload.items():
+                if key not in extra_metadata and key != "attachments":
+                    extra_metadata[key] = value
+            extra_metadata["extra"] = agent_payload
+            resolved_name = manual_name or _extract_agent_name(agent_payload)
+            if resolved_name:
+                extra_metadata.setdefault("manual_author", resolved_name)
+                extra_metadata.setdefault("agent_name", resolved_name)
+            else:
+                agent_name = agent_payload.get("agent_name") or agent_payload.get("agentName")
+                if isinstance(agent_name, str) and agent_name.strip():
+                    extra_metadata.setdefault("agent_name", agent_name.strip())
+            resolved_email = manual_email or _extract_agent_email(agent_payload)
+            if resolved_email:
+                extra_metadata.setdefault("manual_email", resolved_email)
+                extra_metadata.setdefault("agent_email", resolved_email)
         try:
             await storage.register_webchat_message(
                 session_id=session_id,
@@ -1973,9 +2357,33 @@ async def reply_conversation(
             "manual_mode": True,
             "session_id": session_id,
             "contact_id": str(contact_id),
+            "sender_type": "human",
+            "author_type": "human",
         }
         if attachments_payload:
             metadata["attachments"] = attachments_payload
+        if agent_payload:
+            metadata["extra"] = agent_payload
+            manual_name_resp = agent_payload.get("manual_author") or agent_payload.get(
+                "manualAuthor"
+            )
+            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get("agentName")
+            manual_email_resp = (
+                agent_payload.get("manual_email")
+                or agent_payload.get("manualEmail")
+                or agent_payload.get("agent_email")
+                or agent_payload.get("agentEmail")
+            )
+            if isinstance(agent_name_resp, str) and agent_name_resp.strip():
+                metadata["agent_name"] = agent_name_resp.strip()
+            elif isinstance(manual_name_resp, str) and manual_name_resp.strip():
+                metadata["agent_name"] = manual_name_resp.strip()
+            if isinstance(manual_name_resp, str) and manual_name_resp.strip():
+                metadata["manual_author"] = manual_name_resp.strip()
+            if isinstance(manual_email_resp, str) and manual_email_resp.strip():
+                cleaned_email = manual_email_resp.strip()
+                metadata["manual_email"] = cleaned_email
+                metadata.setdefault("agent_email", cleaned_email)
         return {
             "ok": True,
             "reply": None,

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InboxComposer } from "@/components/inbox/composer";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 const THREADS_REFRESH_INTERVAL_MS = 1600;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
@@ -194,6 +195,16 @@ function normaliseSenderType(value: unknown): "assistant" | "human" | "user" | u
   return undefined;
 }
 
+function extractNameCandidate(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
 function extractAgentSenderType(metadata: Record<string, unknown> | null | undefined): "assistant" | "human" | "user" | undefined {
   if (!metadata) {
     return undefined;
@@ -219,10 +230,59 @@ function extractAgentSenderType(metadata: Record<string, unknown> | null | undef
     directCandidates.push(agentRecord["type"], agentRecord["sender_type"], agentRecord["senderType"]);
   }
 
+  let extra = record["extra"];
+  if (typeof extra === "string") {
+    try {
+      extra = JSON.parse(extra);
+    } catch {
+      extra = undefined;
+    }
+  }
+  if (extra && typeof extra === "object") {
+    const extraRecord = extra as Record<string, unknown>;
+    directCandidates.push(
+      extraRecord["sender_type"],
+      extraRecord["senderType"],
+      extraRecord["sender"],
+      extraRecord["author_type"],
+      extraRecord["agent_type"],
+    );
+    const extraSender = extraRecord["sender"];
+    if (extraSender && typeof extraSender === "object") {
+      const senderRecord = extraSender as Record<string, unknown>;
+      directCandidates.push(senderRecord["type"], senderRecord["sender_type"], senderRecord["senderType"]);
+    }
+    const extraAgent = extraRecord["agent"];
+    if (extraAgent && typeof extraAgent === "object") {
+      const agentRecord = extraAgent as Record<string, unknown>;
+      directCandidates.push(agentRecord["type"], agentRecord["sender_type"], agentRecord["senderType"]);
+    }
+  }
+
   for (const candidate of directCandidates) {
     const normalized = normaliseSenderType(candidate);
     if (normalized) {
       return normalized;
+    }
+  }
+
+  const manualFlag =
+    record["manual_override"] ??
+    record["manualOverride"] ??
+    record["manual_mode"] ??
+    record["manualMode"];
+  if (typeof manualFlag === "boolean" && manualFlag) {
+    return "human";
+  }
+  if (extra && typeof extra === "object") {
+    const extraRecord = extra as Record<string, unknown>;
+    const extraManual =
+      extraRecord["manual_override"] ??
+      extraRecord["manualOverride"] ??
+      extraRecord["manual_mode"] ??
+      extraRecord["manualMode"];
+    if (typeof extraManual === "boolean" && extraManual) {
+      return "human";
     }
   }
 
@@ -253,7 +313,128 @@ function isHumanAgentMessage(message: InboxMessage): boolean {
   if (typeof source === "string" && source.toLowerCase().includes("manual")) {
     return true;
   }
+  const manualFlag =
+    metadata?.manual_override ??
+    metadata?.manualOverride ??
+    metadata?.manual_mode ??
+    metadata?.manualMode;
+  if (typeof manualFlag === "boolean" && manualFlag) {
+    return true;
+  }
+  let extra = metadata?.extra;
+  if (typeof extra === "string") {
+    try {
+      extra = JSON.parse(extra);
+    } catch {
+      extra = undefined;
+    }
+  }
+  if (extra && typeof extra === "object") {
+    const extraRecord = extra as Record<string, unknown>;
+    const extraOrigin = extraRecord["origin"];
+    if (typeof extraOrigin === "string" && extraOrigin.toLowerCase().includes("manual")) {
+      return true;
+    }
+    const extraSource = extraRecord["source"];
+    if (typeof extraSource === "string" && extraSource.toLowerCase().includes("manual")) {
+      return true;
+    }
+    const extraManual =
+      extraRecord["manual_override"] ??
+      extraRecord["manualOverride"] ??
+      extraRecord["manual_mode"] ??
+      extraRecord["manualMode"];
+    if (typeof extraManual === "boolean" && extraManual) {
+      return true;
+    }
+  }
   return false;
+}
+
+function resolveHumanAuthorName(
+  metadata: Record<string, unknown> | null | undefined,
+  fallback: string | null | undefined,
+): string {
+  const pickName = (source: Record<string, unknown> | null | undefined): string | null => {
+    if (!source) return null;
+    const keys = [
+      "manual_author",
+      "manualAuthor",
+      "agent_name",
+      "agentName",
+      "author",
+      "author_name",
+      "authorName",
+    ];
+    for (const key of keys) {
+      const extracted = extractNameCandidate((source as Record<string, unknown>)[key]);
+      if (extracted) {
+        return extracted;
+      }
+    }
+    return null;
+  };
+
+  const pickEmail = (source: Record<string, unknown> | null | undefined): string | null => {
+    if (!source) return null;
+    const keys = ["agent_email", "agentEmail", "manual_email", "manualEmail"];
+    for (const key of keys) {
+      const extracted = extractNameCandidate((source as Record<string, unknown>)[key]);
+      if (extracted) {
+        return extracted;
+      }
+    }
+    return null;
+  };
+
+  const parseExtra = (raw: unknown): Record<string, unknown> | null => {
+    if (!raw) return null;
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    }
+    if (typeof raw === "object" && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>;
+    }
+    return null;
+  };
+
+  let candidate = pickName(metadata);
+  const extra = parseExtra(metadata?.["extra"]);
+  if (!candidate) {
+    candidate = pickName(extra);
+  }
+
+  let emailCandidate = pickEmail(metadata);
+  if (!emailCandidate) {
+    emailCandidate = pickEmail(extra);
+  }
+
+  if (!candidate && emailCandidate) {
+    candidate = emailCandidate;
+  }
+
+  if (!candidate && typeof fallback === "string" && fallback.trim().length) {
+    candidate = fallback.trim();
+  }
+
+  if (!candidate || !candidate.trim().length) {
+    candidate = "Miembro del equipo";
+  }
+
+  const normalized = candidate.trim().toLowerCase();
+  if (normalized === "agent" || normalized === "agente") {
+    return emailCandidate ?? "Miembro del equipo";
+  }
+
+  return candidate;
 }
 type InboxSplitViewProps = {
   threads: InboxThread[];
@@ -279,6 +460,130 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   const messagesPollingTimeoutRef = React.useRef<number | null>(null);
   const lastMessagesFingerprintRef = React.useRef<string>("");
   const previousSelectedIdRef = React.useRef<string | null>(null);
+  const { user: currentUser } = useCurrentUser();
+
+  const manualAgentMetadata = React.useMemo(() => {
+    if (!currentUser) {
+      return null;
+    }
+
+    const pickString = (value: unknown): string | null => {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed.length) {
+          return trimmed;
+        }
+      }
+      return null;
+    };
+
+    const userMetadata =
+      currentUser.user_metadata &&
+      typeof currentUser.user_metadata === "object" &&
+      !Array.isArray(currentUser.user_metadata)
+        ? (currentUser.user_metadata as Record<string, unknown>)
+        : null;
+
+    const nameCandidates: string[] = [];
+    if (userMetadata) {
+      const metadataKeys = [
+        "full_name",
+        "fullName",
+        "nombre_completo",
+        "nombreCompleto",
+        "display_name",
+        "displayName",
+        "name",
+      ];
+      for (const key of metadataKeys) {
+        const candidate = pickString(userMetadata[key]);
+        if (candidate) {
+          nameCandidates.push(candidate);
+        }
+      }
+    }
+
+    const currentUserRecord = currentUser as Record<string, unknown>;
+    const directNameCandidates = [
+      pickString(currentUserRecord["name"]),
+      pickString(currentUserRecord["full_name"]),
+      pickString(currentUserRecord["fullName"]),
+    ];
+    for (const candidate of directNameCandidates) {
+      if (candidate) {
+        nameCandidates.push(candidate);
+      }
+    }
+
+    let resolvedName: string | null = null;
+    for (const candidate of nameCandidates) {
+      if (candidate) {
+        resolvedName = candidate;
+        break;
+      }
+    }
+
+    let email: string | null = null;
+    if (typeof currentUser.email === "string" && currentUser.email.trim().length) {
+      email = currentUser.email.trim();
+    } else {
+      const fallbackEmail = pickString(currentUserRecord["email"]);
+      if (fallbackEmail) {
+        email = fallbackEmail;
+      }
+    }
+
+    if (!resolvedName && email) {
+      const localPart = email.split("@")[0] ?? "";
+      const trimmedLocalPart = localPart.trim();
+      resolvedName = trimmedLocalPart.length ? trimmedLocalPart : email;
+    }
+
+    const userId =
+      typeof currentUser.id === "string" && currentUser.id.trim().length
+        ? currentUser.id.trim()
+        : null;
+
+    const manualMetadata: Record<string, unknown> = {};
+
+    if (resolvedName) {
+      manualMetadata.manual_author = resolvedName;
+      manualMetadata.manualAuthor = resolvedName;
+      manualMetadata.agent_name = resolvedName;
+      manualMetadata.agentName = resolvedName;
+    }
+
+    if (email) {
+      manualMetadata.manual_email = email;
+      manualMetadata.manualEmail = email;
+      manualMetadata.agent_email = email;
+      manualMetadata.agentEmail = email;
+    }
+
+    if (userId) {
+      manualMetadata.user_id = userId;
+      manualMetadata.userId = userId;
+      manualMetadata.agent_id = userId;
+      manualMetadata.agentId = userId;
+    }
+
+    if (resolvedName || email || userId) {
+      const userPayload: Record<string, unknown> = {};
+      if (userId) {
+        userPayload.id = userId;
+      }
+      if (resolvedName) {
+        userPayload.name = resolvedName;
+      }
+      if (email) {
+        userPayload.email = email;
+      }
+      userPayload.type = "human";
+      manualMetadata.user = userPayload;
+    }
+
+    return Object.keys(manualMetadata).length ? manualMetadata : null;
+  }, [currentUser]);
 
   React.useEffect(() => {
     setThreadItems(threads);
@@ -607,20 +912,43 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
       setSendError(null);
       setSending(true);
       try {
+        const manualControls =
+          targetThread.manualMode
+            ? {
+                manual_mode: true,
+                manualMode: true,
+                manual_override: true,
+                manualOverride: true,
+                sender_type: "human",
+                senderType: "human",
+                author_type: "human",
+                authorType: "human",
+                origin: "panel_manual",
+                source: "panel_manual",
+                ...(manualAgentMetadata ?? {}),
+              }
+            : null;
+
+        const requestBody: Record<string, unknown> = {
+          content,
+          attachments: outgoingAttachments.map((attachment) => ({
+            url: attachment.url,
+            name: attachment.name,
+            mime: attachment.mime,
+            size: attachment.size,
+            provider_id: attachment.provider_id ?? attachment.path ?? null,
+            path: attachment.path ?? null,
+          })),
+        };
+
+        if (manualControls) {
+          requestBody.metadata = manualControls;
+        }
+
         const response = await fetch(`/api/inbox/${targetThread.id}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content,
-            attachments: outgoingAttachments.map((attachment) => ({
-              url: attachment.url,
-              name: attachment.name,
-              mime: attachment.mime,
-              size: attachment.size,
-              provider_id: attachment.provider_id ?? attachment.path ?? null,
-              path: attachment.path ?? null,
-            })),
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         const text = await response.text();
@@ -670,7 +998,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
         setSending(false);
       }
     },
-    [selectedId, threadItems],
+    [selectedId, threadItems, manualAgentMetadata],
   );
 
   const handleToggleManualMode = React.useCallback(async () => {
@@ -869,8 +1197,15 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 currentMessages.map((message) => {
                   const isAgent = message.role === "usuario";
                   const isHumanAgent = isHumanAgentMessage(message);
+                  const metadata =
+                    message.datos && typeof message.datos === "object"
+                      ? (message.datos as Record<string, unknown>)
+                      : null;
+                  const humanAuthor = isHumanAgent
+                    ? resolveHumanAuthorName(metadata, message.author)
+                    : null;
                   const displayAuthor =
-                    isAgent && !isHumanAgent ? "Tal-IA" : message.author;
+                    isAgent && !isHumanAgent ? "Tal-IA" : isHumanAgent ? humanAuthor ?? message.author : message.author;
                   const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
                   return (
                     <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
@@ -882,7 +1217,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                             variant="secondary"
                             className="border-amber-500/60 bg-amber-500/15 text-amber-700 shadow-sm"
                           >
-                            Humano: {message.author}
+                            Humano: {humanAuthor ?? message.author}
                           </Badge>
                         ) : (
                           <span className="font-medium text-foreground">{displayAuthor}</span>

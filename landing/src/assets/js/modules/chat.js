@@ -497,6 +497,76 @@ function resolveAgentName(metadata) {
   if (typeof author === 'string' && author.trim().length) {
     return author.trim();
   }
+  let extra = metadata.extra;
+  if (typeof extra === 'string') {
+    try {
+      extra = JSON.parse(extra);
+    } catch {
+      extra = null;
+    }
+  }
+  if (extra && typeof extra === 'object') {
+    const fromExtraDirect = extra.agent_name || extra.manual_author || extra.manualAuthor;
+    if (typeof fromExtraDirect === 'string' && fromExtraDirect.trim().length) {
+      return fromExtraDirect.trim();
+    }
+    const agentExtra = extra.agent;
+    if (agentExtra && typeof agentExtra === 'object') {
+      const candidate =
+        agentExtra.name ||
+        agentExtra.display_name ||
+        agentExtra.displayName ||
+        agentExtra.full_name ||
+        agentExtra.fullName;
+      if (typeof candidate === 'string' && candidate.trim().length) {
+        return candidate.trim();
+      }
+    }
+    const ownerExtra = extra.owner || extra.owner_name;
+    if (typeof ownerExtra === 'string' && ownerExtra.trim().length) {
+      return ownerExtra.trim();
+    }
+    const userExtra = extra.user;
+    if (userExtra && typeof userExtra === 'object') {
+      const candidate =
+        userExtra.name ||
+        userExtra.full_name ||
+        userExtra.fullName ||
+        userExtra.display_name ||
+        userExtra.displayName;
+      if (typeof candidate === 'string' && candidate.trim().length) {
+        return candidate.trim();
+      }
+    }
+    const authorExtra = extra.author || extra.author_name || extra.authorName;
+    if (typeof authorExtra === 'string' && authorExtra.trim().length) {
+      return authorExtra.trim();
+    }
+  }
+  const emailCandidates = [
+    metadata.agent_email,
+    metadata.agentEmail,
+    metadata.manual_email,
+    metadata.manualEmail,
+  ];
+  for (const candidate of emailCandidates) {
+    if (typeof candidate === 'string' && candidate.trim().length) {
+      return candidate.trim();
+    }
+  }
+  if (extra && typeof extra === 'object') {
+    const extraEmails = [
+      extra.agent_email,
+      extra.agentEmail,
+      extra.manual_email,
+      extra.manualEmail,
+    ];
+    for (const candidate of extraEmails) {
+      if (typeof candidate === 'string' && candidate.trim().length) {
+        return candidate.trim();
+      }
+    }
+  }
   return '';
 }
 
@@ -505,7 +575,19 @@ function createMessageElement(text, role = 'assistant', metadata = null, attachm
   wrapper.className = `message message--${role}`;
   if (role === 'human') {
     const label = document.createElement('span');
-    const agentName = resolveAgentName(metadata) || 'Miembro del equipo';
+    let agentName = resolveAgentName(metadata) || 'Miembro del equipo';
+    const normalized = agentName.trim().toLowerCase();
+    if (normalized === 'agent' || normalized === 'agente') {
+      const fallback =
+        (metadata && typeof metadata.agent_name === 'string' && metadata.agent_name.trim()) ||
+        (metadata && typeof metadata.manual_author === 'string' && metadata.manual_author.trim()) ||
+        (metadata && typeof metadata.manualAuthor === 'string' && metadata.manualAuthor.trim());
+      if (fallback) {
+        agentName = fallback;
+      } else {
+        agentName = 'Miembro del equipo';
+      }
+    }
     label.className = 'message__label message__label--human';
     label.textContent = `Humano: ${agentName}`;
     wrapper.appendChild(label);
@@ -853,6 +935,31 @@ function extractSenderTypeFromMetadata(metadata) {
   if (agent && typeof agent === 'object') {
     candidates.push(agent.type, agent.sender_type, agent.senderType);
   }
+  let extra = record.extra;
+  if (typeof extra === 'string') {
+    try {
+      extra = JSON.parse(extra);
+    } catch {
+      extra = null;
+    }
+  }
+  if (extra && typeof extra === 'object') {
+    candidates.push(
+      extra.sender_type,
+      extra.senderType,
+      extra.sender,
+      extra.author_type,
+      extra.agent_type,
+    );
+    const extraSender = extra.sender;
+    if (extraSender && typeof extraSender === 'object') {
+      candidates.push(extraSender.type, extraSender.sender_type, extraSender.senderType);
+    }
+    const extraAgent = extra.agent;
+    if (extraAgent && typeof extraAgent === 'object') {
+      candidates.push(extraAgent.type, extraAgent.sender_type, extraAgent.senderType);
+    }
+  }
   for (const candidate of candidates) {
     const resolved = normaliseSenderType(candidate);
     if (resolved) {
@@ -876,6 +983,24 @@ function extractSenderTypeFromMetadata(metadata) {
   const source = record.source;
   if (typeof source === 'string' && source.toLowerCase().includes('manual')) {
     return 'human';
+  }
+  if (extra && typeof extra === 'object') {
+    const extraManualFlag =
+      extra.manual_override ??
+      extra.manualOverride ??
+      extra.manual_mode ??
+      extra.manualMode;
+    if (typeof extraManualFlag === 'boolean' && extraManualFlag) {
+      return 'human';
+    }
+    const extraOrigin = extra.origin;
+    if (typeof extraOrigin === 'string' && extraOrigin.toLowerCase().includes('manual')) {
+      return 'human';
+    }
+    const extraSource = extra.source;
+    if (typeof extraSource === 'string' && extraSource.toLowerCase().includes('manual')) {
+      return 'human';
+    }
   }
 
   return null;
