@@ -179,6 +179,82 @@ function extractManualToggleError(payload: ManualToggleResponse): string | undef
   }
   return undefined;
 }
+
+function normaliseSenderType(value: unknown): "assistant" | "human" | "user" | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed.length) {
+    return undefined;
+  }
+  if (trimmed.startsWith("human")) return "human";
+  if (trimmed.startsWith("assistant")) return "assistant";
+  if (trimmed.startsWith("user")) return "user";
+  return undefined;
+}
+
+function extractAgentSenderType(metadata: Record<string, unknown> | null | undefined): "assistant" | "human" | "user" | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  const record = metadata as Record<string, unknown>;
+  const directCandidates: unknown[] = [
+    record["sender_type"],
+    record["senderType"],
+    record["sender"],
+    record["author_type"],
+    record["agent_type"],
+  ];
+
+  const sender = record["sender"];
+  if (sender && typeof sender === "object") {
+    const senderRecord = sender as Record<string, unknown>;
+    directCandidates.push(senderRecord["type"], senderRecord["sender_type"], senderRecord["senderType"]);
+  }
+
+  const agent = record["agent"];
+  if (agent && typeof agent === "object") {
+    const agentRecord = agent as Record<string, unknown>;
+    directCandidates.push(agentRecord["type"], agentRecord["sender_type"], agentRecord["senderType"]);
+  }
+
+  for (const candidate of directCandidates) {
+    const normalized = normaliseSenderType(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return undefined;
+}
+
+function isHumanAgentMessage(message: InboxMessage): boolean {
+  if (message.role !== "usuario") {
+    return false;
+  }
+  const metadata =
+    message.datos && typeof message.datos === "object"
+      ? (message.datos as Record<string, unknown>)
+      : null;
+  const senderType = extractAgentSenderType(metadata);
+  if (senderType === "human") {
+    return true;
+  }
+  if (senderType === "assistant" || senderType === "user") {
+    return false;
+  }
+
+  const origin = metadata?.origin;
+  if (typeof origin === "string" && origin.toLowerCase().includes("manual")) {
+    return true;
+  }
+  const source = metadata?.source;
+  if (typeof source === "string" && source.toLowerCase().includes("manual")) {
+    return true;
+  }
+  return false;
+}
 type InboxSplitViewProps = {
   threads: InboxThread[];
 };
@@ -792,13 +868,16 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
               {currentMessages.length ? (
                 currentMessages.map((message) => {
                   const isAgent = message.role === "usuario";
+                  const isHumanAgent = isHumanAgentMessage(message);
+                  const displayAuthor =
+                    isAgent && !isHumanAgent ? "Tal-IA" : message.author;
                   const timestampLabel = formatFullTimeLabel(message.timestamp, isHydrated);
                   return (
                     <div key={message.id} className={`flex flex-col ${isAgent ? "items-end" : "items-start"}`}>
                       <div
                         className={`flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${isAgent ? "justify-end" : ""}`}
                       >
-                        {isAgent ? (
+                        {isAgent && isHumanAgent ? (
                           <Badge
                             variant="secondary"
                             className="border-amber-500/60 bg-amber-500/15 text-amber-700 shadow-sm"
@@ -806,7 +885,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                             Humano: {message.author}
                           </Badge>
                         ) : (
-                          <span className="font-medium text-foreground">{message.author}</span>
+                          <span className="font-medium text-foreground">{displayAuthor}</span>
                         )}
                         <span>{timestampLabel || "—"}</span>
                       </div>
