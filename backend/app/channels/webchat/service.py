@@ -1995,6 +1995,7 @@ async def _execute_function_call(
             raise ValueError("scheduled_via inválido para schedule_demo")
         metadata = _safe_dict(arguments.get("metadata"))
         send_calendar_invite = bool(metadata.get("send_calendar_invite"))
+        send_calendar_invite_flag_present = "send_calendar_invite" in metadata
 
         tarjeta_arg = str(arguments.get("tarjeta_id") or "").strip() or None
         tarjeta_id = await storage.ensure_lead_tarjeta(
@@ -2031,17 +2032,22 @@ async def _execute_function_call(
 
         result = await storage.schedule_demo_cita(payload)
         result = await sync_cita_after_create(result)
+        contact = await _resolve_contact(contacto_id)
+        should_send_invite = True
+        metadata_flag = None
         if send_calendar_invite:
-            contact = await _resolve_contact(contacto_id)
-            if contact:
-                updated_row = await _maybe_send_calendar_invitation(
-                    action="create",
-                    cita=result,
-                    contact=contact,
-                    metadata_flag="send_calendar_invite",
-                )
-                if isinstance(updated_row, dict):
-                    result.update(updated_row)
+            metadata_flag = "send_calendar_invite"
+        elif send_calendar_invite_flag_present:
+            should_send_invite = False
+        if contact and should_send_invite:
+            updated_row = await _maybe_send_calendar_invitation(
+                action="create",
+                cita=result,
+                contact=contact,
+                metadata_flag=metadata_flag,
+            )
+            if isinstance(updated_row, dict):
+                result.update(updated_row)
         context.latest_availability = None
         return {"status": "ok", "cita": result}
 
@@ -2061,6 +2067,7 @@ async def _execute_function_call(
 
         metadata_input = _safe_dict(arguments.get("metadata"))
         send_calendar_update = bool(metadata_input.get("send_calendar_update"))
+        send_calendar_update_flag_present = "send_calendar_update" in metadata_input
 
         computed_end_at: str | None = None
         if start_arg is not None and end_arg is None:
@@ -2135,17 +2142,22 @@ async def _execute_function_call(
 
         result = await storage.reschedule_demo_cita(payload)
         result = await sync_cita_after_update(result, provider_hint=provider_normalized)
+        contact = await _resolve_contact(contacto_id_value or result.get("contacto_id"))
+        should_send_update = True
+        metadata_flag = None
         if send_calendar_update:
-            contact = await _resolve_contact(contacto_id_value or result.get("contacto_id"))
-            if contact:
-                updated_row = await _maybe_send_calendar_invitation(
-                    action="update",
-                    cita=result,
-                    contact=contact,
-                    metadata_flag="send_calendar_update",
-                )
-                if isinstance(updated_row, dict):
-                    result.update(updated_row)
+            metadata_flag = "send_calendar_update"
+        elif send_calendar_update_flag_present:
+            should_send_update = False
+        if contact and should_send_update:
+            updated_row = await _maybe_send_calendar_invitation(
+                action="update",
+                cita=result,
+                contact=contact,
+                metadata_flag=metadata_flag,
+            )
+            if isinstance(updated_row, dict):
+                result.update(updated_row)
         context.latest_availability = None
         return {"status": "ok", "cita": result}
 
