@@ -82,6 +82,9 @@ INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
         {"label": "Geoactiv · Casos y soluciones", "url": "https://geoactiv.ai/"},
     ],
     "closing": "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+    "use_summary": True,
+    "use_highlights": True,
+    "use_resources": True,
 }
 
 
@@ -92,6 +95,9 @@ def _clone_information_email_template() -> dict[str, Any]:
         "highlights": list(template["highlights"]),
         "resources": [dict(resource) for resource in template["resources"]],
         "closing": template["closing"],
+        "use_summary": bool(template.get("use_summary", True)),
+        "use_highlights": bool(template.get("use_highlights", True)),
+        "use_resources": bool(template.get("use_resources", True)),
     }
 
 
@@ -107,6 +113,14 @@ def _resolve_information_email_template(custom: dict[str, Any] | None) -> dict[s
     closing = custom.get("closing")
     if isinstance(closing, str) and closing.strip():
         template["closing"] = closing.strip()
+
+    salutation = custom.get("signature_salutation")
+    if isinstance(salutation, str) and salutation.strip():
+        template["signature_salutation"] = salutation.strip()
+
+    signature_body = custom.get("signature")
+    if isinstance(signature_body, str) and signature_body.strip():
+        template["signature"] = signature_body.strip()
 
     highlights = custom.get("highlights")
     if isinstance(highlights, list):
@@ -131,6 +145,17 @@ def _resolve_information_email_template(custom: dict[str, Any] | None) -> dict[s
                 sanitized_resources.append({"label": label, "url": url})
         if sanitized_resources:
             template["resources"] = sanitized_resources
+
+    for key, default in (
+        ("use_summary", True),
+        ("use_highlights", True),
+        ("use_resources", True),
+    ):
+        value = custom.get(key)
+        if isinstance(value, bool):
+            template[key] = value
+        elif value in {"true", "false"}:
+            template[key] = value == "true"
 
     return template
 
@@ -2231,9 +2256,18 @@ async def _execute_function_call(
             )
         template_data = _resolve_information_email_template(template_row)
 
-        if not highlight_lines:
+        include_summary = bool(template_data.get("use_summary", True))
+        include_highlights = bool(template_data.get("use_highlights", True))
+        include_resources = bool(template_data.get("use_resources", True))
+
+        if not include_highlights:
+            highlight_lines = []
+        elif not highlight_lines:
             highlight_lines = list(template_data["highlights"])
-        if not resources:
+
+        if not include_resources:
+            resources = []
+        elif not resources:
             resources = [dict(resource) for resource in template_data["resources"]]
 
         subject_target = company_name or full_name
@@ -2245,27 +2279,31 @@ async def _execute_function_call(
 
         greeting = f"Hola {full_name}," if full_name else "Hola,"
         body_lines = [greeting, "", template_data["intro"]]
-        if summary:
+        if include_summary and summary:
             body_lines.extend(["", summary])
-        if highlight_lines:
+        if include_highlights and highlight_lines:
             body_lines.append("")
             body_lines.append("Puntos clave para tu equipo:")
             for item in highlight_lines:
                 body_lines.append(f"- {item}")
-        if resources:
+        if include_resources and resources:
             body_lines.append("")
             body_lines.append("Recursos para profundizar:")
             for resource in resources:
                 body_lines.append(f"- {resource['label']}: {resource['url']}")
-        body_lines.extend(
-            [
-                "",
-                template_data["closing"],
-                "",
-                "Saludos,",
-                "Equipo Geoactiv · Tal-IA",
-            ]
-        )
+        body_lines.extend(["", template_data["closing"], ""])
+
+        salutation_text = template_data.get("signature_salutation") or "Saludos,"
+        if isinstance(salutation_text, str) and salutation_text.strip():
+            body_lines.append(salutation_text.strip())
+
+        signature_text = template_data.get("signature") or ""
+        signature_lines = []
+        if isinstance(signature_text, str):
+            signature_lines = [line.strip() for line in signature_text.splitlines() if line.strip()]
+        if not signature_lines:
+            signature_lines = ["Equipo Geoactiv · Tal-IA"]
+        body_lines.extend(signature_lines)
         body_text = "\n".join(body_lines)
 
         try:

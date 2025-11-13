@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   EmailTemplateSettings,
   EmailTemplateResource,
@@ -51,6 +52,13 @@ export function EmailTemplateSettingsForm({
       : [{ label: "", url: "" }],
   );
   const [closing, setClosing] = useState(initialSettings.closing);
+  const [useSummary, setUseSummary] = useState(initialSettings.useSummary);
+  const [useHighlights, setUseHighlights] = useState(initialSettings.useHighlights);
+  const [useResources, setUseResources] = useState(initialSettings.useResources);
+  const [signatureSalutation, setSignatureSalutation] = useState(
+    initialSettings.signatureSalutation,
+  );
+  const [signatureText, setSignatureText] = useState(initialSettings.signature);
   const [status, setStatus] = useState<StatusBanner>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -139,6 +147,11 @@ export function EmailTemplateSettingsForm({
         highlights: sanitizedHighlights,
         resources: sanitizedResources,
         closing: trimmedClosing,
+        useSummary,
+        useHighlights,
+        useResources,
+        signatureSalutation,
+        signature: signatureText,
       })
         .then((updated) => {
           setIntro(updated.intro);
@@ -151,6 +164,11 @@ export function EmailTemplateSettingsForm({
               : [{ label: "", url: "" }],
           );
           setClosing(updated.closing);
+          setUseSummary(updated.useSummary);
+          setUseHighlights(updated.useHighlights);
+          setUseResources(updated.useResources);
+          setSignatureSalutation(updated.signatureSalutation);
+          setSignatureText(updated.signature);
           setStatus({
             type: "success",
             message: "Guardado correctamente.",
@@ -197,6 +215,15 @@ export function EmailTemplateSettingsForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <label className="flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-sm">
+            <Checkbox
+              checked={useHighlights}
+              onCheckedChange={(checked) => setUseHighlights(Boolean(checked))}
+            />
+            <span>
+              Incluir la sección <strong>Puntos clave</strong> en el correo.
+            </span>
+          </label>
           {highlights.map((item, index) => (
             <div key={`highlight-${index}`} className="flex gap-2">
               <Input
@@ -285,6 +312,17 @@ export function EmailTemplateSettingsForm({
             Agregar recurso
           </Button>
         </CardContent>
+        <CardFooter className="border-t bg-muted/40 px-6 py-3">
+          <label className="flex items-start gap-3 text-sm">
+            <Checkbox
+              checked={useResources}
+              onCheckedChange={(checked) => setUseResources(Boolean(checked))}
+            />
+            <span>
+              Incluir la sección <strong>Recursos</strong> en el correo.
+            </span>
+          </label>
+        </CardFooter>
       </Card>
 
       <Card>
@@ -302,6 +340,35 @@ export function EmailTemplateSettingsForm({
             className="resize-y"
             placeholder="Escribe el mensaje de cierre…"
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Firma</CardTitle>
+          <CardDescription>
+            Personaliza la despedida final. Usa saltos de línea en la firma para separar nombre, cargo, etc.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-muted-foreground">Saludo</label>
+            <Input
+              value={signatureSalutation}
+              onChange={(event) => setSignatureSalutation(event.target.value)}
+              placeholder="Saludos,"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-muted-foreground">Firma</label>
+            <Textarea
+              value={signatureText}
+              onChange={(event) => setSignatureText(event.target.value)}
+              rows={3}
+              className="resize-y"
+              placeholder="Equipo Geoactiv · Tal-IA"
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -326,6 +393,17 @@ export function EmailTemplateSettingsForm({
           Estos cambios se aplican al correo que Tal-IA envía cuando el cliente
           solicita información en lugar de agendar demo.
         </p>
+        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+          <label className="flex items-start gap-2">
+            <Checkbox
+              checked={useSummary}
+              onCheckedChange={(checked) => setUseSummary(Boolean(checked))}
+            />
+            <span>
+              Incluir el resumen del lead (si está disponible) después de la introducción.
+            </span>
+          </label>
+        </div>
       </CardFooter>
     </form>
   );

@@ -370,26 +370,26 @@
         "description": "Correo de destino confirmado con el prospecto."
       },
       "full_name": {
-        "type": ["string", "null"],
+        "type": "string",
         "description": "Nombre de la persona a quien va dirigido el correo. Opcional si ya se registró."
       },
       "company_name": {
-        "type": ["string", "null"],
+        "type": "string",
         "description": "Nombre de la empresa o marca del prospecto para personalizar el asunto."
       },
       "summary": {
-        "type": ["string", "null"],
+        "type": "string",
         "description": "Resumen breve (1-2 frases) sobre la necesidad u objetivo principal del lead."
       },
       "highlights": {
-        "type": ["array", "null"],
+        "type": "array",
         "description": "Lista de beneficios concretos que quieres remarcar en el correo.",
         "items": {
           "type": "string"
         }
       },
       "resources": {
-        "type": ["array", "null"],
+        "type": "array",
         "description": "Enlaces adicionales que quieras compartir (ej. video, ficha técnica).",
         "items": {
           "type": "object",

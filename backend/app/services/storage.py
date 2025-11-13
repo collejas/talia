@@ -777,7 +777,7 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
     }
     params = {
         "slug": f"eq.{slug}",
-        "select": "slug,intro,highlights,resources,closing,updated_at",
+        "select": "slug,intro,highlights,resources,closing,use_summary,use_highlights,use_resources,signature_salutation,signature,updated_at",
         "limit": "1",
     }
     try:
@@ -839,11 +839,27 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
             continue
         resources.append({"label": label, "url": url})
 
+    use_summary = row.get("use_summary")
+    use_highlights = row.get("use_highlights")
+    use_resources = row.get("use_resources")
+
+    signature_salutation = row.get("signature_salutation")
+    signature_text = row.get("signature")
+
     return {
         "intro": intro_text,
         "highlights": highlights,
         "resources": resources,
         "closing": closing_text,
+        "use_summary": bool(use_summary) if isinstance(use_summary, bool) else use_summary,
+        "use_highlights": bool(use_highlights)
+        if isinstance(use_highlights, bool)
+        else use_highlights,
+        "use_resources": bool(use_resources) if isinstance(use_resources, bool) else use_resources,
+        "signature_salutation": signature_salutation.strip()
+        if isinstance(signature_salutation, str)
+        else signature_salutation,
+        "signature": signature_text.strip() if isinstance(signature_text, str) else signature_text,
         "updated_at": row.get("updated_at"),
     }
 

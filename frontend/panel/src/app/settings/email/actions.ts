@@ -17,6 +17,11 @@ export type EmailTemplateSettings = {
   highlights: string[];
   resources: EmailTemplateResource[];
   closing: string;
+  useSummary: boolean;
+  useHighlights: boolean;
+  useResources: boolean;
+  signatureSalutation: string;
+  signature: string;
   updated_at?: string | null;
 };
 
@@ -25,6 +30,11 @@ export type EmailTemplateSettingsInput = {
   highlights: string[];
   resources: EmailTemplateResource[];
   closing: string;
+  useSummary: boolean;
+  useHighlights: boolean;
+  useResources: boolean;
+  signatureSalutation: string;
+  signature: string;
 };
 
 const DEFAULT_SETTINGS: EmailTemplateSettings = {
@@ -40,6 +50,11 @@ const DEFAULT_SETTINGS: EmailTemplateSettings = {
   ],
   closing:
     "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
+  useSummary: true,
+  useHighlights: true,
+  useResources: true,
+  signatureSalutation: "Saludos,",
+  signature: "Equipo Geoactiv · Tal-IA",
 };
 
 function cloneDefaultSettings(): EmailTemplateSettings {
@@ -48,6 +63,11 @@ function cloneDefaultSettings(): EmailTemplateSettings {
     highlights: [...DEFAULT_SETTINGS.highlights],
     resources: DEFAULT_SETTINGS.resources.map((resource) => ({ ...resource })),
     closing: DEFAULT_SETTINGS.closing,
+    useSummary: DEFAULT_SETTINGS.useSummary,
+    useHighlights: DEFAULT_SETTINGS.useHighlights,
+    useResources: DEFAULT_SETTINGS.useResources,
+    signatureSalutation: DEFAULT_SETTINGS.signatureSalutation,
+    signature: DEFAULT_SETTINGS.signature,
     updated_at: undefined,
   };
 }
@@ -96,6 +116,24 @@ function normalizeSettings(record: Record<string, unknown> | null | undefined): 
     highlights: highlights.length ? highlights : base.highlights,
     resources: resources.length ? resources : base.resources,
     closing,
+    useSummary:
+      typeof record.use_summary === "boolean" ? record.use_summary : base.useSummary,
+    useHighlights:
+      typeof record.use_highlights === "boolean"
+        ? record.use_highlights
+        : base.useHighlights,
+    useResources:
+      typeof record.use_resources === "boolean"
+        ? record.use_resources
+        : base.useResources,
+    signatureSalutation:
+      typeof record.signature_salutation === "string" && record.signature_salutation.trim().length
+        ? record.signature_salutation.trim()
+        : base.signatureSalutation,
+    signature:
+      typeof record.signature === "string" && record.signature.trim().length
+        ? record.signature.trim()
+        : base.signature,
     updated_at:
       typeof record.updated_at === "string" && record.updated_at.length
         ? record.updated_at
@@ -108,7 +146,8 @@ export async function fetchEmailTemplateSettings(): Promise<EmailTemplateSetting
     query: {
       slug: `eq.${DEFAULT_SLUG}`,
       limit: 1,
-      select: "slug,intro,highlights,resources,closing,updated_at",
+      select:
+        "slug,intro,highlights,resources,closing,use_summary,use_highlights,use_resources,signature_salutation,signature,updated_at",
     },
   });
 
@@ -136,6 +175,15 @@ export async function saveEmailTemplateSettings(
       }))
       .filter((resource) => resource.label.length > 0 && resource.url.length > 0),
     closing: input.closing.trim(),
+    use_summary: Boolean(input.useSummary),
+    use_highlights: Boolean(input.useHighlights),
+    use_resources: Boolean(input.useResources),
+    signature_salutation:
+      input.signatureSalutation.trim().length > 0
+        ? input.signatureSalutation.trim()
+        : DEFAULT_SETTINGS.signatureSalutation,
+    signature:
+      input.signature.trim().length > 0 ? input.signature.trim() : DEFAULT_SETTINGS.signature,
   };
 
   const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
