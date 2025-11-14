@@ -124,6 +124,16 @@ def _parse_calendar_datetime(raw_value: Any) -> datetime:
     return parsed
 
 
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:  # pragma: no cover - defensivo ante respuestas inválidas
+        return None
+
+
 def _resolve_timezone_preference(value: Any) -> str:
     preferred = str(value).strip() if isinstance(value, str) else ""
     fallback = settings.webchat_calendar_timezone
@@ -132,6 +142,182 @@ def _resolve_timezone_preference(value: Any) -> str:
 
 def _build_slot_identifier(resource_id: str, slot_start: datetime) -> str:
     return f"{resource_id}:{slot_start.isoformat()}"
+
+
+async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]:
+    if not conversation_id:
+        raise ValueError("conversation_id es requerido para esta operación.")
+    try:
+        conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
+    except storage.StorageError as exc:
+        logger.exception(
+            "calendar.conversation_lookup_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        raise ValueError("No se encontró la conversación solicitada.") from exc
+    contact_id = conversation_meta.get("contact_id")
+    if not contact_id:
+        raise ValueError("No se encontró el contacto asociado a la conversación.")
+    return conversation_meta
+
+
+def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResponse:
+    start_at = _parse_iso_datetime(data.get("start_at"))
+    end_at = _parse_iso_datetime(data.get("end_at"))
+    timezone_value = data.get("timezone")
+    return schemas.CalendarBookingResponse(
+        status="ok",
+        booking_id=str(data.get("booking_id")),
+        resource_id=str(data.get("resource_id")),
+        start_at=start_at or datetime.now(timezone.utc),
+        end_at=end_at,
+        timezone=timezone_value,
+        hold_id=data.get("hold_id"),
+        notes=data.get("notes"),
+        metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else None,
+    )
+
+
+async def get_calendar_availability_response(
+    *,
+    conversation_id: str | None,
+    timezone_preference: str | None,
+    start_date: date | None,
+    window_days: int | None,
+) -> schemas.AvailabilityResponse:
+    resource_id = _resolve_calendar_resource_id()
+    timezone_value = _resolve_timezone_preference(timezone_preference)
+    base_date = start_date or datetime.now(timezone.utc).date()
+    days = _normalize_window_days(window_days)
+    end_date = base_date + timedelta(days=days - 1)
+    try:
+        availability_raw = await calendar_service.list_slots(
+            resource_id=resource_id,
+            start_date=base_date,
+            end_date=end_date,
+            timezone_hint=timezone_value,
+            max_days=days,
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+
+    generated_at = _parse_iso_datetime(availability_raw.get("generated_at")) or datetime.now(
+        timezone.utc
+    )
+    window_start = _parse_iso_datetime(availability_raw.get("window_start")) or generated_at
+    window_end = _parse_iso_datetime(availability_raw.get("window_end")) or generated_at
+
+    slots_payload: list[schemas.AvailabilitySlot] = []
+    for slot in availability_raw.get("slots", []):
+        if not slot.get("is_available"):
+            continue
+        start_dt = _parse_iso_datetime(slot.get("start_at"))
+        end_dt = _parse_iso_datetime(slot.get("end_at"))
+        slots_payload.append(
+            schemas.AvailabilitySlot(
+                slot_id=slot.get("slot_id"),
+                start_at=start_dt or generated_at,
+                end_at=end_dt or generated_at,
+                timezone=slot.get("timezone") or timezone_value,
+                label=slot.get("local_time"),
+                local_date=slot.get("local_date"),
+                local_time=slot.get("local_time"),
+                weekday=(start_dt.weekday() if start_dt else None),
+            )
+        )
+
+    return schemas.AvailabilityResponse(
+        status="ok",
+        conversation_id=conversation_id,
+        resource_id=resource_id,
+        timezone=timezone_value,
+        generated_at=generated_at,
+        window_start=window_start,
+        window_end=window_end,
+        slot_duration_minutes=availability_raw.get("slot_duration_minutes", 0),
+        slots=slots_payload,
+    )
+
+
+async def schedule_calendar_booking(
+    *,
+    conversation_id: str,
+    slot_id: str | None,
+    start_at: datetime,
+    notes: str | None,
+    session_id: str | None = None,
+) -> schemas.CalendarBookingResponse:
+    conversation_meta = await _resolve_conversation_metadata(conversation_id)
+    contact_id = str(conversation_meta.get("contact_id"))
+    resource_id = _resolve_calendar_resource_id()
+    hold_minutes = max(1, settings.webchat_calendar_hold_minutes)
+    slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
+
+    try:
+        hold = await calendar_service.hold_slot(
+            resource_id=resource_id,
+            slot_start=start_at,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            hold_minutes=hold_minutes,
+            metadata={
+                "slot_id": slot_identifier,
+                "source": "webchat",
+                "session_id": session_id,
+                "conversation_id": conversation_id,
+            },
+        )
+        booking = await calendar_service.confirm_slot(
+            hold_id=hold.get("hold_id"),
+            notes=notes,
+            metadata={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "session_id": session_id,
+            },
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+
+    booking["hold_id"] = hold.get("hold_id")
+    return _build_booking_response(booking)
+
+
+async def reschedule_calendar_booking(
+    *,
+    conversation_id: str,
+    booking_id: str,
+    start_at: datetime,
+    notes: str | None = None,
+) -> schemas.CalendarBookingResponse:
+    await _resolve_conversation_metadata(conversation_id)
+    try:
+        booking = await calendar_service.reschedule_booking(
+            booking_id=booking_id,
+            new_slot_start=start_at,
+            notes=notes,
+            metadata={"conversation_id": conversation_id},
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+    return _build_booking_response(booking)
+
+
+async def cancel_calendar_booking(
+    *,
+    conversation_id: str,
+    booking_id: str,
+    reason: str | None = None,
+) -> schemas.CalendarBookingResponse:
+    await _resolve_conversation_metadata(conversation_id)
+    try:
+        booking = await calendar_service.cancel_booking(
+            booking_id=booking_id,
+            reason=reason,
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+    return _build_booking_response(booking)
 
 
 def _clone_information_email_template() -> dict[str, Any]:

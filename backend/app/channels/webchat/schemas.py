@@ -172,4 +172,44 @@ class AvailabilityResponse(BaseModel):
     window_start: datetime
     window_end: datetime
     slot_duration_minutes: int
+    resource_id: str | None = None
     slots: list[AvailabilitySlot] = Field(default_factory=list)
+
+
+class CalendarBookingRequest(BaseModel):
+    """Payload para confirmar una cita desde el webchat."""
+
+    conversation_id: str
+    slot_id: str | None = None
+    start_at: datetime
+    notes: str | None = None
+    session_id: str | None = None
+
+
+class CalendarRescheduleRequest(BaseModel):
+    """Payload para reprogramar una cita existente."""
+
+    conversation_id: str
+    start_at: datetime
+    notes: str | None = None
+
+
+class CalendarCancelRequest(BaseModel):
+    """Payload para cancelar una cita existente."""
+
+    conversation_id: str
+    reason: str | None = None
+
+
+class CalendarBookingResponse(BaseModel):
+    """Respuesta cuando se crea/reprograma/cancela una cita."""
+
+    status: Literal["ok"]
+    booking_id: str
+    resource_id: str
+    start_at: datetime
+    end_at: datetime | None = None
+    timezone: str | None = None
+    hold_id: str | None = None
+    notes: str | None = None
+    metadata: dict[str, Any] | None = None
