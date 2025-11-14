@@ -56,15 +56,16 @@ async def _call_rpc(function: str, payload: dict[str, Any]) -> list[dict[str, An
         raise CalendarError(f"Error de red al invocar {function}") from exc
 
     if response.status_code >= 400:
+        body = response.text
         logger.error(
             "calendar.rpc_error",
             extra={
                 "function": function,
                 "status_code": response.status_code,
-                "body": response.text,
+                "body": body,
             },
         )
-        raise CalendarError(f"Supabase respondió error al ejecutar {function}")
+        raise CalendarError(f"Supabase respondió error al ejecutar {function}: {body}")
 
     try:
         data = response.json()

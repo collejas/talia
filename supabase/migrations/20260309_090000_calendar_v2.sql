@@ -479,8 +479,16 @@ BEGIN
         'active',
         v_expires,
         COALESCE(p_metadata, '{}'::jsonb)
-    ) RETURNING id, resource_id, start_at, end_at, expires_at
-    INTO hold_id, resource_id, slot_start, slot_end, expires_at;
+    ) RETURNING id,
+                  v_resource.id,
+                  p_slot_start,
+                  v_slot_end,
+                  v_expires
+      INTO hold_id,
+           resource_id,
+           slot_start,
+           slot_end,
+           expires_at;
 END;
 $$;
 

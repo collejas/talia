@@ -21,8 +21,8 @@
    - [x] Persistir selecciones y logging en `storage.register_webchat_message`.
    - [x] Tests de integración para herramientas de agenda.
 4. **Widget webchat (Landing)**
-   - [ ] Montar componente shadcn/ui `CalendarSlotPicker` (mes + grid + horarios) y exponerlo como Web Component.
-   - [ ] Integrar en `renderAvailabilityCalendar` incluyendo callbacks para holds y confirmaciones.
+   - [ ] Montar interacción del calendario en el widget (navegación semanal + refresco desde API).
+   - [ ] Integrar en `renderAvailabilityCalendar` incluyendo callbacks para holds y confirmaciones (pendiente componente shadcn/ui completo).
    - [ ] Manejar estados vacíos/errores y fallback a texto.
 5. **Asistente / Prompt**
    - [x] Actualizar `docs/prompt_landing.md` para reflejar el nuevo flujo (ofrecer calendario tras datos completos).

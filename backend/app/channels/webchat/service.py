@@ -101,12 +101,16 @@ def _normalize_window_days(raw_value: Any) -> int:
 
 
 def _parse_calendar_date(raw_value: Any) -> date:
+    today = datetime.now(timezone.utc).date()
     if not raw_value:
-        return datetime.now(timezone.utc).date()
+        return today
     try:
-        return date.fromisoformat(str(raw_value))
+        parsed = date.fromisoformat(str(raw_value))
     except ValueError as exc:  # pragma: no cover - validación defensiva
         raise ValueError(f"Fecha inválida para start_date: {raw_value}") from exc
+    if parsed < today:
+        return today
+    return parsed
 
 
 def _parse_calendar_datetime(raw_value: Any) -> datetime:
