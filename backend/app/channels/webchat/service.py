@@ -158,7 +158,6 @@ class WebchatContext:
     conversation_id: str
     contact_id: str
     session_id: str
-    latest_availability: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -927,13 +926,6 @@ async def handle_message(
     )
     metadata.tools_called = tools_called or None
     metadata.tool_call_ids = tool_call_ids or None
-    availability_payload: dict[str, Any] | None = None
-    if context.latest_availability and isinstance(context.latest_availability, dict):
-        slots_payload = context.latest_availability.get("slots")
-        if isinstance(slots_payload, list) and slots_payload:
-            availability_payload = context.latest_availability
-    metadata.availability = availability_payload
-
     if assistant_reply:
         try:
             message_metadata = {
@@ -941,8 +933,6 @@ async def handle_message(
                 "tools_called": tools_called,
                 "tool_call_ids": tool_call_ids,
             }
-            if availability_payload is not None:
-                message_metadata["availability"] = availability_payload
             await storage.register_webchat_message(
                 session_id=payload.session_id,
                 author="assistant",
@@ -960,7 +950,6 @@ async def handle_message(
                     "error": str(exc),
                 },
             )
-    context.latest_availability = None
 
     return schemas.MessageResponse(
         reply=assistant_reply,

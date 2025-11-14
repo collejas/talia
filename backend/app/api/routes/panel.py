@@ -2909,68 +2909,6 @@ def _build_range_payload(
     }
 
 
-@router.get("/agenda/demos")
-async def agenda_demos(
-    limit: int = Query(default=100, ge=1, le=500),
-    rango: str | None = Query(default=None),
-    desde: str | None = Query(default=None),
-    hasta: str | None = Query(default=None),
-    estado: str | None = Query(default=None),
-    provider: str | None = Query(default=None),
-    authorization: str | None = Header(default=None),
-) -> dict[str, Any]:
-    token = _parse_bearer(authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="auth_required")
-
-    date_from, date_to = _resolve_date_range(rango, desde, hasta)
-    params: dict[str, str] = {
-        "select": "*",
-        "order": "start_at.asc",
-        "limit": str(limit),
-    }
-    and_filters: list[str] = []
-    if date_from:
-        and_filters.append(f"start_at.gte.{_format_utc(date_from)}")
-    if date_to:
-        and_filters.append(f"start_at.lte.{_format_utc(date_to)}")
-    if and_filters:
-        params["and"] = f"({','.join(and_filters)})"
-
-    estado_values = [
-        val.strip().lower() for val in (estado or "").split(",") if val.strip()
-    ] or None
-    if estado_values:
-        if len(estado_values) == 1:
-            params["estado"] = f"eq.{estado_values[0]}"
-        else:
-            params["estado"] = f"in.({','.join(sorted(set(estado_values)))})"
-
-    provider_values = [
-        val.strip().lower() for val in (provider or "").split(",") if val.strip()
-    ] or None
-    if provider_values:
-        if len(provider_values) == 1:
-            params["provider"] = f"eq.{provider_values[0]}"
-        else:
-            params["provider"] = f"in.({','.join(sorted(set(provider_values)))})"
-
-    resp = await _sb_get("/rest/v1/panel_agenda_demos", params=params, token=token)
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=502, detail="Error consultando agenda de demos")
-
-    raw = resp.json() or []
-    return {
-        "ok": True,
-        "items": raw,
-        "range": _build_range_payload(rango, date_from, date_to),
-        "filters": {
-            "estado": estado_values,
-            "provider": provider_values,
-        },
-    }
-
-
 def _ensure_state_code(value: str) -> str:
     digits = "".join(ch for ch in str(value) if ch.isdigit())
     if not digits:

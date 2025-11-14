@@ -62,7 +62,6 @@ class MessageMetadata(BaseModel):
     tools_called: list[str] | None = None
     tool_call_ids: list[str] | None = None
     client_message_id: str | None = None
-    availability: dict[str, Any] | None = None
 
 
 class MessageResponse(BaseModel):

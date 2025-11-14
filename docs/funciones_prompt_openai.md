@@ -132,7 +132,7 @@
 }
 
 
-> **Nota:** Las herramientas de agenda (`list_demo_slots`, `schedule_demo`, `reschedule_demo`, `cancel_demo`) fueron deshabilitadas y ya no están disponibles.
+> **Nota:** No existen herramientas de agenda ni de consulta de horarios disponibles; Tal-IA sólo puede recopilar datos del lead y, si aplica, enviar información por correo.
 
 
 {
