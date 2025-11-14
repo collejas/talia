@@ -1,0 +1,6 @@
+BEGIN;
+
+DROP TABLE IF EXISTS public.citas CASCADE;
+DROP TYPE IF EXISTS public.cita_estado;
+
+COMMIT;
