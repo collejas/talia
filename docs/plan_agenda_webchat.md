@@ -31,7 +31,7 @@
 6. **Panel interno + Operación**
    - [x] Nueva vista/reportes para citas confirmadas (`panel_calendar_bookings`) y UI en `frontend/panel`.
    - [x] Migrar panel a Supabase REST usando `panel_calendar_bookings` en lugar de `panel_agenda_demos`.
-   - [ ] Reglas de notificación/email (ICS, recordatorios).
+   - [x] Reglas de notificación/email (ICS, recordatorios).
 7. **Sincronización con embudo + notificaciones**
    - [x] Agregar `tarjeta_id` a `calendar_slot_holds` y `calendar_bookings` + migración de datos históricos (cuando existan).
    - [x] Actualizar `backend/app/channels/webchat/service.py` para resolver la tarjeta con `storage.ensure_lead_tarjeta` y enviarla al RPC `fn_calendar_confirm_slot`.

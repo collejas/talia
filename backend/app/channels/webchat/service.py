@@ -376,13 +376,18 @@ async def _send_booking_confirmation_email(
         )
         return
 
+    now_iso = datetime.now(timezone.utc).isoformat()
+    reminder_delta = timedelta(hours=2)
+    reminder_at = booking.start_at - reminder_delta
     await _mark_booking_invite_status(
         booking,
         {
             "invite_status": "sent",
             "invite_message_id": message_id,
-            "invite_sent_at": datetime.now(timezone.utc).isoformat(),
+            "invite_sent_at": now_iso,
             "invite_email": email_value,
+            "reminder_status": "pending",
+            "reminder_scheduled_at": reminder_at.isoformat(),
         },
     )
     logger.info(
