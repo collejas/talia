@@ -131,9 +131,142 @@
   }
 }
 
+---
 
-> **Nota:** No existen herramientas de agenda ni de consulta de horarios disponibles; Tal-IA sólo puede recopilar datos del lead y, si aplica, enviar información por correo.
+{
+  "name": "list_demo_slots",
+  "description": "Consulta la disponibilidad del calendario para preparar opciones que el prospecto verá en el webchat.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa asociada al lead."
+      },
+      "timezone": {
+        "type": "string",
+        "description": "Zona horaria preferida del prospecto (ej. 'America/Mexico_City')."
+      },
+      "start_date": {
+        "type": "string",
+        "description": "Fecha inicial en formato YYYY-MM-DD. Si se omite, se usa la fecha actual."
+      },
+      "window_days": {
+        "type": "integer",
+        "description": "Cantidad de días a mostrar (máximo 60).",
+        "minimum": 1,
+        "maximum": 60
+      }
+    },
+    "required": [
+      "conversacion_id"
+    ],
+    "additionalProperties": false
+  }
+}
 
+---
+
+{
+  "name": "schedule_demo",
+  "description": "Confirma una demo en el slot seleccionado por el prospecto.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa donde se registrará la cita."
+      },
+      "slot_id": {
+        "type": "string",
+        "description": "Identificador del slot devuelto por list_demo_slots."
+      },
+      "start_at": {
+        "type": "string",
+        "description": "Fecha y hora del slot en formato ISO 8601 (ej. '2025-03-18T16:00:00-06:00')."
+      },
+      "notes": {
+        "type": "string",
+        "description": "Notas opcionales que el prospecto haya mencionado."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "slot_id",
+      "start_at"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "reschedule_demo",
+  "description": "Mueve una demo confirmada a un nuevo horario disponible.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa relacionada a la cita."
+      },
+      "booking_id": {
+        "type": "string",
+        "description": "Identificador de la cita confirmada."
+      },
+      "start_at": {
+        "type": "string",
+        "description": "Nuevo horario en formato ISO 8601."
+      },
+      "notes": {
+        "type": "string",
+        "description": "Notas adicionales para el seguimiento."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "booking_id",
+      "start_at"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "cancel_demo",
+  "description": "Cancela una demo previamente confirmada.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa relacionada a la cita."
+      },
+      "booking_id": {
+        "type": "string",
+        "description": "Identificador de la cita confirmada."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Motivo opcional compartido por el prospecto."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "booking_id"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
 
 {
   "name": "send_information_email",

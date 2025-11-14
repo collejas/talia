@@ -63,6 +63,22 @@ class Settings(BaseSettings):
         default=True,
         description="Controla si el widget reutiliza session_id entre recargas.",
     )
+    webchat_calendar_resource_id: str | None = Field(
+        default=None,
+        description="ID del recurso (calendar_resources.id) que expone disponibilidad en el webchat.",
+    )
+    webchat_calendar_timezone: str = Field(
+        default="America/Mexico_City",
+        description="Zona horaria preferida para mostrar la agenda cuando el usuario no especifica otra.",
+    )
+    webchat_calendar_default_days: int = Field(
+        default=21,
+        description="Ventana predeterminada (en días) para consultar disponibilidad del calendario.",
+    )
+    webchat_calendar_hold_minutes: int = Field(
+        default=10,
+        description="Minutos que se mantiene bloqueado un horario antes de confirmar la cita.",
+    )
 
     mail_username: str | None = Field(
         default=None,

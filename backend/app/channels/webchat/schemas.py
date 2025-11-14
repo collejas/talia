@@ -62,6 +62,8 @@ class MessageMetadata(BaseModel):
     tools_called: list[str] | None = None
     tool_call_ids: list[str] | None = None
     client_message_id: str | None = None
+    availability: dict[str, Any] | None = None
+    booking: dict[str, Any] | None = None
 
 
 class MessageResponse(BaseModel):
@@ -150,6 +152,7 @@ class UploadResponse(BaseModel):
 class AvailabilitySlot(BaseModel):
     """Horario disponible sugerido para una demo."""
 
+    slot_id: str | None = None
     start_at: datetime
     end_at: datetime
     timezone: str

@@ -7,6 +7,7 @@ import io
 import json
 import zipfile
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -27,7 +28,9 @@ from app.services import (
     send_email,
     storage,
 )
+from app.services import calendar as calendar_service
 from app.services import openai as openai_service
+from app.services.calendar import CalendarError
 from app.services.storage import StorageError
 
 from . import schemas
@@ -56,6 +59,8 @@ TEXT_EXTENSION_WHITELIST = {
     ".log",
 }
 
+CALENDAR_MAX_WINDOW_DAYS = 60
+
 DEFAULT_FALLBACK = (
     "Tu mensaje quedó registrado, pero tuve un problema momentáneo al responder. "
     "Intentemos nuevamente en unos instantes."
@@ -77,6 +82,56 @@ INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
     "use_highlights": True,
     "use_resources": True,
 }
+
+
+def _resolve_calendar_resource_id() -> str:
+    resource_id = settings.webchat_calendar_resource_id
+    if not resource_id:
+        raise ValueError("No se configuró el calendario de demos para el webchat.")
+    return resource_id
+
+
+def _normalize_window_days(raw_value: Any) -> int:
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        value = settings.webchat_calendar_default_days
+    value = max(1, value)
+    return min(value, CALENDAR_MAX_WINDOW_DAYS)
+
+
+def _parse_calendar_date(raw_value: Any) -> date:
+    if not raw_value:
+        return datetime.now(timezone.utc).date()
+    try:
+        return date.fromisoformat(str(raw_value))
+    except ValueError as exc:  # pragma: no cover - validación defensiva
+        raise ValueError(f"Fecha inválida para start_date: {raw_value}") from exc
+
+
+def _parse_calendar_datetime(raw_value: Any) -> datetime:
+    if not raw_value:
+        raise ValueError("start_at requerido para la operación solicitada")
+    text = str(raw_value).strip()
+    if text.endswith("Z"):
+        text = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:  # pragma: no cover
+        raise ValueError(f"Fecha/hora inválida: {raw_value}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _resolve_timezone_preference(value: Any) -> str:
+    preferred = str(value).strip() if isinstance(value, str) else ""
+    fallback = settings.webchat_calendar_timezone
+    return preferred or fallback
+
+
+def _build_slot_identifier(resource_id: str, slot_start: datetime) -> str:
+    return f"{resource_id}:{slot_start.isoformat()}"
 
 
 def _clone_information_email_template() -> dict[str, Any]:
@@ -899,6 +954,7 @@ async def handle_message(
             tools_called,
             tool_call_ids,
             resolved_openai_conversation,
+            side_effects,
         ) = await _run_assistant_turn(
             client=client,
             assistant=assistant,
@@ -926,6 +982,11 @@ async def handle_message(
     )
     metadata.tools_called = tools_called or None
     metadata.tool_call_ids = tool_call_ids or None
+    if side_effects.get("availability"):
+        metadata.availability = side_effects["availability"]
+    if side_effects.get("booking"):
+        metadata.booking = side_effects["booking"]
+
     if assistant_reply:
         try:
             message_metadata = {
@@ -933,6 +994,10 @@ async def handle_message(
                 "tools_called": tools_called,
                 "tool_call_ids": tool_call_ids,
             }
+            if side_effects:
+                for key, value in side_effects.items():
+                    if value is not None:
+                        message_metadata[key] = value
             await storage.register_webchat_message(
                 session_id=payload.session_id,
                 author="assistant",
@@ -1251,7 +1316,7 @@ async def _run_assistant_turn(
     user_message: schemas.MessageRequest,
     openai_conversation_id: str | None,
     previous_response_id: str | None,
-) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None]:
+) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None, dict[str, Any]]:
     """Gestiona la interacción con OpenAI y la resolución de tool calls."""
     metadata_payload = {
         "session_id": context.session_id,
@@ -1332,6 +1397,8 @@ async def _run_assistant_turn(
     assistant_reply: str | None = None
     latest_response_id = previous_response_id
 
+    side_effects: dict[str, Any] = {}
+
     while True:
         response = await client.responses.create(**request_kwargs)
         response_dict = response.model_dump()
@@ -1377,6 +1444,11 @@ async def _run_assistant_turn(
                 )
                 result = {"status": "error", "message": str(exc)}
 
+            if isinstance(result, dict):
+                extras = result.pop("_side_effects", None)
+                if isinstance(extras, dict):
+                    side_effects.update(extras)
+
             payload = {
                 "type": "function_call_output",
                 "call_id": call_id,
@@ -1413,6 +1485,7 @@ async def _run_assistant_turn(
         tools_called,
         tool_call_ids,
         latest_openai_conversation,
+        side_effects,
     )
 
 
@@ -1560,16 +1633,149 @@ async def _execute_function_call(
         }
 
     if name == "list_demo_slots":
-        raise ValueError("La herramienta list_demo_slots ya no está disponible")
+        resource_id = _resolve_calendar_resource_id()
+        timezone_pref = _resolve_timezone_preference(arguments.get("timezone"))
+        start_raw = arguments.get("start_date") or arguments.get("window_start")
+        start_date = _parse_calendar_date(start_raw)
+        window_days = _normalize_window_days(arguments.get("window_days") or arguments.get("days"))
+        end_date = start_date + timedelta(days=window_days - 1)
+        try:
+            availability_raw = await calendar_service.list_slots(
+                resource_id=resource_id,
+                start_date=start_date,
+                end_date=end_date,
+                timezone_hint=timezone_pref,
+                max_days=window_days,
+            )
+        except CalendarError as exc:
+            raise ValueError(str(exc)) from exc
+
+        slots = [slot for slot in availability_raw.get("slots", []) if slot.get("is_available")]
+        availability_payload = dict(availability_raw)
+        availability_payload["slots"] = slots
+
+        return {
+            "status": "ok",
+            "resource_id": resource_id,
+            "timezone": availability_payload.get("timezone"),
+            "window_start": availability_payload.get("window_start"),
+            "window_end": availability_payload.get("window_end"),
+            "slot_duration_minutes": availability_payload.get("slot_duration_minutes"),
+            "slots": availability_payload["slots"],
+            "_side_effects": {"availability": availability_payload},
+        }
 
     if name == "schedule_demo":
-        raise ValueError("La herramienta schedule_demo ya no está disponible")
+        resource_id = _resolve_calendar_resource_id()
+        slot_id = str(arguments.get("slot_id") or "").strip()
+        start_raw = arguments.get("start_at")
+        if not start_raw and slot_id:
+            _, _, candidate = slot_id.partition(":")
+            if candidate:
+                start_raw = candidate
+        slot_datetime = _parse_calendar_datetime(start_raw)
+        hold_minutes = max(1, settings.webchat_calendar_hold_minutes)
+        slot_identifier = slot_id or _build_slot_identifier(resource_id, slot_datetime)
+        notes = (arguments.get("notes") or "").strip() or None
+
+        try:
+            hold = await calendar_service.hold_slot(
+                resource_id=resource_id,
+                slot_start=slot_datetime,
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                hold_minutes=hold_minutes,
+                metadata={
+                    "slot_id": slot_identifier,
+                    "source": "webchat",
+                    "conversation_id": context.conversation_id,
+                },
+            )
+            booking = await calendar_service.confirm_slot(
+                hold_id=hold.get("hold_id"),
+                notes=notes,
+                metadata={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "session_id": context.session_id,
+                },
+            )
+        except CalendarError as exc:
+            raise ValueError(str(exc)) from exc
+
+        booking_payload = {
+            "booking_id": booking.get("booking_id"),
+            "resource_id": booking.get("resource_id"),
+            "start_at": booking.get("start_at"),
+            "end_at": booking.get("end_at"),
+            "timezone": booking.get("timezone"),
+            "status": booking.get("status"),
+            "hold_id": hold.get("hold_id"),
+        }
+        return {
+            "status": "ok",
+            **booking_payload,
+            "_side_effects": {"booking": booking_payload},
+        }
 
     if name == "reschedule_demo":
-        raise ValueError("La herramienta reschedule_demo ya no está disponible")
+        booking_id = str(arguments.get("booking_id") or "").strip()
+        if not booking_id:
+            raise ValueError("booking_id requerido para reschedule_demo")
+        new_slot_raw = arguments.get("start_at") or arguments.get("slot_start")
+        new_slot_datetime = _parse_calendar_datetime(new_slot_raw)
+        notes = (arguments.get("notes") or "").strip() or None
+        try:
+            booking = await calendar_service.reschedule_booking(
+                booking_id=booking_id,
+                new_slot_start=new_slot_datetime,
+                notes=notes,
+                metadata={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "session_id": context.session_id,
+                },
+            )
+        except CalendarError as exc:
+            raise ValueError(str(exc)) from exc
+        booking_payload = {
+            "booking_id": booking.get("booking_id"),
+            "resource_id": booking.get("resource_id"),
+            "start_at": booking.get("start_at"),
+            "end_at": booking.get("end_at"),
+            "status": booking.get("status"),
+            "hold_id": booking.get("hold_id"),
+        }
+        return {
+            "status": "ok",
+            **booking_payload,
+            "_side_effects": {"booking": booking_payload},
+        }
 
     if name == "cancel_demo":
-        raise ValueError("La herramienta cancel_demo ya no está disponible")
+        booking_id = str(arguments.get("booking_id") or "").strip()
+        if not booking_id:
+            raise ValueError("booking_id requerido para cancel_demo")
+        reason = (arguments.get("reason") or "").strip() or None
+        try:
+            booking = await calendar_service.cancel_booking(
+                booking_id=booking_id,
+                reason=reason,
+            )
+        except CalendarError as exc:
+            raise ValueError(str(exc)) from exc
+        booking_payload = {
+            "booking_id": booking.get("booking_id"),
+            "resource_id": booking.get("resource_id"),
+            "start_at": booking.get("start_at"),
+            "end_at": booking.get("end_at"),
+            "status": booking.get("status"),
+        }
+        return {
+            "status": "ok",
+            **booking_payload,
+            "_side_effects": {"booking": booking_payload},
+        }
 
     if name == "send_information_email":
         email_value = str(arguments.get("email") or "").strip()

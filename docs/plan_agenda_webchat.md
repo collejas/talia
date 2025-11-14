@@ -11,23 +11,23 @@
 ### 3. Roadmap de alto nivel
 1. **Diseño UX + Contracto técnico**
    - [ ] Definir mockups del calendario (navegación mensual, picker de día y lista de horarios).
-   - [ ] Cerrar contrato JSON entre frontend ↔ backend ↔ OpenAI (estructura de `availability`, `slot_id`, `hold_id`).
+   - [x] Cerrar contrato JSON entre frontend ↔ backend ↔ OpenAI (estructura de `availability`, `slot_id`, `hold_id`).
 2. **Infraestructura de disponibilidad (Supabase)**
-   - [ ] Crear tablas `calendar_resources`, `calendar_availability_patterns`, `calendar_exceptions`, `calendar_slots_holds`, `calendar_bookings`.
-   - [ ] Implementar RPC `fn_calendar_list_slots`, `fn_calendar_hold_slot`, `fn_calendar_confirm_slot`.
-   - [ ] Sembrar recursos/slots demo para pruebas y generar nuevo backup.
+   - [x] Crear tablas `calendar_resources`, `calendar_availability_patterns`, `calendar_exceptions`, `calendar_slots_holds`, `calendar_bookings`.
+   - [x] Implementar RPC `fn_calendar_list_slots`, `fn_calendar_hold_slot`, `fn_calendar_confirm_slot`.
+   - [x] Sembrar recursos/slots demo para pruebas y generar nuevo backup.
 3. **Backend FastAPI**
    - [ ] Endpoints REST `/api/webchat/calendar` (list, hold, confirm) con validaciones e integración Supabase.
-   - [ ] Persistir selecciones y logging en `storage.register_webchat_message`.
-   - [ ] Tests de integración para herramientas de agenda.
+   - [x] Persistir selecciones y logging en `storage.register_webchat_message`.
+   - [x] Tests de integración para herramientas de agenda.
 4. **Widget webchat (Landing)**
    - [ ] Montar componente shadcn/ui `CalendarSlotPicker` (mes + grid + horarios) y exponerlo como Web Component.
    - [ ] Integrar en `renderAvailabilityCalendar` incluyendo callbacks para holds y confirmaciones.
    - [ ] Manejar estados vacíos/errores y fallback a texto.
 5. **Asistente / Prompt**
-   - [ ] Actualizar `docs/prompt_landing.md` para reflejar el nuevo flujo (ofrecer calendario tras datos completos).
-   - [ ] Reintroducir definiciones de `list_demo_slots` y `schedule_demo` en `docs/funciones_prompt_openai.md`.
-   - [ ] Ajustar `_execute_function_call` para nuevos payloads y confirmaciones.
+   - [x] Actualizar `docs/prompt_landing.md` para reflejar el nuevo flujo (ofrecer calendario tras datos completos).
+   - [x] Reintroducir definiciones de `list_demo_slots` y `schedule_demo` en `docs/funciones_prompt_openai.md`.
+   - [x] Ajustar `_execute_function_call` para nuevos payloads y confirmaciones.
 6. **Panel interno + Operación**
    - [ ] Nueva vista/reportes para citas confirmadas (`panel_calendar_bookings`) y UI en `frontend/panel`.
    - [ ] Reglas de notificación/email (ICS, recordatorios).
