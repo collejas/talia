@@ -210,6 +210,8 @@ async def confirm_slot(
         "timezone": row.get("timezone"),
         "status": row.get("status"),
         "hold_id": hold_id,
+        "tarjeta_id": row.get("tarjeta_id"),
+        "metadata": row.get("metadata"),
     }
 
 
@@ -242,7 +244,17 @@ async def reschedule_booking(
     rows = await _call_rpc("fn_calendar_reschedule_booking", payload)
     if not rows:
         raise CalendarError("No se pudo reprogramar la cita solicitada")
-    return rows[0]
+    row = rows[0]
+    return {
+        "booking_id": row.get("booking_id"),
+        "resource_id": row.get("resource_id"),
+        "start_at": row.get("start_at"),
+        "end_at": row.get("end_at"),
+        "status": row.get("status"),
+        "hold_id": row.get("hold_id"),
+        "tarjeta_id": row.get("tarjeta_id"),
+        "metadata": row.get("metadata"),
+    }
 
 
 async def release_hold(*, hold_id: str, reason: str | None = None) -> dict[str, Any]:

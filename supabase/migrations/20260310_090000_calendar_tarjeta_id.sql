@@ -12,7 +12,12 @@ CREATE INDEX IF NOT EXISTS calendar_slot_holds_tarjeta_idx
 CREATE INDEX IF NOT EXISTS calendar_bookings_tarjeta_idx
     ON public.calendar_bookings(tarjeta_id);
 
-CREATE OR REPLACE FUNCTION public.fn_calendar_hold_slot(
+DROP FUNCTION IF EXISTS public.fn_calendar_hold_slot(uuid, timestamptz, uuid, uuid, integer, jsonb) CASCADE;
+DROP FUNCTION IF EXISTS public.fn_calendar_hold_slot(uuid, timestamptz, uuid, uuid, integer, jsonb, uuid) CASCADE;
+DROP FUNCTION IF EXISTS public.fn_calendar_confirm_slot(uuid, text, jsonb, text, text) CASCADE;
+DROP FUNCTION IF EXISTS public.fn_calendar_reschedule_booking(uuid, timestamptz, text, jsonb) CASCADE;
+
+CREATE FUNCTION public.fn_calendar_hold_slot(
     p_resource_id uuid,
     p_slot_start timestamptz,
     p_conversacion_id uuid,
@@ -169,7 +174,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.fn_calendar_confirm_slot(
+CREATE FUNCTION public.fn_calendar_confirm_slot(
     p_hold_id uuid,
     p_notes text DEFAULT NULL,
     p_metadata jsonb DEFAULT '{}'::jsonb,
@@ -181,7 +186,9 @@ CREATE OR REPLACE FUNCTION public.fn_calendar_confirm_slot(
     start_at timestamptz,
     end_at timestamptz,
     timezone text,
-    status text
+    status text,
+    tarjeta_id uuid,
+    metadata jsonb
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -284,11 +291,13 @@ BEGIN
         v_hold.start_at,
         v_hold.end_at,
         v_resource.timezone,
-        'confirmed'::text;
+        'confirmed'::text,
+        v_hold.tarjeta_id,
+        (SELECT metadata FROM public.calendar_bookings WHERE id = v_booking_id);
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.fn_calendar_reschedule_booking(
+CREATE FUNCTION public.fn_calendar_reschedule_booking(
     p_booking_id uuid,
     p_new_slot_start timestamptz,
     p_notes text DEFAULT NULL,
@@ -299,7 +308,9 @@ CREATE OR REPLACE FUNCTION public.fn_calendar_reschedule_booking(
     start_at timestamptz,
     end_at timestamptz,
     status text,
-    hold_id uuid
+    hold_id uuid,
+    tarjeta_id uuid,
+    metadata jsonb
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -369,7 +380,9 @@ BEGIN
            v_new_hold.slot_start,
            v_new_hold.slot_end,
            'confirmed'::text,
-           v_new_hold.hold_id;
+           v_new_hold.hold_id,
+           v_booking.tarjeta_id,
+           (SELECT metadata FROM public.calendar_bookings WHERE id = v_booking.id);
 END;
 $$;
 

@@ -763,6 +763,56 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     return row
 
 
+async def update_calendar_booking_metadata(
+    *,
+    booking_id: str,
+    metadata_patch: dict[str, Any],
+    current_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fusiona y persiste metadata asociada a una reserva del calendario."""
+    if not metadata_patch:
+        return current_metadata or {}
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    merged: dict[str, Any] = {}
+    if current_metadata:
+        merged.update(current_metadata)
+    merged.update(metadata_patch)
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/calendar_bookings"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    params = {
+        "id": f"eq.{booking_id}",
+        "limit": "1",
+    }
+    payload = {"metadata": merged}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.patch(url, headers=headers, params=params, json=payload)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al actualizar calendar_bookings.metadata: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al actualizar calendar_bookings"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    return merged
+
+
 async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
     """Recupera el template de correo configurado para envíos manuales."""
     if not settings.supabase_url or not settings.supabase_service_role:

@@ -16,6 +16,7 @@ from xml.etree import ElementTree as ET
 import httpx
 from fastapi import HTTPException, Request, UploadFile, status
 from openai import AsyncOpenAI
+from zoneinfo import ZoneInfo
 
 from app.assistants import registry
 from app.assistants.manager import AssistantConfig
@@ -65,6 +66,8 @@ DEFAULT_FALLBACK = (
     "Tu mensaje quedó registrado, pero tuve un problema momentáneo al responder. "
     "Intentemos nuevamente en unos instantes."
 )
+
+DEFAULT_DEMO_DURATION_MINUTES = 45
 
 INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
     "intro": "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
@@ -179,6 +182,217 @@ def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResp
         hold_id=data.get("hold_id"),
         notes=data.get("notes"),
         metadata=data.get("metadata") if isinstance(data.get("metadata"), dict) else None,
+        tarjeta_id=data.get("tarjeta_id"),
+    )
+
+
+def _sanitize_ics_text(value: str) -> str:
+    text = value.replace("\\", "\\\\")
+    text = text.replace("\r\n", "\n")
+    return text.replace("\n", "\\n")
+
+
+def _build_demo_ics_attachment(
+    booking: schemas.CalendarBookingResponse,
+    timezone_name: str,
+    contact_name: str | None,
+    contact_email: str,
+) -> dict[str, object]:
+    start_utc = booking.start_at.astimezone(timezone.utc)
+    end_source = booking.end_at or (
+        booking.start_at + timedelta(minutes=DEFAULT_DEMO_DURATION_MINUTES)
+    )
+    end_utc = end_source.astimezone(timezone.utc)
+    organizer_email = (settings.mail_username or contact_email).strip() or contact_email
+    description_parts = [
+        "Demo de Tal-IA confirmada.",
+        f"Zona horaria preferida: {timezone_name.replace('_', ' ')}.",
+    ]
+    if booking.notes:
+        description_parts.append(f"Notas: {booking.notes.strip()}")
+    description = _sanitize_ics_text(" ".join(description_parts))
+    summary = _sanitize_ics_text("Demo Tal-IA")
+    attendee_name = contact_name.strip() if isinstance(contact_name, str) else contact_email
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Tal-IA//Demo Booking//ES",
+        "CALSCALE:GREGORIAN",
+        "METHOD:REQUEST",
+        "BEGIN:VEVENT",
+        f"UID:{booking.booking_id}@talia.mx",
+        f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTSTART:{start_utc.strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTEND:{end_utc.strftime('%Y%m%dT%H%M%SZ')}",
+        f"SUMMARY:{summary}",
+        f"DESCRIPTION:{description}",
+        f"ATTENDEE;CN={_sanitize_ics_text(attendee_name)}:mailto:{contact_email}",
+        f"ORGANIZER;CN=Tal-IA:mailto:{organizer_email}",
+        "STATUS:CONFIRMED",
+        "SEQUENCE:0",
+        "END:VEVENT",
+        "END:VCALENDAR",
+    ]
+    ics_payload = "\r\n".join(lines) + "\r\n"
+    return {
+        "content": ics_payload.encode("utf-8"),
+        "filename": f"tal-ia-demo-{booking.booking_id}.ics",
+        "maintype": "text",
+        "subtype": "calendar",
+        "headers": {"Content-Class": "urn:content-classes:calendarmessage"},
+    }
+
+
+async def _mark_booking_invite_status(
+    booking: schemas.CalendarBookingResponse,
+    patch: dict[str, Any],
+) -> None:
+    if not patch:
+        return
+    try:
+        metadata = await storage.update_calendar_booking_metadata(
+            booking_id=booking.booking_id,
+            metadata_patch=patch,
+            current_metadata=booking.metadata,
+        )
+        booking.metadata = metadata
+    except StorageError as exc:
+        logger.warning(
+            "calendar.booking_metadata_update_failed",
+            extra={"booking_id": booking.booking_id, "error": str(exc)},
+        )
+
+
+async def _send_booking_confirmation_email(
+    *,
+    booking: schemas.CalendarBookingResponse,
+    contact_id: str | None,
+    conversation_id: str,
+    tarjeta_id: str | None,
+) -> None:
+    if not contact_id:
+        return
+    contact = await _resolve_contact(contact_id)
+    if not contact:
+        return
+    email_value = str(contact.get("correo") or "").strip()
+    if not email_value:
+        await _mark_booking_invite_status(
+            booking,
+            {
+                "invite_status": "skipped",
+                "invite_reason": "missing_contact_email",
+                "invite_attempt_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        logger.info(
+            "calendar.invite_skipped_missing_email",
+            extra={"conversation_id": conversation_id, "booking_id": booking.booking_id},
+        )
+        return
+
+    timezone_name = booking.timezone or settings.webchat_calendar_timezone
+    tz_label = timezone_name.replace("_", " ")
+    try:
+        zone = ZoneInfo(timezone_name)
+    except Exception:
+        zone = timezone.utc
+    start_local = booking.start_at.astimezone(zone)
+    end_local = (
+        booking.end_at or (booking.start_at + timedelta(minutes=DEFAULT_DEMO_DURATION_MINUTES))
+    ).astimezone(zone)
+    date_label = start_local.strftime("%d/%m/%Y")
+    time_label = start_local.strftime("%H:%M")
+
+    contact_name = contact.get("nombre_completo")
+    greeting = f"Hola {contact_name}," if contact_name else "Hola,"
+    end_label = end_local.strftime("%H:%M")
+
+    body_lines = [
+        greeting,
+        "",
+        f"Tu demo con Tal-IA quedó confirmada para el {date_label} a las {time_label} ({tz_label}).",
+        f"El espacio queda reservado aproximadamente hasta las {end_label} ({tz_label}).",
+        "Te enviaré un recordatorio antes del horario confirmado. Si necesitas moverla o cancelarla, responde este correo o escríbeme por el chat.",
+    ]
+    if booking.notes:
+        body_lines.extend(["", f"Notas registradas: {booking.notes.strip()}"])
+    body_lines.extend(
+        [
+            "",
+            "Adjunté un evento de calendario para que lo agregues a tu agenda.",
+            "",
+            "Tal-IA · Geoactiv",
+        ]
+    )
+    subject = "Tal-IA · Demo confirmada"
+    attachments = [
+        _build_demo_ics_attachment(
+            booking=booking,
+            timezone_name=timezone_name,
+            contact_name=contact_name,
+            contact_email=email_value,
+        )
+    ]
+
+    try:
+        message_id = await asyncio.to_thread(
+            send_email,
+            subject=subject,
+            body_text="\n".join(body_lines),
+            recipients=[email_value],
+            attachments=attachments,
+        )
+    except EmailSendError as exc:
+        await _mark_booking_invite_status(
+            booking,
+            {
+                "invite_status": "failed",
+                "invite_error": str(exc),
+                "invite_attempt_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        logger.error(
+            "calendar.invite_send_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "booking_id": booking.booking_id,
+                "error": str(exc),
+            },
+        )
+        return
+    except Exception:  # pragma: no cover - defensivo
+        await _mark_booking_invite_status(
+            booking,
+            {
+                "invite_status": "failed",
+                "invite_error": "unexpected_error",
+                "invite_attempt_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        logger.exception(
+            "calendar.invite_send_unexpected",
+            extra={"conversation_id": conversation_id, "booking_id": booking.booking_id},
+        )
+        return
+
+    await _mark_booking_invite_status(
+        booking,
+        {
+            "invite_status": "sent",
+            "invite_message_id": message_id,
+            "invite_sent_at": datetime.now(timezone.utc).isoformat(),
+            "invite_email": email_value,
+        },
+    )
+    logger.info(
+        "calendar.invite_sent",
+        extra={
+            "conversation_id": conversation_id,
+            "booking_id": booking.booking_id,
+            "email": email_value,
+            "tarjeta_id": tarjeta_id,
+        },
     )
 
 
@@ -252,7 +466,10 @@ async def schedule_calendar_booking(
     session_id: str | None = None,
 ) -> schemas.CalendarBookingResponse:
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
-    contact_id = str(conversation_meta.get("contact_id"))
+    contact_value = conversation_meta.get("contact_id")
+    contact_id = str(contact_value) if contact_value else None
+    if not contact_id:
+        raise ValueError("No fue posible asociar la cita con el contacto de la conversación.")
     try:
         tarjeta_id = await storage.ensure_lead_tarjeta(
             tarjeta_id=None,
@@ -299,7 +516,14 @@ async def schedule_calendar_booking(
         raise ValueError(str(exc)) from exc
 
     booking["hold_id"] = hold.get("hold_id")
-    return _build_booking_response(booking)
+    booking_response = _build_booking_response(booking)
+    await _send_booking_confirmation_email(
+        booking=booking_response,
+        contact_id=contact_id,
+        conversation_id=conversation_id,
+        tarjeta_id=tarjeta_id,
+    )
+    return booking_response
 
 
 async def reschedule_calendar_booking(
@@ -309,7 +533,9 @@ async def reschedule_calendar_booking(
     start_at: datetime,
     notes: str | None = None,
 ) -> schemas.CalendarBookingResponse:
-    await _resolve_conversation_metadata(conversation_id)
+    conversation_meta = await _resolve_conversation_metadata(conversation_id)
+    contact_raw = conversation_meta.get("contact_id") if conversation_meta else None
+    contact_id = str(contact_raw) if contact_raw else None
     try:
         booking = await calendar_service.reschedule_booking(
             booking_id=booking_id,
@@ -319,7 +545,14 @@ async def reschedule_calendar_booking(
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
-    return _build_booking_response(booking)
+    booking_response = _build_booking_response(booking)
+    await _send_booking_confirmation_email(
+        booking=booking_response,
+        contact_id=contact_id,
+        conversation_id=conversation_id,
+        tarjeta_id=booking_response.tarjeta_id,
+    )
+    return booking_response
 
 
 async def cancel_calendar_booking(
@@ -1924,14 +2157,23 @@ async def _execute_function_call(
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
 
+        booking_response = _build_booking_response(booking)
+        booking_response.hold_id = hold.get("hold_id")
+        await _send_booking_confirmation_email(
+            booking=booking_response,
+            contact_id=context.contact_id,
+            conversation_id=context.conversation_id,
+            tarjeta_id=tarjeta_id,
+        )
+
         booking_payload = {
-            "booking_id": booking.get("booking_id"),
-            "resource_id": booking.get("resource_id"),
-            "start_at": booking.get("start_at"),
-            "end_at": booking.get("end_at"),
-            "timezone": booking.get("timezone"),
-            "status": booking.get("status"),
-            "hold_id": hold.get("hold_id"),
+            "booking_id": booking_response.booking_id,
+            "resource_id": booking_response.resource_id,
+            "start_at": booking_response.start_at.isoformat(),
+            "end_at": booking_response.end_at.isoformat() if booking_response.end_at else None,
+            "timezone": booking_response.timezone,
+            "status": booking_response.status,
+            "hold_id": booking_response.hold_id,
         }
         return {
             "status": "ok",
@@ -1959,13 +2201,20 @@ async def _execute_function_call(
             )
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
+        booking_response = _build_booking_response(booking)
+        await _send_booking_confirmation_email(
+            booking=booking_response,
+            contact_id=context.contact_id,
+            conversation_id=context.conversation_id,
+            tarjeta_id=booking_response.tarjeta_id,
+        )
         booking_payload = {
-            "booking_id": booking.get("booking_id"),
-            "resource_id": booking.get("resource_id"),
-            "start_at": booking.get("start_at"),
-            "end_at": booking.get("end_at"),
-            "status": booking.get("status"),
-            "hold_id": booking.get("hold_id"),
+            "booking_id": booking_response.booking_id,
+            "resource_id": booking_response.resource_id,
+            "start_at": booking_response.start_at.isoformat(),
+            "end_at": booking_response.end_at.isoformat() if booking_response.end_at else None,
+            "status": booking_response.status,
+            "hold_id": booking_response.hold_id,
         }
         return {
             "status": "ok",

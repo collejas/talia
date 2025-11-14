@@ -213,3 +213,4 @@ class CalendarBookingResponse(BaseModel):
     hold_id: str | None = None
     notes: str | None = None
     metadata: dict[str, Any] | None = None
+    tarjeta_id: str | None = None
