@@ -31,7 +31,15 @@
 6. **Panel interno + Operación**
    - [ ] Nueva vista/reportes para citas confirmadas (`panel_calendar_bookings`) y UI en `frontend/panel`.
    - [ ] Reglas de notificación/email (ICS, recordatorios).
-7. **QA & Lanzamiento**
+   - [ ] Migrar panel a Supabase REST usando `panel_calendar_bookings` en lugar de `panel_agenda_demos`.
+7. **Sincronización con embudo + notificaciones**
+   - [ ] Agregar `tarjeta_id` a `calendar_slot_holds` y `calendar_bookings` + migración de datos históricos (cuando existan).
+   - [ ] Actualizar `backend/app/channels/webchat/service.py` para resolver la tarjeta con `storage.ensure_lead_tarjeta` y enviarla al RPC `fn_calendar_confirm_slot`.
+   - [ ] Crear trigger `tg_calendar_booking_sync_stage` que mueva la tarjeta a etapa `demo` al confirmar y la regrese/registre movimiento al cancelar.
+   - [ ] Implementar helper de correo/ICS post-confirmación (`send_demo_invite`) que escriba `invite_status` y `message_id` en `calendar_bookings.metadata`.
+   - [ ] Ajustar docs/prompt (`docs/prompt_landing.md`, `docs/funciones_prompt_openai.md`) para reflejar que el backend envía el correo con los datos confirmados.
+   - [ ] Una vez verificado el flujo, emitir migración que archive/elimine `public.citas` y su enum asociado.
+8. **QA & Lanzamiento**
    - [ ] Pruebas punta a punta (usuario dice “sí” → calendario → cita creada).
    - [ ] Validar zonas horarias, móviles y accesibilidad.
    - [ ] Documentar proceso de despliegue y monitoreo.
