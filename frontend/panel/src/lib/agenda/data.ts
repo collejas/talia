@@ -194,11 +194,11 @@ function mapAgenda(rows: AgendaRestRow[]): { items: AgendaItem[]; metrics: Agend
     items.push(item);
     metrics.total += 1;
 
-    const estado = item.estado;
-    if (estado === "cancelada") metrics.canceladas += 1;
-    if (estado === "realizada") metrics.realizadas += 1;
+    const estadoItem = item.estado;
+    if (estadoItem === "cancelada") metrics.canceladas += 1;
+    if (estadoItem === "realizada") metrics.realizadas += 1;
 
-    if (ACTIVE_STATES.has(estado)) {
+    if (ACTIVE_STATES.has(estadoItem)) {
       metrics.activas += 1;
       const startMs = Date.parse(item.startAt);
       if (!Number.isNaN(startMs) && startMs >= nowMs && startMs <= nowMs + UPCOMING_WINDOW_MS) {

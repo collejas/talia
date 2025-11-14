@@ -213,15 +213,17 @@ export function AgendaTable({ items }: AgendaTableProps) {
                   <TableCell className="space-y-1">
                     <Badge variant={estadoVariant}>{estadoLabel}</Badge>
                     <div className="text-muted-foreground text-xs">
-                      {item.reminderStatus ? `Recordatorio: ${item.reminderStatus}` : ""}
+                      {item.metadata?.invite_status
+                        ? `Invitación: ${formatInviteStatus(String(item.metadata.invite_status))}`
+                        : ""}
                     </div>
                   </TableCell>
                   <TableCell className="space-y-1">
                     <div className="font-medium">{providerLabel}</div>
                     {canal ? <div className="text-muted-foreground text-xs">{canal}</div> : null}
-                    {item.scheduledVia ? (
+                    {item.metadata?.source ? (
                       <div className="text-muted-foreground text-xs">
-                        Programada por {item.scheduledVia.toLowerCase()}
+                        Programada por {String(item.metadata.source).toLowerCase()}
                       </div>
                     ) : null}
                   </TableCell>
@@ -246,9 +248,9 @@ export function AgendaTable({ items }: AgendaTableProps) {
                     ) : (
                       <span className="text-muted-foreground text-xs">Sin notas</span>
                     )}
-                    {item.cancelReason ? (
+                    {item.metadata?.cancel_reason ? (
                       <p className="text-xs text-destructive">
-                        Motivo cancelación: {item.cancelReason}
+                        Motivo cancelación: {String(item.metadata.cancel_reason)}
                       </p>
                     ) : null}
                   </TableCell>
@@ -351,6 +353,14 @@ function formatProvider(provider: string): string {
   if (normalized === "calendar") return "Calendario Tal-IA"
   if (normalized === "google") return "Google Calendar"
   return "Agenda interna"
+}
+
+function formatInviteStatus(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized === "sent") return "Enviada";
+  if (normalized === "failed") return "Fallida";
+  if (normalized === "skipped") return "Omitida";
+  return capitalizeSpanish(normalized);
 }
 
 function formatCanal(canal: string | null | undefined): string | null {
