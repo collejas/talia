@@ -22,6 +22,7 @@ import {
   IconLayoutKanban,
   IconMap,
   IconMail,
+  IconBell,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -65,6 +66,7 @@ const NAVIGATION = {
       icon: IconSettings,
       children: [
         { title: "Formato de correos", url: "/settings/email", icon: IconMail },
+        { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell },
       ],
     },
     { title: "Get Help", url: "#", icon: IconHelp },

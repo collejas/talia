@@ -39,3 +39,6 @@ Garantizar que cada demo confirmada reciba un recordatorio antes del horario age
 - Implementar el job (puede ser un script de cron en backend o un edge function en Supabase) que ejecute los pasos descritos en el punto 2.
 - Exponer en el panel un indicador visual del estado del recordatorio usando `metadata` o las columnas nuevas.
 - Añadir alertas si `reminder_status = 'failed'` por más de N minutos antes del evento.
+
+## Configuración desde el panel
+- En la sección `Settings → Recordatorios de demos` se puede activar/desactivar el recordatorio automático y definir la anticipación (en minutos). Estos valores se guardan en `panel_calendar_settings` y el backend los lee antes de programar cada recordatorio.

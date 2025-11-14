@@ -763,6 +763,48 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     return row
 
 
+async def fetch_calendar_settings() -> dict[str, Any]:
+    """Obtiene la configuración de recordatorios del calendario (activación y offset)."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/panel_calendar_settings"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "slug": "eq.default",
+        "limit": "1",
+        "select": "slug,reminder_enabled,reminder_offset_minutes,updated_at",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar configuración de calendario: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al obtener configuración de calendario"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = response.json() or []
+    record = rows[0] if isinstance(rows, list) and rows else {}
+    return {
+        "reminder_enabled": bool(record.get("reminder_enabled", True)),
+        "reminder_offset_minutes": int(record.get("reminder_offset_minutes") or 120),
+        "updated_at": record.get("updated_at"),
+    }
+
+
 async def update_calendar_booking_metadata(
     *,
     booking_id: str,

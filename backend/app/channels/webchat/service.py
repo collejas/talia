@@ -68,6 +68,10 @@ DEFAULT_FALLBACK = (
 )
 
 DEFAULT_DEMO_DURATION_MINUTES = 45
+REMINDER_MINUTES_DEFAULT = 120
+REMINDER_MINUTES_MIN = 15
+REMINDER_MINUTES_MAX = 720
+REMINDER_SETTINGS_TTL_SECONDS = 300
 
 INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
     "intro": "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
@@ -86,12 +90,54 @@ INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
     "use_resources": True,
 }
 
+_REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
+_REMINDER_SETTINGS_LOADED_AT: datetime | None = None
+
 
 def _resolve_calendar_resource_id() -> str:
     resource_id = settings.webchat_calendar_resource_id
     if not resource_id:
         raise ValueError("No se configuró el calendario de demos para el webchat.")
     return resource_id
+
+
+def _normalize_reminder_offset(value: Any) -> int:
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        minutes = REMINDER_MINUTES_DEFAULT
+    return max(REMINDER_MINUTES_MIN, min(REMINDER_MINUTES_MAX, minutes))
+
+
+async def _get_reminder_settings() -> dict[str, Any]:
+    global _REMINDER_SETTINGS_CACHE, _REMINDER_SETTINGS_LOADED_AT
+    now = datetime.now(timezone.utc)
+    if (
+        _REMINDER_SETTINGS_CACHE is not None
+        and _REMINDER_SETTINGS_LOADED_AT is not None
+        and (now - _REMINDER_SETTINGS_LOADED_AT).total_seconds() < REMINDER_SETTINGS_TTL_SECONDS
+    ):
+        return _REMINDER_SETTINGS_CACHE
+
+    settings_payload = {
+        "enabled": True,
+        "offset_minutes": REMINDER_MINUTES_DEFAULT,
+    }
+    try:
+        record = await storage.fetch_calendar_settings()
+        settings_payload["enabled"] = bool(record.get("reminder_enabled", True))
+        settings_payload["offset_minutes"] = _normalize_reminder_offset(
+            record.get("reminder_offset_minutes"),
+        )
+    except StorageError as exc:
+        logger.warning(
+            "calendar.reminder_settings_fetch_failed",
+            extra={"error": str(exc)},
+        )
+
+    _REMINDER_SETTINGS_CACHE = settings_payload
+    _REMINDER_SETTINGS_LOADED_AT = now
+    return settings_payload
 
 
 def _normalize_window_days(raw_value: Any) -> int:
@@ -376,20 +422,24 @@ async def _send_booking_confirmation_email(
         )
         return
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    reminder_delta = timedelta(hours=2)
-    reminder_at = booking.start_at - reminder_delta
-    await _mark_booking_invite_status(
-        booking,
-        {
-            "invite_status": "sent",
-            "invite_message_id": message_id,
-            "invite_sent_at": now_iso,
-            "invite_email": email_value,
-            "reminder_status": "pending",
-            "reminder_scheduled_at": reminder_at.isoformat(),
-        },
-    )
+    reminder_settings = await _get_reminder_settings()
+    patch: dict[str, Any] = {
+        "invite_status": "sent",
+        "invite_message_id": message_id,
+        "invite_sent_at": datetime.now(timezone.utc).isoformat(),
+        "invite_email": email_value,
+    }
+    if reminder_settings.get("enabled", True):
+        offset_minutes = _normalize_reminder_offset(reminder_settings.get("offset_minutes"))
+        reminder_at = booking.start_at - timedelta(minutes=offset_minutes)
+        patch.update(
+            {
+                "reminder_status": "pending",
+                "reminder_scheduled_at": reminder_at.isoformat(),
+                "reminder_offset_minutes": offset_minutes,
+            }
+        )
+    await _mark_booking_invite_status(booking, patch)
     logger.info(
         "calendar.invite_sent",
         extra={
