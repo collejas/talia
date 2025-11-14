@@ -146,3 +146,82 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
      futuro.
 
   Cuando quieras retomamos con eso.
+
+
+
+
+
+# 
+• Backend
+
+  - backend/app/api/routes/panel.py:3251, backend/app/api/routes/panel.py:3286, backend/app/api/routes/panel.py:3327 expose POST/
+    PATCH/DELETE /agenda/demos that call Supabase RPCs (fn_cita_upsert, fn_cita_cancel) and trigger sync_cita_after_*; removing these
+    endpoints (and the _prepare_* helpers immediately above them) will cut panel-driven creación/edición/cancelación.
+  - backend/app/channels/webchat/router.py:87 and backend/app/channels/webchat/service.py:1939 wire the Tal-IA function-calling
+    flow (list_demo_slots, schedule_demo, reschedule_demo) to the same RPCs and calendar sync; delete these branches plus any
+    _maybe_send_calendar_invitation usage to stop cita tooling from webchat.
+  - backend/app/services/storage.py:1325, backend/app/services/storage.py:1355, backend/app/services/storage.py:1381, backend/app/
+    services/storage.py:1719 wrap Supabase RPC/REST mutations for citas (upsert/schedule/reschedule/cancel/direct updates); retire
+    these helpers and scrub their imports to prevent backend code from reintroducing the feature.
+  - backend/app/services/calendar.py:509, backend/app/services/calendar.py:586, backend/app/services/calendar.py:680, backend/
+    app/services/calendar.py:853 host the calendar sync + availability pipeline (sync_cita_after_*, compute_demo_availability,
+    CalendarService providers); remove or stub these routines once citas are no longer managed. Also clean the re-export in backend/
+    app/services/__init__.py:3.
+  - backend/app/core/config.py:66 and backend/app/core/config.py:160 define env toggles for calendar providers and demo availability
+    (slot/buffer/lead/max); delete these settings and dependent code once scheduling support disappears.
+  - Tests and assets: backend/tests/panel/test_agenda.py:1, backend/tests/channels/test_webchat_tools.py:1, and the legacy panel JS
+    in backend/app/public/panel/assets/js/agenda.js:1 all enforce or drive cita creation/edit flows—remove or rewrite them to avoid
+    failing pipelines after the cleanup.
+
+  Database & Backups
+
+  - Schema creation lives in supabase/migrations/20251101_090000_lead_citas_demo.sql:6 and rename/expansion steps in supabase/
+    migrations/20251202_090000_rename_citas.sql:6, supabase/migrations/20251108_210000_citas_invite_columns.sql:6, supabase/
+    migrations/20251202_100500_citas_extra_columns.sql:6. Craft a new down-migration that drops the cita table (or strips write
+    paths) while leaving the panel_agenda_* views intact if you still need read-only reporting.
+  - Appointment logic is centralized in the functions defined by supabase/migrations/20251202_093000_citas_functions.sql:6,
+    supabase/migrations/20251202_111500_citas_functions_fix.sql:6, supabase/migrations/20251203_112000_citas_provider_expand.sql:1,
+    and supabase/migrations/20260111_240000_fn_cita_schedule_json.sql:1. Dropping these RPCs (plus fn_cita_reschedule and
+    fn_agenda_slots_disponibles) is essential to fully disable creación/edición.
+  - Resource tables and constraints for availability (agenda_calendarios, agenda_disponibilidad, agenda_excepciones, agenda_bloqueos)
+    are set up in supabase/migrations/20260105_090000_agenda_disponibilidad.sql:9; remove them if the new planning flow will not
+    consume calendar resources.
+  - Extra indexes/grants live in supabase/migrations/20251202_103000_citas_rls_service_access.sql:6 and supabase/
+    migrations/20251202_120500_citas_indexes.sql:6; include those objects in your teardown.
+  - Seed data under supabase/seeds/agenda_calendarios_seed.sql:1 and supabase/seeds/agenda_disponibilidad_check.sql:1 should be
+    purged so environments no longer provision cita infrastructure.
+  - The schema snapshot backups/postgres_20251114_023519_schema.sql:340, backups/postgres_20251114_023519_schema.sql:1498, and
+    neighbours document the same objects (enum cita_estado, table public.citas, RPCs, triggers, policies). Regenerate or replace
+    these backups once the cleanup migration runs; note there are earlier snapshots (backups/postgres_20251109_*.sql, backups/
+    postgres_20251112_*.sql) with identical structures that also need updating.
+
+  Docs & Prompts
+
+  - Product docs describe and instruct cita flows: docs/hoja_de_ruta_agenda_citas.md:1, docs/estado_actual_agenda.md:1, docs/
+    plan_calendario_disponibilidad.md:1, docs/diseno_disponibilidad.md:1. Remove or rewrite them to reflect the deprecated backend.
+  - Operational playbooks such as docs/scripts_limpieza_citas.md:1, docs/procedimiento_validacion_caldav.md:3, docs/
+    plan_envio_invitaciones_demo.md:1, docs/credenciales.md:1 walk through maintenance and calendar credentials—strip cita sections
+    after the code removal.
+  - Prompt definitions in docs/funciones_prompt_openai.md:160 and related files reference schedule_demo/reschedule_demo; ensure
+    assistant capabilities are revised once those RPCs vanish.
+  - Misc references appear in docs/prompt_landing.md:1, docs/mapa_de_conversion.md:1, docs/canales/whatsapp.md:10, and landing/
+    WIREFRAME.md:1; audit copy so no UI still promises booking support.
+
+  Next Steps
+
+  1. Draft a migration that tears down public.citas, its RPCs, triggers, policies, and availability tables while preserving or
+     rewriting the panel_agenda_* views for read-only use.
+  2. Remove the backend endpoints/services/tests listed above, then run the existing test suite to confirm nothing references the
+     deleted cita APIs.
+  3. Update documentation, prompts, and backups to match the new state; if the panel views must remain, validate they still render
+     correctly after the schema changes.
+
+---
+
+## Estado actual (febrero 2026)
+
+- La agenda legacy fue retirada: endpoints `/agenda/demos`, herramientas `list_demo_slots`/`schedule_demo`/`reschedule_demo`/`cancel_demo` y servicios asociados quedaron eliminados.
+- Migración `20260201_000000_cleanup_citas.sql` publicada; elimina tablas `agenda_*`, columna `calendario_id` y todas las RPC heredadas, conservando únicamente las vistas `panel_agenda_*`.
+- Seeds `supabase/seeds/agenda_calendarios_seed.sql` y `supabase/seeds/agenda_disponibilidad_check.sql` borradas para evitar reprovisionar información de citas.
+- Documentación y prompts actualizados: mientras se diseña la nueva agenda, Tal-IA sólo envía información por correo (no agenda ni reprograma).
+- Recordatorio: regenerar respaldos (`backups/postgres_*.sql`) tras aplicar la migración y documentar el nuevo flujo cuando se habilite el reemplazo.
