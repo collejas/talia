@@ -170,7 +170,7 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma una demo en el slot seleccionado por el prospecto.",
+  "description": "Confirma una demo en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -205,7 +205,7 @@
 
 {
   "name": "reschedule_demo",
-  "description": "Mueve una demo confirmada a un nuevo horario disponible.",
+  "description": "Mueve una demo confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
   "strict": true,
   "parameters": {
     "type": "object",
