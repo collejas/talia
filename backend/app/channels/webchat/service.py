@@ -253,6 +253,18 @@ async def schedule_calendar_booking(
 ) -> schemas.CalendarBookingResponse:
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
     contact_id = str(conversation_meta.get("contact_id"))
+    try:
+        tarjeta_id = await storage.ensure_lead_tarjeta(
+            tarjeta_id=None,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+        )
+    except storage.StorageError as exc:
+        logger.exception(
+            "calendar.ensure_lead_tarjeta_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        raise ValueError("No pude asociar la tarjeta del lead para agendar la demo.") from exc
     resource_id = _resolve_calendar_resource_id()
     hold_minutes = max(1, settings.webchat_calendar_hold_minutes)
     slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
@@ -263,12 +275,14 @@ async def schedule_calendar_booking(
             slot_start=start_at,
             conversation_id=conversation_id,
             contact_id=contact_id,
+            tarjeta_id=tarjeta_id,
             hold_minutes=hold_minutes,
             metadata={
                 "slot_id": slot_identifier,
                 "source": "webchat",
                 "session_id": session_id,
                 "conversation_id": conversation_id,
+                "tarjeta_id": tarjeta_id,
             },
         )
         booking = await calendar_service.confirm_slot(
@@ -278,6 +292,7 @@ async def schedule_calendar_booking(
                 "conversation_id": conversation_id,
                 "contact_id": contact_id,
                 "session_id": session_id,
+                "tarjeta_id": tarjeta_id,
             },
         )
     except CalendarError as exc:
@@ -1869,16 +1884,31 @@ async def _execute_function_call(
         notes = (arguments.get("notes") or "").strip() or None
 
         try:
+            tarjeta_id = await storage.ensure_lead_tarjeta(
+                tarjeta_id=None,
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+            )
+        except storage.StorageError as exc:
+            logger.exception(
+                "calendar.ensure_lead_tarjeta_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+            raise ValueError("No pude asociar la tarjeta del lead para agendar la demo.") from exc
+
+        try:
             hold = await calendar_service.hold_slot(
                 resource_id=resource_id,
                 slot_start=slot_datetime,
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
+                tarjeta_id=tarjeta_id,
                 hold_minutes=hold_minutes,
                 metadata={
                     "slot_id": slot_identifier,
                     "source": "webchat",
                     "conversation_id": context.conversation_id,
+                    "tarjeta_id": tarjeta_id,
                 },
             )
             booking = await calendar_service.confirm_slot(
@@ -1888,6 +1918,7 @@ async def _execute_function_call(
                     "conversation_id": context.conversation_id,
                     "contact_id": context.contact_id,
                     "session_id": context.session_id,
+                    "tarjeta_id": tarjeta_id,
                 },
             )
         except CalendarError as exc:

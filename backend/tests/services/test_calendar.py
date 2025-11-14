@@ -68,6 +68,7 @@ async def test_hold_slot_returns_metadata(monkeypatch):
     async def fake_call_rpc(function: str, payload: dict):
         assert function == "fn_calendar_hold_slot"
         assert payload["p_metadata"]["source"] == "webchat"
+        assert payload["p_tarjeta_id"] == "tarjeta-1"
         return [
             {
                 "hold_id": "hold-123",
@@ -86,6 +87,7 @@ async def test_hold_slot_returns_metadata(monkeypatch):
         slot_start=slot_start,
         conversation_id="conv-1",
         contact_id="contact-1",
+        tarjeta_id="tarjeta-1",
         metadata={"source": "webchat"},
     )
 

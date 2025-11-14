@@ -154,6 +154,7 @@ async def hold_slot(
     slot_start: datetime,
     conversation_id: str,
     contact_id: str | None = None,
+    tarjeta_id: str | None = None,
     hold_minutes: int = 5,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -166,6 +167,8 @@ async def hold_slot(
         "p_hold_minutes": hold_minutes,
         "p_metadata": metadata or {},
     }
+    if tarjeta_id:
+        payload["p_tarjeta_id"] = tarjeta_id
     rows = await _call_rpc("fn_calendar_hold_slot", payload)
     if not rows:
         raise CalendarError("No se pudo crear el hold solicitado")
