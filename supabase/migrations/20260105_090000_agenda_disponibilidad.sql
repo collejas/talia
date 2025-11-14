@@ -673,7 +673,16 @@ CREATE OR REPLACE FUNCTION public.fn_cita_reschedule(
     p_updated_by uuid DEFAULT NULL,
     p_merge_metadata boolean DEFAULT TRUE,
     p_scheduled_via text DEFAULT NULL,
-    p_reminder_status text DEFAULT NULL
+    p_reminder_status text DEFAULT NULL,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
+    p_provider text DEFAULT NULL,
+    p_provider_event_id text DEFAULT NULL,
+    p_meeting_url text DEFAULT NULL,
+    p_location text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_estado public.cita_estado DEFAULT NULL,
+    p_cancel_reason text DEFAULT NULL,
+    p_remove_provider_event boolean DEFAULT FALSE
 ) RETURNS public.citas
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -748,7 +757,16 @@ BEGIN
         p_merge_metadata => p_merge_metadata,
         p_expected_updated_at => p_expected_updated_at,
         p_reminder_status => p_reminder_status,
-        p_scheduled_via => COALESCE(lower(p_scheduled_via), v_existing.scheduled_via)
+        p_reminder_sent_at => p_reminder_sent_at,
+        p_scheduled_via => COALESCE(lower(p_scheduled_via), v_existing.scheduled_via),
+        p_provider => p_provider,
+        p_provider_event_id => p_provider_event_id,
+        p_meeting_url => p_meeting_url,
+        p_location => p_location,
+        p_external_join_url => p_external_join_url,
+        p_estado => p_estado,
+        p_cancel_reason => p_cancel_reason,
+        p_remove_provider_event => p_remove_provider_event
     )
     INTO v_row;
 
@@ -757,7 +775,403 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.fn_cita_reschedule(
-    uuid, timestamptz, timestamptz, text, jsonb, text, timestamptz, uuid, boolean, text, text
-) IS 'Reprograma una cita validando que el nuevo horario siga disponible.';
+    uuid, timestamptz, timestamptz, text, jsonb, text, timestamptz, uuid, boolean, text, text, timestamptz, text, text, text, text, text, public.cita_estado, text, boolean
+) IS 'Reprograma una cita validando que el nuevo horario siga disponible y permite actualizar campos adicionales.';
+
+DROP FUNCTION IF EXISTS public.fn_cita_reschedule_json_v1(
+    uuid, timestamptz, timestamptz, text, jsonb, text, timestamptz, uuid, boolean, text, text, timestamptz, text, text, text, text, text, public.cita_estado, text, boolean
+);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_reschedule_json_v1(
+    p_id uuid,
+    p_start_at timestamptz,
+    p_end_at timestamptz DEFAULT NULL,
+    p_timezone text DEFAULT NULL,
+    p_metadata jsonb DEFAULT NULL,
+    p_notes text DEFAULT NULL,
+    p_expected_updated_at timestamptz DEFAULT NULL,
+    p_updated_by uuid DEFAULT NULL,
+    p_merge_metadata boolean DEFAULT TRUE,
+    p_scheduled_via text DEFAULT NULL,
+    p_reminder_status text DEFAULT NULL,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
+    p_provider text DEFAULT NULL,
+    p_provider_event_id text DEFAULT NULL,
+    p_meeting_url text DEFAULT NULL,
+    p_location text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_estado public.cita_estado DEFAULT NULL,
+    p_cancel_reason text DEFAULT NULL,
+    p_remove_provider_event boolean DEFAULT FALSE
+) RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+    SELECT to_jsonb(
+        public.fn_cita_reschedule(
+            p_id,
+            p_start_at,
+            p_end_at,
+            p_timezone,
+            p_metadata,
+            p_notes,
+            p_expected_updated_at,
+            p_updated_by,
+            p_merge_metadata,
+            p_scheduled_via,
+            p_reminder_status,
+            p_reminder_sent_at,
+            p_provider,
+            p_provider_event_id,
+            p_meeting_url,
+            p_location,
+            p_external_join_url,
+            p_estado,
+            p_cancel_reason,
+            p_remove_provider_event
+        )
+    );
+$$;
+
+DROP FUNCTION IF EXISTS public.fn_cita_reschedule_json_payload_v1(jsonb);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_reschedule_json_payload_v1(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+    rec RECORD;
+    v_payload jsonb;
+    v_kind text;
+BEGIN
+    IF p_payload IS NULL THEN
+        RAISE EXCEPTION 'payload_requerido' USING ERRCODE = '22004';
+    END IF;
+
+    v_kind := jsonb_typeof(p_payload);
+    IF v_kind = 'array' THEN
+        v_payload := p_payload->0;
+    ELSIF v_kind = 'object' THEN
+        v_payload := p_payload;
+    ELSIF v_kind = 'string' THEN
+        BEGIN
+            v_payload := (p_payload::text)::jsonb;
+        EXCEPTION WHEN others THEN
+            RAISE EXCEPTION
+                USING MESSAGE = format('payload_string_no_valido: %s', p_payload::text),
+                      ERRCODE = '22P02';
+        END;
+    ELSE
+        RAISE EXCEPTION
+            USING MESSAGE = format(
+                'payload_formato_no_soportado (%s): %s', v_kind, p_payload::text
+            ),
+            ERRCODE = '22P02';
+    END IF;
+
+    IF jsonb_typeof(v_payload) <> 'object' THEN
+        RAISE EXCEPTION
+            USING MESSAGE = format('payload_no_objeto: %s', v_payload::text),
+                  ERRCODE = '22P02';
+    END IF;
+
+    SELECT *
+      INTO rec
+      FROM jsonb_to_record(v_payload) AS x(
+          p_id uuid,
+          p_start_at timestamptz,
+          p_end_at timestamptz,
+          p_timezone text,
+          p_metadata jsonb,
+          p_notes text,
+          p_expected_updated_at timestamptz,
+          p_updated_by uuid,
+          p_merge_metadata boolean,
+          p_scheduled_via text,
+          p_reminder_status text,
+          p_reminder_sent_at timestamptz,
+          p_provider text,
+          p_provider_event_id text,
+          p_meeting_url text,
+          p_location text,
+          p_external_join_url text,
+          p_estado public.cita_estado,
+          p_cancel_reason text,
+          p_remove_provider_event boolean
+      );
+
+    RETURN public.fn_cita_reschedule_json_v1(
+        rec.p_id,
+        rec.p_start_at,
+        rec.p_end_at,
+        rec.p_timezone,
+        rec.p_metadata,
+        rec.p_notes,
+        rec.p_expected_updated_at,
+        rec.p_updated_by,
+        COALESCE(rec.p_merge_metadata, TRUE),
+        rec.p_scheduled_via,
+        rec.p_reminder_status,
+        rec.p_reminder_sent_at,
+        rec.p_provider,
+        rec.p_provider_event_id,
+        rec.p_meeting_url,
+        rec.p_location,
+        rec.p_external_join_url,
+        rec.p_estado,
+        rec.p_cancel_reason,
+        COALESCE(rec.p_remove_provider_event, FALSE)
+    );
+END;
+$$;
+
+-- Versión v2 para evitar caché de PostgREST desactualizado
+DROP FUNCTION IF EXISTS public.fn_cita_reschedule_json_v2(
+    uuid, timestamptz, timestamptz, text, jsonb, text, timestamptz, uuid, boolean, text, text, timestamptz, text, text, text, text, text, public.cita_estado, text, boolean
+);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_reschedule_json_v2(
+    p_id uuid,
+    p_start_at timestamptz,
+    p_end_at timestamptz DEFAULT NULL,
+    p_timezone text DEFAULT NULL,
+    p_metadata jsonb DEFAULT NULL,
+    p_notes text DEFAULT NULL,
+    p_expected_updated_at timestamptz DEFAULT NULL,
+    p_updated_by uuid DEFAULT NULL,
+    p_merge_metadata boolean DEFAULT TRUE,
+    p_scheduled_via text DEFAULT NULL,
+    p_reminder_status text DEFAULT NULL,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
+    p_provider text DEFAULT NULL,
+    p_provider_event_id text DEFAULT NULL,
+    p_meeting_url text DEFAULT NULL,
+    p_location text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_estado public.cita_estado DEFAULT NULL,
+    p_cancel_reason text DEFAULT NULL,
+    p_remove_provider_event boolean DEFAULT FALSE
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+    v_row public.citas;
+BEGIN
+    SELECT public.fn_cita_reschedule(
+        p_id,
+        p_start_at,
+        p_end_at,
+        p_timezone,
+        p_metadata,
+        p_notes,
+        p_expected_updated_at,
+        p_updated_by,
+        p_merge_metadata,
+        p_scheduled_via,
+        p_reminder_status,
+        p_reminder_sent_at,
+        p_provider,
+        p_provider_event_id,
+        p_meeting_url,
+        p_location,
+        p_external_join_url,
+        p_estado,
+        p_cancel_reason,
+        p_remove_provider_event
+    )
+    INTO v_row;
+
+    RETURN to_jsonb(v_row);
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.fn_cita_reschedule_json_payload_v2(jsonb);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_reschedule_json_payload_v2(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+    rec RECORD;
+BEGIN
+    SELECT *
+      INTO rec
+      FROM jsonb_to_record(p_payload) AS x(
+          p_id uuid,
+          p_start_at timestamptz,
+          p_end_at timestamptz,
+          p_timezone text,
+          p_metadata jsonb,
+          p_notes text,
+          p_expected_updated_at timestamptz,
+          p_updated_by uuid,
+          p_merge_metadata boolean,
+          p_scheduled_via text,
+          p_reminder_status text,
+          p_reminder_sent_at timestamptz,
+          p_provider text,
+          p_provider_event_id text,
+          p_meeting_url text,
+          p_location text,
+          p_external_join_url text,
+          p_estado public.cita_estado,
+          p_cancel_reason text,
+          p_remove_provider_event boolean
+      );
+
+    RETURN public.fn_cita_reschedule_json_v2(
+        rec.p_id,
+        rec.p_start_at,
+        rec.p_end_at,
+        rec.p_timezone,
+        rec.p_metadata,
+        rec.p_notes,
+        rec.p_expected_updated_at,
+        rec.p_updated_by,
+        COALESCE(rec.p_merge_metadata, TRUE),
+        rec.p_scheduled_via,
+        rec.p_reminder_status,
+        rec.p_reminder_sent_at,
+        rec.p_provider,
+        rec.p_provider_event_id,
+        rec.p_meeting_url,
+        rec.p_location,
+        rec.p_external_join_url,
+        rec.p_estado,
+        rec.p_cancel_reason,
+        COALESCE(rec.p_remove_provider_event, FALSE)
+    );
+END;
+$$;
+
+-- Versión v3 para evitar cachés que retengan la firma antigua
+DROP FUNCTION IF EXISTS public.fn_cita_reschedule_json_v3(
+    uuid, timestamptz, timestamptz, text, jsonb, text, timestamptz, uuid, boolean, text, text, timestamptz, text, text, text, text, text, public.cita_estado, text, boolean
+);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_reschedule_json_v3(
+    p_id uuid,
+    p_start_at timestamptz,
+    p_end_at timestamptz DEFAULT NULL,
+    p_timezone text DEFAULT NULL,
+    p_metadata jsonb DEFAULT NULL,
+    p_notes text DEFAULT NULL,
+    p_expected_updated_at timestamptz DEFAULT NULL,
+    p_updated_by uuid DEFAULT NULL,
+    p_merge_metadata boolean DEFAULT TRUE,
+    p_scheduled_via text DEFAULT NULL,
+    p_reminder_status text DEFAULT NULL,
+    p_reminder_sent_at timestamptz DEFAULT NULL,
+    p_provider text DEFAULT NULL,
+    p_provider_event_id text DEFAULT NULL,
+    p_meeting_url text DEFAULT NULL,
+    p_location text DEFAULT NULL,
+    p_external_join_url text DEFAULT NULL,
+    p_estado public.cita_estado DEFAULT NULL,
+    p_cancel_reason text DEFAULT NULL,
+    p_remove_provider_event boolean DEFAULT FALSE
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+    v_row public.citas;
+BEGIN
+    SELECT public.fn_cita_reschedule(
+        p_id,
+        p_start_at,
+        p_end_at,
+        p_timezone,
+        p_metadata,
+        p_notes,
+        p_expected_updated_at,
+        p_updated_by,
+        p_merge_metadata,
+        p_scheduled_via,
+        p_reminder_status,
+        p_reminder_sent_at,
+        p_provider,
+        p_provider_event_id,
+        p_meeting_url,
+        p_location,
+        p_external_join_url,
+        p_estado,
+        p_cancel_reason,
+        p_remove_provider_event
+    )
+    INTO v_row;
+
+    RETURN to_jsonb(v_row);
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.fn_cita_reschedule_json_payload_v3(jsonb);
+
+CREATE OR REPLACE FUNCTION public.fn_cita_reschedule_json_payload_v3(p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+    rec RECORD;
+BEGIN
+    SELECT *
+      INTO rec
+      FROM jsonb_to_record(p_payload) AS x(
+          p_id uuid,
+          p_start_at timestamptz,
+          p_end_at timestamptz,
+          p_timezone text,
+          p_metadata jsonb,
+          p_notes text,
+          p_expected_updated_at timestamptz,
+          p_updated_by uuid,
+          p_merge_metadata boolean,
+          p_scheduled_via text,
+          p_reminder_status text,
+          p_reminder_sent_at timestamptz,
+          p_provider text,
+          p_provider_event_id text,
+          p_meeting_url text,
+          p_location text,
+          p_external_join_url text,
+          p_estado public.cita_estado,
+          p_cancel_reason text,
+          p_remove_provider_event boolean
+      );
+
+    RETURN public.fn_cita_reschedule_json_v3(
+        rec.p_id,
+        rec.p_start_at,
+        rec.p_end_at,
+        rec.p_timezone,
+        rec.p_metadata,
+        rec.p_notes,
+        rec.p_expected_updated_at,
+        rec.p_updated_by,
+        COALESCE(rec.p_merge_metadata, TRUE),
+        rec.p_scheduled_via,
+        rec.p_reminder_status,
+        rec.p_reminder_sent_at,
+        rec.p_provider,
+        rec.p_provider_event_id,
+        rec.p_meeting_url,
+        rec.p_location,
+        rec.p_external_join_url,
+        rec.p_estado,
+        rec.p_cancel_reason,
+        COALESCE(rec.p_remove_provider_event, FALSE)
+    );
+END;
+$$;
 
 COMMIT;

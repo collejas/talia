@@ -80,6 +80,9 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
+\pset pager off
+
 codex resume 019a7964-21c7-76e0-933b-3e66028eca90
 
 codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
