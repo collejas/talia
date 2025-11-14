@@ -49,8 +49,7 @@ const ESTADO_OPTIONS = [
 
 const PROVIDER_OPTIONS = [
   { value: "todos", label: "Todos los proveedores" },
-  { value: "hosting", label: "Agenda interna" },
-  { value: "google", label: "Google Calendar" },
+  { value: "calendar", label: "Calendario Tal-IA" },
 ]
 
 export function AgendaTable({ items }: AgendaTableProps) {
@@ -348,7 +347,8 @@ function getEstadoVariant(
 }
 
 function formatProvider(provider: string): string {
-  const normalized = provider?.toLowerCase() ?? "hosting"
+  const normalized = provider?.toLowerCase() ?? "calendar"
+  if (normalized === "calendar") return "Calendario Tal-IA"
   if (normalized === "google") return "Google Calendar"
   return "Agenda interna"
 }

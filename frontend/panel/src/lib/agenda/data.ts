@@ -6,31 +6,23 @@ import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 
 type AgendaRestRow = {
   id: string;
-  tarjeta_id: string;
-  contacto_id: string;
+  resource_id: string | null;
+  hold_id: string | null;
+  tarjeta_id: string | null;
+  contacto_id: string | null;
   conversacion_id: string | null;
   start_at: string;
   end_at: string | null;
   timezone: string | null;
-  estado: string;
-  provider: string;
-  provider_calendar_id: string | null;
-  provider_event_id: string | null;
-  meeting_url: string | null;
-  location: string | null;
+  status: string | null;
   notes: string | null;
-  metadata: Record<string, unknown> | null;
-  created_by: string | null;
-  updated_by: string | null;
-  cancel_reason: string | null;
-  reminder_sent_at: string | null;
-  reminder_status: string | null;
+  meeting_url: string | null;
   external_join_url: string | null;
-  scheduled_via: string | null;
-  creado_en: string;
-  actualizado_en: string;
-  tarjeta_tablero_id: string | null;
-  tarjeta_etapa_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  tablero_id: string | null;
+  etapa_id: string | null;
   etapa_codigo: string | null;
   etapa_nombre: string | null;
   tarjeta_canal: string | null;
@@ -53,8 +45,8 @@ type AgendaRestRow = {
 
 export type AgendaItem = {
   id: string;
-  tarjetaId: string;
-  contactoId: string;
+  tarjetaId: string | null;
+  contactoId: string | null;
   conversacionId: string | null;
   startAt: string;
   endAt: string | null;
@@ -63,11 +55,7 @@ export type AgendaItem = {
   provider: string;
   meetingUrl: string | null;
   externalJoinUrl: string | null;
-  location: string | null;
   notes: string | null;
-  reminderSentAt: string | null;
-  reminderStatus: string | null;
-  scheduledVia: string | null;
   metadata: Record<string, unknown>;
   contactoNombre: string | null;
   contactoCorreo: string | null;
@@ -78,7 +66,6 @@ export type AgendaItem = {
   etapaNombre: string | null;
   canal: string | null;
   leadScore: number | null;
-  cancelReason: string | null;
 };
 
 export type AgendaMetrics = {
@@ -95,7 +82,7 @@ export type AgendaPayload = {
   errors: string[];
 };
 
-const ACTIVE_STATES = new Set(["pendiente", "confirmada", "reprogramada"]);
+const ACTIVE_STATES = new Set(["confirmada"]);
 const UPCOMING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function loadAgendaData(): Promise<AgendaPayload> {
@@ -115,7 +102,7 @@ export async function loadAgendaData(): Promise<AgendaPayload> {
     };
   }
 
-  const url = new URL(`${baseUrl}/rest/v1/panel_agenda_demos`);
+  const url = new URL(`${baseUrl}/rest/v1/panel_calendar_bookings`);
   url.searchParams.set("select", "*");
   url.searchParams.set("order", "start_at.asc.nullslast");
   url.searchParams.set("limit", "200");
@@ -171,6 +158,14 @@ function mapAgenda(rows: AgendaRestRow[]): { items: AgendaItem[]; metrics: Agend
         ? (row.metadata as Record<string, unknown>)
         : {};
 
+    const statusRaw = (row.status || "confirmed").toLowerCase();
+    const estado =
+      statusRaw === "confirmed"
+        ? "confirmada"
+        : statusRaw === "cancelled"
+          ? "cancelada"
+          : statusRaw;
+
     const item: AgendaItem = {
       id: row.id,
       tarjetaId: row.tarjeta_id,
@@ -179,15 +174,11 @@ function mapAgenda(rows: AgendaRestRow[]): { items: AgendaItem[]; metrics: Agend
       startAt: row.start_at,
       endAt: row.end_at,
       timezone: row.timezone,
-      estado: (row.estado || "pendiente").toLowerCase(),
-      provider: (row.provider || "hosting").toLowerCase(),
+      estado,
+      provider: "calendar",
       meetingUrl: row.meeting_url,
       externalJoinUrl: row.external_join_url,
-      location: row.location,
       notes: row.notes,
-      reminderSentAt: row.reminder_sent_at,
-      reminderStatus: row.reminder_status,
-      scheduledVia: row.scheduled_via,
       metadata,
       contactoNombre: row.contacto_nombre,
       contactoCorreo: row.contacto_correo,
@@ -198,7 +189,6 @@ function mapAgenda(rows: AgendaRestRow[]): { items: AgendaItem[]; metrics: Agend
       etapaNombre: row.etapa_nombre,
       canal: row.tarjeta_canal ?? row.conversacion_canal,
       leadScore: row.tarjeta_lead_score,
-      cancelReason: row.cancel_reason,
     };
 
     items.push(item);

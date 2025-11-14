@@ -29,9 +29,9 @@
    - [x] Reintroducir definiciones de `list_demo_slots` y `schedule_demo` en `docs/funciones_prompt_openai.md`.
    - [x] Ajustar `_execute_function_call` para nuevos payloads y confirmaciones.
 6. **Panel interno + Operación**
-   - [ ] Nueva vista/reportes para citas confirmadas (`panel_calendar_bookings`) y UI en `frontend/panel`.
+   - [x] Nueva vista/reportes para citas confirmadas (`panel_calendar_bookings`) y UI en `frontend/panel`.
+   - [x] Migrar panel a Supabase REST usando `panel_calendar_bookings` en lugar de `panel_agenda_demos`.
    - [ ] Reglas de notificación/email (ICS, recordatorios).
-   - [ ] Migrar panel a Supabase REST usando `panel_calendar_bookings` en lugar de `panel_agenda_demos`.
 7. **Sincronización con embudo + notificaciones**
    - [ ] Agregar `tarjeta_id` a `calendar_slot_holds` y `calendar_bookings` + migración de datos históricos (cuando existan).
    - [ ] Actualizar `backend/app/channels/webchat/service.py` para resolver la tarjeta con `storage.ensure_lead_tarjeta` y enviarla al RPC `fn_calendar_confirm_slot`.
