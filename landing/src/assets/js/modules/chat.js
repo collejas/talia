@@ -91,15 +91,78 @@ function handleCalendarSlotSelection(slot, fallbackTimezone) {
   updateComposerState();
 }
 
+const CALENDAR_WINDOW_DAYS = 7;
+let calendarState = {
+  currentStartDate: null,
+  lastAvailability: null,
+  selectedSlotId: null,
+};
+
+function formatDateKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function groupSlotsByDay(slots, timezone) {
+  const groups = new Map();
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: timezone });
+  slots
+    .filter((slot) => slot && slot.start_at)
+    .forEach((slot) => {
+      const slotTZ = slot.timezone || timezone;
+      const slotDate = new Date(slot.start_at);
+      if (Number.isNaN(slotDate.getTime())) {
+        return;
+      }
+      const key = slot.local_date || formatter.format(slotDate);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          date: slotDate,
+          timezone: slotTZ,
+          slots: [],
+        });
+      }
+      groups.get(key).slots.push(slot);
+    });
+  return Array.from(groups.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+function renderWeeklyNavigation(header, availability) {
+  const nav = document.createElement('div');
+  nav.className = 'message__calendar-nav';
+
+  const buttonPrev = document.createElement('button');
+  buttonPrev.type = 'button';
+  buttonPrev.className = 'message__calendar-nav-button';
+  buttonPrev.textContent = 'Semana anterior';
+  buttonPrev.addEventListener('click', () => {
+    navigateCalendar(-CALENDAR_WINDOW_DAYS, availability);
+  });
+
+  const buttonNext = document.createElement('button');
+  buttonNext.type = 'button';
+  buttonNext.className = 'message__calendar-nav-button';
+  buttonNext.textContent = 'Semana siguiente';
+  buttonNext.addEventListener('click', () => {
+    navigateCalendar(CALENDAR_WINDOW_DAYS, availability);
+  });
+
+  const controls = document.createElement('div');
+  controls.className = 'message__calendar-nav-controls';
+  controls.appendChild(buttonPrev);
+  controls.appendChild(buttonNext);
+  nav.appendChild(controls);
+
+  header.appendChild(nav);
+}
+
 function renderAvailabilityCalendar(availability) {
   const timezone = availability?.timezone || 'America/Mexico_City';
-  const slots = Array.isArray(availability?.slots) ? availability.slots : [];
-
   const wrapper = document.createElement('div');
   wrapper.className = 'message__calendar';
 
   const header = document.createElement('div');
   header.className = 'message__calendar-header';
+
   const title = document.createElement('div');
   title.className = 'message__calendar-title';
   title.textContent = 'Horarios disponibles';
@@ -127,8 +190,10 @@ function renderAvailabilityCalendar(availability) {
     }
   }
 
+  renderWeeklyNavigation(header, availability);
   wrapper.appendChild(header);
 
+  const slots = Array.isArray(availability?.slots) ? availability.slots : [];
   if (!slots.length) {
     const empty = document.createElement('div');
     empty.className = 'message__calendar-empty';
@@ -137,95 +202,79 @@ function renderAvailabilityCalendar(availability) {
     return wrapper;
   }
 
-  const groups = new Map();
-  const locale = 'es-MX';
-  slots
-    .filter((slot) => slot && slot.start_at)
-    .forEach((slot) => {
-      const slotTimezone = slot.timezone || timezone;
-      const slotStart = new Date(slot.start_at);
-      if (Number.isNaN(slotStart.getTime())) return;
-      const key =
-        slot.local_date ||
-        new Intl.DateTimeFormat('en-CA', { timeZone: slotTimezone }).format(slotStart);
-      if (!groups.has(key)) {
-        groups.set(key, {
-          date: slotStart,
-          timezone: slotTimezone,
-          slots: [],
-        });
-      }
-      groups.get(key).slots.push(slot);
-    });
+  const groups = groupSlotsByDay(slots, timezone);
+  const selectedSlotId = calendarState.selectedSlotId;
 
-  const dayCards = Array.from(groups.values()).sort(
-    (a, b) => a.date.getTime() - b.date.getTime(),
-  );
   const grid = document.createElement('div');
-  grid.className = 'message__calendar-grid';
+  grid.className = 'message__calendar-week';
 
-  dayCards.forEach((group) => {
-    const dayCard = document.createElement('div');
-    dayCard.className = 'message__calendar-day';
-    const dayFormatter = new Intl.DateTimeFormat(locale, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      timeZone: group.timezone,
-    });
-    const dayTitle = document.createElement('div');
-    dayTitle.className = 'message__calendar-day-title';
-    dayTitle.textContent = capitalize(dayFormatter.format(group.date));
-    dayCard.appendChild(dayTitle);
+  const locale = 'es-MX';
+  const dayFormatter = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
-    const daySubtitle = document.createElement('div');
-    daySubtitle.className = 'message__calendar-day-subtitle';
-    daySubtitle.textContent =
-      group.slots.length === 1 ? '1 horario disponible' : `${group.slots.length} horarios disponibles`;
-    dayCard.appendChild(daySubtitle);
+  const timeFormatter = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const confirmWrapper = document.createElement('div');
+  confirmWrapper.className = 'message__calendar-selection';
+
+  groups.forEach((group) => {
+    const column = document.createElement('div');
+    column.className = 'message__calendar-column';
+
+    const headerEl = document.createElement('div');
+    headerEl.className = 'message__calendar-column-head';
+    headerEl.innerHTML = `
+      <span class="message__calendar-column-day">${capitalize(dayFormatter.format(group.date))}</span>
+      <span class="message__calendar-column-count">
+        ${group.slots.length === 1 ? '1 horario' : `${group.slots.length} horarios`}
+      </span>
+    `;
 
     const slotList = document.createElement('div');
-    slotList.className = 'message__calendar-slots';
-
-    const timeFormatter = new Intl.DateTimeFormat(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: group.timezone,
-    });
+    slotList.className = 'message__calendar-column-slots';
 
     group.slots
       .slice()
       .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
       .forEach((slot) => {
         const slotStart = new Date(slot.start_at);
-        const timeLabel = slot.local_time || timeFormatter.format(slotStart);
+        if (Number.isNaN(slotStart.getTime())) return;
+
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'message__calendar-slot-button';
-        button.textContent = timeLabel;
-        button.setAttribute('data-slot-start', slot.start_at);
-        if (slot.calendario_id) {
-          button.setAttribute('data-calendario-id', slot.calendario_id);
+        button.className = 'message__calendar-slot';
+        button.textContent = slot.local_time || timeFormatter.format(slotStart);
+        button.dataset.slotId = slot.slot_id || `${slot.start_at}`;
+
+        if (selectedSlotId === button.dataset.slotId) {
+          button.classList.add('is-selected');
         }
-        const slotTimezone = slot.timezone || group.timezone;
-        button.addEventListener('click', () =>
-          handleCalendarSlotSelection(
-            {
-              start_at: slot.start_at,
-              timezone: slotTimezone,
-            },
-            timezone,
-          ),
-        );
+
+        button.addEventListener('click', () => {
+          calendarState.selectedSlotId = button.dataset.slotId;
+          confirmSelection(slot, timezone, confirmWrapper);
+          const allButtons = wrapper.querySelectorAll('.message__calendar-slot');
+          allButtons.forEach((btn) => btn.classList.remove('is-selected'));
+          button.classList.add('is-selected');
+        });
+
         slotList.appendChild(button);
       });
 
-    dayCard.appendChild(slotList);
-    grid.appendChild(dayCard);
+    column.appendChild(headerEl);
+    column.appendChild(slotList);
+    grid.appendChild(column);
   });
 
   wrapper.appendChild(grid);
+  wrapper.appendChild(confirmWrapper);
 
   const hint = document.createElement('p');
   hint.className = 'message__calendar-hint';
@@ -233,6 +282,104 @@ function renderAvailabilityCalendar(availability) {
   wrapper.appendChild(hint);
 
   return wrapper;
+}
+
+function confirmSelection(slot, timezone, container) {
+  container.innerHTML = '';
+  if (!slot) return;
+
+  const confirmation = document.createElement('div');
+  confirmation.className = 'message__calendar-confirm';
+
+  const startDate = new Date(slot.start_at);
+  const locale = 'es-MX';
+  const dayFormatter = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const timeFormatter = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: slot.timezone || timezone,
+  });
+
+  confirmation.innerHTML = `
+    <div class="message__calendar-confirm-text">
+      <span class="message__calendar-confirm-day">${capitalize(dayFormatter.format(startDate))}</span>
+      <span class="message__calendar-confirm-time">${timeFormatter.format(startDate)} (${normaliseTimezoneLabel(
+        slot.timezone || timezone,
+      )})</span>
+    </div>
+    <div class="message__calendar-confirm-actions">
+      <button type="button" class="message__calendar-confirm-button" data-action="confirm">
+        Confirmar demo
+      </button>
+      <button type="button" class="message__calendar-confirm-link" data-action="clear">
+        Ver otro horario
+      </button>
+    </div>
+  `;
+
+  const confirmButton = confirmation.querySelector('[data-action="confirm"]');
+  const clearButton = confirmation.querySelector('[data-action="clear"]');
+
+  confirmButton?.addEventListener('click', () => {
+    handleCalendarSlotSelection(
+      {
+        start_at: slot.start_at,
+        timezone: slot.timezone || timezone,
+      },
+      timezone,
+    );
+  });
+
+  clearButton?.addEventListener('click', () => {
+    calendarState.selectedSlotId = null;
+    container.innerHTML = '';
+    const buttons = container.parentElement?.querySelectorAll('.message__calendar-slot');
+    buttons?.forEach((btn) => btn.classList.remove('is-selected'));
+  });
+
+  container.appendChild(confirmation);
+}
+
+async function navigateCalendar(deltaDays, lastAvailability) {
+  if (!lastAvailability) return;
+  const startDate = calendarState.currentStartDate || new Date(lastAvailability.window_start || Date.now());
+  const nextStart = new Date(startDate);
+  nextStart.setDate(nextStart.getDate() + deltaDays);
+  calendarState.currentStartDate = nextStart;
+  calendarState.selectedSlotId = null;
+
+  try {
+    const response = await fetch(`${config.apiBaseUrl}/calendar/availability?${new URLSearchParams({
+      conversation_id: elements.chatInput?.dataset?.conversationId || '',
+      start_date: formatDateKey(nextStart),
+      window_days: String(CALENDAR_WINDOW_DAYS),
+    })}`);
+    if (!response.ok) return;
+    const availability = await response.json();
+    calendarState.lastAvailability = availability;
+    const calendar = renderAvailabilityCalendar(availability);
+    appendCalendarToChat(calendar);
+  } catch (error) {
+    console.error('calendar navigation failed', error);
+  }
+}
+
+function appendCalendarToChat(calendarElement) {
+  if (!elements.chatLog) return;
+  const lastMessage = elements.chatLog.querySelector('.message--assistant:last-of-type');
+  if (lastMessage) {
+    const availabilityNode = lastMessage.querySelector('.message__calendar');
+    if (availabilityNode && availabilityNode.parentElement === lastMessage) {
+      availabilityNode.replaceWith(calendarElement);
+      return;
+    }
+  }
+  elements.chatLog.appendChild(calendarElement);
 }
 
 let config = { ...defaultConfig };

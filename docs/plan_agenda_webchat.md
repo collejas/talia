@@ -10,7 +10,14 @@
 
 ### 3. Roadmap de alto nivel
 1. **Diseño UX + Contracto técnico**
-   - [ ] Definir mockups del calendario (navegación mensual, picker de día y lista de horarios).
+   - [x] Definir mockups del calendario (navegación semanal/mensual, picker de día y lista de horarios).  
+     ```
+     - Encabezado con título, dropdown de zona horaria y botones “< Semana” / “Semana >”.
+     - Visor semanal de 7 columnas: cada columna muestra el día, contador de slots y chips clicables.
+     - Selección resalta el chip, abre confirmación inline (“Demo lunes 10:00 · Confirmar / Ver otros horarios”).
+     - Estado vacío: tarjeta con mensaje + botón “ver otras fechas” (reconsulta con start_date + 7).
+     - Accesibilidad: botones navegables con teclado (aria-pressed) y tamaños aptos para móvil.
+     ```
    - [x] Cerrar contrato JSON entre frontend ↔ backend ↔ OpenAI (estructura de `availability`, `slot_id`, `hold_id`).
 2. **Infraestructura de disponibilidad (Supabase)**
    - [x] Crear tablas `calendar_resources`, `calendar_availability_patterns`, `calendar_exceptions`, `calendar_slots_holds`, `calendar_bookings`.
