@@ -17,7 +17,7 @@
    - [x] Implementar RPC `fn_calendar_list_slots`, `fn_calendar_hold_slot`, `fn_calendar_confirm_slot`.
    - [x] Sembrar recursos/slots demo para pruebas y generar nuevo backup.
 3. **Backend FastAPI**
-   - [ ] Endpoints REST `/api/webchat/calendar` (list, hold, confirm) con validaciones e integración Supabase.
+   - [x] Endpoints REST `/api/webchat/calendar` (list, hold, confirm) con validaciones e integración Supabase.
    - [x] Persistir selecciones y logging en `storage.register_webchat_message`.
    - [x] Tests de integración para herramientas de agenda.
 4. **Widget webchat (Landing)**
