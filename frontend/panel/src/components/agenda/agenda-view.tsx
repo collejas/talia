@@ -21,6 +21,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 
 type AgendaViewProps = {
   items: AgendaItem[]
@@ -221,10 +222,11 @@ function AgendaRescheduleSheet({
       }
       const data = (await response.json()) as AgendaActionResponse
       onUpdated(data.booking, target)
+      toast.success("Cita reprogramada.")
       onClose()
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo reprogramar la cita."
-      alert(message)
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }
@@ -319,10 +321,11 @@ function AgendaCancelSheet({
       }
       const data = (await response.json()) as AgendaActionResponse
       onUpdated(data.booking, target)
+      toast.success("Cita cancelada.")
       onClose()
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo cancelar la cita."
-      alert(message)
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }
