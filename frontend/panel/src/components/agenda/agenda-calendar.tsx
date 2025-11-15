@@ -10,9 +10,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 type AgendaCalendarProps = {
   items: AgendaItem[]
+  onSelectItem?: (item: AgendaItem) => void
 }
 
-export function AgendaCalendar({ items }: AgendaCalendarProps) {
+export function AgendaCalendar({ items, onSelectItem }: AgendaCalendarProps) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
 
   const days = useMemo(() => {
@@ -75,7 +76,13 @@ export function AgendaCalendar({ items }: AgendaCalendarProps) {
                 {dayEvents.length === 0 ? (
                   <p className="text-muted-foreground text-xs">Sin eventos</p>
                 ) : (
-                  dayEvents.map((event) => <CalendarEventCard key={event.id} item={event} />)
+                  dayEvents.map((event) => (
+                    <CalendarEventCard
+                      key={event.id}
+                      item={event}
+                      onClick={() => onSelectItem?.(event)}
+                    />
+                  ))
                 )}
               </div>
             </div>
@@ -86,10 +93,14 @@ export function AgendaCalendar({ items }: AgendaCalendarProps) {
   )
 }
 
-function CalendarEventCard({ item }: { item: AgendaItem }) {
+function CalendarEventCard({ item, onClick }: { item: AgendaItem; onClick?: () => void }) {
   const timezone = item.timezone || "UTC"
   return (
-    <div className="rounded-lg border border-border/60 bg-background p-2 text-xs shadow-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-border/60 bg-background p-2 text-left text-xs shadow-sm transition hover:border-primary hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold">{item.contactoNombre || "Sin nombre"}</span>
         <Badge variant={resolveEstadoVariant(item.estado)} className="text-[10px] uppercase">
@@ -107,7 +118,7 @@ function CalendarEventCard({ item }: { item: AgendaItem }) {
         <div className="text-muted-foreground mt-1 capitalize">Canal: {item.canal}</div>
       ) : null}
       {item.notes ? <p className="mt-1 line-clamp-2 text-muted-foreground">{item.notes}</p> : null}
-    </div>
+    </button>
   )
 }
 

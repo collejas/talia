@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { AgendaCalendar } from "@/components/agenda/agenda-calendar"
 import { AgendaTable } from "@/components/agenda/agenda-table"
+import { AgendaEventDrawer } from "@/components/agenda/agenda-event-drawer"
 
 type AgendaViewProps = {
   items: AgendaItem[]
@@ -14,6 +15,7 @@ type AgendaViewProps = {
 
 export function AgendaView({ items }: AgendaViewProps) {
   const [mode, setMode] = React.useState<"calendar" | "table">("calendar")
+  const [selectedItem, setSelectedItem] = React.useState<AgendaItem | null>(null)
 
   return (
     <div className="space-y-4">
@@ -33,7 +35,18 @@ export function AgendaView({ items }: AgendaViewProps) {
           </ToggleButton>
         </div>
       </div>
-      {mode === "calendar" ? <AgendaCalendar items={items} /> : <AgendaTable items={items} />}
+      {mode === "calendar" ? (
+        <AgendaCalendar items={items} onSelectItem={(item) => setSelectedItem(item)} />
+      ) : (
+        <AgendaTable items={items} />
+      )}
+      <AgendaEventDrawer
+        open={Boolean(selectedItem)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedItem(null)
+        }}
+        item={selectedItem}
+      />
     </div>
   )
 }
