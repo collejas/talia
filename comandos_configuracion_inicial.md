@@ -1,7 +1,7 @@
 # Crea la carpeta donde Nginx leerá los archivos:
 sudo mkdir -p /var/www/talia-landing
 
-# Copia el contenido de tu proyecto (carpeta landing/src/) hacia esa ruta.
+[text](.ruff_cache)# Copia el contenido de tu proyecto (carpeta landing/src/) hacia esa ruta.
 sudo rsync -av --delete /home/devuser/talia/landing/src/ /var/www/talia-landing/
 
 # Ajusta permisos para que Nginx (usuario www-data en Ubuntu) pueda servir los archivos:
@@ -83,11 +83,7 @@ sudo systemctl restart talia-api.service
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
 
-codex resume 019a7964-21c7-76e0-933b-3e66028eca90
-
-codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
-codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
-codex resume 019a704a-bbeb-7132-bfd0-859919497aa2
+codex resume 019a8430-38c2-7d90-933f-5ea1746ee2f4
 
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service

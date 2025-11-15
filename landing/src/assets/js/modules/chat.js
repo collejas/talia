@@ -64,6 +64,11 @@ function handleCalendarSlotSelection(slot, fallbackTimezone) {
   const inputTimezone = slot.timezone || fallbackTimezone || 'America/Mexico_City';
   const startDate = slot.start_at ? new Date(slot.start_at) : null;
   if (!startDate || Number.isNaN(startDate.getTime())) return;
+  calendarDebug('handleCalendarSlotSelection', {
+    slotId: slot.slot_id || slot.start_at,
+    start_at: slot.start_at,
+    timezone: inputTimezone,
+  });
 
   const locale = 'es-MX';
   const dayFormatter = new Intl.DateTimeFormat(locale, {
@@ -91,12 +96,26 @@ function handleCalendarSlotSelection(slot, fallbackTimezone) {
   updateComposerState();
 }
 
-const CALENDAR_WINDOW_DAYS = 7;
-let calendarState = {
-  currentStartDate: null,
-  lastAvailability: null,
+const calendarState = {
   selectedSlotId: null,
 };
+
+function calendarDebug(...args) {
+  try {
+    console.debug('[calendar]', ...args);
+  } catch (error) {
+    // ignorar
+  }
+}
+
+function setConversationId(value) {
+  if (!value) return;
+  calendarDebug('setConversationId', value);
+  state.conversationId = value;
+  if (elements.chatInput) {
+    elements.chatInput.dataset.conversationId = value;
+  }
+}
 
 function formatDateKey(date) {
   return date.toISOString().slice(0, 10);
@@ -129,34 +148,28 @@ function groupSlotsByDay(slots, timezone) {
 function renderWeeklyNavigation(header, availability) {
   const nav = document.createElement('div');
   nav.className = 'message__calendar-nav';
-
-  const buttonPrev = document.createElement('button');
-  buttonPrev.type = 'button';
-  buttonPrev.className = 'message__calendar-nav-button';
-  buttonPrev.textContent = 'Semana anterior';
-  buttonPrev.addEventListener('click', () => {
-    navigateCalendar(-CALENDAR_WINDOW_DAYS, availability);
-  });
-
-  const buttonNext = document.createElement('button');
-  buttonNext.type = 'button';
-  buttonNext.className = 'message__calendar-nav-button';
-  buttonNext.textContent = 'Semana siguiente';
-  buttonNext.addEventListener('click', () => {
-    navigateCalendar(CALENDAR_WINDOW_DAYS, availability);
-  });
-
-  const controls = document.createElement('div');
-  controls.className = 'message__calendar-nav-controls';
-  controls.appendChild(buttonPrev);
-  controls.appendChild(buttonNext);
-  nav.appendChild(controls);
-
+  const rangeStart = availability?.window_start ? new Date(availability.window_start) : null;
+  const rangeEnd = availability?.window_end ? new Date(availability.window_end) : null;
+  const formatter = new Intl.DateTimeFormat('es-MX', { month: 'short', day: 'numeric' });
+  const label = document.createElement('span');
+  label.className = 'message__calendar-nav-label';
+  if (rangeStart && rangeEnd && !Number.isNaN(rangeStart.getTime()) && !Number.isNaN(rangeEnd.getTime())) {
+    label.textContent = `Mostrando ${formatter.format(rangeStart)} - ${formatter.format(rangeEnd)}`;
+  } else {
+    label.textContent = 'Mostrando semana disponible';
+  }
+  nav.appendChild(label);
   header.appendChild(nav);
 }
 
 function renderAvailabilityCalendar(availability) {
   const timezone = availability?.timezone || 'America/Mexico_City';
+  calendarDebug('renderAvailabilityCalendar', {
+    timezone,
+    windowStart: availability?.window_start,
+    windowEnd: availability?.window_end,
+    slots: Array.isArray(availability?.slots) ? availability.slots.length : 0,
+  });
   const wrapper = document.createElement('div');
   wrapper.className = 'message__calendar';
 
@@ -287,6 +300,7 @@ function renderAvailabilityCalendar(availability) {
 function confirmSelection(slot, timezone, container) {
   container.innerHTML = '';
   if (!slot) return;
+  calendarDebug('confirmSelection', { slotId: slot.slot_id || slot.start_at, start_at: slot.start_at });
 
   const confirmation = document.createElement('div');
   confirmation.className = 'message__calendar-confirm';
@@ -343,30 +357,6 @@ function confirmSelection(slot, timezone, container) {
   });
 
   container.appendChild(confirmation);
-}
-
-async function navigateCalendar(deltaDays, lastAvailability) {
-  if (!lastAvailability) return;
-  const startDate = calendarState.currentStartDate || new Date(lastAvailability.window_start || Date.now());
-  const nextStart = new Date(startDate);
-  nextStart.setDate(nextStart.getDate() + deltaDays);
-  calendarState.currentStartDate = nextStart;
-  calendarState.selectedSlotId = null;
-
-  try {
-    const response = await fetch(`${config.apiBaseUrl}/calendar/availability?${new URLSearchParams({
-      conversation_id: elements.chatInput?.dataset?.conversationId || '',
-      start_date: formatDateKey(nextStart),
-      window_days: String(CALENDAR_WINDOW_DAYS),
-    })}`);
-    if (!response.ok) return;
-    const availability = await response.json();
-    calendarState.lastAvailability = availability;
-    const calendar = renderAvailabilityCalendar(availability);
-    appendCalendarToChat(calendar);
-  } catch (error) {
-    console.error('calendar navigation failed', error);
-  }
 }
 
 function appendCalendarToChat(calendarElement) {
@@ -1309,7 +1299,7 @@ async function syncHistory({ force = false } = {}) {
     const data = await response.json();
     const messages = Array.isArray(data?.messages) ? data.messages : [];
     if (data?.conversation_id) {
-      state.conversationId = data.conversation_id;
+      setConversationId(data.conversation_id);
     }
     state.manualMode = Boolean(data?.manual_mode);
     const nextIds = getMessageIds(messages);
@@ -1588,7 +1578,7 @@ async function handleAssistantReply(message, clientMessageId, attachments) {
         ? metadata.attachments
         : [];
     if (metadata.conversation_id) {
-      state.conversationId = metadata.conversation_id;
+      setConversationId(metadata.conversation_id);
     }
     if (metadata.openai_conversation_id) {
       state.openaiConversationId = metadata.openai_conversation_id;

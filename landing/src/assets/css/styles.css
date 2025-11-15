@@ -973,10 +973,21 @@ body.theme-ice .intro p .callout {
   gap: 0.65rem;
 }
 
- .message__calendar-header {
+.message__calendar-header {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.message__calendar-nav {
+  display: flex;
+  justify-content: flex-start;
+  font-size: 0.72rem;
+  color: var(--muted-text, #556275);
+}
+
+.message__calendar-nav-label {
+  font-weight: 500;
 }
 
 .message__calendar-title {
