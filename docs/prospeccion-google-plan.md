@@ -12,7 +12,7 @@ Permitir búsquedas en Google (Places API) desde el panel, visualizar los result
 
 ## Entregables
 - [ ] Endpoint o job que toma criterios de búsqueda, llama a Google Places (Nearby/Text + Details) y usa `crear_busqueda` + `upsert_resultados_lote` para guardar resultados.
-- [ ] Vista SQL `public.v_google_places_contactables` (o similar) que combine `busquedas` y `resultados` filtrados por `fuente = 'google_places'`, exponiendo teléfono, email (si existiera), website, dirección, rating, tipos y distancia al centro. Debe ser una vista adicional, sin modificar `v_resultados_mapa` ni `v_resultados_unificados`, para no afectar a los consumidores actuales.
+- [x] Vista SQL `public.v_google_places_contactables` que combina `busquedas` y `resultados` filtrados por `fuente = 'google_places'`, exponiendo teléfono, email (si existiera), website, dirección, rating, tipos y distancia al centro. Implementada en la migración `supabase/migrations/20260311_100000_google_prospeccion_view.sql` como vista adicional para no afectar `v_resultados_mapa` ni `v_resultados_unificados`.
 - [ ] Documentación de variables de entorno y scopes necesarios para Places/OAuth.
 - [ ] UI en `frontend/panel/src/app/prospeccion/google-busqueda` con:
   - [ ] Formulario de criterios (texto, tipo/clasificación, radio, coordenadas o mapa interactivo) y selector de fuente `google_places`, con un control explícito para ajustar el radio de búsqueda que sincronice tanto los filtros como el círculo dibujado en el mapa.
