@@ -289,9 +289,11 @@ def _build_demo_ics_attachment(
     }
 
 
-async def _mark_booking_invite_status(
+async def _patch_booking_metadata(
     booking: schemas.CalendarBookingResponse,
     patch: dict[str, Any],
+    *,
+    event: str,
 ) -> None:
     if not patch:
         return
@@ -304,9 +306,20 @@ async def _mark_booking_invite_status(
         booking.metadata = metadata
     except StorageError as exc:
         logger.warning(
-            "calendar.booking_metadata_update_failed",
+            event,
             extra={"booking_id": booking.booking_id, "error": str(exc)},
         )
+
+
+async def _mark_booking_invite_status(
+    booking: schemas.CalendarBookingResponse,
+    patch: dict[str, Any],
+) -> None:
+    await _patch_booking_metadata(
+        booking,
+        patch,
+        event="calendar.booking_metadata_update_failed",
+    )
 
 
 async def _send_booking_confirmation_email(
@@ -448,6 +461,120 @@ async def _send_booking_confirmation_email(
             "email": email_value,
             "tarjeta_id": tarjeta_id,
         },
+    )
+
+
+async def _send_booking_cancellation_email(
+    *,
+    booking: schemas.CalendarBookingResponse,
+    contact_id: str | None,
+    conversation_id: str,
+    reason: str | None,
+) -> None:
+    if not contact_id:
+        return
+    contact = await _resolve_contact(contact_id)
+    if not contact:
+        return
+    email_value = str(contact.get("correo") or "").strip()
+    if not email_value:
+        await _patch_booking_metadata(
+            booking,
+            {
+                "cancel_email_status": "skipped",
+                "cancel_email_reason": "missing_contact_email",
+                "cancel_email_attempt_at": datetime.now(timezone.utc).isoformat(),
+            },
+            event="calendar.cancel_email_metadata_failed",
+        )
+        logger.info(
+            "calendar.cancel_email_skipped_missing_email",
+            extra={"conversation_id": conversation_id, "booking_id": booking.booking_id},
+        )
+        return
+
+    timezone_name = booking.timezone or settings.webchat_calendar_timezone
+    tz_label = timezone_name.replace("_", " ") if isinstance(timezone_name, str) else "UTC"
+    try:
+        zone = ZoneInfo(timezone_name)
+    except Exception:
+        zone = timezone.utc
+    start_local = booking.start_at.astimezone(zone)
+    date_label = start_local.strftime("%d/%m/%Y")
+    time_label = start_local.strftime("%H:%M")
+
+    contact_name = contact.get("nombre_completo")
+    greeting = f"Hola {contact_name}," if contact_name else "Hola,"
+
+    body_lines = [
+        greeting,
+        "",
+        "Te confirmo que la demo programada con Tal-IA fue cancelada.",
+        f"El horario original era el {date_label} a las {time_label} ({tz_label}).",
+    ]
+    if reason:
+        body_lines.extend(["", f"Motivo registrado: {reason.strip()}."])
+    body_lines.extend(
+        [
+            "",
+            "Cuando quieras agendar un nuevo espacio, respóndeme por este medio y te comparto la disponibilidad.",
+            "",
+            "Tal-IA · Geoactiv",
+        ]
+    )
+
+    try:
+        message_id = await asyncio.to_thread(
+            send_email,
+            subject="Tal-IA · Demo cancelada",
+            body_text="\n".join(body_lines),
+            recipients=[email_value],
+        )
+    except EmailSendError as exc:
+        await _patch_booking_metadata(
+            booking,
+            {
+                "cancel_email_status": "failed",
+                "cancel_email_error": str(exc),
+                "cancel_email_attempt_at": datetime.now(timezone.utc).isoformat(),
+            },
+            event="calendar.cancel_email_metadata_failed",
+        )
+        logger.error(
+            "calendar.cancel_email_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "booking_id": booking.booking_id,
+                "error": str(exc),
+            },
+        )
+        return
+    except Exception:  # pragma: no cover - defensivo
+        await _patch_booking_metadata(
+            booking,
+            {
+                "cancel_email_status": "failed",
+                "cancel_email_error": "unexpected_error",
+                "cancel_email_attempt_at": datetime.now(timezone.utc).isoformat(),
+            },
+            event="calendar.cancel_email_metadata_failed",
+        )
+        logger.exception(
+            "calendar.cancel_email_unexpected",
+            extra={"conversation_id": conversation_id, "booking_id": booking.booking_id},
+        )
+        return
+
+    await _patch_booking_metadata(
+        booking,
+        {
+            "cancel_email_status": "sent",
+            "cancel_email_sent_at": datetime.now(timezone.utc).isoformat(),
+            "cancel_email_message_id": message_id,
+            "cancel_email_to": email_value,
+            "cancel_email_reason": reason,
+        },
+        event="calendar.cancel_email_metadata_failed",
     )
 
 
@@ -616,7 +743,9 @@ async def cancel_calendar_booking(
     booking_id: str,
     reason: str | None = None,
 ) -> schemas.CalendarBookingResponse:
-    await _resolve_conversation_metadata(conversation_id)
+    conversation_meta = await _resolve_conversation_metadata(conversation_id)
+    contact_raw = conversation_meta.get("contact_id") if conversation_meta else None
+    contact_id = str(contact_raw) if contact_raw else None
     try:
         booking = await calendar_service.cancel_booking(
             booking_id=booking_id,
@@ -624,7 +753,14 @@ async def cancel_calendar_booking(
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
-    return _build_booking_response(booking)
+    booking_response = _build_booking_response(booking)
+    await _send_booking_cancellation_email(
+        booking=booking_response,
+        contact_id=contact_id,
+        conversation_id=conversation_id,
+        reason=reason,
+    )
+    return booking_response
 
 
 def _clone_information_email_template() -> dict[str, Any]:

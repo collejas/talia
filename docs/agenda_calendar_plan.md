@@ -88,7 +88,8 @@ Documento de trabajo para seguir el avance de la nueva vista de agenda en el pan
   - Ruta: `GET /panel/agenda/availability` (usa `calendar_service.list_slots`). Requiere JWT, permite `from`, `to`, `timezone`, `resource_id` y `max_days` (clamp 60). Respuesta `{ ok, availability }` replicando la estructura del helper (slots, window, duration).
 - [x] Implementar endpoints para reprogramar (`fn_calendar_reschedule_booking`) y cancelar citas (`fn_calendar_cancel_booking`), registrando metadata y motivos.
   - Rutas: `POST /panel/agenda/bookings/{booking_id}/reschedule` y `/cancel`. Ambas validan JWT, consultan la cita vía Supabase, invocan los servicios de webchat para ejecutar la acción y regresan el booking actualizado (`backend/app/api/routes/panel.py`).
-- [ ] Añadir envío de correos para reprogramaciones/cancelaciones y marcar estado en `calendar_bookings.metadata`.
+- [x] Añadir envío de correos para reprogramaciones/cancelaciones y marcar estado en `calendar_bookings.metadata`.
+  - Reprogramaciones ya reutilizan `_send_booking_confirmation_email` (adjunta ICS y marca `invite_status`). Para cancelaciones añadimos `_send_booking_cancellation_email`, que envía un resumen, registra motivo y actualiza metadata (`cancel_email_status`, `message_id`, etc.) cuando el panel o el chat cancelan una cita.
 - [ ] Cubrir rutas nuevas con pruebas unitarias/integración.
 
 ## 3. Frontend / Panel
