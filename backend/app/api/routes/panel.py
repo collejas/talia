@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 from uuid import UUID, uuid4
 
 import httpx
@@ -457,6 +457,39 @@ DATE_RANGE_PRESETS: dict[str, timedelta] = {
     "30d": timedelta(days=30),
     "ano": timedelta(days=365),
 }
+
+AGENDA_ACTIVE_ESTADOS = {"confirmada"}
+AGENDA_UPCOMING_WINDOW = timedelta(hours=24)
+
+
+def _normalize_agenda_estado(value: Any) -> str:
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+    else:
+        lowered = str(value).strip().lower() if value is not None else ""
+    if not lowered:
+        return "pendiente"
+    if lowered in {"confirmed", "confirmada"}:
+        return "confirmada"
+    if lowered in {"cancelled", "cancelada"}:
+        return "cancelada"
+    if lowered in {"rescheduled", "reprogramada"}:
+        return "reprogramada"
+    if lowered in {"completed", "realizada"}:
+        return "realizada"
+    if lowered in {"pending", "pendiente"}:
+        return "pendiente"
+    return lowered
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        raw = str(value).replace("Z", "+00:00")
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -972,6 +1005,240 @@ async def cfg_canales(authorization: str | None = Header(default=None)) -> dict[
             counts[c] = counts.get(c, 0) + 1
     activos = sorted(counts.keys())
     return {"ok": True, "activos": activos, "conteo": counts}
+
+
+def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata_raw = row.get("metadata")
+    metadata_parsed = _coerce_metadata(metadata_raw)
+    if metadata_parsed is None and isinstance(metadata_raw, dict):
+        metadata_parsed = metadata_raw
+    metadata: dict[str, Any] = dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
+    estado = _normalize_agenda_estado(row.get("status") or metadata.get("estado"))
+
+    contacto_payload = {
+        "id": row.get("contacto_id") or row.get("contact_id"),
+        "nombre": row.get("contacto_nombre") or "Contacto sin nombre",
+        "correo": row.get("contacto_correo"),
+        "telefono": row.get("contacto_telefono"),
+        "empresa": row.get("contacto_empresa"),
+        "origen": row.get("contacto_origen"),
+    }
+    asignado_payload: dict[str, Any] | None = None
+    if row.get("asignado_a_usuario_id") or row.get("asignado_nombre"):
+        asignado_payload = {
+            "id": row.get("asignado_a_usuario_id"),
+            "nombre": row.get("asignado_nombre"),
+        }
+    propietario_payload: dict[str, Any] | None = None
+    if row.get("propietario_usuario_id") or row.get("propietario_nombre"):
+        propietario_payload = {
+            "id": row.get("propietario_usuario_id"),
+            "nombre": row.get("propietario_nombre"),
+        }
+
+    return {
+        "id": row.get("id"),
+        "resource_id": row.get("resource_id"),
+        "hold_id": row.get("hold_id"),
+        "tarjeta_id": row.get("tarjeta_id"),
+        "contacto_id": contacto_payload["id"],
+        "conversacion_id": row.get("conversacion_id"),
+        "start_at": row.get("start_at"),
+        "end_at": row.get("end_at"),
+        "timezone": row.get("timezone"),
+        "estado": estado,
+        "notes": row.get("notes"),
+        "meeting_url": row.get("meeting_url"),
+        "external_join_url": row.get("external_join_url"),
+        "canal": row.get("tarjeta_canal") or row.get("conversacion_canal"),
+        "provider": "calendar",
+        "lead_score": row.get("tarjeta_lead_score"),
+        "etapa_nombre": row.get("etapa_nombre"),
+        "metadata": metadata,
+        "contacto": contacto_payload,
+        "asignado": asignado_payload,
+        "propietario": propietario_payload,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _compute_agenda_metrics(items: Sequence[dict[str, Any]]) -> dict[str, int]:
+    metrics = {
+        "total": len(items),
+        "activas": 0,
+        "proximas24h": 0,
+        "canceladas": 0,
+        "realizadas": 0,
+    }
+    now = datetime.now(timezone.utc)
+    window_limit = now + AGENDA_UPCOMING_WINDOW
+
+    for item in items:
+        estado = (item.get("estado") or "").lower()
+        if estado == "cancelada":
+            metrics["canceladas"] += 1
+        if estado == "realizada":
+            metrics["realizadas"] += 1
+        if estado in AGENDA_ACTIVE_ESTADOS:
+            metrics["activas"] += 1
+            start_dt = _parse_iso_datetime(item.get("start_at"))
+            if start_dt and now <= start_dt <= window_limit:
+                metrics["proximas24h"] += 1
+
+    return metrics
+
+
+@router.get("/agenda/bookings")
+async def listar_agenda_bookings(
+    authorization: str | None = Header(default=None),
+    rango: str | None = Query(default=None),
+    fecha_desde: str | None = Query(default=None, alias="from"),
+    fecha_hasta: str | None = Query(default=None, alias="to"),
+    estado: list[str] | None = Query(default=None),
+    assigned: list[str] | None = Query(default=None),
+    provider: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    cursor: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    limit = max(1, min(limit, 500))
+    offset = max(cursor, 0)
+
+    date_from, date_to = _resolve_date_range(rango, fecha_desde, fecha_hasta)
+    if not date_from and not date_to:
+        now = datetime.now(timezone.utc)
+        date_from = now - timedelta(days=30)
+        date_to = now + timedelta(days=30)
+
+    select_clause = (
+        "id,resource_id,hold_id,tarjeta_id,conversacion_id,"
+        "contact_id,contacto_id:contact_id,"
+        "start_at,end_at,timezone,status,notes,meeting_url,external_join_url,metadata,"
+        "created_at,updated_at,tarjeta_canal,tarjeta_lead_score,"
+        "etapa_nombre,asignado_a_usuario_id,asignado_nombre,"
+        "propietario_usuario_id,propietario_nombre,"
+        "contacto_nombre,contacto_correo,contacto_telefono,contacto_empresa,contacto_origen,"
+        "conversacion_canal"
+    )
+
+    params: dict[str, str] = {
+        "select": select_clause,
+        "order": "start_at.asc.nullslast,created_at.asc",
+        "limit": str(limit),
+        "offset": str(offset),
+    }
+
+    and_filters: list[str] = []
+    if date_from:
+        and_filters.append(f"start_at.gte.{_format_utc(date_from)}")
+    if date_to:
+        and_filters.append(f"start_at.lte.{_format_utc(date_to)}")
+    if and_filters:
+        params["and"] = f"({','.join(and_filters)})"
+
+    estado_filters = {
+        value.strip().lower()
+        for value in (estado or [])
+        if isinstance(value, str) and value.strip()
+    }
+    status_filters: set[str] = set()
+    for value in estado_filters:
+        if value in {"cancelada"}:
+            status_filters.add("cancelled")
+        elif value in {"confirmada", "pendiente", "reprogramada"}:
+            status_filters.add("confirmed")
+    if status_filters:
+        if len(status_filters) == 1:
+            params["status"] = f"eq.{next(iter(status_filters))}"
+        else:
+            joined = ",".join(sorted(status_filters))
+            params["status"] = f"in.({joined})"
+
+    assigned_uuid_filters = {
+        value.strip()
+        for value in (assigned or [])
+        if isinstance(value, str) and _looks_like_uuid(value.strip())
+    }
+    if assigned_uuid_filters:
+        if len(assigned_uuid_filters) == 1:
+            params["asignado_a_usuario_id"] = f"eq.{next(iter(assigned_uuid_filters))}"
+        else:
+            params["asignado_a_usuario_id"] = f"in.({','.join(sorted(assigned_uuid_filters))})"
+
+    if search:
+        cleaned = " ".join(search.strip().split())
+        sanitized = "".join(ch for ch in cleaned if ch.isalnum() or ch in "@._+- ")
+        if sanitized:
+            like = sanitized
+            params["or"] = (
+                f"(contacto_nombre.ilike.*{like}*,contacto_correo.ilike.*{like}*,"
+                f"contacto_telefono.ilike.*{like}*,notes.ilike.*{like}*)"
+            )
+
+    resp = await _sb_get(
+        "/rest/v1/panel_calendar_bookings",
+        params=params,
+        token=token,
+        prefer="count=exact",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando agenda")
+
+    raw = resp.json() or []
+    if not isinstance(raw, list):
+        raw = []
+
+    items = [_map_agenda_row(row) for row in raw if isinstance(row, dict)]
+
+    provider_filters = {
+        value.strip().lower()
+        for value in (provider or [])
+        if isinstance(value, str) and value.strip()
+    }
+    assigned_name_filters = {
+        value.strip().lower()
+        for value in (assigned or [])
+        if isinstance(value, str) and not _looks_like_uuid(value.strip()) and value.strip()
+    }
+
+    filtered_items: list[dict[str, Any]] = []
+    for item in items:
+        estado_value = (item.get("estado") or "").lower()
+        if estado_filters and estado_value not in estado_filters:
+            continue
+        provider_value = (item.get("provider") or "calendar").lower()
+        if provider_filters and provider_value not in provider_filters:
+            continue
+        if assigned_name_filters:
+            assigned_payload = item.get("asignado") or {}
+            candidate_id = (assigned_payload.get("id") or "").lower()
+            candidate_name = (assigned_payload.get("nombre") or "").lower()
+            if (
+                candidate_id not in assigned_name_filters
+                and candidate_name not in assigned_name_filters
+            ):
+                continue
+        filtered_items.append(item)
+
+    metrics = _compute_agenda_metrics(filtered_items)
+    total = _content_range_total(resp.headers.get("content-range"))
+    raw_count = len(raw)
+    computed_total = total if total is not None else offset + raw_count
+
+    return {
+        "ok": True,
+        "items": filtered_items,
+        "metrics": metrics,
+        "total": computed_total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": computed_total > offset + raw_count,
+    }
 
 
 @router.get("/leads")
