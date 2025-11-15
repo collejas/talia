@@ -23,6 +23,7 @@ import {
   IconMap,
   IconMail,
   IconBell,
+  IconTargetArrow,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -60,6 +61,16 @@ const NAVIGATION = {
     { name: "Templates", url: "#", icon: IconFileWord },
   ],
   navSecondary: [
+    {
+      title: "Prospeccion",
+      url: "/prospeccion",
+      icon: IconTargetArrow,
+      children: [
+        { title: "Pipeline", url: "/prospeccion/pipeline" },
+        { title: "Campañas", url: "/prospeccion/campanas" },
+        { title: "Mensajes automatizados", url: "/prospeccion/mensajes" },
+      ],
+    },
     {
       title: "Settings",
       url: "/settings",
