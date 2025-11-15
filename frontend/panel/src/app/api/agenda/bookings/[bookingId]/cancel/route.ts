@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ bo
 
   try {
     const data = await callPanelAgendaEndpoint<AgendaActionResponse>(
-      `/panel/agenda/bookings/${bookingId}/cancel`,
+      `/agenda/bookings/${bookingId}/cancel`,
       {},
       {
         method: "POST",

@@ -72,6 +72,18 @@ export function AgendaView({ items }: AgendaViewProps) {
     [],
   )
 
+  const initialCalendarDate = React.useMemo(() => {
+    let earliest: number | null = null
+    for (const item of agendaItems) {
+      const time = Date.parse(item.startAt)
+      if (Number.isNaN(time)) continue
+      if (earliest === null || time < earliest) {
+        earliest = time
+      }
+    }
+    return earliest !== null ? new Date(earliest) : undefined
+  }, [agendaItems])
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,7 +103,11 @@ export function AgendaView({ items }: AgendaViewProps) {
         </div>
       </div>
       {mode === "calendar" ? (
-        <AgendaCalendar items={agendaItems} onSelectItem={(item) => setSelectedItem(item)} />
+        <AgendaCalendar
+          items={agendaItems}
+          onSelectItem={(item) => setSelectedItem(item)}
+          initialDate={initialCalendarDate}
+        />
       ) : (
         <AgendaTable items={agendaItems} />
       )}

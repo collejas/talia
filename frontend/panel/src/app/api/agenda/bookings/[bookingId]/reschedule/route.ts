@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ bo
 
   try {
     const data = await callPanelAgendaEndpoint<AgendaActionResponse>(
-      `/panel/agenda/bookings/${bookingId}/reschedule`,
+      `/agenda/bookings/${bookingId}/reschedule`,
       {},
       {
         method: "POST",

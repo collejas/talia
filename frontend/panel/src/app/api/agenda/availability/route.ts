@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const params = Object.fromEntries(url.searchParams.entries())
   try {
     const data = await callPanelAgendaEndpoint<AgendaAvailabilityResponse>(
-      "/panel/agenda/availability",
+      "/agenda/availability",
       params,
     )
     return NextResponse.json(data)

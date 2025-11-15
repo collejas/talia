@@ -144,7 +144,7 @@ const UPCOMING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function loadAgendaData(): Promise<AgendaPayload> {
   try {
-    const response = await callPanelAgendaEndpoint<AgendaBookingsResponse>("/panel/agenda/bookings");
+    const response = await callPanelAgendaEndpoint<AgendaBookingsResponse>("/agenda/bookings");
     const mapped = mapAgenda(response.items ?? []);
     const metrics = response.metrics ?? computeMetrics(mapped);
     return { items: mapped, metrics, errors: [] };
@@ -169,7 +169,7 @@ export async function loadAgendaAvailability(params: {
   if (typeof params.maxDays === "number") search.max_days = String(params.maxDays);
 
   const response = await callPanelAgendaEndpoint<AgendaAvailabilityResponse>(
-    "/panel/agenda/availability",
+    "/agenda/availability",
     search,
   );
   return response.availability;
@@ -181,7 +181,7 @@ export async function rescheduleAgendaBooking(
 ): Promise<AgendaActionResponse["booking"]> {
   const body = JSON.stringify({ start_at: payload.startAt, notes: payload.notes });
   const response = await callPanelAgendaEndpoint<AgendaActionResponse>(
-    `/panel/agenda/bookings/${bookingId}/reschedule`,
+    `/agenda/bookings/${bookingId}/reschedule`,
     {},
     {
       method: "POST",
@@ -197,7 +197,7 @@ export async function cancelAgendaBooking(
   reason?: string,
 ): Promise<AgendaActionResponse["booking"]> {
   const response = await callPanelAgendaEndpoint<AgendaActionResponse>(
-    `/panel/agenda/bookings/${bookingId}/cancel`,
+    `/agenda/bookings/${bookingId}/cancel`,
     {},
     {
       method: "POST",

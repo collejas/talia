@@ -11,10 +11,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 type AgendaCalendarProps = {
   items: AgendaItem[]
   onSelectItem?: (item: AgendaItem) => void
+  initialDate?: Date
 }
 
-export function AgendaCalendar({ items, onSelectItem }: AgendaCalendarProps) {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+export function AgendaCalendar({ items, onSelectItem, initialDate }: AgendaCalendarProps) {
+  const baseWeek = useMemo(() => startOfWeek(initialDate ?? new Date()), [initialDate])
+  const [weekOffset, setWeekOffset] = useState(0)
+  const weekStart = useMemo(() => addDays(baseWeek, weekOffset * 7), [baseWeek, weekOffset])
 
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
@@ -43,13 +46,24 @@ export function AgendaCalendar({ items, onSelectItem }: AgendaCalendarProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button size="icon" variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+          <Button size="icon" variant="outline" onClick={() => setWeekOffset((prev) => prev - 1)}>
             ←
           </Button>
-          <Button size="icon" variant="outline" onClick={() => setWeekStart(startOfWeek(new Date()))}>
-            •
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => {
+              const todayWeek = startOfWeek(new Date())
+              const diffWeeks = Math.round(
+                (todayWeek.getTime() - baseWeek.getTime()) / (7 * MS_PER_DAY),
+              )
+              setWeekOffset(diffWeeks)
+            }}
+            title="Ir a esta semana"
+          >
+            ●
           </Button>
-          <Button size="icon" variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+          <Button size="icon" variant="outline" onClick={() => setWeekOffset((prev) => prev + 1)}>
             →
           </Button>
         </div>
