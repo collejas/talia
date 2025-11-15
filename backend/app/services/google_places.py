@@ -179,8 +179,6 @@ class GooglePlacesClient:
         else:
             base["textQuery"] = query
             base["locationBias"] = circle_payload
-            if included_types:
-                base["includedTypes"] = list(dict.fromkeys(t for t in included_types if t))
         return base
 
 
