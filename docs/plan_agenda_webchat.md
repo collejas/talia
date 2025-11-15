@@ -44,7 +44,7 @@
    - [x] Actualizar `backend/app/channels/webchat/service.py` para resolver la tarjeta con `storage.ensure_lead_tarjeta` y enviarla al RPC `fn_calendar_confirm_slot`.
    - [x] Crear trigger `tg_calendar_booking_sync_stage` que mueva la tarjeta a etapa `demo` al confirmar y la regrese/registre movimiento al cancelar.
    - [x] Implementar helper de correo/ICS post-confirmación (`send_demo_invite`) que escriba `invite_status` y `message_id` en `calendar_bookings.metadata`.
-   - [ ] Ajustar docs/prompt (`docs/prompt_landing.md`, `docs/funciones_prompt_openai.md`) para reflejar que el backend envía el correo con los datos confirmados.
+   - [x] Ajustar docs/prompt (`docs/prompt_landing.md`, `docs/funciones_prompt_openai.md`) para reflejar que el backend envía el correo con los datos confirmados.
    - [x] Una vez verificado el flujo, emitir migración que archive/elimine `public.citas` y su enum asociado.
 8. **QA & Lanzamiento**
    - [ ] Pruebas punta a punta (usuario dice “sí” → calendario → cita creada).
