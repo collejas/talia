@@ -7,11 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function CampanasPage() {
-  return (
-    <AppViewLayout title="Prospección · Campañas" contentClassName="px-4 lg:px-6">
-      <div className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-        Esta sección se llenará con las campañas y automatizaciones próximamente.
-      </div>
-    </AppViewLayout>
-  )
+  return <AppViewLayout title="Prospección · Campañas" />
 }

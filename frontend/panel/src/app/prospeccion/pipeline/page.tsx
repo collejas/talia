@@ -7,11 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function PipelinePage() {
-  return (
-    <AppViewLayout title="Prospección · Pipeline" contentClassName="px-4 lg:px-6">
-      <div className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-        Esta vista todavía no tiene contenido. Aquí podrás construir el pipeline de prospección.
-      </div>
-    </AppViewLayout>
-  )
+  return <AppViewLayout title="Prospección · Pipeline" />
 }

@@ -7,11 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function MensajesPage() {
-  return (
-    <AppViewLayout title="Prospección · Mensajes" contentClassName="px-4 lg:px-6">
-      <div className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-        Pronto podrás configurar las secuencias y respuestas automatizadas desde aquí.
-      </div>
-    </AppViewLayout>
-  )
+  return <AppViewLayout title="Prospección · Mensajes" />
 }

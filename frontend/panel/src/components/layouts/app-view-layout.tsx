@@ -16,7 +16,7 @@ type AppViewLayoutProps = Omit<ComponentProps<typeof SidebarProvider>, "children
   /**
    * Contenido principal de la vista (cards, tablas, etc).
    */
-  children: ReactNode
+  children?: ReactNode
   /**
    * Permite sobreescribir el header completo si se necesita algo más complejo.
    */

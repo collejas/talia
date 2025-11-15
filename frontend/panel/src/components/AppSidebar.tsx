@@ -69,6 +69,8 @@ const NAVIGATION = {
         { title: "Pipeline", url: "/prospeccion/pipeline" },
         { title: "Campañas", url: "/prospeccion/campanas" },
         { title: "Mensajes automatizados", url: "/prospeccion/mensajes" },
+        { title: "Google búsqueda", url: "/prospeccion/google-busqueda" },
+        { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda" },
       ],
     },
     {
