@@ -1,9 +1,6 @@
 'use client'
 
-import { useMemo } from "react"
-
 import { AgendaItem } from "@/lib/agenda/data"
-import { usePanelRoles } from "@/hooks/use-panel-roles"
 import {
   Drawer,
   DrawerContent,
@@ -24,8 +21,6 @@ type AgendaEventDrawerProps = {
   onRequestCancel?: (item: AgendaItem) => void
 }
 
-const PRIVILEGED_ROLES = new Set(["admin", "manager", "owner", "superuser"])
-
 export function AgendaEventDrawer({
   open,
   onOpenChange,
@@ -33,14 +28,6 @@ export function AgendaEventDrawer({
   onRequestReschedule,
   onRequestCancel,
 }: AgendaEventDrawerProps) {
-  const { roles, loading, error } = usePanelRoles()
-  const canManage = useMemo(() => {
-    if (roles.length === 0) {
-      return !error // si no hay roles cargados, permitir y confiar en el backend
-    }
-    return roles.some((role) => PRIVILEGED_ROLES.has(role.toLowerCase()))
-  }, [roles, error])
-
   const timezone = item?.timezone || "UTC"
 
   return (
@@ -83,25 +70,12 @@ export function AgendaEventDrawer({
           </div>
         </div>
         <DrawerFooter className="gap-3 border-t border-border/60 bg-muted/20">
-          <Button
-            disabled={(!canManage && !loading) || !item}
-            onClick={() => item && onRequestReschedule?.(item)}
-            variant="default"
-          >
+          <Button disabled={!item} onClick={() => item && onRequestReschedule?.(item)} variant="default">
             Reprogramar
           </Button>
-          <Button
-            disabled={(!canManage && !loading) || !item}
-            onClick={() => item && onRequestCancel?.(item)}
-            variant="destructive"
-          >
+          <Button disabled={!item} onClick={() => item && onRequestCancel?.(item)} variant="destructive">
             Cancelar cita
           </Button>
-          {!canManage && !loading ? (
-            <p className="text-muted-foreground text-xs">
-              Solo los administradores o roles elevados pueden modificar o cancelar citas.
-            </p>
-          ) : null}
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
