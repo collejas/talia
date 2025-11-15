@@ -307,7 +307,7 @@ export async function callPanelAgendaEndpoint<T>(
   return (await response.json()) as T;
 }
 
-async function resolvePanelAuthToken(): Promise<string> {
+export async function resolvePanelAuthToken(): Promise<string> {
   const store = await cookies();
   const cookieToken =
     store.get(ACCESS_TOKEN_COOKIE)?.value ||

@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 
 import { AgendaItem } from "@/lib/agenda/data"
-import { useCurrentUser } from "@/hooks/use-current-user"
+import { usePanelRoles } from "@/hooks/use-panel-roles"
 import {
   Drawer,
   DrawerContent,
@@ -33,12 +33,13 @@ export function AgendaEventDrawer({
   onRequestReschedule,
   onRequestCancel,
 }: AgendaEventDrawerProps) {
-  const { user } = useCurrentUser()
+  const { roles, loading, error } = usePanelRoles()
   const canManage = useMemo(() => {
-    const roles = extractRoles(user)
-    if (!roles.length) return false
-    return roles.some((role) => PRIVILEGED_ROLES.has(role))
-  }, [user])
+    if (roles.length === 0) {
+      return !error // si no hay roles cargados, permitir y confiar en el backend
+    }
+    return roles.some((role) => PRIVILEGED_ROLES.has(role.toLowerCase()))
+  }, [roles, error])
 
   const timezone = item?.timezone || "UTC"
 
@@ -83,20 +84,20 @@ export function AgendaEventDrawer({
         </div>
         <DrawerFooter className="gap-3 border-t border-border/60 bg-muted/20">
           <Button
-            disabled={!canManage || !item}
+            disabled={(!canManage && !loading) || !item}
             onClick={() => item && onRequestReschedule?.(item)}
             variant="default"
           >
             Reprogramar
           </Button>
           <Button
-            disabled={!canManage || !item}
+            disabled={(!canManage && !loading) || !item}
             onClick={() => item && onRequestCancel?.(item)}
             variant="destructive"
           >
             Cancelar cita
           </Button>
-          {!canManage ? (
+          {!canManage && !loading ? (
             <p className="text-muted-foreground text-xs">
               Solo los administradores o roles elevados pueden modificar o cancelar citas.
             </p>
@@ -150,16 +151,4 @@ function resolveEstadoVariant(
   if (normalized === "confirmada") return "default"
   if (normalized === "reprogramada" || normalized === "pendiente") return "secondary"
   return "outline"
-}
-
-function extractRoles(user: ReturnType<typeof useCurrentUser>["user"]): string[] {
-  if (!user) return []
-  const metadataRoles = user.app_metadata?.roles ?? user.user_metadata?.roles
-  if (Array.isArray(metadataRoles)) {
-    return metadataRoles.map((role) => String(role).toLowerCase())
-  }
-  if (typeof metadataRoles === "string") {
-    return [metadataRoles.toLowerCase()]
-  }
-  return []
 }
