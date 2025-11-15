@@ -4276,7 +4276,7 @@ async def listar_resultados_google(
     tipo: str | None = Query(default=None, description="Filtra por google_primary_type."),
     max_distancia_m: int | None = Query(default=None, ge=1, le=50000),
     min_rating: float | None = Query(default=None, ge=0, le=5),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=250),
     offset: int = Query(default=0, ge=0),
     order: Literal["recientes", "rating", "distancia"] = Query(default="recientes"),
     authorization: str | None = Header(default=None),

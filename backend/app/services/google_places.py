@@ -131,6 +131,17 @@ class GooglePlacesClient:
             logger.exception("google.places_invalid_json")
             raise GooglePlacesError("google_places_invalid_response") from exc
 
+    def _resolve_url(self, strategy: GoogleSearchStrategy) -> str:
+        if strategy == "nearby":
+            if not self.nearby_url:
+                raise GooglePlacesError("google_places_nearby_url_missing")
+            return self.nearby_url
+        if strategy == "text":
+            if not self.text_url:
+                raise GooglePlacesError("google_places_text_url_missing")
+            return self.text_url
+        raise GooglePlacesError("google_places_unknown_strategy")
+
     def _build_payload(
         self,
         *,
