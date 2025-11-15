@@ -221,3 +221,9 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
 - Seeds `supabase/seeds/agenda_calendarios_seed.sql` y `supabase/seeds/agenda_disponibilidad_check.sql` borradas para evitar reprovisionar información de citas.
 - Documentación y prompts actualizados: mientras se diseña la nueva agenda, Tal-IA sólo envía información por correo (no agenda ni reprograma).
 - Recordatorio: regenerar respaldos (`backups/postgres_*.sql`) tras aplicar la migración y documentar el nuevo flujo cuando se habilite el reemplazo.
+
+
+
+
+  Siguiente paso (si quieres): manejar la actualización de métricas/contador global tras cada acción, o añadir un overlay de loading
+  en el calendario mientras se aplican los cambios.

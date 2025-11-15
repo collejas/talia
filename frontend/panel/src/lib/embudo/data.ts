@@ -18,6 +18,7 @@ export type EmbudoStage = {
 export type EmbudoCard = {
   tarjetaId: string;
   contactoId: string;
+  conversacionId: string | null;
   nombre: string;
   correo: string | null;
   telefono: string | null;
@@ -201,6 +202,7 @@ function mapStages(
     const tarjeta: EmbudoCard = {
       tarjetaId: row.tarjeta_id,
       contactoId: row.contacto_id,
+      conversacionId: row.conversacion_id,
       nombre: row.contacto_nombre?.trim() || "Lead sin nombre",
       correo: row.contacto_correo,
       telefono: row.contacto_telefono,

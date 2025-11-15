@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { LeadActionResult } from "@/lib/embudo/actions";
 import { cn } from "@/lib/utils";
+import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
@@ -1352,22 +1353,6 @@ function resolveInputType(fieldType: DrawerPrepFieldType): "text" | "number" | "
     default:
       return "text";
   }
-}
-
-function toDateTimeLocalInput(value: string): string {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  const offsetDate = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 16);
-}
-
-function fromDateTimeLocalInput(value: string): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
 }
 
 function readStageMetaString(meta: Record<string, unknown> | undefined, key: string): string | undefined {

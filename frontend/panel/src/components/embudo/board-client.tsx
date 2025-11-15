@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -18,12 +18,23 @@ import { CSS } from "@dnd-kit/utilities";
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
 import { EmbudoStageColumn } from "@/components/embudo/stage-column";
 import { EmbudoCardItem } from "@/components/embudo/card-item";
-import { createLeadCard, moveLeadCard, updateLeadCard, type LeadActionResult } from "@/lib/embudo/actions";
+import {
+  createLeadCard,
+  moveLeadCard,
+  scheduleLeadDemo,
+  updateLeadCard,
+  type LeadActionResult,
+} from "@/lib/embudo/actions";
 import {
   LeadDrawer,
   type LeadDrawerCreatePayload,
   type LeadDrawerSubmitPayload,
 } from "@/components/embudo/lead-drawer";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 
 type EmbudoBoardClientProps = {
   etapas: EmbudoStage[];
@@ -35,6 +46,15 @@ type StageCardPair = {
   stage: EmbudoStage;
   card: EmbudoCard;
 };
+
+type ScheduleContext = {
+  card: EmbudoCard;
+  originStage: EmbudoStage;
+  destinationStage: EmbudoStage;
+};
+
+const PRECALIFICADO_STAGE_CODE = "precalificado";
+const DEMO_STAGE_CODE = "demo";
 
 function sortStages(stages: EmbudoStage[]): EmbudoStage[] {
   return [...stages].sort((a, b) => {
@@ -77,6 +97,13 @@ export function EmbudoBoardClient({
   const [activeDragCard, setActiveDragCard] = useState<EmbudoCard | null>(null);
   const [activeDragStage, setActiveDragStage] = useState<EmbudoStage | null>(null);
   const [movePending, setMovePending] = useState(false);
+  const [scheduleContext, setScheduleContext] = useState<ScheduleContext | null>(null);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleDateTime, setScheduleDateTime] = useState("");
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [schedulePending, setSchedulePending] = useState(false);
+
+  const scheduleMinValue = useMemo(() => toDateTimeLocalInput(new Date().toISOString()), []);
 
   const visitantesDisplay = useMemo(() => {
     const formatter = new Intl.NumberFormat("es-MX");
@@ -97,6 +124,36 @@ export function EmbudoBoardClient({
     setStages(initialStages);
   }, [initialStages]);
 
+  useEffect(() => {
+    if (scheduleContext) {
+      const existingValue = readDemoScheduledAt(scheduleContext.card);
+      setScheduleDateTime(existingValue ? toDateTimeLocalInput(existingValue) : "");
+    }
+  }, [scheduleContext]);
+
+  const openScheduleDialog = (context: ScheduleContext) => {
+    setScheduleContext(context);
+    setScheduleError(null);
+    setSchedulePending(false);
+    setScheduleDialogOpen(true);
+  };
+
+  const closeScheduleDialog = () => {
+    setScheduleDialogOpen(false);
+    setScheduleContext(null);
+    setScheduleDateTime("");
+    setScheduleError(null);
+    setSchedulePending(false);
+  };
+
+  const handleScheduleOpenChange = (open: boolean) => {
+    if (!open) {
+      closeScheduleDialog();
+    } else if (scheduleContext) {
+      setScheduleDialogOpen(true);
+    }
+  };
+
   const handleCardClick = (stage: EmbudoStage, card: EmbudoCard) => {
     setSelectedStage(stage);
     setSelectedCard(card);
@@ -109,6 +166,84 @@ export function EmbudoBoardClient({
     setSelectedCard(null);
     setDrawerMode("create");
     setDrawerOpen(true);
+  };
+
+  const handleScheduleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!scheduleContext) return;
+
+    if (!scheduleDateTime.trim()) {
+      setScheduleError("Selecciona la fecha y hora de la demo.");
+      return;
+    }
+
+    const isoValue = fromDateTimeLocalInput(scheduleDateTime);
+    if (!isoValue) {
+      setScheduleError("La fecha no tiene un formato válido.");
+      return;
+    }
+
+    if (!scheduleContext.card.conversacionId) {
+      setScheduleError("Este lead no tiene conversación vinculada, no puedo agendar la demo.");
+      return;
+    }
+
+    setScheduleError(null);
+    setSchedulePending(true);
+    setMovePending(true);
+
+    const bookingResult = await scheduleLeadDemo({
+      conversationId: scheduleContext.card.conversacionId,
+      startAt: isoValue,
+    });
+
+    if (!bookingResult.ok) {
+      setScheduleError(bookingResult.error || "No se pudo agendar la demo.");
+      setSchedulePending(false);
+      setMovePending(false);
+      return;
+    }
+
+    const stagePrep = buildUpdatedDemoStagePrep(scheduleContext.card, isoValue, bookingResult.booking.booking_id);
+    const updateResult = await updateLeadCard({
+      tarjetaId: scheduleContext.card.tarjetaId,
+      tarjeta: {
+        metadata: {
+          stage_prep: stagePrep,
+        },
+      },
+      mergeMetadata: true,
+    });
+
+    if (!updateResult.ok) {
+      setScheduleError(updateResult.error || "No se pudo guardar la cita.");
+      setSchedulePending(false);
+      setMovePending(false);
+      return;
+    }
+
+    const destinationStage =
+      stages.find((stage) => stage.id === scheduleContext.destinationStage.id) ?? scheduleContext.destinationStage;
+    const updatedCard: EmbudoCard = {
+      ...updateResult.card,
+      etapaId: destinationStage.id,
+      etapaNombre: destinationStage.nombre,
+      metadata: {
+        ...(updateResult.card.metadata ?? {}),
+        stage_prep: stagePrep,
+      },
+    };
+
+    setSchedulePending(false);
+    setMovePending(false);
+
+    setDragMessage(null);
+    applyLeadResult({
+      ok: true,
+      stage: destinationStage,
+      card: updatedCard,
+    });
+    closeScheduleDialog();
   };
 
   function applyLeadResult(result: LeadActionResult) {
@@ -264,6 +399,18 @@ export function EmbudoBoardClient({
       return;
     }
 
+    const movingFromPrecalificado = normalizeStageCode(activeDragStage) === PRECALIFICADO_STAGE_CODE;
+    const movingToDemo = normalizeStageCode(destinationStage) === DEMO_STAGE_CODE;
+    if (movingFromPrecalificado && movingToDemo) {
+      openScheduleDialog({
+        card: activeDragCard,
+        originStage: activeDragStage,
+        destinationStage,
+      });
+      handleDragCancel();
+      return;
+    }
+
     setMovePending(true);
     const result = await moveLeadCard({
       tarjetaId: activeDragCard.tarjetaId,
@@ -361,11 +508,54 @@ export function EmbudoBoardClient({
         onOpenChange={handleDrawerOpenChange}
         currentStage={selectedStage}
         allStages={stages}
-        card={selectedCard}
-        mode={drawerMode}
-        onSubmit={handleLeadSubmit}
-        onCreate={handleLeadCreate}
-      />
+      card={selectedCard}
+      mode={drawerMode}
+      onSubmit={handleLeadSubmit}
+      onCreate={handleLeadCreate}
+    />
+
+      <Sheet open={scheduleDialogOpen && !!scheduleContext} onOpenChange={handleScheduleOpenChange}>
+        <SheetContent side="right" className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Agendar demo</SheetTitle>
+            <SheetDescription>
+              {scheduleContext
+                ? `Define la fecha y hora antes de mover “${scheduleContext.card.nombre}” a “${scheduleContext.destinationStage.nombre}”.`
+                : "Define la fecha y hora de la demo."}
+            </SheetDescription>
+          </SheetHeader>
+          <form className="flex flex-col gap-4 px-4 pb-6" onSubmit={handleScheduleSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="schedule-demo-datetime" className="text-sm font-medium">
+                Fecha y hora de la demo *
+              </Label>
+              <Input
+                id="schedule-demo-datetime"
+                type="datetime-local"
+                value={scheduleDateTime}
+                onChange={(event) => setScheduleDateTime(event.target.value)}
+                min={scheduleMinValue || undefined}
+                required
+                disabled={schedulePending}
+              />
+              <p className="text-xs text-muted-foreground">Usa tu zona horaria local.</p>
+            </div>
+            {scheduleError ? (
+              <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {scheduleError}
+              </p>
+            ) : null}
+            <SheetFooter className="flex-row justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeScheduleDialog} disabled={schedulePending}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={schedulePending}>
+                Confirmar demo
+              </Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
@@ -415,4 +605,51 @@ function useDraggableCard({ card, stageId, disabled }: UseDraggableCardArgs) {
     disabled,
   });
   return result;
+}
+
+type StagePrepMetadata = Record<string, Record<string, unknown>>;
+
+function normalizeStageCode(stage: EmbudoStage | null): string {
+  return stage?.codigo?.toLowerCase() ?? "";
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractStagePrep(card: EmbudoCard | null): StagePrepMetadata {
+  if (!card) return {};
+  const metadata = card.metadata;
+  if (!isPlainRecord(metadata)) return {};
+  const stagePrepRaw = metadata.stage_prep;
+  if (!isPlainRecord(stagePrepRaw)) return {};
+
+  const normalized: StagePrepMetadata = {};
+  for (const [stageCode, rawValue] of Object.entries(stagePrepRaw)) {
+    if (isPlainRecord(rawValue)) {
+      normalized[stageCode] = { ...rawValue };
+    }
+  }
+  return normalized;
+}
+
+function readDemoScheduledAt(card: EmbudoCard | null): string | null {
+  const stagePrep = extractStagePrep(card);
+  const demoPrep = stagePrep[DEMO_STAGE_CODE];
+  if (!demoPrep) return null;
+  const value = demoPrep["demo_scheduled_at"];
+  return typeof value === "string" ? value : null;
+}
+
+function buildUpdatedDemoStagePrep(card: EmbudoCard, isoValue: string, bookingId?: string | null): StagePrepMetadata {
+  const current = extractStagePrep(card);
+  const demoPrep: Record<string, unknown> = { ...(current[DEMO_STAGE_CODE] ?? {}) };
+  demoPrep["demo_scheduled_at"] = isoValue;
+  if (bookingId) {
+    demoPrep["demo_booking_id"] = bookingId;
+  }
+  return {
+    ...current,
+    [DEMO_STAGE_CODE]: demoPrep,
+  };
 }

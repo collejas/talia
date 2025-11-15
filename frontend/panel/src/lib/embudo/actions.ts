@@ -8,6 +8,7 @@ import { updateTag } from "next/cache";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { callSupabaseRest, callSupabaseRpc } from "@/lib/leads/supabase";
 import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
+import { getPanelApiBaseUrl } from "@/lib/api/panel";
 
 type LeadRow = {
   tarjeta_id: string;
@@ -71,6 +72,30 @@ export type LeadActionResult =
   | { ok: true; stage: EmbudoStage; card: EmbudoCard }
   | { ok: false; error: string };
 
+type CalendarBookingResponseRow = {
+  status: "ok";
+  booking_id: string;
+  resource_id: string;
+  start_at: string;
+  end_at: string | null;
+  timezone: string | null;
+  hold_id?: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown> | null;
+  tarjeta_id: string | null;
+};
+
+export type ScheduleLeadDemoInput = {
+  conversationId: string;
+  startAt: string;
+  notes?: string | null;
+  sessionId?: string | null;
+};
+
+export type ScheduleLeadDemoResult =
+  | { ok: true; booking: CalendarBookingResponseRow }
+  | { ok: false; error: string };
+
 type ContactInsertRow = {
   id: string;
 };
@@ -115,6 +140,29 @@ async function resolveCurrentUserId(): Promise<string | null> {
   }
 }
 
+async function resolvePanelApiToken(): Promise<string> {
+  const store = await cookies();
+  const token =
+    store.get(ACCESS_TOKEN_COOKIE)?.value ||
+    store.get("talia.access_token")?.value ||
+    store.get("sb-access-token")?.value ||
+    store.get("access_token")?.value;
+
+  if (token && token.trim().length) {
+    return token;
+  }
+
+  const serviceRole =
+    process.env.SUPABASE_SERVICE_ROLE ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SERVICE_API_KEY;
+
+  if (!serviceRole) {
+    throw new Error("No se encontró token para contactar el backend de calendario.");
+  }
+  return serviceRole;
+}
+
 function sanitizeNullableString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -144,6 +192,39 @@ function logDebug(step: string, payload?: Record<string, unknown>) {
   }
 }
 
+export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<ScheduleLeadDemoResult> {
+  try {
+    const token = await resolvePanelApiToken();
+    const baseUrl = getPanelApiBaseUrl();
+    const response = await fetch(`${baseUrl}/webchat/calendar/bookings`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversation_id: input.conversationId,
+        slot_id: null,
+        start_at: input.startAt,
+        notes: input.notes ?? null,
+        session_id: input.sessionId ?? null,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return { ok: false, error: text || "No se pudo agendar la demo." };
+    }
+
+    const booking = (await response.json()) as CalendarBookingResponseRow;
+    return { ok: true, booking };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "No se pudo agendar la demo.";
+    return { ok: false, error: message };
+  }
+}
+
 function mapRowToStage(row: LeadRow): { stage: EmbudoStage; card: EmbudoCard } {
   const stageMetadata =
     row.etapa_metadatos && typeof row.etapa_metadatos === "object" && !Array.isArray(row.etapa_metadatos)
@@ -164,6 +245,7 @@ function mapRowToStage(row: LeadRow): { stage: EmbudoStage; card: EmbudoCard } {
   const card: EmbudoCard = {
     tarjetaId: row.tarjeta_id,
     contactoId: row.contacto_id,
+    conversacionId: row.conversacion_id,
     nombre: row.contacto_nombre?.trim() || "Lead sin nombre",
     correo: row.contacto_correo,
     telefono: row.contacto_telefono,
