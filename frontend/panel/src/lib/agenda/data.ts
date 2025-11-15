@@ -2,9 +2,24 @@
 
 import { cookies } from "next/headers";
 
+import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 
-type AgendaRestRow = {
+type AgendaApiContact = {
+  id: string | null;
+  nombre: string | null;
+  correo: string | null;
+  telefono: string | null;
+  empresa: string | null;
+  origen: string | null;
+};
+
+type AgendaApiAssignment = {
+  id: string | null;
+  nombre: string | null;
+} | null;
+
+type AgendaApiItem = {
   id: string;
   resource_id: string | null;
   hold_id: string | null;
@@ -14,33 +29,75 @@ type AgendaRestRow = {
   start_at: string;
   end_at: string | null;
   timezone: string | null;
-  status: string | null;
+  estado: string;
   notes: string | null;
   meeting_url: string | null;
   external_join_url: string | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  tablero_id: string | null;
-  etapa_id: string | null;
-  etapa_codigo: string | null;
+  canal: string | null;
+  provider: string | null;
+  lead_score: number | null;
   etapa_nombre: string | null;
-  tarjeta_canal: string | null;
-  tarjeta_lead_score: number | null;
-  tarjeta_tags: string[] | null;
-  tarjeta_metadata: Record<string, unknown> | null;
-  asignado_a_usuario_id: string | null;
-  asignado_nombre: string | null;
-  propietario_usuario_id: string | null;
-  propietario_nombre: string | null;
-  contacto_nombre: string | null;
-  contacto_correo: string | null;
-  contacto_telefono: string | null;
-  contacto_empresa: string | null;
-  contacto_origen: string | null;
-  conversacion_estado: string | null;
-  conversacion_ultimo_mensaje_en: string | null;
-  conversacion_canal: string | null;
+  metadata: Record<string, unknown> | null;
+  contacto: AgendaApiContact;
+  asignado: AgendaApiAssignment;
+  propietario: AgendaApiAssignment;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type AgendaApiMetrics = {
+  total: number;
+  activas: number;
+  proximas24h: number;
+  canceladas: number;
+  realizadas: number;
+};
+
+type AgendaBookingsResponse = {
+  ok: boolean;
+  items: AgendaApiItem[];
+  metrics: AgendaApiMetrics;
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+type AgendaAvailabilityResponse = {
+  ok: boolean;
+  availability: {
+    resource_id: string;
+    timezone: string;
+    generated_at: string;
+    window_start: string;
+    window_end: string;
+    slot_duration_minutes: number;
+    slots: Array<{
+      slot_id: string;
+      start_at: string;
+      end_at: string;
+      timezone: string;
+      local_date: string;
+      local_time: string;
+      capacity: number;
+      booked: number;
+      holds: number;
+      is_available: boolean;
+    }>;
+  };
+};
+
+type AgendaActionResponse = {
+  ok: boolean;
+  booking: {
+    booking_id: string;
+    start_at: string;
+    end_at: string | null;
+    timezone: string | null;
+    status: string;
+    notes: string | null;
+    metadata: Record<string, unknown> | null;
+  };
 };
 
 export type AgendaItem = {
@@ -86,87 +143,80 @@ const ACTIVE_STATES = new Set(["confirmada"]);
 const UPCOMING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function loadAgendaData(): Promise<AgendaPayload> {
-  const errors: string[] = [];
-
-  let baseUrl: string;
-  let auth: { apikey: string; token: string };
-
   try {
-    baseUrl = resolveSupabaseUrl();
-    auth = await resolveAuthHeaders();
+    const response = await callAgendaEndpoint<AgendaBookingsResponse>("/panel/agenda/bookings");
+    const mapped = mapAgenda(response.items ?? []);
+    const metrics = response.metrics ?? computeMetrics(mapped);
+    return { items: mapped, metrics, errors: [] };
   } catch (error) {
-    return {
-      items: [],
-      metrics: emptyMetrics(),
-      errors: [error instanceof Error ? error.message : "Supabase no está configurado."],
-    };
+    const message = error instanceof Error ? error.message : "No se pudo cargar la agenda.";
+    return { items: [], metrics: emptyMetrics(), errors: [message] };
   }
-
-  const url = new URL(`${baseUrl}/rest/v1/panel_calendar_bookings`);
-  url.searchParams.set("select", "*");
-  url.searchParams.set("order", "start_at.asc.nullslast");
-  url.searchParams.set("limit", "200");
-
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      apikey: auth.apikey,
-      Authorization: `Bearer ${auth.token}`,
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    errors.push(await readErrorMessage(response));
-    return {
-      items: [],
-      metrics: emptyMetrics(),
-      errors: Array.from(new Set(errors)),
-    };
-  }
-
-  let raw: AgendaRestRow[] = [];
-  try {
-    const data = (await response.json()) as unknown;
-    if (Array.isArray(data)) {
-      raw = data as AgendaRestRow[];
-    } else {
-      errors.push("Formato inesperado al consultar la agenda.");
-    }
-  } catch (error) {
-    errors.push(`Respuesta inválida al cargar agenda (${(error as Error).message})`);
-  }
-
-  const { items, metrics } = mapAgenda(raw);
-
-  return {
-    items,
-    metrics,
-    errors: Array.from(new Set(errors)),
-  };
 }
 
-function mapAgenda(rows: AgendaRestRow[]): { items: AgendaItem[]; metrics: AgendaMetrics } {
-  const items: AgendaItem[] = [];
-  const metrics = emptyMetrics();
-  const nowMs = Date.now();
+export async function loadAgendaAvailability(params: {
+  from?: string;
+  to?: string;
+  timezone?: string;
+  resourceId?: string;
+  maxDays?: number;
+} = {}): Promise<AgendaAvailabilityResponse["availability"]> {
+  const search: Record<string, string> = {};
+  if (params.from) search.from = params.from;
+  if (params.to) search.to = params.to;
+  if (params.timezone) search.timezone = params.timezone;
+  if (params.resourceId) search.resource_id = params.resourceId;
+  if (typeof params.maxDays === "number") search.max_days = String(params.maxDays);
 
-  for (const row of rows) {
+  const response = await callAgendaEndpoint<AgendaAvailabilityResponse>(
+    "/panel/agenda/availability",
+    search,
+  );
+  return response.availability;
+}
+
+export async function rescheduleAgendaBooking(
+  bookingId: string,
+  payload: { startAt: string; notes?: string },
+): Promise<AgendaActionResponse["booking"]> {
+  const body = JSON.stringify({ start_at: payload.startAt, notes: payload.notes });
+  const response = await callAgendaEndpoint<AgendaActionResponse>(
+    `/panel/agenda/bookings/${bookingId}/reschedule`,
+    {},
+    {
+      method: "POST",
+      body,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  return response.booking;
+}
+
+export async function cancelAgendaBooking(
+  bookingId: string,
+  reason?: string,
+): Promise<AgendaActionResponse["booking"]> {
+  const response = await callAgendaEndpoint<AgendaActionResponse>(
+    `/panel/agenda/bookings/${bookingId}/cancel`,
+    {},
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  return response.booking;
+}
+
+function mapAgenda(rows: AgendaApiItem[]): AgendaItem[] {
+  return rows.map((row) => {
     const metadata =
       row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-        ? (row.metadata as Record<string, unknown>)
+        ? row.metadata
         : {};
 
-    const statusRaw = (row.status || "confirmed").toLowerCase();
-    const estado =
-      statusRaw === "confirmed"
-        ? "confirmada"
-        : statusRaw === "cancelled"
-          ? "cancelada"
-          : statusRaw;
-
-    const item: AgendaItem = {
+    const provider = row.provider?.trim() || "calendar";
+    return {
       id: row.id,
       tarjetaId: row.tarjeta_id,
       contactoId: row.contacto_id,
@@ -174,40 +224,44 @@ function mapAgenda(rows: AgendaRestRow[]): { items: AgendaItem[]; metrics: Agend
       startAt: row.start_at,
       endAt: row.end_at,
       timezone: row.timezone,
-      estado,
-      provider: "calendar",
+      estado: row.estado,
+      provider,
       meetingUrl: row.meeting_url,
       externalJoinUrl: row.external_join_url,
       notes: row.notes,
       metadata,
-      contactoNombre: row.contacto_nombre,
-      contactoCorreo: row.contacto_correo,
-      contactoTelefono: row.contacto_telefono,
-      contactoEmpresa: row.contacto_empresa,
-      asignadoNombre: row.asignado_nombre,
-      propietarioNombre: row.propietario_nombre,
+      contactoNombre: row.contacto?.nombre ?? null,
+      contactoCorreo: row.contacto?.correo ?? null,
+      contactoTelefono: row.contacto?.telefono ?? null,
+      contactoEmpresa: row.contacto?.empresa ?? null,
+      asignadoNombre: row.asignado?.nombre ?? null,
+      propietarioNombre: row.propietario?.nombre ?? null,
       etapaNombre: row.etapa_nombre,
-      canal: row.tarjeta_canal ?? row.conversacion_canal,
-      leadScore: row.tarjeta_lead_score,
+      canal: row.canal,
+      leadScore: row.lead_score,
     };
+  });
+}
 
-    items.push(item);
+function computeMetrics(items: AgendaItem[]): AgendaMetrics {
+  const metrics = emptyMetrics();
+  const nowMs = Date.now();
+
+  for (const item of items) {
+    const estado = item.estado?.toLowerCase() ?? "pendiente";
     metrics.total += 1;
-
-    const estadoItem = item.estado;
-    if (estadoItem === "cancelada") metrics.canceladas += 1;
-    if (estadoItem === "realizada") metrics.realizadas += 1;
-
-    if (ACTIVE_STATES.has(estadoItem)) {
+    if (estado === "cancelada") metrics.canceladas += 1;
+    if (estado === "realizada") metrics.realizadas += 1;
+    if (ACTIVE_STATES.has(estado)) {
       metrics.activas += 1;
-      const startMs = Date.parse(item.startAt);
-      if (!Number.isNaN(startMs) && startMs >= nowMs && startMs <= nowMs + UPCOMING_WINDOW_MS) {
+      const start = Date.parse(item.startAt);
+      if (!Number.isNaN(start) && start >= nowMs && start <= nowMs + UPCOMING_WINDOW_MS) {
         metrics.proximas24h += 1;
       }
     }
   }
 
-  return { items, metrics };
+  return metrics;
 }
 
 function emptyMetrics(): AgendaMetrics {
@@ -220,32 +274,49 @@ function emptyMetrics(): AgendaMetrics {
   };
 }
 
-function resolveSupabaseUrl(): string {
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL_PUBLIC;
-  if (!url) {
-    throw new Error("SUPABASE_URL no está configurado para la agenda.");
+async function callAgendaEndpoint<T>(
+  path: string,
+  searchParams: Record<string, string> = {},
+  init: RequestInit = {},
+): Promise<T> {
+  const baseUrl = getPanelApiBaseUrl();
+  const token = await resolvePanelAuthToken();
+  const url = new URL(`${baseUrl}${path}`);
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
   }
-  return url.replace(/\/+$/, "");
+
+  const response = await fetch(url.toString(), {
+    method: init.method ?? "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(init.headers ?? {}),
+    },
+    body: init.body,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Error ${response.status}`);
+  }
+
+  return (await response.json()) as T;
 }
 
-async function resolveAuthHeaders(): Promise<{ apikey: string; token: string }> {
-  const cookieStore = await cookies();
-  const accessToken =
-    cookieStore.get(ACCESS_TOKEN_COOKIE)?.value ||
-    cookieStore.get("sb-access-token")?.value ||
-    cookieStore.get("access_token")?.value;
+async function resolvePanelAuthToken(): Promise<string> {
+  const store = await cookies();
+  const cookieToken =
+    store.get(ACCESS_TOKEN_COOKIE)?.value ||
+    store.get("talia.access_token")?.value ||
+    store.get("sb-access-token")?.value ||
+    store.get("access_token")?.value;
 
-  const anonKey =
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_PUBLIC_ANON_KEY ||
-    process.env.SUPABASE_KEY;
-
-  if (accessToken && anonKey) {
-    return { apikey: anonKey, token: accessToken };
+  if (cookieToken && cookieToken.trim().length) {
+    return cookieToken;
   }
 
   const serviceRole =
@@ -254,34 +325,7 @@ async function resolveAuthHeaders(): Promise<{ apikey: string; token: string }> 
     process.env.SUPABASE_SERVICE_API_KEY;
 
   if (!serviceRole) {
-    throw new Error(
-      "Configura SUPABASE_SERVICE_ROLE (o SUPABASE_SERVICE_KEY) para consultar la agenda.",
-    );
+    throw new Error("No se encontró token para consultar el backend del panel.");
   }
-
-  return { apikey: serviceRole, token: serviceRole };
-}
-
-async function readErrorMessage(response: Response): Promise<string> {
-  try {
-    const text = await response.text();
-    if (!text) return `Error ${response.status}`;
-    try {
-      const json = JSON.parse(text) as Record<string, unknown>;
-      if (typeof json === "string") return json;
-      if (json && typeof json === "object") {
-        return (
-          (json.error_description as string) ||
-          (json.message as string) ||
-          (json.error as string) ||
-          `Error ${response.status}`
-        );
-      }
-      return text;
-    } catch {
-      return text;
-    }
-  } catch {
-    return `Error ${response.status}`;
-  }
+  return serviceRole;
 }
