@@ -1,16 +1,8 @@
-import type { CSSProperties } from "react"
-
-import { AppSidebar } from "@/components/AppSidebar"
+import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { DataTable } from "@/components/data-table"
 import { SectionCards } from "@/components/section-cards"
 import { SessionRecovery } from "@/components/session-recovery"
-import { SiteHeader } from "@/components/site-header"
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
-import { ThemeToggle } from "@/components/ThemeToggle"
 import { loadLeadsData } from "@/lib/leads/data"
 
 export const dynamic = "force-dynamic"
@@ -19,49 +11,31 @@ export default async function Page() {
   const leadsData = await loadLeadsData()
 
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as CSSProperties
-      }
-    >
-      <AppSidebar variant="inset" />
-      <SidebarInset>
-        <SiteHeader title="Leads" />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <SectionCards data={leadsData.cards} />
-              <SessionRecovery errors={leadsData.errors} />
-              {leadsData.errors.length ? (
-                <div className="px-4 lg:px-6">
-                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    <p className="font-medium">No se pudieron cargar todos los datos:</p>
-                    <ul className="list-disc pl-5">
-                      {leadsData.errors.map((message, index) => (
-                        <li key={index}>{sanitizeMessage(message)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ) : null}
-              <div className="px-4 lg:px-6">
-                <ChartAreaInteractive data={leadsData.chart} />
-              </div>
-              <div className="px-4 lg:px-6">
-                <DataTable
-                  data={leadsData.table}
-                  storageKey="leads-table-column-order"
-                />
-              </div>
-            </div>
+    <AppViewLayout title="Leads">
+      <SectionCards data={leadsData.cards} />
+      <SessionRecovery errors={leadsData.errors} />
+      {leadsData.errors.length ? (
+        <div className="px-4 lg:px-6">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <p className="font-medium">No se pudieron cargar todos los datos:</p>
+            <ul className="list-disc pl-5">
+              {leadsData.errors.map((message, index) => (
+                <li key={index}>{sanitizeMessage(message)}</li>
+              ))}
+            </ul>
           </div>
         </div>
-      </SidebarInset>
-      <ThemeToggle />
-    </SidebarProvider>
+      ) : null}
+      <div className="px-4 lg:px-6">
+        <ChartAreaInteractive data={leadsData.chart} />
+      </div>
+      <div className="px-4 lg:px-6">
+        <DataTable
+          data={leadsData.table}
+          storageKey="leads-table-column-order"
+        />
+      </div>
+    </AppViewLayout>
   )
 }
 
