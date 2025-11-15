@@ -51,6 +51,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
+const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 50000;
 const DEFAULT_TYPES = "restaurant,store";
@@ -429,7 +430,7 @@ export function GoogleBusquedaView() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="radius">Radio (m)</Label>
-                  <span className="text-xs text-muted-foreground">{formValues.radio_m.toLocaleString()} m</span>
+                  <span className="text-xs text-muted-foreground">{numberFormatter.format(formValues.radio_m)} m</span>
                 </div>
                 <input
                   id="radius"
@@ -564,7 +565,7 @@ export function GoogleBusquedaView() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Radio {item.radio_m?.toLocaleString()} m · {item.total_encontrados ?? 0} registros
+                      Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
                     </p>
                   </div>
                 ))
