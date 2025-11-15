@@ -167,11 +167,15 @@ function DraggableCenterMarker({
     [onChange],
   );
 
+  if (!centerIcon) {
+    return null;
+  }
+
   return (
     <Marker
       position={position}
       draggable
-      icon={centerIcon ?? undefined}
+      icon={centerIcon}
       eventHandlers={eventHandlers}
       ref={(instance: LeafletMarker | null) => {
         markerRef.current = instance as LeafletMarker | null;
