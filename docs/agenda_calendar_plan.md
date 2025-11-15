@@ -84,7 +84,8 @@ Documento de trabajo para seguir el avance de la nueva vista de agenda en el pan
 - [x] Implementar endpoint de lectura que encapsule `panel_calendar_bookings` evitando exponer `service_role` al frontend.
   - Ruta: `GET /panel/agenda/bookings` (`backend/app/api/routes/panel.py`). Maneja filtros de fecha/rango, estado, responsable, búsqueda y devuelve `items`, `metrics`, `total`, `limit/offset` y `has_more`.
   - Respuesta incluye bloques `contacto`, `asignado`, `propietario`, y normaliza estados (`confirmada/cancelada/reprogramada/realizada`). Métricas replican el cálculo del frontend (activas, próximas 24h, canceladas, realizadas).
-- [ ] Implementar endpoint para disponibilidad (`fn_calendar_list_slots`) con filtros de recurso, rango y zona horaria.
+- [x] Implementar endpoint para disponibilidad (`fn_calendar_list_slots`) con filtros de recurso, rango y zona horaria.
+  - Ruta: `GET /panel/agenda/availability` (usa `calendar_service.list_slots`). Requiere JWT, permite `from`, `to`, `timezone`, `resource_id` y `max_days` (clamp 60). Respuesta `{ ok, availability }` replicando la estructura del helper (slots, window, duration).
 - [ ] Implementar endpoints para reprogramar (`fn_calendar_reschedule_booking`) y cancelar citas (`fn_calendar_cancel_booking`), registrando metadata y motivos.
 - [ ] Añadir envío de correos para reprogramaciones/cancelaciones y marcar estado en `calendar_bookings.metadata`.
 - [ ] Cubrir rutas nuevas con pruebas unitarias/integración.

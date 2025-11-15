@@ -8,7 +8,7 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Sequence
 from uuid import UUID, uuid4
 
@@ -20,7 +20,9 @@ from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services import calendar as calendar_service
 from app.services import demografia_service, leads_geo, storage
+from app.services.calendar import CalendarError
 
 router = APIRouter(prefix="", tags=["panel"])
 
@@ -490,6 +492,18 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
         return datetime.fromisoformat(raw)
     except ValueError:
         return None
+
+
+def _parse_iso_date(value: str | None, *, field: str) -> date:
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field}_required")
+    try:
+        return datetime.fromisoformat(value.strip()).date()
+    except ValueError:
+        try:
+            return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"{field}_invalid") from exc
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -1239,6 +1253,55 @@ async def listar_agenda_bookings(
         "offset": offset,
         "has_more": computed_total > offset + raw_count,
     }
+
+
+@router.get("/agenda/availability")
+async def obtener_agenda_availability(
+    authorization: str | None = Header(default=None),
+    resource_id: str | None = Query(default=None),
+    fecha_desde: str | None = Query(default=None, alias="from"),
+    fecha_hasta: str | None = Query(default=None, alias="to"),
+    timezone_hint: str | None = Query(default=None, alias="timezone"),
+    max_days: int = Query(default=14, ge=1, le=60),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    calendar_resource = resource_id or settings.webchat_calendar_resource_id
+    if not calendar_resource:
+        raise HTTPException(status_code=400, detail="calendar_resource_missing")
+
+    today = datetime.now(timezone.utc).date()
+    if fecha_desde:
+        start_date = _parse_iso_date(fecha_desde, field="from")
+    else:
+        start_date = today
+    if fecha_hasta:
+        end_date = _parse_iso_date(fecha_hasta, field="to")
+    else:
+        end_date = start_date + timedelta(days=max_days)
+
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="range_invalid")
+
+    allowed_span = timedelta(days=min(max_days, 60))
+    if end_date - start_date > allowed_span:
+        end_date = start_date + allowed_span
+
+    tz_hint = (timezone_hint or settings.webchat_calendar_timezone or "UTC").strip()
+    try:
+        payload = await calendar_service.list_slots(
+            resource_id=calendar_resource,
+            start_date=start_date,
+            end_date=end_date,
+            timezone_hint=tz_hint,
+            max_days=min(max_days, 60),
+        )
+    except CalendarError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "availability": payload}
 
 
 @router.get("/leads")
