@@ -173,6 +173,19 @@ class LeadUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class AgendaReschedulePayload(BaseModel):
+    """Payload para reprogramar una cita desde el panel."""
+
+    start_at: str = Field(..., description="Fecha/hora en ISO 8601, incluye zona horaria.")
+    notes: str | None = Field(default=None, description="Notas opcionales para la cita.")
+
+
+class AgendaCancelPayload(BaseModel):
+    """Payload para cancelar una cita desde el panel."""
+
+    reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
+
+
 def _supabase_base_url() -> str:
     if not settings.supabase_url:
         raise HTTPException(status_code=500, detail="Supabase no está configurado")
@@ -494,6 +507,18 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
         return None
 
 
+def _parse_datetime_input(value: str | None, *, field: str) -> datetime:
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field}_required")
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field}_invalid") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _parse_iso_date(value: str | None, *, field: str) -> date:
     if not value:
         raise HTTPException(status_code=400, detail=f"{field}_required")
@@ -510,6 +535,26 @@ def _ensure_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+async def _fetch_calendar_booking_row(
+    booking_id: UUID,
+    *,
+    token: str | None,
+) -> dict[str, Any]:
+    params = {
+        "id": f"eq.{booking_id}",
+        "select": "id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/calendar_bookings", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cita")
+    data = resp.json() or []
+    row = _first_row(data)
+    if not row:
+        raise HTTPException(status_code=404, detail="booking_not_found")
+    return row
 
 
 def _parse_date_value(value: str | None, *, field: str) -> datetime | None:
@@ -1302,6 +1347,62 @@ async def obtener_agenda_availability(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "availability": payload}
+
+
+@router.post("/agenda/bookings/{booking_id}/reschedule")
+async def reprogramar_agenda_booking(
+    booking_id: UUID,
+    payload: AgendaReschedulePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    booking_row = await _fetch_calendar_booking_row(booking_id, token=token)
+    conversation_id = booking_row.get("conversacion_id")
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="booking_without_conversation")
+
+    start_dt = _parse_datetime_input(payload.start_at, field="start_at")
+    try:
+        booking = await webchat_service.reschedule_calendar_booking(
+            conversation_id=str(conversation_id),
+            booking_id=str(booking_id),
+            start_at=start_dt,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"ok": True, "booking": booking}
+
+
+@router.post("/agenda/bookings/{booking_id}/cancel")
+async def cancelar_agenda_booking(
+    booking_id: UUID,
+    payload: AgendaCancelPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    booking_row = await _fetch_calendar_booking_row(booking_id, token=token)
+    conversation_id = booking_row.get("conversacion_id")
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="booking_without_conversation")
+
+    try:
+        booking = await webchat_service.cancel_calendar_booking(
+            conversation_id=str(conversation_id),
+            booking_id=str(booking_id),
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"ok": True, "booking": booking}
 
 
 @router.get("/leads")
