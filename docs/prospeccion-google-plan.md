@@ -14,13 +14,12 @@ Permitir búsquedas en Google (Places API) desde el panel, visualizar los result
 - [x] Endpoint en backend (`POST /panel/prospeccion/google/busquedas`) que usa `GooglePlacesClient` para llamar a Places (Nearby/Text), crea el registro en `busquedas` vía `crear_busqueda` y guarda los resultados con `upsert_resultados_lote`. Incluye lecturas (`GET /panel/prospeccion/google/busquedas` y `GET /panel/prospeccion/google/resultados`) para alimentar el formulario, mapa y listado desde el panel (`backend/app/api/routes/panel.py`).
 - [x] Vista SQL `public.v_google_places_contactables` que combina `busquedas` y `resultados` filtrados por `fuente = 'google_places'`, exponiendo teléfono, email (si existiera), website, dirección, rating, tipos y distancia al centro. Implementada en la migración `supabase/migrations/20260311_100000_google_prospeccion_view.sql` como vista adicional para no afectar `v_resultados_mapa` ni `v_resultados_unificados`.
 - [ ] Documentación de variables de entorno y scopes necesarios para Places/OAuth.
-- [ ] UI en `frontend/panel/src/app/prospeccion/google-busqueda` con:
-  - [ ] Formulario de criterios (texto, tipo/clasificación, radio, coordenadas o mapa interactivo) y selector de fuente `google_places`, con un control explícito para ajustar el radio de búsqueda que sincronice tanto los filtros como el círculo dibujado en el mapa.
-  - [ ] Botón “Buscar y guardar” que llama al backend y muestra estado de ejecución.
-  - [ ] Mapa centrado en la búsqueda con círculo del radio y marcadores por resultado, implementado con Leaflet (alineado con el stack actual), incluyendo la posibilidad de mover el marcador central y actualizar el radio desde el control del formulario.
-  - [ ] Panel lateral/lista con resumen (nombre, tipo, rating, teléfono, correo/web) y acciones (guardar lead, copiar datos, abrir Maps).
-  - [ ] Controles para seleccionar uno o varios prospectos (checkbox/row selection) y lanzar acciones rápidas: enviar correo, WhatsApp, generar carta o crear lead.
-  - [ ] Vacíos/errores amigables (sin resultados, quota excedida, etc.).
+- [x] UI en `frontend/panel/src/app/prospeccion/google-busqueda` con:
+  - [x] Formulario de criterios (texto, tipo/clasificación, radio, coordenadas) y control del radio sincronizado con el mapa (`google-busqueda-view.tsx`).
+  - [x] Botón “Buscar y guardar” conectado a `POST /api/prospeccion/google/busquedas` con feedback visual.
+  - [x] Mapa Leaflet con círculo del radio y marcador central draggable + clic para fijar centro (`google-results-map.tsx`).
+  - [x] Listado lateral con resumen, chips de tipos y enlaces a contacto, más selección múltiple para acciones (correo/WhatsApp/carta pendientes de automatizar).
+  - [x] Controles de filtrado (texto, rating mínimo, solo contactables), selección global y mensajes de estado cuando no hay resultados.
 - [ ] Métricas básicas: refresco de `mv_resultados_por_actividad` y contadores en la UI.
 
 ## Flujo propuesto
