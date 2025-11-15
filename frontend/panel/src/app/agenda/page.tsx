@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react"
 
 import { AppSidebar } from "@/components/AppSidebar"
-import { AgendaTable } from "@/components/agenda/agenda-table"
+import { AgendaView } from "@/components/agenda/agenda-view"
 import { SessionRecovery } from "@/components/session-recovery"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -49,7 +49,7 @@ export default async function Page() {
                 <MetricsOverview metrics={formattedMetrics} />
               </div>
               <div className="px-4 lg:px-6">
-                <AgendaTable items={agendaData.items} />
+                <AgendaView items={agendaData.items} />
               </div>
             </div>
           </div>

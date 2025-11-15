@@ -95,15 +95,18 @@ Documento de trabajo para seguir el avance de la nueva vista de agenda en el pan
 ## 3. Frontend / Panel
 
 - Notas (WIP):
-  - Librerías evaluadas: `@fullcalendar/react` (rich features, SSR tricky) vs `react-big-calendar` (ligera, depende de Luxon/DateFns). Backlog: prototipar RBC con adaptador de zona horaria.
-  - UX prevista: toggle “Calendario | Lista”; vista calendario con header (mes/semana), chips para estado/responsable, clic en evento → panel lateral con acciones (abrir enlace, ver notas, botones “Reprogramar”, “Cancelar”).
-  - Reprogramar: modal paso 1 selecciona nueva fecha, paso 2 consume availability y confirma; cancelar: modal con textarea “Motivo”.
+  - Se optó por un calendario semanal propio (sin dependencia externa) para evitar añadir librerías pesadas. Renderiza 7 columnas, navegación por semanas y cards con estado/horario/responsable.
+  - El toggle “Calendario | Lista” ya existe (`AgendaView`) y mantiene la tabla actual como fallback.
+  - Próximo: integrar availability para crear bloques de reprogramación y panel lateral con acciones.
 
-- [ ] Elegir librería de calendario (FullCalendar, React Big Calendar u otra) y validar soporte SSR/Next 16.
-- [ ] Crear data layer en `src/lib/agenda` que consuma los nuevos endpoints (lectura + availability + acciones).
-- [ ] Construir componente de calendario con modos mes/semana y sincronizar filtros existentes (estado, responsable, proveedor).
+- [x] Elegir librería de calendario (FullCalendar, React Big Calendar u otra) y validar soporte SSR/Next 16.
+  - Decisión: calendario custom implementado con CSS grid y formateadores `Intl` para tener control total y evitar dependencias adicionales; se puede migrar a una librería si surge la necesidad de vistas más complejas.
+- [x] Crear data layer en `src/lib/agenda` que consuma los nuevos endpoints (lectura + availability + acciones).
+  - `loadAgendaData`, `loadAgendaAvailability`, `rescheduleAgendaBooking` y `cancelAgendaBooking` consumen las rutas del backend usando el token del panel.
+- [x] Construir componente de calendario con modos mes/semana y sincronizar filtros existentes (estado, responsable, proveedor).
+  - Primer MVP: vista semanal con navegación y conteo por día (sin filtros adicionales todavía).
+- [x] Mantener vista en tabla como fallback opcional (toggle Calendario/Tabla).
 - [ ] Agregar vista detalle/drawer para cada cita con acciones de abrir enlace, reprogramar (selector de slot) y cancelar (motivo + confirmación).
-- [ ] Mantener vista en tabla como fallback opcional (toggle Calendario/Tabla).
 - [ ] Manejar errores y estados de carga (skeletons, toasts, recuperación de sesión).
 
 ## 4. Notificaciones y UX
