@@ -54,6 +54,55 @@ class Settings(BaseSettings):
         default=4 * 60 * 60,
         description="Tiempo de vida (en segundos) para reutilizar resultados de geolocalización por IP.",
     )
+    google_places_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "GOOGLE_PLACES_API_KEY",
+            "TALIA_GOOGLE_PLACES_API_KEY",
+        ),
+    )
+    google_places_nearby_url: str = Field(
+        default="https://places.googleapis.com/v1/places:searchNearby",
+        validation_alias=AliasChoices(
+            "API_NEARBY_SEARCH",
+            "GOOGLE_PLACES_NEARBY_URL",
+            "TALIA_GOOGLE_PLACES_NEARBY_URL",
+        ),
+    )
+    google_places_text_url: str = Field(
+        default="https://places.googleapis.com/v1/places:searchText",
+        validation_alias=AliasChoices(
+            "GOOGLE_PLACES_TEXT_URL",
+            "TALIA_GOOGLE_PLACES_TEXT_URL",
+        ),
+    )
+    google_places_field_mask: str = Field(
+        default=(
+            "places.id,places.displayName,places.formattedAddress,"
+            "places.location,places.primaryType,places.primaryTypeDisplayName,"
+            "places.types,places.rating,places.userRatingCount,"
+            "places.nationalPhoneNumber,places.internationalPhoneNumber,"
+            "places.websiteUri,places.googleMapsUri"
+        ),
+        validation_alias=AliasChoices(
+            "PLACES_FIELD_MASK",
+            "TALIA_GOOGLE_PLACES_FIELD_MASK",
+        ),
+    )
+    google_places_language_code: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "PLACES_LANGUAGE_CODE",
+            "TALIA_GOOGLE_PLACES_LANGUAGE_CODE",
+        ),
+    )
+    google_places_region_code: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "PLACES_REGION_CODE",
+            "TALIA_GOOGLE_PLACES_REGION_CODE",
+        ),
+    )
     log_file_path: str = "/home/devuser/talia/logs/api.log"
     webchat_inactivity_hours: int | None = Field(
         default=None,

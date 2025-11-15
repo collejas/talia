@@ -14,14 +14,21 @@ from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services import (
+    GooglePlacesClient,
+    GooglePlacesError,
+    demografia_service,
+    leads_geo,
+    normalize_place_for_result,
+    storage,
+)
 from app.services import calendar as calendar_service
-from app.services import demografia_service, leads_geo, storage
 from app.services.calendar import CalendarError
 
 router = APIRouter(prefix="", tags=["panel"])
@@ -184,6 +191,67 @@ class AgendaCancelPayload(BaseModel):
     """Payload para cancelar una cita desde el panel."""
 
     reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
+
+
+class GoogleProspeccionBusquedaPayload(BaseModel):
+    """Parámetros para lanzar una captura desde Google Places."""
+
+    query: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Texto de búsqueda libre (obligatorio en estrategia text).",
+    )
+    lat: float = Field(..., description="Latitud del centro de búsqueda.")
+    lng: float = Field(..., description="Longitud del centro de búsqueda.")
+    radio_m: int = Field(
+        default=1000,
+        ge=50,
+        le=50000,
+        description="Radio en metros para limitar la búsqueda.",
+    )
+    included_types: list[str] | None = Field(
+        default=None,
+        description="Clasificaciones soportadas por Google Places (obligatorias en estrategia nearby).",
+    )
+    strategy: Literal["nearby", "text"] = Field(
+        default="nearby",
+        description="Define si se usa searchNearby (por tipo) o searchText (por texto).",
+    )
+    max_results: int = Field(
+        default=40,
+        ge=1,
+        le=120,
+        description="Número máximo de resultados a capturar en esta ejecución.",
+    )
+    language_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=10,
+        description="Sobrescribe el código de idioma enviado a Google Places.",
+    )
+    region_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=10,
+        description="Sobrescribe el código de región enviado a Google Places.",
+    )
+    meta: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos adicionales para guardar en public.busquedas.meta.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_strategy(self) -> GoogleProspeccionBusquedaPayload:
+        if self.strategy == "nearby" and not self.included_types:
+            raise ValueError("included_types_required")
+        if self.strategy == "text":
+            query = (self.query or "").strip()
+            if not query:
+                raise ValueError("query_required")
+            self.query = query
+        return self
 
 
 def _supabase_base_url() -> str:
@@ -349,6 +417,26 @@ def _first_row(data: Any) -> Any:
     return data
 
 
+def _rpc_field(data: Any, *keys: str) -> Any:
+    """Extrae el primer valor útil de la respuesta RPC."""
+    row = _first_row(data)
+    if isinstance(row, dict):
+        for key in keys:
+            if key in row:
+                return row[key]
+        if row:
+            return next(iter(row.values()))
+    if isinstance(row, (str, int, float)):
+        return row
+    if isinstance(data, dict):
+        for key in keys:
+            if key in data:
+                return data[key]
+        if data:
+            return next(iter(data.values()))
+    return None
+
+
 def _content_range_total(header: str | None) -> int | None:
     if not header:
         return None
@@ -377,6 +465,25 @@ def _clean_str(value: Any) -> str | None:
         if candidate:
             return candidate
     return None
+
+
+def _ilike_param(value: str) -> str:
+    sanitized = value.replace("*", "").replace("%", "")
+    return f"ilike.*{sanitized}*"
+
+
+def _result_preview(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "external_id": item.get("external_id"),
+        "name": item.get("name"),
+        "actividad": item.get("actividad"),
+        "phone": item.get("phone"),
+        "website": item.get("website"),
+        "address": item.get("address"),
+        "rating": item.get("rating"),
+        "reviews": item.get("reviews"),
+        "maps_url": item.get("maps_url"),
+    }
 
 
 def _parse_bearer(authorization: str | None) -> str | None:
@@ -4011,6 +4118,220 @@ async def leads_municipios_metrics(
         "total_ubicados": total_ubicados,
         "sin_ubicacion": sin_ubicacion,
         "range": _build_range_payload(rango, date_from, date_to),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Prospección · Google Places
+# ---------------------------------------------------------------------------
+
+
+@router.post("/prospeccion/google/busquedas")
+async def crear_busqueda_google(
+    payload: GoogleProspeccionBusquedaPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    client = GooglePlacesClient()
+    query_value = payload.query or ", ".join(payload.included_types or []) or "google_places"
+    try:
+        places = await client.search_places(
+            query=payload.query,
+            latitude=payload.lat,
+            longitude=payload.lng,
+            radius_m=payload.radio_m,
+            included_types=payload.included_types,
+            max_results=payload.max_results,
+            strategy=payload.strategy,
+            language_code=payload.language_code,
+            region_code=payload.region_code,
+        )
+    except GooglePlacesError as exc:
+        detail = str(exc) or "google_places_error"
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    normalized_items = [normalize_place_for_result(place) for place in places]
+    meta_payload: dict[str, Any] = {
+        "strategy": payload.strategy,
+        "included_types": payload.included_types,
+        "max_results": payload.max_results,
+    }
+    if payload.meta:
+        meta_payload.update(payload.meta)
+    if payload.language_code:
+        meta_payload["language_code"] = payload.language_code
+    if payload.region_code:
+        meta_payload["region_code"] = payload.region_code
+
+    crear_resp = await _sb_post(
+        "/rest/v1/rpc/crear_busqueda",
+        json={
+            "p_fuente": "google_places",
+            "p_query": query_value,
+            "p_radio_m": payload.radio_m,
+            "p_lat": payload.lat,
+            "p_lng": payload.lng,
+            "p_total": len(normalized_items),
+            "p_meta": meta_payload,
+        },
+        token=token,
+    )
+    if crear_resp.status_code >= 400:
+        raise _supabase_error(crear_resp, "error_creando_busqueda")
+    try:
+        crear_data = crear_resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="busqueda_id_missing")
+    busqueda_value = _rpc_field(crear_data, "crear_busqueda", "id")
+    try:
+        busqueda_uuid = UUID(str(busqueda_value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=502, detail="busqueda_id_invalid")
+
+    upserted = 0
+    if normalized_items:
+        upsert_resp = await _sb_post(
+            "/rest/v1/rpc/upsert_resultados_lote",
+            json={
+                "p_busqueda_id": str(busqueda_uuid),
+                "p_fuente": "google_places",
+                "p_items": normalized_items,
+            },
+            token=token,
+        )
+        if upsert_resp.status_code >= 400:
+            raise _supabase_error(upsert_resp, "error_guardando_resultados")
+        try:
+            upsert_data = upsert_resp.json()
+        except ValueError:
+            upsert_data = None
+        upsert_value = _rpc_field(upsert_data, "upsert_resultados_lote")
+        try:
+            upserted = int(upsert_value or 0)
+        except (TypeError, ValueError):
+            upserted = len(normalized_items)
+
+    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    return {
+        "ok": True,
+        "busqueda_id": str(busqueda_uuid),
+        "google_results": len(normalized_items),
+        "upserted": upserted,
+        "preview": preview,
+    }
+
+
+@router.get("/prospeccion/google/busquedas")
+async def listar_busquedas_google(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, description="Filtro parcial sobre el query."),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    params: dict[str, str] = {
+        "select": "id,fuente,query,radio_m,lat,lng,meta,total_encontrados,creado_en",
+        "order": "creado_en.desc",
+        "limit": str(limit),
+        "offset": str(offset),
+        "fuente": "eq.google_places",
+    }
+    if search:
+        params["query"] = _ilike_param(search)
+
+    resp = await _sb_get(
+        "/rest/v1/busquedas",
+        params=params,
+        token=token,
+        prefer="count=exact",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_listando_busquedas")
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    total = _content_range_total(resp.headers.get("content-range"))
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.get("/prospeccion/google/resultados")
+async def listar_resultados_google(
+    busqueda_id: UUID | None = Query(default=None),
+    q: str | None = Query(
+        default=None, description="Filtro parcial en nombre, actividad o dirección."
+    ),
+    tipo: str | None = Query(default=None, description="Filtra por google_primary_type."),
+    max_distancia_m: int | None = Query(default=None, ge=1, le=50000),
+    min_rating: float | None = Query(default=None, ge=0, le=5),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    order: Literal["recientes", "rating", "distancia"] = Query(default="recientes"),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    order_map = {
+        "recientes": "resultado_creado_en.desc",
+        "rating": "rating.desc.nullslast",
+        "distancia": "distancia_m.asc.nullslast",
+    }
+    params: dict[str, str] = {
+        "select": "*",
+        "limit": str(limit),
+        "offset": str(offset),
+        "order": order_map.get(order, "resultado_creado_en.desc"),
+    }
+    if busqueda_id:
+        params["busqueda_id"] = f"eq.{busqueda_id}"
+    if tipo:
+        params["google_primary_type"] = f"eq.{tipo}"
+    if max_distancia_m:
+        params["distancia_m"] = f"lte.{max_distancia_m}"
+    if min_rating is not None:
+        params["rating"] = f"gte.{min_rating}"
+    if q:
+        sanitized = q.replace("*", "").replace("%", "")
+        params["or"] = (
+            f"(display_name.ilike.*{sanitized}*,"
+            f"actividad.ilike.*{sanitized}*,"
+            f"address.ilike.*{sanitized}*)"
+        )
+
+    resp = await _sb_get(
+        "/rest/v1/v_google_places_contactables",
+        params=params,
+        token=token,
+        prefer="count=exact",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_listando_resultados")
+
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    total = _content_range_total(resp.headers.get("content-range"))
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": limit,
+        "offset": offset,
+        "total": total or len(rows),
     }
 
 

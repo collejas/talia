@@ -11,7 +11,7 @@
 Permitir búsquedas en Google (Places API) desde el panel, visualizar los resultados en un mapa y un listado, y persistirlos en `public.resultados` para posteriores campañas (correo, teléfono, sitio web o dirección).
 
 ## Entregables
-- [ ] Endpoint o job que toma criterios de búsqueda, llama a Google Places (Nearby/Text + Details) y usa `crear_busqueda` + `upsert_resultados_lote` para guardar resultados.
+- [x] Endpoint en backend (`POST /panel/prospeccion/google/busquedas`) que usa `GooglePlacesClient` para llamar a Places (Nearby/Text), crea el registro en `busquedas` vía `crear_busqueda` y guarda los resultados con `upsert_resultados_lote`. Incluye lecturas (`GET /panel/prospeccion/google/busquedas` y `GET /panel/prospeccion/google/resultados`) para alimentar el formulario, mapa y listado desde el panel (`backend/app/api/routes/panel.py`).
 - [x] Vista SQL `public.v_google_places_contactables` que combina `busquedas` y `resultados` filtrados por `fuente = 'google_places'`, exponiendo teléfono, email (si existiera), website, dirección, rating, tipos y distancia al centro. Implementada en la migración `supabase/migrations/20260311_100000_google_prospeccion_view.sql` como vista adicional para no afectar `v_resultados_mapa` ni `v_resultados_unificados`.
 - [ ] Documentación de variables de entorno y scopes necesarios para Places/OAuth.
 - [ ] UI en `frontend/panel/src/app/prospeccion/google-busqueda` con:
@@ -26,10 +26,9 @@ Permitir búsquedas en Google (Places API) desde el panel, visualizar los result
 ## Flujo propuesto
 1. **Capturar parámetros**: formulario manda `query`, `radio_m`, `lat/lng` (o dirección geocodificada), `clasificaciones` y filtros opcionales (rating mínimo, apertura, etc.).
 2. **Backend**:
-   - `crear_busqueda('google_places', …)` para persistir contexto y obtener `busqueda_id`.
-   - Consumir `places:searchNearby` o `places:searchText` con `includedTypes/primaryType` según las clasificaciones que permita Google.
-   - Para cada `place_id`, llamar `places:details` solicitando `id`, `displayName`, `formattedAddress`, `internationalPhoneNumber`, `websiteUri`, `primaryType`, `types`, `rating`, `reviews`, `location`, etc.
-   - Construir arreglo JSON normalizado y ejecutar `upsert_resultados_lote(busqueda_id, 'google_places', items_json)`.
+   - `POST /panel/prospeccion/google/busquedas`: invoca `GooglePlacesClient` (estrategias `nearby` o `text`) con el `radio`, tipos y traducciones que mande el panel, registra la búsqueda con `crear_busqueda` y ejecuta `upsert_resultados_lote`.
+   - `GET /panel/prospeccion/google/busquedas`: lista el historial (query, radio, metadatos) para reutilizar búsquedas anteriores y mostrar contexto al usuario.
+   - `GET /panel/prospeccion/google/resultados`: consulta la vista `v_google_places_contactables` con filtros por texto, tipo, rating, distancia y ordenamientos (`recientes`, `rating`, `distancia`) para poblar el mapa/listado.
 3. **Consulta/visualización**:
    - La nueva vista SQL sirve como “API read” para el panel (paginación, ordenamiento, filtros por actividad/tipo/rating/distancia).
    - El mapa usa `geom`/`lat,lng` ya almacenados; se puede reutilizar `v_resultados_mapa`.
