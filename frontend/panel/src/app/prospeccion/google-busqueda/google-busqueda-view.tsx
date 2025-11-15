@@ -53,7 +53,7 @@ import { cn } from "@/lib/utils";
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
-const RADIUS_MAX = 50000;
+const RADIUS_MAX = 10_000;
 const DEFAULT_TYPES = "restaurant,store";
 
 const ACTIONS = [
@@ -449,6 +449,9 @@ export function GoogleBusquedaView() {
                   value={formValues.radio_m}
                   onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Máximo permitido: {numberFormatter.format(RADIUS_MAX)} m (10 km).
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
