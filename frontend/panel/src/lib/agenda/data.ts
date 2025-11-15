@@ -19,7 +19,7 @@ type AgendaApiAssignment = {
   nombre: string | null;
 } | null;
 
-type AgendaApiItem = {
+export type AgendaApiItem = {
   id: string;
   resource_id: string | null;
   hold_id: string | null;
@@ -53,7 +53,7 @@ type AgendaApiMetrics = {
   realizadas: number;
 };
 
-type AgendaBookingsResponse = {
+export type AgendaBookingsResponse = {
   ok: boolean;
   items: AgendaApiItem[];
   metrics: AgendaApiMetrics;
@@ -63,7 +63,7 @@ type AgendaBookingsResponse = {
   has_more: boolean;
 };
 
-type AgendaAvailabilityResponse = {
+export type AgendaAvailabilityResponse = {
   ok: boolean;
   availability: {
     resource_id: string;
@@ -87,7 +87,7 @@ type AgendaAvailabilityResponse = {
   };
 };
 
-type AgendaActionResponse = {
+export type AgendaActionResponse = {
   ok: boolean;
   booking: {
     booking_id: string;
@@ -144,7 +144,7 @@ const UPCOMING_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function loadAgendaData(): Promise<AgendaPayload> {
   try {
-    const response = await callAgendaEndpoint<AgendaBookingsResponse>("/panel/agenda/bookings");
+    const response = await callPanelAgendaEndpoint<AgendaBookingsResponse>("/panel/agenda/bookings");
     const mapped = mapAgenda(response.items ?? []);
     const metrics = response.metrics ?? computeMetrics(mapped);
     return { items: mapped, metrics, errors: [] };
@@ -168,7 +168,7 @@ export async function loadAgendaAvailability(params: {
   if (params.resourceId) search.resource_id = params.resourceId;
   if (typeof params.maxDays === "number") search.max_days = String(params.maxDays);
 
-  const response = await callAgendaEndpoint<AgendaAvailabilityResponse>(
+  const response = await callPanelAgendaEndpoint<AgendaAvailabilityResponse>(
     "/panel/agenda/availability",
     search,
   );
@@ -180,7 +180,7 @@ export async function rescheduleAgendaBooking(
   payload: { startAt: string; notes?: string },
 ): Promise<AgendaActionResponse["booking"]> {
   const body = JSON.stringify({ start_at: payload.startAt, notes: payload.notes });
-  const response = await callAgendaEndpoint<AgendaActionResponse>(
+  const response = await callPanelAgendaEndpoint<AgendaActionResponse>(
     `/panel/agenda/bookings/${bookingId}/reschedule`,
     {},
     {
@@ -196,7 +196,7 @@ export async function cancelAgendaBooking(
   bookingId: string,
   reason?: string,
 ): Promise<AgendaActionResponse["booking"]> {
-  const response = await callAgendaEndpoint<AgendaActionResponse>(
+  const response = await callPanelAgendaEndpoint<AgendaActionResponse>(
     `/panel/agenda/bookings/${bookingId}/cancel`,
     {},
     {
@@ -274,7 +274,7 @@ function emptyMetrics(): AgendaMetrics {
   };
 }
 
-async function callAgendaEndpoint<T>(
+export async function callPanelAgendaEndpoint<T>(
   path: string,
   searchParams: Record<string, string> = {},
   init: RequestInit = {},
