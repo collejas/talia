@@ -4282,45 +4282,63 @@ async def listar_resultados_google(
         "rating": "rating.desc.nullslast",
         "distancia": "distancia_m.asc.nullslast",
     }
-    params: dict[str, str] = {
+    params_base: dict[str, str] = {
         "select": "*",
-        "limit": str(limit),
-        "offset": str(offset),
         "order": order_map.get(order, "resultado_creado_en.desc"),
     }
     if busqueda_id:
-        params["busqueda_id"] = f"eq.{busqueda_id}"
+        params_base["busqueda_id"] = f"eq.{busqueda_id}"
     if tipo:
-        params["google_primary_type"] = f"eq.{tipo}"
+        params_base["google_primary_type"] = f"eq.{tipo}"
     if max_distancia_m:
-        params["distancia_m"] = f"lte.{max_distancia_m}"
+        params_base["distancia_m"] = f"lte.{max_distancia_m}"
     if min_rating is not None:
-        params["rating"] = f"gte.{min_rating}"
+        params_base["rating"] = f"gte.{min_rating}"
     if q:
         sanitized = q.replace("*", "").replace("%", "")
-        params["or"] = (
+        params_base["or"] = (
             f"(display_name.ilike.*{sanitized}*,"
             f"actividad.ilike.*{sanitized}*,"
             f"address.ilike.*{sanitized}*)"
         )
 
-    resp = await _sb_get(
-        "/rest/v1/v_google_places_contactables",
-        params=params,
-        token=token,
-        prefer="count=exact",
-    )
-    if resp.status_code >= 400:
-        raise _supabase_error(resp, "error_listando_resultados")
+    rows: list[dict[str, Any]] = []
+    remaining = limit
+    current_offset = offset
+    total: int | None = None
 
-    try:
-        rows = resp.json() or []
-    except ValueError:
-        rows = []
-    total = _content_range_total(resp.headers.get("content-range"))
+    while remaining > 0:
+        batch_limit = min(remaining, 1000)
+        batch_params = dict(params_base)
+        batch_params["limit"] = str(batch_limit)
+        batch_params["offset"] = str(current_offset)
+
+        resp = await _sb_get(
+            "/rest/v1/v_google_places_contactables",
+            params=batch_params,
+            token=token,
+            prefer="count=exact",
+        )
+        if resp.status_code >= 400:
+            raise _supabase_error(resp, "error_listando_resultados")
+        try:
+            batch_rows = resp.json() or []
+        except ValueError:
+            batch_rows = []
+        rows.extend(batch_rows)
+        if total is None:
+            total = _content_range_total(resp.headers.get("content-range")) or len(batch_rows)
+        current_offset += batch_limit
+        remaining = limit - len(rows)
+        if not batch_rows or len(rows) >= (total or 0):
+            break
+
+    if total is None:
+        total = len(rows)
+
     return {
         "ok": True,
-        "items": rows,
+        "items": rows[:limit],
         "limit": limit,
         "offset": offset,
         "total": total or len(rows),
