@@ -103,6 +103,10 @@ export function GoogleBusquedaView() {
   const [minRatingFilter, setMinRatingFilter] = useState(0);
   const [onlyContactable, setOnlyContactable] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const activeBusqueda = useMemo(
+    () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
+    [busquedas, activeBusquedaId],
+  );
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -192,6 +196,21 @@ export function GoogleBusquedaView() {
       return next;
     });
   }, [resultados]);
+
+  const busquedaDescriptor = useMemo(() => {
+    if (!activeBusqueda) return null;
+    const meta = (activeBusqueda.meta ?? {}) as { included_types?: unknown };
+    const metaTypes = Array.isArray(meta.included_types)
+      ? meta.included_types.filter((value): value is string => typeof value === "string")
+      : [];
+    if (activeBusqueda.query?.trim()) {
+      return activeBusqueda.query.trim();
+    }
+    if (metaTypes.length) {
+      return metaTypes.join(", ");
+    }
+    return null;
+  }, [activeBusqueda]);
 
   const filteredResults = useMemo(() => {
     const text = filterText.trim().toLowerCase();
@@ -643,10 +662,15 @@ export function GoogleBusquedaView() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base">Resultados almacenados</CardTitle>
-                  <CardDescription>
-                    {isLoadingResultados
-                      ? "Descargando datos…"
-                      : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(resultados.length)} coincidencias`}
+                  <CardDescription className="space-y-0.5">
+                    <span>
+                      {isLoadingResultados
+                        ? "Descargando datos…"
+                        : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(resultados.length)} coincidencias`}
+                    </span>
+                    {busquedaDescriptor ? (
+                      <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
+                    ) : null}
                   </CardDescription>
                 </div>
                 <Button
@@ -741,6 +765,12 @@ export function GoogleBusquedaView() {
                   </p>
                 ) : (
                   paginatedResults.map((item) => {
+                    const actividadTexto =
+                      typeof item.actividad === "string"
+                        ? item.actividad
+                        : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
+                          ? String((item.actividad as { text?: unknown }).text ?? "")
+                          : "";
                     const isSelected = selectedIds.has(item.resultado_id);
                     return (
                       <div
@@ -760,6 +790,13 @@ export function GoogleBusquedaView() {
                           <div className="flex-1 space-y-1">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div>
+                                {((actividadTexto && actividadTexto.trim().length) || busquedaDescriptor) && (
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                                    {actividadTexto && actividadTexto.trim().length
+                                      ? actividadTexto.trim()
+                                      : busquedaDescriptor}
+                                  </p>
+                                )}
                                 <p className="font-semibold">
                                   {item.display_name ?? item.actividad ?? "Sin nombre"}
                                 </p>

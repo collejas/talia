@@ -566,8 +566,12 @@ def normalize_place_for_result(place: dict[str, Any]) -> dict[str, Any]:
     """Convierte un payload crudo de Places en el formato esperado por la función SQL."""
     location = place.get("location") or {}
     display_name = place.get("displayName") or {}
-    primary_display = place.get("primaryTypeDisplayName") or ""
-    actividad = primary_display or place.get("primaryType") or ""
+    primary_display = place.get("primaryTypeDisplayName")
+    if isinstance(primary_display, dict):
+        actividad = primary_display.get("text") or ""
+    else:
+        actividad = primary_display or ""
+    actividad = actividad or place.get("primaryType") or ""
     phone = place.get("internationalPhoneNumber") or place.get("nationalPhoneNumber") or None
     website = place.get("websiteUri") or place.get("googleMapsUri")
 
