@@ -733,6 +733,12 @@ export function DenueBusquedaView() {
                                   {item.phone}
                                 </span>
                               ) : null}
+                              {item.email ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {item.email}
+                                </span>
+                              ) : null}
                             {item.website ? (
                               <a
                                 className="inline-flex items-center gap-1 text-primary"
