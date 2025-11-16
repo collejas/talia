@@ -217,12 +217,6 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
         default="nearby",
         description="Define si se usa searchNearby (por tipo) o searchText (por texto).",
     )
-    max_results: int = Field(
-        default=40,
-        ge=1,
-        le=1000,
-        description="Número máximo de resultados a capturar en esta ejecución.",
-    )
     language_code: str | None = Field(
         default=None,
         min_length=2,
@@ -4144,7 +4138,6 @@ async def crear_busqueda_google(
             longitude=payload.lng,
             radius_m=payload.radio_m,
             included_types=payload.included_types,
-            max_results=payload.max_results,
             strategy=payload.strategy,
             language_code=payload.language_code,
             region_code=payload.region_code,
@@ -4157,7 +4150,6 @@ async def crear_busqueda_google(
     meta_payload: dict[str, Any] = {
         "strategy": payload.strategy,
         "included_types": payload.included_types,
-        "max_results": payload.max_results,
     }
     if payload.meta:
         meta_payload.update(payload.meta)
@@ -4276,7 +4268,7 @@ async def listar_resultados_google(
     tipo: str | None = Query(default=None, description="Filtra por google_primary_type."),
     max_distancia_m: int | None = Query(default=None, ge=1, le=50000),
     min_rating: float | None = Query(default=None, ge=0, le=5),
-    limit: int = Query(default=50, ge=1, le=250),
+    limit: int = Query(default=250, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
     order: Literal["recientes", "rating", "distancia"] = Query(default="recientes"),
     authorization: str | None = Header(default=None),

@@ -35,7 +35,6 @@ class GooglePlacesClient:
         timeout: float = 15.0,
         pause_between_pages: float = 2.0,
         grid_max_tile_radius_m: int = 1200,
-        max_results_cap: int = 1000,
     ) -> None:
         self.api_key = api_key or settings.google_places_api_key
         self.nearby_url = nearby_url or settings.google_places_nearby_url
@@ -47,7 +46,6 @@ class GooglePlacesClient:
         self.timeout = timeout
         self.pause_between_pages = pause_between_pages
         self.grid_max_tile_radius_m = max(200, grid_max_tile_radius_m)
-        self.max_results_cap = max(20, max_results_cap)
 
     async def search_places(
         self,
@@ -57,7 +55,7 @@ class GooglePlacesClient:
         longitude: float,
         radius_m: int,
         included_types: Sequence[str] | None = None,
-        max_results: int = 20,
+        max_results: int | None = None,
         strategy: GoogleSearchStrategy = "nearby",
         language_code: str | None = None,
         region_code: str | None = None,
@@ -72,87 +70,53 @@ class GooglePlacesClient:
             raise GooglePlacesError("text_query_required")
 
         normalized_radius = max(50, min(radius_m, 50_000))
-        tile_radius = self._suggest_tile_radius(normalized_radius)
-        remaining = max(1, min(max_results, self.max_results_cap))
+        grid = self._select_grid_config(normalized_radius)
+        limit = max_results if max_results and max_results > 0 else None
         results: list[dict[str, Any]] = []
-        page_token: str | None = None
 
-        while remaining > 0:
-            if page_token:
-                payload: dict[str, Any] = {"pageToken": page_token}
-            else:
-                payload = self._build_payload(
-                    strategy=strategy,
-                    query=query,
-                    latitude=latitude,
-                    longitude=longitude,
-                    radius_m=normalized_radius,
-                    included_types=included_types,
-                    max_result_count=min(remaining, 20),
-                    language_code=language_code,
-                    region_code=region_code,
-                )
-
-            data = await self._post(
-                url=self._resolve_url(strategy),
-                payload=payload,
-            )
-            places = data.get("places") or []
-            logger.debug(
-                "google.places_page_received",
-                extra={
-                    "strategy": strategy,
-                    "received": len(places),
-                    "remaining_before": remaining,
-                    "has_next_token": bool(data.get("nextPageToken")),
-                },
-            )
-            if not isinstance(places, list):
-                logger.warning("google.places_unexpected_payload", extra={"payload": data})
-                break
-            results.extend(places)
-            remaining = max_results - len(results)
-            page_token = data.get("nextPageToken")
-            if not page_token or remaining <= 0:
-                if remaining > 0 and not page_token:
-                    logger.debug(
-                        "google.places_no_next_page",
-                        extra={"strategy": strategy, "total_collected": len(results)},
-                    )
-                break
-            await asyncio.sleep(self.pause_between_pages)
+        base_results = await self._collect_pages_for_strategy(
+            strategy=strategy,
+            query=query,
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=normalized_radius,
+            included_types=included_types,
+            max_results=limit,
+            language_code=language_code,
+            region_code=region_code,
+        )
+        results.extend(base_results)
 
         if (
             strategy == "nearby"
             and allow_text_fallback
             and included_types
-            and len(results) < max_results
+            and (limit is None or len(results) < limit)
         ):
-            fallback_required = max_results - len(results)
+            remaining_limit = None if limit is None else max(limit - len(results), 0)
             existing_ids = {place.get("id") for place in results if place.get("id")}
             extra_nearby = await self._search_nearby_additional_centers(
                 included_types=included_types,
-                fallback_required=fallback_required,
+                remaining_limit=remaining_limit,
                 latitude=latitude,
                 longitude=longitude,
                 radius_m=normalized_radius,
-                tile_radius_m=tile_radius,
+                grid_config=grid,
                 language_code=language_code,
                 region_code=region_code,
                 existing_ids=existing_ids,
             )
             results.extend(extra_nearby)
-            fallback_required = max_results - len(results)
         if (
             strategy == "nearby"
             and allow_text_fallback
             and included_types
-            and len(results) < max_results
+            and (limit is None or len(results) < limit)
         ):
-            fallback_required = max_results - len(results)
+            remaining_limit = None if limit is None else max(limit - len(results), 0)
             fallback_results = await self._search_text_fallback(
                 included_types=included_types,
-                fallback_required=fallback_required,
+                remaining_limit=remaining_limit,
                 query=query,
                 latitude=latitude,
                 longitude=longitude,
@@ -169,7 +133,7 @@ class GooglePlacesClient:
                     results.append(place)
                     if place_id:
                         dedup_ids.add(place_id)
-                    if len(results) >= max_results:
+                    if limit is not None and len(results) >= limit:
                         break
 
         filtered = self._filter_results_by_radius(
@@ -178,7 +142,9 @@ class GooglePlacesClient:
             center_lng=longitude,
             radius_m=radius_m,
         )
-        return filtered[:max_results]
+        if limit is not None:
+            return filtered[:limit]
+        return filtered
 
     async def _post(self, *, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         headers = {
@@ -260,11 +226,75 @@ class GooglePlacesClient:
             base["locationBias"] = circle_payload
         return base
 
+    async def _collect_pages_for_strategy(
+        self,
+        *,
+        strategy: GoogleSearchStrategy,
+        query: str | None,
+        latitude: float,
+        longitude: float,
+        radius_m: int,
+        included_types: Sequence[str] | None,
+        max_results: int | None,
+        language_code: str | None,
+        region_code: str | None,
+    ) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        page_token: str | None = None
+        limit = max_results if max_results and max_results > 0 else None
+
+        while True:
+            remaining = None if limit is None else max(limit - len(results), 0)
+            if limit is not None and remaining <= 0:
+                break
+            max_result_count = 20 if remaining is None else max(1, min(20, remaining))
+
+            if page_token:
+                payload: dict[str, Any] = {"pageToken": page_token}
+            else:
+                payload = self._build_payload(
+                    strategy=strategy,
+                    query=query,
+                    latitude=latitude,
+                    longitude=longitude,
+                    radius_m=radius_m,
+                    included_types=included_types,
+                    max_result_count=max_result_count,
+                    language_code=language_code,
+                    region_code=region_code,
+                )
+            data = await self._post(url=self._resolve_url(strategy), payload=payload)
+            places = data.get("places") or []
+            logger.debug(
+                "google.places_page_received",
+                extra={
+                    "strategy": strategy,
+                    "received": len(places),
+                    "limit": limit,
+                    "has_next_token": bool(data.get("nextPageToken")),
+                },
+            )
+            if not isinstance(places, list):
+                logger.warning("google.places_unexpected_payload", extra={"payload": data})
+                break
+            results.extend(places)
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                logger.debug(
+                    "google.places_no_next_page",
+                    extra={"strategy": strategy, "total_collected": len(results)},
+                )
+                break
+            await asyncio.sleep(self.pause_between_pages)
+        if limit is not None:
+            return results[:limit]
+        return results
+
     async def _search_text_fallback(
         self,
         *,
         included_types: Sequence[str],
-        fallback_required: int,
+        remaining_limit: int | None,
         query: str | None,
         latitude: float,
         longitude: float,
@@ -279,21 +309,23 @@ class GooglePlacesClient:
         collected: list[dict[str, Any]] = []
         filters = {t.lower() for t in unique_types}
         for place_type in unique_types:
-            if len(collected) >= fallback_required:
+            if remaining_limit is not None and len(collected) >= remaining_limit:
                 break
             fallback_query = query or place_type.replace("_", " ").replace("-", " ")
+            per_query_limit = (
+                None if remaining_limit is None else max(remaining_limit - len(collected), 0)
+            )
             try:
-                results = await self.search_places(
+                results = await self._collect_pages_for_strategy(
+                    strategy="text",
                     query=fallback_query,
                     latitude=latitude,
                     longitude=longitude,
                     radius_m=radius_m,
                     included_types=None,
-                    max_results=fallback_required - len(collected),
-                    strategy="text",
+                    max_results=per_query_limit,
                     language_code=language_code,
                     region_code=region_code,
-                    allow_text_fallback=False,
                 )
             except GooglePlacesError:
                 continue
@@ -302,7 +334,7 @@ class GooglePlacesClient:
                 if filters.isdisjoint(place_types):
                     continue
                 collected.append(place)
-                if len(collected) >= fallback_required:
+                if remaining_limit is not None and len(collected) >= remaining_limit:
                     break
         return collected
 
@@ -331,47 +363,53 @@ class GooglePlacesClient:
         self,
         *,
         included_types: Sequence[str],
-        fallback_required: int,
+        remaining_limit: int | None,
         latitude: float,
         longitude: float,
         radius_m: int,
-        tile_radius_m: int,
+        grid_config: dict[str, int],
         language_code: str | None,
         region_code: str | None,
         existing_ids: set[str],
     ) -> list[dict[str, Any]]:
-        if fallback_required <= 0:
+        if remaining_limit is not None and remaining_limit <= 0:
             return []
-        centers = self._generate_grid_centers(latitude, longitude, radius_m, tile_radius_m)
+        centers = self._generate_grid_centers(
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            tile_radius_m=grid_config["tile_radius_m"],
+            grid_size=grid_config["grid_size"],
+        )
         collected: list[dict[str, Any]] = []
         for lat_new, lng_new in centers:
-            remaining = fallback_required - len(collected)
-            if remaining <= 0:
-                break
-            payload = self._build_payload(
-                strategy="nearby",
-                query=None,
-                latitude=lat_new,
-                longitude=lng_new,
-                radius_m=tile_radius_m,
-                included_types=included_types,
-                max_result_count=min(remaining, 20),
-                language_code=language_code,
-                region_code=region_code,
+            per_tile_limit = (
+                None if remaining_limit is None else max(remaining_limit - len(collected), 0)
             )
+            if per_tile_limit is not None and per_tile_limit <= 0:
+                break
             try:
-                data = await self._post(url=self._resolve_url("nearby"), payload=payload)
+                tile_results = await self._collect_pages_for_strategy(
+                    strategy="nearby",
+                    query=None,
+                    latitude=lat_new,
+                    longitude=lng_new,
+                    radius_m=grid_config["tile_radius_m"],
+                    included_types=included_types,
+                    max_results=per_tile_limit,
+                    language_code=language_code,
+                    region_code=region_code,
+                )
             except GooglePlacesError:
                 continue
-            places = data.get("places") or []
-            for place in places:
+            for place in tile_results:
                 place_id = place.get("id")
                 if place_id and place_id in existing_ids:
                     continue
                 collected.append(place)
                 if place_id:
                     existing_ids.add(place_id)
-                if len(collected) >= fallback_required:
+                if remaining_limit is not None and len(collected) >= remaining_limit:
                     return collected
         return collected
 
@@ -382,19 +420,38 @@ class GooglePlacesClient:
             return max(300, radius_m // 2)
         return min(self.grid_max_tile_radius_m, max(400, radius_m // 3))
 
+    def _select_grid_config(self, radius_m: int) -> dict[str, int]:
+        if radius_m <= 500:
+            grid_size = 1
+            tile_radius = radius_m
+        elif radius_m <= 2000:
+            grid_size = 3
+            tile_radius = max(250, int(radius_m / grid_size * 1.2))
+        else:
+            grid_size = 5
+            tile_radius = min(
+                self.grid_max_tile_radius_m, max(350, int(radius_m / grid_size * 1.3))
+            )
+        return {
+            "grid_size": grid_size,
+            "tile_radius_m": tile_radius,
+        }
+
     def _generate_grid_centers(
         self,
         latitude: float,
         longitude: float,
         radius_m: int,
         tile_radius_m: int,
+        grid_size: int,
     ) -> list[tuple[float, float]]:
-        if tile_radius_m <= 0:
+        if tile_radius_m <= 0 or grid_size <= 1:
             return []
-        step = max(100, int(tile_radius_m * 0.9))
+        step = max(150, int(tile_radius_m * 0.9))
         centers: list[tuple[float, float]] = []
-        for dx in range(-radius_m, radius_m + 1, step):
-            for dy in range(-radius_m, radius_m + 1, step):
+        half_span = radius_m
+        for dx in range(-half_span, half_span + 1, step):
+            for dy in range(-half_span, half_span + 1, step):
                 if dx == 0 and dy == 0:
                     continue
                 if dx * dx + dy * dy > radius_m * radius_m:

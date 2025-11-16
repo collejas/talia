@@ -7,7 +7,6 @@ export type CreateGoogleSearchPayload = {
   radio_m: number;
   included_types?: string[] | null;
   strategy?: GoogleSearchStrategy;
-  max_results?: number;
   language_code?: string | null;
   region_code?: string | null;
   meta?: Record<string, unknown> | null;

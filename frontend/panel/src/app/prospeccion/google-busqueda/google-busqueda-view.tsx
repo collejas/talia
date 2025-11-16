@@ -55,6 +55,8 @@ const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 10_000;
 const DEFAULT_TYPES = "restaurant,store";
+const LIST_PAGE_SIZE = 250;
+const MAP_RESULTS_LIMIT = 5000;
 
 const ACTIONS = [
   { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },
@@ -69,7 +71,6 @@ type FormValues = {
   radio_m: number;
   lat: number;
   lng: number;
-  max_results: number;
   language_code: string;
   region_code: string;
 };
@@ -83,14 +84,13 @@ export function GoogleBusquedaView() {
   const [formValues, setFormValues] = useState<FormValues>({
     strategy: "nearby",
     query: "",
-    includedTypesText: DEFAULT_TYPES,
-    radio_m: 1500,
-    lat: DEFAULT_CENTER.lat,
-    lng: DEFAULT_CENTER.lng,
-    max_results: 40,
-    language_code: "es",
-    region_code: "MX",
-  });
+  includedTypesText: DEFAULT_TYPES,
+  radio_m: 1500,
+  lat: DEFAULT_CENTER.lat,
+  lng: DEFAULT_CENTER.lng,
+  language_code: "es",
+  region_code: "MX",
+});
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [busquedas, setBusquedas] = useState<GoogleBusquedaItem[]>([]);
@@ -98,6 +98,7 @@ export function GoogleBusquedaView() {
   const [activeBusquedaId, setActiveBusquedaId] = useState<string | null>(null);
   const [resultados, setResultados] = useState<GoogleResultadoItem[]>([]);
   const [isLoadingResultados, setIsLoadingResultados] = useState(false);
+  const [resultadosPagination, setResultadosPagination] = useState({ limit: LIST_PAGE_SIZE, offset: 0 });
   const [filterText, setFilterText] = useState("");
   const [minRatingFilter, setMinRatingFilter] = useState(0);
   const [onlyContactable, setOnlyContactable] = useState(false);
@@ -125,21 +126,28 @@ export function GoogleBusquedaView() {
   }, []);
 
   const loadResultadosForBusqueda = useCallback(async (busquedaId: string) => {
-    setIsLoadingResultados(true);
-    try {
-      const response = await listGoogleResultados({ busquedaId, limit: 250 });
-      setResultados(response.items ?? []);
-      setSelectedIds(new Set());
-      setActiveBusquedaId(busquedaId);
-    } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "No fue posible consultar los resultados.",
-      });
-    } finally {
-      setIsLoadingResultados(false);
-    }
-  }, []);
+      setIsLoadingResultados(true);
+      try {
+        const response = await listGoogleResultados({
+          busquedaId,
+          limit: MAP_RESULTS_LIMIT,
+          offset: 0,
+        });
+        setResultados(response.items ?? []);
+        setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
+        setSelectedIds(new Set());
+        setActiveBusquedaId(busquedaId);
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "No fue posible consultar los resultados.",
+        });
+      } finally {
+        setIsLoadingResultados(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -217,6 +225,29 @@ export function GoogleBusquedaView() {
     });
   }, [filterText, minRatingFilter, onlyContactable, resultados]);
 
+  const totalFiltered = filteredResults.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
+  const currentPage = Math.min(
+    totalPages - 1,
+    Math.floor(resultadosPagination.offset / resultadosPagination.limit),
+  );
+  const pageOffset = currentPage * resultadosPagination.limit;
+
+  useEffect(() => {
+    const maxOffset = Math.max(0, (totalPages - 1) * resultadosPagination.limit);
+    if (resultadosPagination.offset > maxOffset) {
+      setResultadosPagination((prev) => ({ ...prev, offset: maxOffset }));
+    }
+  }, [resultadosPagination.offset, resultadosPagination.limit, totalPages]);
+
+  const paginatedResults = useMemo(() => {
+    const end = pageOffset + resultadosPagination.limit;
+    return filteredResults.slice(pageOffset, end);
+  }, [filteredResults, pageOffset, resultadosPagination.limit]);
+  const pageStart = totalFiltered === 0 ? 0 : pageOffset + 1;
+  const pageEnd =
+    totalFiltered === 0 ? 0 : Math.min(pageOffset + resultadosPagination.limit, totalFiltered);
+
   const metrics = useMemo(() => {
     if (!resultados.length) {
       return { total: 0, contactables: 0, averageRating: 0 };
@@ -234,13 +265,13 @@ export function GoogleBusquedaView() {
   const selectedVisibleCount = useMemo(() => {
     if (!selectedIds.size) return 0;
     let count = 0;
-    for (const item of filteredResults) {
+    for (const item of paginatedResults) {
       if (selectedIds.has(item.resultado_id)) {
         count += 1;
       }
     }
     return count;
-  }, [filteredResults, selectedIds]);
+  }, [paginatedResults, selectedIds]);
 
   const handleToggleSelection = useCallback((resultadoId: string, checked: boolean) => {
     setSelectedIds((current) => {
@@ -258,7 +289,7 @@ export function GoogleBusquedaView() {
     (checked: boolean) => {
       setSelectedIds((current) => {
         const next = new Set(current);
-        for (const item of filteredResults) {
+        for (const item of paginatedResults) {
           if (!item.resultado_id) continue;
           if (checked) {
             next.add(item.resultado_id);
@@ -269,8 +300,19 @@ export function GoogleBusquedaView() {
         return next;
       });
     },
-    [filteredResults],
+    [paginatedResults],
   );
+
+  const goToPage = useCallback(
+    (pageIndex: number) => {
+      const clamped = Math.min(Math.max(pageIndex, 0), Math.max(0, totalPages - 1));
+      setResultadosPagination((prev) => ({ ...prev, offset: clamped * prev.limit }));
+    },
+    [totalPages],
+  );
+
+  const handlePrevPage = useCallback(() => goToPage(currentPage - 1), [currentPage, goToPage]);
+  const handleNextPage = useCallback(() => goToPage(currentPage + 1), [currentPage, goToPage]);
 
   const handleCenterChange = useCallback((coords: { lat: number; lng: number }) => {
     updateFormValue("lat", Number(coords.lat.toFixed(6)));
@@ -300,7 +342,6 @@ export function GoogleBusquedaView() {
       radio_m: formValues.radio_m,
       included_types: includedTypes.length ? includedTypes : undefined,
       strategy: formValues.strategy,
-      max_results: formValues.max_results,
       language_code: formValues.language_code || undefined,
       region_code: formValues.region_code || undefined,
       meta: {
@@ -495,17 +536,6 @@ export function GoogleBusquedaView() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="max_results">Máximo de resultados</Label>
-                <Input
-                  id="max_results"
-                  type="number"
-                  min={1}
-                  max={1000}
-                  value={formValues.max_results}
-                  onChange={(event) => updateFormValue("max_results", Number(event.target.value))}
-                />
-              </div>
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 <Button onClick={runBusqueda} disabled={isSearching}>
                   {isSearching ? (
@@ -668,7 +698,7 @@ export function GoogleBusquedaView() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleSelectAllVisible(true)}
-                    disabled={!filteredResults.length}
+                    disabled={!paginatedResults.length}
                   >
                     Seleccionar visibles ({selectedVisibleCount})
                   </Button>
@@ -681,7 +711,9 @@ export function GoogleBusquedaView() {
                     Limpiar selección
                   </Button>
                 </div>
-                <p>{selectedIds.size} prospectos seleccionados</p>
+                <p>
+                  {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
+                </p>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -708,7 +740,7 @@ export function GoogleBusquedaView() {
                       : "No hay coincidencias con los filtros actuales."}
                   </p>
                 ) : (
-                  filteredResults.map((item) => {
+                  paginatedResults.map((item) => {
                     const isSelected = selectedIds.has(item.resultado_id);
                     return (
                       <div
@@ -783,6 +815,33 @@ export function GoogleBusquedaView() {
                     );
                   })
                 )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePrevPage}
+                  disabled={isLoadingResultados || currentPage === 0 || !totalFiltered}
+                >
+                  Anterior
+                </Button>
+                <span>
+                  {totalFiltered === 0
+                    ? "No hay registros"
+                    : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(
+                        pageEnd,
+                      )} de ${numberFormatter.format(totalFiltered)}`}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={isLoadingResultados || currentPage >= totalPages - 1 || !totalFiltered}
+                >
+                  Siguiente
+                </Button>
               </div>
             </CardContent>
           </Card>
