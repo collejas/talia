@@ -501,7 +501,7 @@ export function GoogleBusquedaView() {
                   id="max_results"
                   type="number"
                   min={1}
-                  max={120}
+                  max={1000}
                   value={formValues.max_results}
                   onChange={(event) => updateFormValue("max_results", Number(event.target.value))}
                 />

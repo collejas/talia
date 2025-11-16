@@ -34,6 +34,8 @@ class GooglePlacesClient:
         default_region: str | None = None,
         timeout: float = 15.0,
         pause_between_pages: float = 2.0,
+        grid_max_tile_radius_m: int = 1200,
+        max_results_cap: int = 1000,
     ) -> None:
         self.api_key = api_key or settings.google_places_api_key
         self.nearby_url = nearby_url or settings.google_places_nearby_url
@@ -44,6 +46,8 @@ class GooglePlacesClient:
         self.default_region = default_region or settings.google_places_region_code
         self.timeout = timeout
         self.pause_between_pages = pause_between_pages
+        self.grid_max_tile_radius_m = max(200, grid_max_tile_radius_m)
+        self.max_results_cap = max(20, max_results_cap)
 
     async def search_places(
         self,
@@ -68,7 +72,8 @@ class GooglePlacesClient:
             raise GooglePlacesError("text_query_required")
 
         normalized_radius = max(50, min(radius_m, 50_000))
-        remaining = max(1, min(max_results, 120))
+        tile_radius = self._suggest_tile_radius(normalized_radius)
+        remaining = max(1, min(max_results, self.max_results_cap))
         results: list[dict[str, Any]] = []
         page_token: str | None = None
 
@@ -130,7 +135,8 @@ class GooglePlacesClient:
                 fallback_required=fallback_required,
                 latitude=latitude,
                 longitude=longitude,
-                radius_m=radius_m,
+                radius_m=normalized_radius,
+                tile_radius_m=tile_radius,
                 language_code=language_code,
                 region_code=region_code,
                 existing_ids=existing_ids,
@@ -329,13 +335,14 @@ class GooglePlacesClient:
         latitude: float,
         longitude: float,
         radius_m: int,
+        tile_radius_m: int,
         language_code: str | None,
         region_code: str | None,
         existing_ids: set[str],
     ) -> list[dict[str, Any]]:
         if fallback_required <= 0:
             return []
-        centers = self._generate_additional_centers(latitude, longitude, radius_m)
+        centers = self._generate_grid_centers(latitude, longitude, radius_m, tile_radius_m)
         collected: list[dict[str, Any]] = []
         for lat_new, lng_new in centers:
             remaining = fallback_required - len(collected)
@@ -346,7 +353,7 @@ class GooglePlacesClient:
                 query=None,
                 latitude=lat_new,
                 longitude=lng_new,
-                radius_m=radius_m,
+                radius_m=tile_radius_m,
                 included_types=included_types,
                 max_result_count=min(remaining, 20),
                 language_code=language_code,
@@ -368,27 +375,32 @@ class GooglePlacesClient:
                     return collected
         return collected
 
-    def _generate_additional_centers(
+    def _suggest_tile_radius(self, radius_m: int) -> int:
+        if radius_m <= 500:
+            return radius_m
+        if radius_m <= 2000:
+            return max(300, radius_m // 2)
+        return min(self.grid_max_tile_radius_m, max(400, radius_m // 3))
+
+    def _generate_grid_centers(
         self,
         latitude: float,
         longitude: float,
         radius_m: int,
+        tile_radius_m: int,
     ) -> list[tuple[float, float]]:
-        """Crea centros adicionales alrededor del punto original para cubrir más área."""
-        offsets = [
-            (radius_m * 0.6, 0),
-            (-radius_m * 0.6, 0),
-            (0, radius_m * 0.6),
-            (0, -radius_m * 0.6),
-            (radius_m * 0.45, radius_m * 0.45),
-            (radius_m * 0.45, -radius_m * 0.45),
-            (-radius_m * 0.45, radius_m * 0.45),
-            (-radius_m * 0.45, -radius_m * 0.45),
-        ]
+        if tile_radius_m <= 0:
+            return []
+        step = max(100, int(tile_radius_m * 0.9))
         centers: list[tuple[float, float]] = []
-        for dx, dy in offsets:
-            lat_new, lng_new = _offset_coordinates(latitude, longitude, dx, dy)
-            centers.append((lat_new, lng_new))
+        for dx in range(-radius_m, radius_m + 1, step):
+            for dy in range(-radius_m, radius_m + 1, step):
+                if dx == 0 and dy == 0:
+                    continue
+                if dx * dx + dy * dy > radius_m * radius_m:
+                    continue
+                lat_new, lng_new = _offset_coordinates(latitude, longitude, dx, dy)
+                centers.append((lat_new, lng_new))
         return centers
 
 
@@ -442,6 +454,15 @@ def _offset_coordinates(lat: float, lng: float, dx_m: float, dy_m: float) -> tup
     delta_lat = dy_m / meters_per_deg_lat
     delta_lng = dx_m / meters_per_deg_lng
     return lat + delta_lat, lng + delta_lng
+
+
+def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    radius = 6_371_000.0
+    dlat = radians(lat2 - lat1)
+    dlng = radians(lng2 - lng1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlng / 2) ** 2
+    c = 2 * asin(min(1.0, sqrt(a)))
+    return radius * c
 
 
 def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

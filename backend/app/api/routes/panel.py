@@ -220,7 +220,7 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
     max_results: int = Field(
         default=40,
         ge=1,
-        le=120,
+        le=1000,
         description="Número máximo de resultados a capturar en esta ejecución.",
     )
     language_code: str | None = Field(
