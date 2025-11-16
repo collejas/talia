@@ -646,7 +646,7 @@ export function GoogleBusquedaView() {
                   <CardDescription>
                     {isLoadingResultados
                       ? "Descargando datos…"
-                      : `${filteredResults.length} de ${resultados.length} coincidencias`}
+                      : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(resultados.length)} coincidencias`}
                   </CardDescription>
                 </div>
                 <Button

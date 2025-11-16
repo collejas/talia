@@ -89,6 +89,17 @@ class Settings(BaseSettings):
             "TALIA_GOOGLE_PLACES_FIELD_MASK",
         ),
     )
+    google_places_details_field_mask: str = Field(
+        default=(
+            "id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,"
+            "types,rating,userRatingCount,nationalPhoneNumber,internationalPhoneNumber,"
+            "websiteUri,googleMapsUri,businessStatus,regularOpeningHours,utcOffsetMinutes"
+        ),
+        validation_alias=AliasChoices(
+            "PLACES_DETAILS_FIELD_MASK",
+            "TALIA_GOOGLE_PLACES_DETAILS_FIELD_MASK",
+        ),
+    )
     google_places_language_code: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

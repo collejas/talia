@@ -4141,6 +4141,7 @@ async def crear_busqueda_google(
             strategy=payload.strategy,
             language_code=payload.language_code,
             region_code=payload.region_code,
+            enrich_details=True,
         )
     except GooglePlacesError as exc:
         detail = str(exc) or "google_places_error"

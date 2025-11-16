@@ -41,10 +41,15 @@ class GooglePlacesClient:
         self.text_url = text_url or settings.google_places_text_url
         raw_field_mask = field_mask or settings.google_places_field_mask
         self.field_mask = _sanitize_field_mask(raw_field_mask)
+        self.details_field_mask = _sanitize_field_mask(settings.google_places_details_field_mask)
         self.default_language = default_language or settings.google_places_language_code
         self.default_region = default_region or settings.google_places_region_code
         self.timeout = timeout
         self.pause_between_pages = pause_between_pages
+        self.details_url = getattr(
+            settings, "google_places_details_url", "https://places.googleapis.com/v1/places"
+        )
+        self._details_cache: dict[str, dict[str, Any]] = {}
         self.grid_max_tile_radius_m = max(200, grid_max_tile_radius_m)
 
     async def search_places(
@@ -60,6 +65,7 @@ class GooglePlacesClient:
         language_code: str | None = None,
         region_code: str | None = None,
         allow_text_fallback: bool = True,
+        enrich_details: bool = False,
     ) -> list[dict[str, Any]]:
         """Consulta Places API y regresa la lista cruda de lugares."""
         if not self.api_key:
@@ -142,9 +148,16 @@ class GooglePlacesClient:
             center_lng=longitude,
             radius_m=radius_m,
         )
+        if enrich_details and filtered:
+            enriched = await self._enrich_with_details(
+                places=filtered if limit is None else filtered[:limit],
+                language_code=language_code,
+            )
+        else:
+            enriched = filtered
         if limit is not None:
-            return filtered[:limit]
-        return filtered
+            return enriched[:limit]
+        return enriched
 
     async def _post(self, *, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         headers = {
@@ -358,6 +371,94 @@ class GooglePlacesClient:
             if _distance_m(center_lat, center_lng, lat, lng) <= max_distance:
                 filtered.append(place)
         return filtered
+
+    async def _enrich_with_details(
+        self,
+        *,
+        places: list[dict[str, Any]],
+        language_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        place_ids = [place.get("id") for place in places if place.get("id")]
+        details_map = await self._fetch_place_details(place_ids, language_code)
+        enriched: list[dict[str, Any]] = []
+        for place in places:
+            place_id = place.get("id")
+            detail = details_map.get(place_id)
+            if detail:
+                merged = dict(place)
+                merged.update(detail)
+                enriched.append(merged)
+            else:
+                enriched.append(place)
+        return enriched
+
+    async def _fetch_place_details(
+        self,
+        place_ids: list[str],
+        language_code: str | None,
+    ) -> dict[str, dict[str, Any]]:
+        if not place_ids:
+            return {}
+        cache = self._details_cache
+        result: dict[str, dict[str, Any]] = {}
+        ids_to_fetch: list[str] = []
+        for place_id in place_ids:
+            if place_id in cache:
+                result[place_id] = cache[place_id]
+            else:
+                ids_to_fetch.append(place_id)
+        batch_size = 10
+        for chunk_start in range(0, len(ids_to_fetch), batch_size):
+            chunk = ids_to_fetch[chunk_start : chunk_start + batch_size]
+            tasks = [self._get_place_detail(place_id, language_code) for place_id in chunk]
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
+            for place_id, resp in zip(chunk, responses):
+                if isinstance(resp, Exception) or resp is None:
+                    continue
+                cache[place_id] = resp
+                result[place_id] = resp
+            await asyncio.sleep(self.pause_between_pages / 2)
+        return result
+
+    async def _get_place_detail(
+        self,
+        place_id: str,
+        language_code: str | None,
+    ) -> dict[str, Any] | None:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.api_key or "",
+        }
+        if self.details_field_mask:
+            headers["X-Goog-FieldMask"] = self.details_field_mask
+        params: dict[str, str] = {}
+        lang = language_code or self.default_language
+        if lang:
+            params["languageCode"] = lang
+        url = f"{self.details_url}/{place_id}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(url, headers=headers, params=params)
+        except httpx.RequestError as exc:
+            logger.warning(
+                "google.places_details_request_error",
+                extra={"place_id": place_id, "error": str(exc)},
+            )
+            return None
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except ValueError:
+                detail = resp.text
+            logger.warning(
+                "google.places_details_http_error",
+                extra={"place_id": place_id, "status": resp.status_code, "detail": detail},
+            )
+            return None
+        try:
+            return resp.json()
+        except ValueError:
+            return None
 
     async def _search_nearby_additional_centers(
         self,
