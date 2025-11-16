@@ -1,11 +1,10 @@
 import type { Metadata } from "next"
 
-import { AppViewLayout } from "@/components/layouts/app-view-layout"
-
 export const metadata: Metadata = {
-  title: "Denue busqueda · Prospección",
+  title: "DENUE búsqueda · Prospección",
 }
 
-export default function DenueBusquedaPage() {
-  return <AppViewLayout title="Prospección · Denue busqueda" />
-}
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+export { default } from "./page.client"

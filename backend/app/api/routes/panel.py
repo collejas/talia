@@ -21,10 +21,13 @@ from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.services import (
+    DenueClient,
+    DenueError,
     GooglePlacesClient,
     GooglePlacesError,
     demografia_service,
     leads_geo,
+    normalize_denue_place,
     normalize_place_for_result,
     storage,
 )
@@ -245,6 +248,34 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
             if not query:
                 raise ValueError("query_required")
             self.query = query
+        return self
+
+
+class DenueBusquedaPayload(BaseModel):
+    """Parámetros para lanzar una captura desde DENUE."""
+
+    query: str = Field(..., min_length=2, max_length=200)
+    lat: float = Field(..., description="Latitud del centro de búsqueda.")
+    lng: float = Field(..., description="Longitud del centro de búsqueda.")
+    radio_m: int = Field(
+        default=1000,
+        ge=100,
+        le=20000,
+        description="Radio en metros; se ajustará a los valores aceptados por DENUE (250-5000).",
+    )
+    meta: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos adicionales para guardar en public.busquedas.meta.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_query(self) -> DenueBusquedaPayload:
+        query = (self.query or "").strip()
+        if not query:
+            raise ValueError("query_required")
+        self.query = query
         return self
 
 
@@ -4217,6 +4248,93 @@ async def crear_busqueda_google(
     }
 
 
+@router.post("/prospeccion/denue/busquedas")
+async def crear_busqueda_denue(
+    payload: DenueBusquedaPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    client = DenueClient()
+    try:
+        records = await client.search(
+            query=payload.query,
+            latitude=payload.lat,
+            longitude=payload.lng,
+            radius_m=payload.radio_m,
+        )
+    except DenueError as exc:
+        detail = str(exc) or "denue_error"
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    normalized_items = [normalize_denue_place(item) for item in records]
+    meta_payload: dict[str, Any] = {"query": payload.query}
+    if payload.meta:
+        meta_payload.update(payload.meta)
+
+    crear_resp = await _sb_post(
+        "/rest/v1/rpc/crear_busqueda",
+        json={
+            "p_fuente": "denue",
+            "p_query": payload.query,
+            "p_radio_m": payload.radio_m,
+            "p_lat": payload.lat,
+            "p_lng": payload.lng,
+            "p_total": len(normalized_items),
+            "p_meta": meta_payload,
+        },
+        token=token,
+    )
+    if crear_resp.status_code >= 400:
+        raise _supabase_error(crear_resp, "error_guardando_busqueda")
+    try:
+        crear_data = crear_resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="busqueda_id_missing")
+    busqueda_value = _rpc_field(crear_data, "crear_busqueda", "id")
+    try:
+        busqueda_uuid = UUID(str(busqueda_value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=502, detail="busqueda_id_invalid")
+
+    upserted = 0
+    if normalized_items:
+        upsert_resp = await _sb_post(
+            "/rest/v1/rpc/upsert_resultados_lote",
+            json={
+                "p_busqueda_id": str(busqueda_uuid),
+                "p_fuente": "denue",
+                "p_items": normalized_items,
+            },
+            token=token,
+        )
+        if upsert_resp.status_code >= 400:
+            raise _supabase_error(upsert_resp, "error_upsert_denue")
+        try:
+            upsert_data = upsert_resp.json()
+        except ValueError:
+            upsert_data = {}
+        if isinstance(upsert_data, dict):
+            upserted = (
+                upsert_data.get("upserted") or upsert_data.get("total") or len(normalized_items)
+            )
+        elif isinstance(upsert_data, int):
+            upserted = upsert_data
+        else:
+            upserted = len(normalized_items)
+
+    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    return {
+        "ok": True,
+        "busqueda_id": str(busqueda_uuid),
+        "denue_results": len(normalized_items),
+        "upserted": upserted,
+        "preview": preview,
+    }
+
+
 @router.get("/prospeccion/google/busquedas")
 async def listar_busquedas_google(
     limit: int = Query(default=20, ge=1, le=100),
@@ -4234,6 +4352,49 @@ async def listar_busquedas_google(
         "limit": str(limit),
         "offset": str(offset),
         "fuente": "eq.google_places",
+    }
+    if search:
+        params["query"] = _ilike_param(search)
+
+    resp = await _sb_get(
+        "/rest/v1/busquedas",
+        params=params,
+        token=token,
+        prefer="count=exact",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_listando_busquedas")
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    total = _content_range_total(resp.headers.get("content-range"))
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.get("/prospeccion/denue/busquedas")
+async def listar_busquedas_denue(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    params: dict[str, str] = {
+        "select": "id,fuente,query,radio_m,lat,lng,meta,total_encontrados,creado_en",
+        "order": "creado_en.desc",
+        "limit": str(limit),
+        "offset": str(offset),
+        "fuente": "eq.denue",
     }
     if search:
         params["query"] = _ilike_param(search)
@@ -4316,6 +4477,87 @@ async def listar_resultados_google(
 
         resp = await _sb_get(
             "/rest/v1/v_google_places_contactables",
+            params=batch_params,
+            token=token,
+            prefer="count=exact",
+        )
+        if resp.status_code >= 400:
+            raise _supabase_error(resp, "error_listando_resultados")
+        try:
+            batch_rows = resp.json() or []
+        except ValueError:
+            batch_rows = []
+        rows.extend(batch_rows)
+        if total is None:
+            total = _content_range_total(resp.headers.get("content-range")) or len(batch_rows)
+        current_offset += batch_limit
+        remaining = limit - len(rows)
+        if not batch_rows or len(rows) >= (total or 0):
+            break
+
+    if total is None:
+        total = len(rows)
+
+    return {
+        "ok": True,
+        "items": rows[:limit],
+        "limit": limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.get("/prospeccion/denue/resultados")
+async def listar_resultados_denue(
+    busqueda_id: UUID | None = Query(default=None),
+    q: str | None = Query(
+        default=None, description="Filtro parcial en nombre, actividad o dirección."
+    ),
+    estrato: str | None = Query(
+        default=None, description="Filtra por tamaño de empresa (estrato)."
+    ),
+    limit: int = Query(default=250, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+    order: Literal["recientes", "distancia"] = Query(default="recientes"),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    order_map = {
+        "recientes": "resultado_creado_en.desc",
+        "distancia": "distancia_m.asc.nullslast",
+    }
+    params_base: dict[str, str] = {
+        "select": "*",
+        "order": order_map.get(order, "resultado_creado_en.desc"),
+    }
+    if busqueda_id:
+        params_base["busqueda_id"] = f"eq.{busqueda_id}"
+    if estrato:
+        params_base["estrato"] = f"eq.{estrato}"
+    if q:
+        sanitized = q.replace("*", "").replace("%", "")
+        params_base["or"] = (
+            f"(display_name.ilike.*{sanitized}*,"
+            f"actividad.ilike.*{sanitized}*,"
+            f"address.ilike.*{sanitized}*)"
+        )
+
+    rows: list[dict[str, Any]] = []
+    remaining = limit
+    current_offset = offset
+    total: int | None = None
+
+    while remaining > 0:
+        batch_limit = min(remaining, 1000)
+        batch_params = dict(params_base)
+        batch_params["limit"] = str(batch_limit)
+        batch_params["offset"] = str(current_offset)
+
+        resp = await _sb_get(
+            "/rest/v1/v_denue_contactables",
             params=batch_params,
             token=token,
             prefer="count=exact",

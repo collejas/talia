@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict npzaVgfG4ie98MfrZPayiOrufKGmj193tCmRleFNGYpdszvrecStBhIFsQQbBbp
+\restrict oqE6liVOdNSw1SfDIygPPVQFvQhPchdgIgYNjVK7JZek7P1Vbf2oiB533OX6GId
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -330,19 +330,6 @@ CREATE TYPE auth.one_time_token_type AS ENUM (
     'email_change_token_new',
     'email_change_token_current',
     'phone_change_token'
-);
-
-
---
--- Name: cita_estado; Type: TYPE; Schema: public; Owner: -
---
-
-CREATE TYPE public.cita_estado AS ENUM (
-    'pendiente',
-    'confirmada',
-    'reprogramada',
-    'cancelada',
-    'realizada'
 );
 
 
@@ -1212,136 +1199,1170 @@ COMMENT ON FUNCTION public.es_admin(uid uuid) IS 'Devuelve true si el usuario ti
 
 
 --
--- Name: fn_cita_reschedule_json_payload_v4(jsonb); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_calendar_booking_stats(uuid, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_cita_reschedule_json_payload_v4(p_payload jsonb) RETURNS jsonb
+CREATE FUNCTION public.fn_calendar_booking_stats(p_resource_id uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE(confirmed integer, cancelled integer, upcoming integer, past integer)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    WITH base AS (
+        SELECT * FROM public.calendar_bookings cb
+        WHERE cb.resource_id = p_resource_id
+          AND (p_from IS NULL OR cb.start_at >= p_from)
+          AND (p_to IS NULL OR cb.end_at <= p_to)
+    )
+    SELECT
+        COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
+        COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+        COUNT(*) FILTER (
+            WHERE status = 'confirmed'
+              AND cb.start_at >= now()
+        ) AS upcoming,
+        COUNT(*) FILTER (
+            WHERE status = 'confirmed'
+              AND cb.end_at < now()
+        ) AS past
+    FROM base cb;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_booking_stats(p_resource_id uuid, p_from timestamp with time zone, p_to timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_booking_stats(p_resource_id uuid, p_from timestamp with time zone, p_to timestamp with time zone) IS 'Entrega totales básicos (confirmadas, canceladas, próximas y pasadas) para un recurso.';
+
+
+--
+-- Name: fn_calendar_cancel_booking(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_cancel_booking(p_booking_id uuid, p_reason text DEFAULT NULL::text) RETURNS TABLE(booking_id uuid, resource_id uuid, start_at timestamp with time zone, end_at timestamp with time zone, status text)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'extensions'
+    SET search_path TO 'public'
     AS $$
 DECLARE
-    rec RECORD;
-    v_payload jsonb;
-    v_kind text;
+    v_booking public.calendar_bookings%ROWTYPE;
 BEGIN
-    IF p_payload IS NULL THEN
-        RAISE EXCEPTION 'payload_requerido' USING ERRCODE = '22004';
+    IF p_booking_id IS NULL THEN
+        RAISE EXCEPTION 'booking_id_required' USING ERRCODE = '22023';
     END IF;
 
-    v_kind := jsonb_typeof(p_payload);
-    IF v_kind = 'array' THEN
-        v_payload := p_payload->0;
-    ELSIF v_kind = 'object' THEN
-        v_payload := p_payload;
-    ELSIF v_kind = 'string' THEN
-        BEGIN
-            v_payload := (p_payload::text)::jsonb;
-        EXCEPTION WHEN others THEN
-            RAISE EXCEPTION
-                USING MESSAGE = format('payload_string_no_valido: %s', p_payload::text),
-                      ERRCODE = '22P02';
-        END;
+    SELECT * INTO v_booking
+    FROM public.calendar_bookings
+    WHERE id = p_booking_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'booking_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_booking.status = 'cancelled' THEN
+        RETURN QUERY SELECT v_booking.id, v_booking.resource_id, v_booking.start_at, v_booking.end_at, v_booking.status;
+        RETURN;
+    END IF;
+
+    UPDATE public.calendar_bookings
+    SET status = 'cancelled',
+        notes = COALESCE(NULLIF(p_reason, ''), notes),
+        metadata = metadata || jsonb_build_object(
+            'cancel_reason', NULLIF(p_reason, ''),
+            'cancelled_at', now()
+        ),
+        updated_at = now()
+    WHERE id = p_booking_id;
+
+    IF v_booking.hold_id IS NOT NULL THEN
+        PERFORM * FROM public.fn_calendar_release_hold(v_booking.hold_id, 'booking_cancelled');
+    END IF;
+
+    v_booking.status := 'cancelled';
+
+    RETURN QUERY
+    SELECT v_booking.id, v_booking.resource_id, v_booking.start_at, v_booking.end_at, v_booking.status;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_cancel_booking(p_booking_id uuid, p_reason text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_cancel_booking(p_booking_id uuid, p_reason text) IS 'Cancela una cita confirmada, adjunta el motivo y libera el hold original.';
+
+
+--
+-- Name: fn_calendar_confirm_slot(uuid, text, jsonb, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_confirm_slot(p_hold_id uuid, p_notes text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_meeting_url text DEFAULT NULL::text, p_external_join_url text DEFAULT NULL::text) RETURNS TABLE(booking_id uuid, resource_id uuid, start_at timestamp with time zone, end_at timestamp with time zone, timezone text, status text, hold_id uuid, tarjeta_id uuid, metadata jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_hold public.calendar_slot_holds%ROWTYPE;
+    v_resource public.calendar_resources%ROWTYPE;
+    v_capacity integer;
+    v_booked integer;
+    v_booking_id uuid;
+BEGIN
+    IF p_hold_id IS NULL THEN
+        RAISE EXCEPTION 'hold_id_required' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_hold
+    FROM public.calendar_slot_holds
+    WHERE id = p_hold_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'hold_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_hold.status <> 'active' THEN
+        RAISE EXCEPTION 'hold_not_active' USING ERRCODE = 'P0001';
+    END IF;
+
+    IF v_hold.expires_at <= now() THEN
+        UPDATE public.calendar_slot_holds
+        SET status = 'expired'
+        WHERE id = p_hold_id;
+        RAISE EXCEPTION 'hold_expired' USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT * INTO v_resource
+    FROM public.calendar_resources
+    WHERE id = v_hold.resource_id;
+
+    IF NOT FOUND OR NOT v_resource.is_active THEN
+        RAISE EXCEPTION 'calendar_resource_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    v_capacity := v_resource.capacity_per_slot;
+
+    SELECT COUNT(*)
+    INTO v_booked
+    FROM public.calendar_bookings cb
+    WHERE cb.resource_id = v_resource.id
+      AND cb.status = 'confirmed'
+      AND cb.start_at < v_hold.end_at
+      AND cb.end_at > v_hold.start_at;
+
+    IF v_booked >= v_capacity THEN
+        RAISE EXCEPTION 'slot_already_booked' USING ERRCODE = 'P0001';
+    END IF;
+
+    INSERT INTO public.calendar_bookings (
+        resource_id,
+        hold_id,
+        contact_id,
+        conversacion_id,
+        tarjeta_id,
+        start_at,
+        end_at,
+        timezone,
+        status,
+        notes,
+        meeting_url,
+        external_join_url,
+        metadata,
+        created_at,
+        updated_at
+    ) VALUES (
+        v_resource.id,
+        v_hold.id,
+        v_hold.contact_id,
+        v_hold.conversacion_id,
+        v_hold.tarjeta_id,
+        v_hold.start_at,
+        v_hold.end_at,
+        v_resource.timezone,
+        'confirmed',
+        NULLIF(p_notes, ''),
+        NULLIF(p_meeting_url, ''),
+        NULLIF(p_external_join_url, ''),
+        COALESCE(p_metadata, '{}'::jsonb),
+        now(),
+        now()
+    ) RETURNING id INTO v_booking_id;
+
+    UPDATE public.calendar_slot_holds
+    SET status = 'confirmed', updated_at = now()
+    WHERE id = p_hold_id;
+
+    RETURN QUERY
+    SELECT
+        cb.id,
+        cb.resource_id,
+        cb.start_at,
+        cb.end_at,
+        cb.timezone,
+        cb.status,
+        cb.hold_id,
+        cb.tarjeta_id,
+        cb.metadata
+    FROM public.calendar_bookings cb
+    WHERE cb.id = v_booking_id;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_confirm_slot(p_hold_id uuid, p_notes text, p_metadata jsonb, p_meeting_url text, p_external_join_url text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_confirm_slot(p_hold_id uuid, p_notes text, p_metadata jsonb, p_meeting_url text, p_external_join_url text) IS 'Convierte un hold activo en una cita confirmada dentro del calendario.';
+
+
+--
+-- Name: fn_calendar_exception_delete(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_exception_delete(p_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_found boolean;
+BEGIN
+    DELETE FROM public.calendar_exceptions
+    WHERE id = p_id;
+    GET DIAGNOSTICS v_found = ROW_COUNT;
+    RETURN COALESCE(v_found, false);
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_exception_delete(p_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_exception_delete(p_id uuid) IS 'Elimina una excepción puntual del calendario.';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: calendar_exceptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.calendar_exceptions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    resource_id uuid NOT NULL,
+    kind text NOT NULL,
+    start_at timestamp with time zone NOT NULL,
+    end_at timestamp with time zone NOT NULL,
+    capacity integer,
+    reason text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    updated_by uuid,
+    CONSTRAINT calendar_exceptions_kind_check CHECK ((kind = ANY (ARRAY['block'::text, 'extra'::text]))),
+    CONSTRAINT calendar_exceptions_time_check CHECK ((end_at > start_at))
+);
+
+
+--
+-- Name: TABLE calendar_exceptions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.calendar_exceptions IS 'Bloqueos (kind=block) o ventanas adicionales (kind=extra) aplicadas a un recurso.';
+
+
+--
+-- Name: fn_calendar_exception_upsert(uuid, text, timestamp with time zone, timestamp with time zone, integer, text, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_exception_upsert(p_resource_id uuid, p_kind text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_capacity integer DEFAULT NULL::integer, p_reason text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_id uuid DEFAULT NULL::uuid) RETURNS public.calendar_exceptions
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_result public.calendar_exceptions%ROWTYPE;
+BEGIN
+    IF p_kind NOT IN ('block', 'extra') THEN
+        RAISE EXCEPTION 'exception_kind_invalid' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_id IS NULL THEN
+        INSERT INTO public.calendar_exceptions (
+            resource_id, kind, start_at, end_at,
+            capacity, reason, metadata
+        ) VALUES (
+            p_resource_id,
+            p_kind,
+            p_start_at,
+            p_end_at,
+            CASE WHEN p_kind = 'extra' THEN GREATEST(1, COALESCE(p_capacity, 1)) ELSE NULL END,
+            NULLIF(p_reason, ''),
+            COALESCE(p_metadata, '{}'::jsonb)
+        ) RETURNING * INTO v_result;
     ELSE
-        RAISE EXCEPTION
-            USING MESSAGE = format('payload_formato_no_soportado (%s): %s', v_kind, p_payload::text),
-            ERRCODE = '22P02';
+        UPDATE public.calendar_exceptions
+        SET resource_id = COALESCE(p_resource_id, resource_id),
+            kind = COALESCE(p_kind, kind),
+            start_at = COALESCE(p_start_at, start_at),
+            end_at = COALESCE(p_end_at, end_at),
+            capacity = CASE
+                WHEN COALESCE(p_kind, kind) = 'extra'
+                    THEN GREATEST(1, COALESCE(p_capacity, capacity, 1))
+                ELSE NULL
+            END,
+            reason = COALESCE(NULLIF(p_reason, ''), reason),
+            metadata = COALESCE(p_metadata, metadata),
+            updated_at = now()
+        WHERE id = p_id
+        RETURNING * INTO v_result;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'exception_not_found' USING ERRCODE = 'P0002';
+        END IF;
     END IF;
 
-    IF jsonb_typeof(v_payload) <> 'object' THEN
-        RAISE EXCEPTION
-            USING MESSAGE = format('payload_no_objeto: %s', v_payload::text),
-                  ERRCODE = '22P02';
+    RETURN v_result;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_exception_upsert(p_resource_id uuid, p_kind text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_capacity integer, p_reason text, p_metadata jsonb, p_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_exception_upsert(p_resource_id uuid, p_kind text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_capacity integer, p_reason text, p_metadata jsonb, p_id uuid) IS 'Gestiona bloqueos o ventanas extra del calendario.';
+
+
+--
+-- Name: fn_calendar_expire_holds(timestamp with time zone, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_expire_holds(p_now timestamp with time zone DEFAULT now(), p_batch integer DEFAULT 200) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_total integer;
+BEGIN
+    WITH candidates AS (
+        SELECT id
+        FROM public.calendar_slot_holds
+        WHERE status = 'active'
+          AND expires_at <= p_now
+        ORDER BY expires_at
+        LIMIT p_batch
+    )
+    UPDATE public.calendar_slot_holds sh
+    SET status = 'expired',
+        metadata = sh.metadata || jsonb_build_object('expired_at', p_now),
+        updated_at = p_now
+    WHERE sh.id IN (SELECT id FROM candidates);
+
+    GET DIAGNOSTICS v_total = ROW_COUNT;
+    RETURN COALESCE(v_total, 0);
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_expire_holds(p_now timestamp with time zone, p_batch integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_expire_holds(p_now timestamp with time zone, p_batch integer) IS 'Marca como expirados los holds activos cuyo tiempo haya vencido.';
+
+
+--
+-- Name: fn_calendar_hold_slot(uuid, timestamp with time zone, uuid, uuid, integer, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_hold_slot(p_resource_id uuid, p_slot_start timestamp with time zone, p_conversacion_id uuid, p_contact_id uuid DEFAULT NULL::uuid, p_hold_minutes integer DEFAULT 5, p_metadata jsonb DEFAULT '{}'::jsonb, p_tarjeta_id uuid DEFAULT NULL::uuid) RETURNS TABLE(hold_id uuid, resource_id uuid, slot_start timestamp with time zone, slot_end timestamp with time zone, expires_at timestamp with time zone)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_resource public.calendar_resources%ROWTYPE;
+    v_slot_end timestamptz;
+    v_slot_duration interval;
+    v_expires timestamptz;
+    v_capacity integer;
+    v_hold_limit integer;
+    v_active_holds integer;
+    v_booked integer;
+    v_local_date date;
+    v_local_time time;
+    v_slot_end_local time;
+    v_blocked boolean;
+    v_available_capacity integer;
+    v_today date;
+    v_hold_id uuid;
+BEGIN
+    IF p_resource_id IS NULL OR p_slot_start IS NULL THEN
+        RAISE EXCEPTION 'resource_and_slot_required' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_resource
+    FROM public.calendar_resources
+    WHERE id = p_resource_id AND is_active;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'calendar_resource_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    v_today := (now() AT TIME ZONE v_resource.timezone)::date;
+    v_slot_duration := make_interval(mins => v_resource.slot_minutes);
+    v_slot_end := p_slot_start + v_slot_duration;
+    v_expires := now() + make_interval(mins => GREATEST(1, LEAST(p_hold_minutes, 15)));
+    v_hold_limit := GREATEST(1, v_resource.max_holds_per_slot);
+    v_local_date := (p_slot_start AT TIME ZONE v_resource.timezone)::date;
+    v_local_time := (p_slot_start AT TIME ZONE v_resource.timezone)::time;
+    v_slot_end_local := (v_slot_end AT TIME ZONE v_resource.timezone)::time;
+
+    IF v_local_date < v_today - 1 THEN
+        RAISE EXCEPTION 'slot_out_of_range' USING ERRCODE = '22023';
+    END IF;
+    IF v_local_date > v_today + v_resource.max_days_visible THEN
+        RAISE EXCEPTION 'slot_out_of_range' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM calendar_exceptions ce
+        WHERE ce.resource_id = v_resource.id
+          AND ce.kind = 'block'
+          AND tstzrange(ce.start_at, ce.end_at, '[)') && tstzrange(p_slot_start, v_slot_end, '[)')
+    ) INTO v_blocked;
+
+    IF v_blocked THEN
+        RAISE EXCEPTION 'slot_blocked' USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT COALESCE(ap.capacity, v_resource.capacity_per_slot)
+    INTO v_capacity
+    FROM calendar_availability_patterns ap
+    WHERE ap.resource_id = v_resource.id
+      AND ap.is_active
+      AND ap.weekday = EXTRACT(DOW FROM v_local_date)
+      AND (ap.start_date IS NULL OR ap.start_date <= v_local_date)
+      AND (ap.end_date IS NULL OR ap.end_date >= v_local_date)
+      AND v_local_time >= ap.start_time
+      AND v_slot_end_local <= ap.end_time
+    ORDER BY ap.priority DESC, ap.start_time
+    LIMIT 1;
+
+    IF v_capacity IS NULL THEN
+        SELECT COALESCE(ce.capacity, v_resource.capacity_per_slot)
+        INTO v_capacity
+        FROM calendar_exceptions ce
+        WHERE ce.resource_id = v_resource.id
+          AND ce.kind = 'extra'
+          AND p_slot_start >= ce.start_at
+          AND v_slot_end <= ce.end_at
+        ORDER BY ce.start_at
+        LIMIT 1;
+    END IF;
+
+    v_capacity := COALESCE(v_capacity, v_resource.capacity_per_slot);
+
+    SELECT COUNT(*)
+    INTO v_booked
+    FROM calendar_bookings cb
+    WHERE cb.resource_id = v_resource.id
+      AND cb.status = 'confirmed'
+      AND cb.start_at < v_slot_end
+      AND cb.end_at > p_slot_start;
+
+    IF v_booked >= v_capacity THEN
+        RAISE EXCEPTION 'slot_already_booked' USING ERRCODE = 'P0001';
+    END IF;
+
+    v_available_capacity := GREATEST(v_capacity - v_booked, 0);
+
+    SELECT COUNT(*)
+    INTO v_active_holds
+    FROM calendar_slot_holds sh
+    WHERE sh.resource_id = v_resource.id
+      AND sh.status = 'active'
+      AND sh.expires_at > now()
+      AND sh.start_at < v_slot_end
+      AND sh.end_at > p_slot_start;
+
+    IF v_active_holds >= LEAST(v_hold_limit, v_available_capacity) THEN
+        RAISE EXCEPTION 'slot_hold_limit_reached' USING ERRCODE = 'P0001';
+    END IF;
+
+    INSERT INTO public.calendar_slot_holds (
+        resource_id,
+        start_at,
+        end_at,
+        contact_id,
+        conversacion_id,
+        tarjeta_id,
+        status,
+        expires_at,
+        metadata
+    ) VALUES (
+        v_resource.id,
+        p_slot_start,
+        v_slot_end,
+        p_contact_id,
+        p_conversacion_id,
+        p_tarjeta_id,
+        'active',
+        v_expires,
+        COALESCE(p_metadata, '{}'::jsonb)
+    ) RETURNING id INTO v_hold_id;
+
+    RETURN QUERY
+    SELECT v_hold_id, v_resource.id, p_slot_start, v_slot_end, v_expires;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_hold_slot(p_resource_id uuid, p_slot_start timestamp with time zone, p_conversacion_id uuid, p_contact_id uuid, p_hold_minutes integer, p_metadata jsonb, p_tarjeta_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_hold_slot(p_resource_id uuid, p_slot_start timestamp with time zone, p_conversacion_id uuid, p_contact_id uuid, p_hold_minutes integer, p_metadata jsonb, p_tarjeta_id uuid) IS 'Bloquea temporalmente un slot disponible mientras el visitante confirma la cita.';
+
+
+--
+-- Name: fn_calendar_list_bookings(uuid, timestamp with time zone, timestamp with time zone, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_list_bookings(p_resource_id uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_status text DEFAULT NULL::text, p_limit integer DEFAULT 200, p_offset integer DEFAULT 0) RETURNS TABLE(booking_id uuid, resource_id uuid, contact_id uuid, conversacion_id uuid, start_at timestamp with time zone, end_at timestamp with time zone, status text, notes text, metadata jsonb)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    SELECT
+        cb.id,
+        cb.resource_id,
+        cb.contact_id,
+        cb.conversacion_id,
+        cb.start_at,
+        cb.end_at,
+        cb.status,
+        cb.notes,
+        cb.metadata
+    FROM public.calendar_bookings cb
+    WHERE cb.resource_id = p_resource_id
+      AND (p_status IS NULL OR cb.status = p_status)
+      AND (p_from IS NULL OR cb.start_at >= p_from)
+      AND (p_to IS NULL OR cb.end_at <= p_to)
+    ORDER BY cb.start_at
+    LIMIT COALESCE(NULLIF(p_limit, 0), 200)
+    OFFSET GREATEST(p_offset, 0);
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_list_bookings(p_resource_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_status text, p_limit integer, p_offset integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_list_bookings(p_resource_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_status text, p_limit integer, p_offset integer) IS 'Devuelve las reservas del calendario con filtros básicos para el panel.';
+
+
+--
+-- Name: fn_calendar_list_slots(uuid, date, date, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_list_slots(p_resource_id uuid, p_from date, p_to date, p_timezone text DEFAULT NULL::text, p_max_days integer DEFAULT 31) RETURNS TABLE(resource_id uuid, slot_start timestamp with time zone, slot_end timestamp with time zone, timezone text, local_date date, local_time text, capacity integer, booked integer, holds integer, is_available boolean)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_resource public.calendar_resources%ROWTYPE;
+    v_from date;
+    v_to date;
+    v_timezone text;
+    v_slot_duration interval;
+    v_slot_step interval;
+BEGIN
+    IF p_resource_id IS NULL THEN
+        RAISE EXCEPTION 'resource_id_required' USING ERRCODE = '22023';
     END IF;
 
     SELECT *
-      INTO rec
-      FROM jsonb_to_record(v_payload) AS x(
-          p_id uuid,
-          p_start_at timestamptz,
-          p_end_at timestamptz,
-          p_timezone text,
-          p_metadata jsonb,
-          p_notes text,
-          p_expected_updated_at timestamptz,
-          p_updated_by uuid,
-          p_merge_metadata boolean,
-          p_scheduled_via text,
-          p_reminder_status text,
-          p_reminder_sent_at timestamptz,
-          p_provider text,
-          p_provider_event_id text,
-          p_meeting_url text,
-          p_location text,
-          p_external_join_url text,
-          p_estado public.cita_estado,
-          p_cancel_reason text,
-          p_remove_provider_event boolean
-      );
+    INTO v_resource
+    FROM public.calendar_resources
+    WHERE id = p_resource_id AND is_active;
 
-    RETURN public.fn_cita_reschedule_json_v4(
-        rec.p_id,
-        rec.p_start_at,
-        rec.p_end_at,
-        rec.p_timezone,
-        rec.p_metadata,
-        rec.p_notes,
-        rec.p_expected_updated_at,
-        rec.p_updated_by,
-        COALESCE(rec.p_merge_metadata, TRUE),
-        rec.p_scheduled_via,
-        rec.p_reminder_status,
-        rec.p_reminder_sent_at,
-        rec.p_provider,
-        rec.p_provider_event_id,
-        rec.p_meeting_url,
-        rec.p_location,
-        rec.p_external_join_url,
-        rec.p_estado,
-        rec.p_cancel_reason,
-        COALESCE(rec.p_remove_provider_event, FALSE)
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'calendar_resource_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    v_from := COALESCE(p_from, CURRENT_DATE);
+    v_to := COALESCE(p_to, v_from + v_resource.max_days_visible);
+
+    IF v_to < v_from THEN
+        RAISE EXCEPTION 'invalid_date_range' USING ERRCODE = '22023';
+    END IF;
+
+    IF (v_to - v_from) > LEAST(p_max_days, v_resource.max_days_visible) THEN
+        v_to := v_from + LEAST(p_max_days, v_resource.max_days_visible);
+    END IF;
+
+    v_timezone := COALESCE(NULLIF(p_timezone, ''), v_resource.timezone);
+    v_slot_duration := make_interval(mins => v_resource.slot_minutes);
+    v_slot_step := make_interval(mins => v_resource.slot_minutes + v_resource.buffer_minutes);
+
+    RETURN QUERY
+    WITH params AS (
+        SELECT v_timezone AS timezone,
+               v_slot_duration AS slot_duration,
+               v_slot_step AS slot_step,
+               v_resource.capacity_per_slot AS default_capacity
+    ),
+    day_series AS (
+        SELECT gs::date AS day
+        FROM generate_series(v_from, v_to, '1 day') gs
+    ),
+    pattern_windows AS (
+        SELECT
+            ap.id AS pattern_id,
+            ap.capacity,
+            ((ds.day + ap.start_time)::timestamp AT TIME ZONE v_resource.timezone) AS window_start,
+            ((ds.day + ap.end_time)::timestamp AT TIME ZONE v_resource.timezone) AS window_end
+        FROM calendar_availability_patterns ap
+        JOIN day_series ds ON ds.day BETWEEN COALESCE(ap.start_date, ds.day)
+                              AND COALESCE(ap.end_date, ds.day)
+        WHERE ap.resource_id = v_resource.id
+          AND ap.is_active
+          AND ap.weekday = EXTRACT(DOW FROM ds.day)
+    ),
+    extra_windows AS (
+        SELECT
+            ce.id AS pattern_id,
+            COALESCE(ce.capacity, v_resource.capacity_per_slot) AS capacity,
+            ce.start_at AS window_start,
+            ce.end_at AS window_end
+        FROM calendar_exceptions ce
+        WHERE ce.resource_id = v_resource.id
+          AND ce.kind = 'extra'
+          AND ce.end_at >= (v_from::timestamp)
+          AND ce.start_at <= (v_to::timestamp + INTERVAL '1 day')
+    ),
+    blocked_ranges AS (
+        SELECT tstzrange(ce.start_at, ce.end_at, '[)') AS range
+        FROM calendar_exceptions ce
+        WHERE ce.resource_id = v_resource.id
+          AND ce.kind = 'block'
+          AND ce.end_at >= (v_from::timestamp)
+          AND ce.start_at <= (v_to::timestamp + INTERVAL '1 day')
+    ),
+    windows AS (
+        SELECT * FROM pattern_windows
+        UNION ALL
+        SELECT * FROM extra_windows
+    ),
+    slot_candidates AS (
+        SELECT
+            v_resource.id AS resource_id,
+            w.pattern_id,
+            w.capacity,
+            gs AS slot_start,
+            gs + params.slot_duration AS slot_end,
+            params.default_capacity
+        FROM windows w
+        CROSS JOIN params
+        CROSS JOIN LATERAL generate_series(
+            w.window_start,
+            w.window_end - params.slot_duration,
+            params.slot_step
+        ) AS gs
+        WHERE w.window_end > w.window_start
+    )
+    SELECT
+        sc.resource_id,
+        sc.slot_start,
+        sc.slot_end,
+        params.timezone AS timezone,
+        (sc.slot_start AT TIME ZONE params.timezone)::date AS local_date,
+        to_char(sc.slot_start AT TIME ZONE params.timezone, 'HH24:MI') AS local_time,
+        COALESCE(sc.capacity, params.default_capacity) AS capacity,
+        COALESCE(booked.count, 0) AS booked,
+        COALESCE(holds.count, 0) AS holds,
+        CASE
+            WHEN EXISTS (
+                SELECT 1 FROM blocked_ranges br
+                WHERE br.range && tstzrange(sc.slot_start, sc.slot_end, '[)')
+            ) THEN FALSE
+            WHEN COALESCE(booked.count, 0) >= COALESCE(sc.capacity, params.default_capacity) THEN FALSE
+            WHEN COALESCE(holds.count, 0) >= LEAST(v_resource.max_holds_per_slot, COALESCE(sc.capacity, params.default_capacity)) THEN FALSE
+            ELSE TRUE
+        END AS is_available
+    FROM slot_candidates sc
+    CROSS JOIN params
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*)::integer
+        FROM calendar_bookings cb
+        WHERE cb.resource_id = sc.resource_id
+          AND cb.status = 'confirmed'
+          AND cb.start_at < sc.slot_end
+          AND cb.end_at > sc.slot_start
+    ) AS booked ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*)::integer
+        FROM calendar_slot_holds sh
+        WHERE sh.resource_id = sc.resource_id
+          AND sh.status = 'active'
+          AND sh.expires_at > now()
+          AND sh.start_at < sc.slot_end
+          AND sh.end_at > sc.slot_start
+    ) AS holds ON TRUE
+    WHERE sc.slot_end > now() - INTERVAL '5 minutes'
+    ORDER BY sc.slot_start;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_list_slots(p_resource_id uuid, p_from date, p_to date, p_timezone text, p_max_days integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_list_slots(p_resource_id uuid, p_from date, p_to date, p_timezone text, p_max_days integer) IS 'Genera la disponibilidad por slot considerando patrones, excepciones, holds y reservas confirmadas.';
+
+
+--
+-- Name: fn_calendar_pattern_delete(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_pattern_delete(p_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_found boolean;
+BEGIN
+    DELETE FROM public.calendar_availability_patterns
+    WHERE id = p_id;
+    GET DIAGNOSTICS v_found = ROW_COUNT;
+    RETURN COALESCE(v_found, false);
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_pattern_delete(p_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_pattern_delete(p_id uuid) IS 'Elimina un patrón recurrente del calendario.';
+
+
+--
+-- Name: calendar_availability_patterns; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.calendar_availability_patterns (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    resource_id uuid NOT NULL,
+    weekday smallint NOT NULL,
+    start_time time without time zone NOT NULL,
+    end_time time without time zone NOT NULL,
+    start_date date,
+    end_date date,
+    capacity integer DEFAULT 1 NOT NULL,
+    priority smallint DEFAULT 0 NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT calendar_availability_patterns_capacity_check CHECK ((capacity >= 1)),
+    CONSTRAINT calendar_availability_patterns_time_check CHECK ((end_time > start_time)),
+    CONSTRAINT calendar_availability_patterns_weekday_check CHECK (((weekday >= 0) AND (weekday <= 6)))
+);
+
+
+--
+-- Name: TABLE calendar_availability_patterns; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.calendar_availability_patterns IS 'Definiciones semanales para generar slots disponibles automáticamente.';
+
+
+--
+-- Name: fn_calendar_pattern_upsert(uuid, smallint, time without time zone, time without time zone, date, date, integer, smallint, boolean, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_pattern_upsert(p_resource_id uuid, p_weekday smallint, p_start_time time without time zone, p_end_time time without time zone, p_start_date date DEFAULT NULL::date, p_end_date date DEFAULT NULL::date, p_capacity integer DEFAULT 1, p_priority smallint DEFAULT 0, p_is_active boolean DEFAULT true, p_metadata jsonb DEFAULT '{}'::jsonb, p_id uuid DEFAULT NULL::uuid) RETURNS public.calendar_availability_patterns
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_result public.calendar_availability_patterns%ROWTYPE;
+BEGIN
+    IF p_weekday NOT BETWEEN 0 AND 6 THEN
+        RAISE EXCEPTION 'weekday_invalid' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_id IS NULL THEN
+        INSERT INTO public.calendar_availability_patterns (
+            resource_id, weekday, start_time, end_time,
+            start_date, end_date, capacity, priority,
+            is_active, metadata
+        ) VALUES (
+            p_resource_id,
+            p_weekday,
+            p_start_time,
+            p_end_time,
+            p_start_date,
+            p_end_date,
+            GREATEST(1, p_capacity),
+            COALESCE(p_priority, 0),
+            COALESCE(p_is_active, true),
+            COALESCE(p_metadata, '{}'::jsonb)
+        ) RETURNING * INTO v_result;
+    ELSE
+        UPDATE public.calendar_availability_patterns
+        SET resource_id = COALESCE(p_resource_id, resource_id),
+            weekday = COALESCE(p_weekday, weekday),
+            start_time = COALESCE(p_start_time, start_time),
+            end_time = COALESCE(p_end_time, end_time),
+            start_date = COALESCE(p_start_date, start_date),
+            end_date = COALESCE(p_end_date, end_date),
+            capacity = GREATEST(1, COALESCE(p_capacity, capacity)),
+            priority = COALESCE(p_priority, priority),
+            is_active = COALESCE(p_is_active, is_active),
+            metadata = COALESCE(p_metadata, metadata),
+            updated_at = now()
+        WHERE id = p_id
+        RETURNING * INTO v_result;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'pattern_not_found' USING ERRCODE = 'P0002';
+        END IF;
+    END IF;
+
+    RETURN v_result;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_pattern_upsert(p_resource_id uuid, p_weekday smallint, p_start_time time without time zone, p_end_time time without time zone, p_start_date date, p_end_date date, p_capacity integer, p_priority smallint, p_is_active boolean, p_metadata jsonb, p_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_pattern_upsert(p_resource_id uuid, p_weekday smallint, p_start_time time without time zone, p_end_time time without time zone, p_start_date date, p_end_date date, p_capacity integer, p_priority smallint, p_is_active boolean, p_metadata jsonb, p_id uuid) IS 'Crea o actualiza las reglas recurrentes de disponibilidad.';
+
+
+--
+-- Name: fn_calendar_release_hold(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_release_hold(p_hold_id uuid, p_reason text DEFAULT NULL::text) RETURNS TABLE(hold_id uuid, resource_id uuid, start_at timestamp with time zone, end_at timestamp with time zone, status text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_hold public.calendar_slot_holds%ROWTYPE;
+BEGIN
+    IF p_hold_id IS NULL THEN
+        RAISE EXCEPTION 'hold_id_required' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_hold
+    FROM public.calendar_slot_holds
+    WHERE id = p_hold_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'hold_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_hold.status = 'active' THEN
+        UPDATE public.calendar_slot_holds
+        SET status = 'released',
+            metadata = metadata || jsonb_build_object(
+                'released_reason', COALESCE(NULLIF(p_reason, ''), 'manual'),
+                'released_at', now()
+            ),
+            updated_at = now()
+        WHERE id = p_hold_id;
+        v_hold.status := 'released';
+    END IF;
+
+    RETURN QUERY
+    SELECT v_hold.id, v_hold.resource_id, v_hold.start_at, v_hold.end_at, v_hold.status;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_release_hold(p_hold_id uuid, p_reason text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_release_hold(p_hold_id uuid, p_reason text) IS 'Marca un hold como liberado y adjunta el motivo en metadata.';
+
+
+--
+-- Name: fn_calendar_reschedule_booking(uuid, timestamp with time zone, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_reschedule_booking(p_booking_id uuid, p_new_slot_start timestamp with time zone, p_notes text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(booking_id uuid, resource_id uuid, start_at timestamp with time zone, end_at timestamp with time zone, timezone text, status text, hold_id uuid, tarjeta_id uuid, metadata jsonb)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_booking public.calendar_bookings%ROWTYPE;
+    v_new_hold record;
+    v_old_hold uuid;
+BEGIN
+    IF p_booking_id IS NULL OR p_new_slot_start IS NULL THEN
+        RAISE EXCEPTION 'booking_and_slot_required' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_booking
+    FROM public.calendar_bookings
+    WHERE id = p_booking_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'booking_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF v_booking.status <> 'confirmed' THEN
+        RAISE EXCEPTION 'booking_not_confirmed' USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT *
+    INTO v_new_hold
+    FROM public.fn_calendar_hold_slot(
+        v_booking.resource_id,
+        p_new_slot_start,
+        v_booking.conversacion_id,
+        v_booking.contact_id,
+        5,
+        jsonb_build_object('reschedule_from', v_booking.start_at),
+        v_booking.tarjeta_id
+    ) AS hold_data;
+
+    UPDATE public.calendar_slot_holds
+    SET status = 'confirmed',
+        metadata = metadata || jsonb_build_object('confirmed_via', 'reschedule', 'confirmed_at', now()),
+        updated_at = now()
+    WHERE id = v_new_hold.hold_id;
+
+    v_old_hold := v_booking.hold_id;
+
+    UPDATE public.calendar_bookings
+    SET start_at = v_new_hold.slot_start,
+        end_at = v_new_hold.slot_end,
+        hold_id = v_new_hold.hold_id,
+        tarjeta_id = v_booking.tarjeta_id,
+        metadata = metadata || COALESCE(p_metadata, '{}'::jsonb) || jsonb_build_object(
+            'rescheduled_from', v_booking.start_at,
+            'rescheduled_at', now()
+        ),
+        notes = COALESCE(NULLIF(p_notes, ''), notes),
+        updated_at = now()
+    WHERE id = v_booking.id;
+
+    IF v_old_hold IS NOT NULL THEN
+        PERFORM * FROM public.fn_calendar_release_hold(v_old_hold, 'rescheduled');
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        cb.id,
+        cb.resource_id,
+        cb.start_at,
+        cb.end_at,
+        cb.timezone,
+        cb.status,
+        cb.hold_id,
+        cb.tarjeta_id,
+        cb.metadata
+    FROM public.calendar_bookings cb
+    WHERE cb.id = v_booking.id;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_reschedule_booking(p_booking_id uuid, p_new_slot_start timestamp with time zone, p_notes text, p_metadata jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_reschedule_booking(p_booking_id uuid, p_new_slot_start timestamp with time zone, p_notes text, p_metadata jsonb) IS 'Genera un nuevo hold, actualiza la cita con el horario elegido y libera el hold anterior.';
+
+
+--
+-- Name: calendar_resources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.calendar_resources (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    slug text,
+    timezone text DEFAULT 'America/Mexico_City'::text NOT NULL,
+    slot_minutes integer DEFAULT 45 NOT NULL,
+    buffer_minutes integer DEFAULT 15 NOT NULL,
+    capacity_per_slot integer DEFAULT 1 NOT NULL,
+    max_holds_per_slot integer DEFAULT 1 NOT NULL,
+    max_days_visible integer DEFAULT 45 NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    updated_by uuid,
+    CONSTRAINT calendar_resources_capacity_per_slot_check CHECK ((capacity_per_slot >= 1)),
+    CONSTRAINT calendar_resources_max_days_visible_check CHECK (((max_days_visible >= 1) AND (max_days_visible <= 120))),
+    CONSTRAINT calendar_resources_max_holds_per_slot_check CHECK ((max_holds_per_slot >= 1))
+);
+
+
+--
+-- Name: TABLE calendar_resources; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.calendar_resources IS 'Catálogo de recursos (personas/calendarios) que exponen disponibilidad en el webchat.';
+
+
+--
+-- Name: fn_calendar_resource_upsert(text, text, integer, integer, integer, integer, integer, boolean, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_resource_upsert(p_name text, p_timezone text DEFAULT 'America/Mexico_City'::text, p_slot_minutes integer DEFAULT 45, p_buffer_minutes integer DEFAULT 15, p_capacity_per_slot integer DEFAULT 1, p_max_holds integer DEFAULT 1, p_max_days_visible integer DEFAULT 45, p_is_active boolean DEFAULT true, p_metadata jsonb DEFAULT '{}'::jsonb, p_id uuid DEFAULT NULL::uuid) RETURNS public.calendar_resources
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_result public.calendar_resources%ROWTYPE;
+BEGIN
+    IF p_id IS NULL THEN
+        INSERT INTO public.calendar_resources (
+            name, timezone, slot_minutes, buffer_minutes,
+            capacity_per_slot, max_holds_per_slot, max_days_visible,
+            is_active, metadata
+        ) VALUES (
+            p_name,
+            COALESCE(NULLIF(p_timezone, ''), 'America/Mexico_City'),
+            GREATEST(15, p_slot_minutes),
+            GREATEST(0, p_buffer_minutes),
+            GREATEST(1, p_capacity_per_slot),
+            GREATEST(1, p_max_holds),
+            GREATEST(1, LEAST(p_max_days_visible, 120)),
+            COALESCE(p_is_active, true),
+            COALESCE(p_metadata, '{}'::jsonb)
+        ) RETURNING * INTO v_result;
+    ELSE
+        UPDATE public.calendar_resources
+        SET name = COALESCE(NULLIF(p_name, ''), name),
+            timezone = COALESCE(NULLIF(p_timezone, ''), timezone),
+            slot_minutes = GREATEST(15, COALESCE(p_slot_minutes, slot_minutes)),
+            buffer_minutes = GREATEST(0, COALESCE(p_buffer_minutes, buffer_minutes)),
+            capacity_per_slot = GREATEST(1, COALESCE(p_capacity_per_slot, capacity_per_slot)),
+            max_holds_per_slot = GREATEST(1, COALESCE(p_max_holds, max_holds_per_slot)),
+            max_days_visible = GREATEST(1, LEAST(COALESCE(p_max_days_visible, max_days_visible), 120)),
+            is_active = COALESCE(p_is_active, is_active),
+            metadata = COALESCE(p_metadata, metadata),
+            updated_at = now()
+        WHERE id = p_id
+        RETURNING * INTO v_result;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'calendar_resource_not_found' USING ERRCODE = 'P0002';
+        END IF;
+    END IF;
+
+    RETURN v_result;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION fn_calendar_resource_upsert(p_name text, p_timezone text, p_slot_minutes integer, p_buffer_minutes integer, p_capacity_per_slot integer, p_max_holds integer, p_max_days_visible integer, p_is_active boolean, p_metadata jsonb, p_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_calendar_resource_upsert(p_name text, p_timezone text, p_slot_minutes integer, p_buffer_minutes integer, p_capacity_per_slot integer, p_max_holds integer, p_max_days_visible integer, p_is_active boolean, p_metadata jsonb, p_id uuid) IS 'Crea o actualiza recursos del calendario de forma segura.';
+
+
+--
+-- Name: fn_calendar_sync_tarjeta_stage(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_calendar_sync_tarjeta_stage(p_tarjeta_id uuid, p_status text, p_booking_id uuid) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_tarjeta public.lead_tarjetas%ROWTYPE;
+    v_target_stage uuid;
+    v_target_code text;
+    v_actor uuid;
+BEGIN
+    IF p_tarjeta_id IS NULL OR p_status IS NULL THEN
+        RETURN;
+    END IF;
+
+    SELECT * INTO v_tarjeta
+    FROM public.lead_tarjetas
+    WHERE id = p_tarjeta_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    IF p_status = 'confirmed' THEN
+        v_target_code := 'demo';
+    ELSIF p_status = 'cancelled' THEN
+        v_target_code := 'precalificado';
+    ELSE
+        RETURN;
+    END IF;
+
+    SELECT id INTO v_target_stage
+    FROM public.lead_etapas
+    WHERE tablero_id = v_tarjeta.tablero_id
+      AND codigo = v_target_code
+    ORDER BY orden
+    LIMIT 1;
+
+    IF v_target_stage IS NULL AND p_status = 'cancelled' THEN
+        SELECT id INTO v_target_stage
+        FROM public.lead_etapas
+        WHERE tablero_id = v_tarjeta.tablero_id
+        ORDER BY orden
+        LIMIT 1;
+    END IF;
+
+    IF v_target_stage IS NULL OR v_target_stage = v_tarjeta.etapa_id THEN
+        RETURN;
+    END IF;
+
+    v_actor := coalesce(auth.uid(), v_tarjeta.asignado_a_usuario_id, v_tarjeta.propietario_usuario_id);
+
+    UPDATE public.lead_tarjetas
+    SET etapa_id = v_target_stage,
+        actualizado_en = now()
+    WHERE id = v_tarjeta.id;
+
+    INSERT INTO public.lead_movimientos (
+        tarjeta_id,
+        etapa_origen_id,
+        etapa_destino_id,
+        cambiado_por,
+        fuente,
+        metadata
+    ) VALUES (
+        v_tarjeta.id,
+        v_tarjeta.etapa_id,
+        v_target_stage,
+        v_actor,
+        'asistente',
+        jsonb_build_object(
+            'source', 'calendar_booking',
+            'booking_id', p_booking_id,
+            'status', p_status
+        )
     );
 END;
 $$;
 
 
 --
--- Name: fn_cita_reschedule_json_v4(uuid, timestamp with time zone, timestamp with time zone, text, jsonb, text, timestamp with time zone, uuid, boolean, text, text, timestamp with time zone, text, text, text, text, text, public.cita_estado, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+-- Name: FUNCTION fn_calendar_sync_tarjeta_stage(p_tarjeta_id uuid, p_status text, p_booking_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_cita_reschedule_json_v4(p_id uuid, p_start_at timestamp with time zone, p_end_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_timezone text DEFAULT NULL::text, p_metadata jsonb DEFAULT NULL::jsonb, p_notes text DEFAULT NULL::text, p_expected_updated_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_updated_by uuid DEFAULT NULL::uuid, p_merge_metadata boolean DEFAULT true, p_scheduled_via text DEFAULT NULL::text, p_reminder_status text DEFAULT NULL::text, p_reminder_sent_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_provider text DEFAULT NULL::text, p_provider_event_id text DEFAULT NULL::text, p_meeting_url text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_external_join_url text DEFAULT NULL::text, p_estado public.cita_estado DEFAULT NULL::public.cita_estado, p_cancel_reason text DEFAULT NULL::text, p_remove_provider_event boolean DEFAULT false) RETURNS jsonb
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'extensions'
-    AS $$
-DECLARE
-    v_row public.citas;
-BEGIN
-    SELECT public.fn_cita_reschedule(
-        p_id,
-        p_start_at,
-        p_end_at,
-        p_timezone,
-        p_metadata,
-        p_notes,
-        p_expected_updated_at,
-        p_updated_by,
-        p_merge_metadata,
-        p_scheduled_via,
-        p_reminder_status,
-        p_reminder_sent_at,
-        p_provider,
-        p_provider_event_id,
-        p_meeting_url,
-        p_location,
-        p_external_join_url,
-        p_estado,
-        p_cancel_reason,
-        p_remove_provider_event
-    )
-    INTO v_row;
-
-    RETURN to_jsonb(v_row);
-END;
-$$;
+COMMENT ON FUNCTION public.fn_calendar_sync_tarjeta_stage(p_tarjeta_id uuid, p_status text, p_booking_id uuid) IS 'Sincroniza la etapa de la tarjeta cuando cambia el estado de una cita del calendario.';
 
 
 --
@@ -4994,53 +6015,42 @@ end;$$;
 
 
 --
--- Name: tg_citas_sync_stage(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: tg_calendar_bookings_sync_stage(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.tg_citas_sync_stage() RETURNS trigger
+CREATE FUNCTION public.tg_calendar_bookings_sync_stage() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE
-    v_tablero_id uuid;
-    v_demo_stage uuid;
+    v_tarjeta_id uuid;
 BEGIN
-    IF TG_OP = 'UPDATE' AND NEW.estado IS NOT DISTINCT FROM OLD.estado THEN
+    v_tarjeta_id := NEW.tarjeta_id;
+
+    IF v_tarjeta_id IS NULL AND NEW.conversacion_id IS NOT NULL THEN
+        SELECT lt.id INTO v_tarjeta_id
+        FROM public.lead_tarjetas lt
+        WHERE lt.conversacion_id = NEW.conversacion_id
+        ORDER BY lt.creado_en DESC
+        LIMIT 1;
+    END IF;
+
+    IF v_tarjeta_id IS NULL THEN
         RETURN NEW;
     END IF;
 
-    IF NEW.estado IN ('pendiente','confirmada','reprogramada') THEN
-        SELECT lt.tablero_id
-          INTO v_tablero_id
-          FROM public.lead_tarjetas lt
-         WHERE lt.id = NEW.tarjeta_id;
-
-        IF v_tablero_id IS NOT NULL THEN
-            SELECT le.id
-              INTO v_demo_stage
-              FROM public.lead_etapas le
-             WHERE le.tablero_id = v_tablero_id
-               AND le.codigo = 'demo'
-             LIMIT 1;
-
-            IF v_demo_stage IS NOT NULL THEN
-                UPDATE public.lead_tarjetas lt
-                   SET etapa_id = v_demo_stage
-                 WHERE lt.id = NEW.tarjeta_id
-                   AND lt.etapa_id <> v_demo_stage;
-            END IF;
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status = 'confirmed' THEN
+            PERFORM public.fn_calendar_sync_tarjeta_stage(v_tarjeta_id, 'confirmed', NEW.id);
+        END IF;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF NEW.status IS DISTINCT FROM OLD.status THEN
+            PERFORM public.fn_calendar_sync_tarjeta_stage(v_tarjeta_id, NEW.status, NEW.id);
         END IF;
     END IF;
 
     RETURN NEW;
 END;
 $$;
-
-
---
--- Name: FUNCTION tg_citas_sync_stage(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.tg_citas_sync_stage() IS 'Asegura que la tarjeta se mueva a la etapa Demo cuando hay una cita activa.';
 
 
 --
@@ -5496,8 +6506,20 @@ $$;
 CREATE FUNCTION public.tg_touch_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
+DECLARE
+    v_row jsonb := to_jsonb(NEW);
 BEGIN
-    NEW.actualizado_en := now();
+    IF v_row ? 'actualizado_en' THEN
+        NEW.actualizado_en := now();
+    ELSIF v_row ? 'updated_at' THEN
+        NEW.updated_at := now();
+    ELSE
+        RAISE EXCEPTION
+            'tg_touch_updated_at: la tabla %.% no tiene columnas actualizado_en ni updated_at',
+            TG_TABLE_SCHEMA,
+            TG_TABLE_NAME;
+    END IF;
+
     RETURN NEW;
 END;
 $$;
@@ -5507,7 +6529,7 @@ $$;
 -- Name: FUNCTION tg_touch_updated_at(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.tg_touch_updated_at() IS 'Actualiza la columna actualizado_en al momento actual.';
+COMMENT ON FUNCTION public.tg_touch_updated_at() IS 'Actualiza la columna actualizado_en o updated_at al momento actual, según exista.';
 
 
 --
@@ -7272,10 +8294,6 @@ END;
 $$;
 
 
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
 --
 -- Name: audit_log_entries; Type: TABLE; Schema: auth; Owner: -
 --
@@ -7860,106 +8878,69 @@ CREATE TABLE public.busquedas (
 
 
 --
--- Name: citas; Type: TABLE; Schema: public; Owner: -
+-- Name: calendar_bookings; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.citas (
+CREATE TABLE public.calendar_bookings (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    tarjeta_id uuid NOT NULL,
-    contacto_id uuid NOT NULL,
+    resource_id uuid NOT NULL,
+    hold_id uuid,
+    contact_id uuid,
     conversacion_id uuid,
     start_at timestamp with time zone NOT NULL,
-    end_at timestamp with time zone,
-    timezone text,
-    estado public.cita_estado DEFAULT 'pendiente'::public.cita_estado NOT NULL,
-    provider text DEFAULT 'hosting'::text NOT NULL,
-    provider_calendar_id text,
-    provider_event_id text,
-    meeting_url text,
-    location text,
+    end_at timestamp with time zone NOT NULL,
+    timezone text NOT NULL,
+    status text DEFAULT 'confirmed'::text NOT NULL,
     notes text,
+    meeting_url text,
+    external_join_url text,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by uuid,
     updated_by uuid,
-    cancel_reason text,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
-    reminder_sent_at timestamp with time zone,
-    reminder_status text DEFAULT 'pendiente'::text NOT NULL,
-    external_join_url text,
-    scheduled_via text DEFAULT 'humano'::text NOT NULL,
-    invite_status text DEFAULT 'pendiente'::text NOT NULL,
-    invite_sent_at timestamp with time zone,
-    invite_message_id text,
-    CONSTRAINT citas_invite_status_check CHECK ((invite_status = ANY (ARRAY['pendiente'::text, 'enviado'::text, 'fallido'::text]))),
-    CONSTRAINT citas_provider_check CHECK ((provider = ANY (ARRAY['hosting'::text, 'google'::text, 'caldav'::text]))),
-    CONSTRAINT citas_reminder_status_check CHECK ((reminder_status = ANY (ARRAY['pendiente'::text, 'programado'::text, 'enviado'::text, 'fallido'::text]))),
-    CONSTRAINT citas_scheduled_via_check CHECK ((scheduled_via = ANY (ARRAY['humano'::text, 'ia'::text, 'api'::text]))),
-    CONSTRAINT citas_time_check CHECK (((end_at IS NULL) OR (end_at >= start_at)))
+    tarjeta_id uuid,
+    CONSTRAINT calendar_bookings_status_check CHECK ((status = ANY (ARRAY['confirmed'::text, 'cancelled'::text]))),
+    CONSTRAINT calendar_bookings_time_check CHECK ((end_at > start_at))
 );
 
 
 --
--- Name: TABLE citas; Type: COMMENT; Schema: public; Owner: -
+-- Name: TABLE calendar_bookings; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.citas IS 'Citas de demostración asociadas a leads; sincroniza con calendario externo.';
-
-
---
--- Name: COLUMN citas.provider; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.citas.provider IS 'Origen de la cita (hosting propio vs Google Calendar).';
+COMMENT ON TABLE public.calendar_bookings IS 'Citas confirmadas que Tal-IA agenda desde el webchat.';
 
 
 --
--- Name: COLUMN citas.reminder_sent_at; Type: COMMENT; Schema: public; Owner: -
+-- Name: calendar_slot_holds; Type: TABLE; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.citas.reminder_sent_at IS 'Último recordatorio automático enviado para la cita.';
-
-
---
--- Name: COLUMN citas.reminder_status; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.citas.reminder_status IS 'Estado del recordatorio automático (pendiente, programado, enviado, fallido).';
-
-
---
--- Name: COLUMN citas.external_join_url; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.citas.external_join_url IS 'Enlace externo generado por integraciones (Zoom, Meet, etc.).';
-
-
---
--- Name: COLUMN citas.scheduled_via; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.citas.scheduled_via IS 'Indica si la cita la creó un humano, la IA o una integración API.';
+CREATE TABLE public.calendar_slot_holds (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    resource_id uuid NOT NULL,
+    start_at timestamp with time zone NOT NULL,
+    end_at timestamp with time zone NOT NULL,
+    contact_id uuid,
+    conversacion_id uuid,
+    status text DEFAULT 'active'::text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    updated_by uuid,
+    tarjeta_id uuid,
+    CONSTRAINT calendar_slot_holds_status_check CHECK ((status = ANY (ARRAY['active'::text, 'confirmed'::text, 'released'::text, 'expired'::text]))),
+    CONSTRAINT calendar_slot_holds_time_check CHECK ((end_at > start_at))
+);
 
 
 --
--- Name: COLUMN citas.invite_status; Type: COMMENT; Schema: public; Owner: -
+-- Name: TABLE calendar_slot_holds; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.citas.invite_status IS 'Estado del envío de invitación (pendiente, enviado, fallido).';
-
-
---
--- Name: COLUMN citas.invite_sent_at; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.citas.invite_sent_at IS 'Marca de tiempo del último envío exitoso.';
-
-
---
--- Name: COLUMN citas.invite_message_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.citas.invite_message_id IS 'Identificador del mensaje de invitación (Message-ID, UUID, etc.).';
+COMMENT ON TABLE public.calendar_slot_holds IS 'Reservas temporales mientras el visitante confirma la cita.';
 
 
 --
@@ -8438,90 +9419,28 @@ CREATE MATERIALIZED VIEW public.mv_resultados_por_actividad AS
 
 
 --
--- Name: panel_agenda_calendario; Type: VIEW; Schema: public; Owner: -
+-- Name: panel_calendar_bookings; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.panel_agenda_calendario AS
- SELECT c.id,
-    c.tarjeta_id,
-    c.contacto_id,
-    cto.nombre_completo AS contacto_nombre,
-    c.start_at,
-    c.end_at,
-    c.timezone,
-    c.estado,
-    c.provider,
-    c.meeting_url,
-    c.location,
-    c.notes,
-    c.provider_event_id,
-    c.provider_calendar_id,
-    c.metadata,
-    c.invite_status,
-    c.invite_sent_at,
-    c.invite_message_id,
-    c.reminder_sent_at,
-    c.reminder_status,
-    c.external_join_url,
-    c.scheduled_via,
-    (COALESCE(cto.nombre_completo, 'Lead'::text) || ' • Demo'::text) AS titulo,
+CREATE VIEW public.panel_calendar_bookings AS
+ SELECT cb.id,
+    cb.resource_id,
+    cb.hold_id,
+    cb.tarjeta_id,
+    cb.contact_id,
+    cb.conversacion_id,
+    cb.start_at,
+    cb.end_at,
+    cb.timezone,
+    cb.status,
+    cb.notes,
+    cb.meeting_url,
+    cb.external_join_url,
+    cb.metadata,
+    cb.created_at,
+    cb.updated_at,
     lt.tablero_id,
     lt.etapa_id,
-    le.codigo AS etapa_codigo,
-    le.nombre AS etapa_nombre,
-    lt.asignado_a_usuario_id,
-    ua.nombre_completo AS asignado_nombre,
-    lt.propietario_usuario_id,
-    up.nombre_completo AS propietario_nombre
-   FROM (((((public.citas c
-     JOIN public.lead_tarjetas lt ON ((lt.id = c.tarjeta_id)))
-     LEFT JOIN public.lead_etapas le ON ((le.id = lt.etapa_id)))
-     LEFT JOIN public.usuarios ua ON ((ua.id = lt.asignado_a_usuario_id)))
-     LEFT JOIN public.usuarios up ON ((up.id = lt.propietario_usuario_id)))
-     LEFT JOIN public.contactos cto ON ((cto.id = c.contacto_id)));
-
-
---
--- Name: VIEW panel_agenda_calendario; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.panel_agenda_calendario IS 'Vista simplificada para mostrar eventos de demo en calendarios.';
-
-
---
--- Name: panel_agenda_demos; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.panel_agenda_demos AS
- SELECT c.id,
-    c.tarjeta_id,
-    c.contacto_id,
-    c.conversacion_id,
-    c.start_at,
-    c.end_at,
-    c.timezone,
-    c.estado,
-    c.provider,
-    c.provider_calendar_id,
-    c.provider_event_id,
-    c.meeting_url,
-    c.location,
-    c.notes,
-    c.metadata,
-    c.invite_status,
-    c.invite_sent_at,
-    c.invite_message_id,
-    c.created_by,
-    c.updated_by,
-    c.cancel_reason,
-    c.reminder_sent_at,
-    c.reminder_status,
-    c.external_join_url,
-    c.scheduled_via,
-    c.creado_en,
-    c.actualizado_en,
-    lt.tablero_id AS tarjeta_tablero_id,
-    lt.etapa_id AS tarjeta_etapa_id,
     le.codigo AS etapa_codigo,
     le.nombre AS etapa_nombre,
     lt.canal AS tarjeta_canal,
@@ -8532,28 +9451,48 @@ CREATE VIEW public.panel_agenda_demos AS
     ua.nombre_completo AS asignado_nombre,
     lt.propietario_usuario_id,
     up.nombre_completo AS propietario_nombre,
-    cto.nombre_completo AS contacto_nombre,
-    cto.correo AS contacto_correo,
-    cto.telefono_e164 AS contacto_telefono,
-    cto.company_name AS contacto_empresa,
-    cto.origen AS contacto_origen,
+    c.nombre_completo AS contacto_nombre,
+    c.correo AS contacto_correo,
+    c.telefono_e164 AS contacto_telefono,
+    c.company_name AS contacto_empresa,
+    c.origen AS contacto_origen,
     conv.estado AS conversacion_estado,
     conv.ultimo_mensaje_en AS conversacion_ultimo_mensaje_en,
     conv.canal AS conversacion_canal
-   FROM ((((((public.citas c
-     JOIN public.lead_tarjetas lt ON ((lt.id = c.tarjeta_id)))
+   FROM ((((((public.calendar_bookings cb
+     LEFT JOIN public.lead_tarjetas lt ON ((lt.id = cb.tarjeta_id)))
      LEFT JOIN public.lead_etapas le ON ((le.id = lt.etapa_id)))
      LEFT JOIN public.usuarios ua ON ((ua.id = lt.asignado_a_usuario_id)))
      LEFT JOIN public.usuarios up ON ((up.id = lt.propietario_usuario_id)))
-     LEFT JOIN public.contactos cto ON ((cto.id = c.contacto_id)))
-     LEFT JOIN public.conversaciones conv ON ((conv.id = c.conversacion_id)));
+     LEFT JOIN public.contactos c ON ((c.id = cb.contact_id)))
+     LEFT JOIN public.conversaciones conv ON ((conv.id = cb.conversacion_id)));
 
 
 --
--- Name: VIEW panel_agenda_demos; Type: COMMENT; Schema: public; Owner: -
+-- Name: VIEW panel_calendar_bookings; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.panel_agenda_demos IS 'Agregación de citas demo con datos de tarjetas, contactos y conversaciones para el panel.';
+COMMENT ON VIEW public.panel_calendar_bookings IS 'Citas confirmadas del calendario con contexto de tarjeta, contacto y conversación para el panel.';
+
+
+--
+-- Name: panel_calendar_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.panel_calendar_settings (
+    slug text NOT NULL,
+    reminder_enabled boolean DEFAULT true NOT NULL,
+    reminder_offset_minutes integer DEFAULT 120 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT panel_calendar_settings_reminder_offset_minutes_check CHECK (((reminder_offset_minutes >= 15) AND (reminder_offset_minutes <= 720)))
+);
+
+
+--
+-- Name: TABLE panel_calendar_settings; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.panel_calendar_settings IS 'Preferencias del calendario para el panel (recordatorios, offsets, flags).';
 
 
 --
@@ -8782,6 +9721,111 @@ CREATE VIEW public.v_configuracion_personal AS
      LEFT JOIN public.empleados e ON ((e.usuario_id = u.id)))
      LEFT JOIN public.departamentos d ON ((d.id = e.departamento_id)))
      LEFT JOIN public.puestos p ON ((p.id = e.puesto_id)));
+
+
+--
+-- Name: v_denue_contactables; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.v_denue_contactables AS
+ SELECT r.id AS resultado_id,
+    r.busqueda_id,
+    r.fuente AS fuente_resultado,
+    b.fuente AS fuente_busqueda,
+    r.external_id,
+    COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+    r.name,
+    r.razon_social,
+    r.actividad,
+    r.estrato,
+    COALESCE(NULLIF(r.phone, ''::text), NULLIF((r.raw #>> '{Telefono}'::text[]), ''::text)) AS phone,
+    COALESCE(NULLIF(r.email, ''::text), NULLIF((r.raw #>> '{Correo_e}'::text[]), ''::text)) AS email,
+    COALESCE(NULLIF(r.website, ''::text), NULLIF((r.raw #>> '{Sitio_internet}'::text[]), ''::text)) AS website,
+    NULLIF(r.address, ''::text) AS address,
+    r.lat,
+    r.lng,
+    r.geom,
+    r.maps_url,
+    r.creado_en AS resultado_creado_en,
+    b.query AS busqueda_query,
+    b.radio_m AS busqueda_radio_m,
+    b.lat AS busqueda_lat,
+    b.lng AS busqueda_lng,
+    b.centro AS busqueda_centro,
+    b.total_encontrados AS busqueda_total_encontrados,
+    b.meta AS busqueda_meta,
+    b.creado_en AS busqueda_creado_en,
+    b.creado_por AS busqueda_creado_por,
+        CASE
+            WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+            ELSE NULL::double precision
+        END AS distancia_m
+   FROM (public.resultados r
+     JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
+  WHERE (r.fuente = 'denue'::public.fuente_resultado);
+
+
+--
+-- Name: VIEW v_denue_contactables; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.v_denue_contactables IS 'Resultados de búsquedas DENUE listos para contactabilidad y mapa.';
+
+
+--
+-- Name: v_google_places_contactables; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.v_google_places_contactables AS
+ SELECT r.id AS resultado_id,
+    r.busqueda_id,
+    r.fuente AS fuente_resultado,
+    b.fuente AS fuente_busqueda,
+    r.external_id,
+    COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+    r.name,
+    r.razon_social,
+    r.actividad,
+    r.estrato,
+    (r.raw ->> 'primaryType'::text) AS google_primary_type,
+    (r.raw ->> 'primaryTypeDisplayName'::text) AS google_primary_type_display_name,
+    COALESCE(types.google_types, ARRAY[]::text[]) AS google_types,
+    COALESCE(NULLIF(r.phone, ''::text), NULLIF((r.raw #>> '{internationalPhoneNumber}'::text[]), ''::text), NULLIF((r.raw #>> '{nationalPhoneNumber}'::text[]), ''::text)) AS phone,
+    COALESCE(NULLIF(r.email, ''::text), NULLIF((r.raw #>> '{email}'::text[]), ''::text)) AS email,
+    COALESCE(NULLIF(r.website, ''::text), NULLIF((r.raw #>> '{websiteUri}'::text[]), ''::text), NULLIF((r.raw #>> '{googleMapsUri}'::text[]), ''::text)) AS website,
+    NULLIF(r.address, ''::text) AS address,
+    r.lat,
+    r.lng,
+    r.geom,
+    r.rating,
+    r.reviews,
+    r.maps_url,
+    r.creado_en AS resultado_creado_en,
+    b.query AS busqueda_query,
+    b.radio_m AS busqueda_radio_m,
+    b.lat AS busqueda_lat,
+    b.lng AS busqueda_lng,
+    b.centro AS busqueda_centro,
+    b.total_encontrados AS busqueda_total_encontrados,
+    b.meta AS busqueda_meta,
+    b.creado_en AS busqueda_creado_en,
+    b.creado_por AS busqueda_creado_por,
+        CASE
+            WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+            ELSE NULL::double precision
+        END AS distancia_m
+   FROM ((public.resultados r
+     JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
+     LEFT JOIN LATERAL ( SELECT COALESCE(array_agg(value.value), ARRAY[]::text[]) AS google_types
+           FROM jsonb_array_elements_text(COALESCE((r.raw -> 'types'::text), '[]'::jsonb)) value(value)) types ON (true))
+  WHERE (r.fuente = 'google_places'::public.fuente_resultado);
+
+
+--
+-- Name: VIEW v_google_places_contactables; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.v_google_places_contactables IS 'Resultados de búsquedas Google Places listos para contactabilidad (teléfono, web, tipo, radio y distancia al centro).';
 
 
 --
@@ -9505,6 +10549,54 @@ ALTER TABLE ONLY public.busquedas
 
 
 --
+-- Name: calendar_availability_patterns calendar_availability_patterns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_availability_patterns
+    ADD CONSTRAINT calendar_availability_patterns_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: calendar_bookings calendar_bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_bookings
+    ADD CONSTRAINT calendar_bookings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: calendar_exceptions calendar_exceptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_exceptions
+    ADD CONSTRAINT calendar_exceptions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: calendar_resources calendar_resources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_resources
+    ADD CONSTRAINT calendar_resources_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: calendar_resources calendar_resources_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_resources
+    ADD CONSTRAINT calendar_resources_slug_key UNIQUE (slug);
+
+
+--
+-- Name: calendar_slot_holds calendar_slot_holds_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_slot_holds
+    ADD CONSTRAINT calendar_slot_holds_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: llamadas calls_call_sid_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9542,14 +10634,6 @@ ALTER TABLE ONLY public.identidades_canal
 
 ALTER TABLE ONLY public.identidades_canal
     ADD CONSTRAINT channel_identities_pkey PRIMARY KEY (id);
-
-
---
--- Name: citas citas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.citas
-    ADD CONSTRAINT citas_pkey PRIMARY KEY (id);
 
 
 --
@@ -9726,6 +10810,14 @@ ALTER TABLE ONLY public.lead_tarjetas
 
 ALTER TABLE ONLY public.mensajes
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: panel_calendar_settings panel_calendar_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.panel_calendar_settings
+    ADD CONSTRAINT panel_calendar_settings_pkey PRIMARY KEY (slug);
 
 
 --
@@ -10393,52 +11485,59 @@ CREATE INDEX agentes_canal_idx ON public.agentes USING btree (canal);
 
 
 --
--- Name: citas_active_unique; Type: INDEX; Schema: public; Owner: -
+-- Name: calendar_availability_patterns_resource_weekday_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX citas_active_unique ON public.citas USING btree (tarjeta_id) WHERE (estado = ANY (ARRAY['pendiente'::public.cita_estado, 'confirmada'::public.cita_estado, 'reprogramada'::public.cita_estado]));
-
-
---
--- Name: citas_created_by_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX citas_created_by_idx ON public.citas USING btree (created_by) WHERE (created_by IS NOT NULL);
+CREATE INDEX calendar_availability_patterns_resource_weekday_idx ON public.calendar_availability_patterns USING btree (resource_id, weekday) WHERE is_active;
 
 
 --
--- Name: citas_estado_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: calendar_bookings_conversation_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX citas_estado_idx ON public.citas USING btree (estado, start_at);
-
-
---
--- Name: citas_provider_event_id_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX citas_provider_event_id_idx ON public.citas USING btree (provider_event_id) WHERE (provider_event_id IS NOT NULL);
+CREATE INDEX calendar_bookings_conversation_idx ON public.calendar_bookings USING btree (conversacion_id);
 
 
 --
--- Name: citas_start_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: calendar_bookings_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX citas_start_idx ON public.citas USING btree (start_at);
-
-
---
--- Name: citas_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX citas_tarjeta_idx ON public.citas USING btree (tarjeta_id);
+CREATE INDEX calendar_bookings_tarjeta_idx ON public.calendar_bookings USING btree (tarjeta_id);
 
 
 --
--- Name: citas_updated_by_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: calendar_bookings_unique_slot; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX citas_updated_by_idx ON public.citas USING btree (updated_by) WHERE (updated_by IS NOT NULL);
+CREATE UNIQUE INDEX calendar_bookings_unique_slot ON public.calendar_bookings USING btree (resource_id, start_at) WHERE (status = 'confirmed'::text);
+
+
+--
+-- Name: calendar_exceptions_resource_kind_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX calendar_exceptions_resource_kind_idx ON public.calendar_exceptions USING btree (resource_id, kind, start_at, end_at);
+
+
+--
+-- Name: calendar_slot_holds_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX calendar_slot_holds_active_idx ON public.calendar_slot_holds USING btree (resource_id, start_at, expires_at) WHERE (status = 'active'::text);
+
+
+--
+-- Name: calendar_slot_holds_resource_start_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX calendar_slot_holds_resource_start_idx ON public.calendar_slot_holds USING btree (resource_id, start_at);
+
+
+--
+-- Name: calendar_slot_holds_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX calendar_slot_holds_tarjeta_idx ON public.calendar_slot_holds USING btree (tarjeta_id);
 
 
 --
@@ -11009,17 +12108,45 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 
 
 --
--- Name: citas citas_sync_stage; Type: TRIGGER; Schema: public; Owner: -
+-- Name: calendar_availability_patterns calendar_availability_patterns_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER citas_sync_stage AFTER INSERT OR UPDATE ON public.citas FOR EACH ROW EXECUTE FUNCTION public.tg_citas_sync_stage();
+CREATE TRIGGER calendar_availability_patterns_touch_updated_at BEFORE UPDATE ON public.calendar_availability_patterns FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
--- Name: citas citas_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+-- Name: calendar_bookings calendar_bookings_sync_stage; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER citas_touch_updated_at BEFORE UPDATE ON public.citas FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+CREATE TRIGGER calendar_bookings_sync_stage AFTER INSERT OR UPDATE OF status ON public.calendar_bookings FOR EACH ROW EXECUTE FUNCTION public.tg_calendar_bookings_sync_stage();
+
+
+--
+-- Name: calendar_bookings calendar_bookings_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER calendar_bookings_touch_updated_at BEFORE UPDATE ON public.calendar_bookings FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: calendar_exceptions calendar_exceptions_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER calendar_exceptions_touch_updated_at BEFORE UPDATE ON public.calendar_exceptions FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: calendar_resources calendar_resources_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER calendar_resources_touch_updated_at BEFORE UPDATE ON public.calendar_resources FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: calendar_slot_holds calendar_slot_holds_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER calendar_slot_holds_touch_updated_at BEFORE UPDATE ON public.calendar_slot_holds FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -11334,6 +12461,62 @@ ALTER TABLE ONLY public.adjuntos
 
 
 --
+-- Name: calendar_availability_patterns calendar_availability_patterns_resource_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_availability_patterns
+    ADD CONSTRAINT calendar_availability_patterns_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.calendar_resources(id) ON DELETE CASCADE;
+
+
+--
+-- Name: calendar_bookings calendar_bookings_hold_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_bookings
+    ADD CONSTRAINT calendar_bookings_hold_id_fkey FOREIGN KEY (hold_id) REFERENCES public.calendar_slot_holds(id) ON DELETE SET NULL;
+
+
+--
+-- Name: calendar_bookings calendar_bookings_resource_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_bookings
+    ADD CONSTRAINT calendar_bookings_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.calendar_resources(id) ON DELETE CASCADE;
+
+
+--
+-- Name: calendar_bookings calendar_bookings_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_bookings
+    ADD CONSTRAINT calendar_bookings_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: calendar_exceptions calendar_exceptions_resource_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_exceptions
+    ADD CONSTRAINT calendar_exceptions_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.calendar_resources(id) ON DELETE CASCADE;
+
+
+--
+-- Name: calendar_slot_holds calendar_slot_holds_resource_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_slot_holds
+    ADD CONSTRAINT calendar_slot_holds_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES public.calendar_resources(id) ON DELETE CASCADE;
+
+
+--
+-- Name: calendar_slot_holds calendar_slot_holds_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_slot_holds
+    ADD CONSTRAINT calendar_slot_holds_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE SET NULL;
+
+
+--
 -- Name: llamadas calls_contact_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11347,46 +12530,6 @@ ALTER TABLE ONLY public.llamadas
 
 ALTER TABLE ONLY public.identidades_canal
     ADD CONSTRAINT channel_identities_contact_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
-
-
---
--- Name: citas citas_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.citas
-    ADD CONSTRAINT citas_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
-
-
---
--- Name: citas citas_conversacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.citas
-    ADD CONSTRAINT citas_conversacion_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id) ON DELETE SET NULL;
-
-
---
--- Name: citas citas_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.citas
-    ADD CONSTRAINT citas_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.usuarios(id) ON DELETE SET NULL;
-
-
---
--- Name: citas citas_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.citas
-    ADD CONSTRAINT citas_tarjeta_id_fkey FOREIGN KEY (tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE;
-
-
---
--- Name: citas citas_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.citas
-    ADD CONSTRAINT citas_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.usuarios(id) ON DELETE SET NULL;
 
 
 --
@@ -11917,61 +13060,6 @@ CREATE POLICY adjuntos_select_visible ON public.adjuntos FOR SELECT TO authentic
 --
 
 ALTER TABLE public.busquedas ENABLE ROW LEVEL SECURITY;
-
---
--- Name: citas; Type: ROW SECURITY; Schema: public; Owner: -
---
-
-ALTER TABLE public.citas ENABLE ROW LEVEL SECURITY;
-
---
--- Name: citas citas_admin_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY citas_admin_all ON public.citas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: citas citas_delete; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY citas_delete ON public.citas FOR DELETE USING (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: citas citas_insert; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY citas_insert ON public.citas FOR INSERT WITH CHECK (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: citas citas_modify; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY citas_modify ON public.citas FOR UPDATE USING (public.puede_ver_lead(tarjeta_id)) WITH CHECK (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: citas citas_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY citas_select ON public.citas FOR SELECT USING (public.puede_ver_lead(tarjeta_id));
-
-
---
--- Name: citas citas_service_manage; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY citas_service_manage ON public.citas TO service_role USING (true) WITH CHECK (true);
-
-
---
--- Name: POLICY citas_service_manage ON citas; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON POLICY citas_service_manage ON public.citas IS 'Permite a service_role (workers / integraciones internas) gestionar citas sin restricciones adicionales.';
-
 
 --
 -- Name: contactos; Type: ROW SECURITY; Schema: public; Owner: -
@@ -12685,5 +13773,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict npzaVgfG4ie98MfrZPayiOrufKGmj193tCmRleFNGYpdszvrecStBhIFsQQbBbp
+\unrestrict oqE6liVOdNSw1SfDIygPPVQFvQhPchdgIgYNjVK7JZek7P1Vbf2oiB533OX6GId
 

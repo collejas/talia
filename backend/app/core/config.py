@@ -76,6 +76,13 @@ class Settings(BaseSettings):
             "TALIA_GOOGLE_PLACES_TEXT_URL",
         ),
     )
+    google_places_details_url: str = Field(
+        default="https://places.googleapis.com/v1/places",
+        validation_alias=AliasChoices(
+            "GOOGLE_PLACES_DETAILS_URL",
+            "TALIA_GOOGLE_PLACES_DETAILS_URL",
+        ),
+    )
     google_places_field_mask: str = Field(
         default=(
             "places.id,places.displayName,places.formattedAddress,"
@@ -93,7 +100,8 @@ class Settings(BaseSettings):
         default=(
             "id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,"
             "types,rating,userRatingCount,nationalPhoneNumber,internationalPhoneNumber,"
-            "websiteUri,googleMapsUri,businessStatus,regularOpeningHours,utcOffsetMinutes"
+            "websiteUri,googleMapsUri,businessStatus,regularOpeningHours,utcOffsetMinutes,"
+            "currentOpeningHours"
         ),
         validation_alias=AliasChoices(
             "PLACES_DETAILS_FIELD_MASK",
@@ -113,6 +121,14 @@ class Settings(BaseSettings):
             "PLACES_REGION_CODE",
             "TALIA_GOOGLE_PLACES_REGION_CODE",
         ),
+    )
+    denue_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DENUE_TOKEN", "TALIA_DENUE_TOKEN"),
+    )
+    denue_base_url: str = Field(
+        default="https://www.inegi.org.mx/app/api/denue/v1",
+        validation_alias=AliasChoices("DENUE_BASE_URL", "TALIA_DENUE_BASE_URL"),
     )
     log_file_path: str = "/home/devuser/talia/logs/api.log"
     webchat_inactivity_hours: int | None = Field(
