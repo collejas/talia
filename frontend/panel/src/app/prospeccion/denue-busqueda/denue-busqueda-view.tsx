@@ -739,11 +739,11 @@ export function DenueBusquedaView() {
                                   {item.email}
                                 </span>
                               ) : null}
-                            {item.website ? (
-                              <a
-                                className="inline-flex items-center gap-1 text-primary"
-                                href={item.website}
-                                target="_blank"
+                              {item.website ? (
+                                <a
+                                  className="inline-flex items-center gap-1 text-primary"
+                                  href={formatWebsiteUrl(item.website)}
+                                  target="_blank"
                                   rel="noreferrer"
                                 >
                                   <Globe className="h-3 w-3" />
@@ -820,4 +820,15 @@ function MetricCard({ title, value, description, icon }: MetricCardProps) {
       </CardContent>
     </Card>
   );
+}
+
+function formatWebsiteUrl(raw: string): string {
+  const value = raw.trim();
+  if (!value) {
+    return "#";
+  }
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  return `https://${value.replace(/^\/+/, "")}`;
 }
