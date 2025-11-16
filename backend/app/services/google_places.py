@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from math import cos, radians
+from math import asin, cos, radians, sin, sqrt
 from typing import Any, Literal, Sequence
 
 import httpx
@@ -166,7 +166,13 @@ class GooglePlacesClient:
                     if len(results) >= max_results:
                         break
 
-        return results[:max_results]
+        filtered = self._filter_results_by_radius(
+            results=results,
+            center_lat=latitude,
+            center_lng=longitude,
+            radius_m=radius_m,
+        )
+        return filtered[:max_results]
 
     async def _post(self, *, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         headers = {
@@ -294,6 +300,27 @@ class GooglePlacesClient:
                     break
         return collected
 
+    def _filter_results_by_radius(
+        self,
+        *,
+        results: list[dict[str, Any]],
+        center_lat: float,
+        center_lng: float,
+        radius_m: int,
+    ) -> list[dict[str, Any]]:
+        filtered: list[dict[str, Any]] = []
+        tolerance = max(25, radius_m * 0.02)
+        max_distance = radius_m + tolerance
+        for place in results:
+            location = place.get("location") or {}
+            lat = _to_float(location.get("latitude"))
+            lng = _to_float(location.get("longitude"))
+            if lat is None or lng is None:
+                continue
+            if _distance_m(center_lat, center_lng, lat, lng) <= max_distance:
+                filtered.append(place)
+        return filtered
+
     async def _search_nearby_additional_centers(
         self,
         *,
@@ -415,6 +442,15 @@ def _offset_coordinates(lat: float, lng: float, dx_m: float, dy_m: float) -> tup
     delta_lat = dy_m / meters_per_deg_lat
     delta_lng = dx_m / meters_per_deg_lng
     return lat + delta_lat, lng + delta_lng
+
+
+def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    radius = 6_371_000.0
+    dlat = radians(lat2 - lat1)
+    dlng = radians(lng2 - lng1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlng / 2) ** 2
+    c = 2 * asin(min(1.0, sqrt(a)))
+    return radius * c
 
 
 def _to_float(value: Any) -> float | None:
