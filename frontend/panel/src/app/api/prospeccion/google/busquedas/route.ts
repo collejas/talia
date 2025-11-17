@@ -27,7 +27,7 @@ function buildBackendUrl(request: Request, basePath: string): URL {
   return target;
 }
 
-async function proxyRequest(request: Request, init: { method: "GET" | "POST" }): Promise<NextResponse> {
+async function proxyRequest(request: Request, init: { method: "GET" | "POST" | "DELETE" }): Promise<NextResponse> {
   const token = await resolveAccessToken();
   if (!token) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
@@ -36,6 +36,15 @@ async function proxyRequest(request: Request, init: { method: "GET" | "POST" }):
   let targetUrl: URL;
   try {
     targetUrl = buildBackendUrl(request, "/prospeccion/google/busquedas");
+    if (init.method === "DELETE") {
+      const deleteId = targetUrl.searchParams.get("delete_id");
+      if (!deleteId) {
+        throw new Error("delete_id_required");
+      }
+      targetUrl.searchParams.delete("delete_id");
+      const base = targetUrl.toString().replace(/\/+$/, "");
+      targetUrl = new URL(`${base}/${deleteId}`);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "backend_not_configured";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -74,4 +83,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return proxyRequest(request, { method: "POST" });
+}
+
+export async function DELETE(request: Request) {
+  return proxyRequest(request, { method: "DELETE" });
 }

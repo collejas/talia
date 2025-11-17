@@ -27,7 +27,7 @@ function buildBackendUrl(request: Request): URL {
   return target;
 }
 
-export async function GET(request: Request) {
+async function proxyRequest(request: Request, method: "GET" | "DELETE"): Promise<NextResponse> {
   const token = await resolveAccessToken();
   if (!token) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
@@ -44,11 +44,13 @@ export async function GET(request: Request) {
   let backendResponse: Response;
   try {
     backendResponse = await fetch(targetUrl, {
-      method: "GET",
+      method,
       headers: {
         Accept: "application/json",
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
+      body: method === "DELETE" ? await request.text() : undefined,
       cache: "no-store",
     });
   } catch (error) {
@@ -64,4 +66,12 @@ export async function GET(request: Request) {
       "content-type": contentType,
     },
   });
+}
+
+export async function GET(request: Request) {
+  return proxyRequest(request, "GET");
+}
+
+export async function DELETE(request: Request) {
+  return proxyRequest(request, "DELETE");
 }

@@ -13,6 +13,7 @@ import {
   Search,
   Star,
   Target,
+  Trash2,
 } from "lucide-react";
 
 const GoogleResultsMap = dynamic(() => import("./google-results-map").then((mod) => mod.GoogleResultsMap), {
@@ -21,6 +22,8 @@ const GoogleResultsMap = dynamic(() => import("./google-results-map").then((mod)
 });
 import {
   createGoogleBusqueda,
+  deleteGoogleBusqueda,
+  deleteGoogleResultados,
   listGoogleBusquedas,
   listGoogleResultados,
   type CreateGoogleSearchPayload,
@@ -120,6 +123,8 @@ export function GoogleBusquedaView() {
   const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
   const [actividadSearch, setActividadSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
+  const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -412,6 +417,90 @@ export function GoogleBusquedaView() {
   const handleClearActividades = () => {
     setSelectedActividades(new Set());
   };
+
+  const handleDeleteBusqueda = useCallback(
+    async (busquedaId: string) => {
+      if (!busquedaId) {
+        return;
+      }
+      if (typeof window !== "undefined") {
+        const confirmed = window.confirm(
+          "¿Eliminar esta captura de Google Places? Se borrarán todos sus resultados.",
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      setDeletingBusquedaId(busquedaId);
+      try {
+        await deleteGoogleBusqueda(busquedaId);
+        setFeedback({
+          type: "success",
+          message: "La búsqueda se eliminó correctamente.",
+        });
+        const remaining = await loadBusquedas();
+        if (!remaining.length) {
+          setActiveBusquedaId(null);
+          setResultados([]);
+          setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
+          setSelectedIds(new Set());
+          setSelectedActividades(new Set());
+          setActividadSearch("");
+          return;
+        }
+        const stillExists = activeBusquedaId ? remaining.some((item) => item.id === activeBusquedaId) : false;
+        if (busquedaId === activeBusquedaId || !stillExists) {
+          await loadResultadosForBusqueda(remaining[0]!.id);
+        }
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "No fue posible eliminar la búsqueda.",
+        });
+      } finally {
+        setDeletingBusquedaId(null);
+      }
+    },
+    [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda],
+  );
+
+  const handleDeleteSelectedResultados = useCallback(async () => {
+    if (!selectedIds.size) {
+      setFeedback({
+        type: "info",
+        message: "Selecciona al menos un registro para poder eliminarlo.",
+      });
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("¿Eliminar los resultados seleccionados? Esta acción no se puede deshacer.");
+      if (!confirmed) {
+        return;
+      }
+    }
+    const ids = Array.from(selectedIds);
+    setIsDeletingResultados(true);
+    try {
+      await deleteGoogleResultados(ids);
+      setFeedback({
+        type: "success",
+        message: `Se eliminaron ${ids.length} registros.`,
+      });
+      if (activeBusquedaId) {
+        await Promise.all([loadResultadosForBusqueda(activeBusquedaId), loadBusquedas()]);
+      } else {
+        setResultados([]);
+        setSelectedIds(new Set());
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No fue posible eliminar los resultados seleccionados.",
+      });
+    } finally {
+      setIsDeletingResultados(false);
+    }
+  }, [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda, selectedIds]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -891,6 +980,21 @@ export function GoogleBusquedaView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={handleDeleteSelectedResultados}
+                disabled={!selectedIds.size || isDeletingResultados}
+                className="flex items-center gap-2"
+              >
+                {isDeletingResultados ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Eliminar seleccionados
+              </Button>
               {ACTIONS.map((action) => (
                 <Button
                   key={action.key}
@@ -1091,13 +1195,30 @@ export function GoogleBusquedaView() {
                         })}
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant={activeBusquedaId === item.id ? "secondary" : "outline"}
-                      onClick={() => loadResultadosForBusqueda(item.id)}
-                    >
-                      Ver
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={activeBusquedaId === item.id ? "secondary" : "outline"}
+                        onClick={() => loadResultadosForBusqueda(item.id)}
+                      >
+                        Ver
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Eliminar búsqueda"
+                        onClick={() => handleDeleteBusqueda(item.id)}
+                        disabled={deletingBusquedaId === item.id}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingBusquedaId === item.id ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
