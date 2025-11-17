@@ -435,9 +435,7 @@ export function GoogleBusquedaView() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <Card>
+      <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Target className="h-4 w-4" />
@@ -578,75 +576,255 @@ export function GoogleBusquedaView() {
                   Restablecer centro
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Búsquedas recientes</CardTitle>
-              <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {isLoadingBusquedas ? (
-                <p className="text-sm text-muted-foreground">Cargando historial…</p>
-              ) : busquedas.length ? (
-                busquedas.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 text-sm",
-                      activeBusquedaId === item.id && "border-primary bg-primary/5",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium">{item.query || "(Sin texto)"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(item.creado_en).toLocaleString("es-MX", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={activeBusquedaId === item.id ? "secondary" : "outline"}
-                        onClick={() => loadResultadosForBusqueda(item.id)}
-                      >
-                        Ver
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <Card className="overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between gap-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">Mapa de resultados</CardTitle>
-                <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
+                <CardTitle className="text-base">Resultados almacenados</CardTitle>
+                <CardDescription className="space-y-0.5">
+                  <span>
+                    {isLoadingResultados
+                      ? "Descargando datos…"
+                      : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(resultados.length)} coincidencias`}
+                  </span>
+                  {busquedaDescriptor ? (
+                    <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
+                  ) : null}
+                </CardDescription>
               </div>
               <Button
-                type="button"
                 size="icon"
                 variant="ghost"
-                onClick={() => {
-                  setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
-                }}
+                onClick={() => activeBusquedaId && loadResultadosForBusqueda(activeBusquedaId)}
+                disabled={!activeBusquedaId || isLoadingResultados}
               >
-                <MapPin className="h-4 w-4" />
+                <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
               </Button>
-            </CardHeader>
-            <CardContent className="p-0">
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-normal">Filtrar texto</Label>
+                <Input
+                  value={filterText}
+                  onChange={(event) => setFilterText(event.target.value)}
+                  placeholder="Nombre, actividad…"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal">Rating mínimo</Label>
+                <Select value={String(minRatingFilter)} onValueChange={(value) => setMinRatingFilter(Number(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Todos</SelectItem>
+                    <SelectItem value="3">3+</SelectItem>
+                    <SelectItem value="4">4+</SelectItem>
+                    <SelectItem value="4.5">4.5+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border px-3">
+                <Checkbox
+                  id="contactables"
+                  checked={onlyContactable}
+                  onCheckedChange={(value) => setOnlyContactable(Boolean(value))}
+                />
+                <Label htmlFor="contactables" className="text-xs">
+                  Solo contactables
+                </Label>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSelectAllVisible(true)}
+                  disabled={!paginatedResults.length}
+                >
+                  Seleccionar visibles ({selectedVisibleCount})
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSelectAllVisible(false)}
+                  disabled={!selectedIds.size}
+                >
+                  Limpiar selección
+                </Button>
+              </div>
+              <p>
+                {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {ACTIONS.map((action) => (
+                <Button
+                  key={action.key}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleAction(action.key)}
+                  disabled={!selectedIds.size}
+                  className="flex items-center gap-2"
+                >
+                  {action.icon}
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+            <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+              {!filteredResults.length ? (
+                <p className="text-sm text-muted-foreground">
+                  {isLoadingResultados
+                    ? "Cargando resultados…"
+                    : "No hay coincidencias con los filtros actuales."}
+                </p>
+              ) : (
+                paginatedResults.map((item) => {
+                  const actividadTexto =
+                    typeof item.actividad === "string"
+                      ? item.actividad
+                      : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
+                        ? String((item.actividad as { text?: unknown }).text ?? "")
+                        : "";
+                  const isSelected = selectedIds.has(item.resultado_id);
+                  return (
+                    <div
+                      key={item.resultado_id}
+                      className={cn(
+                        "rounded-xl border p-3 text-sm transition",
+                        isSelected ? "border-primary bg-primary/5" : "border-border/60",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) =>
+                            handleToggleSelection(item.resultado_id, Boolean(checked))
+                          }
+                        />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              {((actividadTexto && actividadTexto.trim().length) || busquedaDescriptor) && (
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                                  {actividadTexto && actividadTexto.trim().length
+                                    ? actividadTexto.trim()
+                                    : busquedaDescriptor}
+                                </p>
+                              )}
+                              <p className="font-semibold">
+                                {item.display_name ?? item.actividad ?? "Sin nombre"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.address ?? "Sin dirección"}
+                              </p>
+                            </div>
+                            {typeof item.rating === "number" ? (
+                              <Badge variant="secondary" className="flex items-center gap-1">
+                                <Star className="h-3 w-3 text-amber-500" />
+                                {item.rating.toFixed(1)}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            {item.phone ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {item.phone}
+                              </span>
+                            ) : null}
+                            {item.website ? (
+                              <a
+                                className="inline-flex items-center gap-1 text-primary"
+                                href={item.website}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <Globe className="h-3 w-3" />
+                                Sitio web
+                                <ArrowUpRight className="h-3 w-3" />
+                              </a>
+                            ) : null}
+                            {typeof item.distancia_m === "number" ? (
+                              <span>{(item.distancia_m / 1000).toFixed(2)} km</span>
+                            ) : null}
+                          </div>
+                          {Array.isArray(item.google_types) && item.google_types.length ? (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {item.google_types.slice(0, 4).map((type) => (
+                                <Badge key={type} variant="outline" className="text-[11px]">
+                                  {type}
+                                </Badge>
+                              ))}
+                              {item.google_types.length > 4 ? (
+                                <Badge variant="outline">+{item.google_types.length - 4}</Badge>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handlePrevPage}
+                disabled={isLoadingResultados || currentPage === 0 || !totalFiltered}
+              >
+                Anterior
+              </Button>
+              <span>
+                {totalFiltered === 0
+                  ? "No hay registros"
+                  : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(
+                      pageEnd,
+                    )} de ${numberFormatter.format(totalFiltered)}`}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={isLoadingResultados || currentPage >= totalPages - 1 || !totalFiltered}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Mapa de resultados</CardTitle>
+              <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
+              }}
+            >
+              <MapPin className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="flex-1 p-0">
+            <div className="h-full min-h-[460px]">
               <GoogleResultsMap
                 center={{ lat: formValues.lat, lng: formValues.lng }}
                 radius={formValues.radio_m}
@@ -654,236 +832,58 @@ export function GoogleBusquedaView() {
                 highlightIds={selectedIds}
                 onCenterChange={handleCenterChange}
               />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">Resultados almacenados</CardTitle>
-                  <CardDescription className="space-y-0.5">
-                    <span>
-                      {isLoadingResultados
-                        ? "Descargando datos…"
-                        : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(resultados.length)} coincidencias`}
-                    </span>
-                    {busquedaDescriptor ? (
-                      <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
-                    ) : null}
-                  </CardDescription>
-                </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => activeBusquedaId && loadResultadosForBusqueda(activeBusquedaId)}
-                  disabled={!activeBusquedaId || isLoadingResultados}
-                >
-                  <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
-                </Button>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal">Filtrar texto</Label>
-                  <Input
-                    value={filterText}
-                    onChange={(event) => setFilterText(event.target.value)}
-                    placeholder="Nombre, actividad…"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal">Rating mínimo</Label>
-                  <Select value={String(minRatingFilter)} onValueChange={(value) => setMinRatingFilter(Number(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Todos</SelectItem>
-                      <SelectItem value="3">3+</SelectItem>
-                      <SelectItem value="4">4+</SelectItem>
-                      <SelectItem value="4.5">4.5+</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2 rounded-lg border px-3">
-                  <Checkbox
-                    id="contactables"
-                    checked={onlyContactable}
-                    onCheckedChange={(value) => setOnlyContactable(Boolean(value))}
-                  />
-                  <Label htmlFor="contactables" className="text-xs">
-                    Solo contactables
-                  </Label>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSelectAllVisible(true)}
-                    disabled={!paginatedResults.length}
-                  >
-                    Seleccionar visibles ({selectedVisibleCount})
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleSelectAllVisible(false)}
-                    disabled={!selectedIds.size}
-                  >
-                    Limpiar selección
-                  </Button>
-                </div>
-                <p>
-                  {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
-                </p>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {ACTIONS.map((action) => (
-                  <Button
-                    key={action.key}
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleAction(action.key)}
-                    disabled={!selectedIds.size}
-                    className="flex items-center gap-2"
-                  >
-                    {action.icon}
-                    {action.label}
-                  </Button>
-                ))}
-              </div>
-              <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
-                {!filteredResults.length ? (
-                  <p className="text-sm text-muted-foreground">
-                    {isLoadingResultados
-                      ? "Cargando resultados…"
-                      : "No hay coincidencias con los filtros actuales."}
-                  </p>
-                ) : (
-                  paginatedResults.map((item) => {
-                    const actividadTexto =
-                      typeof item.actividad === "string"
-                        ? item.actividad
-                        : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
-                          ? String((item.actividad as { text?: unknown }).text ?? "")
-                          : "";
-                    const isSelected = selectedIds.has(item.resultado_id);
-                    return (
-                      <div
-                        key={item.resultado_id}
-                        className={cn(
-                          "rounded-xl border p-3 text-sm transition",
-                          isSelected ? "border-primary bg-primary/5" : "border-border/60",
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) =>
-                              handleToggleSelection(item.resultado_id, Boolean(checked))
-                            }
-                          />
-                          <div className="flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                {((actividadTexto && actividadTexto.trim().length) || busquedaDescriptor) && (
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                                    {actividadTexto && actividadTexto.trim().length
-                                      ? actividadTexto.trim()
-                                      : busquedaDescriptor}
-                                  </p>
-                                )}
-                                <p className="font-semibold">
-                                  {item.display_name ?? item.actividad ?? "Sin nombre"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {item.address ?? "Sin dirección"}
-                                </p>
-                              </div>
-                              {typeof item.rating === "number" ? (
-                                <Badge variant="secondary" className="flex items-center gap-1">
-                                  <Star className="h-3 w-3 text-amber-500" />
-                                  {item.rating.toFixed(1)}
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              {item.phone ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {item.phone}
-                                </span>
-                              ) : null}
-                              {item.website ? (
-                                <a
-                                  className="inline-flex items-center gap-1 text-primary"
-                                  href={item.website}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <Globe className="h-3 w-3" />
-                                  Sitio web
-                                  <ArrowUpRight className="h-3 w-3" />
-                                </a>
-                              ) : null}
-                              {typeof item.distancia_m === "number" ? (
-                                <span>{(item.distancia_m / 1000).toFixed(2)} km</span>
-                              ) : null}
-                            </div>
-                            {Array.isArray(item.google_types) && item.google_types.length ? (
-                              <div className="flex flex-wrap gap-1 pt-1">
-                                {item.google_types.slice(0, 4).map((type) => (
-                                  <Badge key={type} variant="outline" className="text-[11px]">
-                                    {type}
-                                  </Badge>
-                                ))}
-                                {item.google_types.length > 4 ? (
-                                  <Badge variant="outline">+{item.google_types.length - 4}</Badge>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePrevPage}
-                  disabled={isLoadingResultados || currentPage === 0 || !totalFiltered}
-                >
-                  Anterior
-                </Button>
-                <span>
-                  {totalFiltered === 0
-                    ? "No hay registros"
-                    : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(
-                        pageEnd,
-                      )} de ${numberFormatter.format(totalFiltered)}`}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleNextPage}
-                  disabled={isLoadingResultados || currentPage >= totalPages - 1 || !totalFiltered}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Búsquedas recientes</CardTitle>
+          <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoadingBusquedas ? (
+            <p className="text-sm text-muted-foreground">Cargando historial…</p>
+          ) : busquedas.length ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {busquedas.map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-sm",
+                    activeBusquedaId === item.id && "border-primary bg-primary/5",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{item.query || "(Sin texto)"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(item.creado_en).toLocaleString("es-MX", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={activeBusquedaId === item.id ? "secondary" : "outline"}
+                      onClick={() => loadResultadosForBusqueda(item.id)}
+                    >
+                      Ver
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
