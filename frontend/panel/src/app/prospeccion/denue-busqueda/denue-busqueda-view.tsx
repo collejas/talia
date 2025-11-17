@@ -1136,18 +1136,19 @@ export function DenueBusquedaView() {
           <CardTitle className="text-base">Búsquedas recientes</CardTitle>
           <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent>
           {isLoadingBusquedas ? (
             <p className="text-sm text-muted-foreground">Cargando historial…</p>
           ) : busquedas.length ? (
-            busquedas.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  "rounded-lg border px-3 py-2 text-sm",
-                  activeBusquedaId === item.id && "border-primary bg-primary/5",
-                )}
-              >
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {busquedas.map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-sm",
+                    activeBusquedaId === item.id && "border-primary bg-primary/5",
+                  )}
+                >
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-medium">{item.query || "(Sin texto)"}</p>
@@ -1186,8 +1187,9 @@ export function DenueBusquedaView() {
                 <p className="text-xs text-muted-foreground">
                   Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
                 </p>
-              </div>
-            ))
+                </div>
+              ))}
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
           )}
