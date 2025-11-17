@@ -129,6 +129,7 @@ export function GoogleBusquedaView() {
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
   );
+  const resultadosCount = resultados.length;
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -264,6 +265,37 @@ export function GoogleBusquedaView() {
       setSelectedActividades(next);
     }
   }, [resultados, selectedActividades]);
+
+  useEffect(() => {
+    if (!activeBusquedaId) {
+      return;
+    }
+    setBusquedas((current) => {
+      if (!current.length) {
+        return current;
+      }
+      let changed = false;
+      const next = current.map((item) => {
+        if (item.id !== activeBusquedaId) {
+          return item;
+        }
+        const newTotal = resultadosCount;
+        if (typeof item.total_encontrados === "number" && item.total_encontrados === newTotal) {
+          return item;
+        }
+        if (item.total_encontrados == null && newTotal === 0) {
+          return item;
+        }
+        changed = true;
+        return { ...item, total_encontrados: newTotal };
+      });
+      if (changed) {
+        busquedasRef.current = next;
+        return next;
+      }
+      return current;
+    });
+  }, [activeBusquedaId, resultadosCount]);
 
   const busquedaDescriptor = useMemo(() => {
     if (!activeBusqueda) return null;
