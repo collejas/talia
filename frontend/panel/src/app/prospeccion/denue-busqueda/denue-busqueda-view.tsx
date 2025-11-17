@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Globe,
@@ -112,6 +112,7 @@ export function DenueBusquedaView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
+  const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -138,6 +139,10 @@ export function DenueBusquedaView() {
     }
   }, []);
 
+  useEffect(() => {
+    busquedasRef.current = busquedas;
+  }, [busquedas]);
+
   const loadResultadosForBusqueda = useCallback(async (busquedaId: string) => {
       setIsLoadingResultados(true);
       try {
@@ -150,6 +155,16 @@ export function DenueBusquedaView() {
         setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
         setSelectedIds(new Set());
         setActiveBusquedaId(busquedaId);
+        const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
+        if (selectedBusqueda) {
+          setFormValues((prev) => ({
+            ...prev,
+            query: selectedBusqueda.query ?? prev.query,
+            lat: typeof selectedBusqueda.lat === "number" ? selectedBusqueda.lat : prev.lat,
+            lng: typeof selectedBusqueda.lng === "number" ? selectedBusqueda.lng : prev.lng,
+            radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
+          }));
+        }
         const totalRecords = response.total ?? (response.items?.length ?? 0);
         if (typeof totalRecords === "number") {
           setBusquedas((prev) =>
@@ -1136,7 +1151,7 @@ export function DenueBusquedaView() {
           <CardTitle className="text-base">Búsquedas recientes</CardTitle>
           <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {isLoadingBusquedas ? (
             <p className="text-sm text-muted-foreground">Cargando historial…</p>
           ) : busquedas.length ? (
