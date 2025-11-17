@@ -690,103 +690,9 @@ export function DenueBusquedaView() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div>
-            <CardTitle className="text-base">Mapa de resultados</CardTitle>
-            <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
-          </div>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            onClick={() => {
-              setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
-            }}
-          >
-            <MapPin className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          <ProspeccionResultsMap
-            center={{ lat: formValues.lat, lng: formValues.lng }}
-            radius={formValues.radio_m}
-            results={mapResults}
-            highlightIds={selectedIds}
-            onCenterChange={handleCenterChange}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Búsquedas recientes</CardTitle>
-              <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {isLoadingBusquedas ? (
-                <p className="text-sm text-muted-foreground">Cargando historial…</p>
-              ) : busquedas.length ? (
-                busquedas.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 text-sm",
-                      activeBusquedaId === item.id && "border-primary bg-primary/5",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium">{item.query || "(Sin texto)"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(item.creado_en).toLocaleString("es-MX", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={activeBusquedaId === item.id ? "secondary" : "outline"}
-                          onClick={() => loadResultadosForBusqueda(item.id)}
-                        >
-                          Ver
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          aria-label="Eliminar búsqueda"
-                          onClick={() => handleDeleteBusqueda(item.id)}
-                          disabled={deletingBusquedaId === item.id}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          {deletingBusquedaId === item.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-col gap-2">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base">Resultados almacenados</CardTitle>
@@ -1192,10 +1098,99 @@ export function DenueBusquedaView() {
                   Siguiente
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+          </CardContent>
+        </Card>
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Mapa de resultados</CardTitle>
+              <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
+              }}
+            >
+              <MapPin className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ProspeccionResultsMap
+              center={{ lat: formValues.lat, lng: formValues.lng }}
+              radius={formValues.radio_m}
+              results={mapResults}
+              highlightIds={selectedIds}
+              onCenterChange={handleCenterChange}
+            />
+          </CardContent>
+        </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Búsquedas recientes</CardTitle>
+          <CardDescription>Vuelve a cargar resultados anteriores o reutiliza sus parámetros.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoadingBusquedas ? (
+            <p className="text-sm text-muted-foreground">Cargando historial…</p>
+          ) : busquedas.length ? (
+            busquedas.map((item) => (
+              <div
+                key={item.id}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-sm",
+                  activeBusquedaId === item.id && "border-primary bg-primary/5",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{item.query || "(Sin texto)"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(item.creado_en).toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant={activeBusquedaId === item.id ? "secondary" : "outline"}
+                      onClick={() => loadResultadosForBusqueda(item.id)}
+                    >
+                      Ver
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Eliminar búsqueda"
+                      onClick={() => handleDeleteBusqueda(item.id)}
+                      disabled={deletingBusquedaId === item.id}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      {deletingBusquedaId === item.id ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
