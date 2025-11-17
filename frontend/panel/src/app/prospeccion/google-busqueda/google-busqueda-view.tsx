@@ -48,6 +48,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -413,74 +414,103 @@ export function GoogleBusquedaView() {
               <CardDescription>Define el centro, el radio y la estrategia antes de consultar Google.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="strategy">Estrategia</Label>
-                <Select
-                  value={formValues.strategy}
-                  onValueChange={(value) => updateFormValue("strategy", value as GoogleSearchStrategy)}
-                >
-                  <SelectTrigger id="strategy">
-                    <SelectValue placeholder="Selecciona" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nearby">Nearby (por clasificación)</SelectItem>
-                    <SelectItem value="text">Text Search (por frase)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="query">Texto a buscar</Label>
-                <Input
-                  id="query"
-                  placeholder="Ej. cafeterías con terraza"
-                  value={formValues.query}
-                  onChange={(event) => updateFormValue("query", event.target.value)}
-                  disabled={formValues.strategy !== "text"}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Solo se usa cuando seleccionas la estrategia Text Search.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="types">Clasificaciones (coma)</Label>
-                <Input
-                  id="types"
-                  placeholder="restaurant,store"
-                  value={formValues.includedTypesText}
-                  onChange={(event) => updateFormValue("includedTypesText", event.target.value)}
-                  disabled={formValues.strategy !== "nearby"}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Usa los valores aceptados por Google Places, p. ej. <code className="font-mono">restaurant</code>, <code className="font-mono">atm</code>, <code className="font-mono">pharmacy</code>.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="radius">Radio (m)</Label>
-                  <span className="text-xs text-muted-foreground">{numberFormatter.format(formValues.radio_m)} m</span>
+              <div className="grid gap-3 lg:grid-cols-6">
+                <div className="space-y-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Label htmlFor="strategy" className="cursor-help">
+                          Estrategia
+                        </Label>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Cambia entre búsqueda por cercanía (clasificaciones) o por texto libre.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Select
+                    value={formValues.strategy}
+                    onValueChange={(value) => updateFormValue("strategy", value as GoogleSearchStrategy)}
+                  >
+                    <SelectTrigger id="strategy" className="h-9">
+                      <SelectValue placeholder="Selecciona" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nearby">Cercanía</SelectItem>
+                      <SelectItem value="text">Texto</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <input
-                  id="radius"
-                  type="range"
-                  min={RADIUS_MIN}
-                  max={RADIUS_MAX}
-                  step={100}
-                  value={formValues.radio_m}
-                  onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
-                  className="w-full"
-                />
-                <Input
-                  type="number"
-                  min={RADIUS_MIN}
-                  max={RADIUS_MAX}
-                  value={formValues.radio_m}
-                  onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Máximo permitido: {numberFormatter.format(RADIUS_MAX)} m (10 km).
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Label htmlFor="query" className="cursor-help">
+                          Texto a buscar
+                        </Label>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Frase para Places Text Search. Sólo se usa cuando eliges la estrategia Texto.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Input
+                    id="query"
+                    placeholder="Ej. cafeterías con terraza"
+                    value={formValues.query}
+                    onChange={(event) => updateFormValue("query", event.target.value)}
+                    disabled={formValues.strategy !== "text"}
+                    className={cn(
+                      "h-9",
+                      formValues.strategy === "text"
+                        ? "border-primary/70 bg-primary/5"
+                        : "border-border bg-muted text-muted-foreground",
+                    )}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Label htmlFor="types" className="cursor-help">
+                          Clasificaciones
+                        </Label>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Lista de tipos de Places separados por coma. Aplica cuando usas Cercanía.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Input
+                    id="types"
+                    placeholder="restaurant,store"
+                    value={formValues.includedTypesText}
+                    onChange={(event) => updateFormValue("includedTypesText", event.target.value)}
+                    disabled={formValues.strategy !== "nearby"}
+                    className={cn(
+                      "h-9",
+                      formValues.strategy === "nearby"
+                        ? "border-primary/70 bg-primary/5"
+                        : "border-border bg-muted text-muted-foreground",
+                    )}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="radius-range">Radio (m)</Label>
+                  <input
+                    id="radius-range"
+                    type="range"
+                    min={RADIUS_MIN}
+                    max={RADIUS_MAX}
+                    step={100}
+                    value={formValues.radio_m}
+                    onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
+                    className="w-full"
+                  />
+                  <span className="block text-xs text-muted-foreground text-right">
+                    {numberFormatter.format(formValues.radio_m)} m
+                  </span>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="lat">Latitud</Label>
                   <Input
@@ -489,6 +519,7 @@ export function GoogleBusquedaView() {
                     value={formValues.lat}
                     onChange={(event) => updateFormValue("lat", Number(event.target.value))}
                     step={0.000001}
+                    className="h-9 max-w-[120px]"
                   />
                 </div>
                 <div className="space-y-2">
@@ -499,12 +530,24 @@ export function GoogleBusquedaView() {
                     value={formValues.lng}
                     onChange={(event) => updateFormValue("lng", Number(event.target.value))}
                     step={0.000001}
+                    className="h-9 max-w-[120px]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="language_code">Idioma</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Label htmlFor="language_code" className="cursor-help">
+                          Idioma
+                        </Label>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Idioma en el que Google devolverá nombres y direcciones.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <Input
                     id="language_code"
                     value={formValues.language_code}
@@ -513,7 +556,18 @@ export function GoogleBusquedaView() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="region_code">Región</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Label htmlFor="region_code" className="cursor-help">
+                          Región
+                        </Label>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Sesga los resultados hacia el país indicado (código ISO, ej. MX).
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <Input
                     id="region_code"
                     value={formValues.region_code}
