@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Globe,
@@ -107,6 +107,7 @@ export function GoogleBusquedaView() {
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [busquedas, setBusquedas] = useState<GoogleBusquedaItem[]>([]);
+  const busquedasRef = useRef<GoogleBusquedaItem[]>([]);
   const [isLoadingBusquedas, setIsLoadingBusquedas] = useState(true);
   const [activeBusquedaId, setActiveBusquedaId] = useState<string | null>(null);
   const [resultados, setResultados] = useState<GoogleResultadoItem[]>([]);
@@ -132,8 +133,10 @@ export function GoogleBusquedaView() {
     setIsLoadingBusquedas(true);
     try {
       const response = await listGoogleBusquedas({ limit: 8 });
-      setBusquedas(response.items ?? []);
-      return response.items ?? [];
+      const items = response.items ?? [];
+      setBusquedas(items);
+      busquedasRef.current = items;
+      return items;
     } catch (error) {
       setFeedback({
         type: "error",
@@ -157,6 +160,16 @@ export function GoogleBusquedaView() {
         setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
         setSelectedIds(new Set());
         setActiveBusquedaId(busquedaId);
+        const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
+        if (selectedBusqueda) {
+          setFormValues((prev) => ({
+            ...prev,
+            query: selectedBusqueda.query ?? prev.query,
+            lat: typeof selectedBusqueda.lat === "number" ? selectedBusqueda.lat : prev.lat,
+            lng: typeof selectedBusqueda.lng === "number" ? selectedBusqueda.lng : prev.lng,
+            radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
+          }));
+        }
       } catch (error) {
         setFeedback({
           type: "error",
