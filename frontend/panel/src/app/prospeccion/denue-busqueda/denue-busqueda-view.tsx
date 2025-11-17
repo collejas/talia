@@ -676,7 +676,7 @@ export function DenueBusquedaView() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-normal" htmlFor="estrato-filter">
-                  Estrato
+                  Tamaño
                 </Label>
                 <select
                   id="estrato-filter"
@@ -819,7 +819,7 @@ export function DenueBusquedaView() {
                               ) : null}
                             </div>
                             {item.estrato ? (
-                              <p className="text-xs text-muted-foreground">Estrato: {item.estrato}</p>
+                              <p className="text-xs text-muted-foreground">Tamaño: {item.estrato}</p>
                             ) : null}
                           </div>
                         </div>
