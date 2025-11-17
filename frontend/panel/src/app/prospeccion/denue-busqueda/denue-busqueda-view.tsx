@@ -42,6 +42,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
@@ -94,6 +105,7 @@ export function DenueBusquedaView() {
   const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
   const [estratoFilter, setEstratoFilter] = useState<EstratoFilterValue>("any");
   const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
+  const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -360,6 +372,14 @@ export function DenueBusquedaView() {
       }
       return next;
     });
+  }, []);
+
+  const handleSelectAllActividades = useCallback(() => {
+    setSelectedActividades(new Set(actividadOptions));
+  }, [actividadOptions]);
+
+  const handleClearActividades = useCallback(() => {
+    setSelectedActividades(new Set());
   }, []);
 
   const goToPage = useCallback(
@@ -679,44 +699,99 @@ export function DenueBusquedaView() {
                 </Label>
               </div>
             </div>
-            {actividadOptions.length ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-normal">Clase de actividad</Label>
+            <div className="flex flex-wrap items-center gap-3">
+              <Drawer open={actividadDrawerOpen} onOpenChange={setActividadDrawerOpen} direction="right">
+                <DrawerTrigger asChild>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => setSelectedActividades(new Set())}
-                    disabled={!selectedActividades.size}
+                    className="flex items-center gap-2"
+                    disabled={!actividadOptions.length}
                   >
-                    Limpiar
+                    Clase de actividad
+                    {selectedActividades.size ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                        {selectedActividades.size}
+                      </span>
+                    ) : null}
                   </Button>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {actividadOptions.map((actividad) => {
-                    const checked = selectedActividades.has(actividad);
-                    return (
-                      <label
-                        key={actividad}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
-                          checked ? "border-primary bg-primary/5" : "border-border",
-                        )}
+                </DrawerTrigger>
+                <DrawerContent className="sm:max-w-xl">
+                  <DrawerHeader>
+                    <DrawerTitle>Clase de actividad</DrawerTitle>
+                    <DrawerDescription>
+                      Selecciona una o varias clases del DENUE para filtrar los resultados mostrados.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <div className="flex flex-1 flex-col gap-4 overflow-hidden px-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleSelectAllActividades}
+                        disabled={!actividadOptions.length}
                       >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(value) =>
-                            handleActividadToggle(actividad, Boolean(value))
-                          }
-                        />
-                        <span className="line-clamp-2">{actividad}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
+                        Seleccionar todas
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleClearActividades}
+                        disabled={!selectedActividades.size}
+                      >
+                        Limpiar
+                      </Button>
+                    </div>
+                    {actividadOptions.length ? (
+                      <ScrollArea className="h-[60vh] rounded-lg border border-border/60">
+                        <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+                          {actividadOptions.map((actividad) => {
+                            const checked = selectedActividades.has(actividad);
+                            return (
+                              <label
+                                key={actividad}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                                  checked ? "border-primary bg-primary/5" : "border-border/60",
+                                )}
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(value) => handleActividadToggle(actividad, Boolean(value))}
+                                />
+                                <span className="line-clamp-2">{actividad}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Aún no hay clases disponibles para esta búsqueda.</p>
+                    )}
+                  </div>
+                  <DrawerFooter className="border-t border-border/40 bg-muted/30">
+                    <Button type="button" onClick={() => setActividadDrawerOpen(false)}>
+                      Aplicar filtros
+                    </Button>
+                    <DrawerClose asChild>
+                      <Button type="button" variant="ghost">
+                        Cerrar
+                      </Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
+              <span className="text-xs text-muted-foreground">
+                {selectedActividades.size
+                  ? `${selectedActividades.size} clases seleccionadas`
+                  : actividadOptions.length
+                    ? "Todas las clases incluidas"
+                    : "Clases no disponibles"}
+              </span>
+            </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label className="text-xs font-normal" htmlFor="phone-filter">
