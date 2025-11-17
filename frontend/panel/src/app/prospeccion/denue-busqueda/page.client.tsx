@@ -7,7 +7,9 @@ import { DenueBusquedaView } from "./denue-busqueda-view"
 export default function DenueBusquedaClientPage() {
   return (
     <AppViewLayout title="Prospección · Denue búsqueda">
-      <DenueBusquedaView />
+      <div className="px-4 pb-8 pt-4 md:px-6 lg:px-8">
+        <DenueBusquedaView />
+      </div>
     </AppViewLayout>
   )
 }
