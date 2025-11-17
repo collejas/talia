@@ -1,7 +1,6 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
@@ -267,20 +266,6 @@ export function GoogleBusquedaView() {
   const pageEnd =
     totalFiltered === 0 ? 0 : Math.min(pageOffset + resultadosPagination.limit, totalFiltered);
 
-  const metrics = useMemo(() => {
-    if (!resultados.length) {
-      return { total: 0, contactables: 0, averageRating: 0 };
-    }
-    const contactables = resultados.filter((item) => item.phone || item.email || item.website).length;
-    const ratings = resultados
-      .map((item) => (typeof item.rating === "number" ? item.rating : null))
-      .filter((value): value is number => value !== null);
-    const averageRating = ratings.length
-      ? ratings.reduce((acc, value) => acc + value, 0) / ratings.length
-      : 0;
-    return { total: resultados.length, contactables, averageRating };
-  }, [resultados]);
-
   const selectedVisibleCount = useMemo(() => {
     if (!selectedIds.size) return 0;
     let count = 0;
@@ -406,22 +391,6 @@ export function GoogleBusquedaView() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard title="Resultados" value={metrics.total} description="Registros almacenados" icon={<Search className="h-4 w-4" />} />
-        <MetricCard
-          title="Contactables"
-          value={metrics.contactables}
-          description="Con teléfono, correo o sitio"
-          icon={<Phone className="h-4 w-4" />}
-        />
-        <MetricCard
-          title="Promedio de rating"
-          value={metrics.averageRating ? metrics.averageRating.toFixed(1) : "-"}
-          description="Solo negocios con reseñas"
-          icon={<Star className="h-4 w-4" />}
-        />
-      </div>
-
       {feedback ? (
         <div
           className={cn(
@@ -885,27 +854,5 @@ export function GoogleBusquedaView() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-type MetricCardProps = {
-  title: string;
-  value: string | number;
-  description: string;
-  icon: ReactNode;
-};
-
-function MetricCard({ title, value, description, icon }: MetricCardProps) {
-  return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-4 p-4">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="text-2xl font-semibold">{value}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-        <div className="rounded-full border border-border/70 p-3 text-muted-foreground">{icon}</div>
-      </CardContent>
-    </Card>
   );
 }
