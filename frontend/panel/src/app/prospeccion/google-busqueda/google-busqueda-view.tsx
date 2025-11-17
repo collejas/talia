@@ -721,7 +721,7 @@ export function GoogleBusquedaView() {
               </Button>
             </div>
             <div className="flex flex-wrap items-end gap-x-1 gap-y-0.5">
-              <div className="space-y-1 w-[120px]">
+              <div className="space-y-1 w-[100px]">
                 <Label className="text-xs font-normal">Teléfono</Label>
                 <Select value={phoneFilter} onValueChange={(value) => setPhoneFilter(value as ContactFilterValue)}>
                   <SelectTrigger className="h-9">
@@ -734,7 +734,7 @@ export function GoogleBusquedaView() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1 w-[120px]">
+              <div className="space-y-1 w-[100px]">
                 <Label className="text-xs font-normal">Sitio web</Label>
                 <Select value={websiteFilter} onValueChange={(value) => setWebsiteFilter(value as ContactFilterValue)}>
                   <SelectTrigger className="h-9">
@@ -747,7 +747,7 @@ export function GoogleBusquedaView() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1 w-[140px]">
+              <div className="space-y-1 w-[100px]">
                 <Label className="text-xs font-normal">Rating mínimo</Label>
                 <Select value={String(minRatingFilter)} onValueChange={(value) => setMinRatingFilter(Number(value))}>
                   <SelectTrigger className="h-9">
