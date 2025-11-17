@@ -49,6 +49,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -57,6 +68,8 @@ const RADIUS_MAX = 10_000;
 const DEFAULT_TYPES = "restaurant,store";
 const LIST_PAGE_SIZE = 250;
 const MAP_RESULTS_LIMIT = 5000;
+
+type ContactFilterValue = "any" | "with" | "without";
 
 const ACTIONS = [
   { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },
@@ -99,9 +112,12 @@ export function GoogleBusquedaView() {
   const [resultados, setResultados] = useState<GoogleResultadoItem[]>([]);
   const [isLoadingResultados, setIsLoadingResultados] = useState(false);
   const [resultadosPagination, setResultadosPagination] = useState({ limit: LIST_PAGE_SIZE, offset: 0 });
-  const [filterText, setFilterText] = useState("");
   const [minRatingFilter, setMinRatingFilter] = useState(0);
-  const [onlyContactable, setOnlyContactable] = useState(false);
+  const [phoneFilter, setPhoneFilter] = useState<ContactFilterValue>("any");
+  const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
+  const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
+  const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
+  const [actividadSearch, setActividadSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -183,6 +199,8 @@ export function GoogleBusquedaView() {
   useEffect(() => {
     if (!resultados.length) {
       setSelectedIds(new Set());
+      setSelectedActividades(new Set());
+      setActividadSearch("");
       return;
     }
     const validIds = new Set(resultados.map((item) => item.resultado_id));
@@ -196,6 +214,38 @@ export function GoogleBusquedaView() {
       return next;
     });
   }, [resultados]);
+
+  useEffect(() => {
+    if (!selectedActividades.size) {
+      return;
+    }
+    const available = new Set<string>();
+    for (const item of resultados) {
+      if (typeof item.actividad === "string" && item.actividad.trim()) {
+        available.add(item.actividad.trim());
+      } else if (
+        item.actividad &&
+        typeof item.actividad === "object" &&
+        "text" in item.actividad &&
+        typeof (item.actividad as { text?: unknown }).text === "string"
+      ) {
+        const value = String((item.actividad as { text?: string }).text ?? "").trim();
+        if (value) available.add(value);
+      }
+    }
+    let changed = false;
+    const next = new Set<string>();
+    selectedActividades.forEach((value) => {
+      if (available.has(value)) {
+        next.add(value);
+      } else {
+        changed = true;
+      }
+    });
+    if (changed) {
+      setSelectedActividades(next);
+    }
+  }, [resultados, selectedActividades]);
 
   const busquedaDescriptor = useMemo(() => {
     if (!activeBusqueda) return null;
@@ -213,23 +263,7 @@ export function GoogleBusquedaView() {
   }, [activeBusqueda]);
 
   const filteredResults = useMemo(() => {
-    const text = filterText.trim().toLowerCase();
     return resultados.filter((item) => {
-      if (text.length) {
-        const haystack = [
-          item.display_name,
-          item.actividad,
-          item.address,
-          item.phone,
-          item.email,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(text)) {
-          return false;
-        }
-      }
       if (minRatingFilter > 0 && typeof item.rating === "number") {
         if (item.rating < minRatingFilter) {
           return false;
@@ -237,12 +271,50 @@ export function GoogleBusquedaView() {
       } else if (minRatingFilter > 0 && typeof item.rating !== "number") {
         return false;
       }
-      if (onlyContactable && !item.phone && !item.email && !item.website) {
-        return false;
+      if (phoneFilter === "with" && !item.phone) return false;
+      if (phoneFilter === "without" && item.phone) return false;
+      if (websiteFilter === "with" && !item.website) return false;
+      if (websiteFilter === "without" && item.website) return false;
+      if (selectedActividades.size) {
+        const actividadTexto =
+          typeof item.actividad === "string"
+            ? item.actividad.trim()
+            : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
+              ? String((item.actividad as { text?: unknown }).text ?? "").trim()
+              : "";
+        if (!actividadTexto || !selectedActividades.has(actividadTexto)) {
+          return false;
+        }
       }
       return true;
     });
-  }, [filterText, minRatingFilter, onlyContactable, resultados]);
+  }, [minRatingFilter, phoneFilter, resultados, selectedActividades, websiteFilter]);
+
+  const actividadOptions = useMemo(() => {
+    const unique = new Set<string>();
+    for (const item of resultados) {
+      if (typeof item.actividad === "string" && item.actividad.trim()) {
+        unique.add(item.actividad.trim());
+      } else if (
+        item.actividad &&
+        typeof item.actividad === "object" &&
+        "text" in item.actividad &&
+        typeof (item.actividad as { text?: unknown }).text === "string"
+      ) {
+        const value = String((item.actividad as { text?: string }).text ?? "").trim();
+        if (value) unique.add(value);
+      }
+    }
+    return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
+  }, [resultados]);
+
+  const filteredActividadOptions = useMemo(() => {
+    if (!actividadSearch.trim()) {
+      return actividadOptions;
+    }
+    const query = actividadSearch.trim().toLowerCase();
+    return actividadOptions.filter((actividad) => actividad.toLowerCase().includes(query));
+  }, [actividadOptions, actividadSearch]);
 
   const totalFiltered = filteredResults.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
@@ -307,6 +379,26 @@ export function GoogleBusquedaView() {
     },
     [paginatedResults],
   );
+
+  const handleActividadToggle = (value: string, checked: boolean) => {
+    setSelectedActividades((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(value);
+      } else {
+        next.delete(value);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllActividades = () => {
+    setSelectedActividades(new Set(filteredActividadOptions));
+  };
+
+  const handleClearActividades = () => {
+    setSelectedActividades(new Set());
+  };
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -628,19 +720,37 @@ export function GoogleBusquedaView() {
                 <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
               </Button>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-normal">Filtrar texto</Label>
-                <Input
-                  value={filterText}
-                  onChange={(event) => setFilterText(event.target.value)}
-                  placeholder="Nombre, actividad…"
-                />
+            <div className="flex flex-wrap items-end gap-x-1 gap-y-0.5">
+              <div className="space-y-1 w-[120px]">
+                <Label className="text-xs font-normal">Teléfono</Label>
+                <Select value={phoneFilter} onValueChange={(value) => setPhoneFilter(value as ContactFilterValue)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Todos</SelectItem>
+                    <SelectItem value="with">Con teléfono</SelectItem>
+                    <SelectItem value="without">Sin teléfono</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 w-[120px]">
+                <Label className="text-xs font-normal">Sitio web</Label>
+                <Select value={websiteFilter} onValueChange={(value) => setWebsiteFilter(value as ContactFilterValue)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Todos</SelectItem>
+                    <SelectItem value="with">Con sitio web</SelectItem>
+                    <SelectItem value="without">Sin sitio web</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 w-[140px]">
                 <Label className="text-xs font-normal">Rating mínimo</Label>
                 <Select value={String(minRatingFilter)} onValueChange={(value) => setMinRatingFilter(Number(value))}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -651,15 +761,95 @@ export function GoogleBusquedaView() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-2 rounded-lg border px-3">
-                <Checkbox
-                  id="contactables"
-                  checked={onlyContactable}
-                  onCheckedChange={(value) => setOnlyContactable(Boolean(value))}
-                />
-                <Label htmlFor="contactables" className="text-xs">
-                  Solo contactables
-                </Label>
+              <div className="space-y-1 w-[100px]">
+                <Label className="text-xs font-normal">Clase de actividad</Label>
+                <Drawer open={actividadDrawerOpen} onOpenChange={setActividadDrawerOpen} direction="right">
+                  <DrawerTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                      disabled={!actividadOptions.length}
+                    >
+                      {selectedActividades.size
+                        ? `${selectedActividades.size} seleccionadas`
+                        : "Seleccionar"}
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent className="sm:max-w-xl">
+                    <DrawerHeader>
+                      <DrawerTitle>Clases de actividad</DrawerTitle>
+                      <DrawerDescription>
+                        Elige una o varias para reducir los resultados mostrados.
+                      </DrawerDescription>
+                    </DrawerHeader>
+                    <div className="flex flex-1 flex-col gap-4 overflow-hidden px-4">
+                      <Input
+                        value={actividadSearch}
+                        onChange={(event) => setActividadSearch(event.target.value)}
+                        placeholder="Buscar clase…"
+                        className="h-9"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleSelectAllActividades}
+                          disabled={!filteredActividadOptions.length}
+                        >
+                          Seleccionar todas
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={handleClearActividades}
+                          disabled={!selectedActividades.size}
+                        >
+                          Limpiar selección
+                        </Button>
+                      </div>
+                      {filteredActividadOptions.length ? (
+                        <ScrollArea className="h-[60vh] rounded-lg border border-border/60">
+                          <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+                            {filteredActividadOptions.map((actividad) => {
+                              const checked = selectedActividades.has(actividad);
+                              return (
+                                <label
+                                  key={actividad}
+                                  className={cn(
+                                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                                    checked ? "border-primary bg-primary/5" : "border-border/60",
+                                  )}
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(value) => handleActividadToggle(actividad, Boolean(value))}
+                                  />
+                                  <span className="line-clamp-2">{actividad}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No hay clases que coincidan.</p>
+                      )}
+                    </div>
+                    <DrawerFooter className="border-t border-border/40 bg-muted/30">
+                      <Button type="button" onClick={() => setActividadDrawerOpen(false)}>
+                        Aplicar filtros
+                      </Button>
+                      <DrawerClose asChild>
+                        <Button type="button" variant="ghost">
+                          Cerrar
+                        </Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
