@@ -104,6 +104,7 @@ export function DenueBusquedaView() {
   const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
   const [estratoFilter, setEstratoFilter] = useState<EstratoFilterValue>("any");
   const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
+  const [actividadSearch, setActividadSearch] = useState("");
   const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const activeBusqueda = useMemo(
@@ -251,7 +252,10 @@ export function DenueBusquedaView() {
   ]);
 
   const filteredResults = useMemo(() => {
-    if (!selectedActividades.size) {
+    const hasSelected = selectedActividades.size > 0;
+    const searchText = actividadSearch.trim().toLowerCase();
+    const hasSearch = Boolean(searchText);
+    if (!hasSelected && !hasSearch) {
       return generalFilteredResults;
     }
     return generalFilteredResults.filter((item) => {
@@ -264,9 +268,11 @@ export function DenueBusquedaView() {
       if (!actividadTexto) {
         return false;
       }
-      return selectedActividades.has(actividadTexto);
+      const matchesSearch = !hasSearch || actividadTexto.toLowerCase().includes(searchText);
+      const matchesSelected = !hasSelected || selectedActividades.has(actividadTexto);
+      return matchesSearch && matchesSelected;
     });
-  }, [generalFilteredResults, selectedActividades]);
+  }, [actividadSearch, generalFilteredResults, selectedActividades]);
 
   const totalFiltered = filteredResults.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
@@ -362,6 +368,13 @@ export function DenueBusquedaView() {
     }
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
   }, [generalFilteredResults]);
+  const filteredActividadOptions = useMemo(() => {
+    if (!actividadSearch.trim()) {
+      return actividadOptions;
+    }
+    const query = actividadSearch.trim().toLowerCase();
+    return actividadOptions.filter((actividad) => actividad.toLowerCase().includes(query));
+  }, [actividadOptions, actividadSearch]);
 
   const handleActividadToggle = useCallback((value: string, checked: boolean) => {
     setSelectedActividades((current) => {
@@ -376,8 +389,8 @@ export function DenueBusquedaView() {
   }, []);
 
   const handleSelectAllActividades = useCallback(() => {
-    setSelectedActividades(new Set(actividadOptions));
-  }, [actividadOptions]);
+    setSelectedActividades(new Set(filteredActividadOptions));
+  }, [filteredActividadOptions]);
 
   const handleClearActividades = useCallback(() => {
     setSelectedActividades(new Set());
@@ -389,6 +402,7 @@ export function DenueBusquedaView() {
     setEmailFilter("any");
     setWebsiteFilter("any");
     setFilterText("");
+    setActividadSearch("");
     handleClearActividades();
     setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
   }, [handleClearActividades]);
@@ -767,6 +781,18 @@ export function DenueBusquedaView() {
                       </DrawerDescription>
                     </DrawerHeader>
                     <div className="flex flex-1 flex-col gap-4 overflow-hidden px-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-normal text-muted-foreground" htmlFor="actividad-search">
+                          Filtrar clases
+                        </Label>
+                        <Input
+                          id="actividad-search"
+                          value={actividadSearch}
+                          onChange={(event) => setActividadSearch(event.target.value)}
+                          placeholder="Ej. restaurante, hospital…"
+                          className="h-8 text-sm"
+                        />
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
@@ -788,28 +814,34 @@ export function DenueBusquedaView() {
                         </Button>
                       </div>
                       {actividadOptions.length ? (
-                        <ScrollArea className="h-[60vh] rounded-lg border border-border/60">
-                          <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
-                            {actividadOptions.map((actividad) => {
-                              const checked = selectedActividades.has(actividad);
-                              return (
-                                <label
-                                  key={actividad}
-                                  className={cn(
-                                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-                                    checked ? "border-primary bg-primary/5" : "border-border/60",
-                                  )}
-                                >
-                                  <Checkbox
-                                    checked={checked}
-                                    onCheckedChange={(value) => handleActividadToggle(actividad, Boolean(value))}
-                                  />
-                                  <span className="line-clamp-2">{actividad}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </ScrollArea>
+                        filteredActividadOptions.length ? (
+                          <ScrollArea className="h-[60vh] rounded-lg border border-border/60">
+                            <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+                              {filteredActividadOptions.map((actividad) => {
+                                const checked = selectedActividades.has(actividad);
+                                return (
+                                  <label
+                                    key={actividad}
+                                    className={cn(
+                                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                                      checked ? "border-primary bg-primary/5" : "border-border/60",
+                                    )}
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={(value) => handleActividadToggle(actividad, Boolean(value))}
+                                    />
+                                    <span className="line-clamp-2">{actividad}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </ScrollArea>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            No hay clases que coincidan con &quot;{actividadSearch.trim()}&quot;.
+                          </p>
+                        )
                       ) : (
                         <p className="text-sm text-muted-foreground">Aún no hay clases disponibles para esta búsqueda.</p>
                       )}
