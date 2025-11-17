@@ -57,6 +57,8 @@ const ACTIONS = [
   { key: "letter", label: "Carta", icon: <ListChecks className="h-4 w-4" /> },
 ] as const;
 
+type ContactFilterValue = "any" | "with" | "without";
+
 type FormValues = {
   query: string;
   radio_m: number;
@@ -86,6 +88,9 @@ export function DenueBusquedaView() {
   const [resultadosPagination, setResultadosPagination] = useState({ limit: LIST_PAGE_SIZE, offset: 0 });
   const [filterText, setFilterText] = useState("");
   const [onlyContactable, setOnlyContactable] = useState(false);
+  const [phoneFilter, setPhoneFilter] = useState<ContactFilterValue>("any");
+  const [emailFilter, setEmailFilter] = useState<ContactFilterValue>("any");
+  const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -210,9 +215,15 @@ export function DenueBusquedaView() {
       if (onlyContactable && !item.phone && !item.email && !item.website) {
         return false;
       }
+      if (phoneFilter === "with" && !item.phone) return false;
+      if (phoneFilter === "without" && item.phone) return false;
+      if (emailFilter === "with" && !item.email) return false;
+      if (emailFilter === "without" && item.email) return false;
+      if (websiteFilter === "with" && !item.website) return false;
+      if (websiteFilter === "without" && item.website) return false;
       return true;
     });
-  }, [filterText, onlyContactable, resultados]);
+  }, [filterText, onlyContactable, phoneFilter, emailFilter, websiteFilter, resultados]);
 
   const totalFiltered = filteredResults.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
@@ -606,6 +617,53 @@ export function DenueBusquedaView() {
                 <Label htmlFor="only-contactable" className="text-xs">
                   Solo con contacto
                 </Label>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="phone-filter">
+                  Teléfono
+                </Label>
+                <select
+                  id="phone-filter"
+                  value={phoneFilter}
+                  onChange={(event) => setPhoneFilter(event.target.value as ContactFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="with">Con teléfono</option>
+                  <option value="without">Sin teléfono</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="email-filter">
+                  Email
+                </Label>
+                <select
+                  id="email-filter"
+                  value={emailFilter}
+                  onChange={(event) => setEmailFilter(event.target.value as ContactFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="with">Con email</option>
+                  <option value="without">Sin email</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="website-filter">
+                  Sitio web
+                </Label>
+                <select
+                  id="website-filter"
+                  value={websiteFilter}
+                  onChange={(event) => setWebsiteFilter(event.target.value as ContactFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="with">Con sitio web</option>
+                  <option value="without">Sin sitio web</option>
+                </select>
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
