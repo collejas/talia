@@ -84,6 +84,7 @@ psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.c
 \pset pager off
 
 codex resume 019a88cc-5ea9-72b1-a425-1145c6f20363
+codex resume 019a88cc-5ea9-72b1-a425-1145c6f20363
 
 codex resume 019a8430-38c2-7d90-933f-5ea1746ee2f4
 

@@ -1,7 +1,6 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
@@ -189,7 +188,6 @@ export function DenueBusquedaView() {
     }
     return null;
   }, [activeBusqueda]);
-  const busquedaRadio = activeBusqueda?.radio_m ?? formValues.radio_m;
 
   const filteredResults = useMemo(() => {
     const text = filterText.trim().toLowerCase();
@@ -251,11 +249,6 @@ export function DenueBusquedaView() {
     [filteredResults],
   );
 
-  const metrics = useMemo(() => {
-    const total = resultados.length;
-    const contactables = resultados.filter((item) => item.phone || item.email || item.website).length;
-    return { total, contactables };
-  }, [resultados]);
 
   const selectedVisibleCount = useMemo(() => {
     if (!selectedIds.size) return 0;
@@ -369,22 +362,6 @@ export function DenueBusquedaView() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard title="Resultados" value={metrics.total} description="Registros almacenados" icon={<Search className="h-4 w-4" />} />
-        <MetricCard
-          title="Contactables"
-          value={metrics.contactables}
-          description="Con teléfono, correo o sitio"
-          icon={<Phone className="h-4 w-4" />}
-        />
-        <MetricCard
-          title="Radio aplicado"
-          value={`${numberFormatter.format(busquedaRadio)} m`}
-          description="Distancia desde el centro"
-          icon={<MapPin className="h-4 w-4" />}
-        />
-      </div>
-
       {feedback ? (
         <div
           className={cn(
@@ -398,34 +375,31 @@ export function DenueBusquedaView() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Target className="h-4 w-4" />
-                Parámetros de búsqueda
-              </CardTitle>
-              <CardDescription>Define el centro, el radio y la estrategia antes de consultar Google.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="query">Palabra clave o giro</Label>
-                <Input
-                  id="query"
-                  placeholder="Ej. cafeterías, autolavado, ferretería"
-                  value={formValues.query}
-                  onChange={(event) => updateFormValue("query", event.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  DENUE buscará negocios cuyo nombre o actividad coincida con este texto.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="radius">Radio (m)</Label>
-                  <span className="text-xs text-muted-foreground">{numberFormatter.format(formValues.radio_m)} m</span>
-                </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Target className="h-4 w-4" />
+            Parámetros de búsqueda
+          </CardTitle>
+          <CardDescription>Define el centro y el radio antes de consultar DENUE.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_repeat(2,minmax(0,1fr))_minmax(0,1fr)]">
+            <div className="space-y-2">
+              <Label htmlFor="query">Palabra clave o giro</Label>
+              <Input
+                id="query"
+                placeholder="Ej. cafeterías, autolavado, ferretería"
+                value={formValues.query}
+                onChange={(event) => updateFormValue("query", event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                DENUE buscará negocios cuyo nombre o actividad coincida con este texto.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="radius">Radio (m)</Label>
+              <div className="space-y-1">
                 <input
                   id="radius"
                   type="range"
@@ -436,63 +410,37 @@ export function DenueBusquedaView() {
                   onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
                   className="w-full"
                 />
-                <Input
-                  type="number"
-                  min={RADIUS_MIN}
-                  max={RADIUS_MAX}
-                  value={formValues.radio_m}
-                  onChange={(event) => updateFormValue("radio_m", Number(event.target.value))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Máximo permitido: {numberFormatter.format(RADIUS_MAX)} m ({numberFormatter.format(RADIUS_MAX / 1000)} km).
+                <p className="text-[11px] text-muted-foreground">
+                  {numberFormatter.format(formValues.radio_m)} m · máximo {numberFormatter.format(RADIUS_MAX)} m ({numberFormatter.format(
+                    RADIUS_MAX / 1000,
+                  )} km)
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="lat">Latitud</Label>
-                  <Input
-                    id="lat"
-                    type="number"
-                    value={formValues.lat}
-                    onChange={(event) => updateFormValue("lat", Number(event.target.value))}
-                    step={0.000001}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lng">Longitud</Label>
-                  <Input
-                    id="lng"
-                    type="number"
-                    value={formValues.lng}
-                    onChange={(event) => updateFormValue("lng", Number(event.target.value))}
-                    step={0.000001}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="lat">Latitud</Label>
-                  <Input
-                    id="lat"
-                    type="number"
-                    value={formValues.lat}
-                    onChange={(event) => updateFormValue("lat", Number(event.target.value))}
-                    step={0.000001}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lng">Longitud</Label>
-                  <Input
-                    id="lng"
-                    type="number"
-                    value={formValues.lng}
-                    onChange={(event) => updateFormValue("lng", Number(event.target.value))}
-                    step={0.000001}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <Button onClick={runBusqueda} disabled={isSearching}>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lat">Latitud</Label>
+              <Input
+                id="lat"
+                type="number"
+                value={formValues.lat}
+                onChange={(event) => updateFormValue("lat", Number(event.target.value))}
+                step={0.000001}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lng">Longitud</Label>
+              <Input
+                id="lng"
+                type="number"
+                value={formValues.lng}
+                onChange={(event) => updateFormValue("lng", Number(event.target.value))}
+                step={0.000001}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={runBusqueda} disabled={isSearching} className="flex-1 min-w-[140px]">
                   {isSearching ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -513,9 +461,41 @@ export function DenueBusquedaView() {
                   Restablecer centro
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
+      <Card className="overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">Mapa de resultados</CardTitle>
+            <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
+          </div>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
+            }}
+          >
+            <MapPin className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ProspeccionResultsMap
+            center={{ lat: formValues.lat, lng: formValues.lng }}
+            radius={formValues.radio_m}
+            results={mapResults}
+            highlightIds={selectedIds}
+            onCenterChange={handleCenterChange}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Búsquedas recientes</CardTitle>
@@ -564,34 +544,6 @@ export function DenueBusquedaView() {
         </div>
 
         <div className="space-y-4">
-          <Card className="overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-base">Mapa de resultados</CardTitle>
-                <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
-              </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={() => {
-                  setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
-                }}
-              >
-                <MapPin className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-              <CardContent className="p-0">
-              <ProspeccionResultsMap
-                center={{ lat: formValues.lat, lng: formValues.lng }}
-                radius={formValues.radio_m}
-                results={mapResults}
-                highlightIds={selectedIds}
-                onCenterChange={handleCenterChange}
-              />
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -617,51 +569,78 @@ export function DenueBusquedaView() {
                   <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
                 </Button>
               </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-normal">Filtrar texto</Label>
-                  <Input
-                    value={filterText}
-                    onChange={(event) => setFilterText(event.target.value)}
-                    placeholder="Nombre, actividad…"
-                  />
-                </div>
-                <div className="flex items-center gap-2 rounded-lg border px-3">
-                  <Checkbox
-                    id="contactables"
-                    checked={onlyContactable}
-                    onCheckedChange={(value) => setOnlyContactable(Boolean(value))}
-                  />
-                  <Label htmlFor="contactables" className="text-xs">
-                    Solo contactables
-                  </Label>
-                </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-normal">Filtrar texto</Label>
+                <Input
+                  value={filterText}
+                  onChange={(event) => setFilterText(event.target.value)}
+                  placeholder="Nombre, giro o colonia"
+                  className="h-9"
+                />
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSelectAllVisible(true)}
-                    disabled={!paginatedResults.length}
-                  >
-                    Seleccionar visibles ({selectedVisibleCount})
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleSelectAllVisible(false)}
-                    disabled={!selectedIds.size}
-                  >
-                    Limpiar selección
-                  </Button>
-                </div>
-                <p>
-                  {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
-                </p>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal">Resultados por página</Label>
+                <Input
+                  type="number"
+                  min={50}
+                  max={500}
+                  step={50}
+                  value={resultadosPagination.limit}
+                  onChange={(event) =>
+                    setResultadosPagination((prev) => ({
+                      ...prev,
+                      limit: Math.min(500, Math.max(50, Number(event.target.value) || 50)),
+                      offset: 0,
+                    }))
+                  }
+                  className="h-9"
+                />
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="only-contactable"
+                  checked={onlyContactable}
+                  onCheckedChange={(checked) => setOnlyContactable(Boolean(checked))}
+                />
+                <Label htmlFor="only-contactable" className="text-xs">
+                  Solo con contacto
+                </Label>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>
+                  Seleccionados: {numberFormatter.format(selectedIds.size)}{" "}
+                  {selectedVisibleCount && selectedVisibleCount !== selectedIds.size
+                    ? `(en vista: ${selectedVisibleCount})`
+                    : null}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleSelectAllVisible(true)}
+                  disabled={!paginatedResults.length}
+                >
+                  Seleccionar página
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleSelectAllVisible(false)}
+                  disabled={!paginatedResults.length}
+                >
+                  Quitar selección
+                </Button>
+              </div>
+              <p>
+                {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 {ACTIONS.map((action) => (
                   <Button
@@ -797,28 +776,6 @@ export function DenueBusquedaView() {
         </div>
       </div>
     </div>
-  );
-}
-
-type MetricCardProps = {
-  title: string;
-  value: string | number;
-  description: string;
-  icon: ReactNode;
-};
-
-function MetricCard({ title, value, description, icon }: MetricCardProps) {
-  return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-4 p-4">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="text-2xl font-semibold">{value}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-        <div className="rounded-full border border-border/70 p-3 text-muted-foreground">{icon}</div>
-      </CardContent>
-    </Card>
   );
 }
 
