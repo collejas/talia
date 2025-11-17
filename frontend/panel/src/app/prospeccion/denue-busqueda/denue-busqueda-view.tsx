@@ -209,7 +209,7 @@ export function DenueBusquedaView() {
     return null;
   }, [activeBusqueda]);
 
-  const filteredResults = useMemo(() => {
+  const generalFilteredResults = useMemo(() => {
     const text = filterText.trim().toLowerCase();
     return resultados.filter((item) => {
       if (text.length) {
@@ -243,17 +243,6 @@ export function DenueBusquedaView() {
         if (estratoFilter === "mediana" && !label.includes("mediana")) return false;
         if (estratoFilter === "grande" && !label.includes("grande")) return false;
       }
-      if (selectedActividades.size) {
-        const actividadTexto =
-          typeof item.actividad === "string"
-            ? item.actividad.trim()
-            : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
-              ? String((item.actividad as { text?: unknown }).text ?? "").trim()
-              : "";
-        if (!actividadTexto || !selectedActividades.has(actividadTexto)) {
-          return false;
-        }
-      }
       return true;
     });
   }, [
@@ -263,9 +252,26 @@ export function DenueBusquedaView() {
     emailFilter,
     websiteFilter,
     estratoFilter,
-    selectedActividades,
     resultados,
   ]);
+
+  const filteredResults = useMemo(() => {
+    if (!selectedActividades.size) {
+      return generalFilteredResults;
+    }
+    return generalFilteredResults.filter((item) => {
+      const actividadTexto =
+        typeof item.actividad === "string"
+          ? item.actividad.trim()
+          : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
+            ? String((item.actividad as { text?: unknown }).text ?? "").trim()
+            : "";
+      if (!actividadTexto) {
+        return false;
+      }
+      return selectedActividades.has(actividadTexto);
+    });
+  }, [generalFilteredResults, selectedActividades]);
 
   const totalFiltered = filteredResults.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
@@ -346,7 +352,7 @@ export function DenueBusquedaView() {
 
   const actividadOptions = useMemo(() => {
     const unique = new Set<string>();
-    for (const item of resultados) {
+    for (const item of generalFilteredResults) {
       if (typeof item.actividad === "string" && item.actividad.trim()) {
         unique.add(item.actividad.trim());
       } else if (
@@ -360,7 +366,7 @@ export function DenueBusquedaView() {
       }
     }
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
-  }, [resultados]);
+  }, [generalFilteredResults]);
 
   const handleActividadToggle = useCallback((value: string, checked: boolean) => {
     setSelectedActividades((current) => {
