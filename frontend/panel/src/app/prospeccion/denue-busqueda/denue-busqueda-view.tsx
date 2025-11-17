@@ -93,6 +93,7 @@ export function DenueBusquedaView() {
   const [emailFilter, setEmailFilter] = useState<ContactFilterValue>("any");
   const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
   const [estratoFilter, setEstratoFilter] = useState<EstratoFilterValue>("any");
+  const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -230,9 +231,29 @@ export function DenueBusquedaView() {
         if (estratoFilter === "mediana" && !label.includes("mediana")) return false;
         if (estratoFilter === "grande" && !label.includes("grande")) return false;
       }
+      if (selectedActividades.size) {
+        const actividadTexto =
+          typeof item.actividad === "string"
+            ? item.actividad.trim()
+            : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
+              ? String((item.actividad as { text?: unknown }).text ?? "").trim()
+              : "";
+        if (!actividadTexto || !selectedActividades.has(actividadTexto)) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [filterText, onlyContactable, phoneFilter, emailFilter, websiteFilter, estratoFilter, resultados]);
+  }, [
+    filterText,
+    onlyContactable,
+    phoneFilter,
+    emailFilter,
+    websiteFilter,
+    estratoFilter,
+    selectedActividades,
+    resultados,
+  ]);
 
   const totalFiltered = filteredResults.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
@@ -310,6 +331,36 @@ export function DenueBusquedaView() {
     },
     [paginatedResults],
   );
+
+  const actividadOptions = useMemo(() => {
+    const unique = new Set<string>();
+    for (const item of resultados) {
+      if (typeof item.actividad === "string" && item.actividad.trim()) {
+        unique.add(item.actividad.trim());
+      } else if (
+        item.actividad &&
+        typeof item.actividad === "object" &&
+        "text" in item.actividad &&
+        typeof (item.actividad as { text?: unknown }).text === "string"
+      ) {
+        const value = String((item.actividad as { text?: string }).text ?? "").trim();
+        if (value) unique.add(value);
+      }
+    }
+    return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
+  }, [resultados]);
+
+  const handleActividadToggle = useCallback((value: string, checked: boolean) => {
+    setSelectedActividades((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(value);
+      } else {
+        next.delete(value);
+      }
+      return next;
+    });
+  }, []);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -628,6 +679,44 @@ export function DenueBusquedaView() {
                 </Label>
               </div>
             </div>
+            {actividadOptions.length ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-normal">Clase de actividad</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedActividades(new Set())}
+                    disabled={!selectedActividades.size}
+                  >
+                    Limpiar
+                  </Button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {actividadOptions.map((actividad) => {
+                    const checked = selectedActividades.has(actividad);
+                    return (
+                      <label
+                        key={actividad}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
+                          checked ? "border-primary bg-primary/5" : "border-border",
+                        )}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) =>
+                            handleActividadToggle(actividad, Boolean(value))
+                          }
+                        />
+                        <span className="line-clamp-2">{actividad}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label className="text-xs font-normal" htmlFor="phone-filter">
