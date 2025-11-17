@@ -1100,7 +1100,7 @@ export function DenueBusquedaView() {
               </div>
           </CardContent>
         </Card>
-        <Card className="overflow-hidden">
+        <Card className="flex flex-col overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
               <CardTitle className="text-base">Mapa de resultados</CardTitle>
@@ -1117,14 +1117,16 @@ export function DenueBusquedaView() {
               <MapPin className="h-4 w-4" />
             </Button>
           </CardHeader>
-          <CardContent className="p-0">
-            <ProspeccionResultsMap
-              center={{ lat: formValues.lat, lng: formValues.lng }}
-              radius={formValues.radio_m}
-              results={mapResults}
-              highlightIds={selectedIds}
-              onCenterChange={handleCenterChange}
-            />
+          <CardContent className="flex-1 p-0">
+            <div className="h-full min-h-[460px]">
+              <ProspeccionResultsMap
+                center={{ lat: formValues.lat, lng: formValues.lng }}
+                radius={formValues.radio_m}
+                results={mapResults}
+                highlightIds={selectedIds}
+                onCenterChange={handleCenterChange}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
