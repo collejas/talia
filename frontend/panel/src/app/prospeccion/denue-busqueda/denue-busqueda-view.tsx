@@ -668,6 +668,70 @@ export function DenueBusquedaView() {
               </div>
             <div className="grid gap-2 lg:grid-cols-4">
               <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="estrato-filter">
+                  Tamaño
+                </Label>
+                <select
+                  id="estrato-filter"
+                  value={estratoFilter}
+                  onChange={(event) => setEstratoFilter(event.target.value as EstratoFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="micro">Micro (0-10)</option>
+                  <option value="pequena">Pequeña (11-50)</option>
+                  <option value="mediana">Mediana (51-250)</option>
+                  <option value="grande">Grande (250+)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="phone-filter">
+                  Teléfono
+                </Label>
+                <select
+                  id="phone-filter"
+                  value={phoneFilter}
+                  onChange={(event) => setPhoneFilter(event.target.value as ContactFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="with">Con teléfono</option>
+                  <option value="without">Sin teléfono</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="email-filter">
+                  Email
+                </Label>
+                <select
+                  id="email-filter"
+                  value={emailFilter}
+                  onChange={(event) => setEmailFilter(event.target.value as ContactFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="with">Con email</option>
+                  <option value="without">Sin email</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="website-filter">
+                  Sitio web
+                </Label>
+                <select
+                  id="website-filter"
+                  value={websiteFilter}
+                  onChange={(event) => setWebsiteFilter(event.target.value as ContactFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="with">Con sitio web</option>
+                  <option value="without">Sin sitio web</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-1 lg:col-span-2">
                 <Label className="text-xs font-normal">Filtrar texto</Label>
                 <Input
                   value={filterText}
@@ -797,70 +861,6 @@ export function DenueBusquedaView() {
                     ? "Todas las clases incluidas"
                     : "Clases no disponibles"}
               </span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-normal" htmlFor="phone-filter">
-                  Teléfono
-                </Label>
-                <select
-                  id="phone-filter"
-                  value={phoneFilter}
-                  onChange={(event) => setPhoneFilter(event.target.value as ContactFilterValue)}
-                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                >
-                  <option value="any">Todos</option>
-                  <option value="with">Con teléfono</option>
-                  <option value="without">Sin teléfono</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-normal" htmlFor="email-filter">
-                  Email
-                </Label>
-                <select
-                  id="email-filter"
-                  value={emailFilter}
-                  onChange={(event) => setEmailFilter(event.target.value as ContactFilterValue)}
-                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                >
-                  <option value="any">Todos</option>
-                  <option value="with">Con email</option>
-                  <option value="without">Sin email</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-normal" htmlFor="website-filter">
-                  Sitio web
-                </Label>
-                <select
-                  id="website-filter"
-                  value={websiteFilter}
-                  onChange={(event) => setWebsiteFilter(event.target.value as ContactFilterValue)}
-                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                >
-                  <option value="any">Todos</option>
-                  <option value="with">Con sitio web</option>
-                  <option value="without">Sin sitio web</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-normal" htmlFor="estrato-filter">
-                  Tamaño
-                </Label>
-                <select
-                  id="estrato-filter"
-                  value={estratoFilter}
-                  onChange={(event) => setEstratoFilter(event.target.value as EstratoFilterValue)}
-                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                >
-                  <option value="any">Todos</option>
-                  <option value="micro">Micro (0-10)</option>
-                  <option value="pequena">Pequeña (11-50)</option>
-                  <option value="mediana">Mediana (51-250)</option>
-                  <option value="grande">Grande (250+)</option>
-                </select>
-              </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2">
