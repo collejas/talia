@@ -150,6 +150,14 @@ export function DenueBusquedaView() {
         setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
         setSelectedIds(new Set());
         setActiveBusquedaId(busquedaId);
+        const totalRecords = response.total ?? (response.items?.length ?? 0);
+        if (typeof totalRecords === "number") {
+          setBusquedas((prev) =>
+            prev.map((item) =>
+              item.id === busquedaId ? { ...item, total_encontrados: totalRecords } : item,
+            ),
+          );
+        }
       } catch (error) {
         setFeedback({
           type: "error",
@@ -488,10 +496,14 @@ export function DenueBusquedaView() {
         message: `Se eliminaron ${ids.length} registros.`,
       });
       if (activeBusquedaId) {
-        await loadResultadosForBusqueda(activeBusquedaId);
+        await Promise.all([
+          loadResultadosForBusqueda(activeBusquedaId),
+          loadBusquedas(),
+        ]);
       } else {
         setResultados([]);
         setSelectedIds(new Set());
+        await loadBusquedas();
       }
     } catch (error) {
       setFeedback({
@@ -501,7 +513,7 @@ export function DenueBusquedaView() {
     } finally {
       setIsDeletingResultados(false);
     }
-  }, [activeBusquedaId, loadResultadosForBusqueda, selectedIds, setFeedback]);
+  }, [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda, selectedIds, setFeedback]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
