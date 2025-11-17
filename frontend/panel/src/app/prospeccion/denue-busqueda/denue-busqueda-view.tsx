@@ -58,6 +58,7 @@ const ACTIONS = [
 ] as const;
 
 type ContactFilterValue = "any" | "with" | "without";
+type EstratoFilterValue = "any" | "micro" | "pequena" | "mediana" | "grande";
 
 type FormValues = {
   query: string;
@@ -91,6 +92,7 @@ export function DenueBusquedaView() {
   const [phoneFilter, setPhoneFilter] = useState<ContactFilterValue>("any");
   const [emailFilter, setEmailFilter] = useState<ContactFilterValue>("any");
   const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
+  const [estratoFilter, setEstratoFilter] = useState<EstratoFilterValue>("any");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -221,9 +223,16 @@ export function DenueBusquedaView() {
       if (emailFilter === "without" && item.email) return false;
       if (websiteFilter === "with" && !item.website) return false;
       if (websiteFilter === "without" && item.website) return false;
+      if (estratoFilter !== "any") {
+        const label = (item.estrato ?? "").toLowerCase();
+        if (estratoFilter === "micro" && !label.includes("micro")) return false;
+        if (estratoFilter === "pequena" && !label.includes("peque")) return false;
+        if (estratoFilter === "mediana" && !label.includes("mediana")) return false;
+        if (estratoFilter === "grande" && !label.includes("grande")) return false;
+      }
       return true;
     });
-  }, [filterText, onlyContactable, phoneFilter, emailFilter, websiteFilter, resultados]);
+  }, [filterText, onlyContactable, phoneFilter, emailFilter, websiteFilter, estratoFilter, resultados]);
 
   const totalFiltered = filteredResults.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
@@ -580,7 +589,7 @@ export function DenueBusquedaView() {
                   <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
                 </Button>
               </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 lg:grid-cols-4">
               <div className="space-y-1">
                 <Label className="text-xs font-normal">Filtrar texto</Label>
                 <Input
@@ -663,6 +672,23 @@ export function DenueBusquedaView() {
                   <option value="any">Todos</option>
                   <option value="with">Con sitio web</option>
                   <option value="without">Sin sitio web</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="estrato-filter">
+                  Estrato
+                </Label>
+                <select
+                  id="estrato-filter"
+                  value={estratoFilter}
+                  onChange={(event) => setEstratoFilter(event.target.value as EstratoFilterValue)}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  <option value="micro">Micro (0-10)</option>
+                  <option value="pequena">Pequeña (11-50)</option>
+                  <option value="mediana">Mediana (51-250)</option>
+                  <option value="grande">Grande (250+)</option>
                 </select>
               </div>
             </div>

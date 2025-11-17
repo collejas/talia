@@ -106,7 +106,8 @@ def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
     external_id = place.get("Id") or place.get("id")
     address = _build_denue_address(place)
     actividad = _clean_text(place.get("Clase_actividad"))
-    estrato = _clean_text(place.get("Estrato"))
+    estrato_raw = _clean_text(place.get("Estrato"))
+    estrato_label = _classify_estrato(estrato_raw)
     phone = _clean_text(place.get("Telefono"))
     email = _clean_text(place.get("Correo_e"))
     website = _clean_text(place.get("Sitio_internet"))
@@ -117,7 +118,7 @@ def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
         "name": _clean_text(place.get("Nombre")),
         "razon_social": _clean_text(place.get("Razon_social")),
         "actividad": actividad,
-        "estrato": estrato,
+        "estrato": estrato_label,
         "phone": phone,
         "email": email,
         "website": website,
@@ -183,6 +184,43 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _classify_estrato(raw: str | None) -> str | None:
+    """Convierte el valor crudo de estrato en una etiqueta estándar."""
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    if not normalized:
+        return None
+    # Intentar detectar directamente por palabras clave.
+    if "micro" in normalized:
+        return "Micro (0-10 personas)"
+    if "peque" in normalized:
+        return "Pequeña (11-50 personas)"
+    if "mediana" in normalized:
+        return "Mediana (51-250 personas)"
+    if "grande" in normalized or "251" in normalized:
+        return "Grande (250+ personas)"
+    # Algunos catálogos usan dígitos 1-7.
+    digit = None
+    if normalized.isdigit():
+        digit = int(normalized)
+    else:
+        # Busca números dentro del texto.
+        for ch in normalized:
+            if ch.isdigit():
+                digit = int(ch)
+                break
+    if digit is not None:
+        if digit <= 2:
+            return "Micro (0-10 personas)"
+        if digit == 3 or digit == 4:
+            return "Pequeña (11-50 personas)"
+        if digit == 5 or digit == 6:
+            return "Mediana (51-250 personas)"
+        return "Grande (250+ personas)"
+    return raw
 
 
 __all__ = ["DenueClient", "DenueError", "normalize_denue_place"]
