@@ -147,6 +147,27 @@ export async function listDenueResultados(params: {
   return requestJson<DenueResultadosResponse>(url.toString());
 }
 
+export async function deleteDenueBusqueda(busquedaId: string) {
+  if (!busquedaId) {
+    throw new Error("Falta el ID de la búsqueda.");
+  }
+  const url = buildClientUrl("/api/prospeccion/denue/busquedas");
+  url.searchParams.set("delete_id", busquedaId);
+  return requestJson<{ ok: boolean; deleted?: number }>(url.toString(), {
+    method: "DELETE",
+  });
+}
+
+export async function deleteDenueResultados(ids: string[]) {
+  if (!ids.length) {
+    throw new Error("Selecciona al menos un resultado.");
+  }
+  return requestJson<{ ok: boolean; deleted: number }>("/api/prospeccion/denue/resultados", {
+    method: "DELETE",
+    body: JSON.stringify({ ids }),
+  });
+}
+
 function extractStringField(payload: unknown, key: string): string | undefined {
   if (!payload || typeof payload !== "object") {
     return undefined;

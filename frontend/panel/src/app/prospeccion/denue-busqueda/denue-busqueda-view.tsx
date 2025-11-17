@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   Target,
+  Trash2,
 } from "lucide-react";
 
 const ProspeccionResultsMap = dynamic(
@@ -23,6 +24,8 @@ const ProspeccionResultsMap = dynamic(
 );
 import {
   createDenueBusqueda,
+  deleteDenueBusqueda,
+  deleteDenueResultados,
   listDenueBusquedas,
   listDenueResultados,
   type CreateDenueSearchPayload,
@@ -107,6 +110,8 @@ export function DenueBusquedaView() {
   const [actividadSearch, setActividadSearch] = useState("");
   const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
+  const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -407,6 +412,97 @@ export function DenueBusquedaView() {
     setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
   }, [handleClearActividades]);
 
+  const handleDeleteBusqueda = useCallback(
+    async (busquedaId: string) => {
+      if (!busquedaId) {
+        return;
+      }
+      if (typeof window !== "undefined") {
+        const confirmed = window.confirm(
+          "¿Eliminar esta captura de DENUE? Se borrarán todos sus resultados.",
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      setDeletingBusquedaId(busquedaId);
+      try {
+        await deleteDenueBusqueda(busquedaId);
+        setFeedback({
+          type: "success",
+          message: "La búsqueda se eliminó correctamente.",
+        });
+        const remaining = await loadBusquedas();
+        if (!remaining.length) {
+          setActiveBusquedaId(null);
+          setResultados([]);
+          setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
+          setSelectedIds(new Set());
+          setSelectedActividades(new Set());
+          setActividadSearch("");
+          return;
+        }
+        const stillExists = activeBusquedaId
+          ? remaining.some((item) => item.id === activeBusquedaId)
+          : false;
+        if (busquedaId === activeBusquedaId || !stillExists) {
+          await loadResultadosForBusqueda(remaining[0]!.id);
+        }
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "No fue posible eliminar la búsqueda.",
+        });
+      } finally {
+        setDeletingBusquedaId(null);
+      }
+    },
+    [
+      activeBusquedaId,
+      loadBusquedas,
+      loadResultadosForBusqueda,
+      setFeedback,
+    ],
+  );
+
+  const handleDeleteSelectedResultados = useCallback(async () => {
+    if (!selectedIds.size) {
+      setFeedback({
+        type: "info",
+        message: "Selecciona al menos un registro para poder eliminarlo.",
+      });
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("¿Eliminar los resultados seleccionados? Esta acción no se puede deshacer.");
+      if (!confirmed) {
+        return;
+      }
+    }
+    const ids = Array.from(selectedIds);
+    setIsDeletingResultados(true);
+    try {
+      await deleteDenueResultados(ids);
+      setFeedback({
+        type: "success",
+        message: `Se eliminaron ${ids.length} registros.`,
+      });
+      if (activeBusquedaId) {
+        await loadResultadosForBusqueda(activeBusquedaId);
+      } else {
+        setResultados([]);
+        setSelectedIds(new Set());
+      }
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No fue posible eliminar los resultados seleccionados.",
+      });
+    } finally {
+      setIsDeletingResultados(false);
+    }
+  }, [activeBusquedaId, loadResultadosForBusqueda, selectedIds, setFeedback]);
+
   const goToPage = useCallback(
     (pageIndex: number) => {
       const clamped = Math.min(Math.max(pageIndex, 0), Math.max(0, totalPages - 1));
@@ -639,13 +735,30 @@ export function DenueBusquedaView() {
                           })}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant={activeBusquedaId === item.id ? "secondary" : "outline"}
-                        onClick={() => loadResultadosForBusqueda(item.id)}
-                      >
-                        Ver
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={activeBusquedaId === item.id ? "secondary" : "outline"}
+                          onClick={() => loadResultadosForBusqueda(item.id)}
+                        >
+                          Ver
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label="Eliminar búsqueda"
+                          onClick={() => handleDeleteBusqueda(item.id)}
+                          disabled={deletingBusquedaId === item.id}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          {deletingBusquedaId === item.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
@@ -923,6 +1036,21 @@ export function DenueBusquedaView() {
           </CardHeader>
           <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleDeleteSelectedResultados}
+                  disabled={!selectedIds.size || isDeletingResultados}
+                  className="flex items-center gap-2"
+                >
+                  {isDeletingResultados ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Eliminar seleccionados
+                </Button>
                 {ACTIONS.map((action) => (
                   <Button
                     key={action.key}

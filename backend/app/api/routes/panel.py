@@ -144,6 +144,34 @@ class UsuarioRolesUpdatePayload(BaseModel):
     roles: list[UUID] = Field(default_factory=list, description="IDs de roles a mantener.")
 
 
+class DeleteDenueResultadosPayload(BaseModel):
+    """IDs de resultados DENUE a eliminar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="IDs de resultados (uuid) a eliminar.",
+    )
+
+    @model_validator(mode="after")
+    def _dedupe_ids(self) -> DeleteDenueResultadosPayload:
+        if not self.ids:
+            return self
+        # Mantén orden pero elimina duplicados
+        seen: set[UUID] = set()
+        deduped: list[UUID] = []
+        for value in self.ids:
+            if value in seen:
+                continue
+            seen.add(value)
+            deduped.append(value)
+        self.ids = deduped
+        return self
+
+
 class RolCreatePayload(BaseModel):
     """Alta de rol."""
 
@@ -4421,6 +4449,36 @@ async def listar_busquedas_denue(
     }
 
 
+@router.delete("/prospeccion/denue/busquedas/{busqueda_id}")
+async def eliminar_busqueda_denue(
+    busqueda_id: UUID,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+
+    resp = await _sb_delete(
+        "/rest/v1/busquedas",
+        params={
+            "id": f"eq.{busqueda_id}",
+            "fuente": "eq.denue",
+        },
+        token=None,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_eliminando_busqueda")
+    if resp.status_code == 204:
+        return {"ok": True, "deleted": 0}
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    if not rows:
+        # Supabase puede no devolver representación si RLS impide SELECT, pero el DELETE fue OK.
+        return {"ok": True, "deleted": 0}
+    return {"ok": True, "deleted": len(rows)}
+
+
 @router.get("/prospeccion/google/resultados")
 async def listar_resultados_google(
     busqueda_id: UUID | None = Query(default=None),
@@ -4586,6 +4644,38 @@ async def listar_resultados_denue(
         "offset": offset,
         "total": total or len(rows),
     }
+
+
+@router.delete("/prospeccion/denue/resultados")
+async def eliminar_resultados_denue(
+    payload: DeleteDenueResultadosPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    await _require_admin(authorization)
+    if not payload.ids:
+        raise HTTPException(status_code=400, detail="ids_required")
+
+    ids_param = ",".join(str(value) for value in payload.ids)
+    resp = await _sb_delete(
+        "/rest/v1/resultados",
+        params={
+            "id": f"in.({ids_param})",
+            "fuente": "eq.denue",
+        },
+        token=None,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_eliminando_resultados")
+    if resp.status_code == 204:
+        return {"ok": True, "deleted": 0}
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    if not rows:
+        return {"ok": True, "deleted": 0}
+    return {"ok": True, "deleted": len(rows)}
 
 
 @router.get("/panel/env.js")
