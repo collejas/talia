@@ -1,6 +1,7 @@
 "use server";
 
 import { callSupabaseRest, callSupabaseRpc } from "@/lib/visitas/supabase";
+import { inferPhoneLocation } from "@/lib/visitas/phone-location";
 
 type DashboardKpisResponse = {
   visitantes?: number;
@@ -271,7 +272,13 @@ function mapTable(detalle?: VisitDetailRaw[] | null): VisitTableRow[] {
     const header = isWhatsapp
       ? `WhatsApp · ${row.contacto_nombre || row.contacto_telefono || row.contacto_correo || "Conversación"}`
       : row.session_id || `Sesión ${index + 1}`;
-    const type = isWhatsapp ? "WhatsApp" : row.state_name || row.country_name || "Webchat";
+    const phoneLocation = isWhatsapp ? inferPhoneLocation(row.contacto_telefono || null) : null;
+    const type =
+      row.state_name ||
+      row.country_name ||
+      (isWhatsapp
+        ? phoneLocation?.stateName || phoneLocation?.countryName || "WhatsApp"
+        : "Webchat");
     const status = row.tuvo_chat || isWhatsapp ? "Done" : "In Process";
     const target = isWhatsapp ? "1" : toNumber(row.visit_count).toString();
     const reviewer =
@@ -313,57 +320,60 @@ function extractTotal(
 
 function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRaw[] {
   if (!rows || !rows.length) return [];
-  return rows.map((row) => ({
-    session_id: `whatsapp-${row.id}`,
-    canal: "whatsapp",
-    ip: null,
-    registrado_en: row.iniciada_en,
-    primera_visita_en: row.iniciada_en,
-    ultimo_evento_en: row.ultimo_mensaje_en,
-    closed_at: null,
-    stay_seconds: null,
-    avg_stay_seconds: null,
-    visit_count: 1,
-    total_visitas: 1,
-    tuvo_chat: true,
-    mensajes_entrantes: null,
-    mensajes_salientes: null,
-    primer_mensaje_en: row.iniciada_en,
-    ultimo_mensaje_conversacion: row.ultimo_mensaje_en,
-    contacto_id: row.contacto?.telefono_e164 || row.contacto?.correo || null,
-    contacto_nombre: row.contacto?.nombre_completo || null,
-    contacto_correo: row.contacto?.correo || null,
-    contacto_telefono: row.contacto?.telefono_e164 || null,
-    contacto_empresa: null,
-    contacto_estado: "whatsapp",
-    contacto_captura: null,
-    contacto_creado_en: null,
-    country_code: null,
-    country_name: null,
-    state_name: null,
-    state_code: null,
-    city_name: null,
-    cve_ent: null,
-    nom_ent: null,
-    cve_mun: null,
-    nom_mun: null,
-    cvegeo: null,
-    ubicacion_cache: null,
-    device_type: null,
-    dispositivo_cache: null,
-    pantalla_cache: null,
-    sistema_operativo: null,
-    idioma: null,
-    timezone: null,
-    prefiere_modo_oscuro: null,
-    referrer: "WhatsApp",
-    landing_url: null,
-    trazabilidad_cache: null,
-    geo: null,
-    total_rows: null,
-    total_chat_rows: null,
-    total_no_chat_rows: null,
-  }));
+  return rows.map((row) => {
+    const location = inferPhoneLocation(row.contacto?.telefono_e164 || null);
+    return {
+      session_id: `whatsapp-${row.id}`,
+      canal: "whatsapp",
+      ip: null,
+      registrado_en: row.iniciada_en,
+      primera_visita_en: row.iniciada_en,
+      ultimo_evento_en: row.ultimo_mensaje_en,
+      closed_at: null,
+      stay_seconds: null,
+      avg_stay_seconds: null,
+      visit_count: 1,
+      total_visitas: 1,
+      tuvo_chat: true,
+      mensajes_entrantes: null,
+      mensajes_salientes: null,
+      primer_mensaje_en: row.iniciada_en,
+      ultimo_mensaje_conversacion: row.ultimo_mensaje_en,
+      contacto_id: row.contacto?.telefono_e164 || row.contacto?.correo || null,
+      contacto_nombre: row.contacto?.nombre_completo || null,
+      contacto_correo: row.contacto?.correo || null,
+      contacto_telefono: row.contacto?.telefono_e164 || null,
+      contacto_empresa: null,
+      contacto_estado: "whatsapp",
+      contacto_captura: null,
+      contacto_creado_en: null,
+      country_code: location.countryCode,
+      country_name: location.countryName,
+      state_name: location.stateName,
+      state_code: location.stateCode,
+      city_name: location.municipalityName,
+      cve_ent: location.stateCode,
+      nom_ent: location.stateName,
+      cve_mun: null,
+      nom_mun: location.municipalityName,
+      cvegeo: null,
+      ubicacion_cache: null,
+      device_type: null,
+      dispositivo_cache: null,
+      pantalla_cache: null,
+      sistema_operativo: null,
+      idioma: null,
+      timezone: null,
+      prefiere_modo_oscuro: null,
+      referrer: "WhatsApp",
+      landing_url: null,
+      trazabilidad_cache: null,
+      geo: null,
+      total_rows: null,
+      total_chat_rows: null,
+      total_no_chat_rows: null,
+    };
+  });
 }
 
 function normalizeDate(value?: string): string | null {

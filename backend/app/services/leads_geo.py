@@ -13,6 +13,13 @@ from app.data import data_path
 
 logger = get_logger(__name__)
 
+try:  # pragma: no cover - dependemos del entorno de ejecución
+    import phonenumbers
+    from phonenumbers.phonenumberutil import NumberParseException
+except Exception:  # pragma: no cover
+    phonenumbers = None
+    NumberParseException = Exception  # type: ignore[assignment]
+
 
 def _normalize_key(text: str | None) -> str:
     if not text:
@@ -20,6 +27,12 @@ def _normalize_key(text: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", text)
     stripped = "".join(ch for ch in normalized if ch.isalnum())
     return stripped.lower()
+
+
+def _digits_only(value: str | None) -> str:
+    if not value:
+        return ""
+    return "".join(ch for ch in str(value) if ch.isdigit())
 
 
 @lru_cache(maxsize=None)
@@ -163,6 +176,26 @@ def state_display_name(cve_ent: str) -> str | None:
     return str(name) if name else None
 
 
+@lru_cache(maxsize=1)
+def _country_name_index() -> dict[str, str]:
+    data = load_world_countries_geojson()
+    mapping: dict[str, str] = {}
+    for feature in data.get("features", []):
+        props = feature.get("properties") or {}
+        iso = str(props.get("ISO_A2") or props.get("WB_A2") or "").upper()
+        name = props.get("NAME") or props.get("ADMIN") or props.get("FORMAL_EN")
+        if iso and name:
+            mapping[iso] = str(name)
+    mapping.setdefault("MX", "México")
+    return mapping
+
+
+def country_display_name(iso_code: str | None) -> str | None:
+    if not iso_code:
+        return None
+    return _country_name_index().get(str(iso_code).upper())
+
+
 def _normalized_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -198,6 +231,39 @@ def _lada_from_phone(phone_e164: str | None) -> str | None:
         if candidate in catalog:
             return candidate
     return None
+
+
+@lru_cache(maxsize=1)
+def _lada_localities() -> dict[str, list[dict[str, Any]]]:
+    catalog = _load_json("ladas/ladas_clean.json")
+    mapping: dict[str, list[dict[str, Any]]] = {}
+    if isinstance(catalog, list):
+        for row in catalog:
+            if not isinstance(row, dict):
+                continue
+            lada = str(row.get("lada") or "").strip()
+            if not lada:
+                continue
+            mapping.setdefault(lada, []).append(row)
+    return mapping
+
+
+def _country_from_phone(phone_e164: str | None) -> tuple[str | None, str | None]:
+    if not phone_e164:
+        return None, None
+    if phonenumbers:
+        try:
+            parsed = phonenumbers.parse(phone_e164, None)
+        except NumberParseException:
+            parsed = None
+        if parsed:
+            region = phonenumbers.region_code_for_number(parsed)
+            if region:
+                return region, country_display_name(region)
+    digits = _digits_only(phone_e164)
+    if digits.startswith("52"):
+        return "MX", country_display_name("MX")
+    return None, None
 
 
 def _location_from_metadata(
@@ -238,6 +304,19 @@ class ContactLocation:
     municipio_clave: str | None = None
     municipio_nombre: str | None = None
     municipio_cvegeo: str | None = None
+
+
+@dataclass(slots=True)
+class PhoneLocationSummary:
+    """Resumen de ubicación inferida solo a partir del teléfono."""
+
+    phone_e164: str | None
+    country_code: str | None
+    country_name: str | None
+    lada: str | None = None
+    estado_clave: str | None = None
+    estado_nombre: str | None = None
+    municipio_nombre: str | None = None
 
 
 def infer_contact_location(
@@ -309,6 +388,47 @@ def infer_contact_location(
         municipio_clave=municipio,
         municipio_nombre=municipio_nombre,
         municipio_cvegeo=cvegeo,
+    )
+
+
+def phone_location_from_number(phone_e164: str | None) -> PhoneLocationSummary:
+    country_code, country_name = _country_from_phone(phone_e164)
+    lada = estado = estado_nombre = municipio_nombre = None
+
+    if country_code == "MX":
+        lada = _lada_from_phone(phone_e164)
+        if lada:
+            states = _lada_states().get(lada)
+            if states and len(states) == 1:
+                estado, estado_nombre = next(iter(states.items()))
+            entries = _lada_localities().get(lada) or []
+            if not estado:
+                estados = {
+                    str(item.get("cve_ent")).zfill(2) for item in entries if item.get("cve_ent")
+                }
+                if len(estados) == 1:
+                    estado = estados.pop()
+                    estado_nombre = state_display_name(estado) or estado_nombre
+            localidades = {
+                str(item.get("localidad") or "").strip()
+                for item in entries
+                if item.get("localidad")
+            }
+            if len(localidades) == 1:
+                municipio_nombre = next(iter(localidades))
+
+        if estado:
+            estado = str(estado).zfill(2)
+            estado_nombre = estado_nombre or state_display_name(estado)
+
+    return PhoneLocationSummary(
+        phone_e164=phone_e164,
+        country_code=country_code,
+        country_name=country_name,
+        lada=lada,
+        estado_clave=estado,
+        estado_nombre=estado_nombre,
+        municipio_nombre=municipio_nombre,
     )
 
 
