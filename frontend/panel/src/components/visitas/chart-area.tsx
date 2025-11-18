@@ -36,16 +36,17 @@ type ChartAreaProps = {
 }
 
 const chartConfig = {
-  visitors: {
-    label: "Visitors",
-  },
-  desktop: {
+  conChat: {
     label: "Con chat",
     color: "var(--primary)",
   },
-  mobile: {
+  sinChat: {
     label: "Sin chat",
     color: "var(--primary)",
+  },
+  whatsapp: {
+    label: "WhatsApp",
+    color: "hsl(var(--chart-3))",
   },
 } satisfies ChartConfig
 
@@ -124,13 +125,17 @@ export function VisitsChartArea({ data }: ChartAreaProps) {
         <ChartContainer config={chartConfig}>
           <AreaChart accessibilityLayer data={filteredData}>
             <defs>
-              <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-desktop)" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="var(--color-desktop)" stopOpacity={0} />
+              <linearGradient id="fillConChat" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-conChat)" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="var(--color-conChat)" stopOpacity={0} />
               </linearGradient>
-              <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-mobile)" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="var(--color-mobile)" stopOpacity={0} />
+              <linearGradient id="fillSinChat" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-sinChat)" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="var(--color-sinChat)" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="fillWhatsapp" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-whatsapp)" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="var(--color-whatsapp)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -145,18 +150,26 @@ export function VisitsChartArea({ data }: ChartAreaProps) {
               content={<ChartTooltipContent indicator="dot" />}
             />
             <Area
-              dataKey="desktop"
+              dataKey="whatsapp"
               type="monotone"
-              stroke="var(--color-desktop)"
-              fill="url(#fillDesktop)"
+              stroke="var(--color-whatsapp)"
+              fill="url(#fillWhatsapp)"
+              strokeWidth={2}
+              name="WhatsApp"
+            />
+            <Area
+              dataKey="conChat"
+              type="monotone"
+              stroke="var(--color-conChat)"
+              fill="url(#fillConChat)"
               strokeWidth={2}
               name="Con chat"
             />
             <Area
-              dataKey="mobile"
+              dataKey="sinChat"
               type="monotone"
-              stroke="var(--color-mobile)"
-              fill="url(#fillMobile)"
+              stroke="var(--color-sinChat)"
+              fill="url(#fillSinChat)"
               strokeWidth={2}
               name="Sin chat"
             />

@@ -1,1 +1,1 @@
-export { callSupabaseRpc } from "@/lib/leads/supabase";
+export { callSupabaseRpc, callSupabaseRest } from "@/lib/leads/supabase";

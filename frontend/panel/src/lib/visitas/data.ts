@@ -1,6 +1,6 @@
 "use server";
 
-import { callSupabaseRpc } from "@/lib/visitas/supabase";
+import { callSupabaseRest, callSupabaseRpc } from "@/lib/visitas/supabase";
 
 type DashboardKpisResponse = {
   visitantes?: number;
@@ -21,8 +21,21 @@ type VisitantesEstadosResponse = {
   }>;
 };
 
+type WhatsappConversationRow = {
+  id: string;
+  canal: string | null;
+  iniciada_en: string | null;
+  ultimo_mensaje_en: string | null;
+  contacto: {
+    nombre_completo?: string | null;
+    correo?: string | null;
+    telefono_e164?: string | null;
+  } | null;
+};
+
 export type VisitDetailRaw = {
   session_id: string | null;
+  canal?: string | null;
   ip: string | null;
   registrado_en: string | null;
   primera_visita_en: string | null;
@@ -77,19 +90,21 @@ export type VisitCards = {
   sinChat: number;
   conChat: number;
   contactos: number;
+  whatsapp: number;
 };
 
 export type VisitChartPoint = {
   date: string;
-  desktop: number;
-  mobile: number;
+  conChat: number;
+  sinChat: number;
+  whatsapp: number;
 };
 
 export type VisitTableRow = {
   id: number;
   header: string;
   type: string;
-  status: "Done" | "In Process";
+  status: string;
   target: string;
   limit: string;
   reviewer: string;
@@ -104,7 +119,7 @@ export type VisitsPayload = {
 };
 
 export async function loadVisitsData(): Promise<VisitsPayload> {
-  const [kpisResult, estadosResult, detalleResult] = await Promise.all([
+  const [kpisResult, estadosResult, detalleResult, whatsappVisitResult, whatsappDetailResult] = await Promise.all([
     callSupabaseRpc<DashboardKpisResponse>("dashboard_kpis"),
     callSupabaseRpc<VisitantesEstadosResponse>("panel_visitantes_sin_chat_estados"),
     callSupabaseRpc<VisitDetailRaw[]>("panel_webchat_visitas_detalle", {
@@ -115,17 +130,36 @@ export async function loadVisitsData(): Promise<VisitsPayload> {
         p_order_dir: "asc",
       },
     }),
+    callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>("embudo_visitantes_whatsapp", {
+      body: { p_from: null, p_to: null },
+    }),
+    callSupabaseRest<WhatsappConversationRow[]>("conversaciones", {
+      query: {
+        select:
+          "id,canal,iniciada_en,ultimo_mensaje_en,contacto:contactos(nombre_completo,correo,telefono_e164)",
+        canal: "eq.whatsapp",
+        order: "iniciada_en.desc",
+        limit: "200",
+      },
+    }),
   ]);
 
   const errors: string[] = [];
   if (!kpisResult.ok) errors.push(kpisResult.error);
   if (!estadosResult.ok) errors.push(estadosResult.error);
   if (!detalleResult.ok) errors.push(detalleResult.error);
+  if (!whatsappVisitResult.ok) errors.push(whatsappVisitResult.error);
+  if (!whatsappDetailResult.ok) errors.push(whatsappDetailResult.error);
 
-  const detalle = detalleResult.ok ? detalleResult.data : undefined;
-  const cards = mapCards(kpisResult.ok ? kpisResult.data : undefined, detalle);
-  const chart = mapChart(detalle);
-  const table = mapTable(detalle);
+  const detalleWebchat = detalleResult.ok ? detalleResult.data : undefined;
+  const normalizedWebchat = detalleWebchat?.map((row) => ({ ...row, canal: "webchat" as const })) ?? [];
+  const whatsappDetail = whatsappDetailResult.ok ? mapWhatsappRows(whatsappDetailResult.data) : [];
+  const mergedDetalle: VisitDetailRaw[] = [...normalizedWebchat, ...whatsappDetail];
+
+  const whatsappTotal = extractTotal(whatsappVisitResult, whatsappDetail.length);
+  const cards = mapCards(kpisResult.ok ? kpisResult.data : undefined, mergedDetalle, whatsappTotal);
+  const chart = mapChart(mergedDetalle);
+  const table = mapTable(mergedDetalle);
 
   return {
     cards,
@@ -136,15 +170,18 @@ export async function loadVisitsData(): Promise<VisitsPayload> {
 }
 
 function mapCards(
-  payload?: DashboardKpisResponse,
-  detalle?: VisitDetailRaw[] | null,
+  payload: DashboardKpisResponse | undefined,
+  detalle: VisitDetailRaw[] | null | undefined,
+  whatsappTotal: number,
 ): VisitCards {
   if (payload) {
+    const webchatTotals = toNumber(payload.visitas_totales ?? payload.webchat?.visitas_totales);
     return {
-      totalVisits: toNumber(payload.visitas_totales ?? payload.webchat?.visitas_totales),
+      totalVisits: webchatTotals + whatsappTotal,
       sinChat: toNumber(payload.webchat?.visitas_sin_chat ?? payload.visitantes),
       conChat: toNumber(payload.webchat?.conversaciones),
       contactos: toNumber(payload.webchat?.contactos_completos),
+      whatsapp: whatsappTotal,
     };
   }
 
@@ -152,28 +189,32 @@ function mapCards(
     let totalVisits = 0;
     let sinChat = 0;
     let conChat = 0;
+    let whatsapp = 0;
     const contactos = new Set<string>();
     const seenSessions = new Set<string>();
     detalle.forEach((row, index) => {
-    const sessionKey = row.session_id ?? `row-${index}`;
-    totalVisits += 1;
-    if (row.tuvo_chat) {
-      conChat += 1;
-      seenSessions.add(sessionKey);
-    } else if (!seenSessions.has(sessionKey)) {
-      sinChat += 1;
-    }
+      const sessionKey = row.session_id ?? `row-${index}`;
+      totalVisits += 1;
+      if (row.canal === "whatsapp") {
+        whatsapp += 1;
+        seenSessions.add(sessionKey);
+      } else if (row.tuvo_chat) {
+        conChat += 1;
+        seenSessions.add(sessionKey);
+      } else if (!seenSessions.has(sessionKey)) {
+        sinChat += 1;
+      }
 
       const contactId = row.contacto_id || row.contacto_correo || row.contacto_nombre;
       if (contactId) contactos.add(contactId);
-    }
-    );
+    });
 
     return {
       totalVisits,
       sinChat,
       conChat,
       contactos: contactos.size,
+      whatsapp,
     };
   }
 
@@ -182,12 +223,13 @@ function mapCards(
     sinChat: 0,
     conChat: 0,
     contactos: 0,
+    whatsapp: whatsappTotal,
   };
 }
 
 function mapChart(detalle?: VisitDetailRaw[] | null): VisitChartPoint[] {
   if (!detalle || !detalle.length) return [];
-  const totals = new Map<string, { desktop: number; mobile: number }>();
+  const totals = new Map<string, { conChat: number; sinChat: number; whatsapp: number }>();
   const seenSessions = new Set<string>();
   detalle.forEach((row, index) => {
     const sessionKey = row.session_id ?? `row-${index}`;
@@ -196,14 +238,15 @@ function mapChart(detalle?: VisitDetailRaw[] | null): VisitChartPoint[] {
     );
     if (!date) return;
 
-    const bucket = totals.get(date) ?? { desktop: 0, mobile: 0 };
-    if (row.tuvo_chat) {
-      bucket.desktop += 1;
+    const bucket = totals.get(date) ?? { conChat: 0, sinChat: 0, whatsapp: 0 };
+    if (row.canal === "whatsapp") {
+      bucket.whatsapp += 1;
       seenSessions.add(sessionKey);
-    } else {
-      if (!seenSessions.has(sessionKey)) {
-        bucket.mobile += 1;
-      }
+    } else if (row.tuvo_chat) {
+      bucket.conChat += 1;
+      seenSessions.add(sessionKey);
+    } else if (!seenSessions.has(sessionKey)) {
+      bucket.sinChat += 1;
     }
     totals.set(date, bucket);
   });
@@ -211,23 +254,36 @@ function mapChart(detalle?: VisitDetailRaw[] | null): VisitChartPoint[] {
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([date, values]) => ({
       date,
-      desktop: values.desktop,
-      mobile: values.mobile,
+      conChat: values.conChat,
+      sinChat: values.sinChat,
+      whatsapp: values.whatsapp,
     }));
 }
 
 function mapTable(detalle?: VisitDetailRaw[] | null): VisitTableRow[] {
   if (!detalle || !detalle.length) return [];
-  return detalle.map((row, index) => ({
-    id: index + 1,
-    header: row.session_id || `Sesión ${index + 1}`,
-    type: row.state_name || row.country_name || "Sin ubicación",
-    status: row.tuvo_chat ? "Done" : "In Process",
-    target: toNumber(row.visit_count).toString(),
-    limit: formatDuration(row.avg_stay_seconds ?? undefined),
-    reviewer: row.contacto_nombre || row.contacto_correo || "Asignar contacto",
-    raw: row,
-  }));
+  return detalle.map((row, index) => {
+    const isWhatsapp = row.canal === "whatsapp";
+    const header = isWhatsapp
+      ? `WhatsApp · ${row.contacto_nombre || row.contacto_telefono || row.contacto_correo || "Conversación"}`
+      : row.session_id || `Sesión ${index + 1}`;
+    const type = isWhatsapp ? "WhatsApp" : row.state_name || row.country_name || "Webchat";
+    const status = row.tuvo_chat || isWhatsapp ? "Done" : "In Process";
+    const target = isWhatsapp ? "1" : toNumber(row.visit_count).toString();
+    const reviewer =
+      row.contacto_nombre || row.contacto_correo || row.contacto_telefono || "Asignar contacto";
+
+    return {
+      id: index + 1,
+      header,
+      type,
+      status,
+      target,
+      limit: formatDuration(row.avg_stay_seconds ?? undefined),
+      reviewer,
+      raw: row,
+    };
+  });
 }
 
 function toNumber(value: unknown): number {
@@ -237,6 +293,72 @@ function toNumber(value: unknown): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
+}
+
+function extractTotal(
+  result: Awaited<ReturnType<typeof callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>>>,
+  fallbackCount: number,
+) {
+  if (!result || !result.ok) return fallbackCount;
+  const payload = result.data;
+  const row = Array.isArray(payload) ? payload[0] : payload;
+  const value = row?.total;
+  const parsed = toNumber(value);
+  return parsed || fallbackCount;
+}
+
+function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRaw[] {
+  if (!rows || !rows.length) return [];
+  return rows.map((row) => ({
+    session_id: `whatsapp-${row.id}`,
+    canal: "whatsapp",
+    registrado_en: row.iniciada_en,
+    primera_visita_en: row.iniciada_en,
+    ultimo_evento_en: row.ultimo_mensaje_en,
+    closed_at: null,
+    stay_seconds: null,
+    avg_stay_seconds: null,
+    visit_count: 1,
+    total_visitas: 1,
+    tuvo_chat: true,
+    mensajes_entrantes: null,
+    mensajes_salientes: null,
+    primer_mensaje_en: row.iniciada_en,
+    ultimo_mensaje_conversacion: row.ultimo_mensaje_en,
+    contacto_id: row.contacto?.telefono_e164 || row.contacto?.correo || null,
+    contacto_nombre: row.contacto?.nombre_completo || null,
+    contacto_correo: row.contacto?.correo || null,
+    contacto_telefono: row.contacto?.telefono_e164 || null,
+    contacto_empresa: null,
+    contacto_estado: "whatsapp",
+    contacto_captura: null,
+    contacto_creado_en: null,
+    country_code: null,
+    country_name: null,
+    state_name: null,
+    state_code: null,
+    city_name: null,
+    cve_ent: null,
+    nom_ent: null,
+    cve_mun: null,
+    nom_mun: null,
+    cvegeo: null,
+    ubicacion_cache: null,
+    device_type: null,
+    dispositivo_cache: null,
+    pantalla_cache: null,
+    sistema_operativo: null,
+    idioma: null,
+    timezone: null,
+    prefiere_modo_oscuro: null,
+    referrer: "WhatsApp",
+    landing_url: null,
+    trazabilidad_cache: null,
+    geo: null,
+    total_rows: null,
+    total_chat_rows: null,
+    total_no_chat_rows: null,
+  }));
 }
 
 function normalizeDate(value?: string): string | null {
