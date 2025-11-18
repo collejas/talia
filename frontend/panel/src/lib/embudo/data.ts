@@ -156,7 +156,12 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
     }
   }
 
-  return { stages, sinConversacion, visitantesSinChat, errors: Array.from(new Set(errors)) };
+  return {
+    stages,
+    sinConversacion,
+    visitantesSinChat,
+    errors: Array.from(new Set(errors)),
+  };
 }
 
 function mapStages(

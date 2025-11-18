@@ -20,6 +20,7 @@ class ToolRuntimeContext:
     conversation_id: str
     contact_id: str
     session_id: str | None = None
+    channel: str | None = None
 
 
 @dataclass(slots=True)

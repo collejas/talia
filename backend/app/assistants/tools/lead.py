@@ -82,6 +82,7 @@ async def try_execute_lead_tool(
                 tarjeta_id=None,
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
+                channel=context.channel,
             )
         except StorageError as exc:
             logger.warning(

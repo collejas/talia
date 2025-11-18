@@ -37,17 +37,6 @@ function resolveAnonKey(): string | undefined {
   );
 }
 
-function resolveServiceRole(): string {
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_SERVICE_API_KEY;
-  if (!key) {
-    throw new Error("Configura SUPABASE_SERVICE_ROLE para consultar los leads.");
-  }
-  return key;
-}
-
 async function readAccessTokenFromCookies(): Promise<string | undefined> {
   try {
     const cookieStore = await cookies();
@@ -62,15 +51,17 @@ async function readAccessTokenFromCookies(): Promise<string | undefined> {
 }
 
 async function resolveAuthHeaders(): Promise<{ apikey: string; token: string }> {
-  const accessToken = await readAccessTokenFromCookies();
   const anonKey = resolveAnonKey();
-
-  if (accessToken && anonKey) {
-    return { apikey: anonKey, token: accessToken };
+  if (!anonKey) {
+    throw new Error("Supabase no está configurado (falta la anon key).");
   }
 
-  const serviceRole = resolveServiceRole();
-  return { apikey: serviceRole, token: serviceRole };
+  const accessToken = await readAccessTokenFromCookies();
+  if (!accessToken) {
+    throw new Error("Sesión no disponible. Inicia sesión nuevamente.");
+  }
+
+  return { apikey: anonKey, token: accessToken };
 }
 
 export async function callSupabaseRpc<T = unknown>(
@@ -106,7 +97,7 @@ export async function callSupabaseRpc<T = unknown>(
     return {
       ok: false,
       status: response.status,
-      error: await readErrorMessage(response),
+      error: await mapResponseError(response),
     };
   }
 
@@ -177,7 +168,7 @@ export async function callSupabaseRest<T = unknown>(
     return {
       ok: false,
       status: response.status,
-      error: await readErrorMessage(response),
+      error: await mapResponseError(response),
     };
   }
 
@@ -201,7 +192,11 @@ export async function callSupabaseRest<T = unknown>(
   }
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+async function mapResponseError(response: Response): Promise<string> {
+  if (response.status === 401 || response.status === 403) {
+    return "Tu sesión caducó. Vuelve a iniciar sesión.";
+  }
+
   try {
     const text = await response.text();
     if (!text) return `Error ${response.status}`;

@@ -1564,6 +1564,7 @@ async def ensure_lead_tarjeta(
     tarjeta_id: str | None,
     conversation_id: str,
     contact_id: str | None,
+    channel: str | None = None,
 ) -> str:
     """Resuelve o crea una tarjeta de lead asociada a la conversación actual."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -1610,6 +1611,15 @@ async def ensure_lead_tarjeta(
                 )
                 logger.warning(msg)
 
+        async def _maybe_update_channel(row_id: str, row: dict[str, Any]) -> None:
+            patch: dict[str, Any] = {}
+            if channel and not row.get("canal"):
+                patch["canal"] = channel
+            if row.get("fuente") == "contacto_auto":
+                patch["fuente"] = "asistente"
+            if patch:
+                await _update_card(row_id, patch)
+
         def _extract_id(row: dict[str, Any]) -> str:
             resolved_id = row.get("id")
             if not resolved_id:
@@ -1631,9 +1641,11 @@ async def ensure_lead_tarjeta(
                     extra={"tarjeta_id": tarjeta_id, "conversation_id": conversation_id},
                 )
             else:
+                row_id = _extract_id(row)
                 if conversation_id and not row.get("conversacion_id"):
-                    await _update_card(_extract_id(row), {"conversacion_id": conversation_id})
-                return _extract_id(row)
+                    await _update_card(row_id, {"conversacion_id": conversation_id})
+                await _maybe_update_channel(row_id, row)
+                return row_id
 
         # 2. Buscar por conversación actual.
         row = await _fetch(
@@ -1644,7 +1656,9 @@ async def ensure_lead_tarjeta(
             }
         )
         if row:
-            return _extract_id(row)
+            row_id = _extract_id(row)
+            await _maybe_update_channel(row_id, row)
+            return row_id
 
         # 3. Buscar por contacto asociado.
         if contact_id:
@@ -1657,9 +1671,11 @@ async def ensure_lead_tarjeta(
                 }
             )
             if row:
+                row_id = _extract_id(row)
                 if conversation_id and not row.get("conversacion_id"):
-                    await _update_card(_extract_id(row), {"conversacion_id": conversation_id})
-                return _extract_id(row)
+                    await _update_card(row_id, {"conversacion_id": conversation_id})
+                await _maybe_update_channel(row_id, row)
+                return row_id
 
         if not contact_id:
             raise StorageError("No fue posible resolver contacto para crear la tarjeta del lead")
@@ -1676,6 +1692,8 @@ async def ensure_lead_tarjeta(
             "conversacion_id": conversation_id,
             "fuente": "asistente",
         }
+        if channel:
+            payload["canal"] = channel
         resp = await client.post(url, headers=insert_headers, json=payload)
         if resp.status_code == 409:
             # Probablemente ya existe una tarjeta para este contacto/tablero.
@@ -1688,9 +1706,11 @@ async def ensure_lead_tarjeta(
                 }
             )
             if row:
+                row_id = _extract_id(row)
                 if conversation_id and not row.get("conversacion_id"):
-                    await _update_card(_extract_id(row), {"conversacion_id": conversation_id})
-                return _extract_id(row)
+                    await _update_card(row_id, {"conversacion_id": conversation_id})
+                await _maybe_update_channel(row_id, row)
+                return row_id
             msg = (
                 "Supabase devolvió conflicto al crear lead_tarjetas pero no se encontró la tarjeta"
                 f" (contacto_id={contact_id})"
@@ -1708,9 +1728,13 @@ async def ensure_lead_tarjeta(
 
         data = resp.json() or []
         if isinstance(data, list) and data:
-            return _extract_id(data[0])
+            row_id = _extract_id(data[0])
+            await _maybe_update_channel(row_id, data[0])
+            return row_id
         if isinstance(data, dict) and data:
-            return _extract_id(data)
+            row_id = _extract_id(data)
+            await _maybe_update_channel(row_id, data)
+            return row_id
         raise StorageError("Respuesta inesperada al crear la tarjeta del lead")
 
 

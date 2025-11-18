@@ -647,6 +647,7 @@ async def schedule_calendar_booking(
             tarjeta_id=None,
             conversation_id=conversation_id,
             contact_id=contact_id,
+            channel="webchat",
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -1952,6 +1953,7 @@ async def _run_assistant_turn(
         conversation_id=context.conversation_id,
         contact_id=context.contact_id,
         session_id=context.session_id,
+        channel="webchat",
     )
 
     result = await run_tool_loop(
@@ -2154,6 +2156,7 @@ async def _execute_function_call(
                 tarjeta_id=None,
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
+                channel="webchat",
             )
         except storage.StorageError as exc:
             logger.exception(

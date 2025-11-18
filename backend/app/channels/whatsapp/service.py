@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,7 +11,7 @@ from fastapi import HTTPException
 from app.assistants import registry
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
 from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
-from app.assistants.tools import lead as lead_tools
+from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import openai as openai_service
@@ -78,6 +77,19 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             extra={"conversation_id": conversation_id},
         )
         return
+
+    try:
+        await storage.ensure_lead_tarjeta(
+            tarjeta_id=None,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            channel="whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.ensure_lead_tarjeta_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
 
     try:
         conversation_meta = await storage.fetch_conversation(conversation_id)
@@ -253,6 +265,7 @@ async def _generate_assistant_reply(
         conversation_id=conversation_id,
         contact_id=contact_id,
         session_id=f"whatsapp:{conversation_id}",
+        channel="whatsapp",
     )
 
     result = await run_tool_loop(
@@ -262,7 +275,7 @@ async def _generate_assistant_reply(
         context=context_obj,
         initial_request=request_kwargs,
         request_template=_build_request_template,
-        execute_tool=_execute_lead_tool,
+        execute_tool=whatsapp_tools.execute_tool,
         openai_conversation_id=openai_conversation_id,
         previous_response_id=previous_response_id,
         log=logger,
@@ -380,26 +393,3 @@ def _map_status_to_event(status: str | None) -> str | None:
         "undelivered": "fallido",
     }
     return mapping.get(normalized)
-
-
-def _parse_tool_arguments(arguments_payload: Any) -> dict[str, Any]:
-    if isinstance(arguments_payload, str):
-        try:
-            return json.loads(arguments_payload)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Arguments inválidos: {arguments_payload!r}") from exc
-    if isinstance(arguments_payload, dict):
-        return arguments_payload
-    raise ValueError(f"Tipo de argumentos no soportado: {type(arguments_payload)!r}")
-
-
-async def _execute_lead_tool(
-    name: str | None,
-    arguments_payload: Any,
-    context: ToolRuntimeContext,
-) -> dict[str, Any]:
-    arguments = _parse_tool_arguments(arguments_payload)
-    result = await lead_tools.try_execute_lead_tool(name, arguments, context)
-    if result is None:
-        raise ValueError(f"La función {name!r} no está disponible en WhatsApp")
-    return result

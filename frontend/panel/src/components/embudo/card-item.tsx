@@ -1,6 +1,6 @@
 "use client";
 
-import { type HTMLAttributes } from "react"
+import { type HTMLAttributes, useMemo } from "react"
 import { IconMessageCircle, IconUser } from "@tabler/icons-react"
 import type { DraggableSyntheticListeners } from "@dnd-kit/core"
 
@@ -24,6 +24,20 @@ export function EmbudoCardItem({
   dragAttributes,
   dragListeners,
 }: EmbudoCardItemProps) {
+  const formattedUpdatedAt = useMemo(() => {
+    if (!card.actualizadoEn) return "Sin fecha"
+    try {
+      const formatter = new Intl.DateTimeFormat("es-MX", {
+        timeZone: "America/Mexico_City",
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+      return formatter.format(new Date(card.actualizadoEn))
+    } catch {
+      return "Sin fecha"
+    }
+  }, [card.actualizadoEn])
+
   return (
     <button
       type="button"
@@ -69,7 +83,7 @@ export function EmbudoCardItem({
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            Actualizado: {card.actualizadoEn ? new Date(card.actualizadoEn).toLocaleString("es-MX") : "Sin fecha"}
+            Actualizado: {formattedUpdatedAt}
           </span>
           <span className="flex items-center gap-1">
             <IconMessageCircle className="size-3" />

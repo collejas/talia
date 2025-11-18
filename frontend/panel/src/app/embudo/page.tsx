@@ -1,9 +1,9 @@
 import { AppSidebar } from '@/components/AppSidebar'
+import { EmbudoBoard } from '@/components/embudo/board'
 import { SiteHeader } from '@/components/site-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { loadEmbudoData } from '@/lib/embudo/data'
-import { EmbudoBoard } from '@/components/embudo/board'
 import { SessionRecovery } from '@/components/session-recovery'
 import type { CSSProperties } from 'react'
 

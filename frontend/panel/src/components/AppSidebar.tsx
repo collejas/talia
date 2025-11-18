@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   IconChartBar,
@@ -90,6 +90,12 @@ const NAVIGATION = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter()
   const { user, loading } = useCurrentUser()
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setHydrated(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   const sidebarUser = useMemo(() => {
     const fallbackAvatar = "/assets/logos/Logo8.png"
@@ -135,6 +141,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       router.refresh()
     }
   }, [router])
+
+  if (!hydrated) {
+    return (
+      <div
+        data-slot="sidebar"
+        className="bg-sidebar text-sidebar-foreground hidden h-full w-(--sidebar-width) flex-col border-r border-border/40 md:flex"
+      >
+        <div className="flex items-center justify-between gap-3 px-4 py-4">
+          <div className="h-10 w-32 rounded-lg bg-muted animate-pulse" />
+          <div className="h-8 w-8 rounded-full bg-muted/60 animate-pulse" />
+        </div>
+        <div className="flex-1 px-4">
+          <div className="mb-3 h-4 w-28 rounded bg-muted/70 animate-pulse" />
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="h-8 rounded bg-muted/40 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
