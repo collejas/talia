@@ -20,6 +20,13 @@ from zoneinfo import ZoneInfo
 
 from app.assistants import registry
 from app.assistants.manager import AssistantConfig
+from app.assistants.runtime import (
+    AssistantSpec,
+    resolve_assistant_spec,
+)
+from app.assistants.runtime import (
+    build_prompt_payload as build_assistant_prompt_payload,
+)
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import (
@@ -844,18 +851,6 @@ class WebchatContext:
     session_id: str
 
 
-@dataclass(slots=True)
-class AssistantSpec:
-    """Especificación resuelta del asistente remoto."""
-
-    model: str
-    instructions: str | None
-    tools: list[dict[str, Any]]
-
-
-_ASSISTANT_CACHE: dict[str, AssistantSpec] = {}
-
-
 def _extract_client_ip(request: Request | None) -> str | None:
     if request is None:
         return None
@@ -1564,7 +1559,7 @@ async def handle_message(
         if not assistant.assistant_id:
             raise HTTPException(status_code=500, detail="No se configuró el asistente de OpenAI")
         try:
-            assistant_spec = await _resolve_assistant_spec(client, assistant.assistant_id)
+            assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
         except Exception as exc:  # pragma: no cover - configuración remota inválida
             logger.exception("webchat.assistant_spec_failed", extra={"error": str(exc)})
             raise HTTPException(
@@ -1684,7 +1679,7 @@ async def append_manual_agent_context(
             logger.warning("webchat.manual_context.missing_assistant_id")
             return
         try:
-            assistant_spec = await _resolve_assistant_spec(client, assistant.assistant_id)
+            assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
         except Exception as exc:  # pragma: no cover - configuración remota inválida
             logger.exception("webchat.manual_context.resolve_failed", extra={"error": str(exc)})
             return
@@ -2607,48 +2602,7 @@ async def _execute_function_call(
     return {"status": "ignored", "tool": name}
 
 
-async def _resolve_assistant_spec(client: AsyncOpenAI, assistant_id: str) -> AssistantSpec:
-    """Recupera la configuración completa del asistente y la cachea en memoria."""
-    cached = _ASSISTANT_CACHE.get(assistant_id)
-    if cached:
-        return cached
-    record = await client.beta.assistants.retrieve(assistant_id=assistant_id)
-    dump = record.model_dump()
-    tools_dump = dump.get("tools") or []
-    tools: list[dict[str, Any]] = []
-    for tool in tools_dump:
-        if isinstance(tool, dict):
-            tools.append(tool)
-        else:  # pragma: no cover
-            try:
-                tools.append(tool.model_dump(exclude_none=True))
-            except AttributeError:
-                tools.append(dict(tool))
-    spec = AssistantSpec(
-        model=_extract_model(dump, assistant_id),
-        instructions=dump.get("instructions"),
-        tools=tools,
-    )
-    _ASSISTANT_CACHE[assistant_id] = spec
-    return spec
-
-
-def _extract_model(dump: dict[str, Any], assistant_id: str) -> str:
-    """Obtiene el modelo declarado en el asistente o lanza error descriptivo."""
-    model = dump.get("model")
-    if not model:
-        raise ValueError(f"El asistente {assistant_id} no tiene modelo configurado")
-    return str(model)
-
-
 def _build_prompt_payload(assistant: AssistantConfig, context: WebchatContext) -> dict[str, Any]:
-    """Compone el payload requerido por Responses cuando se usa un prompt fijo."""
-    if not assistant.prompt_id:
-        raise ValueError("No se definió prompt_id para el asistente configurado")
-    variables: dict[str, Any] = {
-        "conversacion_id": context.conversation_id,
-    }
-    payload: dict[str, Any] = {"id": assistant.prompt_id, "variables": variables}
-    if assistant.prompt_version:
-        payload["version"] = assistant.prompt_version
-    return payload
+    """Puente específico para usar el helper compartido con el contexto webchat."""
+    variables = {"conversacion_id": context.conversation_id}
+    return build_assistant_prompt_payload(assistant, variables)

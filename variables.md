@@ -64,6 +64,14 @@ TWILIO_AUTH_TOKEN=XXXXXXXXXXXX
 TWILIO_PHONE_NUMBER=+14422818909
 TWILIO_PHONE_NUMBER_SID=XXXXXXXXXXXX
 TWILIO_VALIDATE_SIGNATURES=true
+
+# =========================
+# WHATSAPP (OpenAI)
+# =========================
+TALIA_WHATSAPP_PROMPT_ID=pmpt_XXXXXXXXXXXX
+TALIA_WHATSAPP_PROMPT_VERSION=1
+TALIA_WHATSAPP_ASSISTANT_ID=
+TALIA_WHATSAPP_INACTIVITY_HOURS=24
 # =========================
 # TWILIO VOICE / STREAM
 # =========================
@@ -76,16 +84,19 @@ DEBUG_ENERGY_EVERY_N=20
 
 
 # SUPABASE #
-TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
-TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:XXXXXXXXXXXX@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
-TALIA_SUPABASE_SERVICE_ROLE=XXXXXXXXXXXX
-SUPABASE_ANON_KEY=eyXXXXXXXXXXXX
-TALIA_SUPABASE_LEGACY_JWT_SECRET=XXXXXXXXXXXX
-TALIA_SUPABASE_ACCES_TOKEN=XXXXXXXXXXXX
-DATABASE_URL=postgresql://postgres:XXXXXXXXXXXX@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
-SUPABASE_DB_PASSWORD=XXXXXXXXXXXX
+SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+SUPABASE_DATABASE_URL=postgresql://postgres:xxxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+SUPABASE_SERVICE_ROLE=xxxxxxxxx
+SUPABASE_ANON_KEY=xxxxxexxxxx
+SUPABASE_LEGACY_JWT_SECRET=xxxxxxxx
+SUPABASE_ACCES_TOKEN=xxxxxx
+DATABASE_URL=postgresql://postgres:xxxxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+SUPABASE_DB_PASSWORD=xxxxxx
 TALIA_WEBCHAT_INACTIVITY_HOURS=2
 TALIA_WEBCHAT_PERSIST_SESSION=false
+TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+TALIA_SUPABASE_SERVICE_ROLE=xxxxxxxxx
+
 
 # CORREO #
 TALIA_MAIL_USERNAME=hola@talia.mx

@@ -37,8 +37,34 @@ class Settings(BaseSettings):
     openai_assistant_id: str | None = None
     openai_prompt_version: str | None = None
     openai_project_id: str | None = None
-    twilio_account_sid: str | None = None
-    twilio_auth_token: str | None = None
+    twilio_account_sid: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "TWILIO_ACCOUNT_SID",
+            "TALIA_TWILIO_ACCOUNT_SID",
+        ),
+    )
+    twilio_auth_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "TWILIO_AUTH_TOKEN",
+            "TALIA_TWILIO_AUTH_TOKEN",
+        ),
+    )
+    twilio_phone_number: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TWILIO_PHONE_NUMBER", "TALIA_TWILIO_PHONE_NUMBER"),
+    )
+    twilio_phone_number_sid: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TWILIO_PHONE_NUMBER_SID", "TALIA_TWILIO_PHONE_NUMBER_SID"),
+    )
+    twilio_validate_signatures: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "TWILIO_VALIDATE_SIGNATURES", "TALIA_TWILIO_VALIDATE_SIGNATURES"
+        ),
+    )
     supabase_url: str | None = None
     supabase_service_role: str | None = None
     # Acepta varias variantes comunes del anon key para robustez
@@ -154,6 +180,35 @@ class Settings(BaseSettings):
     webchat_calendar_hold_minutes: int = Field(
         default=10,
         description="Minutos que se mantiene bloqueado un horario antes de confirmar la cita.",
+    )
+    whatsapp_inactivity_hours: int = Field(
+        default=24,
+        description="Horas de inactividad para abrir una nueva conversación de WhatsApp.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_INACTIVITY_HOURS",
+            "TALIA_WHATSAPP_INACTIVITY_HOURS",
+        ),
+    )
+    whatsapp_prompt_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WHATSAPP_PROMPT_ID",
+            "TALIA_WHATSAPP_PROMPT_ID",
+        ),
+    )
+    whatsapp_prompt_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WHATSAPP_PROMPT_VERSION",
+            "TALIA_WHATSAPP_PROMPT_VERSION",
+        ),
+    )
+    whatsapp_assistant_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "WHATSAPP_ASSISTANT_ID",
+            "TALIA_WHATSAPP_ASSISTANT_ID",
+        ),
     )
 
     mail_username: str | None = Field(

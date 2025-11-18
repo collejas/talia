@@ -270,3 +270,34 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
     fuente, rango de fechas y “dentro de radio”, lo que permite navegar decenas de miles de filas sin degradación.
   - El mapa se alimenta de otra vista optimizada y aplica ST_DWithin para mostrar exactamente el mismo radio/centro usado en la
     ingesta, sincronizado con la tabla. Exportaciones y acciones CRM siempre operan sobre el subconjunto filtrado vigente.
+
+
+
+
+
+    https://talia.mx/api/whatsapp/webhook
+
+    fallback 
+    https://talia.mx/api/whatsapp/fallback
+
+    https://talia.mx/api/whatsapp/status
+
+
+
+
+ curl -X POST https://talia.mx/api/whatsapp/webhook \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d 'From=whatsapp:+521234567890' \
+    -d 'Body=hola desde curl' \
+    -d 'MessageSid=SM-curl-test'
+
+  curl -X POST https://talia.mx/api/whatsapp/fallback \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d 'From=whatsapp:+521234567890' \
+    -d 'Body=reintento curl' \
+    -d 'MessageSid=SM-fallback-test'
+
+  curl -X POST https://talia.mx/api/whatsapp/status \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d 'MessageSid=SM-curl-test' \
+    -d 'MessageStatus=delivered'

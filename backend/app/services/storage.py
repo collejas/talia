@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 from uuid import uuid4
 
 import httpx
@@ -113,8 +113,56 @@ async def register_webchat_message(
     }
 
 
-async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
-    """Recupera metadatos de la conversación incluyendo control manual."""
+async def register_whatsapp_message(
+    *,
+    direction: Literal["entrante", "saliente"],
+    wa_id: str | None,
+    phone_e164: str | None,
+    body: str | None,
+    message_sid: str | None,
+    profile_name: str | None = None,
+    conversation_id: str | None = None,
+    contact_id: str | None = None,
+    response_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    inactivity_hours: int | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    webhook_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Invoca registrar_mensaje_whatsapp para almacenar interacciones del canal y ligar el webhook."""
+    payload: dict[str, Any] = {
+        "p_direction": direction,
+        "p_whatsapp_id": wa_id,
+        "p_phone_e164": phone_e164,
+        "p_body": body,
+        "p_metadata": metadata or {},
+        "p_message_sid": message_sid,
+        "p_profile_name": profile_name,
+        "p_conversation_id": conversation_id,
+        "p_contact_id": contact_id,
+        "p_response_id": response_id,
+    }
+    if inactivity_hours is not None:
+        payload["p_inactivity_hours"] = inactivity_hours
+    if attachments:
+        payload["p_attachments"] = attachments
+    if webhook_payload is not None:
+        payload["p_webhook_payload"] = webhook_payload
+
+    rows = await _call_supabase_rpc("registrar_mensaje_whatsapp", payload)
+    if not isinstance(rows, list) or not rows:
+        raise StorageError(f"Respuesta inesperada registrar_mensaje_whatsapp: {rows!r}")
+    row = rows[0]
+    return {
+        "conversation_id": row.get("conversacion_id"),
+        "message_id": row.get("mensaje_id"),
+        "contact_id": row.get("contacto_id"),
+        "openai_conversation_id": row.get("conversacion_openai_id"),
+    }
+
+
+async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
+    """Recupera metadatos de una conversación incluyendo control manual."""
     if not settings.supabase_url or not settings.supabase_service_role:
         raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
 
@@ -163,6 +211,11 @@ async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
         "last_response_id": row.get("last_response_id"),
         "manual_override": manual_override,
     }
+
+
+async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
+    """Alias mantenido por compatibilidad para el canal webchat."""
+    return await fetch_conversation(conversation_id)
 
 
 async def get_webchat_contact_id(session_id: str) -> str | None:
@@ -362,6 +415,7 @@ async def record_webchat_visit(
         "apikey": settings.supabase_service_role,
         "Authorization": f"Bearer {settings.supabase_service_role}",
         "Content-Type": "application/json",
+        "Prefer": "return=minimal",
     }
 
     payload: dict[str, Any] = {"p_session_id": session_id}
@@ -761,6 +815,97 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     elif datos is None:
         row["contacto_datos"] = {}
     return row
+
+
+async def record_delivery_event(
+    *,
+    provider: str,
+    message_sid: str,
+    event: str,
+    raw_payload: dict[str, Any] | None = None,
+    error_code: str | None = None,
+    provider_timestamp: str | None = None,
+) -> None:
+    """Inserta un registro en eventos_entrega vinculado a un mensaje."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            lookup = await client.get(
+                f"{base_url}/rest/v1/mensajes",
+                headers=headers,
+                params={
+                    "select": "id",
+                    "twilio_message_sid": f"eq.{message_sid}",
+                    "limit": "1",
+                },
+            )
+    except httpx.RequestError as exc:
+        msg = f"Error de red al buscar mensaje por SID: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if lookup.status_code >= 400:
+        msg = (
+            "Supabase respondió error al buscar mensaje por SID"
+            f" (status={lookup.status_code}, body={lookup.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    rows = lookup.json() or []
+    if not rows:
+        logger.warning(
+            "delivery_event.message_not_found",
+            extra={"message_sid": message_sid},
+        )
+        return
+    message_id = rows[0].get("id")
+    if not message_id:
+        logger.warning(
+            "delivery_event.invalid_lookup_response",
+            extra={"message_sid": message_sid, "response": rows[0]},
+        )
+        return
+
+    payload = {
+        "mensaje_id": message_id,
+        "proveedor": provider,
+        "evento": event,
+        "payload_crudo": raw_payload or {},
+    }
+    if error_code:
+        payload["codigo_error"] = error_code
+    if provider_timestamp:
+        payload["proveedor_ts"] = provider_timestamp
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{base_url}/rest/v1/eventos_entrega",
+                headers=headers,
+                json=payload,
+            )
+    except httpx.RequestError as exc:
+        msg = f"Error de red al registrar evento de entrega: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al registrar evento de entrega"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
 
 
 async def fetch_calendar_settings() -> dict[str, Any]:
