@@ -20,13 +20,12 @@ from zoneinfo import ZoneInfo
 
 from app.assistants import registry
 from app.assistants.manager import AssistantConfig
-from app.assistants.runtime import (
-    AssistantSpec,
-    resolve_assistant_spec,
-)
+from app.assistants.runtime import AssistantSpec, resolve_assistant_spec
 from app.assistants.runtime import (
     build_prompt_payload as build_assistant_prompt_payload,
 )
+from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.assistants.tools import lead as lead_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import (
@@ -80,22 +79,6 @@ REMINDER_MINUTES_MIN = 15
 REMINDER_MINUTES_MAX = 720
 REMINDER_SETTINGS_TTL_SECONDS = 300
 
-INFORMATION_EMAIL_DEFAULT_TEMPLATE: dict[str, Any] = {
-    "intro": "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
-    "highlights": [
-        "Automatiza la atención 24/7 en webchat, WhatsApp y voz con un solo asistente.",
-        "Califica prospectos y agenda demos o recordatorios sin cargar al equipo comercial.",
-        "Centraliza conversaciones, métricas y tareas en el panel de Tal-IA para dar seguimiento inteligente.",
-    ],
-    "resources": [
-        {"label": "Sitio de Tal-IA", "url": "https://talia.mx/"},
-        {"label": "Geoactiv · Casos y soluciones", "url": "https://geoactiv.ai/"},
-    ],
-    "closing": "Cuando quieras, puedo ayudarte a agendar una demo personalizada o resolver cualquier duda por este medio.",
-    "use_summary": True,
-    "use_highlights": True,
-    "use_resources": True,
-}
 
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
 _REMINDER_SETTINGS_LOADED_AT: datetime | None = None
@@ -770,78 +753,6 @@ async def cancel_calendar_booking(
     return booking_response
 
 
-def _clone_information_email_template() -> dict[str, Any]:
-    template = INFORMATION_EMAIL_DEFAULT_TEMPLATE
-    return {
-        "intro": template["intro"],
-        "highlights": list(template["highlights"]),
-        "resources": [dict(resource) for resource in template["resources"]],
-        "closing": template["closing"],
-        "use_summary": bool(template.get("use_summary", True)),
-        "use_highlights": bool(template.get("use_highlights", True)),
-        "use_resources": bool(template.get("use_resources", True)),
-    }
-
-
-def _resolve_information_email_template(custom: dict[str, Any] | None) -> dict[str, Any]:
-    template = _clone_information_email_template()
-    if not custom:
-        return template
-
-    intro = custom.get("intro")
-    if isinstance(intro, str) and intro.strip():
-        template["intro"] = intro.strip()
-
-    closing = custom.get("closing")
-    if isinstance(closing, str) and closing.strip():
-        template["closing"] = closing.strip()
-
-    salutation = custom.get("signature_salutation")
-    if isinstance(salutation, str) and salutation.strip():
-        template["signature_salutation"] = salutation.strip()
-
-    signature_body = custom.get("signature")
-    if isinstance(signature_body, str) and signature_body.strip():
-        template["signature"] = signature_body.strip()
-
-    highlights = custom.get("highlights")
-    if isinstance(highlights, list):
-        sanitized: list[str] = []
-        for item in highlights:
-            if isinstance(item, str):
-                trimmed = item.strip()
-                if trimmed:
-                    sanitized.append(trimmed)
-        if sanitized:
-            template["highlights"] = sanitized
-
-    resources = custom.get("resources")
-    if isinstance(resources, list):
-        sanitized_resources: list[dict[str, str]] = []
-        for entry in resources:
-            if not isinstance(entry, dict):
-                continue
-            label = str(entry.get("label") or "").strip()
-            url = str(entry.get("url") or "").strip()
-            if label and url:
-                sanitized_resources.append({"label": label, "url": url})
-        if sanitized_resources:
-            template["resources"] = sanitized_resources
-
-    for key, default in (
-        ("use_summary", True),
-        ("use_highlights", True),
-        ("use_resources", True),
-    ):
-        value = custom.get(key)
-        if isinstance(value, bool):
-            template[key] = value
-        elif value in {"true", "false"}:
-            template[key] = value == "true"
-
-    return template
-
-
 @dataclass(slots=True)
 class WebchatContext:
     """Contexto mínimo necesario para resolver function calls."""
@@ -906,6 +817,24 @@ def _safe_dict(value: Any) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     return {}
+
+
+def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
+    """Compone la respuesta textual desde el payload de Responses API."""
+    fragments: list[str] = []
+    for item in payload.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content") or []:
+            if content.get("type") == "output_text":
+                text = content.get("text")
+                if text:
+                    fragments.append(str(text))
+    if fragments:
+        return "\n".join(fragment.strip() for fragment in fragments if fragment)
+    if payload.get("status") == "requires_action":
+        logger.warning("webchat.tool_call_unhandled", extra={"output": payload.get("output")})
+    return None
 
 
 async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
@@ -1948,7 +1877,6 @@ async def _run_assistant_turn(
         "client_message_id": user_message.client_message_id,
         "locale": user_message.locale,
     }
-    # Elimina claves con valores nulos
     sanitized_metadata = {k: v for k, v in metadata_payload.items() if v is not None}
 
     try:
@@ -1994,18 +1922,24 @@ async def _run_assistant_turn(
         }
     )
     request_kwargs: dict[str, Any] = {"input": base_input, "store": True}
-    if assistant.is_prompt:
-        prompt_payload = _build_prompt_payload(assistant, context)
-        request_kwargs["prompt"] = prompt_payload
-        request_kwargs["text"] = {"format": {"type": "text"}}
-    else:
+
+    def _build_request_template() -> dict[str, Any]:
+        if assistant.is_prompt:
+            prompt_payload = _build_prompt_payload(assistant, context)
+            return {
+                "prompt": prompt_payload,
+                "text": {"format": {"type": "text"}},
+            }
         if not assistant_spec:
             raise ValueError("No se pudo resolver la configuración del asistente")
-        request_kwargs["model"] = assistant_spec.model
+        payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
-            request_kwargs["instructions"] = assistant_spec.instructions
+            payload["instructions"] = assistant_spec.instructions
         if assistant_spec.tools:
-            request_kwargs["tools"] = assistant_spec.tools
+            payload["tools"] = assistant_spec.tools
+        return payload
+
+    request_kwargs.update(_build_request_template())
 
     if sanitized_metadata:
         request_kwargs["metadata"] = sanitized_metadata
@@ -2014,102 +1948,34 @@ async def _run_assistant_turn(
     elif previous_response_id:
         request_kwargs["previous_response_id"] = previous_response_id
 
-    tools_called: list[str] = []
-    tool_call_ids: list[str] = []
-    final_response: dict[str, Any] | None = None
-    latest_openai_conversation = openai_conversation_id
-    assistant_reply: str | None = None
-    latest_response_id = previous_response_id
+    runtime_context = ToolRuntimeContext(
+        conversation_id=context.conversation_id,
+        contact_id=context.contact_id,
+        session_id=context.session_id,
+    )
 
-    side_effects: dict[str, Any] = {}
+    result = await run_tool_loop(
+        client=client,
+        assistant=assistant,
+        assistant_spec=assistant_spec,
+        context=runtime_context,
+        initial_request=request_kwargs,
+        request_template=_build_request_template,
+        execute_tool=lambda name, args, _: _execute_function_call(name, args, context),
+        openai_conversation_id=openai_conversation_id,
+        previous_response_id=previous_response_id,
+        log=logger,
+    )
 
-    while True:
-        response = await client.responses.create(**request_kwargs)
-        response_dict = response.model_dump()
-        final_response = response_dict
-        latest_response_id = response_dict.get("id") or latest_response_id
-        conversation_obj = response_dict.get("conversation") or {}
-        latest_openai_conversation = conversation_obj.get("id") or latest_openai_conversation
-
-        output_items = response_dict.get("output") or []
-        pending_calls = [item for item in output_items if item.get("type") == "function_call"]
-
-        # Extrae texto de mensajes (si ya existe).
-        text_fragments: list[str] = []
-        for item in output_items:
-            if item.get("type") != "message":
-                continue
-            for content in item.get("content") or []:
-                if content.get("type") == "output_text":
-                    text = content.get("text")
-                    if text:
-                        text_fragments.append(text)
-        if text_fragments:
-            assistant_reply = "\n".join(fragment.strip() for fragment in text_fragments if fragment)
-
-        if not pending_calls:
-            break
-
-        follow_up_inputs: list[dict[str, Any]] = []
-        for call in pending_calls:
-            name = call.get("name")
-            call_id = call.get("call_id")
-            arguments = call.get("arguments")
-            try:
-                result = await _execute_function_call(name, arguments, context)
-            except Exception as exc:  # pragma: no cover - se reporta al modelo
-                logger.exception(
-                    "webchat.tool_execution_failed",
-                    extra={
-                        "conversation_id": context.conversation_id,
-                        "tool": name,
-                        "error": str(exc),
-                    },
-                )
-                result = {"status": "error", "message": str(exc)}
-
-            if isinstance(result, dict):
-                extras = result.pop("_side_effects", None)
-                if isinstance(extras, dict):
-                    side_effects.update(extras)
-
-            payload = {
-                "type": "function_call_output",
-                "call_id": call_id,
-                "output": json.dumps(result, ensure_ascii=False),
-            }
-            follow_up_inputs.append(payload)
-
-            if name:
-                tools_called.append(str(name))
-            if call_id:
-                tool_call_ids.append(str(call_id))
-
-        request_kwargs = {
-            "input": follow_up_inputs,
-            "store": True,
-        }
-        if latest_openai_conversation:
-            request_kwargs["conversation"] = latest_openai_conversation
-        elif latest_response_id:
-            request_kwargs["previous_response_id"] = latest_response_id
-        if assistant.is_prompt and assistant.prompt_id:
-            request_kwargs["prompt"] = _build_prompt_payload(assistant, context)
-            request_kwargs["text"] = {"format": {"type": "text"}}
-        elif assistant_spec:
-            request_kwargs["model"] = assistant_spec.model
-            if assistant_spec.instructions:
-                request_kwargs["instructions"] = assistant_spec.instructions
-            if assistant_spec.tools:
-                request_kwargs["tools"] = assistant_spec.tools
+    assistant_reply = _extract_text_from_response(result.response)
 
     return (
         assistant_reply,
-        final_response or {},
-        tools_called,
-        tool_call_ids,
-        latest_openai_conversation,
-        side_effects,
+        result.response,
+        result.tools_called,
+        result.tool_call_ids,
+        result.conversation_id,
+        result.side_effects,
     )
 
 
@@ -2204,33 +2070,14 @@ async def _execute_function_call(
             f"El conversacion_id recibido ({conv_id}) no coincide con la conversación activa"
         )
 
-    if name == "set_full_name":
-        full_name = (arguments.get("full_name") or "").strip()
-        if not full_name:
-            raise ValueError("full_name requerido para set_full_name")
-        await storage.update_contact(context.contact_id, {"nombre_completo": full_name})
-        return {"status": "ok", "full_name": full_name}
-
-    if name == "set_email":
-        email = (arguments.get("email") or "").strip()
-        if not email:
-            raise ValueError("email requerido para set_email")
-        await storage.update_contact(context.contact_id, {"correo": email.lower()})
-        return {"status": "ok", "email": email.lower()}
-
-    if name == "set_phone_number":
-        phone_number = (arguments.get("phone_number") or "").strip()
-        if not phone_number:
-            raise ValueError("phone_number requerido para set_phone_number")
-        await storage.update_contact(context.contact_id, {"telefono_e164": phone_number})
-        return {"status": "ok", "phone_number": phone_number}
-
-    if name == "set_company_name":
-        company_name = (arguments.get("company_name") or "").strip()
-        if not company_name:
-            raise ValueError("company_name requerido para set_company_name")
-        await storage.update_contact(context.contact_id, {"company_name": company_name})
-        return {"status": "ok", "company_name": company_name}
+    lead_context = ToolRuntimeContext(
+        conversation_id=context.conversation_id,
+        contact_id=context.contact_id,
+        session_id=context.session_id,
+    )
+    lead_result = await lead_tools.try_execute_lead_tool(name, arguments, lead_context)
+    if lead_result is not None:
+        return lead_result
 
     if name == "close_lead":
         notes = (arguments.get("notes") or "").strip()
@@ -2431,168 +2278,6 @@ async def _execute_function_call(
             "status": "ok",
             **booking_payload,
             "_side_effects": {"booking": booking_payload},
-        }
-
-    if name == "send_information_email":
-        email_value = str(arguments.get("email") or "").strip()
-        if not email_value:
-            raise ValueError("email es requerido para send_information_email")
-
-        full_name = str(arguments.get("full_name") or "").strip() or None
-        company_name = str(arguments.get("company_name") or "").strip() or None
-        summary = str(arguments.get("summary") or "").strip() or None
-
-        highlight_lines: list[str] = []
-        highlights_raw = arguments.get("highlights")
-        if isinstance(highlights_raw, list):
-            for item in highlights_raw:
-                if isinstance(item, str):
-                    trimmed = item.strip()
-                    if trimmed:
-                        highlight_lines.append(trimmed)
-
-        resources: list[dict[str, str]] = []
-        resources_raw = arguments.get("resources")
-        if isinstance(resources_raw, list):
-            for item in resources_raw:
-                if isinstance(item, dict):
-                    label = str(item.get("label") or "").strip()
-                    url = str(item.get("url") or "").strip()
-                    if label and url:
-                        resources.append({"label": label, "url": url})
-
-        contact = await _resolve_contact(context.contact_id)
-        contact_notes = None
-        contact_need = None
-        if contact:
-            contact_name = str(contact.get("nombre_completo") or "").strip() or None
-            contact_company = str(contact.get("company_name") or "").strip() or None
-            contact_email = str(contact.get("correo") or "").strip() or None
-            contact_notes = str(contact.get("notes") or "").strip() or None
-            contact_need = str(contact.get("necesidad_proposito") or "").strip() or None
-            if not full_name:
-                full_name = contact_name
-            if not company_name:
-                company_name = contact_company
-            if not summary:
-                summary = contact_need or contact_notes
-            if contact_email and contact_email.lower() != email_value.lower():
-                try:
-                    await storage.update_contact(
-                        contact.get("id") or context.contact_id, {"correo": email_value.lower()}
-                    )
-                except storage.StorageError as exc:
-                    logger.warning(
-                        "info_email.sync_contact_failed",
-                        extra={
-                            "contact_id": contact.get("id") or context.contact_id,
-                            "error": str(exc),
-                        },
-                    )
-        else:
-            contact_need = None
-
-        template_row: dict[str, Any] | None = None
-        try:
-            template_row = await storage.fetch_email_template()
-        except storage.StorageError as exc:
-            logger.warning(
-                "info_email.template_fetch_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-        template_data = _resolve_information_email_template(template_row)
-
-        include_summary = bool(template_data.get("use_summary", True))
-        include_highlights = bool(template_data.get("use_highlights", True))
-        include_resources = bool(template_data.get("use_resources", True))
-
-        if not include_highlights:
-            highlight_lines = []
-        elif not highlight_lines:
-            highlight_lines = list(template_data["highlights"])
-
-        if not include_resources:
-            resources = []
-        elif not resources:
-            resources = [dict(resource) for resource in template_data["resources"]]
-
-        subject_target = company_name or full_name
-        subject = (
-            f"Tal-IA · Información para {subject_target}"
-            if subject_target
-            else "Tal-IA · Información solicitada"
-        )
-
-        greeting = f"Hola {full_name}," if full_name else "Hola,"
-        body_lines = [greeting, "", template_data["intro"]]
-        if include_summary and summary:
-            body_lines.extend(["", summary])
-        if include_highlights and highlight_lines:
-            body_lines.append("")
-            body_lines.append("Puntos clave para tu equipo:")
-            for item in highlight_lines:
-                body_lines.append(f"- {item}")
-        if include_resources and resources:
-            body_lines.append("")
-            body_lines.append("Recursos para profundizar:")
-            for resource in resources:
-                body_lines.append(f"- {resource['label']}: {resource['url']}")
-        body_lines.extend(["", template_data["closing"], ""])
-
-        salutation_text = template_data.get("signature_salutation") or "Saludos,"
-        if isinstance(salutation_text, str) and salutation_text.strip():
-            body_lines.append(salutation_text.strip())
-
-        signature_text = template_data.get("signature") or ""
-        signature_lines = []
-        if isinstance(signature_text, str):
-            signature_lines = [line.strip() for line in signature_text.splitlines() if line.strip()]
-        if not signature_lines:
-            signature_lines = ["Equipo Geoactiv · Tal-IA"]
-        body_lines.extend(signature_lines)
-        body_text = "\n".join(body_lines)
-
-        try:
-            message_id = await asyncio.to_thread(
-                send_email,
-                subject=subject,
-                body_text=body_text,
-                recipients=[email_value],
-                body_html=None,
-                attachments=None,
-            )
-        except EmailSendError as exc:
-            logger.error(
-                "info_email.send_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-            raise ValueError(
-                "No se pudo enviar el correo en este momento. Inténtalo nuevamente más tarde."
-            ) from exc
-        except Exception as exc:  # pragma: no cover - errores inesperados
-            logger.exception(
-                "info_email.send_unexpected",
-                extra={"conversation_id": context.conversation_id},
-            )
-            raise ValueError("Ocurrió un error inesperado al enviar el correo.") from exc
-
-        try:
-            await storage.upsert_conversation_insights(
-                conversation_id=context.conversation_id,
-                resumen=summary or contact_notes,
-                intencion=contact_need,
-                siguiente_accion="informacion_enviada_email",
-            )
-        except storage.StorageError as exc:
-            logger.warning(
-                "info_email.insights_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-
-        return {
-            "status": "sent",
-            "email": email_value,
-            "message_id": message_id,
         }
 
     logger.warning(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,6 +11,8 @@ from fastapi import HTTPException
 
 from app.assistants import registry
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
+from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.assistants.tools import lead as lead_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import openai as openai_service
@@ -111,7 +114,9 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
         assistant_reply = AssistantReply(
-            DEFAULT_FALLBACK, openai_conversation_id, previous_response_id
+            text=DEFAULT_FALLBACK,
+            openai_conversation_id=openai_conversation_id,
+            response_id=previous_response_id,
         )
 
     if not assistant_reply.text:
@@ -120,7 +125,11 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             "whatsapp.empty_reply",
             conversation_id=conversation_id,
         )
-        return
+        assistant_reply = AssistantReply(
+            text=DEFAULT_FALLBACK,
+            openai_conversation_id=assistant_reply.openai_conversation_id or openai_conversation_id,
+            response_id=assistant_reply.response_id or previous_response_id,
+        )
 
     send_result = await _send_whatsapp_reply(
         to_number=message.from_number,
@@ -199,46 +208,71 @@ async def _generate_assistant_reply(
 ) -> AssistantReply:
     assistant = registry.resolve_assistant("whatsapp")
     client = openai_service.get_assistant_client()
-
-    request_kwargs: dict[str, Any] = {
-        "input": _build_openai_input(message),
-        "store": True,
-        "metadata": {
-            "conversation_id": conversation_id,
-            "contact_id": contact_id,
-            "channel": "whatsapp",
-            "message_sid": message.message_sid,
-        },
-    }
-
-    if assistant.is_prompt:
-        variables = {"conversacion_id": conversation_id}
-        request_kwargs["prompt"] = build_prompt_payload(assistant, variables)
-        request_kwargs["text"] = {"format": {"type": "text"}}
-    else:
+    assistant_spec = None
+    if not assistant.is_prompt:
         if not assistant.assistant_id:
             raise RuntimeError("WHATSAPP_ASSISTANT_ID is not configured")
         assistant_spec = await resolve_assistant_spec(client, assistant.assistant_id)
-        request_kwargs["model"] = assistant_spec.model
+
+    metadata_payload = {
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "channel": "whatsapp",
+        "message_sid": message.message_sid,
+    }
+    request_kwargs: dict[str, Any] = {
+        "input": _build_openai_input(message),
+        "store": True,
+        "metadata": metadata_payload,
+    }
+
+    def _build_request_template() -> dict[str, Any]:
+        if assistant.is_prompt:
+            variables = {"conversacion_id": conversation_id}
+            return {
+                "prompt": build_prompt_payload(assistant, variables),
+                "text": {"format": {"type": "text"}},
+            }
+        if not assistant_spec:
+            raise RuntimeError("No se pudo resolver la configuración del asistente")
+        payload: dict[str, Any] = {"model": assistant_spec.model}
         if assistant_spec.instructions:
-            request_kwargs["instructions"] = assistant_spec.instructions
+            payload["instructions"] = assistant_spec.instructions
+        if assistant_spec.tools:
+            payload["tools"] = assistant_spec.tools
+        return payload
+
+    request_kwargs.update(_build_request_template())
 
     if openai_conversation_id:
         request_kwargs["conversation"] = openai_conversation_id
     elif previous_response_id:
         request_kwargs["previous_response_id"] = previous_response_id
 
-    response = await client.responses.create(**request_kwargs)
-    response_dict = response.model_dump()
-    reply_text = _extract_text_from_response(response_dict)
-    conversation_obj = response_dict.get("conversation") or {}
-    resolved_conversation_id = conversation_obj.get("id") or openai_conversation_id
-    latest_response_id = response_dict.get("id") or previous_response_id
+    context_obj = ToolRuntimeContext(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        session_id=f"whatsapp:{conversation_id}",
+    )
 
+    result = await run_tool_loop(
+        client=client,
+        assistant=assistant,
+        assistant_spec=assistant_spec,
+        context=context_obj,
+        initial_request=request_kwargs,
+        request_template=_build_request_template,
+        execute_tool=_execute_lead_tool,
+        openai_conversation_id=openai_conversation_id,
+        previous_response_id=previous_response_id,
+        log=logger,
+    )
+
+    reply_text = _extract_text_from_response(result.response)
     return AssistantReply(
         text=reply_text.strip() if reply_text else None,
-        openai_conversation_id=resolved_conversation_id,
-        response_id=latest_response_id,
+        openai_conversation_id=result.conversation_id,
+        response_id=result.response_id,
     )
 
 
@@ -346,3 +380,26 @@ def _map_status_to_event(status: str | None) -> str | None:
         "undelivered": "fallido",
     }
     return mapping.get(normalized)
+
+
+def _parse_tool_arguments(arguments_payload: Any) -> dict[str, Any]:
+    if isinstance(arguments_payload, str):
+        try:
+            return json.loads(arguments_payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Arguments inválidos: {arguments_payload!r}") from exc
+    if isinstance(arguments_payload, dict):
+        return arguments_payload
+    raise ValueError(f"Tipo de argumentos no soportado: {type(arguments_payload)!r}")
+
+
+async def _execute_lead_tool(
+    name: str | None,
+    arguments_payload: Any,
+    context: ToolRuntimeContext,
+) -> dict[str, Any]:
+    arguments = _parse_tool_arguments(arguments_payload)
+    result = await lead_tools.try_execute_lead_tool(name, arguments, context)
+    if result is None:
+        raise ValueError(f"La función {name!r} no está disponible en WhatsApp")
+    return result
