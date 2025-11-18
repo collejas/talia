@@ -72,6 +72,40 @@ async def try_execute_lead_tool(
     if tool_name == "send_information_email":
         return await _handle_information_email(arguments, context)
 
+    if tool_name == "close_lead":
+        notes = _require_argument(arguments, "notes")
+        necesidad = _require_argument(arguments, "necesidad_proposito")
+        siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
+        await storage.update_contact(
+            context.contact_id,
+            {"notes": notes, "necesidad_proposito": necesidad},
+        )
+        try:
+            await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.conversation_update_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        try:
+            await storage.upsert_conversation_insights(
+                conversation_id=context.conversation_id,
+                resumen=notes,
+                intencion=necesidad,
+                siguiente_accion=siguiente_accion,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.insights_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        return {
+            "status": "ok",
+            "notes": notes,
+            "necesidad_proposito": necesidad,
+            "siguiente_accion": siguiente_accion,
+        }
+
     return None
 
 
