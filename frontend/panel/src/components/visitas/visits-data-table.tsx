@@ -100,8 +100,8 @@ function renderValue(value: unknown, type: FieldType) {
 }
 
 const VISIT_FIELDS: VisitField[] = [
+  { id: "registrado_en", key: "registrado_en", label: "Creado", type: "datetime", defaultVisible: true },
   { id: "ip", key: "ip", label: "IP", type: "string" },
-  { id: "registrado_en", key: "registrado_en", label: "Registrado", type: "datetime" },
   { id: "primera_visita_en", key: "primera_visita_en", label: "Primera visita", type: "datetime" },
   { id: "ultimo_evento_en", key: "ultimo_evento_en", label: "Último evento", type: "datetime" },
   { id: "closed_at", key: "closed_at", label: "Cierre", type: "datetime" },
