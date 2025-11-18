@@ -24,8 +24,10 @@ import {
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
+  IconChevronUp,
   IconChevronsLeft,
   IconChevronsRight,
+  IconArrowsUpDown,
   IconCircleCheckFilled,
   IconDotsVertical,
   IconGripVertical,
@@ -44,6 +46,7 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type Column,
   Row,
   SortingState,
   useReactTable,
@@ -188,6 +191,39 @@ function DragHandle({ id }: { id: number }) {
   )
 }
 
+function SortButton({
+  column,
+  label,
+  align = "left",
+}: {
+  column: Column<TableRowData, unknown>
+  label: string
+  align?: "left" | "right"
+}) {
+  const direction = column.getIsSorted()
+
+  return (
+    <button
+      type="button"
+      onClick={column.getToggleSortingHandler()}
+      className={["flex w-full items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground", align === "right" ? "justify-end" : "justify-start"].join(" ")}
+    >
+      <span>{label}</span>
+      <SortIcon direction={direction} />
+    </button>
+  )
+}
+
+function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
+  if (direction === "asc") {
+    return <IconChevronUp className="size-3" aria-hidden />
+  }
+  if (direction === "desc") {
+    return <IconChevronDown className="size-3" aria-hidden />
+  }
+  return <IconArrowsUpDown className="size-3" aria-hidden />
+}
+
 function createBaseColumns(
   labels: ColumnLabels = {},
   detailRenderer?: (row: TableRowData) => React.ReactNode,
@@ -235,7 +271,7 @@ function createBaseColumns(
     {
       accessorKey: "header",
       id: "session",
-      header: headerLabel,
+      header: ({ column }) => <SortButton column={column} label={headerLabel} />,
       cell: ({ row }) => {
         return (
           <TableCellViewer
@@ -249,7 +285,7 @@ function createBaseColumns(
     {
       accessorKey: "type",
       id: "type",
-      header: typeLabel,
+      header: ({ column }) => <SortButton column={column} label={typeLabel} />,
       cell: ({ row }) => (
         <div className="w-32">
           <Badge variant="outline" className="text-muted-foreground px-1.5">
@@ -262,7 +298,7 @@ function createBaseColumns(
     {
       accessorKey: "status",
       id: "chat",
-      header: statusLabel,
+      header: ({ column }) => <SortButton column={column} label={statusLabel} />,
       cell: ({ row }) => {
         const raw = row.original.raw as Record<string, unknown> | undefined
         const statusMeta =
@@ -304,7 +340,7 @@ function createBaseColumns(
     {
       accessorKey: "target",
       id: "visits",
-      header: () => <div className="w-full text-right">{targetLabel}</div>,
+      header: ({ column }) => <SortButton column={column} label={targetLabel} align="right" />,
       meta: { label: targetLabel } satisfies ColumnMeta,
       cell: ({ row }) => {
         const raw = row.original.raw as Record<string, unknown> | undefined
@@ -331,7 +367,7 @@ function createBaseColumns(
     {
       accessorKey: "reviewer",
       id: "reviewer",
-      header: reviewerLabel,
+      header: ({ column }) => <SortButton column={column} label={reviewerLabel} />,
       cell: ({ row }) => {
         const isAssigned = row.original.reviewer !== "Assign reviewer"
 
@@ -420,6 +456,7 @@ function SortableColumnHeader({ header, id }: SortableColumnHeaderProps) {
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
@@ -429,19 +466,26 @@ function SortableColumnHeader({ header, id }: SortableColumnHeaderProps) {
   const style: React.CSSProperties = {
     transform: `translate3d(${translateX}px, 0, 0)` ,
     transition,
-    cursor: "grab",
     opacity: isDragging ? 0.6 : undefined,
   }
 
   return (
-    <TableHead
-      ref={setNodeRef}
-      colSpan={header.colSpan}
-      style={style}
-      {...attributes}
-      {...listeners}
-    >
-      {flexRender(header.column.columnDef.header, header.getContext())}
+    <TableHead ref={setNodeRef} colSpan={header.colSpan} style={style}>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Reordenar columna"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          className="text-muted-foreground hover:text-foreground focus:outline-none"
+        >
+          <IconGripVertical className="size-3" aria-hidden />
+        </button>
+        <div className="flex-1">
+          {flexRender(header.column.columnDef.header, header.getContext())}
+        </div>
+      </div>
     </TableHead>
   )
 }

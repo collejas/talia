@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import type { ColumnDef, VisibilityState } from "@tanstack/react-table";
+import type { Column, ColumnDef, VisibilityState } from "@tanstack/react-table";
 import { z } from "zod";
+import { IconChevronDown, IconChevronUp, IconArrowsUpDown } from "@tabler/icons-react";
 
 import { DataTable, schema } from "@/components/data-table";
 import type { VisitDetailRaw, VisitTableRow } from "@/lib/visitas/data";
@@ -147,7 +148,9 @@ const visitExtraColumns: ColumnDef<TableRow>[] = VISIT_FIELDS.map((field) => {
   const columnId = `visit_${field.id}`;
   return {
     id: columnId,
-    header: field.label,
+    header: ({ column }) => (
+      <VisitColumnHeader column={column as Column<TableRow, unknown>} label={field.label} />
+    ),
     accessorFn: (row) => getRawValue(row, field.key),
     cell: ({ getValue }) => renderValue(getValue(), field.type),
     enableSorting: field.type !== "json",
@@ -172,5 +175,27 @@ export function VisitsDataTable({ data }: { data: VisitTableRow[] }) {
       initialVisibility={visitColumnVisibility}
       storageKey="visits-table-column-order"
     />
+  );
+}
+
+function VisitColumnHeader({ column, label }: { column: Column<TableRow, unknown>; label: string }) {
+  const direction = column.getIsSorted();
+  return (
+    <button
+      type="button"
+      onClick={column.getToggleSortingHandler()}
+      className="flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+    >
+      <span>{label}</span>
+      <span className="text-muted-foreground/70">
+        {direction === "asc" ? (
+          <IconChevronUp className="size-3" />
+        ) : direction === "desc" ? (
+          <IconChevronDown className="size-3" />
+        ) : (
+          <IconArrowsUpDown className="size-3" />
+        )}
+      </span>
+    </button>
   );
 }

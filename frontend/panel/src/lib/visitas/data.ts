@@ -21,6 +21,10 @@ type VisitantesEstadosResponse = {
   }>;
 };
 
+type VisitantesCounterRow = {
+  total: number | string | null | undefined;
+};
+
 type WhatsappConversationRow = {
   id: string;
   canal: string | null;
@@ -312,6 +316,7 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
   return rows.map((row) => ({
     session_id: `whatsapp-${row.id}`,
     canal: "whatsapp",
+    ip: null,
     registrado_en: row.iniciada_en,
     primera_visita_en: row.iniciada_en,
     ultimo_evento_en: row.ultimo_mensaje_en,
