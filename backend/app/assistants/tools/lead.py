@@ -76,6 +76,18 @@ async def try_execute_lead_tool(
         notes = _require_argument(arguments, "notes")
         necesidad = _require_argument(arguments, "necesidad_proposito")
         siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
+        tarjeta_id: str | None = None
+        try:
+            tarjeta_id = await storage.ensure_lead_tarjeta(
+                tarjeta_id=None,
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "lead_tools.ensure_tarjeta_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
         await storage.update_contact(
             context.contact_id,
             {"notes": notes, "necesidad_proposito": necesidad},
@@ -104,6 +116,7 @@ async def try_execute_lead_tool(
             "notes": notes,
             "necesidad_proposito": necesidad,
             "siguiente_accion": siguiente_accion,
+            "tarjeta_id": tarjeta_id,
         }
 
     return None
