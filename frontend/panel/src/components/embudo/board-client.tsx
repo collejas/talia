@@ -504,8 +504,8 @@ export function EmbudoBoardClient({
                       key={card.tarjetaId}
                       card={card}
                       onClick={() => handleCardClick(stage, card)}
-                      disabled={(stage.orden ?? Number.MAX_SAFE_INTEGER) < 2}
                       stageId={stage.id}
+                      dragDisabled={(stage.orden ?? Number.MAX_SAFE_INTEGER) < 2}
                     />
                   )}
                 />
@@ -590,13 +590,14 @@ type DraggableCardProps = {
   onClick?: () => void;
   disabled?: boolean;
   stageId: string;
+  dragDisabled?: boolean;
 };
 
-function DraggableCard({ card, onClick, disabled = false, stageId }: DraggableCardProps) {
+function DraggableCard({ card, onClick, disabled = false, stageId, dragDisabled = false }: DraggableCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggableCard({
     card,
     stageId,
-    disabled,
+    dragDisabled,
   });
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
@@ -618,16 +619,16 @@ function DraggableCard({ card, onClick, disabled = false, stageId }: DraggableCa
 type UseDraggableCardArgs = {
   card: EmbudoCard;
   stageId: string;
-  disabled?: boolean;
+  dragDisabled?: boolean;
 };
 
-function useDraggableCard({ card, stageId, disabled }: UseDraggableCardArgs) {
+function useDraggableCard({ card, stageId, dragDisabled }: UseDraggableCardArgs) {
   const result = useDraggable({
     id: card.tarjetaId,
     data: {
       stageId,
     },
-    disabled,
+    disabled: dragDisabled,
   });
   return result;
 }
