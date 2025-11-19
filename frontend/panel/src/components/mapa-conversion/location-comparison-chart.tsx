@@ -319,7 +319,7 @@ export function LocationComparisonChart({
         const stateCode = (entry.key || "").padStart(2, "0").slice(0, 2);
         params.set("estado", stateCode);
       }
-      router.replace(`/mapa-de-conversion?${params.toString()}`);
+      router.replace(`/mapa-de-conversion?${params.toString()}`, { scroll: false });
     },
     [router, searchParams, manualSelectedKey, setManualSelectedKey],
   );

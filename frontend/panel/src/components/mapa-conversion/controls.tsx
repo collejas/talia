@@ -79,7 +79,7 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
         params.set(key, value);
       }
     }
-    router.replace(`/mapa-de-conversion?${params.toString()}`);
+    router.replace(`/mapa-de-conversion?${params.toString()}`, { scroll: false });
   }
 
   function handleNivelChange(value: string) {
