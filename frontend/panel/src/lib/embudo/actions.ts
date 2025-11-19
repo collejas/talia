@@ -72,6 +72,7 @@ export type CreateLeadInput = {
   tableroId: string;
   contacto: Record<string, unknown>;
   tarjeta: Record<string, unknown>;
+  contactId?: string | null;
 };
 
 export type MoveLeadInput = {
@@ -126,6 +127,23 @@ type LeadInsertRow = {
   id: string;
   tablero_id: string;
   etapa_id: string;
+};
+
+type ContactSearchRow = {
+  contacto_id: string;
+  nombre: string | null;
+  correo: string | null;
+  telefono: string | null;
+  company_name: string | null;
+  total_rows: number;
+};
+
+export type ContactSearchResult = {
+  id: string;
+  nombre: string;
+  correo: string | null;
+  telefono: string | null;
+  empresa: string | null;
 };
 
 function decodeJwtUserId(token: string | null | undefined): string | null {
@@ -301,6 +319,35 @@ function extractRow(data: unknown): LeadRow | null {
   return row;
 }
 
+export async function searchEmbudoContacts(query: string, limit = 8): Promise<ContactSearchResult[]> {
+  const trimmed = query?.trim();
+  if (!trimmed || trimmed.length < 2) {
+    return [];
+  }
+
+  const response = await callSupabaseRpc<ContactSearchRow[]>("panel_contactos_list", {
+    body: {
+      p_search: trimmed,
+      p_limit: Math.max(1, Math.min(limit, 25)),
+      p_offset: 0,
+    },
+  });
+
+  if (!response.ok) {
+    console.error("[embudo:searchContacts] rpc-error", { error: response.error, query: trimmed });
+    return [];
+  }
+
+  const rows = Array.isArray(response.data) ? response.data : [];
+  return rows.map((row) => ({
+    id: row.contacto_id,
+    nombre: row.nombre?.trim().length ? row.nombre.trim() : "Sin nombre",
+    correo: row.correo ?? null,
+    telefono: row.telefono ?? null,
+    empresa: row.company_name ?? null,
+  }));
+}
+
 export async function createLeadCard(input: CreateLeadInput): Promise<LeadActionResult> {
   const userId = await resolveCurrentUserId();
   if (!userId) {
@@ -310,80 +357,80 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   logDebug("resolve-user", { userId });
 
   const rawContact = input.contacto ?? {};
-  const contactInsertPayload: Record<string, unknown> = {
-    propietario_usuario_id: userId,
-  };
   const contactUpdatePayload: Record<string, unknown> = {};
 
   const nombreValue = sanitizeNullableString(rawContact.nombre_completo);
-  if (nombreValue !== null) {
-    contactInsertPayload.nombre_completo = nombreValue;
-  }
-
   const correoValue = sanitizeNullableString(
     typeof rawContact.correo === "string" ? rawContact.correo.toLowerCase() : rawContact.correo,
   );
+  const telefonoValue = sanitizeNullableString(rawContact.telefono_e164);
+  const companyValue = sanitizeNullableString(rawContact.company_name);
+  const notesValue = sanitizeNullableString(rawContact.notes);
+  const needValue = sanitizeNullableString(rawContact.necesidad_proposito);
   if (correoValue !== null) {
     contactUpdatePayload.correo = correoValue;
   }
-
-  const telefonoValue = sanitizeNullableString(rawContact.telefono_e164);
   if (telefonoValue !== null) {
     contactUpdatePayload.telefono_e164 = telefonoValue;
   }
 
-  const companyValue = sanitizeNullableString(rawContact.company_name);
-  if (companyValue !== null) {
-    contactInsertPayload.company_name = companyValue;
-  }
+  const usingExistingContactId = typeof input.contactId === "string" ? input.contactId.trim() : "";
+  let contactId = usingExistingContactId.length ? usingExistingContactId : null;
+  let createdContactId: string | null = null;
 
-  const notesValue = sanitizeNullableString(rawContact.notes);
-  if (notesValue !== null) {
-    contactInsertPayload.notes = notesValue;
-  }
+  if (contactId) {
+    if (nombreValue !== null) contactUpdatePayload.nombre_completo = nombreValue;
+    if (companyValue !== null) contactUpdatePayload.company_name = companyValue;
+    if (notesValue !== null) contactUpdatePayload.notes = notesValue;
+    if (needValue !== null) contactUpdatePayload.necesidad_proposito = needValue;
+    logDebug("use-existing-contact", { contactId });
+  } else {
+    const contactInsertPayload: Record<string, unknown> = {
+      propietario_usuario_id: userId,
+      origen: "embudo_manual",
+    };
+    if (nombreValue !== null) contactInsertPayload.nombre_completo = nombreValue;
+    if (companyValue !== null) contactInsertPayload.company_name = companyValue;
+    if (notesValue !== null) contactInsertPayload.notes = notesValue;
+    if (needValue !== null) contactInsertPayload.necesidad_proposito = needValue;
+    removeUndefined(contactInsertPayload);
 
-  const needValue = sanitizeNullableString(rawContact.necesidad_proposito);
-  if (needValue !== null) {
-    contactInsertPayload.necesidad_proposito = needValue;
-  }
+    logDebug("build-contact-payload", { insertKeys: Object.keys(contactInsertPayload) });
 
-  contactInsertPayload.origen = "embudo_manual";
-  removeUndefined(contactInsertPayload);
-  removeUndefined(contactUpdatePayload);
-  logDebug("build-contact-payload", {
-    insertKeys: Object.keys(contactInsertPayload),
-    updateKeys: Object.keys(contactUpdatePayload),
-  });
+    let contactResult;
+    try {
+      contactResult = await callSupabaseRest<ContactInsertRow[]>("contactos", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: contactInsertPayload,
+      });
+    } catch (error) {
+      console.error(`${LOG_PREFIX} contactos-insert-error`, {
+        error: error instanceof Error ? error.message : String(error),
+        payload: contactInsertPayload,
+      });
+      throw error;
+    }
 
-  let contactResult;
-  try {
-    contactResult = await callSupabaseRest<ContactInsertRow[]>("contactos", {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: contactInsertPayload,
-    });
-  } catch (error) {
-    console.error(`${LOG_PREFIX} contactos-insert-error`, {
-      error: error instanceof Error ? error.message : String(error),
-      payload: contactInsertPayload,
-    });
-    throw error;
-  }
+    if (!contactResult.ok) {
+      console.error(`${LOG_PREFIX} contactos-insert-failed`, {
+        error: contactResult.error,
+        payload: contactInsertPayload,
+      });
+      return { ok: false, error: contactResult.error };
+    }
 
-  if (!contactResult.ok) {
-    console.error(`${LOG_PREFIX} contactos-insert-failed`, {
-      error: contactResult.error,
-      payload: contactInsertPayload,
-    });
-    return { ok: false, error: contactResult.error };
+    const contactRow = Array.isArray(contactResult.data)
+      ? (contactResult.data[0] as ContactInsertRow | undefined)
+      : undefined;
+    if (!contactRow?.id) {
+      console.error(`${LOG_PREFIX} contactos-insert-missing-id`, { payload: contactInsertPayload });
+      return { ok: false, error: "No se pudo crear el contacto del lead." };
+    }
+    contactId = contactRow.id;
+    createdContactId = contactRow.id;
+    logDebug("contact-created", { contactId });
   }
-
-  const contactRow = Array.isArray(contactResult.data) ? (contactResult.data[0] as ContactInsertRow | undefined) : undefined;
-  if (!contactRow?.id) {
-    console.error(`${LOG_PREFIX} contactos-insert-missing-id`, { payload: contactInsertPayload });
-    return { ok: false, error: "No se pudo crear el contacto del lead." };
-  }
-  logDebug("contact-created", { contactId: contactRow.id });
 
   const cardPayload = input.tarjeta ?? {};
 
@@ -396,7 +443,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   }
 
   const leadPayload: Record<string, unknown> = {
-    contacto_id: contactRow.id,
+    contacto_id: contactId,
     tablero_id: input.tableroId,
     etapa_id: input.stageId,
     propietario_usuario_id: userId,
@@ -454,11 +501,13 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
       error: leadResult.error,
       leadPayload,
     });
-    await callSupabaseRest("contactos", {
-      method: "DELETE",
-      headers: { Prefer: "return=minimal" },
-      query: { id: `eq.${contactRow.id}` },
-    }).catch(() => undefined);
+    if (createdContactId) {
+      await callSupabaseRest("contactos", {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+        query: { id: `eq.${createdContactId}` },
+      }).catch(() => undefined);
+    }
     return { ok: false, error: leadResult.error };
   }
 
@@ -488,17 +537,17 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   }
 
   if (Object.keys(contactUpdatePayload).length) {
-    logDebug("contact-update", { contactId: contactRow.id, fields: Object.keys(contactUpdatePayload) });
+    logDebug("contact-update", { contactId, fields: Object.keys(contactUpdatePayload) });
     const updateResult = await callSupabaseRest("contactos", {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
-      query: { id: `eq.${contactRow.id}` },
+      query: { id: `eq.${contactId}` },
       body: contactUpdatePayload,
     });
     if (!updateResult.ok) {
       console.error(`${LOG_PREFIX} contactos-update-failed`, {
         error: updateResult.error,
-        contactId: contactRow.id,
+        contactId,
         payload: contactUpdatePayload,
       });
       return { ok: false, error: updateResult.error };

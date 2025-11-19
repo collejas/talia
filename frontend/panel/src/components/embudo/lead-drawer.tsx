@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import type { CheckedState } from "@radix-ui/react-checkbox";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -27,7 +27,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { LeadActionResult, LeadDeleteResult } from "@/lib/embudo/actions";
+import {
+  searchEmbudoContacts,
+  type ContactSearchResult,
+  type LeadActionResult,
+  type LeadDeleteResult,
+} from "@/lib/embudo/actions";
 import { cn } from "@/lib/utils";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +100,7 @@ export type LeadDrawerCreatePayload = {
   tableroId: string;
   contacto: Record<string, unknown>;
   tarjeta: Record<string, unknown>;
+  contactId?: string | null;
 };
 
 type LeadDrawerProps = {
@@ -359,6 +365,11 @@ export function LeadDrawer({
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<ContactSearchResult | null>(null);
+  const [contactSearchQuery, setContactSearchQuery] = useState("");
+  const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
+  const [contactSearchError, setContactSearchError] = useState<string | null>(null);
+  const [contactSearchPending, startContactSearch] = useTransition();
   const isBusy = pending || deletePending;
 
   useEffect(() => {
@@ -392,6 +403,24 @@ export function LeadDrawer({
       setActiveTab("resumen");
     }
   }, [isCreateMode, card]);
+
+  useEffect(() => {
+    if (!open || !isCreateMode) {
+      setSelectedContact(null);
+      setContactSearchQuery("");
+      setContactSearchResults([]);
+      setContactSearchError(null);
+    }
+  }, [open, isCreateMode]);
+
+  useEffect(() => {
+    if (selectedContact) {
+      setValue("nombre", selectedContact.nombre ?? "", { shouldDirty: true });
+      setValue("correo", selectedContact.correo ?? "", { shouldDirty: true });
+      setValue("telefono", selectedContact.telefono ?? "", { shouldDirty: true });
+      setValue("empresa", selectedContact.empresa ?? "", { shouldDirty: true });
+    }
+  }, [selectedContact, setValue]);
 
   const handleStageFieldChange = (stageCode: string, field: DrawerPrepFieldDefinition, value: string | boolean) => {
     setStagePrep((prev) => {
@@ -530,6 +559,7 @@ export function LeadDrawer({
     const necesidadPropositoRaw = (values.necesidadProposito ?? "").trim();
     const proyectoNombreRaw = (values.proyectoNombre ?? "").trim();
     const proyectoNecesidadesRaw = (values.proyectoNecesidades ?? "").trim();
+    const selectedContactId = selectedContact?.id ?? null;
 
     const missingRequired =
       isCreateMode ? null : findMissingRequiredField(upcomingStageGroups, stagePrep, initialStagePrepState);
@@ -600,6 +630,7 @@ export function LeadDrawer({
         tableroId: currentStage.tableroId,
         contacto: contactoPayload,
         tarjeta: tarjetaPayload,
+        contactId: selectedContactId,
       });
       setPending(false);
 
@@ -718,6 +749,34 @@ export function LeadDrawer({
     if (!result.ok) {
       setError(result.error || "No se pudo eliminar el lead.");
     }
+  };
+
+  const handleContactSearch = useCallback(() => {
+    const term = contactSearchQuery.trim();
+    if (term.length < 3) {
+      setContactSearchError("Escribe al menos 3 caracteres para buscar.");
+      setContactSearchResults([]);
+      return;
+    }
+    setContactSearchError(null);
+    startContactSearch(async () => {
+      const results = await searchEmbudoContacts(term, 8);
+      setContactSearchResults(results);
+      setContactSearchError(results.length ? null : "No encontramos coincidencias.");
+    });
+  }, [contactSearchQuery]);
+
+  const handleSelectExistingContact = (contact: ContactSearchResult) => {
+    setSelectedContact(contact);
+    setContactSearchResults([]);
+    setContactSearchError(null);
+  };
+
+  const clearSelectedContact = () => {
+    setSelectedContact(null);
+    setContactSearchResults([]);
+    setContactSearchQuery("");
+    setContactSearchError(null);
   };
 
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition) => {
@@ -887,6 +946,74 @@ export function LeadDrawer({
             >
               <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
+                {isCreateMode ? (
+                  <div className="space-y-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <p className="font-medium text-foreground">Vincular contacto existente</p>
+                      {selectedContact ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearSelectedContact}
+                          disabled={isBusy}
+                        >
+                          Limpiar
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        value={contactSearchQuery}
+                        onChange={(event) => setContactSearchQuery(event.target.value)}
+                        placeholder="Busca por nombre, correo o teléfono"
+                        disabled={isBusy}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleContactSearch}
+                        disabled={isBusy || contactSearchPending}
+                        variant="secondary"
+                      >
+                        {contactSearchPending ? "Buscando..." : "Buscar"}
+                      </Button>
+                    </div>
+                    {contactSearchError ? (
+                      <p className="text-xs text-muted-foreground">{contactSearchError}</p>
+                    ) : null}
+                    {contactSearchResults.length ? (
+                      <ul className="space-y-1 rounded-lg border border-border/60 bg-background/60 p-2 text-sm">
+                        {contactSearchResults.map((contact) => (
+                          <li key={contact.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectExistingContact(contact)}
+                              className="w-full rounded-md px-3 py-2 text-left hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                              disabled={isBusy}
+                            >
+                              <p className="font-medium text-foreground">{contact.nombre}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {[contact.correo, contact.telefono, contact.empresa]
+                                  .filter(Boolean)
+                                  .join(" · ") || "Sin datos adicionales"}
+                              </p>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {selectedContact ? (
+                      <div className="rounded-lg border border-green-400/50 bg-green-50 px-3 py-2 text-xs text-green-900">
+                        <p>
+                          Usando contacto: <span className="font-medium">{selectedContact.nombre}</span>
+                        </p>
+                        <p className="text-[11px] text-green-800">
+                          Puedes editar los campos si necesitas actualizar sus datos.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="grid gap-2">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-nombre">
                     Nombre
