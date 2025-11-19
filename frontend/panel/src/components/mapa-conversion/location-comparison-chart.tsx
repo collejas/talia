@@ -292,10 +292,7 @@ export function LocationComparisonChart({
     };
 
     for (const entry of data) {
-      const conversation = entry.conversacion_totales ?? {
-        con_conversacion: entry.visitantes_con_chat ?? 0,
-        sin_conversacion: entry.visitantes_sin_chat ?? 0,
-      };
+      const conversation = resolveFilteredConversation(entry, activeChannelSet);
       summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
@@ -317,10 +314,7 @@ export function LocationComparisonChart({
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;
 
-    const conversation = activeEntry.conversacion_totales ?? {
-      con_conversacion: activeEntry.visitantes_con_chat ?? 0,
-      sin_conversacion: activeEntry.visitantes_sin_chat ?? 0,
-    };
+    const conversation = resolveFilteredConversation(activeEntry, activeChannelSet);
 
     return {
       scope: "location",
@@ -467,10 +461,7 @@ export function LocationComparisonChart({
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
-      const conversation = entry.conversacion_totales ?? {
-        con_conversacion: entry.visitantes_con_chat ?? 0,
-        sin_conversacion: entry.visitantes_sin_chat ?? 0,
-      };
+      const conversation = resolveFilteredConversation(entry, activeChannelSet);
       const channelRows = displayedChannelKeys.map((channel) => {
         const total = resolveChannelTotal(entry, channel, activeChannelSet);
         return {
@@ -805,3 +796,31 @@ type LeafletGeoJSONFactory = (geojson?: GeoJSONType, options?: LeafletGeoJSONOpt
 type LeafletMapType = {
   flyToBounds?: (bounds: unknown, options?: { padding?: [number, number]; maxZoom?: number }) => void;
 };
+function resolveFilteredConversation(
+  entry: DemografiaMapResponse["dataset"][number],
+  allowedChannels?: Set<ChannelKey>,
+) {
+  const base =
+    entry.conversacion_totales ??
+    {
+      con_conversacion: entry.visitantes_con_chat ?? 0,
+      sin_conversacion: entry.visitantes_sin_chat ?? 0,
+    };
+  if (!allowedChannels || !allowedChannels.size || allowedChannels.size === CHANNEL_KEYS.length) {
+    return {
+      con_conversacion: base.con_conversacion ?? 0,
+      sin_conversacion: base.sin_conversacion ?? 0,
+    };
+  }
+  const visitantesPorCanal = entry.visitantes_totales_por_canal || {};
+  let con = 0;
+  for (const channel of allowedChannels) {
+    const value = visitantesPorCanal[channel];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      con += value;
+    }
+  }
+  const total = resolveFilteredEntryTotal(entry, allowedChannels);
+  const sin = Math.max(0, total - con);
+  return { con_conversacion: con, sin_conversacion: sin };
+}
