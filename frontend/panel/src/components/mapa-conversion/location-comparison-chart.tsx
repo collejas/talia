@@ -576,20 +576,18 @@ export function LocationComparisonChart({
           </span>
         </div>
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-          {showConversationMetrics ? (
-            <MetricSection
-              title="Conversaciones"
-              items={[
-                { label: "Total con conversación", value: metrics.conversation.con_conversacion },
-                { label: "Total sin conversación", value: metrics.conversation.sin_conversacion },
-              ]}
-            />
-          ) : null}
           <MetricSection
             title="Canales"
             items={displayedChannelKeys.map((channel) => ({
               label: `Canal ${CHANNEL_LABELS[channel]}`,
               value: metrics.channels[channel],
+              indentItems:
+                showConversationMetrics && channel === "webchat"
+                  ? [
+                      { label: "Con conversación", value: metrics.conversation.con_conversacion },
+                      { label: "Sin conversación", value: metrics.conversation.sin_conversacion },
+                    ]
+                  : undefined,
             }))}
           />
           <MetricSection
@@ -668,12 +666,18 @@ function FitToData({
   return null;
 }
 
+type MetricItem = {
+  label: string;
+  value: number;
+  indentItems?: Array<{ label: string; value: number }>;
+};
+
 function MetricSection({
   title,
   items,
 }: {
   title: string;
-  items: Array<{ label: string; value: number }>;
+  items: MetricItem[];
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -682,9 +686,24 @@ function MetricSection({
       </span>
       <div className="space-y-1">
         {items.map((item) => (
-          <div key={item.label} className="flex items-center justify-between gap-4">
-            <span className="text-xs text-muted-foreground">{item.label}</span>
-            <span className="font-medium">{formatNumber(item.value)}</span>
+          <div key={item.label} className="space-y-1">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-xs text-muted-foreground">{item.label}</span>
+              <span className="font-medium">{formatNumber(item.value)}</span>
+            </div>
+            {item.indentItems?.length ? (
+              <div className="space-y-1 pl-4">
+                {item.indentItems.map((nested) => (
+                  <div
+                    key={`${item.label}-${nested.label}`}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <span className="text-xs text-muted-foreground">{nested.label}</span>
+                    <span className="font-medium">{formatNumber(nested.value)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
