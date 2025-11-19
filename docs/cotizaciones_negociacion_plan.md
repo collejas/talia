@@ -63,16 +63,15 @@
 ### Avances
 - ✅ `lead_cotizaciones` creada + RLS/índices (`supabase/migrations/20260330_180000_lead_cotizaciones.sql`).
 - ✅ RPCs para crear cotizaciones (`panel_lead_quote_create`) y marcar envío/aceptación (`panel_lead_quote_mark`) con sincronización hacia `lead_movimientos` y `stage_prep` (`supabase/migrations/20260330_181000_panel_lead_quotes.sql`).
-- ✅ Endpoints del panel para listar/crear/actualizar cotizaciones (`/leads/{id}/quotes`, `/quotes/{id}/mark`) que consumen los RPCs (`backend/app/api/routes/panel.py`).
+- ✅ Endpoints del panel para listar/crear/actualizar cotizaciones, generar PDF y enviarlo por correo/WhatsApp (`/leads/{id}/quotes`, `/leads/{id}/quotes/send`, `/quotes/{id}/mark`) (`backend/app/api/routes/panel.py`).
+- ✅ Servicio de PDFs y subida a Storage (`app/services/quotes.py`, `storage.upload_quote_document`).
 
 ### Próximos pasos
 1. Validar con ventas los campos del template (ítems, impuestos, términos, firmas).
-2. Redactar la plantilla HTML/PDF y definir branding (logos, colores).
-3. Configurar bucket `quotes` en storage + políticas de acceso.
-4. Desarrollar servicio de generación y endpoints + pruebas unitarias.
-5. Ajustar frontend (drawer, modal, badges, métricas).
-6. Extender WhatsApp sender para soportar PDFs y registrar eventos.
-7. QA en staging de todo el flujo demo → cotización → negociación.
-8. Documentar en `README`/playbooks cómo crear y enviar cotizaciones.
+2. Ajustar la plantilla PDF (branding, fuentes) y validar con equipo legal/ventas.
+3. Configurar bucket `quotes` en Storage (si no existe) y definir políticas públicas.
+4. Ajustar frontend (drawer, modal, badges, métricas) para consumir los endpoints nuevos.
+5. QA en staging de todo el flujo demo → cotización → negociación.
+6. Documentar en `README`/playbooks cómo crear y enviar cotizaciones.
 
 > Este archivo se irá actualizando conforme completemos cada hito para mantener seguimiento del plan.

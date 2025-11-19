@@ -766,6 +766,65 @@ async def upload_webchat_attachment(
     }
 
 
+async def upload_quote_document(
+    *,
+    content: bytes,
+    filename: str,
+    lead_id: str,
+    content_type: str = "application/pdf",
+) -> dict[str, str]:
+    """Sube el PDF de una cotización al bucket `quotes`."""
+
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    safe_name = Path(filename).name or "cotizacion.pdf"
+    key = f"{lead_id}/{uuid4().hex}-{safe_name}"
+    base_url = settings.supabase_url.rstrip("/")
+    upload_url = f"{base_url}/storage/v1/object/quotes/{key}"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": content_type,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                upload_url,
+                headers=headers,
+                content=content,
+                params={"upsert": "true"},
+            )
+    except httpx.RequestError as exc:
+        msg = f"Error de red al subir cotización: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al guardar cotización"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    public_path = (
+        response.json().get("Key")
+        if response.headers.get("content-type") == "application/json"
+        else None
+    )
+    if not public_path:
+        public_path = f"quotes/{key}" if not str(key).startswith("quotes/") else key
+    public_url = f"{base_url}/storage/v1/object/public/{public_path}"
+
+    return {
+        "url": public_url,
+        "path": public_path,
+        "name": safe_name,
+    }
+
+
 async def fetch_contact(contact_id: str) -> dict[str, Any]:
     """Obtiene la representación del contacto indicado."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -1614,164 +1673,170 @@ async def ensure_lead_tarjeta(
         "Accept": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
 
-        async def _fetch(params: dict[str, Any]) -> dict[str, Any] | None:
-            resp = await client.get(url, headers=headers, params=params)
+            async def _fetch(params: dict[str, Any]) -> dict[str, Any] | None:
+                resp = await client.get(url, headers=headers, params=params)
+                if resp.status_code >= 400:
+                    msg = (
+                        "Supabase respondió error al consultar lead_tarjetas"
+                        f" (status={resp.status_code}, body={resp.text!r})"
+                    )
+                    logger.error(msg)
+                    raise StorageError(msg)
+                rows = resp.json() or []
+                if isinstance(rows, list) and rows:
+                    return rows[0]
+                return None
+
+            async def _update_card(card_id: str, patch: dict[str, Any]) -> None:
+                if not patch:
+                    return
+                patch_headers = {
+                    **headers,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal",
+                }
+                params = {"id": f"eq.{card_id}", "limit": "1"}
+                resp = await client.patch(url, headers=patch_headers, params=params, json=patch)
+                if resp.status_code >= 400:
+                    msg = (
+                        "Supabase respondió error al actualizar lead_tarjetas"
+                        f" (status={resp.status_code}, body={resp.text!r})"
+                    )
+                    logger.warning(msg)
+
+            async def _maybe_update_channel(row_id: str, row: dict[str, Any]) -> None:
+                patch: dict[str, Any] = {}
+                if channel and not row.get("canal"):
+                    patch["canal"] = channel
+                if row.get("fuente") == "contacto_auto":
+                    patch["fuente"] = "asistente"
+                if patch:
+                    await _update_card(row_id, patch)
+
+            def _extract_id(row: dict[str, Any]) -> str:
+                resolved_id = row.get("id")
+                if not resolved_id:
+                    raise StorageError("La tarjeta de lead recuperada no contiene id")
+                return str(resolved_id)
+
+            # 1. Validar tarjeta explícita.
+            if tarjeta_id:
+                row = await _fetch(
+                    {
+                        "id": f"eq.{tarjeta_id}",
+                        "select": "id,conversacion_id,contacto_id",
+                        "limit": "1",
+                    }
+                )
+                if not row:
+                    logger.warning(
+                        "storage.ensure_lead_tarjeta.id_not_found",
+                        extra={"tarjeta_id": tarjeta_id, "conversation_id": conversation_id},
+                    )
+                else:
+                    row_id = _extract_id(row)
+                    if conversation_id and not row.get("conversacion_id"):
+                        await _update_card(row_id, {"conversacion_id": conversation_id})
+                    await _maybe_update_channel(row_id, row)
+                    return row_id
+
+            # 2. Buscar por conversación actual.
+            row = await _fetch(
+                {
+                    "conversacion_id": f"eq.{conversation_id}",
+                    "select": "id,conversacion_id,contacto_id",
+                    "limit": "1",
+                }
+            )
+            if row:
+                row_id = _extract_id(row)
+                await _maybe_update_channel(row_id, row)
+                return row_id
+
+            # 3. Buscar por contacto asociado.
+            if contact_id:
+                row = await _fetch(
+                    {
+                        "contacto_id": f"eq.{contact_id}",
+                        "select": "id,conversacion_id,contacto_id",
+                        "order": "creado_en.desc",
+                        "limit": "1",
+                    }
+                )
+                if row:
+                    row_id = _extract_id(row)
+                    if conversation_id and not row.get("conversacion_id"):
+                        await _update_card(row_id, {"conversacion_id": conversation_id})
+                    await _maybe_update_channel(row_id, row)
+                    return row_id
+
+            if not contact_id:
+                raise StorageError(
+                    "No fue posible resolver contacto para crear la tarjeta del lead"
+                )
+
+            # 4. Crear tarjeta mínima enlazada a la conversación.
+            insert_headers = {
+                **headers,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            }
+
+            payload = {
+                "contacto_id": contact_id,
+                "conversacion_id": conversation_id,
+                "fuente": "asistente",
+            }
+            if channel:
+                payload["canal"] = channel
+            resp = await client.post(url, headers=insert_headers, json=payload)
+            if resp.status_code == 409:
+                row = await _fetch(
+                    {
+                        "contacto_id": f"eq.{contact_id}",
+                        "select": "id,conversacion_id,contacto_id",
+                        "order": "creado_en.desc",
+                        "limit": "1",
+                    }
+                )
+                if row:
+                    row_id = _extract_id(row)
+                    if conversation_id and not row.get("conversacion_id"):
+                        await _update_card(row_id, {"conversacion_id": conversation_id})
+                    await _maybe_update_channel(row_id, row)
+                    return row_id
+                msg = (
+                    "Supabase devolvió conflicto al crear lead_tarjetas pero no se encontró la tarjeta"
+                    f" (contacto_id={contact_id})"
+                )
+                logger.error(msg)
+                raise StorageError(msg)
+
             if resp.status_code >= 400:
                 msg = (
-                    "Supabase respondió error al consultar lead_tarjetas"
+                    "Supabase respondió error al crear lead_tarjetas"
                     f" (status={resp.status_code}, body={resp.text!r})"
                 )
                 logger.error(msg)
                 raise StorageError(msg)
-            rows = resp.json() or []
-            if isinstance(rows, list) and rows:
-                return rows[0]
-            return None
 
-        async def _update_card(card_id: str, patch: dict[str, Any]) -> None:
-            if not patch:
-                return
-            patch_headers = {
-                **headers,
-                "Content-Type": "application/json",
-                "Prefer": "return=minimal",
-            }
-            params = {"id": f"eq.{card_id}", "limit": "1"}
-            resp = await client.patch(url, headers=patch_headers, params=params, json=patch)
-            if resp.status_code >= 400:
-                msg = (
-                    "Supabase respondió error al actualizar lead_tarjetas"
-                    f" (status={resp.status_code}, body={resp.text!r})"
-                )
-                logger.warning(msg)
-
-        async def _maybe_update_channel(row_id: str, row: dict[str, Any]) -> None:
-            patch: dict[str, Any] = {}
-            if channel and not row.get("canal"):
-                patch["canal"] = channel
-            if row.get("fuente") == "contacto_auto":
-                patch["fuente"] = "asistente"
-            if patch:
-                await _update_card(row_id, patch)
-
-        def _extract_id(row: dict[str, Any]) -> str:
-            resolved_id = row.get("id")
-            if not resolved_id:
-                raise StorageError("La tarjeta de lead recuperada no contiene id")
-            return str(resolved_id)
-
-        # 1. Validar tarjeta explícita.
-        if tarjeta_id:
-            row = await _fetch(
-                {
-                    "id": f"eq.{tarjeta_id}",
-                    "select": "id,conversacion_id,contacto_id",
-                    "limit": "1",
-                }
-            )
-            if not row:
-                logger.warning(
-                    "storage.ensure_lead_tarjeta.id_not_found",
-                    extra={"tarjeta_id": tarjeta_id, "conversation_id": conversation_id},
-                )
-            else:
-                row_id = _extract_id(row)
-                if conversation_id and not row.get("conversacion_id"):
-                    await _update_card(row_id, {"conversacion_id": conversation_id})
-                await _maybe_update_channel(row_id, row)
+            data = resp.json() or []
+            if isinstance(data, list) and data:
+                row_id = _extract_id(data[0])
+                await _maybe_update_channel(row_id, data[0])
                 return row_id
-
-        # 2. Buscar por conversación actual.
-        row = await _fetch(
-            {
-                "conversacion_id": f"eq.{conversation_id}",
-                "select": "id,conversacion_id,contacto_id",
-                "limit": "1",
-            }
-        )
-        if row:
-            row_id = _extract_id(row)
-            await _maybe_update_channel(row_id, row)
-            return row_id
-
-        # 3. Buscar por contacto asociado.
-        if contact_id:
-            row = await _fetch(
-                {
-                    "contacto_id": f"eq.{contact_id}",
-                    "select": "id,conversacion_id,contacto_id",
-                    "order": "creado_en.desc",
-                    "limit": "1",
-                }
-            )
-            if row:
-                row_id = _extract_id(row)
-                if conversation_id and not row.get("conversacion_id"):
-                    await _update_card(row_id, {"conversacion_id": conversation_id})
-                await _maybe_update_channel(row_id, row)
+            if isinstance(data, dict) and data:
+                row_id = _extract_id(data)
+                await _maybe_update_channel(row_id, data)
                 return row_id
-
-        if not contact_id:
-            raise StorageError("No fue posible resolver contacto para crear la tarjeta del lead")
-
-        # 4. Crear tarjeta mínima enlazada a la conversación.
-        insert_headers = {
-            **headers,
-            "Content-Type": "application/json",
-            "Prefer": "return=representation",
-        }
-
-        payload = {
-            "contacto_id": contact_id,
-            "conversacion_id": conversation_id,
-            "fuente": "asistente",
-        }
-        if channel:
-            payload["canal"] = channel
-        resp = await client.post(url, headers=insert_headers, json=payload)
-        if resp.status_code == 409:
-            # Probablemente ya existe una tarjeta para este contacto/tablero.
-            row = await _fetch(
-                {
-                    "contacto_id": f"eq.{contact_id}",
-                    "select": "id,conversacion_id,contacto_id",
-                    "order": "creado_en.desc",
-                    "limit": "1",
-                }
-            )
-            if row:
-                row_id = _extract_id(row)
-                if conversation_id and not row.get("conversacion_id"):
-                    await _update_card(row_id, {"conversacion_id": conversation_id})
-                await _maybe_update_channel(row_id, row)
-                return row_id
-            msg = (
-                "Supabase devolvió conflicto al crear lead_tarjetas pero no se encontró la tarjeta"
-                f" (contacto_id={contact_id})"
-            )
-            logger.error(msg)
-            raise StorageError(msg)
-
-        if resp.status_code >= 400:
-            msg = (
-                "Supabase respondió error al crear lead_tarjetas"
-                f" (status={resp.status_code}, body={resp.text!r})"
-            )
-            logger.error(msg)
-            raise StorageError(msg)
-
-        data = resp.json() or []
-        if isinstance(data, list) and data:
-            row_id = _extract_id(data[0])
-            await _maybe_update_channel(row_id, data[0])
-            return row_id
-        if isinstance(data, dict) and data:
-            row_id = _extract_id(data)
-            await _maybe_update_channel(row_id, data)
-            return row_id
-        raise StorageError("Respuesta inesperada al crear la tarjeta del lead")
+            raise StorageError("Respuesta inesperada al crear la tarjeta del lead")
+    except httpx.RequestError as exc:
+        msg = f"Error de red al sincronizar lead_tarjetas: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
 
 
 async def _call_supabase_rpc(function_name: str, payload: dict[str, Any]) -> Any:

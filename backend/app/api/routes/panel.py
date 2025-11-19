@@ -7,6 +7,7 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Sequence
@@ -23,16 +24,20 @@ from app.core.logging import get_logger
 from app.services import (
     DenueClient,
     DenueError,
+    EmailSendError,
     GooglePlacesClient,
     GooglePlacesError,
     demografia_service,
     leads_geo,
     normalize_denue_place,
     normalize_place_for_result,
+    send_email,
     storage,
 )
 from app.services import calendar as calendar_service
+from app.services import quotes as quotes_service
 from app.services.calendar import CalendarError
+from app.services.storage import StorageError
 
 router = APIRouter(prefix="", tags=["panel"])
 
@@ -247,6 +252,27 @@ class LeadQuoteMarkPayload(BaseModel):
     )
     metadata: dict[str, Any] | None = Field(
         default=None, description="Metadatos opcionales que se adjuntarán en la bitácora."
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class LeadQuoteSendPayload(LeadQuoteCreatePayload):
+    """Payload completo para generar y enviar una cotización."""
+
+    channel: Literal["email", "whatsapp"]
+    email_to: list[str] | None = Field(
+        default=None, description="Destinatarios adicionales del correo."
+    )
+    whatsapp_to: str | None = Field(
+        default=None,
+        description="Número E.164; por defecto se usa el teléfono del contacto.",
+    )
+    subject: str | None = Field(default=None, max_length=200)
+    message: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Mensaje introductorio para correo o WhatsApp.",
     )
 
     model_config = ConfigDict(extra="ignore")
@@ -706,6 +732,75 @@ def _quote_extra_payload(payload: LeadQuoteMarkPayload) -> dict[str, Any]:
         elif isinstance(value, date):
             extra["proposal_sent_at"] = value.isoformat()
     return extra
+
+
+async def _fetch_lead_for_quote(lead_id: UUID, token: str) -> dict[str, Any]:
+    params = {
+        "id": f"eq.{lead_id}",
+        "select": (
+            "id,moneda,proyecto_nombre,proyecto_necesidades,metadata,"
+            "contacto:contactos!lead_tarjetas_contacto_id_fkey("
+            "id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito)"
+        ),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/lead_tarjetas", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando lead")
+    rows = resp.json() or []
+    row = _first_row(rows)
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=404, detail="lead_not_found")
+    return row
+
+
+def _resolve_lead_label(lead_row: dict[str, Any]) -> str:
+    contact = _single_related(lead_row.get("contacto")) or {}
+    candidates = [
+        lead_row.get("proyecto_nombre"),
+        contact.get("company_name"),
+        contact.get("nombre_completo"),
+    ]
+    for value in candidates:
+        cleaned = _clean_str(value)
+        if cleaned:
+            return cleaned
+    return "Lead sin nombre"
+
+
+def _resolve_email_recipients(
+    contact: dict[str, Any] | None, overrides: list[str] | None
+) -> list[str]:
+    recipients: list[str] = []
+    seen: set[str] = set()
+    for value in overrides or []:
+        if not isinstance(value, str):
+            continue
+        email = value.strip().lower()
+        if email and email not in seen:
+            recipients.append(email)
+            seen.add(email)
+    contact_email = _clean_str((contact or {}).get("correo"))
+    if contact_email:
+        lowered = contact_email.lower()
+        if lowered not in seen:
+            recipients.append(contact_email)
+            seen.add(lowered)
+    return recipients
+
+
+def _resolve_whatsapp_number(contact: dict[str, Any] | None, override: str | None) -> str | None:
+    candidate = _clean_str(override)
+    if candidate:
+        return candidate
+    contact_phone = _clean_str((contact or {}).get("telefono_e164"))
+    return contact_phone
+
+
+def _quote_mark_extra(extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = dict(extra or {})
+    payload.setdefault("proposal_sent_at", datetime.now(timezone.utc).isoformat())
+    return payload
 
 
 def _ilike_param(value: str) -> str:
@@ -2216,6 +2311,130 @@ async def crear_cotizacion_lead(
     if not isinstance(row, dict):
         raise HTTPException(status_code=502, detail="quote_create_unexpected_response")
     quote = _quote_from_row(row)
+    return LeadQuoteResponse(quote=quote)
+
+
+@router.post(
+    "/leads/{lead_id}/quotes/send",
+    response_model=LeadQuoteResponse,
+)
+async def enviar_cotizacion_lead(
+    lead_id: UUID,
+    payload: LeadQuoteSendPayload,
+    authorization: str | None = Header(default=None),
+) -> LeadQuoteResponse:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    lead_row = await _fetch_lead_for_quote(lead_id, token)
+    contact = _single_related(lead_row.get("contacto")) or {}
+    currency = payload.moneda or lead_row.get("moneda") or "MXN"
+
+    base_payload_data = payload.model_dump(
+        include=set(LeadQuoteCreatePayload.model_fields.keys()),
+        exclude_none=True,
+    )
+    base_payload = LeadQuoteCreatePayload(**base_payload_data)
+    quote_context = quotes_service.QuoteRenderContext(
+        lead_label=_resolve_lead_label(lead_row),
+        reference=str(lead_id).split("-")[0],
+        issuer_name=settings.mail_username or "Tal-IA",
+        issuer_email=settings.mail_username,
+        contact_name=_clean_str(contact.get("nombre_completo")),
+        contact_company=_clean_str(contact.get("company_name")),
+        contact_email=_clean_str(contact.get("correo")),
+        contact_phone=_clean_str(contact.get("telefono_e164")),
+        conceptos=base_payload.conceptos or [],
+        subtotal=base_payload.subtotal,
+        impuestos=base_payload.impuestos,
+        total=base_payload.total,
+        moneda=currency,
+        valido_hasta=base_payload.valido_hasta,
+        descripcion=base_payload.descripcion or base_payload.titulo,
+        notes=lead_row.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+    )
+
+    pdf_doc = quotes_service.render_quote_pdf(quote_context)
+    try:
+        upload = await storage.upload_quote_document(
+            content=pdf_doc.content,
+            filename=pdf_doc.filename,
+            lead_id=str(lead_id),
+            content_type="application/pdf",
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="quote_upload_failed") from exc
+
+    create_payload = _quote_payload_from_body(base_payload)
+    create_payload["pdf_url"] = upload["url"]
+    create_payload["pdf_path"] = upload["path"]
+    resp_create = await _sb_rpc(
+        "panel_lead_quote_create",
+        json={"p_tarjeta_id": str(lead_id), "p_payload": create_payload},
+        token=token,
+    )
+    if resp_create.status_code >= 400:
+        raise _supabase_error(resp_create, "Error creando cotización")
+    row_created = _first_row(resp_create.json() or {})
+    if not isinstance(row_created, dict):
+        raise HTTPException(status_code=502, detail="quote_create_unexpected_response")
+
+    channel = payload.channel
+    extra_data: dict[str, Any]
+    if channel == "email":
+        recipients = _resolve_email_recipients(contact, payload.email_to)
+        if not recipients:
+            raise HTTPException(status_code=400, detail="quote_email_missing_recipient")
+        subject = payload.subject or quotes_service.compose_email_subject(quote_context)
+        body = quotes_service.compose_email_body(quote_context, payload.message)
+        try:
+            await asyncio.to_thread(
+                send_email,
+                subject=subject,
+                body_text=body,
+                recipients=recipients,
+                attachments=[
+                    {
+                        "content": pdf_doc.content,
+                        "maintype": "application",
+                        "subtype": "pdf",
+                        "filename": pdf_doc.filename,
+                    }
+                ],
+            )
+        except EmailSendError as exc:
+            raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
+        extra_data = _quote_mark_extra({"email_to": recipients, "subject": subject})
+    else:
+        whatsapp_number = _resolve_whatsapp_number(contact, payload.whatsapp_to)
+        if not whatsapp_number:
+            raise HTTPException(status_code=400, detail="quote_whatsapp_missing_recipient")
+        body = quotes_service.compose_whatsapp_body(quote_context, payload.message)
+        try:
+            await quotes_service.send_whatsapp_message(
+                to_number=whatsapp_number,
+                body=body,
+                media_url=upload["url"],
+            )
+        except quotes_service.QuoteSendError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        extra_data = _quote_mark_extra({"whatsapp_to": whatsapp_number})
+
+    mark_body = {
+        "p_quote_id": str(row_created.get("id")),
+        "p_estado": "enviada",
+        "p_canal": channel,
+        "p_extra": extra_data,
+    }
+    resp_mark = await _sb_rpc("panel_lead_quote_mark", json=mark_body, token=token)
+    if resp_mark.status_code >= 400:
+        raise _supabase_error(resp_mark, "Error actualizando cotización")
+    row_marked = _first_row(resp_mark.json() or {})
+    if not isinstance(row_marked, dict):
+        raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
+
+    quote = _quote_from_row(row_marked)
     return LeadQuoteResponse(quote=quote)
 
 
