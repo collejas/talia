@@ -48,6 +48,18 @@ type LeadRow = {
   total_rows: number;
 };
 
+type DeleteLeadRow = {
+  tarjeta_id: string;
+  contacto_id: string;
+  contacto_nombre: string | null;
+  contacto_correo: string | null;
+  contacto_telefono: string | null;
+  tablero_id: string;
+  etapa_id: string;
+  etapa_codigo: string | null;
+  eliminado_en: string;
+};
+
 export type UpdateLeadInput = {
   tarjetaId: string;
   contacto?: Record<string, unknown>;
@@ -71,9 +83,16 @@ export type MoveLeadInput = {
   expectedEtapa?: string | null;
 };
 
+export type DeleteLeadInput = {
+  tarjetaId: string;
+  motivo?: string | null;
+};
+
 export type LeadActionResult =
   | { ok: true; stage: EmbudoStage; card: EmbudoCard }
   | { ok: false; error: string };
+
+export type LeadDeleteResult = { ok: true; tarjetaId: string; contactoId: string } | { ok: false; error: string };
 
 type CalendarBookingResponseRow = {
   status: "ok";
@@ -548,4 +567,25 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
   updateTag("embudo");
   const mapped = mapRowToStage(row);
   return { ok: true, stage: mapped.stage, card: mapped.card };
+}
+
+export async function deleteLeadCard(input: DeleteLeadInput): Promise<LeadDeleteResult> {
+  const response = await callSupabaseRpc<DeleteLeadRow[]>("panel_lead_delete", {
+    body: {
+      p_tarjeta_id: input.tarjetaId,
+      p_motivo: input.motivo ?? null,
+    },
+  });
+
+  if (!response.ok) {
+    return { ok: false, error: response.error };
+  }
+
+  const row = Array.isArray(response.data) && response.data.length ? (response.data[0] as DeleteLeadRow) : null;
+  if (!row?.tarjeta_id) {
+    return { ok: false, error: "No se recibió confirmación de eliminación." };
+  }
+
+  updateTag("embudo");
+  return { ok: true, tarjetaId: row.tarjeta_id, contactoId: row.contacto_id };
 }

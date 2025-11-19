@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { LeadActionResult } from "@/lib/embudo/actions";
+import type { LeadActionResult, LeadDeleteResult } from "@/lib/embudo/actions";
 import { cn } from "@/lib/utils";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +106,7 @@ type LeadDrawerProps = {
   mode?: "create" | "edit";
   onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
+  onDelete?: () => Promise<LeadDeleteResult>;
 };
 
 type DrawerPrepOption = {
@@ -291,6 +292,7 @@ export function LeadDrawer({
   mode = "edit",
   onSubmit,
   onCreate,
+  onDelete,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
@@ -356,12 +358,15 @@ export function LeadDrawer({
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
+  const isBusy = pending || deletePending;
 
   useEffect(() => {
     reset(defaultFormValues);
     setStagePrep(initialStagePrepState);
     setError(null);
     setPending(false);
+    setDeletePending(false);
   }, [defaultFormValues, initialStagePrepState, reset, open]);
 
   useEffect(() => {
@@ -693,6 +698,28 @@ export function LeadDrawer({
     onOpenChange(false);
   };
 
+  const handleDeleteLead = async () => {
+    if (!onDelete || !card) {
+      return;
+    }
+
+    const confirmed =
+      typeof window === "undefined"
+        ? true
+        : window.confirm("¿Seguro que deseas eliminar este lead? El contacto permanecerá disponible.");
+    if (!confirmed) {
+      return;
+    }
+
+    setError(null);
+    setDeletePending(true);
+    const result = await onDelete();
+    setDeletePending(false);
+    if (!result.ok) {
+      setError(result.error || "No se pudo eliminar el lead.");
+    }
+  };
+
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition) => {
     const stageValues = stagePrep[stageCode] ?? {};
     const rawValue = stageValues[field.key];
@@ -710,7 +737,7 @@ export function LeadDrawer({
               id={baseId}
               checked={checked}
               onCheckedChange={handleCheckedChange}
-              disabled={pending}
+              disabled={isBusy}
             />
             <div className="space-y-1">
               <label className="text-xs font-medium text-foreground" htmlFor={baseId}>
@@ -737,7 +764,7 @@ export function LeadDrawer({
               value={value}
               onChange={(event) => handleStageFieldChange(stageCode, field, event.target.value)}
               placeholder={field.placeholder}
-              disabled={pending}
+              disabled={isBusy}
             />
             {field.description ? (
               <p className="text-xs text-muted-foreground">{field.description}</p>
@@ -763,7 +790,7 @@ export function LeadDrawer({
               onValueChange={(next) =>
                 handleStageFieldChange(stageCode, field, next === EMPTY_SELECT_VALUE ? "" : next)
               }
-              disabled={pending || !options.length}
+              disabled={isBusy || !options.length}
             >
               <SelectTrigger id={`${baseId}-select`} size="default">
                 <SelectValue placeholder={field.placeholder ?? "Selecciona una opción"} />
@@ -803,7 +830,7 @@ export function LeadDrawer({
               type={inputType}
               value={displayValue}
               placeholder={field.placeholder}
-              disabled={pending}
+              disabled={isBusy}
               onChange={(event) => {
                 const nextValue = field.type === "datetime" ? event.target.value : event.target.value;
                 handleStageFieldChange(stageCode, field, nextValue);
@@ -867,7 +894,7 @@ export function LeadDrawer({
                   <Input
                     id="lead-nombre"
                     placeholder="Nombre del contacto"
-                    disabled={pending}
+                    disabled={isBusy}
                     aria-invalid={errors.nombre ? "true" : "false"}
                     {...register("nombre")}
                   />
@@ -883,7 +910,7 @@ export function LeadDrawer({
                     id="lead-correo"
                     type="email"
                     placeholder="correo@ejemplo.com"
-                    disabled={pending}
+                    disabled={isBusy}
                     aria-invalid={errors.correo ? "true" : "false"}
                     {...register("correo")}
                   />
@@ -898,7 +925,7 @@ export function LeadDrawer({
                 <Input
                     id="lead-telefono"
                     placeholder="+52..."
-                    disabled={pending}
+                    disabled={isBusy}
                     aria-invalid={errors.telefono ? "true" : "false"}
                     {...register("telefono")}
                   />
@@ -913,7 +940,7 @@ export function LeadDrawer({
                 <Input
                   id="lead-empresa"
                   placeholder="Nombre de la empresa"
-                  disabled={pending}
+                  disabled={isBusy}
                   {...register("empresa")}
                 />
               </div>
@@ -933,7 +960,7 @@ export function LeadDrawer({
                     <Textarea
                       id="lead-notas"
                       placeholder="Resumen generado por Tal-IA"
-                      disabled={pending}
+                      disabled={isBusy}
                       rows={3}
                       {...register("notas")}
                     />
@@ -945,7 +972,7 @@ export function LeadDrawer({
                     <Textarea
                       id="lead-necesidad"
                       placeholder="Necesidad capturada por Tal-IA"
-                      disabled={pending}
+                      disabled={isBusy}
                       rows={3}
                       {...register("necesidadProposito")}
                     />
@@ -968,7 +995,7 @@ export function LeadDrawer({
                 <Input
                   id="lead-proyecto-nombre"
                   placeholder="Implementación IA · Región Norte"
-                  disabled={pending}
+                  disabled={isBusy}
                   aria-invalid={errors.proyectoNombre ? "true" : "false"}
                   {...register("proyectoNombre")}
                 />
@@ -986,7 +1013,7 @@ export function LeadDrawer({
                 <Textarea
                   id="lead-proyecto-necesidades"
                   placeholder="Resumen de los objetivos, plazos o problemas a resolver."
-                  disabled={pending}
+                  disabled={isBusy}
                   rows={4}
                   {...register("proyectoNecesidades")}
                 />
@@ -1002,7 +1029,7 @@ export function LeadDrawer({
                   <Input
                     id="lead-monto"
                     placeholder="0"
-                    disabled={pending}
+                    disabled={isBusy}
                     aria-invalid={errors.monto ? "true" : "false"}
                     {...register("monto")}
                   />
@@ -1018,7 +1045,7 @@ export function LeadDrawer({
                     id="lead-moneda"
                     placeholder="MXN"
                     maxLength={3}
-                    disabled={pending}
+                    disabled={isBusy}
                     aria-invalid={errors.moneda ? "true" : "false"}
                     {...register("moneda")}
                     onBlur={(event) => setValue("moneda", event.target.value.toUpperCase())}
@@ -1034,7 +1061,7 @@ export function LeadDrawer({
                   <Input
                     id="lead-probabilidad"
                     placeholder="0-100"
-                    disabled={pending}
+                    disabled={isBusy}
                     aria-invalid={errors.probabilidad ? "true" : "false"}
                     {...register("probabilidad")}
                   />
@@ -1174,7 +1201,7 @@ export function LeadDrawer({
               <DrawerFooter className="mt-4 space-y-2">
                 <Button
                   type="submit"
-                  disabled={pending || (!card && !isCreateMode)}
+                  disabled={isBusy || (!card && !isCreateMode)}
                   className="w-full"
                 >
                   {pending
@@ -1190,16 +1217,27 @@ export function LeadDrawer({
                   variant="ghost"
                   className="w-full"
                   onClick={() => onOpenChange(false)}
-                  disabled={pending}
+                  disabled={isBusy}
                 >
                   Cancelar
                 </Button>
+                {!isCreateMode && card && onDelete ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="w-full"
+                    onClick={handleDeleteLead}
+                    disabled={isBusy}
+                  >
+                    {deletePending ? "Eliminando..." : "Eliminar lead"}
+                  </Button>
+                ) : null}
               </DrawerFooter>
             </form>
           </TabsContent>
 
           {!isCreateMode && card ? (
-          <TabsContent value="notas" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
+            <TabsContent value="notas" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
             <div className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-6">
               <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
                 <div>
@@ -1212,7 +1250,7 @@ export function LeadDrawer({
                   value={noteText}
                   onChange={(event) => setNoteText(event.target.value)}
                   placeholder="Escribe una nota interna..."
-                  disabled={notePending || pending}
+                  disabled={notePending || isBusy}
                   minLength={1}
                 />
                 {noteError ? (
@@ -1222,7 +1260,7 @@ export function LeadDrawer({
                   <Button
                     type="button"
                     onClick={handleAddNote}
-                    disabled={notePending || pending}
+                    disabled={notePending || isBusy}
                   >
                     {notePending ? "Guardando..." : "Guardar nota"}
                   </Button>

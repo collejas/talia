@@ -20,10 +20,12 @@ import { EmbudoStageColumn } from "@/components/embudo/stage-column";
 import { EmbudoCardItem } from "@/components/embudo/card-item";
 import {
   createLeadCard,
+  deleteLeadCard,
   moveLeadCard,
   scheduleLeadDemo,
   updateLeadCard,
   type LeadActionResult,
+  type LeadDeleteResult,
 } from "@/lib/embudo/actions";
 import {
   LeadDrawer,
@@ -323,6 +325,28 @@ export function EmbudoBoardClient({
     return result;
   }
 
+  async function handleLeadDelete(): Promise<LeadDeleteResult> {
+    if (!selectedCard) {
+      return { ok: false, error: "No se encontró el lead seleccionado." };
+    }
+
+    const result = await deleteLeadCard({ tarjetaId: selectedCard.tarjetaId });
+    if (result.ok) {
+      setStages((prev) =>
+        sortStages(
+          prev.map((stage) => ({
+            ...stage,
+            tarjetas: stage.tarjetas.filter((card) => card.tarjetaId !== selectedCard.tarjetaId),
+          })),
+        ),
+      );
+      setSelectedStage(null);
+      setSelectedCard(null);
+      setDrawerOpen(false);
+    }
+    return result;
+  }
+
   const handleDrawerOpenChange = (open: boolean) => {
     setDrawerOpen(open);
     if (!open) {
@@ -508,11 +532,12 @@ export function EmbudoBoardClient({
         onOpenChange={handleDrawerOpenChange}
         currentStage={selectedStage}
         allStages={stages}
-      card={selectedCard}
-      mode={drawerMode}
-      onSubmit={handleLeadSubmit}
-      onCreate={handleLeadCreate}
-    />
+        card={selectedCard}
+        mode={drawerMode}
+        onSubmit={handleLeadSubmit}
+        onCreate={handleLeadCreate}
+        onDelete={handleLeadDelete}
+      />
 
       <Sheet open={scheduleDialogOpen && !!scheduleContext} onOpenChange={handleScheduleOpenChange}>
         <SheetContent side="right" className="sm:max-w-md">
