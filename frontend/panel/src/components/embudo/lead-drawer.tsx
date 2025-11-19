@@ -849,7 +849,7 @@ export function LeadDrawer({
               onSubmit={handleSubmit(onSubmitForm)}
               className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-4"
             >
-              <section className="space-y-3">
+              <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
                 <div className="grid gap-2">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-nombre">
@@ -921,7 +921,7 @@ export function LeadDrawer({
               </div>
             </section>
 
-            <section className="space-y-3">
+            <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
               <div className="space-y-1">
                 <h4 className="text-sm font-semibold text-foreground">Proyecto</h4>
                 <p className="text-xs text-muted-foreground">
@@ -960,7 +960,7 @@ export function LeadDrawer({
               </div>
             </section>
 
-              <section className="space-y-3">
+              <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-foreground">Lead</h4>
                 <div className="grid gap-2">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-monto">
