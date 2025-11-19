@@ -55,50 +55,78 @@ def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
     """Construye un PDF simple con el resumen de la cotización."""
 
     lines: list[str] = []
-    lines.append("Tal-IA · Cotización")
-    lines.append(f"Emitida: {context.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')}")
-    lines.append(f"Lead: {context.lead_label}")
-    if context.contact_name:
-        lines.append(f"Contacto: {context.contact_name}")
-    if context.contact_company:
-        lines.append(f"Empresa: {context.contact_company}")
+    divider = "=" * 80
+    sub_divider = "-" * 80
+
+    lines.append("Tal-IA · Geoactiv")
+    lines.append("Documento de cotización")
+    lines.append(divider)
+
+    lines.append(f"Lead / Proyecto: {context.lead_label}")
+    lines.append(
+        f"Fecha de emisión: {context.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')}"
+    )
+    lines.append("")
+
+    lines.append("Datos del contacto")
+    lines.append(sub_divider)
+    lines.append(f"Nombre: {context.contact_name or '—'}")
+    lines.append(f"Empresa: {context.contact_company or '—'}")
+    lines.append(f"Correo: {context.contact_email or '—'}")
+    lines.append(f"Teléfono: {context.contact_phone or '—'}")
     lines.append("")
 
     if context.descripcion:
-        lines.append("Resumen del proyecto:")
+        lines.append("Resumen del proyecto")
+        lines.append(sub_divider)
         lines.extend(_wrap_text(context.descripcion))
         lines.append("")
 
     if context.notes:
-        lines.append("Notas relevantes:")
+        lines.append("Notas / necesidades detectadas")
+        lines.append(sub_divider)
         lines.extend(_wrap_text(context.notes))
         lines.append("")
 
-    lines.append("Conceptos incluidos:")
-    for idx, concept in enumerate(context.conceptos or [], start=1):
-        title = _clean_concept_title(concept, idx)
-        lines.append(f"{idx}. {title}")
-        desc = concept.get("descripcion") or concept.get("description") or concept.get("detalle")
-        if desc:
-            lines.extend([f"   {part}" for part in _wrap_text(str(desc))])
-        monto = _concept_total(concept)
-        if monto is not None:
-            lines.append(f"   Total: {_format_currency(monto, context.moneda)}")
-    if not context.conceptos:
-        lines.append("- Detalle pendiente")
-    lines.append("")
+    lines.append("Detalle de conceptos")
+    lines.append(sub_divider)
+    concept_rows = context.conceptos or []
+    if not concept_rows:
+        lines.append("· Pendiente de definir.")
+    else:
+        for idx, concept in enumerate(concept_rows, start=1):
+            title = _clean_concept_title(concept, idx)
+            lines.append(f"{idx}. {title}")
+            desc = (
+                concept.get("descripcion") or concept.get("description") or concept.get("detalle")
+            )
+            if desc:
+                lines.extend([f"   {part}" for part in _wrap_text(str(desc))])
+            monto = _concept_total(concept)
+            if monto is not None:
+                lines.append(f"   Total: {_format_currency(monto, context.moneda)}")
+            lines.append("")
 
-    lines.append("Totales:")
-    lines.append(f"   Subtotal: {_format_currency(context.subtotal, context.moneda)}")
-    lines.append(f"   Impuestos: {_format_currency(context.impuestos, context.moneda)}")
-    lines.append(f"   Total: {_format_currency(_resolve_total(context), context.moneda)}")
+    lines.append("Resumen económico")
+    lines.append(sub_divider)
+    lines.append(f"Subtotal: {_format_currency(context.subtotal, context.moneda)}")
+    lines.append(f"Impuestos: {_format_currency(context.impuestos, context.moneda)}")
+    lines.append(f"Total estimado: {_format_currency(_resolve_total(context), context.moneda)}")
     if context.valido_hasta:
-        lines.append(f"   Vigencia: {context.valido_hasta.isoformat()}")
+        lines.append(f"Vigencia de la propuesta: {context.valido_hasta.isoformat()}")
     lines.append("")
 
-    lines.append(f"Emitido por: {context.issuer_name}")
+    lines.append("Emitido por")
+    lines.append(sub_divider)
+    lines.append(f"Ejecutivo: {context.issuer_name}")
     if context.issuer_email:
-        lines.append(f"Contacto: {context.issuer_email}")
+        lines.append(f"Correo de contacto: {context.issuer_email}")
+    lines.append("")
+    lines.append(divider)
+    lines.append(
+        "Tal-IA automatiza ventas y soporte omnicanal. Esta cotización es referencial "
+        "y puede ajustarse según necesidades específicas."
+    )
 
     pdf_bytes = _build_pdf_from_lines(lines)
     filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"

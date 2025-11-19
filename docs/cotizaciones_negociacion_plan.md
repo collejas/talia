@@ -65,6 +65,7 @@
 - ✅ RPCs para crear cotizaciones (`panel_lead_quote_create`) y marcar envío/aceptación (`panel_lead_quote_mark`) con sincronización hacia `lead_movimientos` y `stage_prep` (`supabase/migrations/20260330_181000_panel_lead_quotes.sql`).
 - ✅ Endpoints del panel para listar/crear/actualizar cotizaciones, generar PDF y enviarlo por correo/WhatsApp (`/leads/{id}/quotes`, `/leads/{id}/quotes/send`, `/quotes/{id}/mark`) (`backend/app/api/routes/panel.py`).
 - ✅ Servicio de PDFs, subida a Storage y bucket público `quotes` (`app/services/quotes.py`, `storage.upload_quote_document`, `supabase/migrations/20260330_182000_quotes_bucket.sql`).
+- ✅ Bucket `quotes` creado manualmente en Supabase Storage (Panel → Storage → Create bucket → `quotes`, público, MIME `application/pdf`).
 
 ### Próximos pasos
 1. Validar con ventas los campos del template (ítems, impuestos, términos, firmas).
