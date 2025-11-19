@@ -458,7 +458,7 @@ export function LocationComparisonChart({
   const zoom = nivel === "pais" ? 2 : nivel === "estado" ? 5 : 6;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)]">
       <div className="relative z-0 h-[320px] w-full overflow-hidden rounded-lg border">
         <MapContainer
           key={nivel}
