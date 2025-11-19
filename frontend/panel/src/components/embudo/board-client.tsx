@@ -58,6 +58,15 @@ type ScheduleContext = {
 const PRECALIFICADO_STAGE_CODE = "precalificado";
 const DEMO_STAGE_CODE = "demo";
 
+const STAGE_REQUIRED_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
+  demo: [
+    { key: "demo_format", label: "Modalidad" },
+  ],
+  cerrado_ganado: [
+    { key: "close_date", label: "Fecha de cierre" },
+  ],
+};
+
 function sortStages(stages: EmbudoStage[]): EmbudoStage[] {
   return [...stages].sort((a, b) => {
     if (a.orden !== b.orden) return (a.orden ?? Number.MAX_SAFE_INTEGER) - (b.orden ?? Number.MAX_SAFE_INTEGER);
@@ -423,6 +432,15 @@ export function EmbudoBoardClient({
       return;
     }
 
+    const missingStageRequirement = getMissingStageRequirement(destinationStage, activeDragCard);
+    if (missingStageRequirement) {
+      setDragMessage(
+        `Completa el campo “${missingStageRequirement}” en la sección ${destinationStage.nombre} antes de avanzar.`,
+      );
+      handleDragCancel();
+      return;
+    }
+
     const movingFromPrecalificado = normalizeStageCode(activeDragStage) === PRECALIFICADO_STAGE_CODE;
     const movingToDemo = normalizeStageCode(destinationStage) === DEMO_STAGE_CODE;
     if (movingFromPrecalificado && movingToDemo) {
@@ -678,4 +696,23 @@ function buildUpdatedDemoStagePrep(card: EmbudoCard, isoValue: string, bookingId
     ...current,
     [DEMO_STAGE_CODE]: demoPrep,
   };
+}
+
+function getMissingStageRequirement(stage: EmbudoStage, card: EmbudoCard): string | null {
+  const stageCode = normalizeStageCode(stage);
+  const requirements = STAGE_REQUIRED_FIELDS[stageCode];
+  if (!requirements || !requirements.length) {
+    return null;
+  }
+  const stagePrep = extractStagePrep(card);
+  const values = stagePrep[stageCode] ?? {};
+  for (const requirement of requirements) {
+    const rawValue = values[requirement.key];
+    const hasValue =
+      typeof rawValue === "string" ? rawValue.trim().length > 0 : rawValue === true;
+    if (!hasValue) {
+      return requirement.label;
+    }
+  }
+  return null;
 }

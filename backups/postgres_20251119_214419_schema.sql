@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict fc3EL59wdK0KvpMj5AS7kbXWhwNwcUaIhCudeeYJocjW0yqEKi8CvGM6bhdy4An
+\restrict DwKu68zCdiMegaFy8BLgLf8KgVmO3DdM12OmXFSIFlR2hgh7mhUGOzrBwhaQir9
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -425,7 +425,8 @@ CREATE TYPE realtime.wal_rls AS (
 
 CREATE TYPE storage.buckettype AS ENUM (
     'STANDARD',
-    'ANALYTICS'
+    'ANALYTICS',
+    'VECTOR'
 );
 
 
@@ -1173,6 +1174,34 @@ CREATE FUNCTION public.embudo_visitantes_contador(p_closed_after timestamp with 
     SELECT COUNT(*)::bigint AS total
     FROM filtered;
 $$;
+
+
+--
+-- Name: embudo_visitantes_whatsapp(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.embudo_visitantes_whatsapp(p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE(total bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+WITH visibles AS (
+    SELECT c.id
+      FROM public.conversaciones c
+     WHERE c.canal = 'whatsapp'
+       AND public.puede_ver_conversacion(c.id)
+       AND (p_from IS NULL OR c.iniciada_en >= p_from)
+       AND (p_to IS NULL OR c.iniciada_en <= p_to)
+)
+SELECT COUNT(*)::bigint AS total
+  FROM visibles;
+$$;
+
+
+--
+-- Name: FUNCTION embudo_visitantes_whatsapp(p_from timestamp with time zone, p_to timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.embudo_visitantes_whatsapp(p_from timestamp with time zone, p_to timestamp with time zone) IS 'Cuenta conversaciones de WhatsApp visibles para el usuario en el periodo indicado.';
 
 
 --
@@ -2961,10 +2990,63 @@ $$;
 
 
 --
+-- Name: panel_lead_delete(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.panel_lead_delete(p_tarjeta_id uuid, p_motivo text DEFAULT NULL::text) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, tablero_id uuid, etapa_id uuid, etapa_codigo text, eliminado_en timestamp with time zone)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_snapshot RECORD;
+BEGIN
+    SELECT
+        lt.id AS tarjeta_id,
+        lt.contacto_id,
+        ct.nombre_completo AS contacto_nombre,
+        ct.correo AS contacto_correo,
+        ct.telefono_e164 AS contacto_telefono,
+        lt.tablero_id,
+        lt.etapa_id,
+        le.codigo AS etapa_codigo
+    INTO v_snapshot
+    FROM public.lead_tarjetas AS lt
+    JOIN public.contactos AS ct ON ct.id = lt.contacto_id
+    JOIN public.lead_etapas AS le ON le.id = lt.etapa_id
+    WHERE lt.id = p_tarjeta_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
+    END IF;
+
+    IF NOT public.puede_ver_lead(v_snapshot.tarjeta_id) THEN
+        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
+    END IF;
+
+    DELETE FROM public.lead_tarjetas AS lt
+    WHERE lt.id = v_snapshot.tarjeta_id;
+
+    RETURN QUERY
+    SELECT
+        v_snapshot.tarjeta_id,
+        v_snapshot.contacto_id,
+        v_snapshot.contacto_nombre,
+        v_snapshot.contacto_correo,
+        v_snapshot.contacto_telefono,
+        v_snapshot.tablero_id,
+        v_snapshot.etapa_id,
+        v_snapshot.etapa_codigo,
+        now() AS eliminado_en;
+END;
+$$;
+
+
+--
 -- Name: panel_lead_move(uuid, uuid, uuid, text, text, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_lead_move(p_tarjeta_id uuid, p_etapa_destino uuid, p_cambiado_por uuid DEFAULT NULL::uuid, p_fuente text DEFAULT 'humano'::text, p_motivo text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_expected_etapa uuid DEFAULT NULL::uuid) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_lead_move(p_tarjeta_id uuid, p_etapa_destino uuid, p_cambiado_por uuid DEFAULT NULL::uuid, p_fuente text DEFAULT 'humano'::text, p_motivo text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_expected_etapa uuid DEFAULT NULL::uuid) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_necesidad text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, proyecto_nombre text, proyecto_necesidades text, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3019,6 +3101,7 @@ BEGIN
             ls.contacto_telefono,
             ls.contacto_empresa,
             ls.contacto_notas,
+            ls.contacto_necesidad,
             ls.contacto_estado,
             ls.canal,
             ls.etapa_id,
@@ -3033,6 +3116,8 @@ BEGIN
             ls.monto_estimado,
             ls.moneda,
             ls.probabilidad,
+            ls.proyecto_nombre,
+            ls.proyecto_necesidades,
             ls.lead_score,
             ls.asignado_id,
             ls.asignado_nombre,
@@ -3106,7 +3191,7 @@ BEGIN
         v_now,
         NULLIF(p_motivo, ''),
         p_fuente,
-        COALESCE(v_metadata, '{}'::jsonb)
+        v_metadata
     );
 
     RETURN QUERY
@@ -3118,6 +3203,7 @@ BEGIN
         ls.contacto_telefono,
         ls.contacto_empresa,
         ls.contacto_notas,
+        ls.contacto_necesidad,
         ls.contacto_estado,
         ls.canal,
         ls.etapa_id,
@@ -3132,6 +3218,8 @@ BEGIN
         ls.monto_estimado,
         ls.moneda,
         ls.probabilidad,
+        ls.proyecto_nombre,
+        ls.proyecto_necesidades,
         ls.lead_score,
         ls.asignado_id,
         ls.asignado_nombre,
@@ -3209,7 +3297,7 @@ $$;
 -- Name: panel_lead_update(uuid, jsonb, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_lead_update(p_tarjeta_id uuid, p_contacto jsonb DEFAULT '{}'::jsonb, p_tarjeta jsonb DEFAULT '{}'::jsonb, p_merge_metadata boolean DEFAULT true) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_lead_update(p_tarjeta_id uuid, p_contacto jsonb DEFAULT '{}'::jsonb, p_tarjeta jsonb DEFAULT '{}'::jsonb, p_merge_metadata boolean DEFAULT true) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_necesidad text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, proyecto_nombre text, proyecto_necesidades text, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -3329,6 +3417,22 @@ BEGIN
                     END
                 ELSE lt.probabilidad_override
             END,
+            proyecto_nombre = CASE
+                WHEN v_card_updates ? 'proyecto_nombre' THEN
+                    CASE jsonb_typeof(v_card_updates->'proyecto_nombre')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(v_card_updates->>'proyecto_nombre', '')
+                    END
+                ELSE lt.proyecto_nombre
+            END,
+            proyecto_necesidades = CASE
+                WHEN v_card_updates ? 'proyecto_necesidades' THEN
+                    CASE jsonb_typeof(v_card_updates->'proyecto_necesidades')
+                        WHEN 'null' THEN NULL
+                        ELSE NULLIF(v_card_updates->>'proyecto_necesidades', '')
+                    END
+                ELSE lt.proyecto_necesidades
+            END,
             asignado_a_usuario_id = CASE
                 WHEN v_card_updates ? 'asignado_id' THEN
                     CASE jsonb_typeof(v_card_updates->'asignado_id')
@@ -3399,6 +3503,7 @@ BEGIN
         ls.contacto_telefono,
         ls.contacto_empresa,
         ls.contacto_notas,
+        ls.contacto_necesidad,
         ls.contacto_estado,
         ls.canal,
         ls.etapa_id,
@@ -3413,6 +3518,8 @@ BEGIN
         ls.monto_estimado,
         ls.moneda,
         ls.probabilidad,
+        ls.proyecto_nombre,
+        ls.proyecto_necesidades,
         ls.lead_score,
         ls.asignado_id,
         ls.asignado_nombre,
@@ -4047,7 +4154,7 @@ $$;
 -- Name: panel_leads_list(uuid, uuid, public.lead_categoria, uuid, timestamp with time zone, timestamp with time zone, text, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
+CREATE FUNCTION public.panel_leads_list(p_tablero uuid DEFAULT NULL::uuid, p_etapa uuid DEFAULT NULL::uuid, p_categoria public.lead_categoria DEFAULT NULL::public.lead_categoria, p_asignado uuid DEFAULT NULL::uuid, p_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_search text DEFAULT NULL::text, p_order_by text DEFAULT 'creado_en'::text, p_order_dir text DEFAULT 'desc'::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_necesidad text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, proyecto_nombre text, proyecto_necesidades text, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
@@ -4060,6 +4167,7 @@ WITH filtered AS (
         ct.telefono_e164 AS contacto_telefono,
         NULLIF(ct.company_name, '') AS contacto_empresa,
         NULLIF(ct.notes, '') AS contacto_notas,
+        NULLIF(ct.necesidad_proposito, '') AS contacto_necesidad,
         COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
         COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
         le.id AS etapa_id,
@@ -4074,6 +4182,8 @@ WITH filtered AS (
         lt.monto_estimado,
         lt.moneda,
         COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
+        lt.proyecto_nombre,
+        lt.proyecto_necesidades,
         lt.lead_score,
         lt.asignado_a_usuario_id AS asignado_id,
         asignado.nombre_completo AS asignado_nombre,
@@ -4118,42 +4228,18 @@ ordered AS (
     SELECT *
     FROM annotated
     ORDER BY
-        CASE
-            WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN actualizado_en
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN actualizado_en
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) = 'asc' THEN cerrado_en
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) <> 'asc' THEN cerrado_en
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) = 'asc' THEN monto_estimado
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) <> 'asc' THEN monto_estimado
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) = 'asc' THEN probabilidad
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) <> 'asc' THEN probabilidad
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) = 'asc' THEN lead_score
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) <> 'asc' THEN lead_score
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) = 'asc' THEN creado_en
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) <> 'asc' THEN creado_en
-        END DESC,
+        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN actualizado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN actualizado_en END DESC,
+        CASE WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) = 'asc' THEN cerrado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) <> 'asc' THEN cerrado_en END DESC,
+        CASE WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) = 'asc' THEN monto_estimado END ASC,
+        CASE WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) <> 'asc' THEN monto_estimado END DESC,
+        CASE WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) = 'asc' THEN probabilidad END ASC,
+        CASE WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) <> 'asc' THEN probabilidad END DESC,
+        CASE WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) = 'asc' THEN lead_score END ASC,
+        CASE WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) <> 'asc' THEN lead_score END DESC,
+        CASE WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) = 'asc' THEN creado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) <> 'asc' THEN creado_en END DESC,
         creado_en DESC,
         tarjeta_id
 )
@@ -4165,6 +4251,7 @@ SELECT
     contacto_telefono,
     contacto_empresa,
     contacto_notas,
+    contacto_necesidad,
     contacto_estado,
     canal,
     etapa_id,
@@ -4179,6 +4266,8 @@ SELECT
     monto_estimado,
     moneda,
     probabilidad,
+    proyecto_nombre,
+    proyecto_necesidades,
     lead_score,
     asignado_id,
     asignado_nombre,
@@ -4528,7 +4617,7 @@ WITH normalized_level AS (
         ELSE 'estado'
     END AS nivel
 ),
-visits AS (
+webchat_visits AS (
     SELECT
         w.session_id,
         w.contacto_id,
@@ -4553,7 +4642,7 @@ visits AS (
     WHERE (p_from IS NULL OR w.ultimo_evento_en >= p_from)
       AND (p_to IS NULL OR w.ultimo_evento_en <= p_to)
 ),
-geo AS (
+webchat_geo AS (
     SELECT
         v.*,
         COALESCE(
@@ -4568,9 +4657,9 @@ geo AS (
             NULLIF(v.geo -> 'ip_lookup' ->> 'country', ''),
             NULLIF((v.geo -> 'client') ->> 'country', '')
         ) AS raw_country_name
-    FROM visits v
+    FROM webchat_visits v
 ),
-normalized AS (
+webchat_normalized AS (
     SELECT
         g.session_id,
         g.tuvo_chat,
@@ -4585,25 +4674,25 @@ normalized AS (
             CASE WHEN upper(COALESCE(g.raw_country_code, '')) = 'MX' THEN 'México' ELSE 'País desconocido' END
         ) AS country_name,
         CASE
-            WHEN g.cve_ent IS NOT NULL AND g.cve_ent <> '' THEN LPAD(REGEXP_REPLACE(g.cve_ent, '\\D', '', 'g'), 2, '0')
+            WHEN g.cve_ent IS NOT NULL AND g.cve_ent <> '' THEN LPAD(REGEXP_REPLACE(g.cve_ent, '\D', '', 'g'), 2, '0')
             ELSE NULL
         END AS cve_ent,
         g.nom_ent,
         CASE
-            WHEN g.cve_mun IS NOT NULL AND g.cve_mun <> '' THEN LPAD(REGEXP_REPLACE(g.cve_mun, '\\D', '', 'g'), 3, '0')
+            WHEN g.cve_mun IS NOT NULL AND g.cve_mun <> '' THEN LPAD(REGEXP_REPLACE(g.cve_mun, '\D', '', 'g'), 3, '0')
             ELSE NULL
         END AS cve_mun,
         g.nom_mun,
         CASE
-            WHEN g.cvegeo IS NOT NULL AND g.cvegeo <> '' THEN LPAD(REGEXP_REPLACE(g.cvegeo, '\\D', '', 'g'), 5, '0')
+            WHEN g.cvegeo IS NOT NULL AND g.cvegeo <> '' THEN LPAD(REGEXP_REPLACE(g.cvegeo, '\D', '', 'g'), 5, '0')
             WHEN g.cve_ent IS NOT NULL AND g.cve_mun IS NOT NULL THEN
-                LPAD(REGEXP_REPLACE(g.cve_ent, '\\D', '', 'g'), 2, '0')
-                || LPAD(REGEXP_REPLACE(g.cve_mun, '\\D', '', 'g'), 3, '0')
+                LPAD(REGEXP_REPLACE(g.cve_ent, '\D', '', 'g'), 2, '0')
+                || LPAD(REGEXP_REPLACE(g.cve_mun, '\D', '', 'g'), 3, '0')
             ELSE NULL
         END AS cvegeo
-    FROM geo g
+    FROM webchat_geo g
 ),
-scoped AS (
+webchat_scoped AS (
     SELECT
         nl.nivel,
         n.session_id,
@@ -4626,25 +4715,202 @@ scoped AS (
                     COALESCE(NULLIF(n.cve_ent, ''), 'Estado desconocido')
                 )
         END AS location_name
-    FROM normalized n
+    FROM webchat_normalized n
     CROSS JOIN normalized_level nl
+),
+webchat_metrics AS (
+    SELECT
+        s.nivel AS location_level,
+        s.location_key,
+        s.location_name,
+        COUNT(*)::bigint AS total_visitas,
+        COUNT(*) FILTER (WHERE s.tuvo_chat) AS visitas_con_chat,
+        COUNT(*) FILTER (WHERE NOT s.tuvo_chat) AS visitas_sin_chat,
+        COUNT(*)::bigint AS webchat_total,
+        COUNT(*) FILTER (WHERE s.tuvo_chat) AS webchat_con_chat,
+        COUNT(*) FILTER (WHERE NOT s.tuvo_chat) AS webchat_sin_chat
+    FROM webchat_scoped s
+    GROUP BY s.nivel, s.location_key, s.location_name
+),
+conversation_base AS (
+    SELECT
+        conv.id,
+        lower(COALESCE(conv.canal, '')) AS canal,
+        COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) AS activity_at,
+        ct.contacto_datos,
+        ct.telefono_e164
+    FROM public.conversaciones conv
+    JOIN public.contactos ct ON ct.id = conv.contacto_id
+    WHERE lower(COALESCE(conv.canal, '')) IN ('whatsapp', 'voz')
+      AND public.puede_ver_contacto(ct.id)
+      AND (p_from IS NULL OR COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) >= p_from)
+      AND (p_to IS NULL OR COALESCE(conv.ultimo_mensaje_en, conv.iniciada_en, now()) <= p_to)
+),
+conversation_geo AS (
+    SELECT
+        cb.*,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,country_code}', ''),
+            NULLIF(cb.contacto_datos #>> '{country_code}', ''),
+            NULLIF(cb.contacto_datos #>> '{ubicacion,pais_codigo}', ''),
+            NULLIF(cb.contacto_datos #>> '{pais_codigo}', '')
+        ) AS raw_country_code,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,country_name}', ''),
+            NULLIF(cb.contacto_datos #>> '{country_name}', ''),
+            NULLIF(cb.contacto_datos #>> '{ubicacion,pais_nombre}', ''),
+            NULLIF(cb.contacto_datos #>> '{pais_nombre}', ''),
+            NULLIF(cb.contacto_datos #>> '{ubicacion,pais}', ''),
+            NULLIF(cb.contacto_datos #>> '{pais}', '')
+        ) AS raw_country_name,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,cve_ent}', ''),
+            NULLIF(cb.contacto_datos #>> '{cve_ent}', '')
+        ) AS raw_cve_ent,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,nom_ent}', ''),
+            NULLIF(cb.contacto_datos #>> '{nom_ent}', '')
+        ) AS raw_nom_ent,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,cve_mun}', ''),
+            NULLIF(cb.contacto_datos #>> '{cve_mun}', '')
+        ) AS raw_cve_mun,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,nom_mun}', ''),
+            NULLIF(cb.contacto_datos #>> '{nom_mun}', '')
+        ) AS raw_nom_mun,
+        COALESCE(
+            NULLIF(cb.contacto_datos #>> '{ubicacion,cvegeo}', ''),
+            NULLIF(cb.contacto_datos #>> '{cvegeo}', '')
+        ) AS raw_cvegeo,
+        regexp_replace(COALESCE(cb.telefono_e164, ''), '\D', '', 'g') AS telefono_digits
+    FROM conversation_base cb
+),
+conversation_normalized AS (
+    SELECT
+        cg.id,
+        cg.canal,
+        CASE
+            WHEN cg.raw_country_code IS NOT NULL AND cg.raw_country_code <> '' THEN
+                CASE
+                    WHEN length(cg.raw_country_code) = 2 THEN upper(cg.raw_country_code)
+                    WHEN length(cg.raw_country_code) = 3 AND cg.raw_country_code ~ '^[A-Za-z]{3}$'
+                        THEN upper(cg.raw_country_code)
+                    ELSE upper(substr(cg.raw_country_code, 1, 2))
+                END
+            WHEN cg.telefono_digits LIKE '52%' THEN 'MX'
+            ELSE 'UNK'
+        END AS country_code,
+        CASE
+            WHEN cg.raw_country_name IS NOT NULL AND cg.raw_country_name <> '' THEN cg.raw_country_name
+            WHEN cg.telefono_digits LIKE '52%' THEN 'México'
+            ELSE 'País desconocido'
+        END AS country_name,
+        CASE
+            WHEN cg.raw_cve_ent IS NOT NULL AND cg.raw_cve_ent <> '' THEN LPAD(REGEXP_REPLACE(cg.raw_cve_ent, '\D', '', 'g'), 2, '0')
+            ELSE NULL
+        END AS cve_ent,
+        COALESCE(cg.raw_nom_ent, CASE WHEN cg.telefono_digits LIKE '52%' THEN 'Estado desconocido' END) AS nom_ent,
+        CASE
+            WHEN cg.raw_cve_mun IS NOT NULL AND cg.raw_cve_mun <> '' THEN LPAD(REGEXP_REPLACE(cg.raw_cve_mun, '\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS cve_mun,
+        cg.raw_nom_mun AS nom_mun,
+        CASE
+            WHEN cg.raw_cvegeo IS NOT NULL AND cg.raw_cvegeo <> '' THEN LPAD(REGEXP_REPLACE(cg.raw_cvegeo, '\D', '', 'g'), 5, '0')
+            WHEN cg.raw_cve_ent IS NOT NULL AND cg.raw_cve_mun IS NOT NULL THEN
+                LPAD(REGEXP_REPLACE(cg.raw_cve_ent, '\D', '', 'g'), 2, '0')
+                || LPAD(REGEXP_REPLACE(cg.raw_cve_mun, '\D', '', 'g'), 3, '0')
+            ELSE NULL
+        END AS cvegeo
+    FROM conversation_geo cg
+),
+conversation_scoped AS (
+    SELECT
+        nl.nivel,
+        n.canal,
+        CASE
+            WHEN nl.nivel = 'pais' THEN COALESCE(NULLIF(n.country_code, ''), 'UNK')
+            WHEN nl.nivel = 'municipio' THEN COALESCE(NULLIF(n.cvegeo, ''), 'UNK')
+            ELSE COALESCE(NULLIF(n.cve_ent, ''), 'UNK')
+        END AS location_key,
+        CASE
+            WHEN nl.nivel = 'pais' THEN COALESCE(NULLIF(n.country_name, ''), 'País desconocido')
+            WHEN nl.nivel = 'municipio' THEN
+                COALESCE(
+                    NULLIF(n.nom_mun, ''),
+                    COALESCE(NULLIF(n.cvegeo, ''), 'Municipio desconocido')
+                )
+            ELSE
+                COALESCE(
+                    NULLIF(n.nom_ent, ''),
+                    COALESCE(NULLIF(n.cve_ent, ''), 'Estado desconocido')
+                )
+        END AS location_name
+    FROM conversation_normalized n
+    CROSS JOIN normalized_level nl
+),
+conversation_metrics AS (
+    SELECT
+        cs.nivel AS location_level,
+        cs.location_key,
+        cs.location_name,
+        COUNT(*) FILTER (WHERE cs.canal = 'whatsapp')::bigint AS whatsapp_total,
+        COUNT(*) FILTER (WHERE cs.canal = 'voz')::bigint AS voz_total
+    FROM conversation_scoped cs
+    GROUP BY cs.nivel, cs.location_key, cs.location_name
+),
+metrics_union AS (
+    SELECT
+        wm.location_level,
+        wm.location_key,
+        wm.location_name,
+        wm.total_visitas,
+        wm.visitas_con_chat,
+        wm.visitas_sin_chat,
+        wm.webchat_total,
+        wm.webchat_con_chat,
+        wm.webchat_sin_chat,
+        0::bigint AS whatsapp_total,
+        0::bigint AS voz_total
+    FROM webchat_metrics wm
+
+    UNION ALL
+
+    SELECT
+        cm.location_level,
+        cm.location_key,
+        cm.location_name,
+        0::bigint AS total_visitas,
+        0::bigint AS visitas_con_chat,
+        0::bigint AS visitas_sin_chat,
+        0::bigint AS webchat_total,
+        0::bigint AS webchat_con_chat,
+        0::bigint AS webchat_sin_chat,
+        COALESCE(cm.whatsapp_total, 0)::bigint AS whatsapp_total,
+        COALESCE(cm.voz_total, 0)::bigint AS voz_total
+    FROM conversation_metrics cm
 )
 SELECT
-    s.nivel AS location_level,
-    s.location_key,
-    s.location_name,
-    COUNT(*)::bigint AS total_visitas,
-    COUNT(*) FILTER (WHERE s.tuvo_chat) AS visitas_con_chat,
-    COUNT(*) FILTER (WHERE NOT s.tuvo_chat) AS visitas_sin_chat,
-    COUNT(*)::bigint AS webchat_total,
-    COUNT(*) FILTER (WHERE s.tuvo_chat) AS webchat_con_chat,
-    COUNT(*) FILTER (WHERE NOT s.tuvo_chat) AS webchat_sin_chat,
-    0::bigint AS whatsapp_total,
-    0::bigint AS voz_total,
-    (COUNT(*) > 0) AS has_data
-FROM scoped s
-GROUP BY s.nivel, s.location_key, s.location_name
-ORDER BY s.nivel, s.location_name;
+    mu.location_level,
+    mu.location_key,
+    mu.location_name,
+    SUM(mu.total_visitas)::bigint AS total_visitas,
+    SUM(mu.visitas_con_chat)::bigint AS visitas_con_chat,
+    SUM(mu.visitas_sin_chat)::bigint AS visitas_sin_chat,
+    SUM(mu.webchat_total)::bigint AS webchat_total,
+    SUM(mu.webchat_con_chat)::bigint AS webchat_con_chat,
+    SUM(mu.webchat_sin_chat)::bigint AS webchat_sin_chat,
+    SUM(mu.whatsapp_total)::bigint AS whatsapp_total,
+    SUM(mu.voz_total)::bigint AS voz_total,
+    (
+        SUM(mu.total_visitas)
+        + SUM(mu.whatsapp_total)
+        + SUM(mu.voz_total)
+    ) > 0 AS has_data
+FROM metrics_union mu
+GROUP BY mu.location_level, mu.location_key, mu.location_name
+ORDER BY mu.location_level, mu.location_name;
 $_$;
 
 
@@ -6002,6 +6268,248 @@ COMMENT ON FUNCTION public.registrar_mensaje_webchat(p_session_id text, p_author
 
 
 --
+-- Name: registrar_mensaje_whatsapp(text, text, text, text, jsonb, text, text, uuid, uuid, text, integer, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.registrar_mensaje_whatsapp(p_direction text, p_whatsapp_id text DEFAULT NULL::text, p_phone_e164 text DEFAULT NULL::text, p_body text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_message_sid text DEFAULT NULL::text, p_profile_name text DEFAULT NULL::text, p_conversation_id uuid DEFAULT NULL::uuid, p_contact_id uuid DEFAULT NULL::uuid, p_response_id text DEFAULT NULL::text, p_inactivity_hours integer DEFAULT 24, p_attachments jsonb DEFAULT '[]'::jsonb, p_webhook_payload jsonb DEFAULT NULL::jsonb) RETURNS TABLE(conversacion_id uuid, mensaje_id uuid, contacto_id uuid, conversacion_openai_id text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    v_contact_id uuid;
+    v_conversacion_id uuid;
+    v_mensaje_id uuid;
+    v_now timestamptz := now();
+    v_last_activity timestamptz;
+    v_conv_openai text;
+    v_hours integer := GREATEST(1, COALESCE(p_inactivity_hours, 24));
+    v_tipo_contenido text := 'texto';
+    v_metadata jsonb := COALESCE(p_metadata, '{}'::jsonb);
+    v_existing record;
+    v_webhook_id uuid;
+BEGIN
+    IF p_webhook_payload IS NOT NULL THEN
+        INSERT INTO public.webhooks_entrantes (canal, id_solicitud, carga, processed_ok)
+        VALUES (
+            'whatsapp',
+            COALESCE(NULLIF(p_message_sid, ''), NULLIF(p_whatsapp_id, ''), NULLIF(p_phone_e164, '')),
+            p_webhook_payload,
+            NULL
+        )
+        RETURNING id INTO v_webhook_id;
+    END IF;
+
+    IF p_direction NOT IN ('entrante', 'saliente') THEN
+        RAISE EXCEPTION 'Dirección inválida %', p_direction;
+    END IF;
+
+    IF p_direction = 'saliente' AND p_conversation_id IS NULL THEN
+        RAISE EXCEPTION 'conversation_id requerido para mensajes salientes';
+    END IF;
+
+    IF p_message_sid IS NOT NULL THEN
+        SELECT m.conversacion_id, m.id, c.contacto_id, c.conversacion_openai_id
+          INTO v_existing
+          FROM public.mensajes m
+          JOIN public.conversaciones c ON c.id = m.conversacion_id
+         WHERE m.twilio_message_sid = p_message_sid
+         LIMIT 1;
+        IF FOUND THEN
+            RETURN QUERY SELECT v_existing.conversacion_id, v_existing.id, v_existing.contacto_id, v_existing.conversacion_openai_id;
+            IF v_webhook_id IS NOT NULL THEN
+                UPDATE public.webhooks_entrantes
+                   SET processed_ok = TRUE,
+                       error = NULL
+                 WHERE id = v_webhook_id;
+            END IF;
+            RETURN;
+        END IF;
+    END IF;
+
+    IF p_contact_id IS NOT NULL THEN
+        SELECT id INTO v_contact_id FROM public.contactos WHERE id = p_contact_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Contacto % no existe', p_contact_id;
+        END IF;
+    END IF;
+
+    IF p_conversation_id IS NOT NULL THEN
+        SELECT c.id, c.contacto_id, c.conversacion_openai_id, c.ultimo_mensaje_en
+          INTO v_conversacion_id, v_contact_id, v_conv_openai, v_last_activity
+          FROM public.conversaciones c
+         WHERE c.id = p_conversation_id
+           AND c.canal = 'whatsapp'
+         LIMIT 1;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'La conversación % no pertenece al canal WhatsApp', p_conversation_id;
+        END IF;
+        IF p_contact_id IS NOT NULL AND v_contact_id <> p_contact_id THEN
+            RAISE EXCEPTION 'El contacto % no coincide con la conversación %', p_contact_id, p_conversation_id;
+        END IF;
+    END IF;
+
+    IF v_contact_id IS NULL AND COALESCE(p_whatsapp_id, '') <> '' THEN
+        SELECT ic.contacto_id
+          INTO v_contact_id
+          FROM public.identidades_canal AS ic
+         WHERE ic.canal = 'whatsapp'
+           AND ic.id_externo = p_whatsapp_id
+         LIMIT 1;
+    END IF;
+
+    IF v_contact_id IS NULL AND COALESCE(p_phone_e164, '') <> '' THEN
+        SELECT id
+          INTO v_contact_id
+          FROM public.contactos
+         WHERE telefono_e164 = p_phone_e164
+         LIMIT 1;
+    END IF;
+
+    IF v_contact_id IS NULL THEN
+        INSERT INTO public.contactos (nombre_completo, telefono_e164, origen, contacto_datos)
+        VALUES (
+            COALESCE(NULLIF(p_profile_name, ''), 'Visitante WhatsApp'),
+            NULLIF(p_phone_e164, ''),
+            'whatsapp',
+            jsonb_build_object('wa_id', p_whatsapp_id, 'profile_name', p_profile_name)
+        )
+        RETURNING id INTO v_contact_id;
+    END IF;
+
+    IF COALESCE(p_whatsapp_id, '') <> '' THEN
+        INSERT INTO public.identidades_canal (contacto_id, canal, id_externo, metadatos)
+        VALUES (
+            v_contact_id,
+            'whatsapp',
+            p_whatsapp_id,
+            jsonb_build_object('telefono', p_phone_e164, 'profile_name', p_profile_name)
+        )
+        ON CONFLICT (canal, id_externo) DO UPDATE
+        SET contacto_id = EXCLUDED.contacto_id,
+            metadatos = EXCLUDED.metadatos;
+    END IF;
+
+    IF v_conversacion_id IS NULL THEN
+        SELECT c.id, c.ultimo_mensaje_en, c.conversacion_openai_id
+          INTO v_conversacion_id, v_last_activity, v_conv_openai
+          FROM public.conversaciones AS c
+         WHERE c.contacto_id = v_contact_id
+           AND c.canal = 'whatsapp'
+           AND c.estado <> 'cerrada'
+         ORDER BY c.iniciada_en DESC
+         LIMIT 1;
+    END IF;
+
+    IF p_direction = 'entrante' THEN
+        IF v_conversacion_id IS NULL OR (
+            v_last_activity IS NOT NULL AND v_last_activity < (v_now - make_interval(hours => v_hours))
+        ) THEN
+            v_conversacion_id := NULL;
+        END IF;
+    END IF;
+
+    IF v_conversacion_id IS NULL THEN
+        INSERT INTO public.conversaciones (
+            contacto_id,
+            canal,
+            estado,
+            iniciada_en,
+            ultimo_mensaje_en,
+            ultimo_entrante_en
+        )
+        VALUES (
+            v_contact_id,
+            'whatsapp',
+            'abierta',
+            v_now,
+            v_now,
+            CASE WHEN p_direction = 'entrante' THEN v_now ELSE NULL END
+        )
+        RETURNING id INTO v_conversacion_id;
+        v_conv_openai := NULL;
+    END IF;
+
+    IF jsonb_typeof(p_attachments) = 'array' AND jsonb_array_length(p_attachments) > 0 THEN
+        IF COALESCE(trim(COALESCE(p_body, '')), '') = '' THEN
+            v_tipo_contenido := 'medio';
+        END IF;
+        v_metadata := v_metadata || jsonb_build_object('attachments', p_attachments);
+    END IF;
+
+    INSERT INTO public.mensajes (
+        conversacion_id,
+        direccion,
+        tipo_contenido,
+        texto,
+        datos,
+        proveedor_mensaje_id,
+        estado,
+        creado_en,
+        twilio_message_sid,
+        cantidad_medios
+    ) VALUES (
+        v_conversacion_id,
+        p_direction,
+        v_tipo_contenido,
+        NULLIF(p_body, ''),
+        v_metadata,
+        p_message_sid,
+        CASE WHEN p_direction = 'entrante' THEN 'entregada' ELSE 'enviada' END,
+        v_now,
+        p_message_sid,
+        CASE WHEN jsonb_typeof(p_attachments) = 'array' THEN jsonb_array_length(p_attachments) ELSE 0 END
+    )
+    RETURNING id INTO v_mensaje_id;
+
+    IF p_direction = 'saliente' THEN
+        IF v_metadata ? 'openai_conversation_id' THEN
+            v_conv_openai := NULLIF(v_metadata->>'openai_conversation_id', '');
+        END IF;
+        UPDATE public.conversaciones
+           SET conversacion_openai_id = COALESCE(v_conv_openai, public.conversaciones.conversacion_openai_id)
+         WHERE id = v_conversacion_id;
+    END IF;
+
+    UPDATE public.conversaciones
+       SET ultimo_mensaje_en = v_now,
+           ultimo_mensaje_id = v_mensaje_id,
+           ultimo_entrante_en = CASE WHEN p_direction = 'entrante' THEN v_now ELSE public.conversaciones.ultimo_entrante_en END,
+           ultimo_saliente_en = CASE WHEN p_direction = 'saliente' THEN v_now ELSE public.conversaciones.ultimo_saliente_en END,
+           last_response_id = COALESCE(p_response_id, public.conversaciones.last_response_id)
+     WHERE id = v_conversacion_id
+     RETURNING public.conversaciones.conversacion_openai_id INTO v_conv_openai;
+
+    RETURN QUERY SELECT v_conversacion_id, v_mensaje_id, v_contact_id, v_conv_openai;
+
+    IF v_webhook_id IS NOT NULL THEN
+        UPDATE public.webhooks_entrantes
+           SET processed_ok = TRUE,
+               error = NULL
+         WHERE id = v_webhook_id;
+    END IF;
+
+    RETURN;
+EXCEPTION
+    WHEN OTHERS THEN
+        IF v_webhook_id IS NOT NULL THEN
+            UPDATE public.webhooks_entrantes
+               SET processed_ok = FALSE,
+                   error = left(SQLERRM, 500)
+             WHERE id = v_webhook_id;
+        END IF;
+        RAISE;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION registrar_mensaje_whatsapp(p_direction text, p_whatsapp_id text, p_phone_e164 text, p_body text, p_metadata jsonb, p_message_sid text, p_profile_name text, p_conversation_id uuid, p_contact_id uuid, p_response_id text, p_inactivity_hours integer, p_attachments jsonb, p_webhook_payload jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.registrar_mensaje_whatsapp(p_direction text, p_whatsapp_id text, p_phone_e164 text, p_body text, p_metadata jsonb, p_message_sid text, p_profile_name text, p_conversation_id uuid, p_contact_id uuid, p_response_id text, p_inactivity_hours integer, p_attachments jsonb, p_webhook_payload jsonb) IS 'Registra mensajes entrantes o salientes del canal WhatsApp, liga la carga cruda en webhooks_entrantes y gestiona la conversación asociada.';
+
+
+--
 -- Name: t_set_actualizado_en(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6067,6 +6575,12 @@ DECLARE
     v_owner uuid;
     v_lead_existe boolean;
 BEGIN
+    -- Si el contacto proviene de WhatsApp, la tarjeta se crea desde el backend;
+    -- no debemos duplicarla desde este trigger pensado para webchat/landing.
+    IF COALESCE(NEW.origen, '') = 'whatsapp' THEN
+        RETURN NEW;
+    END IF;
+
     v_tienen_datos :=
         (NEW.correo IS NOT NULL AND btrim(NEW.correo) <> '') OR
         (NEW.telefono_e164 IS NOT NULL AND btrim(NEW.telefono_e164) <> '');
@@ -9136,13 +9650,29 @@ CREATE TABLE public.lead_tarjetas (
     fuente text,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    proyecto_nombre text,
+    proyecto_necesidades text,
     CONSTRAINT lead_tarjetas_amount_check CHECK (((monto_estimado IS NULL) OR (monto_estimado >= (0)::numeric))),
     CONSTRAINT lead_tarjetas_canal_check CHECK (((canal IS NULL) OR (canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text, 'api'::text])))),
-    CONSTRAINT lead_tarjetas_fuente_check CHECK (((fuente IS NULL) OR (fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text])))),
+    CONSTRAINT lead_tarjetas_fuente_check CHECK (((fuente IS NULL) OR (fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text, 'contacto_auto'::text])))),
     CONSTRAINT lead_tarjetas_probability_check CHECK (((probabilidad_override IS NULL) OR ((probabilidad_override >= (0)::numeric) AND (probabilidad_override <= (100)::numeric))))
 );
 
 ALTER TABLE ONLY public.lead_tarjetas REPLICA IDENTITY FULL;
+
+
+--
+-- Name: COLUMN lead_tarjetas.proyecto_nombre; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lead_tarjetas.proyecto_nombre IS 'Nombre o título del proyecto asociado al lead.';
+
+
+--
+-- Name: COLUMN lead_tarjetas.proyecto_necesidades; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.lead_tarjetas.proyecto_necesidades IS 'Resumen de necesidades o requisitos del proyecto.';
 
 
 --
@@ -9286,7 +9816,7 @@ CREATE TABLE public.lead_movimientos (
     motivo text,
     fuente text DEFAULT 'humano'::text NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
-    CONSTRAINT lead_movimientos_fuente_check CHECK ((fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text])))
+    CONSTRAINT lead_movimientos_fuente_check CHECK ((fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text, 'contacto_auto'::text])))
 );
 
 ALTER TABLE ONLY public.lead_movimientos REPLICA IDENTITY FULL;
@@ -9724,6 +10254,55 @@ CREATE VIEW public.v_configuracion_personal AS
 
 
 --
+-- Name: v_denue_contactables; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.v_denue_contactables AS
+ SELECT r.id AS resultado_id,
+    r.busqueda_id,
+    r.fuente AS fuente_resultado,
+    b.fuente AS fuente_busqueda,
+    r.external_id,
+    COALESCE(NULLIF(r.name, ''::text), NULLIF(r.razon_social, ''::text)) AS display_name,
+    r.name,
+    r.razon_social,
+    r.actividad,
+    r.estrato,
+    COALESCE(NULLIF(r.phone, ''::text), NULLIF((r.raw #>> '{Telefono}'::text[]), ''::text)) AS phone,
+    COALESCE(NULLIF(r.email, ''::text), NULLIF((r.raw #>> '{Correo_e}'::text[]), ''::text)) AS email,
+    COALESCE(NULLIF(r.website, ''::text), NULLIF((r.raw #>> '{Sitio_internet}'::text[]), ''::text)) AS website,
+    NULLIF(r.address, ''::text) AS address,
+    r.lat,
+    r.lng,
+    r.geom,
+    r.maps_url,
+    r.creado_en AS resultado_creado_en,
+    b.query AS busqueda_query,
+    b.radio_m AS busqueda_radio_m,
+    b.lat AS busqueda_lat,
+    b.lng AS busqueda_lng,
+    b.centro AS busqueda_centro,
+    b.total_encontrados AS busqueda_total_encontrados,
+    b.meta AS busqueda_meta,
+    b.creado_en AS busqueda_creado_en,
+    b.creado_por AS busqueda_creado_por,
+        CASE
+            WHEN ((b.centro IS NOT NULL) AND (r.geom IS NOT NULL)) THEN public.st_distance(b.centro, r.geom)
+            ELSE NULL::double precision
+        END AS distancia_m
+   FROM (public.resultados r
+     JOIN public.busquedas b ON ((b.id = r.busqueda_id)))
+  WHERE (r.fuente = 'denue'::public.fuente_resultado);
+
+
+--
+-- Name: VIEW v_denue_contactables; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.v_denue_contactables IS 'Resultados de búsquedas DENUE listos para contactabilidad y mapa.';
+
+
+--
 -- Name: v_google_places_contactables; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -10078,9 +10657,23 @@ COMMENT ON COLUMN storage.buckets.owner IS 'Field is deprecated, use owner_id in
 --
 
 CREATE TABLE storage.buckets_analytics (
-    id text NOT NULL,
+    name text NOT NULL,
     type storage.buckettype DEFAULT 'ANALYTICS'::storage.buckettype NOT NULL,
     format text DEFAULT 'ICEBERG'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+--
+-- Name: buckets_vectors; Type: TABLE; Schema: storage; Owner: -
+--
+
+CREATE TABLE storage.buckets_vectors (
+    id text NOT NULL,
+    type storage.buckettype DEFAULT 'VECTOR'::storage.buckettype NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -10171,6 +10764,23 @@ CREATE TABLE storage.s3_multipart_uploads_parts (
     owner_id text,
     version text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: vector_indexes; Type: TABLE; Schema: storage; Owner: -
+--
+
+CREATE TABLE storage.vector_indexes (
+    id text DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL COLLATE pg_catalog."C",
+    bucket_id text NOT NULL,
+    data_type text NOT NULL,
+    dimension integer NOT NULL,
+    distance_metric text NOT NULL,
+    metadata_configuration jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -10740,14 +11350,6 @@ ALTER TABLE ONLY public.lead_tableros
 
 
 --
--- Name: lead_tarjetas lead_tarjetas_contacto_tablero_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.lead_tarjetas
-    ADD CONSTRAINT lead_tarjetas_contacto_tablero_key UNIQUE (contacto_id, tablero_id);
-
-
---
 -- Name: lead_tarjetas lead_tarjetas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11036,6 +11638,14 @@ ALTER TABLE ONLY storage.buckets
 
 
 --
+-- Name: buckets_vectors buckets_vectors_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
+--
+
+ALTER TABLE ONLY storage.buckets_vectors
+    ADD CONSTRAINT buckets_vectors_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: migrations migrations_name_key; Type: CONSTRAINT; Schema: storage; Owner: -
 --
 
@@ -11081,6 +11691,14 @@ ALTER TABLE ONLY storage.s3_multipart_uploads_parts
 
 ALTER TABLE ONLY storage.s3_multipart_uploads
     ADD CONSTRAINT s3_multipart_uploads_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vector_indexes vector_indexes_pkey; Type: CONSTRAINT; Schema: storage; Owner: -
+--
+
+ALTER TABLE ONLY storage.vector_indexes
+    ADD CONSTRAINT vector_indexes_pkey PRIMARY KEY (id);
 
 
 --
@@ -11905,6 +12523,13 @@ CREATE UNIQUE INDEX bucketid_objname ON storage.objects USING btree (bucket_id, 
 
 
 --
+-- Name: buckets_analytics_unique_name_idx; Type: INDEX; Schema: storage; Owner: -
+--
+
+CREATE UNIQUE INDEX buckets_analytics_unique_name_idx ON storage.buckets_analytics USING btree (name) WHERE (deleted_at IS NULL);
+
+
+--
 -- Name: idx_multipart_uploads_list; Type: INDEX; Schema: storage; Owner: -
 --
 
@@ -11951,6 +12576,13 @@ CREATE INDEX name_prefix_search ON storage.objects USING btree (name text_patter
 --
 
 CREATE UNIQUE INDEX objects_bucket_id_level_idx ON storage.objects USING btree (bucket_id, level, name COLLATE "C");
+
+
+--
+-- Name: vector_indexes_name_bucket_id_idx; Type: INDEX; Schema: storage; Owner: -
+--
+
+CREATE UNIQUE INDEX vector_indexes_name_bucket_id_idx ON storage.vector_indexes USING btree (name, bucket_id);
 
 
 --
@@ -12680,7 +13312,7 @@ ALTER TABLE ONLY public.lead_tarjetas
 --
 
 ALTER TABLE ONLY public.lead_tarjetas
-    ADD CONSTRAINT lead_tarjetas_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE;
+    ADD CONSTRAINT lead_tarjetas_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -12881,6 +13513,14 @@ ALTER TABLE ONLY storage.s3_multipart_uploads_parts
 
 ALTER TABLE ONLY storage.s3_multipart_uploads_parts
     ADD CONSTRAINT s3_multipart_uploads_parts_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES storage.s3_multipart_uploads(id) ON DELETE CASCADE;
+
+
+--
+-- Name: vector_indexes vector_indexes_bucket_id_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
+--
+
+ALTER TABLE ONLY storage.vector_indexes
+    ADD CONSTRAINT vector_indexes_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets_vectors(id);
 
 
 --
@@ -13618,6 +14258,12 @@ ALTER TABLE storage.buckets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE storage.buckets_analytics ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: buckets_vectors; Type: ROW SECURITY; Schema: storage; Owner: -
+--
+
+ALTER TABLE storage.buckets_vectors ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: migrations; Type: ROW SECURITY; Schema: storage; Owner: -
 --
 
@@ -13646,6 +14292,12 @@ ALTER TABLE storage.s3_multipart_uploads ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE storage.s3_multipart_uploads_parts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: vector_indexes; Type: ROW SECURITY; Schema: storage; Owner: -
+--
+
+ALTER TABLE storage.vector_indexes ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: supabase_realtime; Type: PUBLICATION; Schema: -; Owner: -
@@ -13724,5 +14376,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fc3EL59wdK0KvpMj5AS7kbXWhwNwcUaIhCudeeYJocjW0yqEKi8CvGM6bhdy4An
+\unrestrict DwKu68zCdiMegaFy8BLgLf8KgVmO3DdM12OmXFSIFlR2hgh7mhUGOzrBwhaQir9
 

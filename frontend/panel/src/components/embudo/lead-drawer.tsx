@@ -18,13 +18,6 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -167,6 +160,12 @@ type DrawerStageGroup = {
   sections: DrawerPrepSectionDefinition[];
 };
 
+type StageLockInfo = {
+  canEdit: boolean;
+  complete: boolean;
+  lockedReason: string | null;
+};
+
 type StageVisualTokens = {
   gradientClass: string;
   borderClass: string;
@@ -187,6 +186,224 @@ const ALLOWED_TYPES: Set<DrawerPrepFieldType> = new Set([
   "checkbox",
   "url",
 ]);
+
+const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
+  precalificado: {
+    sections: [
+      {
+        key: "qualification_check",
+        title: "Checklist de precalificación",
+        description: "Valida que el lead cumple los requisitos antes de avanzar.",
+        order: 10,
+        fields: [
+          {
+            key: "qualification_status",
+            type: "select",
+            label: "Estatus de precalificación",
+            required: true,
+            options: [
+              { value: "calificado", label: "Calificado" },
+              { value: "pendiente", label: "Pendiente" },
+              { value: "descartado", label: "Descartado" },
+            ],
+          },
+          {
+            key: "qualification_deadline",
+            type: "date",
+            label: "Fecha límite de evaluación",
+          },
+          {
+            key: "qualification_notes",
+            type: "textarea",
+            label: "Notas de precalificación",
+            placeholder: "Puntos clave que justifican el avance.",
+          },
+        ],
+      },
+    ],
+  },
+  demo: {
+    sections: [
+      {
+        key: "demo_planning",
+        title: "Preparación de la demo",
+        description: "Agenda y contexto necesarios para la demostración.",
+        order: 10,
+        fields: [
+          {
+            key: "demo_scheduled_at",
+            type: "datetime",
+            label: "Fecha y hora programada",
+            required: true,
+          },
+          {
+            key: "demo_format",
+            type: "select",
+            label: "Modalidad",
+            required: true,
+            options: [
+              { value: "virtual", label: "Virtual" },
+              { value: "presencial", label: "Presencial" },
+              { value: "hibrida", label: "Híbrida" },
+            ],
+          },
+          {
+            key: "demo_link",
+            type: "url",
+            label: "Enlace o ubicación",
+            placeholder: "https://...",
+          },
+          {
+            key: "demo_host",
+            type: "text",
+            label: "Anfitrión interno",
+          },
+          {
+            key: "demo_objectives",
+            type: "textarea",
+            label: "Objetivos de la demo",
+          },
+        ],
+      },
+    ],
+  },
+  negociacion: {
+    sections: [
+      {
+        key: "negotiation_plan",
+        title: "Resumen de negociación",
+        description: "Acordar responsables, presupuesto y próximos pasos.",
+        order: 10,
+        fields: [
+          {
+            key: "proposal_sent_at",
+            type: "date",
+            label: "Fecha de envío de propuesta",
+          },
+          {
+            key: "decision_maker",
+            type: "text",
+            label: "Decisor principal",
+          },
+          {
+            key: "budget_status",
+            type: "select",
+            label: "Estatus de presupuesto",
+            options: [
+              { value: "aprobado", label: "Aprobado" },
+              { value: "pendiente", label: "Pendiente" },
+              { value: "sin_presupuesto", label: "Sin presupuesto" },
+            ],
+          },
+          {
+            key: "negotiation_notes",
+            type: "textarea",
+            label: "Notas de negociación",
+          },
+        ],
+      },
+    ],
+  },
+  cerrado_ganado: {
+    sections: [
+      {
+        key: "closing_plan",
+        title: "Plan de implementación",
+        description: "Datos para transferir el lead a operaciones / customer success.",
+        order: 10,
+        fields: [
+          {
+            key: "close_date",
+            type: "date",
+            label: "Fecha de cierre",
+            required: true,
+          },
+          {
+            key: "contract_value",
+            type: "number",
+            label: "Valor de contrato",
+            suffix: "MXN",
+          },
+          {
+            key: "kickoff_date",
+            type: "date",
+            label: "Fecha de kickoff",
+          },
+          {
+            key: "implementation_owner",
+            type: "text",
+            label: "Responsable de implementación",
+          },
+        ],
+      },
+    ],
+  },
+  cerrado_perdido: {
+    sections: [
+      {
+        key: "loss_review",
+        title: "Análisis de pérdida",
+        description: "Aprendizajes y próximos pasos tras perder la oportunidad.",
+        order: 10,
+        fields: [
+          {
+            key: "loss_reason",
+            type: "select",
+            label: "Motivo principal",
+            options: [
+              { value: "precio", label: "Precio" },
+              { value: "tiempo", label: "Tiempo / urgencia" },
+              { value: "competencia", label: "Competencia" },
+              { value: "no_fit", label: "Sin encaje" },
+              { value: "indefinido", label: "No especificado" },
+            ],
+          },
+          {
+            key: "loss_competitor",
+            type: "text",
+            label: "Competidor",
+          },
+          {
+            key: "loss_reopen_date",
+            type: "date",
+            label: "Revisar de nuevo el",
+            description: "Fecha tentativa para retomar la conversación.",
+          },
+          {
+            key: "loss_notes",
+            type: "textarea",
+            label: "Notas de cierre perdido",
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const FIELD_OPTION_FALLBACKS: Record<string, DrawerPrepOption[]> = {
+  qualification_status: [
+    { value: "calificado", label: "Calificado" },
+    { value: "pendiente", label: "Pendiente" },
+    { value: "descartado", label: "Descartado" },
+  ],
+  demo_format: [
+    { value: "virtual", label: "Virtual" },
+    { value: "presencial", label: "Presencial" },
+    { value: "hibrida", label: "Híbrida" },
+  ],
+  budget_status: [
+    { value: "aprobado", label: "Aprobado" },
+    { value: "pendiente", label: "Pendiente" },
+    { value: "sin_presupuesto", label: "Sin presupuesto" },
+  ],
+  loss_reason: [
+    { value: "precio", label: "Precio" },
+    { value: "tiempo", label: "Tiempo / urgencia" },
+    { value: "competencia", label: "Competencia" },
+    { value: "no_fit", label: "Sin encaje" },
+    { value: "indefinido", label: "No especificado" },
+  ],
+};
 
 type LeadHistoryEntry = {
   movimiento_id: string;
@@ -342,6 +559,10 @@ export function LeadDrawer({
   const upcomingStageGroups = useMemo(
     () => buildUpcomingStageGroups(allStages, currentStage, drawerDefinitions),
     [allStages, currentStage, drawerDefinitions],
+  );
+  const stageLocks = useMemo(
+    () => computeStageLocks(upcomingStageGroups, stagePrep),
+    [upcomingStageGroups, stagePrep],
   );
 
   const form = useForm<FormValues>({
@@ -779,10 +1000,11 @@ export function LeadDrawer({
     setContactSearchError(null);
   };
 
-  const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition) => {
+  const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {
     const stageValues = stagePrep[stageCode] ?? {};
     const rawValue = stageValues[field.key];
     const baseId = `${stageCode}-${field.key}`;
+    const disabled = isBusy || forceDisabled;
 
     switch (field.type) {
       case "checkbox": {
@@ -796,7 +1018,7 @@ export function LeadDrawer({
               id={baseId}
               checked={checked}
               onCheckedChange={handleCheckedChange}
-              disabled={isBusy}
+              disabled={disabled}
             />
             <div className="space-y-1">
               <label className="text-xs font-medium text-foreground" htmlFor={baseId}>
@@ -823,7 +1045,7 @@ export function LeadDrawer({
               value={value}
               onChange={(event) => handleStageFieldChange(stageCode, field, event.target.value)}
               placeholder={field.placeholder}
-              disabled={isBusy}
+              disabled={disabled}
             />
             {field.description ? (
               <p className="text-xs text-muted-foreground">{field.description}</p>
@@ -834,37 +1056,44 @@ export function LeadDrawer({
       case "select": {
         const stringValue = typeof rawValue === "string" ? rawValue : "";
         const hasValue = stringValue.length > 0;
-        const selectValue = (hasValue ? stringValue : field.required ? undefined : EMPTY_SELECT_VALUE) as
-          | string
-          | undefined;
-        const options = field.options ?? [];
+        const fallbackOptions = FIELD_OPTION_FALLBACKS[field.key] ?? [];
+        const options = (field.options && field.options.length ? field.options : fallbackOptions) ?? [];
+        const selectValue = hasValue ? stringValue : "";
         return (
           <div className="grid gap-2">
             <label className="text-xs font-medium text-muted-foreground" htmlFor={`${baseId}-select`}>
               {field.label}
               {field.required ? " *" : ""}
             </label>
-            <Select
+            <select
+              id={`${baseId}-select`}
+              className={cn(
+                "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground shadow-xs transition focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50",
+              )}
               value={selectValue}
-              onValueChange={(next) =>
-                handleStageFieldChange(stageCode, field, next === EMPTY_SELECT_VALUE ? "" : next)
-              }
-              disabled={isBusy || !options.length}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!field.required && next === EMPTY_SELECT_VALUE) {
+                  handleStageFieldChange(stageCode, field, "");
+                } else {
+                  handleStageFieldChange(stageCode, field, next);
+                }
+              }}
+              disabled={disabled || !options.length}
             >
-              <SelectTrigger id={`${baseId}-select`} size="default">
-                <SelectValue placeholder={field.placeholder ?? "Selecciona una opción"} />
-              </SelectTrigger>
-              <SelectContent>
-                {!field.required ? (
-                  <SelectItem value={EMPTY_SELECT_VALUE}>Sin seleccionar</SelectItem>
-                ) : null}
-                {options.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {field.required ? (
+                <option value="" disabled>
+                  {field.placeholder ?? "Selecciona una opción"}
+                </option>
+              ) : (
+                <option value={EMPTY_SELECT_VALUE}>Sin seleccionar</option>
+              )}
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
             {field.description ? (
               <p className="text-xs text-muted-foreground">{field.description}</p>
             ) : null}
@@ -889,7 +1118,7 @@ export function LeadDrawer({
               type={inputType}
               value={displayValue}
               placeholder={field.placeholder}
-              disabled={isBusy}
+              disabled={disabled}
               onChange={(event) => {
                 const nextValue = field.type === "datetime" ? event.target.value : event.target.value;
                 handleStageFieldChange(stageCode, field, nextValue);
@@ -1212,6 +1441,9 @@ export function LeadDrawer({
                       className="pointer-events-none absolute left-3 top-1 bottom-3 w-px bg-border/60"
                     />
                     {upcomingStageGroups.map(({ stage, sections }, index) => {
+                      const stageLockInfo = stageLocks.get(stage.codigo);
+                      const stageLocked = stageLockInfo ? !stageLockInfo.canEdit : false;
+                      const lockingStageName = stageLockInfo?.lockedReason;
                       const stageDescription = readStageMetaString(stage.metadatos, "descripcion");
                       const tokens = resolveStageTokens(stage);
                       const IconComponent = resolveStageIcon(stage.codigo);
@@ -1253,11 +1485,16 @@ export function LeadDrawer({
                                     ) : null}
                                   </div>
                                   <h5 className="text-base font-semibold text-foreground">{stage.nombre}</h5>
-                                  {stageDescription ? (
-                                    <p className="text-xs text-muted-foreground">{stageDescription}</p>
-                                  ) : null}
-                                </div>
-                              </div>
+                              {stageDescription ? (
+                                <p className="text-xs text-muted-foreground">{stageDescription}</p>
+                              ) : null}
+                              {stageLocked && lockingStageName ? (
+                                <p className="text-xs text-amber-700">
+                                  Completa la etapa “{lockingStageName}” antes de llenar esta sección.
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
                               {total ? (
                                 <div className="min-w-[140px] flex-1">
                                   <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
@@ -1303,7 +1540,7 @@ export function LeadDrawer({
                                           key={`${stage.codigo}-${field.key}`}
                                           className="rounded-lg border border-border/40 bg-background/70 p-3"
                                         >
-                                          {renderStageField(stage.codigo, field)}
+                                          {renderStageField(stage.codigo, field, stageLocked)}
                                         </div>
                                       ))}
                                     </div>
@@ -1567,9 +1804,13 @@ function buildDrawerDefinitions(stages: EmbudoStage[]): Map<string, DrawerDefini
 
   for (const stage of stages) {
     const meta = stage.metadatos;
-    if (!isRecord(meta)) continue;
-
-    const definition = parseDrawerPrepDefinition(meta);
+    let definition: DrawerPrepDefinition | null = null;
+    if (isRecord(meta)) {
+      definition = parseDrawerPrepDefinition(meta);
+    }
+    if (!definition) {
+      definition = DEFAULT_DRAWER_DEFINITIONS[stage.codigo] ?? null;
+    }
     if (!definition) continue;
 
     const fieldMap = new Map<string, DrawerPrepFieldDefinition>();
@@ -1739,6 +1980,46 @@ function buildUpcomingStageGroups(
       if (orderDiff !== 0) return orderDiff;
       return a.stage.nombre.localeCompare(b.stage.nombre, "es");
     });
+}
+
+function computeStageLocks(groups: DrawerStageGroup[], state: StagePrepState): Map<string, StageLockInfo> {
+  const map = new Map<string, StageLockInfo>();
+  let blockingStage: string | null = null;
+  for (const group of groups) {
+    const complete = areStageSectionsComplete(group.stage.codigo, group.sections, state);
+    const canEdit = blockingStage === null;
+    map.set(group.stage.codigo, {
+      canEdit,
+      complete,
+      lockedReason: canEdit ? null : blockingStage,
+    });
+    if (!complete && blockingStage === null) {
+      blockingStage = group.stage.nombre;
+    } else if (complete && blockingStage === group.stage.nombre) {
+      blockingStage = null;
+    }
+  }
+  return map;
+}
+
+function areStageSectionsComplete(
+  stageCode: string,
+  sections: DrawerPrepSectionDefinition[],
+  state: StagePrepState,
+): boolean {
+  const values = state[stageCode] ?? {};
+  for (const section of sections) {
+    for (const field of section.fields) {
+      if (!field.required) continue;
+      const rawValue = values[field.key];
+      const hasValue =
+        field.type === "checkbox" ? rawValue === true : typeof rawValue === "string" && rawValue.trim().length > 0;
+      if (!hasValue) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function findMissingRequiredField(
