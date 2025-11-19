@@ -77,6 +77,7 @@ const formSchema = z.object({
       return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
     }, { message: "La probabilidad debe estar entre 0 y 100." }),
   notas: z.string().trim().max(1000).optional().or(z.literal("")),
+  necesidadProposito: z.string().trim().max(2000).optional().or(z.literal("")),
   proyectoNombre: z.string().trim().max(160).optional().or(z.literal("")),
   proyectoNecesidades: z.string().trim().max(2000).optional().or(z.literal("")),
 });
@@ -310,6 +311,7 @@ export function LeadDrawer({
       moneda: card?.moneda ?? "",
       probabilidad,
       notas: card?.notas ?? "",
+      necesidadProposito: card?.necesidadProposito ?? "",
       proyectoNombre: card?.proyectoNombre ?? "",
       proyectoNecesidades: card?.proyectoNecesidades ?? "",
     };
@@ -552,8 +554,11 @@ export function LeadDrawer({
     if (empresaRaw.length) {
       contactoPayload.company_name = empresaRaw;
     }
-    if (notasRaw.length) {
-      contactoPayload.notes = notasRaw;
+      if (notasRaw.length) {
+        contactoPayload.notes = notasRaw;
+      }
+      if (necesidadPropositoRaw.length) {
+        contactoPayload.necesidad_proposito = necesidadPropositoRaw;
       }
 
       const tarjetaPayload: Record<string, unknown> = {};
@@ -631,6 +636,9 @@ export function LeadDrawer({
 
     if (notasRaw !== (defaultFormValues.notas ?? "").trim()) {
       contactoUpdates.notes = notasRaw.length ? notasRaw : null;
+    }
+    if (necesidadPropositoRaw !== (defaultFormValues.necesidadProposito ?? "").trim()) {
+      contactoUpdates.necesidad_proposito = necesidadPropositoRaw.length ? necesidadPropositoRaw : null;
     }
 
     const tarjetaUpdates: Record<string, unknown> = {};
@@ -908,16 +916,40 @@ export function LeadDrawer({
                   {...register("empresa")}
                 />
               </div>
-              <div className="grid gap-2">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-notas">
-                  Notas
-                </label>
-                <Textarea
-                  id="lead-notas"
-                  placeholder="Notas sobre el contacto"
-                  disabled={pending}
-                  {...register("notas")}
-                />
+              <div className="rounded-xl border border-indigo-200/70 bg-indigo-50/70 p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-indigo-900">
+                  <IconMessageCircle className="size-4" />
+                  <span className="text-xs font-semibold uppercase tracking-wide">Insights generados por Tal-IA</span>
+                </div>
+                <p className="mt-1 text-xs text-indigo-900/80">
+                  Información capturada automáticamente por Tal-IA durante la conversación.
+                </p>
+                <div className="mt-3 grid gap-3">
+                  <div className="grid gap-2">
+                    <label className="text-xs font-medium text-indigo-900/80" htmlFor="lead-notas">
+                      Resumen del contexto
+                    </label>
+                    <Textarea
+                      id="lead-notas"
+                      placeholder="Resumen generado por Tal-IA"
+                      disabled={pending}
+                      rows={3}
+                      {...register("notas")}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs font-medium text-indigo-900/80" htmlFor="lead-necesidad">
+                      Necesidad o propósito
+                    </label>
+                    <Textarea
+                      id="lead-necesidad"
+                      placeholder="Necesidad capturada por Tal-IA"
+                      disabled={pending}
+                      rows={3}
+                      {...register("necesidadProposito")}
+                    />
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -24,6 +24,7 @@ export type EmbudoCard = {
   telefono: string | null;
   empresa: string | null;
   notas: string | null;
+  necesidadProposito: string | null;
   canal: string | null;
   estado: string | null;
   etapaId: string;
@@ -56,6 +57,7 @@ type LeadListRow = {
   contacto_telefono: string | null;
   contacto_empresa: string | null;
   contacto_notas: string | null;
+  contacto_necesidad: string | null;
   contacto_estado: string | null;
   canal: string | null;
   etapa_id: string;
@@ -217,6 +219,7 @@ function mapStages(
       telefono: row.contacto_telefono,
       empresa: row.contacto_empresa,
       notas: row.contacto_notas,
+      necesidadProposito: row.contacto_necesidad ?? null,
       canal: row.canal,
       estado: row.contacto_estado,
       etapaId: row.etapa_id,
