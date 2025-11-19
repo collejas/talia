@@ -106,6 +106,7 @@ type LeadDrawerProps = {
   onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
   onDelete?: () => Promise<LeadDeleteResult>;
+  onAdvanceStage?: (stage: EmbudoStage) => Promise<{ ok: boolean; error?: string }>;
 };
 
 type DrawerPrepOption = {
@@ -516,6 +517,7 @@ export function LeadDrawer({
   onSubmit,
   onCreate,
   onDelete,
+  onAdvanceStage,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
@@ -944,6 +946,19 @@ export function LeadDrawer({
     if (!result.ok) {
       setError(result.error || "Ocurrió un error al guardar los cambios.");
       return;
+    }
+
+    if (!isCreateMode && card && onAdvanceStage) {
+      const targetStage = findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep);
+      if (targetStage) {
+        setPending(true);
+        const advanceResult = await onAdvanceStage(targetStage);
+        setPending(false);
+        if (!advanceResult.ok) {
+          setError(advanceResult.error || "No se pudo avanzar el lead automáticamente.");
+          return;
+        }
+      }
     }
 
     setError(null);
@@ -2115,6 +2130,22 @@ function stageHasAnyValue(state: Record<string, string | boolean>): boolean {
 
 function areStagePrepsEqual(a: StagePrepPayload, b: StagePrepPayload): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function findAutoAdvanceStage(
+  currentStage: EmbudoStage | null,
+  groups: DrawerStageGroup[],
+  state: StagePrepState,
+): EmbudoStage | null {
+  if (!currentStage) return null;
+  let furthest: EmbudoStage | null = null;
+  for (const group of groups) {
+    if (!areStageSectionsComplete(group.stage.codigo, group.sections, state)) {
+      break;
+    }
+    furthest = group.stage;
+  }
+  return furthest;
 }
 
 function resolveInputType(fieldType: DrawerPrepFieldType): "text" | "number" | "date" | "datetime-local" | "url" {

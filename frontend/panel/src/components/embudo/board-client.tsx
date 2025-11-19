@@ -334,6 +334,25 @@ export function EmbudoBoardClient({
     return result;
   }
 
+  async function handleAutoAdvanceStage(nextStage: EmbudoStage) {
+    if (!selectedCard) {
+      return { ok: false as const, error: "No se encontró el lead seleccionado." };
+    }
+    setMovePending(true);
+    const result = await moveLeadCard({
+      tarjetaId: selectedCard.tarjetaId,
+      etapaDestino: nextStage.id,
+      fuente: "humano",
+      expectedEtapa: selectedCard.etapaId,
+    });
+    setMovePending(false);
+    if (!result.ok) {
+      return { ok: false as const, error: result.error || "No se pudo avanzar el lead." };
+    }
+    applyLeadResult(result);
+    return { ok: true as const };
+  }
+
   async function handleLeadDelete(): Promise<LeadDeleteResult> {
     if (!selectedCard) {
       return { ok: false, error: "No se encontró el lead seleccionado." };
@@ -555,6 +574,7 @@ export function EmbudoBoardClient({
         onSubmit={handleLeadSubmit}
         onCreate={handleLeadCreate}
         onDelete={handleLeadDelete}
+        onAdvanceStage={handleAutoAdvanceStage}
       />
 
       <Sheet open={scheduleDialogOpen && !!scheduleContext} onOpenChange={handleScheduleOpenChange}>
