@@ -218,8 +218,17 @@ export function LocationComparisonChart({
   }, [shape]);
 
   const maxTotal = useMemo(() => {
-    return data.reduce((max, entry) => Math.max(max, resolveEntryTotal(entry)), 0) || 1;
-  }, [data]);
+    return (
+      data.reduce(
+        (max, entry) =>
+          Math.max(
+            max,
+            resolveFilteredEntryTotal(entry, activeChannelSet),
+          ),
+        0,
+      ) || 1
+    );
+  }, [activeChannelSet, data]);
 
   const keysWithData = useMemo(() => {
     const set = new Set<string>();
@@ -379,7 +388,7 @@ export function LocationComparisonChart({
         datasetMap.get(key) ||
         datasetMap.get(key.padStart(2, "0")) ||
         datasetMap.get(key.toUpperCase());
-      const total = entry ? resolveEntryTotal(entry) : 0;
+      const total = entry ? resolveFilteredEntryTotal(entry, activeChannelSet) : 0;
       const isSelected = entry?.key && selectedKey && entry.key === selectedKey;
       const isHovered = entry?.key && hoveredKey && entry.key === hoveredKey;
 
