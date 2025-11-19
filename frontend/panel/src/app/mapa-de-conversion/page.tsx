@@ -16,6 +16,7 @@ import { MapaConversionTableClient } from "@/components/mapa-conversion/table.cl
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
+import { MAPA_STAGE_KEYS, createEmptyStageTotals } from "@/lib/mapa-conversion/stages";
 
 export const dynamic = "force-dynamic";
 
@@ -272,19 +273,14 @@ export default async function Page({
     : [];
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;
   const globalStages = demografiaResponse
-    ? demografiaResponse.map.dataset.reduce(
-        (acc, entry) => {
-          const stages = entry.etapas_totales || {};
-          acc.captado += stages.captado ?? 0;
-          acc.precalificado += stages.precalificado ?? 0;
-          acc.negociacion += stages.negociacion ?? 0;
-          acc.ganado += stages.ganado ?? 0;
-          acc.perdido += stages.perdido ?? 0;
-          return acc;
-        },
-        { captado: 0, precalificado: 0, negociacion: 0, ganado: 0, perdido: 0 },
-      )
-    : { captado: 0, precalificado: 0, negociacion: 0, ganado: 0, perdido: 0 };
+    ? demografiaResponse.map.dataset.reduce((acc, entry) => {
+        const stages = entry.etapas_totales || {};
+        for (const stageKey of MAPA_STAGE_KEYS) {
+          acc[stageKey] += stages[stageKey] ?? 0;
+        }
+        return acc;
+      }, createEmptyStageTotals())
+    : createEmptyStageTotals();
   const mapShape = (() => {
     const raw = demografiaResponse?.map.geojson;
     if (!raw || typeof raw !== "object") return null;

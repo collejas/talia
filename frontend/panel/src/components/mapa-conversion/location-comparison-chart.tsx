@@ -9,6 +9,12 @@ import type { Layer as LeafletLayer, Path as LeafletPath } from "leaflet";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { DemografiaMapResponse } from "@/lib/mapa-conversion/api";
+import {
+  MAPA_STAGE_ORDER,
+  MAPA_STAGE_KEYS,
+  type MapaStageKey,
+  createEmptyStageTotals,
+} from "@/lib/mapa-conversion/stages";
 import { cn } from "@/lib/utils";
 
 const CHANNEL_KEYS = ["webchat", "whatsapp", "voz"] as const;
@@ -20,27 +26,13 @@ export type LocationComparisonChartProps = {
   shape: GeoJSONType | null;
   colorMode: "sequential" | "channel";
   channelFilter?: ChannelKey[];
-  globalStages?: {
-    captado: number;
-    precalificado: number;
-    negociacion: number;
-    ganado: number;
-    perdido: number;
-  };
+  globalStages?: Record<MapaStageKey, number>;
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
   pais: "País",
   estado: "Estado",
   municipio: "Municipio",
-};
-
-const STAGE_LABELS: Record<string, string> = {
-  captado: "Captado",
-  precalificado: "Precalificado",
-  negociacion: "Negociación",
-  ganado: "Ganado",
-  perdido: "Perdido",
 };
 
 type LeafletGeoJSONOptions = {
@@ -59,13 +51,7 @@ type MetricsPayload = {
   channels: {
     [key in ChannelKey]: number;
   };
-  stages: {
-    captado: number;
-    precalificado: number;
-    negociacion: number;
-    ganado: number;
-    perdido: number;
-  };
+  stages: Record<MapaStageKey, number>;
 };
 
 function resolveFeatureKey(feature: Feature): string {
@@ -251,22 +237,16 @@ export function LocationComparisonChart({
   const hoveredEntry = hoveredKey ? datasetMap.get(hoveredKey) ?? null : null;
   const activeEntry = hoveredEntry ?? selectedEntry ?? null;
 
-  const aggregatedStages = useMemo(
-    () =>
-      data.reduce(
-        (acc, entry) => {
-          const stages = entry.etapas_totales || {};
-          acc.captado += stages.captado ?? 0;
-          acc.precalificado += stages.precalificado ?? 0;
-          acc.negociacion += stages.negociacion ?? 0;
-          acc.ganado += stages.ganado ?? 0;
-          acc.perdido += stages.perdido ?? 0;
-          return acc;
-        },
-        { captado: 0, precalificado: 0, negociacion: 0, ganado: 0, perdido: 0 },
-      ),
-    [data],
-  );
+  const aggregatedStages = useMemo(() => {
+    const totals = createEmptyStageTotals();
+    for (const entry of data) {
+      const stages = entry.etapas_totales || {};
+      for (const stageKey of MAPA_STAGE_KEYS) {
+        totals[stageKey] += stages[stageKey] ?? 0;
+      }
+    }
+    return totals;
+  }, [data]);
 
   const datasetSummary = useMemo<MetricsPayload>(() => {
     const summary: MetricsPayload = {
@@ -286,15 +266,7 @@ export function LocationComparisonChart({
         whatsapp: 0,
         voz: 0,
       },
-      stages: globalStages
-        ? { ...globalStages }
-        : {
-            captado: 0,
-            precalificado: 0,
-            negociacion: 0,
-            ganado: 0,
-            perdido: 0,
-          },
+      stages: globalStages ? { ...globalStages } : { ...aggregatedStages },
     };
 
     for (const entry of data) {
@@ -326,6 +298,12 @@ export function LocationComparisonChart({
       ? resolveFilteredConversation(activeEntry, activeChannelSet)
       : { con_conversacion: 0, sin_conversacion: 0 };
 
+    const stageTotals = createEmptyStageTotals();
+    const rawStages = activeEntry.etapas_totales || {};
+    for (const stageKey of MAPA_STAGE_KEYS) {
+      stageTotals[stageKey] = rawStages[stageKey] ?? 0;
+    }
+
     return {
       scope: "location",
       title: activeEntry.name,
@@ -340,13 +318,7 @@ export function LocationComparisonChart({
         whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
         voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet),
       },
-      stages: {
-        captado: activeEntry.etapas_totales?.captado ?? 0,
-        precalificado: activeEntry.etapas_totales?.precalificado ?? 0,
-        negociacion: activeEntry.etapas_totales?.negociacion ?? 0,
-        ganado: activeEntry.etapas_totales?.ganado ?? 0,
-        perdido: activeEntry.etapas_totales?.perdido ?? 0,
-      },
+      stages: stageTotals,
     };
   }, [activeChannelSet, activeEntry, showConversationMetrics]);
 
@@ -592,13 +564,10 @@ export function LocationComparisonChart({
           />
           <MetricSection
             title="Etapas"
-            items={[
-              { label: STAGE_LABELS.captado, value: metrics.stages.captado },
-              { label: STAGE_LABELS.precalificado, value: metrics.stages.precalificado },
-              { label: STAGE_LABELS.negociacion, value: metrics.stages.negociacion },
-              { label: STAGE_LABELS.ganado, value: metrics.stages.ganado },
-              { label: STAGE_LABELS.perdido, value: metrics.stages.perdido },
-            ]}
+            items={MAPA_STAGE_ORDER.map(({ key, label }) => ({
+              label,
+              value: metrics.stages[key] ?? 0,
+            }))}
           />
         </div>
       </aside>
