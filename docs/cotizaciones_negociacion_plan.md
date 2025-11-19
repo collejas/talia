@@ -60,9 +60,14 @@
 7. Recordatorios y métricas usan `lead_cotizaciones` para disparar tareas y reportar resultados.
 
 ## Pendientes / Próximos pasos
+### Avances
+- ✅ `lead_cotizaciones` creada + RLS/índices (`supabase/migrations/20260330_180000_lead_cotizaciones.sql`).
+- ✅ RPCs para crear cotizaciones (`panel_lead_quote_create`) y marcar envío/aceptación (`panel_lead_quote_mark`) con sincronización hacia `lead_movimientos` y `stage_prep` (`supabase/migrations/20260330_181000_panel_lead_quotes.sql`).
+
+### Próximos pasos
 1. Validar con ventas los campos del template (ítems, impuestos, términos, firmas).
 2. Redactar la plantilla HTML/PDF y definir branding (logos, colores).
-3. Implementar migraciones (tabla, índices, policies, bucket).
+3. Configurar bucket `quotes` en storage + políticas de acceso.
 4. Desarrollar servicio de generación y endpoints + pruebas unitarias.
 5. Ajustar frontend (drawer, modal, badges, métricas).
 6. Extender WhatsApp sender para soportar PDFs y registrar eventos.
