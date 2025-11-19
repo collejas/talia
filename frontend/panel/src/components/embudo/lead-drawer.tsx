@@ -30,6 +30,16 @@ import { Textarea } from "@/components/ui/textarea";
 import type { LeadActionResult } from "@/lib/embudo/actions";
 import { cn } from "@/lib/utils";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
+import { Badge } from "@/components/ui/badge";
+import {
+  IconAlertTriangle,
+  IconCalendarEvent,
+  IconChecklist,
+  IconHandStop,
+  IconMessageCircle,
+  IconTargetArrow,
+  IconTrophy,
+} from "@tabler/icons-react";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
@@ -147,6 +157,16 @@ type DrawerStageGroup = {
   sections: DrawerPrepSectionDefinition[];
 };
 
+type StageVisualTokens = {
+  gradientClass: string;
+  borderClass: string;
+  badgeClass: string;
+  iconBgClass: string;
+  dotClass: string;
+  dotRingClass: string;
+  accentColor: string;
+};
+
 const ALLOWED_TYPES: Set<DrawerPrepFieldType> = new Set([
   "text",
   "textarea",
@@ -182,6 +202,82 @@ type HistoryState = {
 };
 
 const HISTORY_FETCH_LIMIT = 100;
+
+const STAGE_COLOR_TOKEN_MAP: Record<string, StageVisualTokens> = {
+  amber: {
+    gradientClass: "bg-gradient-to-br from-amber-50 via-white to-white",
+    borderClass: "border-amber-200/70",
+    badgeClass: "bg-amber-100 text-amber-900",
+    iconBgClass: "bg-amber-100 text-amber-700",
+    dotClass: "bg-amber-400",
+    dotRingClass: "ring-amber-200",
+    accentColor: "#f59e0b",
+  },
+  sky: {
+    gradientClass: "bg-gradient-to-br from-sky-50 via-white to-white",
+    borderClass: "border-sky-200/70",
+    badgeClass: "bg-sky-100 text-sky-900",
+    iconBgClass: "bg-sky-100 text-sky-700",
+    dotClass: "bg-sky-400",
+    dotRingClass: "ring-sky-200",
+    accentColor: "#0ea5e9",
+  },
+  emerald: {
+    gradientClass: "bg-gradient-to-br from-emerald-50 via-white to-white",
+    borderClass: "border-emerald-200/70",
+    badgeClass: "bg-emerald-100 text-emerald-900",
+    iconBgClass: "bg-emerald-100 text-emerald-700",
+    dotClass: "bg-emerald-400",
+    dotRingClass: "ring-emerald-200",
+    accentColor: "#059669",
+  },
+  violet: {
+    gradientClass: "bg-gradient-to-br from-violet-50 via-white to-white",
+    borderClass: "border-violet-200/70",
+    badgeClass: "bg-violet-100 text-violet-900",
+    iconBgClass: "bg-violet-100 text-violet-700",
+    dotClass: "bg-violet-400",
+    dotRingClass: "ring-violet-200",
+    accentColor: "#8b5cf6",
+  },
+  rose: {
+    gradientClass: "bg-gradient-to-br from-rose-50 via-white to-white",
+    borderClass: "border-rose-200/70",
+    badgeClass: "bg-rose-100 text-rose-900",
+    iconBgClass: "bg-rose-100 text-rose-700",
+    dotClass: "bg-rose-400",
+    dotRingClass: "ring-rose-200",
+    accentColor: "#f43f5e",
+  },
+  slate: {
+    gradientClass: "bg-gradient-to-br from-slate-50 via-white to-white",
+    borderClass: "border-slate-200/70",
+    badgeClass: "bg-slate-100 text-slate-900",
+    iconBgClass: "bg-slate-100 text-slate-700",
+    dotClass: "bg-slate-500",
+    dotRingClass: "ring-slate-200",
+    accentColor: "#0f172a",
+  },
+};
+
+const DEFAULT_STAGE_TOKENS: StageVisualTokens = {
+  gradientClass: "bg-gradient-to-br from-slate-50 via-white to-white",
+  borderClass: "border-slate-200/70",
+  badgeClass: "bg-slate-100 text-slate-900",
+  iconBgClass: "bg-slate-100 text-slate-700",
+  dotClass: "bg-slate-500",
+  dotRingClass: "ring-slate-200",
+  accentColor: "#0f172a",
+};
+
+const STAGE_ICON_MAP: Record<string, React.ComponentType<{ className?: string; stroke?: number }>> = {
+  captado: IconTargetArrow,
+  precalificado: IconChecklist,
+  demo: IconCalendarEvent,
+  negociacion: IconHandStop,
+  cerrado_ganado: IconTrophy,
+  cerrado_perdido: IconAlertTriangle,
+};
 
 export function LeadDrawer({
   open,
@@ -864,36 +960,112 @@ export function LeadDrawer({
                       Completa la información para preparar el avance del lead en cada etapa.
                     </p>
                   </div>
-                  <div className="space-y-4">
-                    {upcomingStageGroups.map(({ stage, sections }) => {
+                  <div className="relative space-y-6 pl-8">
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-3 top-1 bottom-3 w-px bg-border/60"
+                    />
+                    {upcomingStageGroups.map(({ stage, sections }, index) => {
                       const stageDescription = readStageMetaString(stage.metadatos, "descripcion");
+                      const tokens = resolveStageTokens(stage);
+                      const IconComponent = resolveStageIcon(stage.codigo);
+                      const { completed, total } = countStageFields(stage.codigo, sections, stagePrep);
+                      const progress = total ? Math.round((completed / total) * 100) : 0;
                       return (
-                        <div key={stage.id} className="space-y-4 rounded-lg border border-border/60 p-4">
-                          <div>
-                            <h5 className="text-sm font-semibold text-foreground">{stage.nombre}</h5>
-                            {stageDescription ? (
-                              <p className="text-xs text-muted-foreground">{stageDescription}</p>
-                            ) : null}
-                          </div>
-                          {sections.map((section) => (
-                          <div key={`${stage.codigo}-${section.key}`} className="space-y-3">
-                            <div>
-                              <h6 className="text-xs font-semibold uppercase text-muted-foreground">
-                                {section.title}
-                              </h6>
-                              {section.description ? (
-                                <p className="text-xs text-muted-foreground">{section.description}</p>
+                        <div key={stage.id} className="relative">
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "absolute -left-8 top-6 flex h-10 w-10 items-center justify-center rounded-full border-4 border-background text-[11px] font-semibold text-foreground shadow ring-2 ring-offset-2 ring-offset-background",
+                              tokens.dotClass,
+                              tokens.dotRingClass,
+                            )}
+                          >
+                            {index + 1}
+                          </span>
+                          <div
+                            className={cn(
+                              "rounded-2xl border p-5 shadow-sm transition-shadow hover:shadow-md",
+                              tokens.gradientClass,
+                              tokens.borderClass,
+                            )}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <div className={cn("flex h-11 w-11 items-center justify-center rounded-full", tokens.iconBgClass)}>
+                                  <IconComponent className="size-5" stroke={1.5} />
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge className={cn("text-[10px] font-semibold uppercase tracking-wide", tokens.badgeClass)}>
+                                      Paso {index + 1}
+                                    </Badge>
+                                    {total ? (
+                                      <span className="text-xs font-medium text-muted-foreground">
+                                        {completed}/{total} campos
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <h5 className="text-base font-semibold text-foreground">{stage.nombre}</h5>
+                                  {stageDescription ? (
+                                    <p className="text-xs text-muted-foreground">{stageDescription}</p>
+                                  ) : null}
+                                </div>
+                              </div>
+                              {total ? (
+                                <div className="min-w-[140px] flex-1">
+                                  <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                                    <span>Progreso</span>
+                                    <span>{progress}%</span>
+                                  </div>
+                                  <div className="mt-1 h-1.5 rounded-full bg-white/60">
+                                    <div
+                                      className="h-full rounded-full transition-all"
+                                      style={{ width: `${progress}%`, backgroundColor: tokens.accentColor }}
+                                    />
+                                  </div>
+                                </div>
                               ) : null}
                             </div>
-                            <div className="space-y-3">
-                              {section.fields.map((field) => (
-                                <div key={`${stage.codigo}-${field.key}`} className="space-y-2">
-                                  {renderStageField(stage.codigo, field)}
-                                </div>
-                              ))}
+
+                            <div className="mt-4 space-y-4">
+                              {sections.map((section) => {
+                                const sectionProgress = countSectionFields(stage.codigo, section, stagePrep);
+                                return (
+                                  <div
+                                    key={`${stage.codigo}-${section.key}`}
+                                    className="space-y-3 rounded-xl border border-white/70 bg-white/80 p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <h6 className="text-xs font-semibold uppercase text-muted-foreground">
+                                          {section.title}
+                                        </h6>
+                                        {section.description ? (
+                                          <p className="text-xs text-muted-foreground">{section.description}</p>
+                                        ) : null}
+                                      </div>
+                                      {section.fields.length ? (
+                                        <span className="text-[10px] font-medium text-muted-foreground">
+                                          {sectionProgress.completed}/{section.fields.length}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <div className="space-y-3">
+                                      {section.fields.map((field) => (
+                                        <div
+                                          key={`${stage.codigo}-${field.key}`}
+                                          className="rounded-lg border border-border/40 bg-background/70 p-3"
+                                        >
+                                          {renderStageField(stage.codigo, field)}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
-                        ))}
                         </div>
                       );
                     })}
@@ -1334,6 +1506,54 @@ function findMissingRequiredField(
     }
   }
   return null;
+}
+
+function resolveStageTokens(stage: EmbudoStage): StageVisualTokens {
+  const colorKey = readStageMetaString(stage.metadatos, "color")?.toLowerCase() ?? "";
+  return STAGE_COLOR_TOKEN_MAP[colorKey] ?? DEFAULT_STAGE_TOKENS;
+}
+
+function resolveStageIcon(stageCode: string) {
+  return STAGE_ICON_MAP[stageCode] ?? IconMessageCircle;
+}
+
+function countStageFields(
+  stageCode: string,
+  sections: DrawerPrepSectionDefinition[],
+  state: StagePrepState,
+): { completed: number; total: number } {
+  let total = 0;
+  let completed = 0;
+  for (const section of sections) {
+    const sectionCount = countSectionFields(stageCode, section, state);
+    total += sectionCount.total;
+    completed += sectionCount.completed;
+  }
+  return { completed, total };
+}
+
+function countSectionFields(
+  stageCode: string,
+  section: DrawerPrepSectionDefinition,
+  state: StagePrepState,
+): { completed: number; total: number } {
+  const values = state[stageCode] ?? {};
+  let completed = 0;
+  let total = 0;
+  for (const field of section.fields) {
+    total += 1;
+    if (isStageFieldComplete(field, values[field.key])) {
+      completed += 1;
+    }
+  }
+  return { completed, total };
+}
+
+function isStageFieldComplete(field: DrawerPrepFieldDefinition, rawValue: string | boolean | undefined): boolean {
+  if (field.type === "checkbox") {
+    return rawValue === true;
+  }
+  return typeof rawValue === "string" && rawValue.trim().length > 0;
 }
 
 function areStagePrepsEqual(a: StagePrepPayload, b: StagePrepPayload): boolean {

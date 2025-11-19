@@ -294,3 +294,55 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
     cómo se movió la conversión en el mapa.
   - Filtros de etapa avanzada: permitir filtrar el mapa por “etapa actual” (p. ej. sólo mostrar regiones donde hay leads en
     Negociación o con Demo agendada), para que el mapa sea realmente una vista del embudo.
+
+
+
+
+# embudo
+
+› Perfecto!!!! ahoera vamos a la vista 'embudo', com opuedes ver en la vista, hay un sidebar lateral derecho que sale al darle clic a
+  cualquier tarjeta, como puedes ver en ese sidebar, se muestran secciones las 'Proximas etapas', esas secciones se ven todas iguales
+  visualmente, quisiera hacer algo para que se note que cad una es diferente que podriamos hacer, que propuestas tienes?
+
+
+• Ideas rápidas para diferenciar visualmente cada sección de “Próximas etapas” en el drawer:
+
+  1. Banderas de color y icono por etapa
+      - Usa el metadatos.color de cada etapa para pintar una franja lateral o un badge con el nombre (“Demo”, “Cierre”).
+      - Añade un icono alusivo (calendario, checklist, trofeo) al encabezado.
+  2. Cards con niveles
+      - Convierte cada etapa en una “card” con sombra y ligero gradiente distinto.
+      - Añade una etiqueta pequeña “Paso 1 / 2 / 3” para reforzar el orden.
+  3. Checklist expandible
+      - Título más una barra de estado (ej. 2/4 campos completados) y cada campo como un item con línea divisoria.
+      - Campos pendientes muestran un punto gris; completos, un check verde.
+  4. Timeline vertical
+      - Dibuja una línea vertical con puntos numerados; cada etapa cuelga de esa línea, con su panel de campos.
+      - Colores del punto/label reflejan el estado (pendiente, en curso, listo).
+  5. Separadores temáticos
+      - Encabezado con fondo sólido (color del metadato), texto blanco y descripción corta; el contenido queda en un panel blanco para
+
+  Puedo implementar el que prefieras; si ya tienes colores definidos en lead_etapas.metadatos.color, aprovecharía esa metadata para dar
+  personalidad a cada bloque sin inventar estilos.
+
+
+› me agradan los 5 puntos!!!! se pueden establecer los 5 o no?
+
+
+• Podemos combinarlos; no son excluyentes. Por ejemplo:
+
+  1. Color e icono → usar el metadatos.color en la franja/encabezado y poner un icono acorde a la etapa.
+  2. Cards con sombra → cada sección se renderiza como card con gradiente suave + “Paso X”.
+  3. Checklist → dentro de cada card, mostrar los campos de drawer_prep como lista, marcando completados/pending.
+  4. Timeline → añadir una barra vertical (o numerador) que conecte las cards para reforzar la secuencia.
+  5. Separadores → usar encabezado destacado (background sólido) y cuerpo blanco.
+
+  Implementar los cinco a la vez implica retocar el componente del drawer (no lo vimos aún) para:
+
+  - Leer metadatos.color e icono asociado.
+  - Renderizar un contenedor tipo card (border + sombra) con badge “Paso N”.
+  - Mostrar la barra vertical + bullet entre cards (CSS).
+  - Dibujar para cada field un checklist item con estado (puedes marcar completados en función de si field.value existe).
+
+  Si te parece bien, hago un primer diseño mezclando los cinco elementos y ajustamos después. Sólo confirma que quieres la versión
+  “full combo” y que puedo tocar el componente del drawer (probablemente frontend/panel/src/components/embudo/...).
