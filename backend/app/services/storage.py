@@ -817,6 +817,42 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     return row
 
 
+async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
+    """Recupera identidades de canal asociadas al contacto."""
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    base_url = settings.supabase_url.rstrip("/")
+    url = f"{base_url}/rest/v1/identidades_canal"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Accept": "application/json",
+    }
+    params = {
+        "select": "canal,id_externo,metadatos",
+        "contacto_id": f"eq.{contact_id}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        msg = f"Error de red al consultar identidades del contacto: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al consultar identidades del contacto "
+            f"(status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    data = response.json() or []
+    return data if isinstance(data, list) else []
+
+
 async def record_delivery_event(
     *,
     provider: str,

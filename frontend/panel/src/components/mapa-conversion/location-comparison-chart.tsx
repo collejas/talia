@@ -115,6 +115,12 @@ function resolveChannelTotal(
   return entry.leads_totales_por_canal?.[channel] ?? 0;
 }
 
+function resolveEntryTotal(entry: DemografiaMapResponse["dataset"][number]): number {
+  const visits = entry.total_visitas ?? 0;
+  if (visits > 0) return visits;
+  return entry.leads_total ?? 0;
+}
+
 export function LocationComparisonChart({
   data,
   nivel,
@@ -171,7 +177,7 @@ export function LocationComparisonChart({
   }, [shape]);
 
   const maxTotal = useMemo(() => {
-    return data.reduce((max, entry) => Math.max(max, entry.total_visitas ?? 0), 0) || 1;
+    return data.reduce((max, entry) => Math.max(max, resolveEntryTotal(entry)), 0) || 1;
   }, [data]);
 
   const keysWithData = useMemo(() => {
@@ -240,7 +246,7 @@ export function LocationComparisonChart({
         con_conversacion: entry.visitantes_con_chat ?? 0,
         sin_conversacion: entry.visitantes_sin_chat ?? 0,
       };
-      summary.totalVisitas += entry.total_visitas ?? 0;
+      summary.totalVisitas += resolveEntryTotal(entry);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
       summary.channels.webchat += resolveChannelTotal(entry, "webchat");
@@ -269,8 +275,8 @@ export function LocationComparisonChart({
     return {
       scope: "location",
       title: activeEntry.name,
-      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(activeEntry.total_visitas ?? 0)} visitas`,
-      totalVisitas: activeEntry.total_visitas ?? 0,
+      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveEntryTotal(activeEntry))} visitas`,
+      totalVisitas: resolveEntryTotal(activeEntry),
       conversation: {
         con_conversacion: conversation.con_conversacion ?? 0,
         sin_conversacion: conversation.sin_conversacion ?? 0,
@@ -325,7 +331,7 @@ export function LocationComparisonChart({
         datasetMap.get(key) ||
         datasetMap.get(key.padStart(2, "0")) ||
         datasetMap.get(key.toUpperCase());
-      const total = entry?.total_visitas ?? 0;
+      const total = entry ? resolveEntryTotal(entry) : 0;
       const isSelected = entry?.key && selectedKey && entry.key === selectedKey;
       const isHovered = entry?.key && hoveredKey && entry.key === hoveredKey;
 
@@ -421,7 +427,7 @@ export function LocationComparisonChart({
             {
               key: "total",
               label: "Visitas totales",
-              value: formatNumber(entry.total_visitas ?? 0),
+              value: formatNumber(resolveEntryTotal(entry)),
               color: "var(--chart-1)",
             },
             {

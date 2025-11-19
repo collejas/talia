@@ -14,8 +14,8 @@ from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
 from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
+from app.services import leads_geo, storage
 from app.services import openai as openai_service
-from app.services import storage
 from app.services import twilio as twilio_service
 from app.services.storage import StorageError
 
@@ -90,6 +90,8 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             "whatsapp.ensure_lead_tarjeta_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
+
+    await _maybe_update_contact_location(contact_id)
 
     try:
         conversation_meta = await storage.fetch_conversation(conversation_id)
@@ -207,6 +209,85 @@ async def handle_status_callback(callback: schemas.WhatsAppStatusCallback) -> No
             "whatsapp.delivery_event_recorded",
             message_sid=callback.message_sid,
             event=event,
+        )
+
+
+async def _maybe_update_contact_location(contact_id: str) -> None:
+    """Enriquece el contacto con la ubicación inferida a partir de su teléfono/LADA."""
+    try:
+        contact = await storage.fetch_contact(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.fetch_contact_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        return
+
+    contacto_datos = contact.get("contacto_datos") or {}
+    ubicacion = dict(contacto_datos.get("ubicacion") or {})
+    lada_exists = ubicacion.get("lada")
+    estado_exists = ubicacion.get("cve_ent")
+    cvegeo_exists = ubicacion.get("cvegeo")
+
+    if lada_exists and estado_exists and cvegeo_exists:
+        return
+
+    try:
+        identities = await storage.fetch_contact_identities(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.fetch_contact_identities_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        identities = []
+
+    channels = []
+    origen = contact.get("origen")
+    if isinstance(origen, str) and origen:
+        channels.append(origen)
+    else:
+        channels.append("whatsapp")
+
+    location = leads_geo.infer_contact_location(
+        contacto_id=contact_id,
+        data=contact,
+        channels=channels,
+        identities=identities,
+    )
+
+    updated = False
+    ubicacion.setdefault("pais", "México")
+    ubicacion.setdefault("country_code", "MX")
+
+    if location.lada and ubicacion.get("lada") != location.lada:
+        ubicacion["lada"] = location.lada
+        updated = True
+    if location.estado_clave and ubicacion.get("cve_ent") != location.estado_clave:
+        ubicacion["cve_ent"] = location.estado_clave
+        updated = True
+    if location.estado_nombre and ubicacion.get("nom_ent") != location.estado_nombre:
+        ubicacion["nom_ent"] = location.estado_nombre
+        updated = True
+    if location.municipio_clave and ubicacion.get("cve_mun") != location.municipio_clave:
+        ubicacion["cve_mun"] = location.municipio_clave
+        updated = True
+    if location.municipio_nombre and ubicacion.get("nom_mun") != location.municipio_nombre:
+        ubicacion["nom_mun"] = location.municipio_nombre
+        updated = True
+    if location.municipio_cvegeo and ubicacion.get("cvegeo") != location.municipio_cvegeo:
+        ubicacion["cvegeo"] = location.municipio_cvegeo
+        updated = True
+
+    if not updated:
+        return
+
+    contacto_datos["ubicacion"] = ubicacion
+    try:
+        await storage.update_contact(contact_id, {"contacto_datos": contacto_datos})
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.update_contact_location_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
         )
 
 
