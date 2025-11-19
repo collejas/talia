@@ -180,11 +180,12 @@ function mapCards(
   whatsappTotal: number,
 ): VisitCards {
   if (payload) {
-    const webchatTotals = toNumber(payload.visitas_totales ?? payload.webchat?.visitas_totales);
+    const sinChat = toNumber(payload.webchat?.visitas_sin_chat ?? payload.visitantes);
+    const conChat = toNumber(payload.webchat?.conversaciones);
     return {
-      totalVisits: webchatTotals + whatsappTotal,
-      sinChat: toNumber(payload.webchat?.visitas_sin_chat ?? payload.visitantes),
-      conChat: toNumber(payload.webchat?.conversaciones),
+      totalVisits: sinChat + conChat + whatsappTotal,
+      sinChat,
+      conChat,
       contactos: toNumber(payload.webchat?.contactos_completos),
       whatsapp: whatsappTotal,
     };
@@ -215,7 +216,7 @@ function mapCards(
     });
 
     return {
-      totalVisits,
+      totalVisits: totalVisits + whatsappTotal,
       sinChat,
       conChat,
       contactos: contactos.size,

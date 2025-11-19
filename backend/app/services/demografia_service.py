@@ -272,6 +272,8 @@ async def fetch_visitantes_resumen(
         "sin_chat": 0,
         "webchat_con_chat": 0,
         "webchat_sin_chat": 0,
+        "whatsapp_total": 0,
+        "voz_total": 0,
     }
 
     for row in rows:
@@ -297,6 +299,8 @@ async def fetch_visitantes_resumen(
         totals["sin_chat"] += item["sin_chat"]
         totals["webchat_con_chat"] += item["webchat_con_chat"]
         totals["webchat_sin_chat"] += item["webchat_sin_chat"]
+        totals["whatsapp_total"] += item["whatsapp_total"]
+        totals["voz_total"] += item["voz_total"]
 
     return {
         "items": items,
@@ -473,11 +477,26 @@ def build_map_dataset(
         if not _should_include(key):
             continue
         entry = _ensure_entry(key, str(row.get("name") or "Desconocido"))
-        entry["visitantes_total"] += _to_number(row.get("total"))
+        total_visitas = _to_number(row.get("total"))
+        webchat_total = _to_number(row.get("webchat_total"))
+        whatsapp_total = _to_number(row.get("whatsapp_total"))
+        voz_total = _to_number(row.get("voz_total"))
+
+        entry["visitantes_total"] += total_visitas
         entry["visitantes_con_chat"] += _to_number(row.get("con_chat"))
         entry["visitantes_sin_chat"] += _to_number(row.get("sin_chat"))
-        if _to_number(row.get("total")) > 0:
+        if total_visitas > 0:
             entry["has_data"] = True
+
+        visitantes_channels = entry["visitantes_totales_por_canal"]
+        if webchat_total > 0:
+            visitantes_channels["webchat"] = visitantes_channels.get("webchat", 0) + webchat_total
+        if whatsapp_total > 0:
+            visitantes_channels["whatsapp"] = (
+                visitantes_channels.get("whatsapp", 0) + whatsapp_total
+            )
+        if voz_total > 0:
+            visitantes_channels["voz"] = visitantes_channels.get("voz", 0) + voz_total
 
     result = []
     for entry in combined.values():
@@ -508,29 +527,24 @@ def build_map_dataset(
         )
         entry["leads_totales_por_canal"] = leads_channels_sorted
 
-        visitantes_channels: dict[str, int] = {}
-        if entry["visitantes_total"] > 0:
-            visitantes_channels["webchat"] = entry["visitantes_total"]
-        entry["visitantes_totales_por_canal"] = visitantes_channels
+        visitantes_channels = entry["visitantes_totales_por_canal"]
 
-        totales_por_canal: dict[str, int] = dict(leads_channels_sorted)
-        if visitantes_channels:
-            totales_por_canal["webchat"] = totales_por_canal.get("webchat", 0) + (
-                visitantes_channels.get("webchat", 0)
-            )
-        entry["totales_por_canal"] = totales_por_canal
+        entry["totales_por_canal"] = {
+            channel: value for channel, value in visitantes_channels.items() if value > 0
+        }
 
         entry["conversacion_totales"] = {
             "con_conversacion": entry["visitantes_con_chat"],
             "sin_conversacion": entry["visitantes_sin_chat"],
         }
-        entry["total_visitas"] = entry["visitantes_total"] + entry["leads_total"]
+        entry["total_visitas"] = sum(visitantes_channels.values())
+        if entry["total_visitas"] <= 0 and entry["visitantes_total"] > 0:
+            entry["total_visitas"] = entry["visitantes_total"]
+            entry["totales_por_canal"]["webchat"] = (
+                entry["totales_por_canal"].get("webchat", 0) + entry["visitantes_total"]
+            )
         entry["has_data"] = (
-            entry["has_data"]
-            or entry["visitantes_total"] > 0
-            or entry["leads_total"] > 0
-            or entry["totales_por_canal"]["whatsapp"] > 0
-            or entry["totales_por_canal"]["voz"] > 0
+            entry["has_data"] or entry["total_visitas"] > 0 or entry["leads_total"] > 0
         )
         logger.info(
             "demografia.entry_aggregated",

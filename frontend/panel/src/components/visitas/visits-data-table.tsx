@@ -168,12 +168,34 @@ const visitColumnVisibility: VisibilityState = VISIT_FIELDS.reduce<VisibilitySta
 );
 
 export function VisitsDataTable({ data }: { data: VisitTableRow[] }) {
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+        Preparando tabla de visitas...
+      </div>
+    )
+  }
+
   return (
     <DataTable
       data={data}
       extraColumns={visitExtraColumns}
       initialVisibility={visitColumnVisibility}
       storageKey="visits-table-column-order"
+      columnLabels={{
+        header: "Sesión / Canal",
+        type: "Ubicación / Canal",
+        status: "Estado del chat",
+        target: "Visitas registradas",
+        reviewer: "Contacto asignado",
+      }}
     />
   );
 }

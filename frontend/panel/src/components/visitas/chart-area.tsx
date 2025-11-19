@@ -53,6 +53,12 @@ const chartConfig = {
 export function VisitsChartArea({ data }: ChartAreaProps) {
   const isMobile = useIsMobile()
   const [timeRange, setTimeRange] = React.useState<"90d" | "30d" | "7d">("90d")
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   React.useEffect(() => {
     if (isMobile) {
@@ -76,6 +82,20 @@ export function VisitsChartArea({ data }: ChartAreaProps) {
       return date >= startDate
     })
   }, [data, timeRange])
+
+  if (!mounted) {
+    return (
+      <Card className="@container/card">
+        <CardHeader>
+          <CardTitle>Total de visitas</CardTitle>
+          <CardDescription>Cargando métricas...</CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 pb-6">
+          <div className="h-48 w-full animate-pulse rounded-lg bg-muted" />
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="@container/card">

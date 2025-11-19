@@ -12,10 +12,10 @@ import {
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
-import { loadDemografiaData } from "@/lib/mapa-conversion/api";
+import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
-import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
+import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +86,17 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
       entry.conversacion_totales?.con_conversacion ?? entry.visitantes_con_chat ?? 0
     const visitantesSinChat =
       entry.conversacion_totales?.sin_conversacion ?? entry.visitantes_sin_chat ?? 0
+    const totalWhatsapp =
+      visitantesPorCanal.whatsapp ??
+      entry.totales_por_canal?.whatsapp ??
+      entry.leads_totales_por_canal?.whatsapp ??
+      0
+    const totalVoz =
+      visitantesPorCanal.voz ??
+      entry.totales_por_canal?.voz ??
+      entry.leads_totales_por_canal?.voz ??
+      0
+
     const metrics = {
       leads_total: entry.leads_total ?? 0,
       visitantes_total: visitantesTotal,
@@ -94,8 +105,8 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
       leads_webchat: entry.leads_totales_por_canal?.webchat ?? 0,
       leads_whatsapp: entry.leads_totales_por_canal?.whatsapp ?? 0,
       leads_voz: entry.leads_totales_por_canal?.voz ?? 0,
-      total_whatsapp: entry.totales_por_canal?.whatsapp ?? 0,
-      total_voz: entry.totales_por_canal?.voz ?? 0,
+      total_whatsapp: totalWhatsapp,
+      total_voz: totalVoz,
       etapa_captado: entry.etapas_totales?.captado ?? 0,
       etapa_precalificado: entry.etapas_totales?.precalificado ?? 0,
       etapa_negociacion: entry.etapas_totales?.negociacion ?? 0,
@@ -292,7 +303,12 @@ export default async function Page({
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <SectionCards data={cardsData} />
-              <DemografiaControls nivel={nivel} canales={canalesSelected} etapas={etapas} color={colorMode} />
+              <DemografiaControls
+                nivel={nivel}
+                canales={canalesSelected}
+                etapas={etapas}
+                color={colorMode}
+              />
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">

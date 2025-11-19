@@ -91,6 +91,29 @@ const CHANNEL_COLORS: Record<string, [number, number, number]> = {
   voz: [249, 115, 22], // #f97316
 };
 const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
+const CHANNEL_LABELS: Record<string, string> = {
+  webchat: "Webchat",
+  whatsapp: "WhatsApp",
+  voz: "Voz",
+};
+
+function resolveChannelTotal(
+  entry: DemografiaMapResponse["dataset"][number],
+  channel: "webchat" | "whatsapp" | "voz",
+): number {
+  const visitantes = entry.visitantes_totales_por_canal?.[channel];
+  if (typeof visitantes === "number" && visitantes > 0) {
+    return visitantes;
+  }
+  const totales = entry.totales_por_canal?.[channel];
+  if (typeof totales === "number" && totales > 0) {
+    return totales;
+  }
+  if (channel === "webchat") {
+    return entry.visitantes_total ?? 0;
+  }
+  return entry.leads_totales_por_canal?.[channel] ?? 0;
+}
 
 export function LocationComparisonChart({
   data,
@@ -220,9 +243,9 @@ export function LocationComparisonChart({
       summary.totalVisitas += entry.total_visitas ?? 0;
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
-      summary.channels.webchat += entry.totales_por_canal?.webchat ?? entry.visitantes_total ?? 0;
-      summary.channels.whatsapp += entry.totales_por_canal?.whatsapp ?? 0;
-      summary.channels.voz += entry.totales_por_canal?.voz ?? 0;
+      summary.channels.webchat += resolveChannelTotal(entry, "webchat");
+      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp");
+      summary.channels.voz += resolveChannelTotal(entry, "voz");
     }
 
     summary.stages = globalStages ? { ...globalStages } : { ...aggregatedStages };
@@ -253,9 +276,9 @@ export function LocationComparisonChart({
         sin_conversacion: conversation.sin_conversacion ?? 0,
       },
       channels: {
-        webchat: activeEntry.totales_por_canal?.webchat ?? activeEntry.visitantes_total ?? 0,
-        whatsapp: activeEntry.totales_por_canal?.whatsapp ?? 0,
-        voz: activeEntry.totales_por_canal?.voz ?? 0,
+        webchat: resolveChannelTotal(activeEntry, "webchat"),
+        whatsapp: resolveChannelTotal(activeEntry, "whatsapp"),
+        voz: resolveChannelTotal(activeEntry, "voz"),
       },
       stages: {
         captado: activeEntry.etapas_totales?.captado ?? 0,
@@ -376,16 +399,20 @@ export function LocationComparisonChart({
 
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
-      const totalesPorCanal = entry.totales_por_canal ?? {};
       const conversation = entry.conversacion_totales ?? {
         con_conversacion: entry.visitantes_con_chat ?? 0,
         sin_conversacion: entry.visitantes_sin_chat ?? 0,
       };
-      const channelEntries = Object.entries(totalesPorCanal);
-      const topChannel = channelEntries
-        .filter(([, totalValue]) => (totalValue ?? 0) > 0)
-        .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0];
-      const topChannelLabel = topChannel ? topChannel[0] : null;
+      const channelRows = ["webchat", "whatsapp", "voz"].map((channel) => {
+        const total = resolveChannelTotal(entry, channel as "webchat" | "whatsapp" | "voz");
+        return {
+          key: `channel-${channel}`,
+          label: `Total ${CHANNEL_LABELS[channel] ?? channel}`,
+          value: formatNumber(total),
+          monospace: true,
+          color: resolveChannelColor(channel),
+        };
+      });
 
       const tooltip = renderToStaticMarkup(
         <MapTooltipContent
@@ -409,18 +436,7 @@ export function LocationComparisonChart({
               value: formatNumber(conversation.sin_conversacion ?? 0),
               color: "var(--chart-3)",
             },
-            ...(topChannelLabel
-              ? [
-                  {
-                    key: "channel",
-                    label: "Canal principal",
-                    value: `${topChannelLabel} (${formatNumber(topChannel?.[1] ?? 0)})`,
-                    monospace: false,
-                    valueClassName: "capitalize",
-                    color: resolveChannelColor(topChannelLabel),
-                  } satisfies MapTooltipRow,
-                ]
-              : []),
+            ...channelRows,
           ]}
         />,
       );
