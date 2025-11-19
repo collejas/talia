@@ -310,12 +310,16 @@ export default async function Page({
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <SectionCards data={cardsData} />
-              <DemografiaControls
-                nivel={nivel}
-                canales={canalesSelected}
-                etapas={etapas}
-                color={colorMode}
-              />
+              <div className="px-4 lg:px-6">
+                <div className="bg-gradient-to-b from-primary/5 via-card to-card rounded-xl border border-border/60 shadow-sm">
+                  <DemografiaControls
+                    nivel={nivel}
+                    canales={canalesSelected}
+                    etapas={etapas}
+                    color={colorMode}
+                  />
+                </div>
+              </div>
               <SessionRecovery errors={errores} />
               {demografiaResponse ? (
                 <div className="px-4 lg:px-6">

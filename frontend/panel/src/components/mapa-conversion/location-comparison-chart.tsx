@@ -565,7 +565,7 @@ export function LocationComparisonChart({
           ) : null}
         </MapContainer>
       </div>
-      <aside className="flex h-[320px] flex-col gap-4 rounded-lg border bg-card p-4 text-sm shadow-sm">
+      <aside className="flex h-[320px] flex-col gap-4 rounded-xl border border-border/60 bg-gradient-to-b from-primary/5 via-card to-card p-4 text-sm shadow-sm">
         <div className="flex flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
             {metrics.scope === "dataset" ? "Resumen" : "Ubicación seleccionada"}
