@@ -529,12 +529,9 @@ def build_map_dataset(
 
         visitantes_channels = entry["visitantes_totales_por_canal"]
 
-        combined_channels = dict(leads_channels_sorted)
-        for channel_key, channel_value in visitantes_channels.items():
-            if channel_value <= 0:
-                continue
-            combined_channels[channel_key] = combined_channels.get(channel_key, 0) + channel_value
-        entry["totales_por_canal"] = combined_channels
+        entry["totales_por_canal"] = {
+            channel: value for channel, value in visitantes_channels.items() if value > 0
+        }
 
         entry["conversacion_totales"] = {
             "con_conversacion": entry["visitantes_con_chat"],

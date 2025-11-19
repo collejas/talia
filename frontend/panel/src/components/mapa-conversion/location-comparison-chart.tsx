@@ -431,12 +431,6 @@ export function LocationComparisonChart({
               color: "var(--chart-1)",
             },
             {
-              key: "conversationYes",
-              label: "Con conversación",
-              value: formatNumber(conversation.con_conversacion ?? 0),
-              color: "var(--chart-2)",
-            },
-            {
               key: "conversationNo",
               label: "Sin conversación",
               value: formatNumber(conversation.sin_conversacion ?? 0),
