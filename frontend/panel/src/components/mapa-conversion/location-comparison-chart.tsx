@@ -170,6 +170,7 @@ export function LocationComparisonChart({
     return normalized.length ? normalized : [...CHANNEL_KEYS];
   }, [channelFilter]);
   const activeChannelSet = useMemo(() => new Set<ChannelKey>(activeChannels), [activeChannels]);
+  const showConversationMetrics = activeChannelSet.has("webchat");
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
 
   const datasetMap = useMemo(() => {
@@ -216,6 +217,11 @@ export function LocationComparisonChart({
       features,
     } satisfies FeatureCollection;
   }, [shape]);
+
+  const mapLayerKey = useMemo(() => {
+    if (!enhancedGeojson) return `empty-${activeChannels.join("|")}`;
+    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}`;
+  }, [activeChannels, colorMode, enhancedGeojson]);
 
   const maxTotal = useMemo(() => {
     return (
@@ -292,7 +298,9 @@ export function LocationComparisonChart({
     };
 
     for (const entry of data) {
-      const conversation = resolveFilteredConversation(entry, activeChannelSet);
+      const conversation = showConversationMetrics
+        ? resolveFilteredConversation(entry, activeChannelSet)
+        : { con_conversacion: 0, sin_conversacion: 0 };
       summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
@@ -309,12 +317,14 @@ export function LocationComparisonChart({
         : `${formatNumber(data.length)} ubicaciones`;
     summary.subtitle = `${formatNumber(summary.totalVisitas)} visitas totales · ${locationSubtitle}`;
     return summary;
-  }, [activeChannelSet, aggregatedStages, data, globalStages]);
+  }, [activeChannelSet, aggregatedStages, data, globalStages, showConversationMetrics]);
 
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;
 
-    const conversation = resolveFilteredConversation(activeEntry, activeChannelSet);
+    const conversation = showConversationMetrics
+      ? resolveFilteredConversation(activeEntry, activeChannelSet)
+      : { con_conversacion: 0, sin_conversacion: 0 };
 
     return {
       scope: "location",
@@ -338,7 +348,7 @@ export function LocationComparisonChart({
         perdido: activeEntry.etapas_totales?.perdido ?? 0,
       },
     };
-  }, [activeChannelSet, activeEntry]);
+  }, [activeChannelSet, activeEntry, showConversationMetrics]);
 
   const metrics = activeMetrics ?? datasetSummary;
 
@@ -473,24 +483,34 @@ export function LocationComparisonChart({
         };
       });
 
+      const rows: MapTooltipRow[] = [
+        {
+          key: "total",
+          label: "Visitas totales",
+          value: formatNumber(resolveFilteredEntryTotal(entry, activeChannelSet)),
+          color: "var(--chart-1)",
+        },
+      ];
+      if (showConversationMetrics) {
+        rows.push({
+          key: "conversationYes",
+          label: "Con conversación",
+          value: formatNumber(conversation.con_conversacion ?? 0),
+          color: "var(--chart-2)",
+        });
+        rows.push({
+          key: "conversationNo",
+          label: "Sin conversación",
+          value: formatNumber(conversation.sin_conversacion ?? 0),
+          color: "var(--chart-3)",
+        });
+      }
+      rows.push(...channelRows);
+
       const tooltip = renderToStaticMarkup(
         <MapTooltipContent
           title={entry.name ?? (feature.properties?.name?.toString() ?? "Sin nombre")}
-          rows={[
-            {
-              key: "total",
-              label: "Visitas totales",
-              value: formatNumber(resolveFilteredEntryTotal(entry, activeChannelSet)),
-              color: "var(--chart-1)",
-            },
-            {
-              key: "conversationNo",
-              label: "Sin conversación",
-              value: formatNumber(conversation.sin_conversacion ?? 0),
-              color: "var(--chart-3)",
-            },
-            ...channelRows,
-          ]}
+          rows={rows}
         />,
       );
 
@@ -501,7 +521,7 @@ export function LocationComparisonChart({
 
       tooltipLayer.bindTooltip?.(tooltip, tooltipOptions);
     },
-    [activeChannelSet, datasetMap, displayedChannelKeys, handleFeatureClick, setHoveredKey],
+    [activeChannelSet, datasetMap, displayedChannelKeys, handleFeatureClick, setHoveredKey, showConversationMetrics],
   );
 
   const center =
@@ -531,7 +551,7 @@ export function LocationComparisonChart({
                   style,
                   onEachFeature,
                 } as unknown as GeoJSONProps)}
-                key={JSON.stringify(enhancedGeojson)}
+                key={mapLayerKey}
               />
               <FitToData
                 activeKeys={keysWithData}
@@ -554,13 +574,15 @@ export function LocationComparisonChart({
           </span>
         </div>
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
-          <MetricSection
-            title="Conversaciones"
-            items={[
-              { label: "Total con conversación", value: metrics.conversation.con_conversacion },
-              { label: "Total sin conversación", value: metrics.conversation.sin_conversacion },
-            ]}
-          />
+          {showConversationMetrics ? (
+            <MetricSection
+              title="Conversaciones"
+              items={[
+                { label: "Total con conversación", value: metrics.conversation.con_conversacion },
+                { label: "Total sin conversación", value: metrics.conversation.sin_conversacion },
+              ]}
+            />
+          ) : null}
           <MetricSection
             title="Canales"
             items={displayedChannelKeys.map((channel) => ({
