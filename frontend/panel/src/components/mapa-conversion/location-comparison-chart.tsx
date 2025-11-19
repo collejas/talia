@@ -472,17 +472,6 @@ export function LocationComparisonChart({
       if (typeof tooltipLayer.bindTooltip !== "function") return;
 
       const conversation = resolveFilteredConversation(entry, activeChannelSet);
-      const channelRows = displayedChannelKeys.map((channel) => {
-        const total = resolveChannelTotal(entry, channel, activeChannelSet);
-        return {
-          key: `channel-${channel}`,
-          label: `Total ${CHANNEL_LABELS[channel]}`,
-          value: formatNumber(total),
-          monospace: true,
-          color: resolveChannelColor(channel),
-        };
-      });
-
       const rows: MapTooltipRow[] = [
         {
           key: "total",
@@ -491,21 +480,34 @@ export function LocationComparisonChart({
           color: "var(--chart-1)",
         },
       ];
-      if (showConversationMetrics) {
+      for (const channel of displayedChannelKeys) {
+        const total = resolveChannelTotal(entry, channel, activeChannelSet);
         rows.push({
-          key: "conversationYes",
-          label: "Con conversación",
-          value: formatNumber(conversation.con_conversacion ?? 0),
-          color: "var(--chart-2)",
+          key: `channel-${channel}`,
+          label: `Total ${CHANNEL_LABELS[channel]}`,
+          value: formatNumber(total),
+          monospace: true,
+          color: resolveChannelColor(channel),
         });
-        rows.push({
-          key: "conversationNo",
-          label: "Sin conversación",
-          value: formatNumber(conversation.sin_conversacion ?? 0),
-          color: "var(--chart-3)",
-        });
+        if (showConversationMetrics && channel === "webchat") {
+          rows.push(
+            {
+              key: "conversationYes",
+              label: "Con conversación",
+              value: formatNumber(conversation.con_conversacion ?? 0),
+              color: "var(--chart-2)",
+              indent: true,
+            },
+            {
+              key: "conversationNo",
+              label: "Sin conversación",
+              value: formatNumber(conversation.sin_conversacion ?? 0),
+              color: "var(--chart-3)",
+              indent: true,
+            },
+          );
+        }
       }
-      rows.push(...channelRows);
 
       const tooltip = renderToStaticMarkup(
         <MapTooltipContent
@@ -768,6 +770,7 @@ type MapTooltipRow = {
   monospace?: boolean;
   valueClassName?: string;
   color?: string;
+  indent?: boolean;
 };
 
 type MapTooltipContentProps = {
@@ -781,7 +784,13 @@ function MapTooltipContent({ title, rows }: MapTooltipContentProps) {
       <div className="font-medium text-foreground">{title}</div>
       <div className="grid gap-1.5">
         {rows.map((row) => (
-          <div key={row.key} className="text-muted-foreground flex items-center gap-2">
+          <div
+            key={row.key}
+            className={cn(
+              "text-muted-foreground flex items-center gap-2",
+              row.indent ? "pl-3" : "",
+            )}
+          >
             <span
               className="bg-muted h-2.5 w-2.5 shrink-0 rounded-[2px]"
               style={row.color ? ({ backgroundColor: row.color } as CSSProperties) : undefined}
