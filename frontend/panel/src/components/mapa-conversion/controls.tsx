@@ -160,7 +160,8 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-card/80 px-4 py-3 shadow-sm backdrop-blur">
+    <div className="px-4 lg:px-6">
+      <div className="kpi-surface flex flex-wrap items-center gap-3 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-2 text-sm font-medium text-card-foreground/80">
           <IconFilter className="size-4" />
           Filtros de demografía
@@ -298,6 +299,7 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
             </Button>
           </div>
         </div>
+      </div>
     </div>
   );
 }

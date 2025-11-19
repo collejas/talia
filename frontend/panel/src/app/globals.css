@@ -101,4 +101,8 @@
   .shadow-panel-soft {
     box-shadow: var(--shadow-panel-soft);
   }
+
+  .kpi-surface {
+    @apply rounded-xl border border-border/60 bg-gradient-to-b from-primary/5 via-card to-card shadow-sm;
+  }
 }
