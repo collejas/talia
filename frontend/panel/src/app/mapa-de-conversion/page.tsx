@@ -15,12 +15,14 @@ import { DemografiaControls } from "@/components/mapa-conversion/controls";
 import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
+import { VisitsDataTable } from "@/components/visitas/visits-data-table";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import {
   MAPA_STAGE_KEYS,
   createEmptyStageTotals,
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
+import { loadVisitsData } from "@/lib/visitas/data";
 
 export const dynamic = "force-dynamic";
 
@@ -236,6 +238,7 @@ export default async function Page({
   const colorMode: ColorMode = colorParam === "channel" ? "channel" : "sequential";
 
   let demografiaResponse: Awaited<ReturnType<typeof loadDemografiaData>> | null = null;
+  let visitsPayload: Awaited<ReturnType<typeof loadVisitsData>> | null = null;
   const errores: string[] = [];
 
   try {
@@ -249,6 +252,16 @@ export default async function Page({
       error instanceof Error
         ? error.message
         : "No se pudo obtener la información demográfica."
+    );
+  }
+
+  try {
+    visitsPayload = await loadVisitsData();
+  } catch (error) {
+    errores.push(
+      error instanceof Error
+        ? error.message
+        : "No se pudieron cargar las visitas recientes."
     );
   }
 
@@ -304,6 +317,14 @@ export default async function Page({
     }
     return null;
   })();
+  const visitsTable = visitsPayload?.table ?? [];
+  if (visitsPayload?.errors?.length) {
+    for (const message of visitsPayload.errors) {
+      if (message && !errores.includes(message)) {
+        errores.push(message);
+      }
+    }
+  }
 
   return (
     <SidebarProvider
@@ -358,6 +379,11 @@ export default async function Page({
                     nivel={nivel}
                     summary={demografiaResponse.summary}
                   />
+                </div>
+              ) : null}
+              {visitsTable.length ? (
+                <div className="px-4 lg:px-6">
+                  <VisitsDataTable data={visitsTable} />
                 </div>
               ) : null}
             </div>
