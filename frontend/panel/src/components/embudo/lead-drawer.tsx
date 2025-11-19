@@ -77,6 +77,8 @@ const formSchema = z.object({
       return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 100;
     }, { message: "La probabilidad debe estar entre 0 y 100." }),
   notas: z.string().trim().max(1000).optional().or(z.literal("")),
+  proyectoNombre: z.string().trim().max(160).optional().or(z.literal("")),
+  proyectoNecesidades: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -308,6 +310,8 @@ export function LeadDrawer({
       moneda: card?.moneda ?? "",
       probabilidad,
       notas: card?.notas ?? "",
+      proyectoNombre: card?.proyectoNombre ?? "",
+      proyectoNecesidades: card?.proyectoNecesidades ?? "",
     };
   }, [card]);
 
@@ -516,6 +520,8 @@ export function LeadDrawer({
     const probRaw = (values.probabilidad ?? "").trim();
     const empresaRaw = (values.empresa ?? "").trim();
     const notasRaw = (values.notas ?? "").trim();
+    const proyectoNombreRaw = (values.proyectoNombre ?? "").trim();
+    const proyectoNecesidadesRaw = (values.proyectoNecesidades ?? "").trim();
 
     const missingRequired =
       isCreateMode ? null : findMissingRequiredField(upcomingStageGroups, stagePrep);
@@ -559,6 +565,12 @@ export function LeadDrawer({
       }
       if (probRaw.length) {
         tarjetaPayload.probabilidad_override = Number(probRaw);
+      }
+      if (proyectoNombreRaw.length) {
+        tarjetaPayload.proyecto_nombre = proyectoNombreRaw;
+      }
+      if (proyectoNecesidadesRaw.length) {
+        tarjetaPayload.proyecto_necesidades = proyectoNecesidadesRaw;
       }
 
       const metadata: Record<string, unknown> = {
@@ -633,6 +645,14 @@ export function LeadDrawer({
 
     if (probRaw !== (defaultFormValues.probabilidad ?? "").trim()) {
       tarjetaUpdates.probabilidad_override = probRaw.length ? Number(probRaw) : null;
+    }
+    const defaultProyectoNombre = (defaultFormValues.proyectoNombre ?? "").trim();
+    if (proyectoNombreRaw !== defaultProyectoNombre) {
+      tarjetaUpdates.proyecto_nombre = proyectoNombreRaw.length ? proyectoNombreRaw : null;
+    }
+    const defaultProyectoNecesidades = (defaultFormValues.proyectoNecesidades ?? "").trim();
+    if (proyectoNecesidadesRaw !== defaultProyectoNecesidades) {
+      tarjetaUpdates.proyecto_necesidades = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
     }
 
     const stagePrepChanged = !areStagePrepsEqual(normalizedStagePrep, initialStagePrepPayload);
@@ -897,6 +917,45 @@ export function LeadDrawer({
                   placeholder="Notas sobre el contacto"
                   disabled={pending}
                   {...register("notas")}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="space-y-1">
+                <h4 className="text-sm font-semibold text-foreground">Proyecto</h4>
+                <p className="text-xs text-muted-foreground">
+                  Describe el nombre y las necesidades principales asociadas al lead.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-proyecto-nombre">
+                  Nombre del proyecto
+                </label>
+                <Input
+                  id="lead-proyecto-nombre"
+                  placeholder="Implementación IA · Región Norte"
+                  disabled={pending}
+                  aria-invalid={errors.proyectoNombre ? "true" : "false"}
+                  {...register("proyectoNombre")}
+                />
+                {errors.proyectoNombre ? (
+                  <p className="text-xs text-destructive">{errors.proyectoNombre.message}</p>
+                ) : null}
+              </div>
+              <div className="grid gap-2">
+                <label
+                  className="text-xs font-medium text-muted-foreground"
+                  htmlFor="lead-proyecto-necesidades"
+                >
+                  Necesidades / objetivos
+                </label>
+                <Textarea
+                  id="lead-proyecto-necesidades"
+                  placeholder="Resumen de los objetivos, plazos o problemas a resolver."
+                  disabled={pending}
+                  rows={4}
+                  {...register("proyectoNecesidades")}
                 />
               </div>
             </section>

@@ -31,6 +31,8 @@ export type EmbudoCard = {
   monto: number | null;
   moneda: string | null;
   probabilidad: number | null;
+  proyectoNombre: string | null;
+  proyectoNecesidades: string | null;
   asignadoId: string | null;
   asignadoNombre: string | null;
   prioridad: number;
@@ -68,6 +70,8 @@ type LeadListRow = {
   monto_estimado: number | null;
   moneda: string | null;
   probabilidad: number | null;
+  proyecto_nombre: string | null;
+  proyecto_necesidades: string | null;
   lead_score: number | null;
   asignado_id: string | null;
   asignado_nombre: string | null;
@@ -220,6 +224,8 @@ function mapStages(
       monto: row.monto_estimado,
       moneda: row.moneda,
       probabilidad: row.probabilidad,
+      proyectoNombre: row.proyecto_nombre ?? null,
+      proyectoNecesidades: row.proyecto_necesidades ?? null,
       asignadoId: row.asignado_id,
       asignadoNombre: row.asignado_nombre,
       prioridad: row.lead_score ?? 0,

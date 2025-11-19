@@ -32,6 +32,8 @@ type LeadRow = {
   monto_estimado: number | null;
   moneda: string | null;
   probabilidad: number | null;
+  proyecto_nombre: string | null;
+  proyecto_necesidades: string | null;
   lead_score: number | null;
   asignado_id: string | null;
   asignado_nombre: string | null;
@@ -258,6 +260,8 @@ function mapRowToStage(row: LeadRow): { stage: EmbudoStage; card: EmbudoCard } {
     monto: row.monto_estimado,
     moneda: row.moneda,
     probabilidad: row.probabilidad,
+    proyectoNombre: row.proyecto_nombre ?? null,
+    proyectoNecesidades: row.proyecto_necesidades ?? null,
     asignadoId: row.asignado_id,
     asignadoNombre: row.asignado_nombre,
     prioridad: row.lead_score ?? 0,
@@ -399,6 +403,20 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   if ("probabilidad_override" in cardPayload) {
     leadPayload.probabilidad_override = cardPayload.probabilidad_override;
+  }
+
+  if ("proyecto_nombre" in cardPayload) {
+    const proyectoNombreValue = sanitizeNullableString(cardPayload.proyecto_nombre);
+    if (proyectoNombreValue !== null) {
+      leadPayload.proyecto_nombre = proyectoNombreValue;
+    }
+  }
+
+  if ("proyecto_necesidades" in cardPayload) {
+    const proyectoNeedsValue = sanitizeNullableString(cardPayload.proyecto_necesidades);
+    if (proyectoNeedsValue !== null) {
+      leadPayload.proyecto_necesidades = proyectoNeedsValue;
+    }
   }
 
   removeUndefined(leadPayload);
