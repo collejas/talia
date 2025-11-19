@@ -355,6 +355,32 @@ def infer_contact_location(
                 estado = None
                 estado_nombre = None
 
+    if estado and not municipio and lada:
+        municipio_candidates: dict[str, str] = {}
+        localities = _lada_localities().get(lada) or []
+        if localities:
+            muni_index = _municipality_name_index(str(estado).zfill(2))
+            for entry in localities:
+                loc_name = str(entry.get("localidad") or "").strip()
+                if not loc_name:
+                    continue
+                normalized = _normalize_key(loc_name)
+                candidate = muni_index.get(normalized)
+                if candidate:
+                    code, name = candidate
+                    municipio_candidates[code] = name
+            if len(municipio_candidates) == 1:
+                municipio, municipio_nombre = next(iter(municipio_candidates.items()))
+            elif len(municipio_candidates) > 1:
+                target_name = state_display_name(str(estado).zfill(2)) or estado_nombre
+                if target_name:
+                    normalized_target = _normalize_key(target_name)
+                    for code, name in municipio_candidates.items():
+                        if _normalize_key(name) == normalized_target:
+                            municipio = code
+                            municipio_nombre = name
+                            break
+
     if not estado and identities:
         for raw_meta in identities:
             identity_meta = _normalized_dict(raw_meta)
