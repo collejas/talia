@@ -240,7 +240,7 @@ export function LocationComparisonChart({
   const aggregatedStages = useMemo(() => {
     const totals = createEmptyStageTotals();
     for (const entry of data) {
-      const stages = entry.etapas_totales || {};
+      const stages = (entry.etapas_totales || {}) as Record<MapaStageKey, number | undefined>;
       for (const stageKey of MAPA_STAGE_KEYS) {
         totals[stageKey] += stages[stageKey] ?? 0;
       }
@@ -299,7 +299,7 @@ export function LocationComparisonChart({
       : { con_conversacion: 0, sin_conversacion: 0 };
 
     const stageTotals = createEmptyStageTotals();
-    const rawStages = activeEntry.etapas_totales || {};
+    const rawStages = (activeEntry.etapas_totales || {}) as Record<MapaStageKey, number | undefined>;
     for (const stageKey of MAPA_STAGE_KEYS) {
       stageTotals[stageKey] = rawStages[stageKey] ?? 0;
     }

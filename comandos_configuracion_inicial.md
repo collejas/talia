@@ -281,19 +281,16 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
 
 
 
- curl -X POST https://talia.mx/api/whatsapp/webhook \
-    -H 'Content-Type: application/x-www-form-urlencoded' \
-    -d 'From=whatsapp:+521234567890' \
-    -d 'Body=hola desde curl' \
-    -d 'MessageSid=SM-curl-test'
 
-  curl -X POST https://talia.mx/api/whatsapp/fallback \
-    -H 'Content-Type: application/x-www-form-urlencoded' \
-    -d 'From=whatsapp:+521234567890' \
-    -d 'Body=reintento curl' \
-    -d 'MessageSid=SM-fallback-test'
+# Algunas ideas para que el “Mapa de Conversión” haga honor al nombre y aporte más valor:
 
-  curl -X POST https://talia.mx/api/whatsapp/status \
-    -H 'Content-Type: application/x-www-form-urlencoded' \
-    -d 'MessageSid=SM-curl-test' \
-    -d 'MessageStatus=delivered'
+  - Embudo visual por región: además del total y las etapas, muestra un mini funnel o barras apiladas por estado/municipio destacando
+    dónde caen más leads (ej. Captado → Demo → Ganado). Podría ser un gráfico en la columna derecha que cambie según la selección.
+  - Calor por tasa de conversión: hoy coloreamos por volumen o canal; podrías ofrecer un modo adicional “Conversión” que pinte el
+    mapa según % de ganados vs. captados por región, evitando que zonas muy grandes opaquen a las más eficientes.
+  - Top conversion drivers: listado de regiones con mejor tasa de demo/ganado, con badges tipo “+20% vs promedio” para priorizar
+    campañas.
+  - Comparativa temporal: una pequeña tarjeta mostrando tendencia (últimos 7 días vs. periodo anterior) y un slider de fecha para ver
+    cómo se movió la conversión en el mapa.
+  - Filtros de etapa avanzada: permitir filtrar el mapa por “etapa actual” (p. ej. sólo mostrar regiones donde hay leads en
+    Negociación o con Demo agendada), para que el mapa sea realmente una vista del embudo.

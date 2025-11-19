@@ -16,7 +16,11 @@ import { MapaConversionTableClient } from "@/components/mapa-conversion/table.cl
 import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
-import { MAPA_STAGE_KEYS, createEmptyStageTotals } from "@/lib/mapa-conversion/stages";
+import {
+  MAPA_STAGE_KEYS,
+  createEmptyStageTotals,
+  type MapaStageKey,
+} from "@/lib/mapa-conversion/stages";
 
 export const dynamic = "force-dynamic";
 
@@ -274,7 +278,7 @@ export default async function Page({
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;
   const globalStages = demografiaResponse
     ? demografiaResponse.map.dataset.reduce((acc, entry) => {
-        const stages = entry.etapas_totales || {};
+        const stages = (entry.etapas_totales || {}) as Record<MapaStageKey, number | undefined>;
         for (const stageKey of MAPA_STAGE_KEYS) {
           acc[stageKey] += stages[stageKey] ?? 0;
         }
