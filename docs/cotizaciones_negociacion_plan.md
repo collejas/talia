@@ -63,6 +63,7 @@
 ### Avances
 - ✅ `lead_cotizaciones` creada + RLS/índices (`supabase/migrations/20260330_180000_lead_cotizaciones.sql`).
 - ✅ RPCs para crear cotizaciones (`panel_lead_quote_create`) y marcar envío/aceptación (`panel_lead_quote_mark`) con sincronización hacia `lead_movimientos` y `stage_prep` (`supabase/migrations/20260330_181000_panel_lead_quotes.sql`).
+- ✅ Endpoints del panel para listar/crear/actualizar cotizaciones (`/leads/{id}/quotes`, `/quotes/{id}/mark`) que consumen los RPCs (`backend/app/api/routes/panel.py`).
 
 ### Próximos pasos
 1. Validar con ventas los campos del template (ítems, impuestos, términos, firmas).

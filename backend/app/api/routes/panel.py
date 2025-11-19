@@ -211,6 +211,88 @@ class LeadUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class LeadQuoteCreatePayload(BaseModel):
+    """Datos para crear una cotización ligada a un lead."""
+
+    titulo: str | None = Field(default=None, max_length=200)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    conceptos: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Lista libre de conceptos/partidas que se incluirán en el PDF.",
+    )
+    subtotal: float | None = Field(default=None, description="Importe antes de impuestos.")
+    impuestos: float | None = Field(
+        default=None, description="Impuestos aplicados a la cotización."
+    )
+    total: float | None = Field(default=None, description="Importe total.")
+    moneda: str | None = Field(default=None, min_length=3, max_length=3, description="ISO-4217.")
+    valido_hasta: date | None = Field(
+        default=None, description="Fecha de vigencia de la propuesta."
+    )
+    pdf_url: str | None = Field(default=None, max_length=2048)
+    pdf_path: str | None = Field(default=None, max_length=512)
+    metadatos: dict[str, Any] | None = Field(default=None, description="Datos adicionales del PDF.")
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class LeadQuoteMarkPayload(BaseModel):
+    """Payload para actualizar el estado de una cotización."""
+
+    estado: Literal["enviada", "aceptada", "rechazada", "cancelada"]
+    canal: Literal["email", "whatsapp", "manual", "otro"] | None = Field(default=None)
+    proposal_sent_at: datetime | date | None = Field(
+        default=None,
+        description="Permite fijar manualmente la fecha de envío que se guardará en stage_prep.",
+    )
+    metadata: dict[str, Any] | None = Field(
+        default=None, description="Metadatos opcionales que se adjuntarán en la bitácora."
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class LeadQuote(BaseModel):
+    """Representación estándar de una cotización."""
+
+    id: UUID
+    tarjeta_id: UUID
+    version: int
+    titulo: str | None = None
+    descripcion: str | None = None
+    conceptos: list[dict[str, Any]] = Field(default_factory=list)
+    subtotal: float | None = None
+    impuestos: float | None = None
+    total: float | None = None
+    moneda: str | None = None
+    valido_hasta: date | None = None
+    estado: Literal["borrador", "enviada", "aceptada", "rechazada", "cancelada"]
+    canal_envio: Literal["email", "whatsapp", "manual", "otro"] | None = None
+    enviada_por: UUID | None = None
+    enviada_en: datetime | None = None
+    aprobada_en: datetime | None = None
+    rechazada_en: datetime | None = None
+    pdf_path: str | None = None
+    pdf_url: str | None = None
+    metadatos: dict[str, Any] | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class LeadQuoteResponse(BaseModel):
+    """Respuesta con una sola cotización."""
+
+    quote: LeadQuote
+
+
+class LeadQuoteListResponse(BaseModel):
+    """Listado de cotizaciones."""
+
+    quotes: list[LeadQuote] = Field(default_factory=list)
+
+
 class AgendaReschedulePayload(BaseModel):
     """Payload para reprogramar una cita desde el panel."""
 
@@ -377,6 +459,17 @@ async def _sb_post(
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
 
 
+async def _sb_rpc(
+    function: str,
+    *,
+    json: dict[str, Any] | None = None,
+    token: str | None = None,
+) -> httpx.Response:
+    """Invoca una función RPC de Supabase."""
+    path = f"/rest/v1/rpc/{function}"
+    return await _sb_post(path, json=json, token=token)
+
+
 async def _sb_patch(
     path: str,
     *,
@@ -518,6 +611,101 @@ def _clean_str(value: Any) -> str | None:
         if candidate:
             return candidate
     return None
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if cleaned.endswith("Z"):
+            cleaned = cleaned[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_date(value: Any) -> date | None:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return date.fromisoformat(cleaned[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def _clean_currency(value: Any) -> str | None:
+    if isinstance(value, str):
+        cleaned = value.strip().upper()
+        if len(cleaned) == 3:
+            return cleaned
+    return None
+
+
+def _ensure_concept_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
+    return LeadQuote(
+        id=row.get("id"),
+        tarjeta_id=row.get("tarjeta_id"),
+        version=row.get("version") or 1,
+        titulo=row.get("titulo"),
+        descripcion=row.get("descripcion"),
+        conceptos=_ensure_concept_list(row.get("conceptos")),
+        subtotal=row.get("subtotal"),
+        impuestos=row.get("impuestos"),
+        total=row.get("total"),
+        moneda=_clean_currency(row.get("moneda")),
+        valido_hasta=_parse_date(row.get("valido_hasta")),
+        estado=row.get("estado") or "borrador",
+        canal_envio=row.get("canal_envio"),
+        enviada_por=row.get("enviada_por"),
+        enviada_en=_parse_timestamp(row.get("enviada_en")),
+        aprobada_en=_parse_timestamp(row.get("aprobada_en")),
+        rechazada_en=_parse_timestamp(row.get("rechazada_en")),
+        pdf_path=row.get("pdf_path"),
+        pdf_url=row.get("pdf_url"),
+        metadatos=row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None,
+        creado_en=_parse_timestamp(row.get("creado_en")),
+        actualizado_en=_parse_timestamp(row.get("actualizado_en")),
+    )
+
+
+def _quote_payload_from_body(payload: LeadQuoteCreatePayload) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True)
+    if "conceptos" in body:
+        body["conceptos"] = _ensure_concept_list(body.get("conceptos"))
+    if "moneda" in body:
+        body["moneda"] = _clean_currency(body["moneda"]) or "MXN"
+    if "valido_hasta" in body and isinstance(body["valido_hasta"], date):
+        body["valido_hasta"] = body["valido_hasta"].isoformat()
+    return body
+
+
+def _quote_extra_payload(payload: LeadQuoteMarkPayload) -> dict[str, Any]:
+    extra = dict(payload.metadata or {})
+    value = payload.proposal_sent_at
+    if value:
+        if isinstance(value, datetime):
+            extra["proposal_sent_at"] = value.astimezone(timezone.utc).isoformat()
+        elif isinstance(value, date):
+            extra["proposal_sent_at"] = value.isoformat()
+    return extra
 
 
 def _ilike_param(value: str) -> str:
@@ -1975,6 +2163,90 @@ async def eliminar_lead(
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error eliminando lead")
     return {"ok": True}
+
+
+@router.get("/leads/{lead_id}/quotes", response_model=LeadQuoteListResponse)
+async def listar_cotizaciones_lead(
+    lead_id: UUID,
+    authorization: str | None = Header(default=None),
+) -> LeadQuoteListResponse:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    params = {
+        "tarjeta_id": f"eq.{lead_id}",
+        "order": "version.desc",
+    }
+    resp = await _sb_get("/rest/v1/lead_cotizaciones", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cotizaciones")
+    rows = resp.json() or []
+    quotes: list[LeadQuote] = []
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict):
+                quotes.append(_quote_from_row(row))
+    return LeadQuoteListResponse(quotes=quotes)
+
+
+@router.post(
+    "/leads/{lead_id}/quotes",
+    status_code=201,
+    response_model=LeadQuoteResponse,
+)
+async def crear_cotizacion_lead(
+    lead_id: UUID,
+    payload: LeadQuoteCreatePayload,
+    authorization: str | None = Header(default=None),
+) -> LeadQuoteResponse:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    body = {
+        "p_tarjeta_id": str(lead_id),
+        "p_payload": _quote_payload_from_body(payload),
+    }
+    resp = await _sb_rpc("panel_lead_quote_create", json=body, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando cotización")
+    data = resp.json() or {}
+    row = _first_row(data)
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=502, detail="quote_create_unexpected_response")
+    quote = _quote_from_row(row)
+    return LeadQuoteResponse(quote=quote)
+
+
+@router.post(
+    "/quotes/{quote_id}/mark",
+    response_model=LeadQuoteResponse,
+)
+async def actualizar_estado_cotizacion(
+    quote_id: UUID,
+    payload: LeadQuoteMarkPayload,
+    authorization: str | None = Header(default=None),
+) -> LeadQuoteResponse:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    body = {
+        "p_quote_id": str(quote_id),
+        "p_estado": payload.estado,
+        "p_canal": payload.canal,
+        "p_extra": _quote_extra_payload(payload),
+    }
+    resp = await _sb_rpc("panel_lead_quote_mark", json=body, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando cotización")
+    data = resp.json() or {}
+    row = _first_row(data)
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
+    quote = _quote_from_row(row)
+    return LeadQuoteResponse(quote=quote)
 
 
 def _normalise_sender_type(value: Any) -> str | None:
