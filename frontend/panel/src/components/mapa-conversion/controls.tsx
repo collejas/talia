@@ -56,10 +56,24 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const normalizedCanales = React.useMemo(() => {
-    if (!canales.length) return new Set(DEFAULT_CHANNELS);
-    return new Set(canales);
+  const normalizedChannelsArray = React.useMemo(() => {
+    const source = canales.length ? canales : DEFAULT_CHANNELS;
+    return Array.from(
+      new Set(
+        source
+          .map((value) => value.trim().toLowerCase())
+          .filter((value) => value && DEFAULT_CHANNELS.includes(value)),
+      ),
+    );
   }, [canales]);
+  const [channelDraft, setChannelDraft] = React.useState<Set<string>>(
+    () => new Set(normalizedChannelsArray),
+  );
+  const [isChannelMenuOpen, setChannelMenuOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setChannelDraft(new Set(normalizedChannelsArray));
+  }, [normalizedChannelsArray]);
 
   const normalizedStages = React.useMemo(() => {
     if (!etapas.length) return new Set(DEFAULT_STAGES);
@@ -90,18 +104,14 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
   }
 
   function toggleChannel(value: string) {
-    const next = new Set(normalizedCanales);
-    if (next.has(value)) {
-      next.delete(value);
-    } else {
-      next.add(value);
-    }
-
-    const cleaned = Array.from(next);
-    const final = cleaned.length ? cleaned.join(",") : DEFAULT_CHANNELS.join(",");
-
-    updateParams({
-      canales: final,
+    setChannelDraft((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        next.delete(value);
+      } else {
+        next.add(value);
+      }
+      return next;
     });
   }
 
@@ -129,6 +139,24 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
     updateParams({
       etapas: ordered.join(","),
     });
+  }
+
+  function applyChannelFilter() {
+    const values = Array.from(channelDraft)
+      .filter((value) => DEFAULT_CHANNELS.includes(value))
+      .sort();
+    if (!values.length || values.length === DEFAULT_CHANNELS.length) {
+      updateParams({ canales: null });
+    } else {
+      updateParams({ canales: values.join(",") });
+    }
+    setChannelMenuOpen(false);
+  }
+
+  function resetChannelFilter() {
+    setChannelDraft(new Set(DEFAULT_CHANNELS));
+    updateParams({ canales: null });
+    setChannelMenuOpen(false);
   }
 
   return (
@@ -165,30 +193,54 @@ export function DemografiaControls({ nivel, canales, etapas, color }: Demografia
           </SelectContent>
         </Select>
 
-        <DropdownMenu>
+        <DropdownMenu open={isChannelMenuOpen} onOpenChange={setChannelMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="outline" size="sm" className="inline-flex items-center gap-2">
               <IconCurrencyDollar className="size-4" />
               Canales
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="z-50 w-[180px]">
+          <DropdownMenuContent align="start" className="z-50 w-[220px]">
             {CHANNEL_OPTIONS.map((item) => (
               <DropdownMenuCheckboxItem
                 key={item.value}
-                checked={normalizedCanales.has(item.value)}
+                checked={channelDraft.has(item.value)}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
                 onCheckedChange={() => toggleChannel(item.value)}
               >
                 {item.label}
               </DropdownMenuCheckboxItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={normalizedCanales.size === CHANNEL_OPTIONS.length}
-              onCheckedChange={() => updateParams({ canales: DEFAULT_CHANNELS.join(",") })}
-            >
-              Seleccionar todos
-            </DropdownMenuCheckboxItem>
+            <div className="px-2 pb-2 text-xs text-muted-foreground">
+              {channelDraft.size === 0
+                ? "Sin selección (se mostrarán todos los canales)"
+                : channelDraft.size === CHANNEL_OPTIONS.length
+                  ? "Mostrando todos los canales"
+                  : `${channelDraft.size} canal${channelDraft.size === 1 ? "" : "es"} seleccionados`}
+            </div>
+            <div className="flex gap-2 px-2 pb-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1 text-xs"
+                onClick={resetChannelFilter}
+              >
+                Restablecer
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="flex-1 text-xs"
+                onClick={applyChannelFilter}
+              >
+                Aplicar
+              </Button>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 

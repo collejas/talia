@@ -21,7 +21,8 @@ export const dynamic = "force-dynamic";
 
 type DemografiaDataset = Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"];
 
-const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz"];
+const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz"] as const;
+type ChannelKey = (typeof DEFAULT_CHANNELS)[number];
 type ColorMode = "sequential" | "channel";
 
 function selectTopLocation(dataset: DemografiaDataset) {
@@ -198,13 +199,19 @@ export default async function Page({
   const nivel: "pais" | "estado" | "municipio" =
     requestedNivel === "municipio" && !normalizedEstado ? "pais" : requestedNivel;
   const canalesParam = typeof params.canales === "string" ? params.canales : "";
-  const canalesSelected =
+  const canalesSelectedRaw =
     canalesParam.trim().length > 0
       ? canalesParam
           .split(",")
           .map((item) => item.trim().toLowerCase())
           .filter(Boolean)
-      : DEFAULT_CHANNELS;
+      : [...DEFAULT_CHANNELS];
+  const normalizedChannels = canalesSelectedRaw
+    .filter((value): value is ChannelKey => DEFAULT_CHANNELS.includes(value as ChannelKey))
+    .filter((value, index, array) => array.indexOf(value) === index);
+  const canalesSelected: ChannelKey[] = normalizedChannels.length
+    ? normalizedChannels
+    : [...DEFAULT_CHANNELS];
   const defaultChannelsSorted = [...DEFAULT_CHANNELS].sort();
   const selectedChannelsSorted = [...canalesSelected].sort();
   const canalesDefaultSelected =
@@ -318,6 +325,7 @@ export default async function Page({
                     shape={mapShape}
                     colorMode={colorMode}
                     globalStages={globalStages}
+                    channelFilter={canalesSelected}
                   />
                 </div>
               ) : null}

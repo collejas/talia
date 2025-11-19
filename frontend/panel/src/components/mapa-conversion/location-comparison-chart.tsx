@@ -11,11 +11,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { DemografiaMapResponse } from "@/lib/mapa-conversion/api";
 import { cn } from "@/lib/utils";
 
+const CHANNEL_KEYS = ["webchat", "whatsapp", "voz"] as const;
+type ChannelKey = (typeof CHANNEL_KEYS)[number];
+
 export type LocationComparisonChartProps = {
   data: DemografiaMapResponse["dataset"];
   nivel: DemografiaMapResponse["nivel"];
   shape: GeoJSONType | null;
   colorMode: "sequential" | "channel";
+  channelFilter?: ChannelKey[];
   globalStages?: {
     captado: number;
     precalificado: number;
@@ -53,9 +57,7 @@ type MetricsPayload = {
     sin_conversacion: number;
   };
   channels: {
-    webchat: number;
-    whatsapp: number;
-    voz: number;
+    [key in ChannelKey]: number;
   };
   stages: {
     captado: number;
@@ -85,34 +87,59 @@ function resolveFeatureKey(feature: Feature): string {
   return value.toString().trim();
 }
 
-const CHANNEL_COLORS: Record<string, [number, number, number]> = {
+const CHANNEL_COLORS: Record<ChannelKey, [number, number, number]> = {
   webchat: [59, 130, 246], // #3b82f6
   whatsapp: [34, 197, 94], // #22c55e
   voz: [249, 115, 22], // #f97316
 };
 const DEFAULT_CHANNEL_COLOR: [number, number, number] = [148, 163, 184]; // slate
-const CHANNEL_LABELS: Record<string, string> = {
+const CHANNEL_LABELS: Record<ChannelKey, string> = {
   webchat: "Webchat",
   whatsapp: "WhatsApp",
   voz: "Voz",
 };
 
+function normalizeChannelKey(value: string | null | undefined): ChannelKey | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.toLowerCase();
+  return CHANNEL_KEYS.includes(normalized as ChannelKey) ? (normalized as ChannelKey) : null;
+}
+
 function resolveChannelTotal(
   entry: DemografiaMapResponse["dataset"][number],
-  channel: "webchat" | "whatsapp" | "voz",
+  channel: ChannelKey,
+  allowedChannels?: Set<ChannelKey>,
 ): number {
+  if (allowedChannels && allowedChannels.size && !allowedChannels.has(channel)) {
+    return 0;
+  }
   const visitantes = entry.visitantes_totales_por_canal?.[channel];
-  if (typeof visitantes === "number" && visitantes > 0) {
+  if (typeof visitantes === "number" && Number.isFinite(visitantes)) {
     return visitantes;
   }
   const totales = entry.totales_por_canal?.[channel];
-  if (typeof totales === "number" && totales > 0) {
+  if (typeof totales === "number" && Number.isFinite(totales)) {
     return totales;
   }
-  if (channel === "webchat") {
-    return entry.visitantes_total ?? 0;
+  const leads = entry.leads_totales_por_canal?.[channel];
+  if (typeof leads === "number" && Number.isFinite(leads)) {
+    return leads;
   }
-  return entry.leads_totales_por_canal?.[channel] ?? 0;
+  return 0;
+}
+
+function resolveFilteredEntryTotal(
+  entry: DemografiaMapResponse["dataset"][number],
+  allowedChannels?: Set<ChannelKey>,
+): number {
+  if (!allowedChannels || !allowedChannels.size || allowedChannels.size === CHANNEL_KEYS.length) {
+    return resolveEntryTotal(entry);
+  }
+  let total = 0;
+  for (const channel of allowedChannels) {
+    total += resolveChannelTotal(entry, channel);
+  }
+  return total;
 }
 
 function resolveEntryTotal(entry: DemografiaMapResponse["dataset"][number]): number {
@@ -126,10 +153,24 @@ export function LocationComparisonChart({
   nivel,
   shape,
   colorMode,
+  channelFilter,
   globalStages,
 }: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const activeChannels = useMemo<ChannelKey[]>(() => {
+    const source = channelFilter?.length ? channelFilter : CHANNEL_KEYS;
+    const normalized = source
+      .map((channel) => channel.toLowerCase() as ChannelKey)
+      .filter(
+        (channel, index, array): channel is ChannelKey =>
+          CHANNEL_KEYS.includes(channel) && array.indexOf(channel) === index,
+      );
+    return normalized.length ? normalized : [...CHANNEL_KEYS];
+  }, [channelFilter]);
+  const activeChannelSet = useMemo(() => new Set<ChannelKey>(activeChannels), [activeChannels]);
+  const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
 
   const datasetMap = useMemo(() => {
     const map = new Map<string, (typeof data)[number]>();
@@ -246,12 +287,12 @@ export function LocationComparisonChart({
         con_conversacion: entry.visitantes_con_chat ?? 0,
         sin_conversacion: entry.visitantes_sin_chat ?? 0,
       };
-      summary.totalVisitas += resolveEntryTotal(entry);
+      summary.totalVisitas += resolveFilteredEntryTotal(entry, activeChannelSet);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
-      summary.channels.webchat += resolveChannelTotal(entry, "webchat");
-      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp");
-      summary.channels.voz += resolveChannelTotal(entry, "voz");
+      summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet);
+      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet);
+      summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet);
     }
 
     summary.stages = globalStages ? { ...globalStages } : { ...aggregatedStages };
@@ -262,7 +303,7 @@ export function LocationComparisonChart({
         : `${formatNumber(data.length)} ubicaciones`;
     summary.subtitle = `${formatNumber(summary.totalVisitas)} visitas totales · ${locationSubtitle}`;
     return summary;
-  }, [aggregatedStages, data, globalStages]);
+  }, [activeChannelSet, aggregatedStages, data, globalStages]);
 
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;
@@ -275,16 +316,16 @@ export function LocationComparisonChart({
     return {
       scope: "location",
       title: activeEntry.name,
-      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveEntryTotal(activeEntry))} visitas`,
-      totalVisitas: resolveEntryTotal(activeEntry),
+      subtitle: `${NIVEL_LABELS[activeEntry.nivel as keyof typeof NIVEL_LABELS] ?? "Ubicación"} · ${formatNumber(resolveFilteredEntryTotal(activeEntry, activeChannelSet))} visitas`,
+      totalVisitas: resolveFilteredEntryTotal(activeEntry, activeChannelSet),
       conversation: {
         con_conversacion: conversation.con_conversacion ?? 0,
         sin_conversacion: conversation.sin_conversacion ?? 0,
       },
       channels: {
-        webchat: resolveChannelTotal(activeEntry, "webchat"),
-        whatsapp: resolveChannelTotal(activeEntry, "whatsapp"),
-        voz: resolveChannelTotal(activeEntry, "voz"),
+        webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet),
+        whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
+        voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet),
       },
       stages: {
         captado: activeEntry.etapas_totales?.captado ?? 0,
@@ -294,7 +335,7 @@ export function LocationComparisonChart({
         perdido: activeEntry.etapas_totales?.perdido ?? 0,
       },
     };
-  }, [activeEntry]);
+  }, [activeChannelSet, activeEntry]);
 
   const metrics = activeMetrics ?? datasetSummary;
 
@@ -311,6 +352,13 @@ export function LocationComparisonChart({
       if (!nextLevel) return;
 
       const params = new URLSearchParams(searchParams.toString());
+      const hasCustomChannels =
+        activeChannels.length > 0 && activeChannels.length < CHANNEL_KEYS.length;
+      if (hasCustomChannels) {
+        params.set("canales", activeChannels.join(","));
+      } else {
+        params.delete("canales");
+      }
       if (nextLevel === "estado") {
         params.set("nivel", "estado");
         params.delete("estado");
@@ -321,7 +369,7 @@ export function LocationComparisonChart({
       }
       router.replace(`/mapa-de-conversion?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams, manualSelectedKey, setManualSelectedKey],
+    [activeChannels, manualSelectedKey, router, searchParams, setManualSelectedKey],
   );
 
   const style = useCallback(
@@ -346,7 +394,12 @@ export function LocationComparisonChart({
 
       const intensity = Math.min(1, total / maxTotal);
       if (colorMode === "channel") {
-        const { fillColor, fillOpacity } = resolveChannelStyle(entry, intensity, Boolean(isSelected || isHovered));
+        const { fillColor, fillOpacity } = resolveChannelStyle(
+          entry,
+          intensity,
+          Boolean(isSelected || isHovered),
+          activeChannelSet,
+        );
         return {
           color: isSelected || isHovered ? "hsl(var(--primary)/0.6)" : "hsl(var(--foreground)/0.18)",
           weight: isSelected || isHovered ? 2.2 : 1,
@@ -365,7 +418,7 @@ export function LocationComparisonChart({
         fillOpacity: isSelected || isHovered ? 0.82 : 0.72,
       };
     },
-    [colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
+    [activeChannelSet, colorMode, datasetMap, hoveredKey, maxTotal, selectedKey],
   );
 
   const onEachFeature = useCallback(
@@ -409,11 +462,11 @@ export function LocationComparisonChart({
         con_conversacion: entry.visitantes_con_chat ?? 0,
         sin_conversacion: entry.visitantes_sin_chat ?? 0,
       };
-      const channelRows = ["webchat", "whatsapp", "voz"].map((channel) => {
-        const total = resolveChannelTotal(entry, channel as "webchat" | "whatsapp" | "voz");
+      const channelRows = displayedChannelKeys.map((channel) => {
+        const total = resolveChannelTotal(entry, channel, activeChannelSet);
         return {
           key: `channel-${channel}`,
-          label: `Total ${CHANNEL_LABELS[channel] ?? channel}`,
+          label: `Total ${CHANNEL_LABELS[channel]}`,
           value: formatNumber(total),
           monospace: true,
           color: resolveChannelColor(channel),
@@ -427,7 +480,7 @@ export function LocationComparisonChart({
             {
               key: "total",
               label: "Visitas totales",
-              value: formatNumber(resolveEntryTotal(entry)),
+              value: formatNumber(resolveFilteredEntryTotal(entry, activeChannelSet)),
               color: "var(--chart-1)",
             },
             {
@@ -448,7 +501,7 @@ export function LocationComparisonChart({
 
       tooltipLayer.bindTooltip?.(tooltip, tooltipOptions);
     },
-    [datasetMap, handleFeatureClick, setHoveredKey],
+    [activeChannelSet, datasetMap, displayedChannelKeys, handleFeatureClick, setHoveredKey],
   );
 
   const center =
@@ -510,11 +563,10 @@ export function LocationComparisonChart({
           />
           <MetricSection
             title="Canales"
-            items={[
-              { label: "Canal Webchat", value: metrics.channels.webchat },
-              { label: "Canal WhatsApp", value: metrics.channels.whatsapp },
-              { label: "Canal Voz", value: metrics.channels.voz },
-            ]}
+            items={displayedChannelKeys.map((channel) => ({
+              label: `Canal ${CHANNEL_LABELS[channel]}`,
+              value: metrics.channels[channel],
+            }))}
           />
           <MetricSection
             title="Etapas"
@@ -631,10 +683,25 @@ function resolveChannelStyle(
   entry: DemografiaMapResponse["dataset"][number],
   intensity: number,
   isActive: boolean,
+  allowedChannels?: Set<ChannelKey>,
 ): { fillColor: string; fillOpacity: number } {
   const totals = entry.totales_por_canal || {};
-  const sorted = Object.entries(totals).sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0));
-  const topChannel = sorted.find(([, value]) => (value ?? 0) > 0)?.[0] ?? "webchat";
+  const filteredTotals = Object.entries(totals)
+    .map(([channel, total]) => {
+      const normalized = normalizeChannelKey(channel);
+      if (!normalized) return null;
+      if (typeof total !== "number" || !Number.isFinite(total)) {
+        return [normalized, 0] as const;
+      }
+      return [normalized, total] as const;
+    })
+    .filter((item): item is readonly [ChannelKey, number] => Boolean(item))
+    .filter(([channel]) => !allowedChannels?.size || allowedChannels.has(channel));
+
+  const sorted = filteredTotals.sort(([, totalA], [, totalB]) => (Number(totalB) ?? 0) - (Number(totalA) ?? 0));
+  const fallbackChannel =
+    allowedChannels && allowedChannels.size ? Array.from(allowedChannels)[0] : CHANNEL_KEYS[0];
+  const topChannel = sorted.find(([, value]) => (Number(value) ?? 0) > 0)?.[0] ?? fallbackChannel;
   const baseColor = CHANNEL_COLORS[topChannel] ?? DEFAULT_CHANNEL_COLOR;
   const factor = Math.min(1, Math.max(0, Math.pow(intensity || 0.25, 0.75)));
   const [r, g, b] = mixWithWhite(baseColor, factor);
@@ -715,9 +782,8 @@ function MapTooltipContent({ title, rows }: MapTooltipContentProps) {
 }
 
 function resolveChannelColor(channel: string | null | undefined): string {
-  if (!channel) return "var(--chart-4)";
-  const normalized = channel.toLowerCase();
-  const color = CHANNEL_COLORS[normalized] ?? DEFAULT_CHANNEL_COLOR;
+  const normalized = normalizeChannelKey(channel);
+  const color = normalized ? CHANNEL_COLORS[normalized] : DEFAULT_CHANNEL_COLOR;
   return `rgb(${color.join(", ")})`;
 }
 
