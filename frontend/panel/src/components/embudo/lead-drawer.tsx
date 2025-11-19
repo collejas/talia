@@ -522,11 +522,12 @@ export function LeadDrawer({
     const probRaw = (values.probabilidad ?? "").trim();
     const empresaRaw = (values.empresa ?? "").trim();
     const notasRaw = (values.notas ?? "").trim();
+    const necesidadPropositoRaw = (values.necesidadProposito ?? "").trim();
     const proyectoNombreRaw = (values.proyectoNombre ?? "").trim();
     const proyectoNecesidadesRaw = (values.proyectoNecesidades ?? "").trim();
 
     const missingRequired =
-      isCreateMode ? null : findMissingRequiredField(upcomingStageGroups, stagePrep);
+      isCreateMode ? null : findMissingRequiredField(upcomingStageGroups, stagePrep, initialStagePrepState);
     if (missingRequired) {
       setError(
         `Completa el campo “${missingRequired.field.label}” en la etapa “${missingRequired.stage.nombre}”.`,
@@ -1578,9 +1579,16 @@ function buildUpcomingStageGroups(
 function findMissingRequiredField(
   groups: DrawerStageGroup[],
   state: StagePrepState,
+  initialState: StagePrepState,
 ): { stage: EmbudoStage; field: DrawerPrepFieldDefinition } | null {
   for (const group of groups) {
     const stageValues = state[group.stage.codigo] ?? {};
+    const initialValues = initialState[group.stage.codigo] ?? {};
+    const shouldValidateStage =
+      stageHasAnyValue(stageValues) || stageHasAnyValue(initialValues);
+    if (!shouldValidateStage) {
+      continue;
+    }
     for (const section of group.sections) {
       for (const field of section.fields) {
         if (!field.required) continue;
@@ -1645,6 +1653,18 @@ function isStageFieldComplete(field: DrawerPrepFieldDefinition, rawValue: string
     return rawValue === true;
   }
   return typeof rawValue === "string" && rawValue.trim().length > 0;
+}
+
+function stageHasAnyValue(state: Record<string, string | boolean>): boolean {
+  return Object.values(state).some((value) => {
+    if (typeof value === "boolean") {
+      return value === true;
+    }
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+    return false;
+  });
 }
 
 function areStagePrepsEqual(a: StagePrepPayload, b: StagePrepPayload): boolean {

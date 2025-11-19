@@ -1,5 +1,10 @@
 BEGIN;
 
+-- ============================================================================
+-- Ensure panel_leads_list / panel_lead_update / panel_lead_move expose the
+-- new project + necesidad fields with a consistent structure.
+-- ============================================================================
+
 DROP FUNCTION IF EXISTS public.panel_leads_list(
     uuid,
     uuid,
@@ -12,7 +17,7 @@ DROP FUNCTION IF EXISTS public.panel_leads_list(
     text,
     integer,
     integer
-) CASCADE;
+);
 
 CREATE OR REPLACE FUNCTION public.panel_leads_list(
     p_tablero uuid DEFAULT NULL,
@@ -138,42 +143,18 @@ ordered AS (
     SELECT *
     FROM annotated
     ORDER BY
-        CASE
-            WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN actualizado_en
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN actualizado_en
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) = 'asc' THEN cerrado_en
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) <> 'asc' THEN cerrado_en
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) = 'asc' THEN monto_estimado
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) <> 'asc' THEN monto_estimado
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) = 'asc' THEN probabilidad
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) <> 'asc' THEN probabilidad
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) = 'asc' THEN lead_score
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) <> 'asc' THEN lead_score
-        END DESC,
-        CASE
-            WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) = 'asc' THEN creado_en
-        END ASC,
-        CASE
-            WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) <> 'asc' THEN creado_en
-        END DESC,
+        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) = 'asc' THEN actualizado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'actualizado_en' AND lower(p_order_dir) <> 'asc' THEN actualizado_en END DESC,
+        CASE WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) = 'asc' THEN cerrado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'cerrado_en' AND lower(p_order_dir) <> 'asc' THEN cerrado_en END DESC,
+        CASE WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) = 'asc' THEN monto_estimado END ASC,
+        CASE WHEN lower(p_order_by) = 'monto_estimado' AND lower(p_order_dir) <> 'asc' THEN monto_estimado END DESC,
+        CASE WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) = 'asc' THEN probabilidad END ASC,
+        CASE WHEN lower(p_order_by) = 'probabilidad' AND lower(p_order_dir) <> 'asc' THEN probabilidad END DESC,
+        CASE WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) = 'asc' THEN lead_score END ASC,
+        CASE WHEN lower(p_order_by) = 'lead_score' AND lower(p_order_dir) <> 'asc' THEN lead_score END DESC,
+        CASE WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) = 'asc' THEN creado_en END ASC,
+        CASE WHEN lower(p_order_by) = 'creado_en' AND lower(p_order_dir) <> 'asc' THEN creado_en END DESC,
         creado_en DESC,
         tarjeta_id
 )
@@ -250,6 +231,8 @@ CREATE FUNCTION public.panel_lead_update(
     contacto_nombre text,
     contacto_correo text,
     contacto_telefono text,
+    contacto_empresa text,
+    contacto_notas text,
     contacto_necesidad text,
     contacto_estado text,
     canal text,
@@ -278,8 +261,7 @@ CREATE FUNCTION public.panel_lead_update(
     tags text[],
     metadata jsonb,
     total_rows bigint
-)
-LANGUAGE plpgsql
+) LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $function$
@@ -288,10 +270,10 @@ DECLARE
     v_contact public.contactos%ROWTYPE;
     v_contact_updates jsonb := COALESCE(p_contacto, '{}'::jsonb);
     v_card_updates jsonb := COALESCE(p_tarjeta, '{}'::jsonb);
-    v_merge boolean := COALESCE(p_merge_metadata, true);
+    v_merge boolean := COALESCE(p_merge_metadata, TRUE);
     v_now timestamptz := now();
 BEGIN
-    SELECT *
+    SELECT lt.*
     INTO v_lead
     FROM public.lead_tarjetas lt
     WHERE lt.id = p_tarjeta_id
@@ -462,7 +444,7 @@ BEGIN
             metadata = CASE
                 WHEN v_card_updates ? 'metadata' THEN
                     CASE
-                        WHEN v_merge THEN coalesce(lt.metadata, '{}'::jsonb) || COALESCE(v_card_updates->'metadata', '{}'::jsonb)
+                        WHEN v_merge THEN COALESCE(lt.metadata, '{}'::jsonb) || COALESCE(v_card_updates->'metadata', '{}'::jsonb)
                         ELSE COALESCE(v_card_updates->'metadata', '{}'::jsonb)
                     END
                 ELSE lt.metadata
@@ -478,46 +460,55 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        lt.id AS tarjeta_id,
-        lt.contacto_id,
-        ct.nombre_completo AS contacto_nombre,
-        ct.correo AS contacto_correo,
-        ct.telefono_e164 AS contacto_telefono,
-        NULLIF(ct.necesidad_proposito, '') AS contacto_necesidad,
-        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, '')) AS contacto_estado,
-        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, '')) AS canal,
-        le.id AS etapa_id,
-        le.nombre AS etapa_nombre,
-        le.codigo AS etapa_codigo,
-        le.metadatos AS etapa_metadatos,
-        le.orden AS etapa_orden,
-        le.categoria,
-        lt.creado_en,
-        lt.actualizado_en,
-        lt.cerrado_en,
-        lt.monto_estimado,
-        lt.moneda,
-        COALESCE(lt.probabilidad_override, le.probabilidad) AS probabilidad,
-        lt.proyecto_nombre,
-        lt.proyecto_necesidades,
-        lt.lead_score,
-        lt.asignado_a_usuario_id AS asignado_id,
-        asignado.nombre_completo AS asignado_nombre,
-        lt.propietario_usuario_id AS propietario_id,
-        propietario.nombre_completo AS propietario_nombre,
-        lt.conversacion_id,
-        conv.ultimo_mensaje_en,
-        lt.motivo_cierre,
-        lt.tags,
-        lt.metadata,
-        1::bigint AS total_rows
-    FROM public.lead_tarjetas lt
-    JOIN public.lead_etapas le ON le.id = lt.etapa_id
-    JOIN public.contactos ct ON ct.id = lt.contacto_id
-    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
-    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
-    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
-    WHERE lt.id = p_tarjeta_id;
+        ls.tarjeta_id,
+        ls.contacto_id,
+        ls.contacto_nombre,
+        ls.contacto_correo,
+        ls.contacto_telefono,
+        ls.contacto_empresa,
+        ls.contacto_notas,
+        ls.contacto_necesidad,
+        ls.contacto_estado,
+        ls.canal,
+        ls.etapa_id,
+        ls.etapa_nombre,
+        ls.etapa_codigo,
+        ls.etapa_metadatos,
+        ls.etapa_orden,
+        ls.categoria,
+        ls.creado_en,
+        ls.actualizado_en,
+        ls.cerrado_en,
+        ls.monto_estimado,
+        ls.moneda,
+        ls.probabilidad,
+        ls.proyecto_nombre,
+        ls.proyecto_necesidades,
+        ls.lead_score,
+        ls.asignado_id,
+        ls.asignado_nombre,
+        ls.propietario_id,
+        ls.propietario_nombre,
+        ls.conversacion_id,
+        ls.ultimo_mensaje_en,
+        ls.motivo_cierre,
+        ls.tags,
+        ls.metadata,
+        ls.total_rows
+    FROM public.panel_leads_list(
+        p_tablero => v_lead.tablero_id,
+        p_etapa => NULL,
+        p_categoria => NULL,
+        p_asignado => NULL,
+        p_from => NULL,
+        p_to => NULL,
+        p_search => NULL,
+        p_order_by => 'actualizado_en',
+        p_order_dir => 'desc',
+        p_limit => 1,
+        p_offset => 0
+    ) AS ls
+    WHERE ls.tarjeta_id = p_tarjeta_id;
 END;
 $function$;
 
@@ -552,6 +543,8 @@ CREATE FUNCTION public.panel_lead_move(
     contacto_nombre text,
     contacto_correo text,
     contacto_telefono text,
+    contacto_empresa text,
+    contacto_notas text,
     contacto_necesidad text,
     contacto_estado text,
     canal text,
@@ -628,46 +621,55 @@ BEGIN
     IF v_lead.etapa_id = v_dest.id THEN
         RETURN QUERY
         SELECT
-            lt.id::uuid AS tarjeta_id,
-            lt.contacto_id::uuid AS contacto_id,
-            ct.nombre_completo::text AS contacto_nombre,
-            ct.correo::text AS contacto_correo,
-            ct.telefono_e164::text AS contacto_telefono,
-            COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, ''))::text AS contacto_estado,
-            NULLIF(ct.necesidad_proposito, '')::text AS contacto_necesidad,
-            COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, ''))::text AS canal,
-            le.id::uuid AS etapa_id,
-            le.nombre::text AS etapa_nombre,
-            le.codigo::text AS etapa_codigo,
-            le.metadatos::jsonb AS etapa_metadatos,
-            le.orden::smallint AS etapa_orden,
-            le.categoria::public.lead_categoria AS categoria,
-            lt.creado_en::timestamptz AS creado_en,
-            lt.actualizado_en::timestamptz AS actualizado_en,
-            lt.cerrado_en::timestamptz AS cerrado_en,
-            lt.monto_estimado::numeric AS monto_estimado,
-            lt.moneda::text AS moneda,
-            COALESCE(lt.probabilidad_override, le.probabilidad)::numeric AS probabilidad,
-            lt.proyecto_nombre::text AS proyecto_nombre,
-            lt.proyecto_necesidades::text AS proyecto_necesidades,
-            lt.lead_score::integer AS lead_score,
-            lt.asignado_a_usuario_id::uuid AS asignado_id,
-            asignado.nombre_completo::text AS asignado_nombre,
-            lt.propietario_usuario_id::uuid AS propietario_id,
-            propietario.nombre_completo::text AS propietario_nombre,
-            lt.conversacion_id::uuid AS conversacion_id,
-            conv.ultimo_mensaje_en::timestamptz AS ultimo_mensaje_en,
-            lt.motivo_cierre::text AS motivo_cierre,
-            lt.tags::text[] AS tags,
-            lt.metadata::jsonb AS metadata,
-            1::bigint AS total_rows
-        FROM public.lead_tarjetas lt
-        JOIN public.lead_etapas le ON le.id = lt.etapa_id
-        JOIN public.contactos ct ON ct.id = lt.contacto_id
-        LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
-        LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
-        LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
-        WHERE lt.id = p_tarjeta_id;
+            ls.tarjeta_id,
+            ls.contacto_id,
+            ls.contacto_nombre,
+            ls.contacto_correo,
+            ls.contacto_telefono,
+            ls.contacto_empresa,
+            ls.contacto_notas,
+            ls.contacto_necesidad,
+            ls.contacto_estado,
+            ls.canal,
+            ls.etapa_id,
+            ls.etapa_nombre,
+            ls.etapa_codigo,
+            ls.etapa_metadatos,
+            ls.etapa_orden,
+            ls.categoria,
+            ls.creado_en,
+            ls.actualizado_en,
+            ls.cerrado_en,
+            ls.monto_estimado,
+            ls.moneda,
+            ls.probabilidad,
+            ls.proyecto_nombre,
+            ls.proyecto_necesidades,
+            ls.lead_score,
+            ls.asignado_id,
+            ls.asignado_nombre,
+            ls.propietario_id,
+            ls.propietario_nombre,
+            ls.conversacion_id,
+            ls.ultimo_mensaje_en,
+            ls.motivo_cierre,
+            ls.tags,
+            ls.metadata,
+            ls.total_rows
+        FROM public.panel_leads_list(
+            p_tablero => v_lead.tablero_id,
+            p_etapa => NULL,
+            p_categoria => NULL,
+            p_asignado => NULL,
+            p_from => NULL,
+            p_to => NULL,
+            p_search => NULL,
+            p_order_by => 'actualizado_en',
+            p_order_dir => 'desc',
+            p_limit => 1,
+            p_offset => 0
+        ) AS ls
+        WHERE ls.tarjeta_id = p_tarjeta_id;
         RETURN;
     END IF;
 
@@ -721,46 +723,55 @@ BEGIN
 
     RETURN QUERY
     SELECT
-        lt.id::uuid AS tarjeta_id,
-        lt.contacto_id::uuid AS contacto_id,
-        ct.nombre_completo::text AS contacto_nombre,
-        ct.correo::text AS contacto_correo,
-        ct.telefono_e164::text AS contacto_telefono,
-        COALESCE(NULLIF(ct.estado, ''), NULLIF(ct.captura_estado, ''))::text AS contacto_estado,
-        NULLIF(ct.necesidad_proposito, '')::text AS contacto_necesidad,
-        COALESCE(NULLIF(lt.canal, ''), NULLIF(conv.canal, ''))::text AS canal,
-        le.id::uuid AS etapa_id,
-        le.nombre::text AS etapa_nombre,
-        le.codigo::text AS etapa_codigo,
-        le.metadatos::jsonb AS etapa_metadatos,
-        le.orden::smallint AS etapa_orden,
-        le.categoria::public.lead_categoria AS categoria,
-        lt.creado_en::timestamptz AS creado_en,
-        lt.actualizado_en::timestamptz AS actualizado_en,
-        lt.cerrado_en::timestamptz AS cerrado_en,
-        lt.monto_estimado::numeric AS monto_estimado,
-        lt.moneda::text AS moneda,
-        COALESCE(lt.probabilidad_override, le.probabilidad)::numeric AS probabilidad,
-        lt.proyecto_nombre::text AS proyecto_nombre,
-        lt.proyecto_necesidades::text AS proyecto_necesidades,
-        lt.lead_score::integer AS lead_score,
-        lt.asignado_a_usuario_id::uuid AS asignado_id,
-        asignado.nombre_completo::text AS asignado_nombre,
-        lt.propietario_usuario_id::uuid AS propietario_id,
-        propietario.nombre_completo::text AS propietario_nombre,
-        lt.conversacion_id::uuid AS conversacion_id,
-        conv.ultimo_mensaje_en::timestamptz AS ultimo_mensaje_en,
-        lt.motivo_cierre::text AS motivo_cierre,
-        lt.tags::text[] AS tags,
-        lt.metadata::jsonb AS metadata,
-        1::bigint AS total_rows
-    FROM public.lead_tarjetas lt
-    JOIN public.lead_etapas le ON le.id = lt.etapa_id
-    JOIN public.contactos ct ON ct.id = lt.contacto_id
-    LEFT JOIN public.conversaciones conv ON conv.id = lt.conversacion_id
-    LEFT JOIN public.usuarios asignado ON asignado.id = lt.asignado_a_usuario_id
-    LEFT JOIN public.usuarios propietario ON propietario.id = lt.propietario_usuario_id
-    WHERE lt.id = p_tarjeta_id;
+        ls.tarjeta_id,
+        ls.contacto_id,
+        ls.contacto_nombre,
+        ls.contacto_correo,
+        ls.contacto_telefono,
+        ls.contacto_empresa,
+        ls.contacto_notas,
+        ls.contacto_necesidad,
+        ls.contacto_estado,
+        ls.canal,
+        ls.etapa_id,
+        ls.etapa_nombre,
+        ls.etapa_codigo,
+        ls.etapa_metadatos,
+        ls.etapa_orden,
+        ls.categoria,
+        ls.creado_en,
+        ls.actualizado_en,
+        ls.cerrado_en,
+        ls.monto_estimado,
+        ls.moneda,
+        ls.probabilidad,
+        ls.proyecto_nombre,
+        ls.proyecto_necesidades,
+        ls.lead_score,
+        ls.asignado_id,
+        ls.asignado_nombre,
+        ls.propietario_id,
+        ls.propietario_nombre,
+        ls.conversacion_id,
+        ls.ultimo_mensaje_en,
+        ls.motivo_cierre,
+        ls.tags,
+        ls.metadata,
+        ls.total_rows
+    FROM public.panel_leads_list(
+        p_tablero => v_lead.tablero_id,
+        p_etapa => NULL,
+        p_categoria => NULL,
+        p_asignado => NULL,
+        p_from => NULL,
+        p_to => NULL,
+        p_search => NULL,
+        p_order_by => 'actualizado_en',
+        p_order_dir => 'desc',
+        p_limit => 1,
+        p_offset => 0
+    ) AS ls
+    WHERE ls.tarjeta_id = p_tarjeta_id;
 END;
 $function$;
 
