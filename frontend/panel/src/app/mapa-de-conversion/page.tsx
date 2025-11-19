@@ -19,7 +19,7 @@ import { loadDemografiaData } from "@/lib/mapa-conversion/api";
 import {
   MAPA_STAGE_KEYS,
   createEmptyStageTotals,
-  type MapaStageKey,
+  orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
 
 export const dynamic = "force-dynamic";
@@ -62,9 +62,10 @@ function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>[
   const stageLabels: Record<string, string> = {
     captado: "Captado",
     precalificado: "Precalificado",
+    demo: "Demo agendada",
     negociacion: "Negociación",
-    ganado: "Ganado",
-    perdido: "Perdido",
+    cerrado_ganado: "Cerrado (ganado)",
+    cerrado_perdido: "Cerrado (perdido)",
   }
 
   return dataset.map((entry, index) => {
@@ -275,16 +276,26 @@ export default async function Page({
         (a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0),
       )
     : [];
+  const stageKeysFromData = demografiaResponse
+    ? Array.from(
+        new Set(
+          demografiaResponse.map.dataset.flatMap((entry) =>
+            Object.keys(entry.etapas_totales ?? {}),
+          ),
+        ),
+      )
+    : MAPA_STAGE_KEYS;
+  const stageKeys = stageKeysFromData.length ? orderStageKeys(stageKeysFromData) : MAPA_STAGE_KEYS;
   const nivelChart = demografiaResponse?.map.nivel ?? nivel;
   const globalStages = demografiaResponse
     ? demografiaResponse.map.dataset.reduce((acc, entry) => {
-        const stages = (entry.etapas_totales || {}) as Record<MapaStageKey, number | undefined>;
-        for (const stageKey of MAPA_STAGE_KEYS) {
-          acc[stageKey] += stages[stageKey] ?? 0;
+        const stages = (entry.etapas_totales || {}) as Record<string, number | undefined>;
+        for (const stageKey of stageKeys) {
+          acc[stageKey] = (acc[stageKey] ?? 0) + (stages[stageKey] ?? 0);
         }
         return acc;
-      }, createEmptyStageTotals())
-    : createEmptyStageTotals();
+      }, createEmptyStageTotals(stageKeys))
+    : createEmptyStageTotals(stageKeys);
   const mapShape = (() => {
     const raw = demografiaResponse?.map.geojson;
     if (!raw || typeof raw !== "object") return null;
@@ -326,6 +337,7 @@ export default async function Page({
                     colorMode={colorMode}
                     globalStages={globalStages}
                     channelFilter={canalesSelected}
+                    stageKeys={stageKeys}
                   />
                 </div>
               ) : null}

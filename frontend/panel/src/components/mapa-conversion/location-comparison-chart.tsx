@@ -10,9 +10,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { DemografiaMapResponse } from "@/lib/mapa-conversion/api";
 import {
-  MAPA_STAGE_ORDER,
+  MAPA_STAGE_LABELS,
   MAPA_STAGE_KEYS,
-  type MapaStageKey,
   createEmptyStageTotals,
 } from "@/lib/mapa-conversion/stages";
 import { cn } from "@/lib/utils";
@@ -26,7 +25,8 @@ export type LocationComparisonChartProps = {
   shape: GeoJSONType | null;
   colorMode: "sequential" | "channel";
   channelFilter?: ChannelKey[];
-  globalStages?: Record<MapaStageKey, number>;
+  globalStages?: Record<string, number>;
+  stageKeys?: string[];
 };
 
 const NIVEL_LABELS: Record<DemografiaMapResponse["nivel"], string> = {
@@ -51,7 +51,7 @@ type MetricsPayload = {
   channels: {
     [key in ChannelKey]: number;
   };
-  stages: Record<MapaStageKey, number>;
+  stages: Record<string, number>;
 };
 
 function resolveFeatureKey(feature: Feature): string {
@@ -141,6 +141,7 @@ export function LocationComparisonChart({
   colorMode,
   channelFilter,
   globalStages,
+  stageKeys: stageKeysProp,
 }: LocationComparisonChartProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -237,16 +238,21 @@ export function LocationComparisonChart({
   const hoveredEntry = hoveredKey ? datasetMap.get(hoveredKey) ?? null : null;
   const activeEntry = hoveredEntry ?? selectedEntry ?? null;
 
+  const stageKeys = useMemo(
+    () => (stageKeysProp && stageKeysProp.length ? stageKeysProp : MAPA_STAGE_KEYS),
+    [stageKeysProp],
+  );
+
   const aggregatedStages = useMemo(() => {
-    const totals = createEmptyStageTotals();
+    const totals = createEmptyStageTotals(stageKeys);
     for (const entry of data) {
-      const stages = (entry.etapas_totales || {}) as Record<MapaStageKey, number | undefined>;
-      for (const stageKey of MAPA_STAGE_KEYS) {
+      const stages = (entry.etapas_totales || {}) as Record<string, number | undefined>;
+      for (const stageKey of stageKeys) {
         totals[stageKey] += stages[stageKey] ?? 0;
       }
     }
     return totals;
-  }, [data]);
+  }, [data, stageKeys]);
 
   const datasetSummary = useMemo<MetricsPayload>(() => {
     const summary: MetricsPayload = {
@@ -298,9 +304,9 @@ export function LocationComparisonChart({
       ? resolveFilteredConversation(activeEntry, activeChannelSet)
       : { con_conversacion: 0, sin_conversacion: 0 };
 
-    const stageTotals = createEmptyStageTotals();
-    const rawStages = (activeEntry.etapas_totales || {}) as Record<MapaStageKey, number | undefined>;
-    for (const stageKey of MAPA_STAGE_KEYS) {
+    const stageTotals = createEmptyStageTotals(stageKeys);
+    const rawStages = (activeEntry.etapas_totales || {}) as Record<string, number | undefined>;
+    for (const stageKey of stageKeys) {
       stageTotals[stageKey] = rawStages[stageKey] ?? 0;
     }
 
@@ -320,7 +326,7 @@ export function LocationComparisonChart({
       },
       stages: stageTotals,
     };
-  }, [activeChannelSet, activeEntry, showConversationMetrics]);
+  }, [activeChannelSet, activeEntry, showConversationMetrics, stageKeys]);
 
   const metrics = activeMetrics ?? datasetSummary;
 
@@ -564,8 +570,8 @@ export function LocationComparisonChart({
           />
           <MetricSection
             title="Etapas"
-            items={MAPA_STAGE_ORDER.map(({ key, label }) => ({
-              label,
+            items={stageKeys.map((key) => ({
+              label: MAPA_STAGE_LABELS[key] ?? formatStageLabel(key),
               value: metrics.stages[key] ?? 0,
             }))}
           />
@@ -804,6 +810,16 @@ function resolveChannelColor(channel: string | null | undefined): string {
   const normalized = normalizeChannelKey(channel);
   const color = normalized ? CHANNEL_COLORS[normalized] : DEFAULT_CHANNEL_COLOR;
   return `rgb(${color.join(", ")})`;
+}
+
+function formatStageLabel(key: string): string {
+  if (!key) return "Sin etapa";
+  return key
+    .replace(/_/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
 }
 
 type LeafletGeoJSONFactory = (geojson?: GeoJSONType, options?: LeafletGeoJSONOptions) => {

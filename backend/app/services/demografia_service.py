@@ -345,9 +345,11 @@ def build_map_dataset(
             stage_order = _to_number(raw.get("etapa_orden"))
             captado_threshold = _to_number(raw.get("captado_orden")) or 1
             bucket = None
-            if stage_category == "ganada":
+            if stage_code == "demo":
+                bucket = "demo"
+            elif stage_category == "ganada" or stage_code in {"cerrado_ganado", "ganado"}:
                 bucket = "ganado"
-            elif stage_category == "perdida":
+            elif stage_category == "perdida" or stage_code in {"cerrado_perdido", "perdido"}:
                 bucket = "perdido"
             else:
                 if stage_order and stage_order <= captado_threshold:
@@ -361,6 +363,7 @@ def build_map_dataset(
                 {
                     "captado": 0,
                     "precalificado": 0,
+                    "demo": 0,
                     "negociacion": 0,
                     "ganado": 0,
                     "perdido": 0,
@@ -393,6 +396,7 @@ def build_map_dataset(
                 "etapas_totales": {
                     "captado": 0,
                     "precalificado": 0,
+                    "demo": 0,
                     "negociacion": 0,
                     "ganado": 0,
                     "perdido": 0,
@@ -440,9 +444,11 @@ def build_map_dataset(
         if total > 0:
             entry["has_data"] = True
         stage_bucket = None
-        if stage_category == "ganada":
+        if stage_code == "demo":
+            stage_bucket = "demo"
+        elif stage_category == "ganada" or stage_code in {"cerrado_ganado", "ganado"}:
             stage_bucket = "ganado"
-        elif stage_category == "perdida":
+        elif stage_category == "perdida" or stage_code in {"cerrado_perdido", "perdido"}:
             stage_bucket = "perdido"
         elif stage_code not in {"visitantes_sin_chat", "sin_conversacion"}:
             if stage_order and stage_order <= captado_threshold:
@@ -503,6 +509,7 @@ def build_map_dataset(
         entry["etapas_totales"] = {
             "captado": entry["etapas_totales"].get("captado", 0),
             "precalificado": entry["etapas_totales"].get("precalificado", 0),
+            "demo": entry["etapas_totales"].get("demo", 0),
             "negociacion": entry["etapas_totales"].get("negociacion", 0),
             "ganado": entry["etapas_totales"].get("ganado", 0),
             "perdido": entry["etapas_totales"].get("perdido", 0),
