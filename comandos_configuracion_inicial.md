@@ -83,7 +83,7 @@ sudo systemctl restart talia-api.service
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
 
-codex resume 019a8430-38c2-7d90-933f-5ea1746ee2f4
+codex resume 019a9e40-eeac-7ca3-8a1e-082035d9a1ce
 
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service

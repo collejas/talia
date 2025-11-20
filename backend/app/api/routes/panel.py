@@ -9,12 +9,25 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Literal, Sequence
+from enum import Enum
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Query, Response
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
@@ -43,6 +56,8 @@ router = APIRouter(prefix="", tags=["panel"])
 
 logger = get_logger(__name__)
 
+DEFAULT_PORTAL_TOKEN_DAYS = 14
+
 
 class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
@@ -55,10 +70,12 @@ class ConversationReplyPayload(BaseModel):
 
     content: str | None = Field(default=None, max_length=4000)
     locale: str | None = Field(
-        default=None, description="Locale del panel (ej. es-MX) para informar al asistente."
+        default=None,
+        description="Locale del panel (ej. es-MX) para informar al asistente.",
     )
     metadata: dict[str, Any] | None = Field(
-        default=None, description="Metadatos opcionales que se adjuntarán al mensaje entrante."
+        default=None,
+        description="Metadatos opcionales que se adjuntarán al mensaje entrante.",
     )
     client_message_id: str | None = Field(
         default=None,
@@ -216,6 +233,149 @@ class LeadUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class ClienteOnboardingEstado(str, Enum):
+    """Estados posibles del proceso de alta del cliente."""
+
+    PENDIENTE = "pendiente"
+    EN_PROGRESO = "en_progreso"
+    COMPLETADO = "completado"
+
+
+class ClienteDocumentoTipo(str, Enum):
+    """Tipos de documentos fiscales/legales requeridos."""
+
+    CONSTANCIA_FISCAL = "constancia_fiscal"
+    COMPROBANTE_DOMICILIO = "comprobante_domicilio"
+    IDENTIFICACION_OFICIAL = "identificacion_oficial"
+    CONTRATO_SERVICIO = "contrato_servicio"
+    NDA = "nda"
+    OTRO = "otro"
+
+
+PORTAL_DOCUMENT_REQUIREMENTS: list[dict[str, str]] = [
+    {
+        "tipo": ClienteDocumentoTipo.CONSTANCIA_FISCAL.value,
+        "titulo": "Constancia de situación fiscal",
+        "descripcion": "Documento emitido por el SAT con RFC y régimen vigentes.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.COMPROBANTE_DOMICILIO.value,
+        "titulo": "Comprobante de domicilio",
+        "descripcion": "Factura o estado de cuenta reciente (< 3 meses).",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.IDENTIFICACION_OFICIAL.value,
+        "titulo": "Identificación del representante",
+        "descripcion": "INE o pasaporte vigente de la persona que firmará.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.CONTRATO_SERVICIO.value,
+        "titulo": "Contrato de servicios",
+        "descripcion": "Se firma digitalmente o se carga la versión firmada.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.NDA.value,
+        "titulo": "Acuerdo de confidencialidad",
+        "descripcion": "Opcional cuando ya existe NDA previo.",
+    },
+]
+
+
+class ClienteDocumentoEstado(str, Enum):
+    """Estatus de recepción y validación de documentos de cliente."""
+
+    PENDIENTE = "pendiente"
+    RECIBIDO = "recibido"
+    VALIDADO = "validado"
+    RECHAZADO = "rechazado"
+
+
+class LeadConversionPayload(BaseModel):
+    """Solicitud para convertir o forzar la conversión de un lead en cliente."""
+
+    forzar: bool = Field(
+        default=False,
+        description="Permite crear el cliente aunque la etapa no sea de categoría ganada.",
+    )
+
+
+class ClienteFiscalUpdatePayload(BaseModel):
+    """Campos fiscales y de onboarding que se pueden actualizar en un cliente."""
+
+    rfc: str | None = Field(default=None, max_length=30)
+    razon_social: str | None = Field(default=None, max_length=250)
+    domicilio_fiscal: str | None = Field(default=None, max_length=500)
+    domicilio_fisico: str | None = Field(default=None, max_length=500)
+    regimen_fiscal: str | None = Field(default=None, max_length=120)
+    datos_facturacion: dict[str, Any] | None = Field(default=None)
+    estado_onboarding: ClienteOnboardingEstado | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteDocumentoPayload(BaseModel):
+    """Datos para registrar un documento sin subir archivo desde el panel."""
+
+    tipo: ClienteDocumentoTipo
+    estado: ClienteDocumentoEstado | None = Field(default=None)
+    descripcion: str | None = Field(default=None, max_length=400)
+    storage_path: str | None = Field(default=None, max_length=512)
+    storage_url: str | None = Field(default=None, max_length=2048)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteDocumentoUpdatePayload(BaseModel):
+    """Actualización parcial de documentos ya almacenados."""
+
+    estado: ClienteDocumentoEstado | None = Field(default=None)
+    descripcion: str | None = Field(default=None, max_length=400)
+    storage_path: str | None = Field(default=None, max_length=512)
+    storage_url: str | None = Field(default=None, max_length=2048)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteResponsablePayload(BaseModel):
+    """Responsable del proyecto asociado a un cliente."""
+
+    nombre: str = Field(..., max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=32)
+    rol: str | None = Field(default=None, max_length=120)
+    es_responsable_principal: bool | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteResponsableUpdatePayload(BaseModel):
+    """Actualización parcial de un responsable del cliente."""
+
+    nombre: str | None = Field(default=None, max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=32)
+    rol: str | None = Field(default=None, max_length=120)
+    es_responsable_principal: bool | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClientePortalLinkPayload(BaseModel):
+    """Solicitud para emitir o renovar un enlace del portal de clientes."""
+
+    expira_en: datetime | None = Field(
+        default=None,
+        description="Fecha límite del enlace; si no se envía se usa el default (14 días).",
+    )
+    nota: str | None = Field(default=None, max_length=400)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+
 class LeadQuoteCreatePayload(BaseModel):
     """Datos para crear una cotización ligada a un lead."""
 
@@ -251,7 +411,8 @@ class LeadQuoteMarkPayload(BaseModel):
         description="Permite fijar manualmente la fecha de envío que se guardará en stage_prep.",
     )
     metadata: dict[str, Any] | None = Field(
-        default=None, description="Metadatos opcionales que se adjuntarán en la bitácora."
+        default=None,
+        description="Metadatos opcionales que se adjuntarán en la bitácora.",
     )
 
     model_config = ConfigDict(extra="ignore")
@@ -609,6 +770,180 @@ def _rpc_field(data: Any, *keys: str) -> Any:
     return None
 
 
+def _cliente_select_clause() -> str:
+    """Select base para recuperar clientes con documentos y responsables."""
+
+    return (
+        "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
+        "razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,"
+        "fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
+        "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
+        "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
+        "storage_path,metadatos,creado_en,actualizado_en),"
+        "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
+        "es_responsable_principal,metadatos,creado_en,actualizado_en)"
+    )
+
+
+async def _fetch_cliente_por_lead(lead_id: UUID, token: str) -> dict[str, Any] | None:
+    """Obtiene el cliente ligado a la tarjeta especificada."""
+
+    params = {
+        "lead_tarjeta_id": f"eq.{lead_id}",
+        "select": _cliente_select_clause(),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/clientes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cliente del lead")
+    rows = resp.json() or []
+    return _first_row(rows) if rows else None
+
+
+async def _fetch_cliente_por_id(
+    cliente_id: UUID, token: str | None = None
+) -> dict[str, Any] | None:
+    """Recupera un cliente por su ID con relaciones básicas."""
+
+    params = {
+        "id": f"eq.{cliente_id}",
+        "select": _cliente_select_clause(),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/clientes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cliente")
+    rows = resp.json() or []
+    return _first_row(rows) if rows else None
+
+
+def _portal_token_select_clause(include_relations: bool = True) -> str:
+    base = (
+        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
+        "ultimo_acceso_ip,creado_en,actualizado_en"
+    )
+    if include_relations:
+        base += (
+            f",cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_cliente_select_clause()})"
+        )
+    else:
+        base += ",cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
+    return base
+
+
+async def _fetch_portal_token(
+    portal_token: str, *, include_relations: bool = True
+) -> dict[str, Any] | None:
+    params = {
+        "token": f"eq.{portal_token}",
+        "select": _portal_token_select_clause(include_relations),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/cliente_portal_tokens", params=params)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando token de portal")
+    rows = resp.json() or []
+    item = _first_row(rows)
+    if not item:
+        return None
+    cliente = _single_related(item.get("cliente"))
+    if cliente is not None:
+        item["cliente"] = cliente
+    return item
+
+
+def _sanitize_portal_session(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    allowed = {
+        "id",
+        "cliente_id",
+        "expira_en",
+        "revocado",
+        "usos",
+        "nota",
+        "metadata",
+        "ultimo_acceso_en",
+        "ultimo_acceso_ip",
+        "creado_en",
+        "actualizado_en",
+    }
+    return {key: row.get(key) for key in allowed}
+
+
+def _ensure_portal_token_active(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        raise HTTPException(status_code=404, detail="portal_token_not_found")
+    if row.get("revocado"):
+        raise HTTPException(status_code=410, detail="portal_token_revoked")
+    expira = _parse_timestamp(row.get("expira_en"))
+    if expira and expira < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="portal_token_expired")
+    return row
+
+
+def _portal_default_expiration() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=DEFAULT_PORTAL_TOKEN_DAYS)
+
+
+def _serialize_datetime(value: datetime | None) -> str | None:
+    if not value:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
+def _request_ip(request: Request | None) -> str | None:
+    if not request:
+        return None
+    forwarded = request.headers.get("x-forwarded-for") if request.headers else None
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = request.client
+    return client.host if client else None
+
+
+async def _touch_portal_token(row: dict[str, Any], *, ip: str | None = None) -> None:
+    token_id = row.get("id")
+    if not token_id:
+        return
+    usos = int(row.get("usos") or 0) + 1
+    payload: dict[str, Any] = {
+        "usos": usos,
+        "ultimo_acceso_en": datetime.now(timezone.utc).isoformat(),
+    }
+    if ip:
+        payload["ultimo_acceso_ip"] = ip
+    try:
+        await _sb_patch(
+            "/rest/v1/cliente_portal_tokens",
+            params={"id": f"eq.{token_id}"},
+            json=payload,
+        )
+    except HTTPException:
+        logger.exception("No se pudo actualizar uso del token de portal")
+
+
+async def _resolve_portal_session(
+    portal_token: str,
+    *,
+    request: Request | None = None,
+    include_relations: bool = False,
+) -> dict[str, Any]:
+    row = await _fetch_portal_token(portal_token, include_relations=include_relations)
+    row = _ensure_portal_token_active(row)
+    await _touch_portal_token(row, ip=_request_ip(request))
+    return row
+
+
+def _build_portal_link(token: str) -> str:
+    base = settings.cliente_portal_base_url
+    if not base:
+        raise HTTPException(status_code=500, detail="cliente_portal_base_url_missing")
+    return f"{base.rstrip('/')}/{token}"
+
+
 def _content_range_total(header: str | None) -> int | None:
     if not header:
         return None
@@ -706,7 +1041,7 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         rechazada_en=_parse_timestamp(row.get("rechazada_en")),
         pdf_path=row.get("pdf_path"),
         pdf_url=row.get("pdf_url"),
-        metadatos=row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None,
+        metadatos=(row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None),
         creado_en=_parse_timestamp(row.get("creado_en")),
         actualizado_en=_parse_timestamp(row.get("actualizado_en")),
     )
@@ -845,7 +1180,7 @@ async def _auto_move_lead_to_won(lead_id: UUID, token: str, quote: LeadQuote | N
         "p_fuente": "asistente",
         "p_motivo": "quote_auto_accept",
         "p_metadata": {"source": "quote_auto_accept"},
-        "p_expected_etapa": str(lead_row.get("etapa_id")) if lead_row.get("etapa_id") else None,
+        "p_expected_etapa": (str(lead_row.get("etapa_id")) if lead_row.get("etapa_id") else None),
     }
     resp = await _sb_rpc("panel_lead_move", json=payload, token=token)
     if resp.status_code >= 400:
@@ -965,10 +1300,9 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
 
     Si no hay secret disponible, cae en la extracción sin verificación.
     """
-    secret: str | None = (
-        getattr(settings, "supabase_jwt_secret", None)  # type: ignore[attr-defined]
-        or getattr(settings, "supabase_legacy_jwt_secret", None)  # type: ignore[attr-defined]
-    )
+    secret: str | None = getattr(settings, "supabase_jwt_secret", None) or getattr(  # type: ignore[attr-defined]
+        settings, "supabase_legacy_jwt_secret", None
+    )  # type: ignore[attr-defined]
     if not jwt_token:
         return None
     if not secret:
@@ -1170,7 +1504,9 @@ def _format_utc(dt: datetime) -> str:
 
 
 @router.get("/auth/permisos")
-async def get_permissions(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def get_permissions(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     token = _parse_bearer(authorization)
     user_id = _jwt_verify_and_sub(token)
     if not user_id:
@@ -1210,7 +1546,9 @@ async def _require_admin(authorization: str | None) -> str:
 
 
 @router.get("/config/personal")
-async def cfg_personal(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def cfg_personal(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     await _require_admin(authorization)
 
     resp_personal = await _sb_get(
@@ -1222,21 +1560,30 @@ async def cfg_personal(authorization: str | None = Header(default=None)) -> dict
 
     resp_roles = await _sb_get(
         "/rest/v1/roles",
-        params={"select": "id,codigo,nombre,descripcion,creado_en", "order": "codigo.asc"},
+        params={
+            "select": "id,codigo,nombre,descripcion,creado_en",
+            "order": "codigo.asc",
+        },
     )
     if resp_roles.status_code >= 400:
         raise _supabase_error(resp_roles, "Error consultando roles")
 
     resp_departamentos = await _sb_get(
         "/rest/v1/departamentos",
-        params={"select": "id,nombre,departamento_padre_id,creado_en", "order": "nombre.asc"},
+        params={
+            "select": "id,nombre,departamento_padre_id,creado_en",
+            "order": "nombre.asc",
+        },
     )
     if resp_departamentos.status_code >= 400:
         raise _supabase_error(resp_departamentos, "Error consultando departamentos")
 
     resp_puestos = await _sb_get(
         "/rest/v1/puestos",
-        params={"select": "id,nombre,descripcion,departamento_id,creado_en", "order": "nombre.asc"},
+        params={
+            "select": "id,nombre,descripcion,departamento_id,creado_en",
+            "order": "nombre.asc",
+        },
     )
     if resp_puestos.status_code >= 400:
         raise _supabase_error(resp_puestos, "Error consultando puestos")
@@ -1347,7 +1694,9 @@ async def cfg_eliminar_puesto(
 ) -> dict[str, Any]:
     await _require_admin(authorization)
     resp = await _sb_delete(
-        "/rest/v1/puestos", params={"id": f"eq.{puesto_id}"}, prefer="return=representation"
+        "/rest/v1/puestos",
+        params={"id": f"eq.{puesto_id}"},
+        prefer="return=representation",
     )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error eliminando puesto")
@@ -1583,7 +1932,9 @@ async def cfg_eliminar_rol(
 
 
 @router.get("/config/agentes")
-async def cfg_agentes(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def cfg_agentes(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     await _require_admin(authorization)
     params = {
         "select": "id,nombre,canal,modelo,temperatura,max_output_tokens,activo,creado_en",
@@ -1597,7 +1948,9 @@ async def cfg_agentes(authorization: str | None = Header(default=None)) -> dict[
 
 
 @router.get("/config/canales")
-async def cfg_canales(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def cfg_canales(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     await _require_admin(authorization)
     # Recuento por canal a partir de conversaciones recientes (últimos 30 días)
     since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
@@ -2347,6 +2700,461 @@ async def actualizar_lead(
         raise HTTPException(status_code=404, detail="lead_not_found")
     item = _first_row(rows)
     return {"ok": True, "item": item}
+
+
+@router.get("/leads/{lead_id}/cliente")
+async def obtener_cliente_de_lead(
+    lead_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    """Devuelve el cliente asociado a un lead, si existe."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    cliente = await _fetch_cliente_por_lead(lead_id, token)
+    return {"ok": True, "cliente": cliente}
+
+
+@router.post("/leads/{lead_id}/convertir")
+async def convertir_lead_cliente(
+    lead_id: UUID,
+    payload: LeadConversionPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Reintenta o fuerza la conversión de un lead a cliente y devuelve el estado."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    body = {"p_tarjeta_id": str(lead_id), "p_forzar": payload.forzar}
+    resp = await _sb_rpc("convertir_lead_en_cliente", json=body, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error convirtiendo lead en cliente")
+
+    cliente = await _fetch_cliente_por_lead(lead_id, token)
+    fallback = _first_row(resp.json() or [])
+    return {"ok": True, "cliente": cliente or fallback}
+
+
+@router.patch("/clientes/{cliente_id}")
+async def actualizar_cliente(
+    cliente_id: UUID,
+    payload: ClienteFiscalUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Actualiza datos fiscales y de onboarding de un cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "cliente": None}
+
+    resp = await _sb_patch(
+        "/rest/v1/clientes",
+        params={"id": f"eq.{cliente_id}"},
+        json=updates,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando cliente")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    cliente = _first_row(rows)
+    return {"ok": True, "cliente": cliente}
+
+
+@router.post("/clientes/{cliente_id}/documentos")
+async def registrar_documento_cliente(
+    cliente_id: UUID,
+    payload: ClienteDocumentoPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Registra un documento de cliente usando una URL previamente cargada."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    user_id = _jwt_verify_and_sub(token)
+    body = payload.model_dump(exclude_none=True)
+    body.setdefault("estado", ClienteDocumentoEstado.PENDIENTE.value)
+    body["cliente_id"] = str(cliente_id)
+    if user_id:
+        body.setdefault("cargado_por", user_id)
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_documentos",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error registrando documento")
+    rows = resp.json() or []
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/clientes/{cliente_id}/documentos/upload")
+async def subir_documento_cliente(
+    cliente_id: UUID,
+    tipo: ClienteDocumentoTipo = Form(...),
+    descripcion: str | None = Form(default=None),
+    authorization: str | None = Header(default=None),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Sube un archivo al bucket y lo marca como documento recibido del cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    upload = await storage.upload_cliente_document(
+        file=file, cliente_id=str(cliente_id), document_type=tipo.value
+    )
+
+    user_id = _jwt_verify_and_sub(token)
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "tipo": tipo.value,
+        "estado": ClienteDocumentoEstado.RECIBIDO.value,
+        "descripcion": descripcion,
+        "storage_path": upload.get("path"),
+        "storage_url": upload.get("url"),
+        "metadatos": {
+            "nombre": upload.get("name"),
+            "mime": upload.get("mime"),
+            "size": upload.get("size"),
+        },
+    }
+    if user_id:
+        body["cargado_por"] = user_id
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_documentos",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error guardando documento de cliente")
+    rows = resp.json() or []
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.patch("/clientes/{cliente_id}/documentos/{documento_id}")
+async def actualizar_documento_cliente(
+    cliente_id: UUID,
+    documento_id: UUID,
+    payload: ClienteDocumentoUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Actualiza estado o metadatos de un documento de cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "documento": None}
+
+    user_id = _jwt_verify_and_sub(token)
+    if updates.get("estado") == ClienteDocumentoEstado.VALIDADO.value and user_id:
+        updates.setdefault("validado_por", user_id)
+        updates.setdefault("validado_en", datetime.now(timezone.utc).isoformat())
+
+    resp = await _sb_patch(
+        "/rest/v1/cliente_documentos",
+        params={"id": f"eq.{documento_id}", "cliente_id": f"eq.{cliente_id}"},
+        json=updates,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando documento")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="documento_not_found")
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/clientes/{cliente_id}/responsables")
+async def crear_responsable_cliente(
+    cliente_id: UUID,
+    payload: ClienteResponsablePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Agrega un responsable del proyecto para el cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    body = payload.model_dump(exclude_none=True)
+    body["cliente_id"] = str(cliente_id)
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_responsables",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando responsable")
+    rows = resp.json() or []
+    responsable = _first_row(rows)
+    return {"ok": True, "responsable": responsable}
+
+
+@router.patch("/clientes/{cliente_id}/responsables/{responsable_id}")
+async def actualizar_responsable_cliente(
+    cliente_id: UUID,
+    responsable_id: UUID,
+    payload: ClienteResponsableUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Actualiza la información de un responsable ya registrado."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "responsable": None}
+
+    resp = await _sb_patch(
+        "/rest/v1/cliente_responsables",
+        params={"id": f"eq.{responsable_id}", "cliente_id": f"eq.{cliente_id}"},
+        json=updates,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando responsable")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="responsable_not_found")
+    responsable = _first_row(rows)
+    return {"ok": True, "responsable": responsable}
+
+
+@router.post("/clientes/{cliente_id}/portal-links")
+async def crear_link_portal_cliente(
+    cliente_id: UUID,
+    payload: ClientePortalLinkPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Genera un URL firmado para que el cliente complete su onboarding."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    portal_token = secrets.token_urlsafe(32)
+    expira = payload.expira_en or _portal_default_expiration()
+    user_id = _jwt_verify_and_sub(token)
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "token": portal_token,
+        "expira_en": _serialize_datetime(expira),
+        "nota": payload.nota,
+        "metadata": payload.metadatos or {},
+    }
+    if user_id:
+        body["creado_por"] = user_id
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_portal_tokens",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando enlace de portal")
+    rows = resp.json() or []
+    registro = _first_row(rows)
+    link = _build_portal_link(portal_token)
+    return {
+        "ok": True,
+        "link": link,
+        "token": portal_token,
+        "registro": _sanitize_portal_session(registro),
+    }
+
+
+@router.get("/portal/clientes/{portal_token}")
+async def portal_cliente_estado(portal_token: str, request: Request) -> dict[str, Any]:
+    """Devuelve el estado actual del cliente para el portal público."""
+
+    session = await _resolve_portal_session(portal_token, request=request, include_relations=True)
+    cliente = session.get("cliente")
+    if not cliente:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    return {
+        "ok": True,
+        "portal": _sanitize_portal_session(session),
+        "cliente": cliente,
+        "documentos_requeridos": PORTAL_DOCUMENT_REQUIREMENTS,
+    }
+
+
+@router.patch("/portal/clientes/{portal_token}/fiscales")
+async def portal_actualizar_cliente(
+    portal_token: str,
+    payload: ClienteFiscalUpdatePayload,
+    request: Request,
+) -> dict[str, Any]:
+    """Permite al cliente actualizar sus datos fiscales desde el portal."""
+
+    session = await _resolve_portal_session(portal_token, request=request, include_relations=False)
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+
+    updates = payload.model_dump(exclude_none=True)
+    if updates:
+        resp = await _sb_patch(
+            "/rest/v1/clientes",
+            params={"id": f"eq.{cliente_id}"},
+            json=updates,
+            prefer="return=representation",
+        )
+        if resp.status_code >= 400:
+            raise _supabase_error(resp, "Error actualizando cliente")
+
+    refreshed = await _fetch_cliente_por_id(UUID(str(cliente_id)))
+    return {
+        "ok": True,
+        "cliente": refreshed,
+    }
+
+
+@router.post("/portal/clientes/{portal_token}/documentos/upload")
+async def portal_subir_documento_cliente(
+    portal_token: str,
+    request: Request,
+    tipo: ClienteDocumentoTipo = Form(...),
+    descripcion: str | None = Form(default=None),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Sube documentos requeridos por el equipo de Tal-IA."""
+
+    session = await _resolve_portal_session(portal_token, request=request, include_relations=False)
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+
+    upload = await storage.upload_cliente_document(
+        file=file, cliente_id=str(cliente_id), document_type=tipo.value
+    )
+
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "tipo": tipo.value,
+        "estado": ClienteDocumentoEstado.RECIBIDO.value,
+        "descripcion": descripcion,
+        "storage_path": upload.get("path"),
+        "storage_url": upload.get("url"),
+        "metadatos": {
+            "nombre": upload.get("name"),
+            "mime": upload.get("mime"),
+            "size": upload.get("size"),
+            "fuente": "portal_cliente",
+            "portal_token_id": session.get("id"),
+        },
+    }
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_documentos",
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error guardando documento")
+    rows = resp.json() or []
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/portal/clientes/{portal_token}/responsables")
+async def portal_agregar_responsable(
+    portal_token: str,
+    payload: ClienteResponsablePayload,
+    request: Request,
+) -> dict[str, Any]:
+    """Permite al cliente declarar a sus responsables del proyecto."""
+
+    session = await _resolve_portal_session(portal_token, request=request, include_relations=False)
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+
+    body = payload.model_dump(exclude_none=True)
+    body["cliente_id"] = str(cliente_id)
+    body.setdefault("metadatos", {})
+    body["metadatos"]["fuente"] = "portal_cliente"
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_responsables",
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error registrando responsable")
+    rows = resp.json() or []
+    responsable = _first_row(rows)
+    return {"ok": True, "responsable": responsable}
+
+
+@router.patch("/portal/clientes/{portal_token}/responsables/{responsable_id}")
+async def portal_actualizar_responsable(
+    portal_token: str,
+    responsable_id: UUID,
+    payload: ClienteResponsableUpdatePayload,
+    request: Request,
+) -> dict[str, Any]:
+    """Actualiza un responsable ya capturado desde el portal."""
+
+    session = await _resolve_portal_session(portal_token, request=request, include_relations=False)
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "responsable": None}
+
+    resp = await _sb_patch(
+        "/rest/v1/cliente_responsables",
+        params={
+            "id": f"eq.{responsable_id}",
+            "cliente_id": f"eq.{cliente_id}",
+        },
+        json=updates,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando responsable")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="responsable_not_found")
+    responsable = _first_row(rows)
+    return {"ok": True, "responsable": responsable}
 
 
 @router.delete("/leads/{lead_id}")
@@ -3483,9 +4291,11 @@ async def reply_conversation(
     metadata.setdefault("client_message_id", client_message_id)
     metadata.setdefault(
         "manual_mode",
-        bool(metadata_model.manual_mode)
-        if isinstance(metadata_model, webchat_schemas.MessageMetadata)
-        else False,
+        (
+            bool(metadata_model.manual_mode)
+            if isinstance(metadata_model, webchat_schemas.MessageMetadata)
+            else False
+        ),
     )
     metadata.setdefault("session_id", session_id)
     metadata.setdefault("contact_id", str(contact_id))
@@ -4295,16 +5105,16 @@ async def demografia_mapa(
         "canales": channel_values,
         "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
-        "totales_leads": leads_payload.get("totals") if isinstance(leads_payload, dict) else {},
-        "totales_visitantes": visitantes_payload.get("totals")
-        if isinstance(visitantes_payload, dict)
-        else {},
-        "totales_leads_por_canal": leads_payload.get("totals_by_channel")
-        if isinstance(leads_payload, dict)
-        else {},
-        "captado_orden": leads_payload.get("captado_orden")
-        if isinstance(leads_payload, dict)
-        else None,
+        "totales_leads": (leads_payload.get("totals") if isinstance(leads_payload, dict) else {}),
+        "totales_visitantes": (
+            visitantes_payload.get("totals") if isinstance(visitantes_payload, dict) else {}
+        ),
+        "totales_leads_por_canal": (
+            leads_payload.get("totals_by_channel") if isinstance(leads_payload, dict) else {}
+        ),
+        "captado_orden": (
+            leads_payload.get("captado_orden") if isinstance(leads_payload, dict) else None
+        ),
         "dataset": dataset,
         "geojson": geojson,
     }
@@ -4590,7 +5400,12 @@ async def leads_estado_metrics(
             total = _to_int(row.get("total"))
             entry = items_map.setdefault(
                 key,
-                {"cve_ent": key, "nombre": row.get("nombre"), "total": 0, "por_canal": {}},
+                {
+                    "cve_ent": key,
+                    "nombre": row.get("nombre"),
+                    "total": 0,
+                    "por_canal": {},
+                },
             )
             if not entry.get("nombre") and row.get("nombre"):
                 entry["nombre"] = row.get("nombre")
@@ -4715,7 +5530,12 @@ async def leads_municipios_metrics(
             total = _to_int(row.get("total"))
             entry = items_map.setdefault(
                 key,
-                {"cvegeo": key, "nombre": row.get("nombre"), "total": 0, "por_canal": {}},
+                {
+                    "cvegeo": key,
+                    "nombre": row.get("nombre"),
+                    "total": 0,
+                    "por_canal": {},
+                },
             )
             if not entry.get("nombre") and row.get("nombre"):
                 entry["nombre"] = row.get("nombre")

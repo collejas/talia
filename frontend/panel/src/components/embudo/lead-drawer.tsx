@@ -37,6 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
+import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
 import {
   IconAlertTriangle,
   IconBrandWhatsapp,
@@ -566,7 +567,8 @@ export function LeadDrawer({
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
-  const [activeTab, setActiveTab] = useState<"resumen" | "notas" | "historial">("resumen");
+  const [activeTab, setActiveTab] =
+    useState<"resumen" | "notas" | "historial" | "onboarding">("resumen");
 
   const defaultFormValues = useMemo<FormValues>(() => {
     const monto = typeof card?.monto === "number" && !Number.isNaN(card.monto) ? String(card.monto) : "";
@@ -1569,7 +1571,7 @@ export function LeadDrawer({
           <TabsList
             className={cn(
               "mx-4 grid h-auto gap-1 rounded-lg border bg-muted/60 p-1",
-              isCreateMode || !card ? "grid-cols-1" : "grid-cols-3",
+              isCreateMode || !card ? "grid-cols-1" : "grid-cols-4",
             )}
           >
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
@@ -1577,6 +1579,7 @@ export function LeadDrawer({
               <>
                 <TabsTrigger value="notas">Notas</TabsTrigger>
                 <TabsTrigger value="historial">Historial</TabsTrigger>
+                <TabsTrigger value="onboarding">Onboarding</TabsTrigger>
               </>
             ) : null}
           </TabsList>
@@ -2249,6 +2252,18 @@ export function LeadDrawer({
                 </p>
               ) : null}
             </div>
+          </TabsContent>
+          ) : null}
+
+          {!isCreateMode && card ? (
+          <TabsContent value="onboarding" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
+            <LeadOnboardingPanel
+              card={card}
+              currentStage={currentStage}
+              isOpen={open}
+              isCreateMode={isCreateMode}
+              active={activeTab === "onboarding"}
+            />
           </TabsContent>
           ) : null}
         </Tabs>

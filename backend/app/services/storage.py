@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 import httpx
@@ -301,7 +302,9 @@ async def fetch_webchat_session_id(contact_id: str) -> str | None:
     return str(session_id) if session_id else None
 
 
-async def resolve_webchat_conversation_from_session(session_id: str) -> dict[str, Any] | None:
+async def resolve_webchat_conversation_from_session(
+    session_id: str,
+) -> dict[str, Any] | None:
     """Obtiene la última conversación webchat asociada a un session_id."""
     contact_id = await get_webchat_contact_id(session_id)
     if not contact_id:
@@ -825,6 +828,71 @@ async def upload_quote_document(
     }
 
 
+async def upload_cliente_document(
+    *, file: UploadFile, cliente_id: str, document_type: str
+) -> dict[str, Any]:
+    """Sube un documento de cliente al bucket `clientes`."""
+
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    content = await file.read()
+    if not content:
+        raise StorageError("El archivo de cliente está vacío")
+
+    original_name = file.filename or "documento"
+    safe_name = Path(original_name).name
+    extension = Path(safe_name).suffix
+    key = f"{cliente_id}/{document_type}/{uuid4().hex}{extension}"
+
+    base_url = settings.supabase_url.rstrip("/")
+    upload_url = f"{base_url}/storage/v1/object/clientes/{key}"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": file.content_type or "application/octet-stream",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                upload_url,
+                headers=headers,
+                content=content,
+                params={"upsert": "true"},
+            )
+    except httpx.RequestError as exc:  # pragma: no cover - errores de red reales
+        msg = f"Error de red al subir documento de cliente: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al guardar documento de cliente"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    public_path = (
+        response.json().get("Key")
+        if response.headers.get("content-type") == "application/json"
+        else None
+    )
+    if not public_path:
+        public_path = f"clientes/{key}" if not str(key).startswith("clientes/") else key
+
+    storage_url = f"{base_url}/storage/v1/object/{public_path}"
+
+    return {
+        "url": storage_url,
+        "path": public_path,
+        "name": safe_name,
+        "mime": file.content_type,
+        "size": len(content),
+    }
+
+
 async def fetch_contact(contact_id: str) -> dict[str, Any]:
     """Obtiene la representación del contacto indicado."""
     if not settings.supabase_url or not settings.supabase_service_role:
@@ -1183,15 +1251,21 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
         "highlights": highlights,
         "resources": resources,
         "closing": closing_text,
-        "use_summary": bool(use_summary) if isinstance(use_summary, bool) else use_summary,
-        "use_highlights": bool(use_highlights)
-        if isinstance(use_highlights, bool)
-        else use_highlights,
-        "use_resources": bool(use_resources) if isinstance(use_resources, bool) else use_resources,
-        "signature_salutation": signature_salutation.strip()
-        if isinstance(signature_salutation, str)
-        else signature_salutation,
-        "signature": signature_text.strip() if isinstance(signature_text, str) else signature_text,
+        "use_summary": (bool(use_summary) if isinstance(use_summary, bool) else use_summary),
+        "use_highlights": (
+            bool(use_highlights) if isinstance(use_highlights, bool) else use_highlights
+        ),
+        "use_resources": (
+            bool(use_resources) if isinstance(use_resources, bool) else use_resources
+        ),
+        "signature_salutation": (
+            signature_salutation.strip()
+            if isinstance(signature_salutation, str)
+            else signature_salutation
+        ),
+        "signature": (
+            signature_text.strip() if isinstance(signature_text, str) else signature_text
+        ),
         "updated_at": row.get("updated_at"),
     }
 
@@ -1734,7 +1808,10 @@ async def ensure_lead_tarjeta(
                 if not row:
                     logger.warning(
                         "storage.ensure_lead_tarjeta.id_not_found",
-                        extra={"tarjeta_id": tarjeta_id, "conversation_id": conversation_id},
+                        extra={
+                            "tarjeta_id": tarjeta_id,
+                            "conversation_id": conversation_id,
+                        },
                     )
                 else:
                     row_id = _extract_id(row)

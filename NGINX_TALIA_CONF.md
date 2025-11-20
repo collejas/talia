@@ -120,6 +120,18 @@ server {
         proxy_buffering off;
     }
 
+    # Portal público (Next.js /portal/[token]).
+    location ^~ /portal/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
     # Todas las otras rutas /api/* las atiende Next.js.
     location ^~ /api/ {
         proxy_pass http://127.0.0.1:3001;
@@ -201,7 +213,7 @@ server {
     }
 
     # Rutas principales del panel (Next.js) fuera de /panel
-    location ~* ^/(auth|dashboard|contactos|leads|visitas|inbox|embudo|agenda|vista-1|mapa-de-conversion|vista-2|settings|prospeccion)(/.*)?$ {
+    location ~* ^/(auth|dashboard|contactos|leads|visitas|inbox|embudo|agenda|vista-1|mapa-de-conversion|vista-2|settings|prospeccion|portal)(/.*)?$ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

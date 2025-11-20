@@ -74,6 +74,16 @@ class Settings(BaseSettings):
     )
     supabase_jwt_secret: str | None = None
     supabase_legacy_jwt_secret: str | None = None
+    cliente_portal_base_url: str | None = Field(
+        default=None,
+        description="URL base pública que usará el enlace del portal de clientes.",
+        validation_alias=AliasChoices(
+            "CLIENTE_PORTAL_BASE_URL",
+            "TALIA_CLIENTE_PORTAL_BASE_URL",
+            "PORTAL_CLIENTE_BASE_URL",
+            "TALIA_PORTAL_CLIENTE_URL",
+        ),
+    )
     geolocation_api_url: str | None = None
     geolocation_api_token: str | None = None
     geolocation_cache_ttl_seconds: int = Field(
