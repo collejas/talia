@@ -24,6 +24,7 @@ import {
   IconMail,
   IconBell,
   IconTargetArrow,
+  IconUsersGroup,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -48,6 +49,7 @@ const NAVIGATION = {
     { title: "Inbox", url: "/inbox", icon: IconInbox },
     { title: "Embudo", url: "/embudo", icon: IconListDetails },
     { title: "Leads", url: "/leads", icon: IconUsers },
+    { title: "Clientes", url: "/clientes", icon: IconUsersGroup },
     { title: "Agenda", url: "/agenda", icon: IconCalendar },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
     { title: "Proyectos", url: "#", icon: IconFolder },
