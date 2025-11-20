@@ -1285,6 +1285,43 @@ export function LeadDrawer({
     });
   };
 
+  const handleQuoteStatusChange = useCallback(
+    (quote: LeadQuoteEntry, nextStatus: "aceptada" | "rechazada" | "cancelada") => {
+      if (!card) return;
+      setQuoteError(null);
+      startQuoteAction(async () => {
+        try {
+          const response = await fetch(`/api/embudo/quotes/${quote.id}/mark`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              estado: nextStatus,
+              canal: quote.channel,
+              metadata: { quote_version: quote.version },
+            }),
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const message =
+              typeof body?.error === "string" && body.error
+                ? body.error
+                : `Error ${response.status}`;
+            setQuoteError(message);
+            return;
+          }
+          await fetchQuotes();
+        } catch (actionError) {
+          setQuoteError(
+            actionError instanceof Error
+              ? actionError.message
+              : "No se pudo actualizar la cotización.",
+          );
+        }
+      });
+    },
+    [card, fetchQuotes],
+  );
+
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {
     const stageValues = stagePrep[stageCode] ?? {};
     const rawValue = stageValues[field.key];
@@ -1769,8 +1806,8 @@ export function LeadDrawer({
                     <div className="space-y-3">
                       {quotesState.data.map((quote) => (
                         <div key={quote.id} className="space-y-2 rounded-lg border border-border/60 p-3">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="space-y-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="space-y-1">
                               <div className="flex flex-wrap items-center gap-2 text-xs">
                                 <Badge variant="outline">Versión {quote.version}</Badge>
                                 <Badge variant={quoteStatusVariant(quote.status)}>
@@ -1791,14 +1828,38 @@ export function LeadDrawer({
                                 Total: {formatQuoteCurrency(quote.total, quote.currency)}
                               </p>
                             </div>
-                            {quote.pdfUrl ? (
-                              <Button asChild variant="ghost" size="sm" className="gap-1">
-                                <a href={quote.pdfUrl} target="_blank" rel="noopener noreferrer">
-                                  <IconDownload className="size-4" />
-                                  Ver PDF
-                                </a>
+                            <div className="flex flex-wrap gap-2">
+                              {quote.pdfUrl ? (
+                                <Button asChild variant="ghost" size="sm" className="gap-1">
+                                  <a href={quote.pdfUrl} target="_blank" rel="noopener noreferrer">
+                                    <IconDownload className="size-4" />
+                                    Ver PDF
+                                  </a>
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="gap-1"
+                                onClick={() => handleQuoteStatusChange(quote, "aceptada")}
+                                disabled={quotePending}
+                              >
+                                <IconTrophy className="size-4" />
+                                Marcar como aceptada
                               </Button>
-                            ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="gap-1"
+                                onClick={() => handleQuoteStatusChange(quote, "rechazada")}
+                                disabled={quotePending}
+                              >
+                                <IconHandStop className="size-4" />
+                                Rechazada
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2816,19 +2877,19 @@ function describeHistoryEntry(entry: LeadHistoryEntry): string {
 
 function mapQuoteEntry(input: unknown): LeadQuoteEntry {
   const row = isRecord(input) ? input : {};
-  const totalValue = toNumber(row["total"]);
+  const totalValue = toNumber(row.total);
   return {
     id: String(
-      row["id"] ?? `${row["version"] ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`,
+      row.id ?? `${row.version ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`,
     ),
-    version: Number.isFinite(Number(row["version"])) ? Number(row["version"]) : 1,
-    status: typeof row["estado"] === "string" ? (row["estado"] as string) : "borrador",
-    channel: typeof row["canal_envio"] === "string" ? (row["canal_envio"] as string) : null,
-    sentAt: typeof row["enviada_en"] === "string" ? (row["enviada_en"] as string) : null,
+    version: Number.isFinite(Number(row.version)) ? Number(row.version) : 1,
+    status: typeof row.estado === "string" ? row.estado : "borrador",
+    channel: typeof row.canal_envio === "string" ? row.canal_envio : null,
+    sentAt: typeof row.enviada_en === "string" ? row.enviada_en : null,
     total: totalValue,
-    currency: typeof row["moneda"] === "string" ? (row["moneda"] as string) : null,
-    pdfUrl: typeof row["pdf_url"] === "string" ? (row["pdf_url"] as string) : null,
-    createdAt: typeof row["creado_en"] === "string" ? (row["creado_en"] as string) : null,
+    currency: typeof row.moneda === "string" ? row.moneda : null,
+    pdfUrl: typeof row.pdf_url === "string" ? row.pdf_url : null,
+    createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
   };
 }
 
