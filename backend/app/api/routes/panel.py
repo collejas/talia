@@ -9,12 +9,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Literal, Sequence
+from enum import Enum
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Query, Response
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
@@ -55,10 +66,12 @@ class ConversationReplyPayload(BaseModel):
 
     content: str | None = Field(default=None, max_length=4000)
     locale: str | None = Field(
-        default=None, description="Locale del panel (ej. es-MX) para informar al asistente."
+        default=None,
+        description="Locale del panel (ej. es-MX) para informar al asistente.",
     )
     metadata: dict[str, Any] | None = Field(
-        default=None, description="Metadatos opcionales que se adjuntarán al mensaje entrante."
+        default=None,
+        description="Metadatos opcionales que se adjuntarán al mensaje entrante.",
     )
     client_message_id: str | None = Field(
         default=None,
@@ -146,7 +159,9 @@ class UsuarioUpdatePayload(BaseModel):
 class UsuarioRolesUpdatePayload(BaseModel):
     """Actualiza roles asignados a un usuario."""
 
-    roles: list[UUID] = Field(default_factory=list, description="IDs de roles a mantener.")
+    roles: list[UUID] = Field(
+        default_factory=list, description="IDs de roles a mantener."
+    )
 
 
 class DeleteResultadosPayload(BaseModel):
@@ -216,6 +231,109 @@ class LeadUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class ClienteOnboardingEstado(str, Enum):
+    """Estados posibles del proceso de alta del cliente."""
+
+    PENDIENTE = "pendiente"
+    EN_PROGRESO = "en_progreso"
+    COMPLETADO = "completado"
+
+
+class ClienteDocumentoTipo(str, Enum):
+    """Tipos de documentos fiscales/legales requeridos."""
+
+    CONSTANCIA_FISCAL = "constancia_fiscal"
+    COMPROBANTE_DOMICILIO = "comprobante_domicilio"
+    IDENTIFICACION_OFICIAL = "identificacion_oficial"
+    CONTRATO_SERVICIO = "contrato_servicio"
+    NDA = "nda"
+    OTRO = "otro"
+
+
+class ClienteDocumentoEstado(str, Enum):
+    """Estatus de recepción y validación de documentos de cliente."""
+
+    PENDIENTE = "pendiente"
+    RECIBIDO = "recibido"
+    VALIDADO = "validado"
+    RECHAZADO = "rechazado"
+
+
+class LeadConversionPayload(BaseModel):
+    """Solicitud para convertir o forzar la conversión de un lead en cliente."""
+
+    forzar: bool = Field(
+        default=False,
+        description="Permite crear el cliente aunque la etapa no sea de categoría ganada.",
+    )
+
+
+class ClienteFiscalUpdatePayload(BaseModel):
+    """Campos fiscales y de onboarding que se pueden actualizar en un cliente."""
+
+    rfc: str | None = Field(default=None, max_length=30)
+    razon_social: str | None = Field(default=None, max_length=250)
+    domicilio_fiscal: str | None = Field(default=None, max_length=500)
+    domicilio_fisico: str | None = Field(default=None, max_length=500)
+    regimen_fiscal: str | None = Field(default=None, max_length=120)
+    datos_facturacion: dict[str, Any] | None = Field(default=None)
+    estado_onboarding: ClienteOnboardingEstado | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteDocumentoPayload(BaseModel):
+    """Datos para registrar un documento sin subir archivo desde el panel."""
+
+    tipo: ClienteDocumentoTipo
+    estado: ClienteDocumentoEstado | None = Field(default=None)
+    descripcion: str | None = Field(default=None, max_length=400)
+    storage_path: str | None = Field(default=None, max_length=512)
+    storage_url: str | None = Field(default=None, max_length=2048)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteDocumentoUpdatePayload(BaseModel):
+    """Actualización parcial de documentos ya almacenados."""
+
+    estado: ClienteDocumentoEstado | None = Field(default=None)
+    descripcion: str | None = Field(default=None, max_length=400)
+    storage_path: str | None = Field(default=None, max_length=512)
+    storage_url: str | None = Field(default=None, max_length=2048)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteResponsablePayload(BaseModel):
+    """Responsable del proyecto asociado a un cliente."""
+
+    nombre: str = Field(..., max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=32)
+    rol: str | None = Field(default=None, max_length=120)
+    es_responsable_principal: bool | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClienteResponsableUpdatePayload(BaseModel):
+    """Actualización parcial de un responsable del cliente."""
+
+    nombre: str | None = Field(default=None, max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=32)
+    rol: str | None = Field(default=None, max_length=120)
+    es_responsable_principal: bool | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class LeadQuoteCreatePayload(BaseModel):
     """Datos para crear una cotización ligada a un lead."""
 
@@ -225,18 +343,24 @@ class LeadQuoteCreatePayload(BaseModel):
         default=None,
         description="Lista libre de conceptos/partidas que se incluirán en el PDF.",
     )
-    subtotal: float | None = Field(default=None, description="Importe antes de impuestos.")
+    subtotal: float | None = Field(
+        default=None, description="Importe antes de impuestos."
+    )
     impuestos: float | None = Field(
         default=None, description="Impuestos aplicados a la cotización."
     )
     total: float | None = Field(default=None, description="Importe total.")
-    moneda: str | None = Field(default=None, min_length=3, max_length=3, description="ISO-4217.")
+    moneda: str | None = Field(
+        default=None, min_length=3, max_length=3, description="ISO-4217."
+    )
     valido_hasta: date | None = Field(
         default=None, description="Fecha de vigencia de la propuesta."
     )
     pdf_url: str | None = Field(default=None, max_length=2048)
     pdf_path: str | None = Field(default=None, max_length=512)
-    metadatos: dict[str, Any] | None = Field(default=None, description="Datos adicionales del PDF.")
+    metadatos: dict[str, Any] | None = Field(
+        default=None, description="Datos adicionales del PDF."
+    )
 
     model_config = ConfigDict(extra="ignore")
 
@@ -251,7 +375,8 @@ class LeadQuoteMarkPayload(BaseModel):
         description="Permite fijar manualmente la fecha de envío que se guardará en stage_prep.",
     )
     metadata: dict[str, Any] | None = Field(
-        default=None, description="Metadatos opcionales que se adjuntarán en la bitácora."
+        default=None,
+        description="Metadatos opcionales que se adjuntarán en la bitácora.",
     )
 
     model_config = ConfigDict(extra="ignore")
@@ -322,14 +447,20 @@ class LeadQuoteListResponse(BaseModel):
 class AgendaReschedulePayload(BaseModel):
     """Payload para reprogramar una cita desde el panel."""
 
-    start_at: str = Field(..., description="Fecha/hora en ISO 8601, incluye zona horaria.")
-    notes: str | None = Field(default=None, description="Notas opcionales para la cita.")
+    start_at: str = Field(
+        ..., description="Fecha/hora en ISO 8601, incluye zona horaria."
+    )
+    notes: str | None = Field(
+        default=None, description="Notas opcionales para la cita."
+    )
 
 
 class AgendaCancelPayload(BaseModel):
     """Payload para cancelar una cita desde el panel."""
 
-    reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
+    reason: str | None = Field(
+        default=None, description="Motivo compartido por el cliente."
+    )
 
 
 class GoogleProspeccionBusquedaPayload(BaseModel):
@@ -524,7 +655,9 @@ async def _sb_patch(
         headers["Prefer"] = prefer
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            return await client.patch(url, headers=headers, params=params, json=json or {})
+            return await client.patch(
+                url, headers=headers, params=params, json=json or {}
+            )
     except httpx.RequestError:
         logger.exception("Error al conectar a Supabase (PATCH)")
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
@@ -607,6 +740,51 @@ def _rpc_field(data: Any, *keys: str) -> Any:
         if data:
             return next(iter(data.values()))
     return None
+
+
+def _cliente_select_clause() -> str:
+    """Select base para recuperar clientes con documentos y responsables."""
+
+    return (
+        "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
+        "razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,"
+        "fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
+        "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
+        "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
+        "storage_path,metadatos,creado_en,actualizado_en),"
+        "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
+        "es_responsable_principal,metadatos,creado_en,actualizado_en)"
+    )
+
+
+async def _fetch_cliente_por_lead(lead_id: UUID, token: str) -> dict[str, Any] | None:
+    """Obtiene el cliente ligado a la tarjeta especificada."""
+
+    params = {
+        "lead_tarjeta_id": f"eq.{lead_id}",
+        "select": _cliente_select_clause(),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/clientes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cliente del lead")
+    rows = resp.json() or []
+    return _first_row(rows) if rows else None
+
+
+async def _fetch_cliente_por_id(cliente_id: UUID, token: str) -> dict[str, Any] | None:
+    """Recupera un cliente por su ID con relaciones básicas."""
+
+    params = {
+        "id": f"eq.{cliente_id}",
+        "select": _cliente_select_clause(),
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/clientes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cliente")
+    rows = resp.json() or []
+    return _first_row(rows) if rows else None
 
 
 def _content_range_total(header: str | None) -> int | None:
@@ -706,7 +884,9 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         rechazada_en=_parse_timestamp(row.get("rechazada_en")),
         pdf_path=row.get("pdf_path"),
         pdf_url=row.get("pdf_url"),
-        metadatos=row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None,
+        metadatos=(
+            row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None
+        ),
         creado_en=_parse_timestamp(row.get("creado_en")),
         actualizado_en=_parse_timestamp(row.get("actualizado_en")),
     )
@@ -824,7 +1004,9 @@ async def _ensure_won_stage_metadata(
         )
 
 
-async def _auto_move_lead_to_won(lead_id: UUID, token: str, quote: LeadQuote | None = None) -> None:
+async def _auto_move_lead_to_won(
+    lead_id: UUID, token: str, quote: LeadQuote | None = None
+) -> None:
     try:
         lead_row = await _fetch_lead_for_quote(lead_id, token)
     except HTTPException:
@@ -845,7 +1027,9 @@ async def _auto_move_lead_to_won(lead_id: UUID, token: str, quote: LeadQuote | N
         "p_fuente": "asistente",
         "p_motivo": "quote_auto_accept",
         "p_metadata": {"source": "quote_auto_accept"},
-        "p_expected_etapa": str(lead_row.get("etapa_id")) if lead_row.get("etapa_id") else None,
+        "p_expected_etapa": (
+            str(lead_row.get("etapa_id")) if lead_row.get("etapa_id") else None
+        ),
     }
     resp = await _sb_rpc("panel_lead_move", json=payload, token=token)
     if resp.status_code >= 400:
@@ -894,7 +1078,9 @@ def _resolve_email_recipients(
     return recipients
 
 
-def _resolve_whatsapp_number(contact: dict[str, Any] | None, override: str | None) -> str | None:
+def _resolve_whatsapp_number(
+    contact: dict[str, Any] | None, override: str | None
+) -> str | None:
     candidate = _clean_str(override)
     if candidate:
         return candidate
@@ -965,10 +1151,11 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
 
     Si no hay secret disponible, cae en la extracción sin verificación.
     """
-    secret: str | None = (
-        getattr(settings, "supabase_jwt_secret", None)  # type: ignore[attr-defined]
-        or getattr(settings, "supabase_legacy_jwt_secret", None)  # type: ignore[attr-defined]
-    )
+    secret: str | None = getattr(
+        settings, "supabase_jwt_secret", None
+    ) or getattr(  # type: ignore[attr-defined]
+        settings, "supabase_legacy_jwt_secret", None
+    )  # type: ignore[attr-defined]
     if not jwt_token:
         return None
     if not secret:
@@ -1156,7 +1343,12 @@ def _resolve_date_range(
     if end:
         end = _ensure_utc(end)
         # Si el usuario proporcionó solo una fecha (sin hora), extiende al final del día
-        if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
+        if (
+            end.hour == 0
+            and end.minute == 0
+            and end.second == 0
+            and end.microsecond == 0
+        ):
             end = end + timedelta(days=1) - timedelta(microseconds=1)
 
     if start and end and start > end:
@@ -1170,7 +1362,9 @@ def _format_utc(dt: datetime) -> str:
 
 
 @router.get("/auth/permisos")
-async def get_permissions(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def get_permissions(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     token = _parse_bearer(authorization)
     user_id = _jwt_verify_and_sub(token)
     if not user_id:
@@ -1210,7 +1404,9 @@ async def _require_admin(authorization: str | None) -> str:
 
 
 @router.get("/config/personal")
-async def cfg_personal(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def cfg_personal(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     await _require_admin(authorization)
 
     resp_personal = await _sb_get(
@@ -1222,21 +1418,30 @@ async def cfg_personal(authorization: str | None = Header(default=None)) -> dict
 
     resp_roles = await _sb_get(
         "/rest/v1/roles",
-        params={"select": "id,codigo,nombre,descripcion,creado_en", "order": "codigo.asc"},
+        params={
+            "select": "id,codigo,nombre,descripcion,creado_en",
+            "order": "codigo.asc",
+        },
     )
     if resp_roles.status_code >= 400:
         raise _supabase_error(resp_roles, "Error consultando roles")
 
     resp_departamentos = await _sb_get(
         "/rest/v1/departamentos",
-        params={"select": "id,nombre,departamento_padre_id,creado_en", "order": "nombre.asc"},
+        params={
+            "select": "id,nombre,departamento_padre_id,creado_en",
+            "order": "nombre.asc",
+        },
     )
     if resp_departamentos.status_code >= 400:
         raise _supabase_error(resp_departamentos, "Error consultando departamentos")
 
     resp_puestos = await _sb_get(
         "/rest/v1/puestos",
-        params={"select": "id,nombre,descripcion,departamento_id,creado_en", "order": "nombre.asc"},
+        params={
+            "select": "id,nombre,descripcion,departamento_id,creado_en",
+            "order": "nombre.asc",
+        },
     )
     if resp_puestos.status_code >= 400:
         raise _supabase_error(resp_puestos, "Error consultando puestos")
@@ -1256,7 +1461,9 @@ async def cfg_crear_departamento(
 ) -> dict[str, Any]:
     await _require_admin(authorization)
     body = payload.model_dump(mode="json", exclude_none=True)
-    resp = await _sb_post("/rest/v1/departamentos", json=body, prefer="return=representation")
+    resp = await _sb_post(
+        "/rest/v1/departamentos", json=body, prefer="return=representation"
+    )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error creando departamento")
     data = resp.json() or []
@@ -1347,7 +1554,9 @@ async def cfg_eliminar_puesto(
 ) -> dict[str, Any]:
     await _require_admin(authorization)
     resp = await _sb_delete(
-        "/rest/v1/puestos", params={"id": f"eq.{puesto_id}"}, prefer="return=representation"
+        "/rest/v1/puestos",
+        params={"id": f"eq.{puesto_id}"},
+        prefer="return=representation",
     )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error eliminando puesto")
@@ -1368,7 +1577,9 @@ async def cfg_crear_usuario(
     body = payload.model_dump(mode="json", exclude_none=True)
     if "telefono_e164" not in body or body["telefono_e164"] is None:
         body.pop("telefono_e164", None)
-    resp = await _sb_post("/rest/v1/usuarios", json=body, prefer="return=representation")
+    resp = await _sb_post(
+        "/rest/v1/usuarios", json=body, prefer="return=representation"
+    )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error creando usuario")
     data = resp.json() or []
@@ -1440,7 +1651,9 @@ async def cfg_actualizar_roles_usuario(
     to_remove = sorted(current_ids - desired_ids)
 
     if to_add:
-        payload_rows = [{"usuario_id": str(usuario_id), "rol_id": rol_id} for rol_id in to_add]
+        payload_rows = [
+            {"usuario_id": str(usuario_id), "rol_id": rol_id} for rol_id in to_add
+        ]
         resp_insert = await _sb_post(
             "/rest/v1/usuarios_roles",
             json=payload_rows,  # type: ignore[arg-type]
@@ -1476,7 +1689,9 @@ async def cfg_crear_empleado(
 ) -> dict[str, Any]:
     await _require_admin(authorization)
     body = payload.model_dump(mode="json", exclude_none=True)
-    resp = await _sb_post("/rest/v1/empleados", json=body, prefer="return=representation")
+    resp = await _sb_post(
+        "/rest/v1/empleados", json=body, prefer="return=representation"
+    )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error creando empleado")
     data = resp.json() or []
@@ -1583,7 +1798,9 @@ async def cfg_eliminar_rol(
 
 
 @router.get("/config/agentes")
-async def cfg_agentes(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def cfg_agentes(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     await _require_admin(authorization)
     params = {
         "select": "id,nombre,canal,modelo,temperatura,max_output_tokens,activo,creado_en",
@@ -1597,7 +1814,9 @@ async def cfg_agentes(authorization: str | None = Header(default=None)) -> dict[
 
 
 @router.get("/config/canales")
-async def cfg_canales(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+async def cfg_canales(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     await _require_admin(authorization)
     # Recuento por canal a partir de conversaciones recientes (últimos 30 días)
     since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
@@ -1619,7 +1838,9 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
     metadata_parsed = _coerce_metadata(metadata_raw)
     if metadata_parsed is None and isinstance(metadata_raw, dict):
         metadata_parsed = metadata_raw
-    metadata: dict[str, Any] = dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
+    metadata: dict[str, Any] = (
+        dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
+    )
     estado = _normalize_agenda_estado(row.get("status") or metadata.get("estado"))
 
     contacto_payload = {
@@ -1775,7 +1996,9 @@ async def listar_agenda_bookings(
         if len(assigned_uuid_filters) == 1:
             params["asignado_a_usuario_id"] = f"eq.{next(iter(assigned_uuid_filters))}"
         else:
-            params["asignado_a_usuario_id"] = f"in.({','.join(sorted(assigned_uuid_filters))})"
+            params["asignado_a_usuario_id"] = (
+                f"in.({','.join(sorted(assigned_uuid_filters))})"
+            )
 
     if search:
         cleaned = " ".join(search.strip().split())
@@ -1810,7 +2033,9 @@ async def listar_agenda_bookings(
     assigned_name_filters = {
         value.strip().lower()
         for value in (assigned or [])
-        if isinstance(value, str) and not _looks_like_uuid(value.strip()) and value.strip()
+        if isinstance(value, str)
+        and not _looks_like_uuid(value.strip())
+        and value.strip()
     }
 
     filtered_items: list[dict[str, Any]] = []
@@ -2061,7 +2286,8 @@ async def listar_leads(
                 or row.get("contacto_nombre")
                 or "Sin nombre",
                 "correo": contacto_raw.get("correo") or row.get("contacto_correo"),
-                "telefono": contacto_raw.get("telefono_e164") or row.get("contacto_telefono"),
+                "telefono": contacto_raw.get("telefono_e164")
+                or row.get("contacto_telefono"),
                 "estado": contacto_raw.get("estado"),
                 "company_name": contacto_raw.get("company_name"),
                 "notes": contacto_raw.get("notes"),
@@ -2349,6 +2575,253 @@ async def actualizar_lead(
     return {"ok": True, "item": item}
 
 
+@router.get("/leads/{lead_id}/cliente")
+async def obtener_cliente_de_lead(
+    lead_id: UUID, authorization: str | None = Header(default=None)
+) -> dict[str, Any]:
+    """Devuelve el cliente asociado a un lead, si existe."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    cliente = await _fetch_cliente_por_lead(lead_id, token)
+    return {"ok": True, "cliente": cliente}
+
+
+@router.post("/leads/{lead_id}/convertir")
+async def convertir_lead_cliente(
+    lead_id: UUID,
+    payload: LeadConversionPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Reintenta o fuerza la conversión de un lead a cliente y devuelve el estado."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    body = {"p_tarjeta_id": str(lead_id), "p_forzar": payload.forzar}
+    resp = await _sb_rpc("convertir_lead_en_cliente", json=body, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error convirtiendo lead en cliente")
+
+    cliente = await _fetch_cliente_por_lead(lead_id, token)
+    fallback = _first_row(resp.json() or [])
+    return {"ok": True, "cliente": cliente or fallback}
+
+
+@router.patch("/clientes/{cliente_id}")
+async def actualizar_cliente(
+    cliente_id: UUID,
+    payload: ClienteFiscalUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Actualiza datos fiscales y de onboarding de un cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "cliente": None}
+
+    resp = await _sb_patch(
+        "/rest/v1/clientes",
+        params={"id": f"eq.{cliente_id}"},
+        json=updates,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando cliente")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    cliente = _first_row(rows)
+    return {"ok": True, "cliente": cliente}
+
+
+@router.post("/clientes/{cliente_id}/documentos")
+async def registrar_documento_cliente(
+    cliente_id: UUID,
+    payload: ClienteDocumentoPayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Registra un documento de cliente usando una URL previamente cargada."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    user_id = _jwt_verify_and_sub(token)
+    body = payload.model_dump(exclude_none=True)
+    body.setdefault("estado", ClienteDocumentoEstado.PENDIENTE.value)
+    body["cliente_id"] = str(cliente_id)
+    if user_id:
+        body.setdefault("cargado_por", user_id)
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_documentos",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error registrando documento")
+    rows = resp.json() or []
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/clientes/{cliente_id}/documentos/upload")
+async def subir_documento_cliente(
+    cliente_id: UUID,
+    tipo: ClienteDocumentoTipo = Form(...),
+    descripcion: str | None = Form(default=None),
+    authorization: str | None = Header(default=None),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Sube un archivo al bucket y lo marca como documento recibido del cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    upload = await storage.upload_cliente_document(
+        file=file, cliente_id=str(cliente_id), document_type=tipo.value
+    )
+
+    user_id = _jwt_verify_and_sub(token)
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "tipo": tipo.value,
+        "estado": ClienteDocumentoEstado.RECIBIDO.value,
+        "descripcion": descripcion,
+        "storage_path": upload.get("path"),
+        "storage_url": upload.get("url"),
+        "metadatos": {
+            "nombre": upload.get("name"),
+            "mime": upload.get("mime"),
+            "size": upload.get("size"),
+        },
+    }
+    if user_id:
+        body["cargado_por"] = user_id
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_documentos",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error guardando documento de cliente")
+    rows = resp.json() or []
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.patch("/clientes/{cliente_id}/documentos/{documento_id}")
+async def actualizar_documento_cliente(
+    cliente_id: UUID,
+    documento_id: UUID,
+    payload: ClienteDocumentoUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Actualiza estado o metadatos de un documento de cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "documento": None}
+
+    user_id = _jwt_verify_and_sub(token)
+    if updates.get("estado") == ClienteDocumentoEstado.VALIDADO.value and user_id:
+        updates.setdefault("validado_por", user_id)
+        updates.setdefault("validado_en", datetime.now(timezone.utc).isoformat())
+
+    resp = await _sb_patch(
+        "/rest/v1/cliente_documentos",
+        params={"id": f"eq.{documento_id}", "cliente_id": f"eq.{cliente_id}"},
+        json=updates,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando documento")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="documento_not_found")
+    documento = _first_row(rows)
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/clientes/{cliente_id}/responsables")
+async def crear_responsable_cliente(
+    cliente_id: UUID,
+    payload: ClienteResponsablePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Agrega un responsable del proyecto para el cliente."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    body = payload.model_dump(exclude_none=True)
+    body["cliente_id"] = str(cliente_id)
+
+    resp = await _sb_post(
+        "/rest/v1/cliente_responsables",
+        json=body,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando responsable")
+    rows = resp.json() or []
+    responsable = _first_row(rows)
+    return {"ok": True, "responsable": responsable}
+
+
+@router.patch("/clientes/{cliente_id}/responsables/{responsable_id}")
+async def actualizar_responsable_cliente(
+    cliente_id: UUID,
+    responsable_id: UUID,
+    payload: ClienteResponsableUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Actualiza la información de un responsable ya registrado."""
+
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "responsable": None}
+
+    resp = await _sb_patch(
+        "/rest/v1/cliente_responsables",
+        params={"id": f"eq.{responsable_id}", "cliente_id": f"eq.{cliente_id}"},
+        json=updates,
+        token=token,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando responsable")
+    rows = resp.json() or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="responsable_not_found")
+    responsable = _first_row(rows)
+    return {"ok": True, "responsable": responsable}
+
+
 @router.delete("/leads/{lead_id}")
 async def eliminar_lead(
     lead_id: UUID,
@@ -2457,7 +2930,8 @@ async def enviar_cotizacion_lead(
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
         descripcion=base_payload.descripcion or base_payload.titulo,
-        notes=lead_row.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+        notes=lead_row.get("proyecto_necesidades")
+        or contact.get("necesidad_proposito"),
     )
 
     pdf_doc = quotes_service.render_quote_pdf(quote_context)
@@ -2509,12 +2983,16 @@ async def enviar_cotizacion_lead(
                 ],
             )
         except EmailSendError as exc:
-            raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
+            raise HTTPException(
+                status_code=502, detail="quote_email_send_failed"
+            ) from exc
         extra_data = _quote_mark_extra({"email_to": recipients, "subject": subject})
     else:
         whatsapp_number = _resolve_whatsapp_number(contact, payload.whatsapp_to)
         if not whatsapp_number:
-            raise HTTPException(status_code=400, detail="quote_whatsapp_missing_recipient")
+            raise HTTPException(
+                status_code=400, detail="quote_whatsapp_missing_recipient"
+            )
         body = quotes_service.compose_whatsapp_body(quote_context, payload.message)
         try:
             await quotes_service.send_whatsapp_message(
@@ -2541,7 +3019,9 @@ async def enviar_cotizacion_lead(
 
     quote = _quote_from_row(row_marked)
     if quote.estado == "aceptada":
-        await _auto_move_lead_to_won(UUID(str(quote.tarjeta_id)), token=token, quote=quote)
+        await _auto_move_lead_to_won(
+            UUID(str(quote.tarjeta_id)), token=token, quote=quote
+        )
     return LeadQuoteResponse(quote=quote)
 
 
@@ -2573,7 +3053,9 @@ async def actualizar_estado_cotizacion(
         raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
     quote = _quote_from_row(row)
     if quote.estado == "aceptada":
-        await _auto_move_lead_to_won(UUID(str(quote.tarjeta_id)), token=token, quote=quote)
+        await _auto_move_lead_to_won(
+            UUID(str(quote.tarjeta_id)), token=token, quote=quote
+        )
     return LeadQuoteResponse(quote=quote)
 
 
@@ -2625,10 +3107,14 @@ def _extract_sender_type(metadata: dict[str, Any] | None) -> str | None:
     ]
     sender = metadata.get("sender")
     if isinstance(sender, dict):
-        candidates.extend([sender.get("type"), sender.get("sender_type"), sender.get("senderType")])
+        candidates.extend(
+            [sender.get("type"), sender.get("sender_type"), sender.get("senderType")]
+        )
     agent = metadata.get("agent")
     if isinstance(agent, dict):
-        candidates.extend([agent.get("type"), agent.get("sender_type"), agent.get("senderType")])
+        candidates.extend(
+            [agent.get("type"), agent.get("sender_type"), agent.get("senderType")]
+        )
     extra = metadata.get("extra")
     if isinstance(extra, str):
         try:
@@ -2715,7 +3201,11 @@ def _extract_agent_name(metadata: dict[str, Any] | None) -> str | None:
             candidate = user.get(key)
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
-    author = metadata.get("author") or metadata.get("author_name") or metadata.get("authorName")
+    author = (
+        metadata.get("author")
+        or metadata.get("author_name")
+        or metadata.get("authorName")
+    )
     if isinstance(author, str) and author.strip():
         return author.strip()
     extra = metadata.get("extra")
@@ -2745,7 +3235,9 @@ def _extract_agent_name(metadata: dict[str, Any] | None) -> str | None:
                 candidate = user_extra.get(key)
                 if isinstance(candidate, str) and candidate.strip():
                     return candidate.strip()
-        author_extra = extra.get("author") or extra.get("author_name") or extra.get("authorName")
+        author_extra = (
+            extra.get("author") or extra.get("author_name") or extra.get("authorName")
+        )
         if isinstance(author_extra, str) and author_extra.strip():
             return author_extra.strip()
     return None
@@ -2906,7 +3398,9 @@ async def mark_conversation_read(
     except httpx.RequestError:
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail="No fue posible marcar como leída")
+        raise HTTPException(
+            status_code=resp.status_code, detail="No fue posible marcar como leída"
+        )
     return {"ok": True}
 
 
@@ -3021,7 +3515,9 @@ async def set_conversation_state(
     except httpx.RequestError:
         raise HTTPException(status_code=502, detail="Error al conectar a Supabase")
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail="No fue posible cambiar el estado")
+        raise HTTPException(
+            status_code=resp.status_code, detail="No fue posible cambiar el estado"
+        )
     return {"ok": True, "estado": new_estado}
 
 
@@ -3039,7 +3535,9 @@ async def set_manual_mode(
     except storage.StorageError as exc:
         detail = str(exc) or "No se pudo actualizar el modo manual"
         lowered = detail.lower()
-        status = 502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        status = (
+            502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        )
         raise HTTPException(status_code=status, detail=detail) from exc
     return {"ok": True, "manual": payload.manual}
 
@@ -3105,7 +3603,9 @@ async def get_messages(
                         size = None
                 name_value = attachment.get("nombre") or attachment.get("name")
                 name = name_value.strip() if isinstance(name_value, str) else None
-                provider_id = attachment.get("proveedor_id") or attachment.get("provider_id")
+                provider_id = attachment.get("proveedor_id") or attachment.get(
+                    "provider_id"
+                )
                 attachments.append(
                     {
                         "id": attachment.get("id"),
@@ -3218,16 +3718,22 @@ async def reply_conversation(
         raise HTTPException(status_code=422, detail="message_required")
 
     try:
-        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+        conversation_meta = await storage.fetch_webchat_conversation(
+            str(conversacion_id)
+        )
     except storage.StorageError as exc:
         message = str(exc)
         lowered = message.lower()
         log_extra = {"conversation_id": str(conversacion_id), "error": message}
         if "no encontrada" in lowered or "not found" in lowered:
             logger.warning("panel.inbox.conversation_not_found", extra=log_extra)
-            raise HTTPException(status_code=404, detail="conversation_not_found") from exc
+            raise HTTPException(
+                status_code=404, detail="conversation_not_found"
+            ) from exc
         logger.exception("panel.inbox.fetch_conversation_failed", extra=log_extra)
-        raise HTTPException(status_code=502, detail="No se pudo recuperar la conversación") from exc
+        raise HTTPException(
+            status_code=502, detail="No se pudo recuperar la conversación"
+        ) from exc
 
     channel = (conversation_meta.get("channel") or "").lower()
     if channel != "webchat":
@@ -3284,7 +3790,9 @@ async def reply_conversation(
         if payload.locale:
             extra_metadata["locale"] = payload.locale
         manual_user_id = _jwt_verify_and_sub(token)
-        manual_user_id = manual_user_id.strip() if isinstance(manual_user_id, str) else None
+        manual_user_id = (
+            manual_user_id.strip() if isinstance(manual_user_id, str) else None
+        )
 
         agent_payload: dict[str, Any] = {}
         if payload.metadata and isinstance(payload.metadata, dict):
@@ -3351,12 +3859,24 @@ async def reply_conversation(
                 agent_payload["user"] = user_payload
 
         if agent_payload:
-            agent_payload.setdefault("origin", agent_payload.get("origin") or "panel_manual")
-            agent_payload.setdefault("source", agent_payload.get("source") or "panel_manual")
-            agent_payload.setdefault("sender_type", agent_payload.get("sender_type") or "human")
-            agent_payload.setdefault("senderType", agent_payload.get("senderType") or "human")
-            agent_payload.setdefault("author_type", agent_payload.get("author_type") or "human")
-            agent_payload.setdefault("authorType", agent_payload.get("authorType") or "human")
+            agent_payload.setdefault(
+                "origin", agent_payload.get("origin") or "panel_manual"
+            )
+            agent_payload.setdefault(
+                "source", agent_payload.get("source") or "panel_manual"
+            )
+            agent_payload.setdefault(
+                "sender_type", agent_payload.get("sender_type") or "human"
+            )
+            agent_payload.setdefault(
+                "senderType", agent_payload.get("senderType") or "human"
+            )
+            agent_payload.setdefault(
+                "author_type", agent_payload.get("author_type") or "human"
+            )
+            agent_payload.setdefault(
+                "authorType", agent_payload.get("authorType") or "human"
+            )
 
             for key, value in agent_payload.items():
                 if key not in extra_metadata and key != "attachments":
@@ -3367,7 +3887,9 @@ async def reply_conversation(
                 extra_metadata.setdefault("manual_author", resolved_name)
                 extra_metadata.setdefault("agent_name", resolved_name)
             else:
-                agent_name = agent_payload.get("agent_name") or agent_payload.get("agentName")
+                agent_name = agent_payload.get("agent_name") or agent_payload.get(
+                    "agentName"
+                )
                 if isinstance(agent_name, str) and agent_name.strip():
                     extra_metadata.setdefault("agent_name", agent_name.strip())
             resolved_email = manual_email or _extract_agent_email(agent_payload)
@@ -3388,7 +3910,9 @@ async def reply_conversation(
                 "panel.inbox.manual_register_failed",
                 extra={"conversation_id": str(conversacion_id), "error": str(exc)},
             )
-            raise HTTPException(status_code=502, detail="No se pudo registrar el mensaje") from exc
+            raise HTTPException(
+                status_code=502, detail="No se pudo registrar el mensaje"
+            ) from exc
 
         try:
             await webchat_service.append_manual_agent_context(
@@ -3428,7 +3952,9 @@ async def reply_conversation(
             manual_name_resp = agent_payload.get("manual_author") or agent_payload.get(
                 "manualAuthor"
             )
-            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get("agentName")
+            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get(
+                "agentName"
+            )
             manual_email_resp = (
                 agent_payload.get("manual_email")
                 or agent_payload.get("manualEmail")
@@ -3471,7 +3997,9 @@ async def reply_conversation(
             "panel.inbox.assistant_failed",
             extra={"conversation_id": str(conversacion_id), "error": str(exc)},
         )
-        raise HTTPException(status_code=502, detail="Error al invocar al asistente") from exc
+        raise HTTPException(
+            status_code=502, detail="Error al invocar al asistente"
+        ) from exc
 
     metadata_model = assistant_response.metadata
     metadata = (
@@ -3483,9 +4011,11 @@ async def reply_conversation(
     metadata.setdefault("client_message_id", client_message_id)
     metadata.setdefault(
         "manual_mode",
-        bool(metadata_model.manual_mode)
-        if isinstance(metadata_model, webchat_schemas.MessageMetadata)
-        else False,
+        (
+            bool(metadata_model.manual_mode)
+            if isinstance(metadata_model, webchat_schemas.MessageMetadata)
+            else False
+        ),
     )
     metadata.setdefault("session_id", session_id)
     metadata.setdefault("contact_id", str(contact_id))
@@ -3606,7 +4136,9 @@ async def _fetch_visitantes_total(
             "embudo.visitantes_total_failed",
             extra={"status": resp.status_code, "body": resp.text},
         )
-        raise HTTPException(status_code=502, detail="Error consultando visitantes sin chat")
+        raise HTTPException(
+            status_code=502, detail="Error consultando visitantes sin chat"
+        )
 
     data = resp.json()
     if isinstance(data, list):
@@ -3614,14 +4146,18 @@ async def _fetch_visitantes_total(
     elif isinstance(data, dict):
         row = data
     else:
-        logger.warning("embudo.visitantes_total_unexpected_payload", extra={"data": data})
+        logger.warning(
+            "embudo.visitantes_total_unexpected_payload", extra={"data": data}
+        )
         return 0
 
     total_value = row.get("total")
     try:
         return int(total_value)
     except (TypeError, ValueError):
-        logger.warning("embudo.visitantes_total_invalid_value", extra={"total": total_value})
+        logger.warning(
+            "embudo.visitantes_total_invalid_value", extra={"total": total_value}
+        )
         return 0
 
 
@@ -3645,7 +4181,9 @@ async def _fetch_dashboard_kpis(
             "dashboard.kpis_failed",
             extra={"status": resp.status_code, "body": resp.text},
         )
-        raise HTTPException(status_code=502, detail="Error consultando KPIs del dashboard")
+        raise HTTPException(
+            status_code=502, detail="Error consultando KPIs del dashboard"
+        )
     data = resp.json()
     if isinstance(data, dict):
         return data
@@ -3762,8 +4300,12 @@ async def obtener_embudo(
     date_from, date_to = _resolve_date_range(rango, desde, hasta)
 
     etapas = await _fetch_etapas(token, board_id)
-    cards = await _fetch_embudo_cards(token, board_id, channel_values, date_from, date_to)
-    visitantes_total = await _fetch_visitantes_total(token, channel_values, date_from, date_to)
+    cards = await _fetch_embudo_cards(
+        token, board_id, channel_values, date_from, date_to
+    )
+    visitantes_total = await _fetch_visitantes_total(
+        token, channel_values, date_from, date_to
+    )
 
     cards_by_stage: dict[str, list[dict[str, Any]]] = {}
     for row in cards:
@@ -3776,7 +4318,9 @@ async def obtener_embudo(
     category_totals: dict[str, int] = {}
     total_leads = 0
 
-    for etapa in sorted(etapas, key=lambda e: (e.get("orden") is None, e.get("orden", 0))):
+    for etapa in sorted(
+        etapas, key=lambda e: (e.get("orden") is None, e.get("orden", 0))
+    ):
         etapa_id = str(etapa.get("id"))
         meta_raw = etapa.get("metadatos")
         meta_dict = meta_raw if isinstance(meta_raw, dict) else None
@@ -3920,7 +4464,9 @@ async def visitas_webchat_detalle(
     estado: str | None = Query(default=None),
     pais: str | None = Query(default=None),
     ciudad: str | None = Query(default=None),
-    session: str | None = Query(default=None, description="Filtro por ID de sesión (parcial)."),
+    session: str | None = Query(
+        default=None, description="Filtro por ID de sesión (parcial)."
+    ),
     ip: str | None = Query(default=None, description="Filtro por IP (parcial)."),
     visitas_min: int | None = Query(default=None, ge=0),
     visitas_max: int | None = Query(default=None, ge=0),
@@ -3974,10 +4520,14 @@ async def visitas_webchat_detalle(
     visitas_min_value = visitas_min if visitas_min is not None else None
     visitas_max_value = visitas_max if visitas_max is not None else None
     primera_desde_dt = (
-        _parse_date_value(primera_desde, field="primera_desde") if primera_desde else None
+        _parse_date_value(primera_desde, field="primera_desde")
+        if primera_desde
+        else None
     )
     primera_hasta_dt = (
-        _parse_date_value(primera_hasta, field="primera_hasta") if primera_hasta else None
+        _parse_date_value(primera_hasta, field="primera_hasta")
+        if primera_hasta
+        else None
     )
     ultimo_desde_dt = (
         _parse_date_value(ultimo_desde, field="ultimo_desde") if ultimo_desde else None
@@ -3998,7 +4548,10 @@ async def visitas_webchat_detalle(
     if contacto_estado_norm in {"", "todos", "all"}:
         contacto_estado_norm = None
     valid_contact_states = {"completo", "incompleto", "sin", "sin_contacto"}
-    if contacto_estado_norm is not None and contacto_estado_norm not in valid_contact_states:
+    if (
+        contacto_estado_norm is not None
+        and contacto_estado_norm not in valid_contact_states
+    ):
         raise HTTPException(status_code=400, detail="contacto_estado_invalid")
 
     device_values: list[str] | None = None
@@ -4062,7 +4615,9 @@ async def visitas_webchat_detalle(
     items = payload.get("items") if isinstance(payload, dict) else []
     total = int(payload.get("total") or 0) if isinstance(payload, dict) else 0
     total_chat = int(payload.get("total_chat") or 0) if isinstance(payload, dict) else 0
-    total_no_chat = int(payload.get("total_no_chat") or 0) if isinstance(payload, dict) else 0
+    total_no_chat = (
+        int(payload.get("total_no_chat") or 0) if isinstance(payload, dict) else 0
+    )
 
     return {
         "ok": True,
@@ -4295,16 +4850,24 @@ async def demografia_mapa(
         "canales": channel_values,
         "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
-        "totales_leads": leads_payload.get("totals") if isinstance(leads_payload, dict) else {},
-        "totales_visitantes": visitantes_payload.get("totals")
-        if isinstance(visitantes_payload, dict)
-        else {},
-        "totales_leads_por_canal": leads_payload.get("totals_by_channel")
-        if isinstance(leads_payload, dict)
-        else {},
-        "captado_orden": leads_payload.get("captado_orden")
-        if isinstance(leads_payload, dict)
-        else None,
+        "totales_leads": (
+            leads_payload.get("totals") if isinstance(leads_payload, dict) else {}
+        ),
+        "totales_visitantes": (
+            visitantes_payload.get("totals")
+            if isinstance(visitantes_payload, dict)
+            else {}
+        ),
+        "totales_leads_por_canal": (
+            leads_payload.get("totals_by_channel")
+            if isinstance(leads_payload, dict)
+            else {}
+        ),
+        "captado_orden": (
+            leads_payload.get("captado_orden")
+            if isinstance(leads_payload, dict)
+            else None
+        ),
         "dataset": dataset,
         "geojson": geojson,
     }
@@ -4323,7 +4886,9 @@ async def visitantes_estado_metrics(
 
     date_from, date_to = _resolve_date_range(rango, desde, hasta)
     try:
-        payload = await storage.fetch_visitantes_estados(date_from=date_from, date_to=date_to)
+        payload = await storage.fetch_visitantes_estados(
+            date_from=date_from, date_to=date_to
+        )
     except storage.StorageError as exc:
         logger.exception("visitantes.estados_fetch_failed")
         raise HTTPException(
@@ -4382,7 +4947,9 @@ async def visitantes_paises_metrics(
     date_from, date_to = _resolve_date_range(rango, desde, hasta)
 
     try:
-        payload = await storage.fetch_visitantes_paises(date_from=date_from, date_to=date_to)
+        payload = await storage.fetch_visitantes_paises(
+            date_from=date_from, date_to=date_to
+        )
     except storage.StorageError as exc:
         logger.exception("visitantes.paises_fetch_failed")
         raise HTTPException(
@@ -4452,7 +5019,9 @@ async def visitantes_municipios_metrics(
             state_code, date_from=date_from, date_to=date_to
         )
     except storage.StorageError as exc:
-        logger.exception("visitantes.municipios_fetch_failed", extra={"estado": state_code})
+        logger.exception(
+            "visitantes.municipios_fetch_failed", extra={"estado": state_code}
+        )
         raise HTTPException(
             status_code=502, detail=str(exc) or "Error consultando visitantes"
         ) from exc
@@ -4590,7 +5159,12 @@ async def leads_estado_metrics(
             total = _to_int(row.get("total"))
             entry = items_map.setdefault(
                 key,
-                {"cve_ent": key, "nombre": row.get("nombre"), "total": 0, "por_canal": {}},
+                {
+                    "cve_ent": key,
+                    "nombre": row.get("nombre"),
+                    "total": 0,
+                    "por_canal": {},
+                },
             )
             if not entry.get("nombre") and row.get("nombre"):
                 entry["nombre"] = row.get("nombre")
@@ -4599,7 +5173,9 @@ async def leads_estado_metrics(
             if isinstance(breakdown, dict):
                 for channel, value in breakdown.items():
                     ch_key = str(channel)
-                    entry["por_canal"][ch_key] = entry["por_canal"].get(ch_key, 0) + _to_int(value)
+                    entry["por_canal"][ch_key] = entry["por_canal"].get(
+                        ch_key, 0
+                    ) + _to_int(value)
 
     _merge_state_rows(leads_payload.get("items"))
     _merge_state_rows(visitantes_payload.get("items"))
@@ -4663,7 +5239,9 @@ async def leads_municipios_metrics(
                 date_to=date_to,
             )
         except storage.StorageError as exc:
-            logger.exception("leads.municipios_fetch_failed", extra={"estado": state_code})
+            logger.exception(
+                "leads.municipios_fetch_failed", extra={"estado": state_code}
+            )
             raise HTTPException(
                 status_code=502, detail=str(exc) or "Error consultando leads"
             ) from exc
@@ -4677,7 +5255,9 @@ async def leads_municipios_metrics(
                 date_to=date_to,
             )
         except storage.StorageError as exc:
-            logger.exception("visitantes.municipios_merge_failed", extra={"estado": state_code})
+            logger.exception(
+                "visitantes.municipios_merge_failed", extra={"estado": state_code}
+            )
             raise HTTPException(
                 status_code=502, detail=str(exc) or "Error consultando visitantes"
             ) from exc
@@ -4715,7 +5295,12 @@ async def leads_municipios_metrics(
             total = _to_int(row.get("total"))
             entry = items_map.setdefault(
                 key,
-                {"cvegeo": key, "nombre": row.get("nombre"), "total": 0, "por_canal": {}},
+                {
+                    "cvegeo": key,
+                    "nombre": row.get("nombre"),
+                    "total": 0,
+                    "por_canal": {},
+                },
             )
             if not entry.get("nombre") and row.get("nombre"):
                 entry["nombre"] = row.get("nombre")
@@ -4724,7 +5309,9 @@ async def leads_municipios_metrics(
             if isinstance(breakdown, dict):
                 for channel, value in breakdown.items():
                     ch_key = str(channel)
-                    entry["por_canal"][ch_key] = entry["por_canal"].get(ch_key, 0) + _to_int(value)
+                    entry["por_canal"][ch_key] = entry["por_canal"].get(
+                        ch_key, 0
+                    ) + _to_int(value)
 
     _merge_municipio_rows(leads_payload.get("items"))
     _merge_municipio_rows(visitantes_payload.get("items"))
@@ -4789,7 +5376,9 @@ async def crear_busqueda_google(
         raise HTTPException(status_code=401, detail="auth_required")
 
     client = GooglePlacesClient()
-    query_value = payload.query or ", ".join(payload.included_types or []) or "google_places"
+    query_value = (
+        payload.query or ", ".join(payload.included_types or []) or "google_places"
+    )
     try:
         places = await client.search_places(
             query=payload.query,
@@ -4866,7 +5455,10 @@ async def crear_busqueda_google(
         except (TypeError, ValueError):
             upserted = len(normalized_items)
 
-    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    preview = [
+        _result_preview(item)
+        for item in normalized_items[: min(10, len(normalized_items))]
+    ]
     return {
         "ok": True,
         "busqueda_id": str(busqueda_uuid),
@@ -4946,14 +5538,19 @@ async def crear_busqueda_denue(
             upsert_data = {}
         if isinstance(upsert_data, dict):
             upserted = (
-                upsert_data.get("upserted") or upsert_data.get("total") or len(normalized_items)
+                upsert_data.get("upserted")
+                or upsert_data.get("total")
+                or len(normalized_items)
             )
         elif isinstance(upsert_data, int):
             upserted = upsert_data
         else:
             upserted = len(normalized_items)
 
-    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    preview = [
+        _result_preview(item)
+        for item in normalized_items[: min(10, len(normalized_items))]
+    ]
     return {
         "ok": True,
         "busqueda_id": str(busqueda_uuid),
@@ -4967,7 +5564,9 @@ async def crear_busqueda_denue(
 async def listar_busquedas_google(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    search: str | None = Query(default=None, description="Filtro parcial sobre el query."),
+    search: str | None = Query(
+        default=None, description="Filtro parcial sobre el query."
+    ),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     token = _parse_bearer(authorization)
@@ -5114,7 +5713,9 @@ async def listar_resultados_google(
     q: str | None = Query(
         default=None, description="Filtro parcial en nombre, actividad o dirección."
     ),
-    tipo: str | None = Query(default=None, description="Filtra por google_primary_type."),
+    tipo: str | None = Query(
+        default=None, description="Filtra por google_primary_type."
+    ),
     max_distancia_m: int | None = Query(default=None, ge=1, le=50000),
     min_rating: float | None = Query(default=None, ge=0, le=5),
     limit: int = Query(default=250, ge=1, le=5000),
@@ -5176,7 +5777,9 @@ async def listar_resultados_google(
             batch_rows = []
         rows.extend(batch_rows)
         if total is None:
-            total = _content_range_total(resp.headers.get("content-range")) or len(batch_rows)
+            total = _content_range_total(resp.headers.get("content-range")) or len(
+                batch_rows
+            )
         current_offset += batch_limit
         remaining = limit - len(rows)
         if not batch_rows or len(rows) >= (total or 0):
@@ -5289,7 +5892,9 @@ async def listar_resultados_denue(
             batch_rows = []
         rows.extend(batch_rows)
         if total is None:
-            total = _content_range_total(resp.headers.get("content-range")) or len(batch_rows)
+            total = _content_range_total(resp.headers.get("content-range")) or len(
+                batch_rows
+            )
         current_offset += batch_limit
         remaining = limit - len(rows)
         if not batch_rows or len(rows) >= (total or 0):
@@ -5347,5 +5952,8 @@ async def panel_env_js() -> Response:
     """
     url = (settings.supabase_url or "").rstrip("/")
     anon = getattr(settings, "supabase_anon", None) or ""
-    body = "window.SUPABASE_URL = '" + url + "';\n" "window.SUPABASE_ANON_KEY = '" + anon + "';\n"
+    body = (
+        "window.SUPABASE_URL = '" + url + "';\n"
+        "window.SUPABASE_ANON_KEY = '" + anon + "';\n"
+    )
     return Response(content=body, media_type="application/javascript")
