@@ -21,6 +21,14 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   searchEmbudoContacts,
   type ContactSearchResult,
   type LeadActionResult,
@@ -31,11 +39,16 @@ import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
 import {
   IconAlertTriangle,
+  IconBrandWhatsapp,
   IconCalendarEvent,
   IconChecklist,
+  IconDownload,
   IconHandStop,
+  IconMail,
   IconMessageCircle,
+  IconPlus,
   IconTargetArrow,
+  IconTrash,
   IconTrophy,
 } from "@tabler/icons-react";
 
@@ -107,6 +120,32 @@ type LeadDrawerProps = {
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
   onDelete?: () => Promise<LeadDeleteResult>;
   onAdvanceStage?: (stage: EmbudoStage) => Promise<{ ok: boolean; error?: string }>;
+};
+
+type QuoteChannel = "email" | "whatsapp";
+
+type LeadQuoteEntry = {
+  id: string;
+  version: number;
+  status: string;
+  channel: string | null;
+  sentAt: string | null;
+  total: number | null;
+  currency: string | null;
+  pdfUrl: string | null;
+  createdAt: string | null;
+};
+
+type QuotesState =
+  | { status: "idle"; data: LeadQuoteEntry[] }
+  | { status: "loading"; data: LeadQuoteEntry[] }
+  | { status: "loaded"; data: LeadQuoteEntry[] }
+  | { status: "error"; data: LeadQuoteEntry[]; error: string };
+
+type QuoteConceptForm = {
+  title: string;
+  description: string;
+  amount: string;
 };
 
 type DrawerPrepOption = {
@@ -584,6 +623,25 @@ export function LeadDrawer({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
+  const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
+  const [quoteSheetOpen, setQuoteSheetOpen] = useState(false);
+  const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
+  const [quoteTitle, setQuoteTitle] = useState("");
+  const [quoteDescription, setQuoteDescription] = useState("");
+  const [quoteSubject, setQuoteSubject] = useState("");
+  const [quoteMessage, setQuoteMessage] = useState("");
+  const [quoteEmailTo, setQuoteEmailTo] = useState("");
+  const [quoteWhatsappTo, setQuoteWhatsappTo] = useState("");
+  const [quoteSubtotal, setQuoteSubtotal] = useState("");
+  const [quoteImpuestos, setQuoteImpuestos] = useState("");
+  const [quoteTotal, setQuoteTotal] = useState("");
+  const [quoteMoneda, setQuoteMoneda] = useState(card?.moneda ?? "MXN");
+  const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
+    formatDateInput(addDays(new Date(), 14)),
+  );
+  const [quoteConcepts, setQuoteConcepts] = useState<QuoteConceptForm[]>([{ title: "", description: "", amount: "" }]);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [notePending, setNotePending] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -593,6 +651,7 @@ export function LeadDrawer({
   const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
   const [contactSearchError, setContactSearchError] = useState<string | null>(null);
   const [contactSearchPending, startContactSearch] = useTransition();
+  const [quotePending, startQuoteAction] = useTransition();
   const isBusy = pending || deletePending;
 
   useEffect(() => {
@@ -610,6 +669,12 @@ export function LeadDrawer({
   }, [card?.tarjetaId]);
 
   useEffect(() => {
+    setQuotesState({ status: "idle", data: [] });
+    setQuoteSheetOpen(false);
+    setQuoteSuccess(null);
+  }, [card?.tarjetaId]);
+
+  useEffect(() => {
     if (noteError && noteText.trim()) {
       setNoteError(null);
     }
@@ -618,6 +683,7 @@ export function LeadDrawer({
   useEffect(() => {
     if (!open) {
       setActiveTab("resumen");
+      setQuoteSheetOpen(false);
     }
   }, [open]);
 
@@ -711,6 +777,40 @@ export function LeadDrawer({
     }
   }, [card]);
 
+  const fetchQuotes = useCallback(async () => {
+    if (!card) return;
+    setQuotesState((prev) => {
+      if (prev.status === "loading") return prev;
+      return { status: "loading", data: prev.data };
+    });
+    try {
+      const response = await fetch(`/api/embudo/leads/${card.tarjetaId}/quotes`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
+        setQuotesState((prev) => ({
+          status: "error",
+          data: prev.data,
+          error: message,
+        }));
+        return;
+      }
+      const rows = Array.isArray(body?.quotes) ? (body.quotes as unknown[]) : [];
+      const mapped = rows.map((row) => mapQuoteEntry(row));
+      setQuotesState({ status: "loaded", data: mapped });
+    } catch (fetchError) {
+      setQuotesState((prev) => ({
+        status: "error",
+        data: prev.data,
+        error:
+          fetchError instanceof Error
+            ? fetchError.message
+            : "No se pudieron cargar las cotizaciones.",
+      }));
+    }
+  }, [card]);
+
   useEffect(() => {
     if (!open || !card?.tarjetaId) return;
     if (activeTab === "notas" || activeTab === "historial") {
@@ -719,6 +819,19 @@ export function LeadDrawer({
       }
     }
   }, [open, card?.tarjetaId, activeTab, historyState.status, fetchHistory]);
+
+  useEffect(() => {
+    if (!open || !card?.tarjetaId) return;
+    if (quotesState.status === "idle") {
+      void fetchQuotes();
+    }
+  }, [open, card?.tarjetaId, quotesState.status, fetchQuotes]);
+
+  useEffect(() => {
+    if (card?.moneda) {
+      setQuoteMoneda(card.moneda);
+    }
+  }, [card?.moneda]);
 
   const noteEntries = useMemo(
     () =>
@@ -1015,6 +1128,163 @@ export function LeadDrawer({
     setContactSearchError(null);
   };
 
+  const handleConceptFieldChange = (index: number, field: keyof QuoteConceptForm, value: string) => {
+    setQuoteConcepts((prev) =>
+      prev.map((concept, idx) => (idx === index ? { ...concept, [field]: value } : concept)),
+    );
+  };
+
+  const handleAddConceptRow = () => {
+    setQuoteConcepts((prev) => [...prev, { title: "", description: "", amount: "" }]);
+  };
+
+  const handleRemoveConceptRow = (index: number) => {
+    setQuoteConcepts((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  const handleQuoteChannelChange = (nextChannel: QuoteChannel) => {
+    setQuoteChannel(nextChannel);
+    if (nextChannel === "email" && !quoteEmailTo && card?.correo) {
+      setQuoteEmailTo(card.correo);
+    }
+    if (nextChannel === "whatsapp" && !quoteWhatsappTo && card?.telefono) {
+      setQuoteWhatsappTo(card.telefono);
+    }
+  };
+
+  const openQuoteSheet = useCallback(
+    (channel: QuoteChannel) => {
+      if (!card) return;
+      const defaultTitle =
+        card.proyectoNombre?.trim() ||
+        (card.nombre ? `Propuesta ${card.nombre}` : "Cotización Tal-IA");
+      const defaultDescription =
+        card.proyectoNecesidades?.trim() || card.necesidadProposito?.trim() || "";
+      const defaultSubject =
+        `Cotización Tal-IA · ${card.empresa ?? card.nombre ?? ""}`.trim() || "Cotización Tal-IA";
+      const defaultMessage =
+        channel === "email"
+          ? "Adjunto encontrarás la cotización actualizada. Quedo al pendiente de tus comentarios."
+          : "Te comparto la cotización en el PDF adjunto. Avísame si necesitas un ajuste.";
+      const defaultMoneda = (card.moneda || quoteMoneda || "MXN").toUpperCase();
+      const defaultAmount =
+        typeof card.monto === "number" && Number.isFinite(card.monto) ? String(card.monto) : "";
+      const validUntil = formatDateInput(addDays(new Date(), 14));
+      setQuoteChannel(channel);
+      setQuoteTitle(defaultTitle);
+      setQuoteDescription(defaultDescription);
+      setQuoteSubject(defaultSubject);
+      setQuoteMessage(defaultMessage);
+      setQuoteEmailTo(card.correo ?? "");
+      setQuoteWhatsappTo(card.telefono ?? "");
+      setQuoteSubtotal(defaultAmount);
+      setQuoteImpuestos("");
+      setQuoteTotal(defaultAmount);
+      setQuoteMoneda(defaultMoneda);
+      setQuoteValidoHasta(validUntil);
+      setQuoteConcepts([
+        {
+          title: card.proyectoNombre?.trim() || "Implementación Tal-IA",
+          description: defaultDescription,
+          amount: defaultAmount,
+        },
+      ]);
+      setQuoteError(null);
+      setQuoteSuccess(null);
+      setQuoteSheetOpen(true);
+    },
+    [card, quoteMoneda],
+  );
+
+  const handleQuoteSheetOpenChange = (openState: boolean) => {
+    if (!openState) {
+      setQuoteSheetOpen(false);
+      setQuoteError(null);
+    }
+  };
+
+  const handleSendQuote = () => {
+    if (!card) return;
+    if (quoteChannel === "email") {
+      const emails = parseEmailList(quoteEmailTo);
+      if (!emails.length) {
+        setQuoteError("Agrega al menos un correo para enviar la cotización.");
+        return;
+      }
+    } else {
+      if (!quoteWhatsappTo.trim()) {
+        setQuoteError("Ingresa el número de WhatsApp del contacto.");
+        return;
+      }
+    }
+    setQuoteError(null);
+    startQuoteAction(async () => {
+      try {
+        const emails = parseEmailList(quoteEmailTo);
+        const subtotalValue = parseNumberInput(quoteSubtotal);
+        const taxValue = parseNumberInput(quoteImpuestos);
+        const totalValue = parseNumberInput(quoteTotal);
+        const conceptsPayload = quoteConcepts
+          .map((concept) => {
+            const title = concept.title.trim();
+            const description = concept.description.trim();
+            const amount = parseNumberInput(concept.amount);
+            if (!title && !description && amount == null) {
+              return null;
+            }
+            const payload: Record<string, unknown> = {};
+            if (title) payload.titulo = title;
+            if (description) payload.descripcion = description;
+            if (amount != null) payload.total = amount;
+            return payload;
+          })
+          .filter(Boolean);
+
+        const payload = {
+          channel: quoteChannel,
+          titulo: quoteTitle.trim() || null,
+          descripcion: quoteDescription.trim() || null,
+          conceptos: conceptsPayload,
+          subtotal: subtotalValue ?? null,
+          impuestos: taxValue ?? null,
+          total: totalValue ?? null,
+          moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
+          valido_hasta: quoteValidoHasta?.trim() || null,
+          email_to: quoteChannel === "email" ? emails : undefined,
+          whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
+          subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
+          message: quoteMessage.trim() || null,
+        };
+
+        const response = await fetch(`/api/embudo/leads/${card.tarjetaId}/quotes/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message =
+            typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
+          setQuoteError(message);
+          return;
+        }
+        setQuoteSheetOpen(false);
+        setQuoteError(null);
+        setQuoteSuccess("Cotización enviada correctamente.");
+        await fetchQuotes();
+      } catch (sendError) {
+        setQuoteError(
+          sendError instanceof Error
+            ? sendError.message
+            : "No se pudo enviar la cotización.",
+        );
+      }
+    });
+  };
+
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {
     const stageValues = stagePrep[stageCode] ?? {};
     const rawValue = stageValues[field.key];
@@ -1151,7 +1421,8 @@ export function LeadDrawer({
   const hasUpcomingSections = upcomingStageGroups.length > 0;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} direction="right">
+    <>
+      <Drawer open={open} onOpenChange={onOpenChange} direction="right">
       <DrawerContent className="data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:max-w-lg data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:overflow-hidden">
         <DrawerHeader className="items-start">
           <DrawerTitle>{isCreateMode ? "Nuevo lead" : card?.nombre ?? "Lead sin nombre"}</DrawerTitle>
@@ -1441,6 +1712,102 @@ export function LeadDrawer({
                   ) : null}
                 </div>
               </section>
+
+              {!isCreateMode && card ? (
+                <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">Cotizaciones</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Envía propuestas en PDF y registra su estado desde aquí.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => openQuoteSheet("email")}
+                        disabled={isBusy}
+                      >
+                        <IconMail className="size-4" />
+                        Correo
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={() => openQuoteSheet("whatsapp")}
+                        disabled={isBusy}
+                      >
+                        <IconBrandWhatsapp className="size-4" />
+                        WhatsApp
+                      </Button>
+                    </div>
+                  </div>
+
+                  {quoteSuccess ? (
+                    <p className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-800">
+                      {quoteSuccess}
+                    </p>
+                  ) : null}
+
+                  {quotesState.status === "loading" && quotesState.data.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-muted-foreground/40 p-3 text-xs text-muted-foreground">
+                      Cargando cotizaciones...
+                    </p>
+                  ) : null}
+
+                  {quotesState.status === "error" ? (
+                    <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                      {quotesState.error}
+                    </p>
+                  ) : null}
+
+                  {quotesState.data.length ? (
+                    <div className="space-y-3">
+                      {quotesState.data.map((quote) => (
+                        <div key={quote.id} className="space-y-2 rounded-lg border border-border/60 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <Badge variant="outline">Versión {quote.version}</Badge>
+                                <Badge variant={quoteStatusVariant(quote.status)}>
+                                  {formatQuoteStatus(quote.status)}
+                                </Badge>
+                                {quote.channel ? (
+                                  <Badge variant="secondary">{formatQuoteChannel(quote.channel)}</Badge>
+                                ) : null}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {quote.sentAt
+                                  ? `Enviada ${formatQuoteDate(quote.sentAt)}`
+                                  : quote.createdAt
+                                    ? `Creada ${formatQuoteDate(quote.createdAt)}`
+                                    : "Sin enviar"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Total: {formatQuoteCurrency(quote.total, quote.currency)}
+                              </p>
+                            </div>
+                            {quote.pdfUrl ? (
+                              <Button asChild variant="ghost" size="sm" className="gap-1">
+                                <a href={quote.pdfUrl} target="_blank" rel="noopener noreferrer">
+                                  <IconDownload className="size-4" />
+                                  Ver PDF
+                                </a>
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : quotesState.status === "loaded" ? (
+                    <p className="text-xs text-muted-foreground">Aún no has enviado cotizaciones.</p>
+                  ) : null}
+                </section>
+              ) : null}
 
               {hasUpcomingSections ? (
                 <section className="space-y-4">
@@ -1736,6 +2103,232 @@ export function LeadDrawer({
         </Tabs>
       </DrawerContent>
     </Drawer>
+    {!isCreateMode && card ? (
+      <Sheet open={quoteSheetOpen} onOpenChange={handleQuoteSheetOpenChange}>
+        <SheetContent side="right" className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Enviar cotización</SheetTitle>
+            <SheetDescription>
+              Genera y envía una cotización en PDF para {card.nombre ?? "el lead seleccionado"}.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1"
+                variant={quoteChannel === "email" ? "default" : "outline"}
+                onClick={() => handleQuoteChannelChange("email")}
+                disabled={quotePending}
+              >
+                <IconMail className="size-4" />
+                Correo
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1"
+                variant={quoteChannel === "whatsapp" ? "default" : "outline"}
+                onClick={() => handleQuoteChannelChange("whatsapp")}
+                disabled={quotePending}
+              >
+                <IconBrandWhatsapp className="size-4" />
+                WhatsApp
+              </Button>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Título interno</label>
+              <Input
+                value={quoteTitle}
+                onChange={(event) => setQuoteTitle(event.target.value)}
+                disabled={quotePending}
+                placeholder="Implementación Tal-IA"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Descripción / resumen</label>
+              <Textarea
+                value={quoteDescription}
+                onChange={(event) => setQuoteDescription(event.target.value)}
+                disabled={quotePending}
+                rows={3}
+                placeholder="Resumen del proyecto que aparecerá en el PDF."
+              />
+            </div>
+
+            {quoteChannel === "email" ? (
+              <>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">Destinatarios</label>
+                  <Input
+                    value={quoteEmailTo}
+                    onChange={(event) => setQuoteEmailTo(event.target.value)}
+                    disabled={quotePending}
+                    placeholder="correo@empresa.com, contacto@otra.com"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Separa correos con comas o espacios.</p>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-medium text-muted-foreground">Asunto</label>
+                  <Input
+                    value={quoteSubject}
+                    onChange={(event) => setQuoteSubject(event.target.value)}
+                    disabled={quotePending}
+                    placeholder="Cotización Tal-IA"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="grid gap-2">
+                <label className="text-xs font-medium text-muted-foreground">WhatsApp destino</label>
+                <Input
+                  value={quoteWhatsappTo}
+                  onChange={(event) => setQuoteWhatsappTo(event.target.value)}
+                  disabled={quotePending}
+                  placeholder="+52..."
+                />
+              </div>
+            )}
+
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Mensaje introductorio</label>
+              <Textarea
+                value={quoteMessage}
+                onChange={(event) => setQuoteMessage(event.target.value)}
+                disabled={quotePending}
+                rows={3}
+                placeholder="Texto que acompañará al PDF."
+              />
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border/70 bg-background/60 p-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h5 className="text-sm font-semibold text-foreground">Conceptos</h5>
+                  <p className="text-xs text-muted-foreground">Puedes listar servicios o partidas.</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1"
+                  onClick={handleAddConceptRow}
+                  disabled={quotePending || quoteConcepts.length >= 8}
+                >
+                  <IconPlus className="size-4" />
+                  Agregar
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {quoteConcepts.map((concept, index) => (
+                  <div key={`concept-${index}`} className="space-y-2 rounded-lg border border-border/50 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-muted-foreground">Concepto {index + 1}</span>
+                      {quoteConcepts.length > 1 ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleRemoveConceptRow(index)}
+                          disabled={quotePending}
+                        >
+                          <IconTrash className="size-4" />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <Input
+                      value={concept.title}
+                      onChange={(event) => handleConceptFieldChange(index, "title", event.target.value)}
+                      disabled={quotePending}
+                      placeholder="Nombre del concepto"
+                    />
+                    <Textarea
+                      value={concept.description}
+                      onChange={(event) =>
+                        handleConceptFieldChange(index, "description", event.target.value)
+                      }
+                      disabled={quotePending}
+                      rows={2}
+                      placeholder="Descripción o notas"
+                    />
+                    <Input
+                      value={concept.amount}
+                      onChange={(event) => handleConceptFieldChange(index, "amount", event.target.value)}
+                      disabled={quotePending}
+                      placeholder="Monto (opcional)"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Subtotal</label>
+              <Input
+                value={quoteSubtotal}
+                onChange={(event) => setQuoteSubtotal(event.target.value)}
+                disabled={quotePending}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Impuestos</label>
+              <Input
+                value={quoteImpuestos}
+                onChange={(event) => setQuoteImpuestos(event.target.value)}
+                disabled={quotePending}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Total</label>
+              <Input
+                value={quoteTotal}
+                onChange={(event) => setQuoteTotal(event.target.value)}
+                disabled={quotePending}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Moneda</label>
+              <Input
+                value={quoteMoneda}
+                onChange={(event) => setQuoteMoneda(event.target.value.toUpperCase())}
+                disabled={quotePending}
+                maxLength={3}
+                placeholder="MXN"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Vigente hasta</label>
+              <Input
+                type="date"
+                value={quoteValidoHasta}
+                onChange={(event) => setQuoteValidoHasta(event.target.value)}
+                disabled={quotePending}
+              />
+            </div>
+          </div>
+          <SheetFooter className="flex flex-col gap-2 pt-2">
+            {quoteError ? (
+              <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {quoteError}
+              </p>
+            ) : null}
+            <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
+              {quotePending ? "Enviando..." : "Enviar cotización"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setQuoteSheetOpen(false)} disabled={quotePending}>
+              Cancelar
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    ) : null}
+    </>
   );
 }
 
@@ -2219,4 +2812,117 @@ function describeHistoryEntry(entry: LeadHistoryEntry): string {
   }
 
   return "Movimiento del lead";
+}
+
+function mapQuoteEntry(input: unknown): LeadQuoteEntry {
+  const row = isRecord(input) ? input : {};
+  const totalValue = toNumber(row["total"]);
+  return {
+    id: String(
+      row["id"] ?? `${row["version"] ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`,
+    ),
+    version: Number.isFinite(Number(row["version"])) ? Number(row["version"]) : 1,
+    status: typeof row["estado"] === "string" ? (row["estado"] as string) : "borrador",
+    channel: typeof row["canal_envio"] === "string" ? (row["canal_envio"] as string) : null,
+    sentAt: typeof row["enviada_en"] === "string" ? (row["enviada_en"] as string) : null,
+    total: totalValue,
+    currency: typeof row["moneda"] === "string" ? (row["moneda"] as string) : null,
+    pdfUrl: typeof row["pdf_url"] === "string" ? (row["pdf_url"] as string) : null,
+    createdAt: typeof row["creado_en"] === "string" ? (row["creado_en"] as string) : null,
+  };
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatQuoteStatus(status: string): string {
+  const normalized = status?.toLowerCase() ?? "";
+  switch (normalized) {
+    case "enviada":
+      return "Enviada";
+    case "aceptada":
+      return "Aceptada";
+    case "rechazada":
+      return "Rechazada";
+    case "cancelada":
+      return "Cancelada";
+    default:
+      return "Borrador";
+  }
+}
+
+function quoteStatusVariant(
+  status: string,
+): "default" | "secondary" | "outline" | "destructive" {
+  const normalized = status?.toLowerCase() ?? "";
+  if (normalized === "aceptada") return "default";
+  if (normalized === "rechazada" || normalized === "cancelada") return "destructive";
+  if (normalized === "enviada") return "secondary";
+  return "outline";
+}
+
+function formatQuoteChannel(channel: string | null): string {
+  if (!channel) return "Sin canal";
+  if (channel.toLowerCase() === "email") return "Correo";
+  if (channel.toLowerCase() === "whatsapp") return "WhatsApp";
+  return channel;
+}
+
+function formatQuoteDate(value: string | null): string {
+  if (!value) return "—";
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function formatQuoteCurrency(value: number | null, currency: string | null): string {
+  if (value == null) return "—";
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: (currency || "MXN").toUpperCase(),
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency || "MXN"} ${value.toFixed(2)}`;
+  }
+}
+
+function parseNumberInput(value: string): number | null {
+  if (!value) return null;
+  const sanitized = value.replace(/,/g, "").trim();
+  if (!sanitized) return null;
+  const parsed = Number(sanitized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function formatDateInput(date: Date): string {
+  return date.toISOString().split("T")[0] ?? "";
+}
+
+function parseEmailList(value: string): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,;\s]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
