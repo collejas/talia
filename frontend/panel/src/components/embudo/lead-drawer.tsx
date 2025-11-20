@@ -1161,6 +1161,49 @@ export function LeadDrawer({
     }
   };
 
+  const updateWonStagePrep = useCallback(
+    (totalValue: number | null) => {
+      const today = new Date().toISOString().split("T")[0] ?? "";
+      setStagePrep((prev) => {
+        const next = { ...prev };
+        const wonPrep = { ...(next.cerrado_ganado ?? {}) };
+        let changed = false;
+        if (!wonPrep.close_date) {
+          wonPrep["close_date"] = today;
+          changed = true;
+        }
+        if (totalValue != null) {
+          const formatted = String(totalValue);
+          if (wonPrep["contract_value"] !== formatted) {
+            wonPrep["contract_value"] = formatted;
+            changed = true;
+          }
+        } else if (
+          card?.monto != null &&
+          typeof card.monto === "number" &&
+          wonPrep["contract_value"] == null
+        ) {
+          wonPrep["contract_value"] = String(card.monto);
+          changed = true;
+        }
+        if (!changed) {
+          return prev;
+        }
+        next.cerrado_ganado = wonPrep;
+        return next;
+      });
+    },
+    [card],
+  );
+
+  useEffect(() => {
+    if (!card?.tarjetaId) return;
+    if (quotesState.status !== "loaded") return;
+    const acceptedQuote = quotesState.data.find((quote) => quote.status === "aceptada");
+    if (!acceptedQuote) return;
+    updateWonStagePrep(acceptedQuote.total ?? null);
+  }, [card?.tarjetaId, quotesState.status, quotesState.data, updateWonStagePrep]);
+
   const openQuoteSheet = useCallback(
     (channel: QuoteChannel) => {
       if (!card) return;
@@ -1354,6 +1397,9 @@ export function LeadDrawer({
             return;
           }
           await fetchQuotes();
+          if (nextStatus === "aceptada") {
+            updateWonStagePrep(quote.total);
+          }
         } catch (actionError) {
           setQuoteError(
             actionError instanceof Error
@@ -1363,7 +1409,7 @@ export function LeadDrawer({
         }
       });
     },
-    [card, fetchQuotes],
+    [card, fetchQuotes, updateWonStagePrep],
   );
 
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {

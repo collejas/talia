@@ -738,7 +738,8 @@ async def _fetch_lead_for_quote(lead_id: UUID, token: str) -> dict[str, Any]:
     params = {
         "id": f"eq.{lead_id}",
         "select": (
-            "id,moneda,proyecto_nombre,proyecto_necesidades,metadata,"
+            "id,tablero_id,etapa_id,monto_estimado,moneda,proyecto_nombre,proyecto_necesidades,metadata,"
+            "etapa:lead_etapas!lead_tarjetas_etapa_id_fkey(codigo,categoria),"
             "contacto:contactos!lead_tarjetas_contacto_id_fkey("
             "id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito)"
         ),
@@ -752,6 +753,110 @@ async def _fetch_lead_for_quote(lead_id: UUID, token: str) -> dict[str, Any]:
     if not isinstance(row, dict):
         raise HTTPException(status_code=404, detail="lead_not_found")
     return row
+
+
+async def _fetch_won_stage_id(tablero_id: Any, token: str) -> str | None:
+    tablero = str(tablero_id or "").strip()
+    if not tablero:
+        return None
+    params = {
+        "tablero_id": f"eq.{tablero}",
+        "codigo": "eq.cerrado_ganado",
+        "select": "id",
+        "limit": "1",
+    }
+    resp = await _sb_get("/rest/v1/lead_etapas", params=params, token=token)
+    if resp.status_code >= 400:
+        return None
+    rows = resp.json() or []
+    row = _first_row(rows)
+    if isinstance(row, dict) and row.get("id"):
+        return str(row["id"])
+    return None
+
+
+async def _ensure_won_stage_metadata(
+    lead_id: UUID,
+    lead_row: dict[str, Any],
+    *,
+    token: str,
+    quote: LeadQuote | None = None,
+) -> None:
+    metadata = lead_row.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    stage_prep = metadata.get("stage_prep")
+    if not isinstance(stage_prep, dict):
+        stage_prep = {}
+    closed_prep = stage_prep.get("cerrado_ganado")
+    if not isinstance(closed_prep, dict):
+        closed_prep = {}
+    changed = False
+    today = datetime.now(timezone.utc).date().isoformat()
+    existing_close = closed_prep.get("close_date")
+    if not _clean_str(existing_close):
+        closed_prep["close_date"] = today
+        changed = True
+    if quote and quote.total is not None and "contract_value" not in closed_prep:
+        closed_prep["contract_value"] = float(quote.total)
+        changed = True
+    elif "contract_value" not in closed_prep:
+        monto = lead_row.get("monto_estimado")
+        if isinstance(monto, (int, float)):
+            closed_prep["contract_value"] = float(monto)
+            changed = True
+    if not changed:
+        return
+    stage_prep["cerrado_ganado"] = closed_prep
+    metadata["stage_prep"] = stage_prep
+    try:
+        await _sb_patch(
+            "/rest/v1/lead_tarjetas",
+            params={"id": f"eq.{lead_id}"},
+            json={"metadata": metadata},
+            token=token,
+            prefer="return=minimal",
+        )
+    except HTTPException:
+        logger.warning(
+            "quotes.auto_fill_won_failed",
+            extra={"lead_id": str(lead_id)},
+        )
+
+
+async def _auto_move_lead_to_won(lead_id: UUID, token: str, quote: LeadQuote | None = None) -> None:
+    try:
+        lead_row = await _fetch_lead_for_quote(lead_id, token)
+    except HTTPException:
+        return
+    stage_info = _single_related(lead_row.get("etapa")) or {}
+    stage_code = (_clean_str(stage_info.get("codigo")) or "").lower()
+    stage_category = (_clean_str(stage_info.get("categoria")) or "").lower()
+    await _ensure_won_stage_metadata(lead_id, lead_row, token=token, quote=quote)
+    if stage_category == "ganada" or stage_code == "cerrado_ganado":
+        return
+    tablero_id = lead_row.get("tablero_id")
+    won_stage_id = await _fetch_won_stage_id(tablero_id, token)
+    if not won_stage_id:
+        return
+    payload = {
+        "p_tarjeta_id": str(lead_id),
+        "p_etapa_destino": won_stage_id,
+        "p_fuente": "asistente",
+        "p_motivo": "quote_auto_accept",
+        "p_metadata": {"source": "quote_auto_accept"},
+        "p_expected_etapa": str(lead_row.get("etapa_id")) if lead_row.get("etapa_id") else None,
+    }
+    resp = await _sb_rpc("panel_lead_move", json=payload, token=token)
+    if resp.status_code >= 400:
+        logger.warning(
+            "quotes.auto_move_failed",
+            extra={
+                "lead_id": str(lead_id),
+                "status": resp.status_code,
+                "body": resp.text,
+            },
+        )
 
 
 def _resolve_lead_label(lead_row: dict[str, Any]) -> str:
@@ -2435,6 +2540,8 @@ async def enviar_cotizacion_lead(
         raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
 
     quote = _quote_from_row(row_marked)
+    if quote.estado == "aceptada":
+        await _auto_move_lead_to_won(UUID(str(quote.tarjeta_id)), token=token, quote=quote)
     return LeadQuoteResponse(quote=quote)
 
 
@@ -2465,6 +2572,8 @@ async def actualizar_estado_cotizacion(
     if not isinstance(row, dict):
         raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
     quote = _quote_from_row(row)
+    if quote.estado == "aceptada":
+        await _auto_move_lead_to_won(UUID(str(quote.tarjeta_id)), token=token, quote=quote)
     return LeadQuoteResponse(quote=quote)
 
 
