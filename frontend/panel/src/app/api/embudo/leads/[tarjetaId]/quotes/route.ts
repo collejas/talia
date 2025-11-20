@@ -6,13 +6,15 @@ import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ tarjetaId: string }> },
 ) {
   const { tarjetaId } = await params;
   if (!tarjetaId) {
     return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
   }
+  const url = new URL(request.url);
+  const statusFilter = url.searchParams.get("status")?.toLowerCase() ?? null;
 
   let token: string;
   try {
@@ -43,7 +45,16 @@ export async function GET(
   }
 
   const payload = text ? safeJson(text) : null;
-  return NextResponse.json(payload ?? { quotes: [] });
+  const quotes = Array.isArray(payload?.quotes) ? (payload!.quotes as unknown[]) : [];
+  if (!statusFilter) {
+    return NextResponse.json({ quotes });
+  }
+  const filtered = quotes.filter(
+    (quote) =>
+      typeof (quote as { estado?: unknown }).estado === "string" &&
+      ((quote as { estado: string }).estado || "").toLowerCase() === statusFilter,
+  );
+  return NextResponse.json({ quotes: filtered });
 }
 
 function safeJson(payload: string): Record<string, unknown> | null {

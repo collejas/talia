@@ -134,6 +134,12 @@ type LeadQuoteEntry = {
   currency: string | null;
   pdfUrl: string | null;
   createdAt: string | null;
+  title: string | null;
+  description: string | null;
+  concepts: Record<string, unknown>[] | null;
+  subtotal: number | null;
+  taxes: number | null;
+  validUntil: string | null;
 };
 
 type QuotesState =
@@ -1158,21 +1164,48 @@ export function LeadDrawer({
   const openQuoteSheet = useCallback(
     (channel: QuoteChannel) => {
       if (!card) return;
-      const defaultTitle =
-        card.proyectoNombre?.trim() ||
-        (card.nombre ? `Propuesta ${card.nombre}` : "Cotización Tal-IA");
-      const defaultDescription =
+      const latestQuote = quotesState.data[0];
+      const fallbackTitle =
+        card.proyectoNombre?.trim() || (card.nombre ? `Propuesta ${card.nombre}` : "Cotización Tal-IA");
+      const fallbackDescription =
         card.proyectoNecesidades?.trim() || card.necesidadProposito?.trim() || "";
+      const defaultTitle = latestQuote?.title?.trim() || fallbackTitle;
+      const defaultDescription = latestQuote?.description?.trim() || fallbackDescription;
       const defaultSubject =
         `Cotización Tal-IA · ${card.empresa ?? card.nombre ?? ""}`.trim() || "Cotización Tal-IA";
       const defaultMessage =
         channel === "email"
           ? "Adjunto encontrarás la cotización actualizada. Quedo al pendiente de tus comentarios."
           : "Te comparto la cotización en el PDF adjunto. Avísame si necesitas un ajuste.";
-      const defaultMoneda = (card.moneda || quoteMoneda || "MXN").toUpperCase();
-      const defaultAmount =
-        typeof card.monto === "number" && Number.isFinite(card.monto) ? String(card.monto) : "";
-      const validUntil = formatDateInput(addDays(new Date(), 14));
+      const defaultMoneda = (
+        latestQuote?.currency ||
+        card.moneda ||
+        quoteMoneda ||
+        "MXN"
+      ).toUpperCase();
+      const defaultSubtotal =
+        latestQuote?.subtotal != null && Number.isFinite(latestQuote.subtotal)
+          ? String(latestQuote.subtotal)
+          : typeof card.monto === "number" && Number.isFinite(card.monto)
+            ? String(card.monto)
+            : "";
+      const defaultTotal =
+        latestQuote?.total != null && Number.isFinite(latestQuote.total)
+          ? String(latestQuote.total)
+          : defaultSubtotal;
+      const defaultTaxes =
+        latestQuote?.taxes != null && Number.isFinite(latestQuote.taxes) ? String(latestQuote.taxes) : "";
+      const validUntil =
+        formatIsoDateForInput(latestQuote?.validUntil) ?? formatDateInput(addDays(new Date(), 14));
+      const conceptForms = latestQuote?.concepts?.length
+        ? convertConceptRecordsToForm(latestQuote.concepts)
+        : [
+            {
+              title: card.proyectoNombre?.trim() || "Implementación Tal-IA",
+              description: defaultDescription,
+              amount: defaultSubtotal,
+            },
+          ];
       setQuoteChannel(channel);
       setQuoteTitle(defaultTitle);
       setQuoteDescription(defaultDescription);
@@ -1180,23 +1213,17 @@ export function LeadDrawer({
       setQuoteMessage(defaultMessage);
       setQuoteEmailTo(card.correo ?? "");
       setQuoteWhatsappTo(card.telefono ?? "");
-      setQuoteSubtotal(defaultAmount);
-      setQuoteImpuestos("");
-      setQuoteTotal(defaultAmount);
+      setQuoteSubtotal(defaultSubtotal);
+      setQuoteImpuestos(defaultTaxes);
+      setQuoteTotal(defaultTotal);
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
-      setQuoteConcepts([
-        {
-          title: card.proyectoNombre?.trim() || "Implementación Tal-IA",
-          description: defaultDescription,
-          amount: defaultAmount,
-        },
-      ]);
+      setQuoteConcepts(conceptForms);
       setQuoteError(null);
       setQuoteSuccess(null);
       setQuoteSheetOpen(true);
     },
-    [card, quoteMoneda],
+    [card, quoteMoneda, quotesState.data],
   );
 
   const handleQuoteSheetOpenChange = (openState: boolean) => {
@@ -1212,6 +1239,11 @@ export function LeadDrawer({
       const emails = parseEmailList(quoteEmailTo);
       if (!emails.length) {
         setQuoteError("Agrega al menos un correo para enviar la cotización.");
+        return;
+      }
+      const invalidEmail = emails.some((email) => !EMAIL_REGEX.test(email));
+      if (invalidEmail) {
+        setQuoteError("Revisa los correos: uno o más tienen un formato inválido.");
         return;
       }
     } else {
@@ -1243,6 +1275,18 @@ export function LeadDrawer({
           })
           .filter(Boolean);
 
+        const hasConcepts = conceptsPayload.length > 0;
+        const hasTotals = subtotalValue != null || totalValue != null;
+        if (!hasConcepts && !hasTotals) {
+          setQuoteError("Agrega al menos un concepto o define un monto estimado.");
+          return;
+        }
+        const currencyValue = (quoteMoneda || "MXN").trim().toUpperCase();
+        if (currencyValue.length !== 3) {
+          setQuoteError("La moneda debe tener exactamente 3 caracteres (ej. MXN).");
+          return;
+        }
+
         const payload = {
           channel: quoteChannel,
           titulo: quoteTitle.trim() || null,
@@ -1251,7 +1295,7 @@ export function LeadDrawer({
           subtotal: subtotalValue ?? null,
           impuestos: taxValue ?? null,
           total: totalValue ?? null,
-          moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
+          moneda: currencyValue,
           valido_hasta: quoteValidoHasta?.trim() || null,
           email_to: quoteChannel === "email" ? emails : undefined,
           whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
@@ -2890,6 +2934,12 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     currency: typeof row.moneda === "string" ? row.moneda : null,
     pdfUrl: typeof row.pdf_url === "string" ? row.pdf_url : null,
     createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
+    title: typeof row.titulo === "string" ? row.titulo : null,
+    description: typeof row.descripcion === "string" ? row.descripcion : null,
+    concepts: Array.isArray(row.conceptos) ? (row.conceptos as Record<string, unknown>[]) : null,
+    subtotal: toNumber(row.subtotal),
+    taxes: toNumber(row.impuestos),
+    validUntil: typeof row.valido_hasta === "string" ? row.valido_hasta : null,
   };
 }
 
@@ -2986,4 +3036,40 @@ function parseEmailList(value: string): string[] {
     .split(/[,;\s]+/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+function convertConceptRecordsToForm(records: Record<string, unknown>[]): QuoteConceptForm[] {
+  if (!records.length) {
+    return [{ title: "", description: "", amount: "" }];
+  }
+  const entries = records
+    .map((record) => {
+      if (!isRecord(record)) return null;
+      return {
+        title: typeof record.titulo === "string" ? record.titulo : typeof record.title === "string" ? record.title : "",
+        description:
+          typeof record.descripcion === "string"
+            ? record.descripcion
+            : typeof record.description === "string"
+              ? record.description
+              : "",
+        amount:
+          record.total != null && Number.isFinite(Number(record.total))
+            ? String(Number(record.total))
+            : "",
+      };
+    })
+    .filter(Boolean) as QuoteConceptForm[];
+  return entries.length ? entries : [{ title: "", description: "", amount: "" }];
+}
+
+function formatIsoDateForInput(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return formatDateInput(parsed);
+  } catch {
+    return null;
+  }
 }

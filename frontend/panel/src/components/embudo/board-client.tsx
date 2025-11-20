@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -115,6 +115,37 @@ export function EmbudoBoardClient({
   const [schedulePending, setSchedulePending] = useState(false);
 
   const scheduleMinValue = useMemo(() => toDateTimeLocalInput(new Date().toISOString()), []);
+
+  const ensureLeadHasAcceptedQuote = useCallback(
+    async (
+      tarjetaId: string,
+    ): Promise<{ ok: boolean; accepted: boolean; error?: string }> => {
+      try {
+        const response = await fetch(
+          `/api/embudo/leads/${tarjetaId}/quotes?status=aceptada`,
+          { cache: "no-store" },
+        );
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message =
+            typeof body?.error === "string" && body.error ? body.error : `Error ${response.status}`;
+          return { ok: false, accepted: false, error: message };
+        }
+        const quotes = Array.isArray(body?.quotes) ? (body.quotes as unknown[]) : [];
+        return { ok: true, accepted: quotes.length > 0 };
+      } catch (error) {
+        return {
+          ok: false,
+          accepted: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "No se pudo verificar las cotizaciones del lead.",
+        };
+      }
+    },
+    [],
+  );
 
   const visitantesDisplay = useMemo(() => {
     const formatter = new Intl.NumberFormat("es-MX");
@@ -338,6 +369,19 @@ export function EmbudoBoardClient({
     if (!selectedCard) {
       return { ok: false as const, error: "No se encontró el lead seleccionado." };
     }
+    const nextStageCode = normalizeStageCode(nextStage);
+    if (nextStageCode === "cerrado_ganado") {
+      const acceptedCheck = await ensureLeadHasAcceptedQuote(selectedCard.tarjetaId);
+      if (!acceptedCheck.ok) {
+        return { ok: false as const, error: acceptedCheck.error || "No se pudo verificar las cotizaciones." };
+      }
+      if (!acceptedCheck.accepted) {
+        return {
+          ok: false as const,
+          error: "Necesitas una cotización aceptada antes de marcar el lead como ganado.",
+        };
+      }
+    }
     setMovePending(true);
     const result = await moveLeadCard({
       tarjetaId: selectedCard.tarjetaId,
@@ -458,6 +502,21 @@ export function EmbudoBoardClient({
       );
       handleDragCancel();
       return;
+    }
+
+    const destinationCode = normalizeStageCode(destinationStage);
+    if (destinationCode === "cerrado_ganado") {
+      const acceptedCheck = await ensureLeadHasAcceptedQuote(activeDragCard.tarjetaId);
+      if (!acceptedCheck.ok) {
+        setDragMessage(acceptedCheck.error ?? "No se pudo verificar las cotizaciones del lead.");
+        handleDragCancel();
+        return;
+      }
+      if (!acceptedCheck.accepted) {
+        setDragMessage("Necesitas una cotización aceptada antes de marcar el lead como ganado.");
+        handleDragCancel();
+        return;
+      }
     }
 
     const movingFromPrecalificado = normalizeStageCode(activeDragStage) === PRECALIFICADO_STAGE_CODE;
