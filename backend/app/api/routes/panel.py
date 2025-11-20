@@ -374,6 +374,17 @@ class ClientePortalLinkPayload(BaseModel):
     )
     nota: str | None = Field(default=None, max_length=400)
     metadatos: dict[str, Any] | None = Field(default=None)
+    enviar_correo: bool = Field(default=True)
+    correo_destinatarios: list[str] | None = Field(
+        default=None,
+        description="Lista manual de correos; si se omite se usa el correo del contacto.",
+    )
+    correo_asunto: str | None = Field(default=None, max_length=200)
+    correo_mensaje: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Mensaje adicional que se adjuntará al correo.",
+    )
 
 
 class LeadQuoteCreatePayload(BaseModel):
@@ -942,6 +953,90 @@ def _build_portal_link(token: str) -> str:
     if not base:
         raise HTTPException(status_code=500, detail="cliente_portal_base_url_missing")
     return f"{base.rstrip('/')}/{token}"
+
+
+def _normalize_email_list(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        candidate = _clean_str(raw)
+        if not candidate:
+            continue
+        lowered = candidate.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        normalized.append(candidate)
+    return normalized
+
+
+def _cliente_contact_email(cliente: dict[str, Any] | None) -> str | None:
+    if not cliente:
+        return None
+    contact = cliente.get("contacto")
+    if isinstance(contact, dict):
+        return _clean_str(contact.get("correo"))
+    return None
+
+
+def _portal_email_subject(cliente: dict[str, Any] | None) -> str:
+    nombre = (
+        (cliente or {}).get("razon_social")
+        or ((cliente or {}).get("contacto") or {}).get("nombre_completo")
+        or ""
+    )
+    if nombre:
+        return f"{nombre}, completa tu onboarding con Tal-IA"
+    return "Completa tu onboarding con Tal-IA"
+
+
+def _portal_email_body(
+    cliente: dict[str, Any] | None,
+    link: str,
+    custom_message: str | None = None,
+) -> str:
+    contacto = (cliente or {}).get("contacto") if isinstance(cliente, dict) else None
+    nombre = None
+    if isinstance(contacto, dict):
+        nombre = _clean_str(contacto.get("nombre_completo"))
+    if not nombre:
+        nombre = _clean_str((cliente or {}).get("razon_social"))
+    saludo = nombre or "Hola"
+    lines = [
+        f"{saludo},",
+        "",
+        "Te compartimos tu enlace seguro para completar el onboarding y subir la documentación:",
+        link,
+        "",
+        "En el portal podrás:",
+        "- Capturar tus datos fiscales.",
+        "- Subir constancia, comprobante de domicilio e identificaciones.",
+        "- Registrar a los responsables del proyecto.",
+    ]
+    if custom_message:
+        lines.extend(["", custom_message.strip()])
+    lines.extend(
+        [
+            "",
+            "Si tienes dudas, responde a este correo y con gusto te ayudamos.",
+            "",
+            "Gracias,",
+            "Equipo Tal-IA",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _resolve_portal_email_recipients(
+    payload: ClientePortalLinkPayload, cliente: dict[str, Any] | None
+) -> list[str]:
+    candidates = _normalize_email_list(payload.correo_destinatarios)
+    if candidates:
+        return candidates
+    contact_email = _cliente_contact_email(cliente)
+    return [contact_email] if contact_email else []
 
 
 def _content_range_total(header: str | None) -> int | None:
@@ -2961,6 +3056,7 @@ async def crear_link_portal_cliente(
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
 
+    cliente_data = await _fetch_cliente_por_id(cliente_id, token)
     portal_token = secrets.token_urlsafe(32)
     expira = payload.expira_en or _portal_default_expiration()
     user_id = _jwt_verify_and_sub(token)
@@ -2985,11 +3081,43 @@ async def crear_link_portal_cliente(
     rows = resp.json() or []
     registro = _first_row(rows)
     link = _build_portal_link(portal_token)
+    email_summary: dict[str, Any] = {
+        "attempted": payload.enviar_correo,
+        "sent": False,
+        "recipients": [],
+    }
+    if payload.enviar_correo:
+        recipients = _resolve_portal_email_recipients(payload, cliente_data)
+        if recipients:
+            subject = payload.correo_asunto or _portal_email_subject(cliente_data)
+            body_text = _portal_email_body(
+                cliente_data,
+                link,
+                payload.correo_mensaje,
+            )
+            try:
+                await asyncio.to_thread(
+                    send_email,
+                    subject=subject,
+                    body_text=body_text,
+                    recipients=recipients,
+                )
+            except EmailSendError as exc:
+                logger.exception(
+                    "portal.email_send_failed",
+                    extra={"cliente_id": str(cliente_id), "recipients": recipients},
+                )
+                raise HTTPException(status_code=502, detail="portal_email_send_failed") from exc
+            email_summary.update({"sent": True, "recipients": recipients, "subject": subject})
+        else:
+            email_summary["reason"] = "missing_recipient"
+
     return {
         "ok": True,
         "link": link,
         "token": portal_token,
         "registro": _sanitize_portal_session(registro),
+        "email": email_summary,
     }
 
 

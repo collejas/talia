@@ -82,6 +82,17 @@ export type LeadOnboardingPanelProps = {
   active: boolean;
 };
 
+type PortalLinkResponse = {
+  link?: string;
+  email?: {
+    sent?: boolean;
+    recipients?: string[];
+    attempted?: boolean;
+    reason?: string;
+  };
+  error?: string;
+};
+
 export function LeadOnboardingPanel({
   card,
   currentStage,
@@ -217,7 +228,7 @@ export function LeadOnboardingPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = await response.json().catch(() => ({}));
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
         throw new Error(
           typeof body?.error === "string" ? body.error : "No se pudo guardar al cliente.",
@@ -241,7 +252,7 @@ export function LeadOnboardingPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const body = await response.json().catch(() => ({}));
+      const body = (await response.json().catch(() => ({}))) as PortalLinkResponse;
       if (!response.ok) {
         throw new Error(
           typeof body?.error === "string" ? body.error : "No se pudo generar el enlace.",
@@ -252,7 +263,14 @@ export function LeadOnboardingPanel({
       if (link && navigator?.clipboard) {
         await navigator.clipboard.writeText(link).catch(() => undefined);
       }
-      toast.success("Enlace listo para compartir.");
+      const emailInfo = body?.email;
+      if (emailInfo?.sent && emailInfo.recipients?.length) {
+        toast.success(`Enlace enviado a ${emailInfo.recipients.join(", ")}.`);
+      } else if (emailInfo?.attempted && emailInfo?.reason === "missing_recipient") {
+        toast.success("Enlace listo; no se encontró correo para enviar automáticamente.");
+      } else {
+        toast.success("Enlace listo para compartir.");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo generar el enlace.");
     } finally {
