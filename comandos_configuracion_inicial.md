@@ -83,6 +83,8 @@ sudo systemctl restart talia-api.service
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
 
+
+
 codex resume 019a9e40-eeac-7ca3-8a1e-082035d9a1ce
 
 sudo systemctl status talia-panel.service
@@ -279,8 +281,13 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
     https://talia.mx/api/whatsapp/status
 
 
+TalIA es inteligencia artificial conversacional omnicanal que automatiza ventas, atención y soporte por canales como Teléfono, WhatsApp, Facebook, Instagram, webchat y más.
 
+Hola Preguuuunntameeeee
 
+https://talia.mx/
+https://geoactiv.mx/
+hola@talia.mx
 
 # Algunas ideas para que el “Mapa de Conversión” haga honor al nombre y aporte más valor:
 

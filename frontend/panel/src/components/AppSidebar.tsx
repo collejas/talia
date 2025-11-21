@@ -45,24 +45,13 @@ import {
 const NAVIGATION = {
   navMain: [
     { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
-    { title: "Contactos", url: "/contactos", icon: IconAddressBook },
-    { title: "Inbox", url: "/inbox", icon: IconInbox },
     { title: "Embudo", url: "/embudo", icon: IconListDetails },
-    { title: "Leads", url: "/leads", icon: IconUsers },
-    { title: "Clientes", url: "/clientes", icon: IconUsersGroup },
+    { title: "Inbox", url: "/inbox", icon: IconInbox },
     { title: "Agenda", url: "/agenda", icon: IconCalendar },
-    { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
-    { title: "Proyectos", url: "#", icon: IconFolder },
-    { title: "Vista 1", url: "/vista-1", icon: IconLayoutGrid },
-    { title: "Mapa de Conversión", url: "/mapa-de-conversion", icon: IconMap },
-    { title: "Vista 2", url: "/vista-2", icon: IconLayoutKanban },
-  ],
-  documents: [
-    { name: "Data Library", url: "#", icon: IconDatabase },
-    { name: "Reports", url: "#", icon: IconReport },
-    { name: "Templates", url: "#", icon: IconFileWord },
-  ],
-  navSecondary: [
+    { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap },
+    { title: "Leads", url: "/leads", icon: IconUsers },
+    { title: "Contactos", url: "/contactos", icon: IconAddressBook },
+    { title: "Clientes", url: "/clientes", icon: IconUsersGroup },
     {
       title: "Prospeccion",
       url: "/prospeccion",
@@ -84,6 +73,17 @@ const NAVIGATION = {
         { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell },
       ],
     },
+    { title: "Proyectos", url: "#", icon: IconFolder },
+    { title: "Visita 1", url: "/vista-1", icon: IconLayoutGrid },
+    { title: "Visita 2", url: "/vista-2", icon: IconLayoutKanban },
+    { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
+  ],
+  documents: [
+    { name: "Data Library", url: "#", icon: IconDatabase },
+    { name: "Reports", url: "#", icon: IconReport },
+    { name: "Templates", url: "#", icon: IconFileWord },
+  ],
+  navSecondary: [
     { title: "Get Help", url: "#", icon: IconHelp },
     { title: "Search", url: "#", icon: IconSearch },
   ],

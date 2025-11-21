@@ -2,9 +2,20 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
+import {
+  IconChevronDown,
+  IconCirclePlusFilled,
+  IconMail,
+  type Icon,
+} from "@tabler/icons-react"
 
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -17,6 +28,11 @@ type NavItem = {
   title: string
   url: string
   icon?: Icon
+  children?: {
+    title: string
+    url: string
+    icon?: Icon
+  }[]
 }
 
 export function NavMain({ items }: { items: NavItem[] }) {
@@ -48,6 +64,8 @@ export function NavMain({ items }: { items: NavItem[] }) {
           {items.map((item) => {
             const isPlaceholder = !item.url || item.url === "#"
             const isActive = !isPlaceholder && pathname.startsWith(item.url)
+            const childIsActive = item.children?.some((child) => pathname.startsWith(child.url))
+            const hasChildren = Array.isArray(item.children) && item.children.length > 0
 
             const content = (
               <>
@@ -55,6 +73,43 @@ export function NavMain({ items }: { items: NavItem[] }) {
                 <span>{item.title}</span>
               </>
             )
+
+            if (hasChildren) {
+              return (
+                <SidebarMenuItem key={item.title}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip={item.title}
+                        className="justify-between data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                        isActive={isActive || !!childIsActive}
+                      >
+                        <div className="flex items-center gap-2">
+                          {item.icon && <item.icon />}
+                          <span>{item.title}</span>
+                        </div>
+                        <IconChevronDown className="size-4 shrink-0 opacity-70" />
+                      </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      side="right"
+                      align="start"
+                      sideOffset={8}
+                      className="min-w-52 rounded-lg"
+                    >
+                      {item.children?.map((child) => (
+                        <DropdownMenuItem key={child.title} asChild>
+                          <Link href={child.url}>
+                            {child.icon ? <child.icon className="mr-2 size-4" /> : null}
+                            {child.title}
+                          </Link>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </SidebarMenuItem>
+              )
+            }
 
             return (
               <SidebarMenuItem key={item.title}>
