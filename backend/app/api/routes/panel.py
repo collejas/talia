@@ -2277,11 +2277,33 @@ async def listar_agenda_bookings(
                 f"contacto_telefono.ilike.*{like}*,notes.ilike.*{like}*)"
             )
 
+    provider_filters = {
+        value.strip().lower()
+        for value in (provider or [])
+        if isinstance(value, str) and value.strip()
+    }
+    if provider_filters and "calendar" not in provider_filters:
+        return {
+            "ok": True,
+            "items": [],
+            "metrics": {
+                "total": 0,
+                "activas": 0,
+                "proximas24h": 0,
+                "canceladas": 0,
+                "realizadas": 0,
+            },
+            "total": 0,
+            "limit": limit,
+            "offset": offset,
+            "has_more": False,
+        }
+
     resp = await _sb_get(
         "/rest/v1/panel_calendar_bookings",
         params=params,
         token=token,
-        prefer="count=exact",
+        prefer="count=planned",
     )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error consultando agenda")
@@ -2292,24 +2314,16 @@ async def listar_agenda_bookings(
 
     items = [_map_agenda_row(row) for row in raw if isinstance(row, dict)]
 
-    provider_filters = {
-        value.strip().lower()
-        for value in (provider or [])
-        if isinstance(value, str) and value.strip()
-    }
+    filtered_items: list[dict[str, Any]] = []
     assigned_name_filters = {
         value.strip().lower()
         for value in (assigned or [])
         if isinstance(value, str) and not _looks_like_uuid(value.strip()) and value.strip()
     }
 
-    filtered_items: list[dict[str, Any]] = []
     for item in items:
         estado_value = (item.get("estado") or "").lower()
         if estado_filters and estado_value not in estado_filters:
-            continue
-        provider_value = (item.get("provider") or "calendar").lower()
-        if provider_filters and provider_value not in provider_filters:
             continue
         if assigned_name_filters:
             assigned_payload = item.get("asignado") or {}
@@ -2512,7 +2526,7 @@ async def listar_leads(
         "/rest/v1/lead_tarjetas",
         params=params,
         token=token,
-        prefer="count=exact",
+        prefer="count=planned",
     )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "Error consultando leads")
@@ -6053,7 +6067,7 @@ async def listar_busquedas_google(
         "/rest/v1/busquedas",
         params=params,
         token=token,
-        prefer="count=exact",
+        prefer="count=planned",
     )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "error_listando_busquedas")
@@ -6125,7 +6139,7 @@ async def listar_busquedas_denue(
         "/rest/v1/busquedas",
         params=params,
         token=token,
-        prefer="count=exact",
+        prefer="count=planned",
     )
     if resp.status_code >= 400:
         raise _supabase_error(resp, "error_listando_busquedas")
@@ -6216,46 +6230,30 @@ async def listar_resultados_google(
             f"address.ilike.*{sanitized}*)"
         )
 
-    rows: list[dict[str, Any]] = []
-    remaining = limit
-    current_offset = offset
-    total: int | None = None
+    effective_limit = min(limit, 500)
+    params_base["limit"] = str(effective_limit)
+    params_base["offset"] = str(offset)
 
-    while remaining > 0:
-        batch_limit = min(remaining, 1000)
-        batch_params = dict(params_base)
-        batch_params["limit"] = str(batch_limit)
-        batch_params["offset"] = str(current_offset)
-
-        resp = await _sb_get(
-            "/rest/v1/v_google_places_contactables",
-            params=batch_params,
-            token=token,
-            prefer="count=exact",
-        )
-        if resp.status_code >= 400:
-            raise _supabase_error(resp, "error_listando_resultados")
-        try:
-            batch_rows = resp.json() or []
-        except ValueError:
-            batch_rows = []
-        rows.extend(batch_rows)
-        if total is None:
-            total = _content_range_total(resp.headers.get("content-range")) or len(batch_rows)
-        current_offset += batch_limit
-        remaining = limit - len(rows)
-        if not batch_rows or len(rows) >= (total or 0):
-            break
-
-    if total is None:
-        total = len(rows)
+    resp = await _sb_get(
+        "/rest/v1/v_google_places_contactables",
+        params=params_base,
+        token=token,
+        prefer="count=planned",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_listando_resultados")
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    total = _content_range_total(resp.headers.get("content-range")) or len(rows)
 
     return {
         "ok": True,
-        "items": rows[:limit],
-        "limit": limit,
+        "items": rows,
+        "limit": effective_limit,
         "offset": offset,
-        "total": total or len(rows),
+        "total": total,
     }
 
 
@@ -6329,46 +6327,30 @@ async def listar_resultados_denue(
             f"address.ilike.*{sanitized}*)"
         )
 
-    rows: list[dict[str, Any]] = []
-    remaining = limit
-    current_offset = offset
-    total: int | None = None
+    effective_limit = min(limit, 500)
+    params_base["limit"] = str(effective_limit)
+    params_base["offset"] = str(offset)
 
-    while remaining > 0:
-        batch_limit = min(remaining, 1000)
-        batch_params = dict(params_base)
-        batch_params["limit"] = str(batch_limit)
-        batch_params["offset"] = str(current_offset)
-
-        resp = await _sb_get(
-            "/rest/v1/v_denue_contactables",
-            params=batch_params,
-            token=token,
-            prefer="count=exact",
-        )
-        if resp.status_code >= 400:
-            raise _supabase_error(resp, "error_listando_resultados")
-        try:
-            batch_rows = resp.json() or []
-        except ValueError:
-            batch_rows = []
-        rows.extend(batch_rows)
-        if total is None:
-            total = _content_range_total(resp.headers.get("content-range")) or len(batch_rows)
-        current_offset += batch_limit
-        remaining = limit - len(rows)
-        if not batch_rows or len(rows) >= (total or 0):
-            break
-
-    if total is None:
-        total = len(rows)
+    resp = await _sb_get(
+        "/rest/v1/v_denue_contactables",
+        params=params_base,
+        token=token,
+        prefer="count=planned",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "error_listando_resultados")
+    try:
+        rows = resp.json() or []
+    except ValueError:
+        rows = []
+    total = _content_range_total(resp.headers.get("content-range")) or len(rows)
 
     return {
         "ok": True,
-        "items": rows[:limit],
-        "limit": limit,
+        "items": rows,
+        "limit": effective_limit,
         "offset": offset,
-        "total": total or len(rows),
+        "total": total,
     }
 
 

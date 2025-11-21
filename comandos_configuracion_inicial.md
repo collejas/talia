@@ -99,6 +99,16 @@ http://127.0.0.1:3000/auth/login
 poetry run pytest
 
 
+# Supabase 
+supabase start
+
+export SUPABASE_DB_URL="postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
+  supabase db lint --db-url "$SUPABASE_DB_URL"
+
+supabase db lint --db-url "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
+
+
+
 # Exportacion de permisos servdor
 export TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 export TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
