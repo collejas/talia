@@ -828,6 +828,67 @@ async def upload_quote_document(
     }
 
 
+async def upload_logo_asset(*, file: UploadFile, folder: str = "general") -> dict[str, str]:
+    """Sube un logo general al bucket `logos` y devuelve metadatos básicos."""
+
+    if not settings.supabase_url or not settings.supabase_service_role:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+
+    content = await file.read()
+    if not content:
+        raise StorageError("El archivo de logo está vacío")
+
+    original_name = file.filename or "logo.png"
+    safe_name = Path(original_name).name
+    extension = Path(safe_name).suffix or ".png"
+    key = f"{folder}/{uuid4().hex}{extension}"
+
+    base_url = settings.supabase_url.rstrip("/")
+    upload_url = f"{base_url}/storage/v1/object/logos/{key}"
+    headers = {
+        "apikey": settings.supabase_service_role,
+        "Authorization": f"Bearer {settings.supabase_service_role}",
+        "Content-Type": file.content_type or "application/octet-stream",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                upload_url,
+                headers=headers,
+                content=content,
+                params={"upsert": "true"},
+            )
+    except httpx.RequestError as exc:
+        msg = f"Error de red al subir logo: {exc}"
+        logger.exception(msg)
+        raise StorageError(msg) from exc
+
+    if response.status_code >= 400:
+        msg = (
+            "Supabase respondió error al guardar logo"
+            f" (status={response.status_code}, body={response.text!r})"
+        )
+        logger.error(msg)
+        raise StorageError(msg)
+
+    public_path = (
+        response.json().get("Key")
+        if response.headers.get("content-type") == "application/json"
+        else None
+    )
+    if not public_path:
+        public_path = f"logos/{key}" if not str(key).startswith("logos/") else key
+    public_url = f"{base_url}/storage/v1/object/public/{public_path}"
+
+    return {
+        "url": public_url,
+        "path": public_path,
+        "name": safe_name,
+        "mime": file.content_type or "application/octet-stream",
+    }
+
+
 async def upload_cliente_document(
     *, file: UploadFile, cliente_id: str, document_type: str
 ) -> dict[str, Any]:

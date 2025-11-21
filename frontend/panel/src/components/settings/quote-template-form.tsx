@@ -1,7 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
-import { IconAlertCircle, IconCheck, IconPlus, IconTrash } from "@tabler/icons-react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import {
+  IconAlertCircle,
+  IconCheck,
+  IconPlus,
+  IconTrash,
+} from "@tabler/icons-react"
 
 import { saveQuoteTemplateSettings } from "@/app/settings/formato-cotizacion/actions"
 import type {
@@ -20,6 +25,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
 type QuoteTemplateSettingsFormProps = {
@@ -28,6 +41,15 @@ type QuoteTemplateSettingsFormProps = {
 }
 
 type StatusBanner = { type: "success" | "error"; message: string } | null
+type LogoAsset = {
+  id: string
+  nombre: string
+  descripcion?: string | null
+  file_url: string
+  file_path: string
+  metadata?: Record<string, unknown> | null
+  created_at: string
+}
 
 const ensureHighlights = (list: string[]) => (list.length ? [...list] : [""])
 
@@ -55,6 +77,12 @@ export function QuoteTemplateSettingsForm({
 
   const [status, setStatus] = useState<StatusBanner>(null)
   const [isPending, startTransition] = useTransition()
+  const [logoSheetOpen, setLogoSheetOpen] = useState(false)
+  const [logos, setLogos] = useState<LogoAsset[]>([])
+  const [logosLoading, setLogosLoading] = useState(false)
+  const [logosError, setLogosError] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setName(initialTemplate.name)
@@ -77,6 +105,81 @@ export function QuoteTemplateSettingsForm({
 
   const placeholdersTip = useMemo(
     () => "Puedes usar {{cliente.nombre}}, {{tabla_conceptos}} u otros tokens dentro de los textos.",
+    [],
+  )
+
+  const loadLogos = useCallback(async () => {
+    setLogosLoading(true)
+    setLogosError(null)
+    try {
+      const response = await fetch("/api/settings/logos", { cache: "no-store" })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(
+          typeof payload?.error === "string"
+            ? payload.error
+            : "No se pudieron cargar los logos.",
+        )
+      }
+      const items = Array.isArray(payload?.logos) ? payload.logos : []
+      setLogos(items as LogoAsset[])
+    } catch (error) {
+      setLogosError(
+        error instanceof Error ? error.message : "No se pudieron cargar los logos.",
+      )
+    } finally {
+      setLogosLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (logoSheetOpen && !logos.length && !logosLoading) {
+      void loadLogos()
+    }
+  }, [logoSheetOpen, logos.length, logosLoading, loadLogos])
+
+  const handleLogoFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) {
+        return
+      }
+      setLogoUploading(true)
+      setLogosError(null)
+      try {
+        const formData = new FormData()
+        formData.append("file", file, file.name || "logo.png")
+        formData.append("nombre", file.name || "Logo")
+        const response = await fetch("/api/settings/logos", {
+          method: "POST",
+          body: formData,
+        })
+        const payload = await response.json()
+        if (!response.ok) {
+          throw new Error(
+            typeof payload?.error === "string"
+              ? payload.error
+              : "No se pudo subir el logo.",
+          )
+        }
+        const newLogo = payload as LogoAsset
+        setLogos((prev) => {
+          const filtered = prev.filter((item) => item.id !== newLogo.id)
+          return [newLogo, ...filtered]
+        })
+        setLogoUrl(newLogo.file_url)
+        setLogoSheetOpen(false)
+      } catch (error) {
+        setLogosError(
+          error instanceof Error ? error.message : "No se pudo subir el logo.",
+        )
+      } finally {
+        setLogoUploading(false)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
+      }
+    },
     [],
   )
 
@@ -129,7 +232,7 @@ export function QuoteTemplateSettingsForm({
       .filter((item) => item.length > 0)
 
     const configPayload: QuoteTemplateConfig = {
-      logoUrl,
+      logoUrl: logoUrl.trim() || defaultTemplate.config.logoUrl,
       primaryColor,
       accentColor,
       headerTitle,
@@ -222,33 +325,72 @@ export function QuoteTemplateSettingsForm({
           <CardTitle>Branding</CardTitle>
           <CardDescription>Cambia logo y colores principales del documento.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="logo-url">URL del logo</Label>
-            <Input
-              id="logo-url"
-              value={logoUrl}
-              onChange={(event) => setLogoUrl(event.target.value)}
-              placeholder="https://talia.mx/tu-logo.png"
-            />
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-4 rounded-lg border p-4 md:flex-row md:items-center">
+            <div className="flex items-center justify-center rounded-md border bg-white px-4 py-3 shadow-sm dark:bg-background">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt="Logo seleccionado"
+                  className="max-h-16 w-auto object-contain"
+                />
+              ) : (
+                <span className="text-sm text-muted-foreground">Sin logo</span>
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="logo-url">URL del logo</Label>
+              <Input
+                id="logo-url"
+                value={logoUrl}
+                onChange={(event) => setLogoUrl(event.target.value)}
+                placeholder="https://talia.mx/tu-logo.png"
+              />
+              <p className="text-xs text-muted-foreground">
+                Puedes pegar una URL manualmente o elegir uno de los logos cargados.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={() => setLogoSheetOpen(true)}>
+                  Galería de logos
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setLogoSheetOpen(true)
+                    if (!logos.length) {
+                      void loadLogos()
+                    }
+                    setTimeout(() => {
+                      fileInputRef.current?.click()
+                    }, 50)
+                  }}
+                >
+                  Subir logo
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="primary-color">Color principal</Label>
-            <Input
-              id="primary-color"
-              type="color"
-              value={primaryColor}
-              onChange={(event) => setPrimaryColor(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="accent-color">Color acento</Label>
-            <Input
-              id="accent-color"
-              type="color"
-              value={accentColor}
-              onChange={(event) => setAccentColor(event.target.value)}
-            />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="primary-color">Color principal</Label>
+              <Input
+                id="primary-color"
+                type="color"
+                value={primaryColor}
+                onChange={(event) => setPrimaryColor(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="accent-color">Color acento</Label>
+              <Input
+                id="accent-color"
+                type="color"
+                value={accentColor}
+                onChange={(event) => setAccentColor(event.target.value)}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -403,6 +545,85 @@ export function QuoteTemplateSettingsForm({
           Restaurar plantilla base
         </Button>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleLogoFileChange}
+        className="hidden"
+      />
+
+      <Sheet open={logoSheetOpen} onOpenChange={setLogoSheetOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-4 sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Galería de logos</SheetTitle>
+            <SheetDescription>Selecciona un logo existente o sube uno nuevo.</SheetDescription>
+          </SheetHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={logoUploading}
+            >
+              {logoUploading ? "Subiendo..." : "Subir logo"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => loadLogos()}
+              disabled={logosLoading}
+            >
+              Recargar
+            </Button>
+          </div>
+          {logosError ? <p className="text-sm text-destructive">{logosError}</p> : null}
+          <ScrollArea className="h-[calc(100vh-260px)] pr-4">
+            {logosLoading ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={`logo-skeleton-${index}`}
+                    className="h-32 animate-pulse rounded-lg border border-dashed border-muted bg-muted/40"
+                  />
+                ))}
+              </div>
+            ) : logos.length ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {logos.map((logo) => (
+                  <button
+                    key={logo.id}
+                    type="button"
+                    onClick={() => {
+                      setLogoUrl(logo.file_url)
+                      setLogoSheetOpen(false)
+                    }}
+                    className="flex flex-col gap-2 rounded-lg border p-3 text-left transition hover:border-primary"
+                  >
+                    <div className="flex h-28 items-center justify-center rounded-md border bg-white p-3 dark:bg-background">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={logo.file_url}
+                        alt={logo.nombre}
+                        className="max-h-24 w-auto object-contain"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{logo.nombre}</p>
+                      {logo.descripcion ? (
+                        <p className="text-xs text-muted-foreground">{logo.descripcion}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Aún no has cargado logos.</p>
+            )}
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </form>
   )
 }

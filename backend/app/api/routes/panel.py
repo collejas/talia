@@ -118,6 +118,20 @@ class PuestoUpdatePayload(BaseModel):
     departamento_id: UUID | None = Field(default=None)
 
 
+class LogoAsset(BaseModel):
+    id: UUID
+    nombre: str
+    descripcion: str | None = None
+    file_url: str
+    file_path: str
+    metadata: dict[str, Any]
+    created_at: datetime
+
+
+class LogoAssetListResponse(BaseModel):
+    logos: list[LogoAsset]
+
+
 class EmpleadoCreatePayload(BaseModel):
     """Alta de empleado."""
 
@@ -1139,6 +1153,34 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         metadatos=(row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None),
         creado_en=_parse_timestamp(row.get("creado_en")),
         actualizado_en=_parse_timestamp(row.get("actualizado_en")),
+    )
+
+
+def _logo_from_row(row: dict[str, Any]) -> LogoAsset:
+    try:
+        logo_id = UUID(str(row.get("id")))
+    except Exception as exc:  # pragma: no cover - datos inesperados
+        raise ValueError("invalid_logo_id") from exc
+
+    metadata = row.get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    created = _parse_timestamp(row.get("created_at")) or datetime.now(timezone.utc)
+
+    return LogoAsset(
+        id=logo_id,
+        nombre=row.get("nombre") or "",
+        descripcion=row.get("descripcion"),
+        file_url=row.get("file_url") or "",
+        file_path=row.get("file_path") or "",
+        metadata=metadata,
+        created_at=created,
     )
 
 
@@ -3009,6 +3051,81 @@ async def crear_responsable_cliente(
     rows = resp.json() or []
     responsable = _first_row(rows)
     return {"ok": True, "responsable": responsable}
+
+
+@router.get(
+    "/settings/logos",
+    response_model=LogoAssetListResponse,
+)
+async def listar_logos_settings(
+    authorization: str | None = Header(default=None),
+) -> LogoAssetListResponse:
+    await _require_admin(authorization)
+    resp = await _sb_get(
+        "/rest/v1/logos",
+        params={
+            "select": "id,nombre,descripcion,file_path,file_url,metadata,created_at",
+            "order": "created_at.desc",
+        },
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando logos")
+    rows = resp.json() or []
+    logos: list[LogoAsset] = []
+    for row in rows:
+        if isinstance(row, dict):
+            try:
+                logos.append(_logo_from_row(row))
+            except ValueError:
+                continue
+    return LogoAssetListResponse(logos=logos)
+
+
+@router.post(
+    "/settings/logos",
+    response_model=LogoAsset,
+)
+async def subir_logo_settings(
+    authorization: str | None = Header(default=None),
+    file: UploadFile = File(...),
+    nombre: str = Form(...),
+    descripcion: str | None = Form(default=None),
+) -> LogoAsset:
+    user_id = await _require_admin(authorization)
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="logo_file_required")
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="logo_invalid_type")
+
+    try:
+        upload = await storage.upload_logo_asset(file=file)
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="logo_upload_failed") from exc
+
+    payload = {
+        "nombre": (nombre or "").strip() or (file.filename or "Logo"),
+        "descripcion": (descripcion or "").strip() or None,
+        "file_path": upload["path"],
+        "file_url": upload["url"],
+        "metadata": {
+            "mime": upload.get("mime"),
+            "original_name": upload.get("name"),
+        },
+        "uploaded_by": str(user_id),
+    }
+
+    resp = await _sb_post(
+        "/rest/v1/logos",
+        json=payload,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error guardando logo")
+    row = _first_row(resp.json() or [])
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=502, detail="logo_save_unexpected_response")
+    return _logo_from_row(row)
 
 
 @router.patch("/clientes/{cliente_id}/responsables/{responsable_id}")
