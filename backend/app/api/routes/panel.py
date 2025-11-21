@@ -3396,7 +3396,7 @@ async def enviar_cotizacion_lead(
         notes=lead_row.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
     )
 
-    pdf_doc = quotes_service.render_quote_pdf(quote_context)
+    pdf_doc = await quotes_service.render_quote_pdf(quote_context)
     try:
         upload = await storage.upload_quote_document(
             content=pdf_doc.content,
