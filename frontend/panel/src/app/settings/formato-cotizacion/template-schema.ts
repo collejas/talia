@@ -224,6 +224,62 @@ section {
   border-radius: 6px;
   list-style: none;
 }
+.concept-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+.concept-table th,
+.concept-table td {
+  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+.concept-table th {
+  background: #f8fafc;
+  color: var(--quote-primary);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.concept-title {
+  font-weight: 600;
+  width: 25%;
+}
+.concept-desc {
+  width: 55%;
+}
+.concept-amount {
+  text-align: right;
+  font-weight: 600;
+  color: var(--quote-primary);
+  white-space: nowrap;
+}
+.totals-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 12px;
+}
+.totals-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.totals-item span {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.08em;
+}
+.totals-item strong {
+  font-size: 1.15rem;
+  color: var(--quote-primary);
+}
 .muted {
   color: #475569;
   font-size: 0.9rem;

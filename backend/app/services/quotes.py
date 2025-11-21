@@ -7,7 +7,10 @@ import textwrap
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from html import escape as html_escape
 from typing import Any, Iterable
+
+from weasyprint import HTML as WeasyHTML
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -15,6 +18,7 @@ from app.services import quote_templates as quote_templates_service
 from app.services import twilio as twilio_service
 
 logger = get_logger("app.services.quotes")
+RAW_HTML_TOKENS = {"tabla_conceptos", "resumen_totales"}
 
 
 @dataclass
@@ -57,7 +61,7 @@ async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
 
     try:
         template = await quote_templates_service.fetch_active_template()
-        return _render_template_based_pdf(context, template)
+        return await _render_template_based_pdf(context, template)
     except quote_templates_service.QuoteTemplateError as exc:
         logger.warning("quote_template_unavailable: %s", exc)
     except Exception as exc:  # pragma: no cover - defensivo
@@ -66,83 +70,25 @@ async def render_quote_pdf(context: QuoteRenderContext) -> QuoteDocument:
     return _render_plaintext_pdf(context)
 
 
-def _render_template_based_pdf(
+async def _render_template_based_pdf(
     context: QuoteRenderContext, template: quote_templates_service.QuoteTemplate
 ) -> QuoteDocument:
     """Construye el PDF usando la información declarativa almacenada en Supabase."""
 
     replacements = _build_replacements(context)
-    lines: list[str] = []
-    divider = "=" * 90
-    sub_divider = "-" * 90
+    filled_html = _replace_tokens(template.html, replacements)
+    final_html = _inject_styles(filled_html, template.css)
+    base_url = _resolve_template_base_url()
 
-    header_title = _replace_tokens(template.config.get("headerTitle") or "", replacements)
-    header_subtitle = _replace_tokens(template.config.get("headerSubtitle") or "", replacements)
-    intro_text = _replace_tokens(template.config.get("introText") or "", replacements)
-
-    lines.append(header_title or "Tal-IA · Propuesta Comercial")
-    lines.append(header_subtitle or context.lead_label or "Proyecto")
-    lines.append(divider)
-    if intro_text:
-        lines.extend(_wrap_text(intro_text))
-        lines.append("")
-
-    highlight_items = [
-        _replace_tokens(item, replacements)
-        for item in (template.config.get("highlights") or [])
-        if isinstance(item, str) and item.strip()
-    ]
-    if highlight_items:
-        lines.append("Puntos destacados")
-        lines.append(sub_divider)
-        for item in highlight_items:
-            lines.extend([f"- {part}" for part in _wrap_text(item)])
-        lines.append("")
-
-    lines.append("Detalle de conceptos")
-    lines.append(sub_divider)
-    lines.extend(_build_concepts_block(context))
-    lines.append("")
-
-    lines.append("Resumen económico")
-    lines.append(sub_divider)
-    lines.extend(_build_totals_block(context))
-    if context.valido_hasta:
-        lines.append(f"Vigencia estimada: {context.valido_hasta.isoformat()}")
-    lines.append("")
-
-    notes_title = template.config.get("notesTitle") or "Notas"
-    notes_body = _replace_tokens(template.config.get("notesBody") or "", replacements)
-    lines.append(notes_title)
-    lines.append(sub_divider)
-    if notes_body:
-        lines.extend(_wrap_text(notes_body))
-    lines.append("")
-
-    terms_title = template.config.get("termsTitle") or "Términos"
-    terms_body = _replace_tokens(template.config.get("termsBody") or "", replacements)
-    lines.append(terms_title)
-    lines.append(sub_divider)
-    if terms_body:
-        lines.extend(_wrap_text(terms_body))
-    lines.append("")
-
-    lines.append("Emitido por")
-    lines.append(sub_divider)
-    lines.append(f"Ejecutivo: {context.issuer_name}")
-    if context.issuer_email:
-        lines.append(f"Correo de contacto: {context.issuer_email}")
-    lines.append(
-        f"{template.config.get('signatureName') or 'Equipo Tal-IA'} · "
-        f"{template.config.get('signatureRole') or 'Consultoría Geoactiv'}"
-    )
-    footer_note = template.config.get("footerNote")
-    if footer_note:
-        lines.append("")
-        lines.extend(_wrap_text(footer_note))
+    try:
+        pdf_bytes = await asyncio.to_thread(
+            lambda: WeasyHTML(string=final_html, base_url=base_url).write_pdf()
+        )
+    except Exception as exc:
+        logger.exception("weasyprint_render_failed", exc_info=exc)
+        return _render_plaintext_pdf(context)
 
     filename = f"cotizacion-{context.reference}-{context.created_at:%Y%m%d%H%M%S}.pdf"
-    pdf_bytes = _build_pdf_from_lines(lines)
     return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
@@ -257,8 +203,8 @@ def _build_totals_block(context: QuoteRenderContext) -> list[str]:
 
 
 def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
-    tabla_lines = _build_concepts_block(context)
-    resumen_lines = _build_totals_block(context)
+    tabla_html = _build_concepts_html(context)
+    resumen_html = _build_totals_html(context)
     vigencia = context.valido_hasta.isoformat() if context.valido_hasta else "-"
 
     values = {
@@ -271,8 +217,8 @@ def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
         "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d"),
         "cotizacion.descripcion": _safe_text(context.descripcion),
         "cotizacion.vigencia": vigencia,
-        "tabla_conceptos": "\n".join(tabla_lines).strip(),
-        "resumen_totales": "\n".join(resumen_lines).strip(),
+        "tabla_conceptos": tabla_html,
+        "resumen_totales": resumen_html,
         "ejecutivo.nombre": context.issuer_name,
         "ejecutivo.correo": context.issuer_email or "",
         "empresa.nombre": "Tal-IA",
@@ -285,8 +231,9 @@ def _replace_tokens(text: str, replacements: dict[str, str]) -> str:
         return ""
     result = text
     for key, value in replacements.items():
-        result = result.replace(f"{{{{{key}}}}}", value)
-    return result.strip()
+        replacement = value if key in RAW_HTML_TOKENS else html_escape(value)
+        result = result.replace(f"{{{{{key}}}}}", replacement)
+    return result
 
 
 def _safe_text(value: str | None, fallback: str = "—") -> str:
@@ -294,6 +241,76 @@ def _safe_text(value: str | None, fallback: str = "—") -> str:
         return fallback
     trimmed = value.strip()
     return trimmed if trimmed else fallback
+
+
+def _build_concepts_html(context: QuoteRenderContext) -> str:
+    rows: list[str] = []
+    concepts = context.conceptos or []
+    if not concepts:
+        rows.append('<tr><td class="concept-title" colspan="3">Pendiente de definir.</td></tr>')
+    else:
+        for idx, concept in enumerate(concepts, start=1):
+            title = html_escape(_concept_title_for_display(concept, idx))
+            desc_value = (
+                concept.get("descripcion") or concept.get("description") or concept.get("detalle")
+            )
+            desc = html_escape(desc_value.strip()) if isinstance(desc_value, str) else ""
+            if desc:
+                desc = desc.replace("\n", "<br />")
+            amount = _format_currency(_concept_total(concept), context.moneda)
+            rows.append(
+                "<tr>"
+                f'<td class="concept-title">{title}</td>'
+                f'<td class="concept-desc">{desc}</td>'
+                f'<td class="concept-amount">{html_escape(amount)}</td>'
+                "</tr>"
+            )
+    table = (
+        "<table class=\"concept-table\">"
+        "<thead><tr><th>Concepto</th><th>Detalle</th><th>Importe</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody>"
+        "</table>"
+    )
+    return table
+
+
+def _build_totals_html(context: QuoteRenderContext) -> str:
+    subtotal = _format_currency(context.subtotal, context.moneda)
+    impuestos = _format_currency(context.impuestos, context.moneda)
+    total = _format_currency(_resolve_total(context), context.moneda)
+    blocks = [
+        ("Subtotal", subtotal),
+        ("Impuestos", impuestos),
+        ("Total estimado", total),
+    ]
+    items = [
+        f'<div class="totals-item"><span>{html_escape(label)}</span><strong>{html_escape(value)}</strong></div>'
+        for label, value in blocks
+    ]
+    return f"<div class=\"totals-grid\">{''.join(items)}</div>"
+
+
+def _inject_styles(html_doc: str, css: str) -> str:
+    css = css.strip()
+    if not css:
+        return html_doc
+    style_tag = f"<style>{css}</style>"
+    if "</head>" in html_doc:
+        return html_doc.replace("</head>", f"{style_tag}</head>", 1)
+    if "<head>" in html_doc:
+        return html_doc.replace("<head>", f"<head>{style_tag}", 1)
+    return f"{style_tag}{html_doc}"
+
+
+def _resolve_template_base_url() -> str | None:
+    candidates = [
+        getattr(settings, "cliente_portal_base_url", None),
+        settings.supabase_url,
+    ]
+    for candidate in candidates:
+        if candidate:
+            return candidate.rstrip("/")
+    return None
 
 
 def compose_email_subject(context: QuoteRenderContext) -> str:
@@ -387,12 +404,16 @@ def _concept_total(concept: dict[str, Any]) -> float | None:
     return None
 
 
-def _clean_concept_title(concept: dict[str, Any], idx: int) -> str:
+def _concept_title_for_display(concept: dict[str, Any], idx: int) -> str:
     for key in ("titulo", "title", "nombre", "name"):
         value = concept.get(key)
-        if value:
-            return _sanitize_text(str(value))
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return f"Concepto {idx}"
+
+
+def _clean_concept_title(concept: dict[str, Any], idx: int) -> str:
+    return _sanitize_text(_concept_title_for_display(concept, idx))
 
 
 def _wrap_text(value: str, width: int = 90) -> list[str]:
