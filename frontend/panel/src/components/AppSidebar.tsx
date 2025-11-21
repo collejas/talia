@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   IconChartBar,
   IconDatabase,
+  IconFileDescription,
   IconFileWord,
   IconInbox,
   IconFolder,
@@ -71,6 +72,11 @@ const NAVIGATION = {
       children: [
         { title: "Formato de correos", url: "/settings/email", icon: IconMail },
         { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell },
+        {
+          title: "Formato de cotización",
+          url: "/settings/formato-cotizacion",
+          icon: IconFileDescription,
+        },
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder },
