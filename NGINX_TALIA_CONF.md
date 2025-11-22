@@ -213,7 +213,7 @@ server {
     }
 
     # Rutas principales del panel (Next.js) fuera de /panel
-    location ~* ^/(auth|dashboard|contactos|leads|visitas|inbox|embudo|agenda|vista-1|mapa-de-conversion|vista-2|settings|prospeccion|portal)(/.*)?$ {
+    location ~* ^/(auth|dashboard|contactos|leads|visitas|inbox|embudo|agenda|vista-1|mapa-de-conversion|vista-2|settings|prospeccion|portal|clientes)(/.*)?$ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
