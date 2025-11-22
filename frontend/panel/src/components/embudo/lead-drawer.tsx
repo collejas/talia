@@ -2009,22 +2009,11 @@ export function LeadDrawer({
                         type="button"
                         size="sm"
                         className="gap-1"
-                        onClick={() => openQuoteSheet("email")}
+                        onClick={() => openQuoteSheet(quoteChannel)}
                         disabled={isBusy}
                       >
-                        <IconMail className="size-4" />
-                        Correo
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="gap-1"
-                        onClick={() => openQuoteSheet("whatsapp")}
-                        disabled={isBusy}
-                      >
-                        <IconBrandWhatsapp className="size-4" />
-                        WhatsApp
+                        <IconChecklist className="size-4" />
+                        Cotizar
                       </Button>
                     </div>
                   </div>
