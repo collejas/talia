@@ -21,15 +21,16 @@ Este plan describe las entidades mínimas y sus relaciones para evolucionar el C
 - `cuentas`: empresas/organizaciones con `tipo`, industria, tamaño, sitio web, dirección o `direccion JSONB`, `propietario_usuario_id` y opcional `ubicacion_geom` si se usa PostGIS.
 - `contactos`: personas ligadas opcionalmente a `cuenta_id`, con cargo, canales preferidos y `propietario_usuario_id`.
 - `etapas_pipeline`: etapas ordenadas (`Nuevo`, `Calificado`, `Propuesta`, `Negociación`, `Ganado`, `Perdido`) con probabilidad por defecto.
-- `oportunidades`: vinculadas a `cuenta_id` y `contacto_id` principal, con `titulo`, `monto_estimado`, `moneda`, `probabilidad`, `fecha_cierre_probable`, `estado`, `motivo_perdida`, `etapa_id` y `propietario_usuario_id`.
+- `oportunidades`: vinculadas a `cuenta_id` y `contacto_id` principal, con `titulo`, `monto_estimado`, `moneda`, `probabilidad`, `fecha_cierre_probable`, `estado` (catálogo `abierta`/`ganada`/`perdida`), `motivo_perdida` (catálogo + texto libre), `etapa_id` y `propietario_usuario_id`.
 - `oportunidad_etapas_historial`: registra cambios de etapa con `cambiado_por_usuario_id` y `cambiado_en`.
 
 ## Actividades y tareas
-- `actividades`: tabla unificada con `tipo` (`llamada`, `reunion`, `email`, `whatsapp`, `nota`, `tarea`), `asunto`, `descripcion`, `estado`, `inicio_en`, `fin_en`, relaciones opcionales (`cuenta_id`, `contacto_id`, `oportunidad_id`), asignaciones (`creado_por_usuario_id`, `asignado_a_usuario_id`) y `metadata JSONB` (URLs de meeting, IDs externos, etc.).
-- Si se prefiere separar, `tareas` puede existir con `prioridad` y `fecha_vencimiento`, pero puede modelarse con `actividades.tipo = 'tarea'`.
+- `actividades`: tabla unificada con `tipo` (`llamada`, `reunion`, `email`, `whatsapp`, `nota`, `tarea`), `canal` (zoom, meet, whatsapp, teléfono, etc.), `asunto`, `descripcion`, `estado`, `inicio_en`, `fin_en`, relaciones opcionales (`cuenta_id`, `contacto_id`, `oportunidad_id`), asignaciones (`creado_por_usuario_id`, `asignado_a_usuario_id`) y `metadata JSONB` (URLs de meeting, IDs externos, etc.).
+- Las tareas, ya sea como tabla separada o modeladas dentro de `actividades`, deben incluir explícitamente `prioridad` y `fecha_vencimiento` para soportar SLA y recordatorios.
+- Para notas rápidas, puede mantenerse `actividades.tipo = 'nota'` o crearse una tabla `notas` polimórfica (`relacion_tipo`, `relacion_id`) cuando se requiera visibilidad/permisos diferenciados.
 
 ## Soporte y tickets
-- `tickets`: enlace con `cuenta_id` y `contacto_id`, campos de `estado`, `prioridad`, `canal_origen`, `asignado_a_usuario_id`, fechas de creación/actualización/cierre y `metadata JSONB` para IDs externos.
+- `tickets`: enlace con `contacto_id` y `cuenta_id` opcional, campos de `estado`, `prioridad`, `canal_origen`, `asignado_a_usuario_id`, fechas de creación/actualización/cierre y `metadata JSONB` para IDs externos.
 - `ticket_comentarios`: hilo de conversación con autor (usuario o cliente), mensaje y timestamps.
 
 ## Productos, cotizaciones y ventas
@@ -45,7 +46,7 @@ Este plan describe las entidades mínimas y sus relaciones para evolucionar el C
 ## Etiquetas, archivos y auditoría
 - `tags`: catálogo por `organizacion_id` con `nombre` y `color` opcional.
 - `taggings`: relación polimórfica (`relacion_tipo`, `relacion_id`) para cuentas, contactos, oportunidades, tickets, etc.
-- `archivos`: referencias a almacenamiento con `relacion_tipo`, `relacion_id`, `nombre_original`, `content_type`, `tamano_bytes`, `storage_path/url`, `subido_por_usuario_id` y `subido_en`.
+- `archivos`: referencias a almacenamiento con relación polimórfica (`relacion_tipo`, `relacion_id`) para adjuntar a cuentas, contactos, oportunidades, tickets, actividades, etc.; incluye `nombre_original`, `content_type`, `tamano_bytes`, `storage_path/url`, `subido_por_usuario_id` y `subido_en`.
 - `audit_logs`: registros de acciones (`crear`, `actualizar`, `borrar`, `login`), tabla afectada, `registro_id`, `cambios JSONB`, `usuario_id`, IP y `user_agent`.
 
 ## Diagrama de relaciones (Mermaid)
@@ -90,6 +91,10 @@ erDiagram
 
   tags ||--o{ taggings : "marca"
   archivos ||--o{ actividades : "adjunta" : optional
+  archivos ||--o{ cuentas : "adjunta" : optional
+  archivos ||--o{ contactos : "adjunta" : optional
+  archivos ||--o{ oportunidades : "adjunta" : optional
+  archivos ||--o{ tickets : "adjunta" : optional
 ```
 
 ## Migración y pasos sugeridos
