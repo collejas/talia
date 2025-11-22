@@ -922,6 +922,90 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def search_contacts(
+        self,
+        *,
+        organizacion_id: UUID,
+        query: str,
+        limit: int = 8,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        sanitized = query.strip()
+        if not sanitized:
+            return []
+        # Evitamos caracteres que rompan el or-filter de Supabase
+        for char in ("(", ")", ","):
+            sanitized = sanitized.replace(char, " ")
+        sanitized = sanitized.replace("*", "")
+        pattern = f"*{sanitized}*"
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,metadata",
+            "order": "actualizado_en.desc.nullslast",
+            "limit": str(limit),
+            "offset": str(offset),
+            "or": f"(nombre_completo.ilike.*{pattern}*,correo.ilike.*{pattern}*,telefono_e164.ilike.*{pattern}*,company_name.ilike.*{pattern}*)",
+        }
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar contactos: {data!r}")
+        return data
+
+    async def get_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{contacto_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener contacto: {row!r}")
+        return row
+
+    async def update_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not payload:
+            existing = await self.get_contact(
+                organizacion_id=organizacion_id,
+                contacto_id=contacto_id,
+            )
+            if existing is None:
+                raise CRMRepositoryError("contacto_no_encontrado")
+            return existing
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{contacto_id}",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/contactos",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el contacto actualizado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar contacto: {row!r}")
+        return row
+
     @staticmethod
     def _extract_total_count(content_range: str | None) -> int | None:
         if not content_range or "/" not in content_range:

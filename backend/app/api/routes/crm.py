@@ -175,6 +175,44 @@ class CRMOpportunitiesResponse(BaseModel):
     offset: int
 
 
+class CRMContact(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre_completo: str | None = None
+    correo: str | None = None
+    telefono_e164: str | None = None
+    company_name: str | None = None
+    notes: str | None = None
+    necesidad_proposito: str | None = None
+    estado: str | None = None
+    metadata: dict[str, Any] | None = None
+    actualizado_en: datetime | None = None
+
+
+class CRMContactUpdate(BaseModel):
+    nombre_completo: str | None = Field(default=None, max_length=160)
+    correo: str | None = Field(default=None, max_length=255)
+    telefono_e164: str | None = Field(default=None, max_length=32)
+    company_name: str | None = Field(default=None, max_length=160)
+    notes: str | None = Field(default=None, max_length=2000)
+    necesidad_proposito: str | None = Field(default=None, max_length=2000)
+    estado: str | None = Field(default=None, max_length=80)
+
+
+class CRMContactSearchItem(BaseModel):
+    id: UUID
+    nombre: str | None = None
+    correo: str | None = None
+    telefono: str | None = None
+    empresa: str | None = None
+
+
+class CRMContactSearchResponse(BaseModel):
+    items: list[CRMContactSearchItem]
+    limit: int
+    offset: int
+
+
 class CRMActivity(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -878,6 +916,63 @@ async def pipeline_get_card(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
     )
+
+
+@router.get("/contacts/search", response_model=CRMContactSearchResponse)
+async def search_contacts(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    query: Annotated[str, Query(min_length=2, alias="q")],
+    limit: Annotated[int, Query(ge=1, le=25)] = 8,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CRMContactSearchResponse:
+    rows = await repo.search_contacts(
+        organizacion_id=organizacion_id,
+        query=query,
+        limit=limit,
+        offset=offset,
+    )
+    items: list[CRMContactSearchItem] = []
+    for row in rows:
+        contacto_id = _safe_uuid(row.get("id"))
+        if not contacto_id:
+            continue
+        items.append(
+            CRMContactSearchItem(
+                id=contacto_id,
+                nombre=row.get("nombre_completo"),
+                correo=row.get("correo"),
+                telefono=row.get("telefono_e164"),
+                empresa=row.get("company_name"),
+            )
+        )
+    return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
+
+
+@router.patch(
+    "/contacts/{contacto_id}",
+    response_model=CRMContact,
+)
+async def update_contact(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    contacto_id: UUID,
+    payload: CRMContactUpdate,
+) -> CRMContact:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.update_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "contacto_no_encontrado" in str(exc):
+            raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMContact.model_validate(row)
 
 
 @router.get("/actividades", response_model=CRMActivitiesResponse)

@@ -9,7 +9,7 @@ import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
 import { callCrmApi } from "@/lib/api/crm";
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { callSupabaseRest, callSupabaseRpc } from "@/lib/leads/supabase";
+import { callSupabaseRest } from "@/lib/leads/supabase";
 import type {
   EmbudoCard,
   EmbudoStage,
@@ -88,21 +88,37 @@ type ContactInsertRow = {
   id: string;
 };
 
-type ContactSearchRow = {
-  contacto_id: string;
-  nombre: string | null;
-  correo: string | null;
-  telefono: string | null;
-  company_name: string | null;
-  total_rows: number;
-};
-
 export type ContactSearchResult = {
   id: string;
   nombre: string;
   correo: string | null;
   telefono: string | null;
   empresa: string | null;
+};
+
+type CrmContactSearchItem = {
+  id: string;
+  nombre: string | null;
+  correo: string | null;
+  telefono: string | null;
+  empresa: string | null;
+};
+
+type CrmContactSearchResponse = {
+  items: CrmContactSearchItem[];
+  limit: number;
+  offset: number;
+};
+
+type CrmContact = {
+  id: string;
+  nombre_completo?: string | null;
+  correo?: string | null;
+  telefono_e164?: string | null;
+  company_name?: string | null;
+  notes?: string | null;
+  necesidad_proposito?: string | null;
+  estado?: string | null;
 };
 
 function decodeJwtUserId(token: string | null | undefined): string | null {
@@ -227,26 +243,26 @@ export async function searchEmbudoContacts(query: string, limit = 8): Promise<Co
     return [];
   }
 
-  const response = await callSupabaseRpc<ContactSearchRow[]>("panel_contactos_list", {
-    body: {
-      p_search: trimmed,
-      p_limit: Math.max(1, Math.min(limit, 25)),
-      p_offset: 0,
+  const response = await callCrmApi<CrmContactSearchResponse>("/crm/contacts/search", {
+    searchParams: {
+      q: trimmed,
+      limit: String(Math.max(1, Math.min(limit, 25))),
+      offset: "0",
     },
   });
 
   if (!response.ok) {
-    console.error("[embudo:searchContacts] rpc-error", { error: response.error, query: trimmed });
+    console.error("[embudo:searchContacts] crm-error", { error: response.error, query: trimmed });
     return [];
   }
 
-  const rows = Array.isArray(response.data) ? response.data : [];
+  const rows = Array.isArray(response.data?.items) ? response.data.items : [];
   return rows.map((row) => ({
-    id: row.contacto_id,
+    id: row.id,
     nombre: row.nombre?.trim().length ? row.nombre.trim() : "Sin nombre",
     correo: row.correo ?? null,
     telefono: row.telefono ?? null,
-    empresa: row.company_name ?? null,
+    empresa: row.empresa ?? null,
   }));
 }
 
@@ -458,10 +474,8 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
       return { ok: false, error: "No se encontró el contacto del lead." };
     }
 
-    const contactResult = await callSupabaseRest("contactos", {
+    const contactResult = await callCrmApi<CrmContact>(`/crm/contacts/${contactId}`, {
       method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      query: { id: `eq.${contactId}` },
       body: contactoPayload,
     });
 
