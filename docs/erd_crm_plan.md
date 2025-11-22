@@ -98,14 +98,14 @@ erDiagram
 ```
 
 ## Migración y pasos sugeridos
-1. Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`.
-2. Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento.
-3. Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`).
-4. Introducir `actividades` y/o `tareas` y migrar llamadas/conversaciones a este modelo.
-5. Implementar `tickets` y `ticket_comentarios` si aplica al soporte actual.
-6. Incorporar `productos`, `cotizaciones`, `cotizacion_items` cuando se active ventas/cobranzas.
-7. Añadir `campanas`, `leads`, `lead_eventos` para captación y alimentar el funnel.
-8. Integrar `tags`, `archivos`, `audit_logs` y ajustar APIs para exponer CRUD filtrados por `organizacion_id` y `propietario_usuario_id`.
+1. [ ] Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`.
+2. [ ] Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento.
+3. [ ] Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`).
+4. [ ] Introducir `actividades` y/o `tareas` y migrar llamadas/conversaciones a este modelo.
+5. [ ] Implementar `tickets` y `ticket_comentarios` si aplica al soporte actual.
+6. [ ] Incorporar `productos`, `cotizaciones`, `cotizacion_items` cuando se active ventas/cobranzas.
+7. [ ] Añadir `campanas`, `leads`, `lead_eventos` para captación y alimentar el funnel.
+8. [ ] Integrar `tags`, `archivos`, `audit_logs` y ajustar APIs para exponer CRUD filtrados por `organizacion_id` y `propietario_usuario_id`.
 
 Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado para crecer con auditoría, etiquetado y metadatos sin romper compatibilidad.
 
