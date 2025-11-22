@@ -28,7 +28,9 @@ La configuración centraliza credenciales de OpenAI, Twilio y Supabase, incluyen
 
 Base de datos y seguridad
 
-El proyecto opera sobre Supabase/Postgres con un esquema normalizado para contactos, conversaciones, mensajes, adjuntos y eventos. La migración `supabase/migrations/20251023_160500_rls_policies.sql` agrega funciones helper (`puede_ver_conversacion`, `puede_ver_mensaje`) y políticas RLS que aíslan la información por usuario (propietario del contacto o agente asignado) manteniendo privilegios de administración. Para respaldos iniciales y automáticos se incluye `backend/scripts/backup_db.py`, que genera dumps completos y de sólo esquema usando `pg_dump` y las credenciales definidas en `backend/.env`.
+El proyecto opera sobre Supabase/Postgres con un esquema normalizado para contactos, conversaciones, mensajes, adjuntos y eventos. La migración `supabase/migrations/20251023_160500_rls_policies.sql` agrega funciones helper (`puede_ver_conversacion`, `puede_ver_mensaje`) y políticas RLS que aíslan la información por usuario (propietario del contacto o agente asignado) manteniendo privilegios de administración.
+
+Para respaldos iniciales y automáticos se incluye `backend/scripts/backup_db.py`, que genera dumps completos (`*_full.dump`), de sólo esquema (`*_schema.sql`) y, por defecto, un volcado adicional con roles/permisos globales (`*_globals.sql`) usando `pg_dump` + `pg_dumpall`. Cada ejecución crea una carpeta `backups/<prefijo>_<timestamp>/` con esos archivos; ejecuta `poetry run python backend/scripts/backup_db.py --output-dir backups` para obtener el paquete completo o agrega `--no-globals` si sólo necesitas los dumps tradicionales.
 
 Registro de interacciones
 

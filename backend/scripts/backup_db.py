@@ -60,6 +60,23 @@ def _run_pg_dump(database_url: str, output_path: Path, extra_flags: Iterable[str
         raise RuntimeError(details)
 
 
+def _run_pg_dumpall(database_url: str, output_path: Path) -> None:
+    cmd = [
+        "pg_dumpall",
+        f"--dbname={database_url}",
+        "--globals-only",
+        "--file",
+        str(output_path),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: PLW1510
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        details = stderr or stdout or "pg_dumpall devolvió un código de error"
+        raise RuntimeError(details)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -71,7 +88,7 @@ def parse_args() -> argparse.Namespace:
         "--mode",
         choices=["all", "full", "schema"],
         default="all",
-        help="Define qué respaldos generar. all (default) genera ambos.",
+        help="Define qué respaldos generar. all (default) crea completo + estructura.",
     )
     parser.add_argument(
         "--database-url",
@@ -94,6 +111,13 @@ def parse_args() -> argparse.Namespace:
         "--quiet",
         action="store_true",
         help="Reduce el output a sólo errores.",
+    )
+    parser.add_argument(
+        "--globals",
+        dest="include_globals",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Genera un dump adicional con roles/privilegios globales (default: true).",
     )
     return parser.parse_args()
 
@@ -127,22 +151,31 @@ def main() -> int:
         )
         return 1
 
+    if args.include_globals and shutil.which("pg_dumpall") is None:
+        print(
+            "[backup_db] ERROR: --globals requiere pg_dumpall en el PATH. Instala el cliente de PostgreSQL.",
+            file=sys.stderr,
+        )
+        return 1
+
     output_dir = Path(args.output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = args.prefix or _database_name_from_url(database_url)
+    run_dir = output_dir / f"{prefix}_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
     masked_url = _mask_database_url(database_url)
 
     tasks: list[tuple[str, Path, list[str]]] = []
     if args.mode in {"all", "full"}:
-        full_path = output_dir / f"{prefix}_{timestamp}_full.dump"
+        full_path = run_dir / f"{prefix}_{timestamp}_full.dump"
         tasks.append(("completo", full_path, ["--format=custom", "--compress=9"]))
     if args.mode in {"all", "schema"}:
-        schema_path = output_dir / f"{prefix}_{timestamp}_schema.sql"
+        schema_path = run_dir / f"{prefix}_{timestamp}_schema.sql"
         tasks.append(("estructura", schema_path, ["--format=plain", "--schema-only"]))
 
-    if not tasks:
+    if not tasks and not args.include_globals:
         print("[backup_db] No hay tareas que ejecutar (revisa el modo).", file=sys.stderr)
         return 1
 
@@ -154,6 +187,22 @@ def main() -> int:
         except RuntimeError as exc:  # pragma: no cover - CLI
             print(
                 f"[backup_db] ERROR al crear el respaldo {label}: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+
+    if args.include_globals:
+        globals_path = run_dir / f"{prefix}_{timestamp}_globals.sql"
+        if not args.quiet:
+            print(
+                f"[backup_db] Generando respaldo global en {globals_path} "
+                f"(roles/permisos, DB: {masked_url})"
+            )
+        try:
+            _run_pg_dumpall(database_url, globals_path)
+        except RuntimeError as exc:  # pragma: no cover - CLI
+            print(
+                f"[backup_db] ERROR al crear el respaldo global: {exc}",
                 file=sys.stderr,
             )
             return 1

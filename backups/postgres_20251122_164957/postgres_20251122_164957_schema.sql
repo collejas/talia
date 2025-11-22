@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict bYPHj5PPVzeCsOr7VybCdyo8y46ToIiL1CBOdZOLYC0kyUp7K6ZmVkufv76YGMW
+\restrict rGwYBHJOUyuFzLgoP0VaDTJ6jBx8LquhTqocrEafE5lXDy2vig6QNw5LvIIfsri
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -330,6 +330,17 @@ CREATE TYPE auth.one_time_token_type AS ENUM (
     'email_change_token_new',
     'email_change_token_current',
     'phone_change_token'
+);
+
+
+--
+-- Name: catalog_item_tipo; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.catalog_item_tipo AS ENUM (
+    'producto',
+    'servicio',
+    'paquete'
 );
 
 
@@ -887,11 +898,203 @@ $_$;
 
 
 --
+-- Name: _apply_quote_items(uuid, jsonb, character); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._apply_quote_items(p_cotizacion_id uuid, p_items jsonb, p_default_moneda character) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    r_item record;
+    v_catalog_item uuid;
+    v_titulo text;
+    v_descripcion text;
+    v_unidad text;
+    v_cantidad numeric;
+    v_precio_unitario numeric;
+    v_descuento numeric;
+    v_subtotal numeric;
+    v_impuestos numeric;
+    v_total numeric;
+    v_moneda char(3);
+    v_metadatos jsonb;
+    v_orden integer;
+    v_text text;
+BEGIN
+    IF p_cotizacion_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    DELETE FROM public.lead_cotizacion_items WHERE cotizacion_id = p_cotizacion_id;
+
+    IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
+        RETURN;
+    END IF;
+
+    FOR r_item IN
+        SELECT value, ordinality
+        FROM jsonb_array_elements(p_items) WITH ORDINALITY AS elem(value, ordinality)
+    LOOP
+        v_catalog_item := NULL;
+        v_titulo := NULLIF(r_item.value->>'titulo', '');
+        v_descripcion := NULLIF(r_item.value->>'descripcion', '');
+        v_unidad := NULLIF(r_item.value->>'unidad', '');
+        IF v_unidad IS NULL THEN
+            v_unidad := 'unidad';
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'catalog_item_id', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_catalog_item := v_text::uuid;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_catalog_item := NULL;
+            END;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'cantidad', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_cantidad := v_text::numeric;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_cantidad := NULL;
+            END;
+        ELSE
+            v_cantidad := NULL;
+        END IF;
+        IF v_cantidad IS NULL OR v_cantidad <= 0 THEN
+            v_cantidad := 1;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'precio_unitario', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_precio_unitario := v_text::numeric;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_precio_unitario := NULL;
+            END;
+        ELSE
+            v_precio_unitario := NULL;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'descuento', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_descuento := v_text::numeric;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_descuento := NULL;
+            END;
+        ELSE
+            v_descuento := NULL;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'subtotal', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_subtotal := v_text::numeric;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_subtotal := NULL;
+            END;
+        ELSE
+            v_subtotal := NULL;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'impuestos', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_impuestos := v_text::numeric;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_impuestos := NULL;
+            END;
+        ELSE
+            v_impuestos := NULL;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'total', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_total := v_text::numeric;
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_total := NULL;
+            END;
+        ELSE
+            v_total := NULL;
+        END IF;
+
+        v_text := NULLIF(r_item.value->>'moneda', '');
+        IF v_text IS NOT NULL THEN
+            v_moneda := SUBSTRING(upper(v_text) FROM 1 FOR 3);
+        ELSE
+            v_moneda := NULL;
+        END IF;
+        IF v_moneda IS NULL OR char_length(v_moneda) <> 3 THEN
+            v_moneda := COALESCE(p_default_moneda, 'MXN');
+        END IF;
+
+        v_metadatos := '{}'::jsonb;
+        IF r_item.value ? 'metadatos' AND jsonb_typeof(r_item.value->'metadatos') = 'object' THEN
+            v_metadatos := r_item.value->'metadatos';
+        END IF;
+
+        v_orden := r_item.ordinality;
+        v_text := NULLIF(r_item.value->>'orden', '');
+        IF v_text IS NOT NULL THEN
+            BEGIN
+                v_orden := GREATEST(1, v_text::integer);
+            EXCEPTION WHEN invalid_text_representation THEN
+                v_orden := r_item.ordinality;
+            END;
+        END IF;
+
+        IF v_catalog_item IS NULL AND v_titulo IS NULL AND v_descripcion IS NULL
+           AND v_subtotal IS NULL AND v_total IS NULL THEN
+            CONTINUE;
+        END IF;
+
+        INSERT INTO public.lead_cotizacion_items (
+            cotizacion_id,
+            catalog_item_id,
+            titulo,
+            descripcion,
+            unidad,
+            cantidad,
+            precio_unitario,
+            descuento,
+            subtotal,
+            impuestos,
+            total,
+            moneda,
+            orden,
+            metadatos
+        ) VALUES (
+            p_cotizacion_id,
+            v_catalog_item,
+            v_titulo,
+            v_descripcion,
+            COALESCE(v_unidad, 'unidad'),
+            v_cantidad,
+            v_precio_unitario,
+            v_descuento,
+            v_subtotal,
+            v_impuestos,
+            v_total,
+            v_moneda,
+            v_orden,
+            v_metadatos
+        );
+    END LOOP;
+END;
+$$;
+
+
+--
 -- Name: _contacto_captura_estado(text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public._contacto_captura_estado(p_nombre text, p_correo text, p_telefono text, p_notes text, p_necesidad text) RETURNS text
     LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public, pg_temp'
     AS $$
     SELECT CASE
         WHEN COALESCE(NULLIF(btrim(p_nombre), ''), NULL) IS NOT NULL
@@ -918,6 +1121,7 @@ COMMENT ON FUNCTION public._contacto_captura_estado(p_nombre text, p_correo text
 
 CREATE FUNCTION public._lead_tarjeta_auto_precalificar(p_tarjeta_id uuid) RETURNS void
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_tablero_id uuid;
@@ -1159,6 +1363,7 @@ COMMENT ON FUNCTION public.convertir_lead_en_cliente(p_tarjeta_id uuid, p_forzar
 
 CREATE FUNCTION public.crear_busqueda(p_fuente public.fuente_resultado, p_query text, p_radio_m integer, p_lat double precision, p_lng double precision, p_total integer, p_meta jsonb DEFAULT '{}'::jsonb) RETURNS uuid
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public, pg_temp'
     AS $$
 declare v_id uuid;
 begin
@@ -2491,26 +2696,29 @@ BEGIN
         v_booking.tarjeta_id
     ) AS hold_data;
 
-    UPDATE public.calendar_slot_holds
+    UPDATE public.calendar_slot_holds csh
     SET status = 'confirmed',
-        metadata = metadata || jsonb_build_object('confirmed_via', 'reschedule', 'confirmed_at', now()),
+        metadata = csh.metadata
+            || jsonb_build_object('confirmed_via', 'reschedule', 'confirmed_at', now()),
         updated_at = now()
-    WHERE id = v_new_hold.hold_id;
+    WHERE csh.id = v_new_hold.hold_id;
 
     v_old_hold := v_booking.hold_id;
 
-    UPDATE public.calendar_bookings
+    UPDATE public.calendar_bookings cb
     SET start_at = v_new_hold.slot_start,
         end_at = v_new_hold.slot_end,
         hold_id = v_new_hold.hold_id,
         tarjeta_id = v_booking.tarjeta_id,
-        metadata = metadata || COALESCE(p_metadata, '{}'::jsonb) || jsonb_build_object(
-            'rescheduled_from', v_booking.start_at,
-            'rescheduled_at', now()
-        ),
-        notes = COALESCE(NULLIF(p_notes, ''), notes),
+        metadata = cb.metadata
+            || COALESCE(p_metadata, '{}'::jsonb)
+            || jsonb_build_object(
+                'rescheduled_from', v_booking.start_at,
+                'rescheduled_at', now()
+            ),
+        notes = COALESCE(NULLIF(p_notes, ''), cb.notes),
         updated_at = now()
-    WHERE id = v_booking.id;
+    WHERE cb.id = v_booking.id;
 
     IF v_old_hold IS NOT NULL THEN
         PERFORM * FROM public.fn_calendar_release_hold(v_old_hold, 'rescheduled');
@@ -2638,6 +2846,7 @@ COMMENT ON FUNCTION public.fn_calendar_resource_upsert(p_name text, p_timezone t
 
 CREATE FUNCTION public.fn_calendar_sync_tarjeta_stage(p_tarjeta_id uuid, p_status text, p_booking_id uuid) RETURNS void
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_tarjeta public.lead_tarjetas%ROWTYPE;
@@ -3633,6 +3842,7 @@ DECLARE
     v_lead public.lead_tarjetas%ROWTYPE;
     v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
     v_conceptos jsonb := '[]'::jsonb;
+    v_items jsonb := '[]'::jsonb;
     v_subtotal numeric;
     v_impuestos numeric;
     v_total numeric;
@@ -3675,6 +3885,16 @@ BEGIN
             v_conceptos := '[]'::jsonb;
         ELSE
             RAISE EXCEPTION 'invalid_concepts_payload' USING ERRCODE = '22023';
+        END IF;
+    END IF;
+
+    IF v_payload ? 'items' THEN
+        IF jsonb_typeof(v_payload->'items') = 'array' THEN
+            v_items := COALESCE(v_payload->'items', '[]'::jsonb);
+        ELSIF jsonb_typeof(v_payload->'items') = 'null' THEN
+            v_items := '[]'::jsonb;
+        ELSE
+            RAISE EXCEPTION 'invalid_items_payload' USING ERRCODE = '22023';
         END IF;
     END IF;
 
@@ -3749,6 +3969,21 @@ BEGIN
         END IF;
     END IF;
 
+    IF jsonb_typeof(v_items) <> 'array' THEN
+        v_items := '[]'::jsonb;
+    END IF;
+
+    IF jsonb_array_length(v_items) = 0 AND jsonb_array_length(v_conceptos) > 0 THEN
+        SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+            'titulo', NULLIF(elem.value->>'titulo', ''),
+            'descripcion', NULLIF(elem.value->>'descripcion', ''),
+            'total', CASE WHEN jsonb_typeof(elem.value->'total') = 'number' THEN (elem.value->>'total')::numeric ELSE NULL END,
+            'orden', elem.ordinality
+        ))), '[]'::jsonb)
+        INTO v_items
+        FROM jsonb_array_elements(v_conceptos) WITH ORDINALITY AS elem(value, ordinality);
+    END IF;
+
     INSERT INTO public.lead_cotizaciones (
         tarjeta_id,
         version,
@@ -3782,6 +4017,8 @@ BEGIN
         v_metadatos
     )
     RETURNING * INTO v_created;
+
+    PERFORM public._apply_quote_items(v_created.id, v_items, v_moneda);
 
     RETURN QUERY SELECT
         v_created.id,
@@ -3881,6 +4118,46 @@ BEGIN
         actualizado_en = v_now
     WHERE q.id = p_quote_id
     RETURNING * INTO v_updated;
+
+    IF p_estado = 'aceptada' THEN
+        DELETE FROM public.lead_tarjeta_items WHERE lead_tarjeta_id = v_lead.id;
+
+        INSERT INTO public.lead_tarjeta_items (
+            lead_tarjeta_id,
+            cotizacion_item_id,
+            catalog_item_id,
+            titulo,
+            descripcion,
+            unidad,
+            cantidad,
+            precio_unitario,
+            descuento,
+            subtotal,
+            impuestos,
+            total,
+            moneda,
+            cerrado_en,
+            metadatos
+        )
+        SELECT
+            v_lead.id,
+            ci.id,
+            ci.catalog_item_id,
+            ci.titulo,
+            ci.descripcion,
+            COALESCE(ci.unidad, 'unidad'),
+            COALESCE(ci.cantidad, 1),
+            ci.precio_unitario,
+            ci.descuento,
+            ci.subtotal,
+            ci.impuestos,
+            ci.total,
+            COALESCE(ci.moneda, v_quote.moneda, 'MXN'),
+            v_now,
+            COALESCE(ci.metadatos, '{}'::jsonb)
+        FROM public.lead_cotizacion_items ci
+        WHERE ci.cotizacion_id = v_quote.id;
+    END IF;
 
     IF p_estado = 'enviada' THEN
         v_metadata := COALESCE(v_lead.metadata, '{}'::jsonb);
@@ -6517,6 +6794,7 @@ $$;
 
 CREATE FUNCTION public.prevent_remove_last_admin() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 declare
   admin_role_id uuid;
@@ -7203,6 +7481,7 @@ COMMENT ON FUNCTION public.registrar_mensaje_whatsapp(p_direction text, p_whatsa
 
 CREATE FUNCTION public.t_set_actualizado_en() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 begin
   new.actualizado_en = now();
@@ -7216,6 +7495,7 @@ end;$$;
 
 CREATE FUNCTION public.tg_calendar_bookings_sync_stage() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_tarjeta_id uuid;
@@ -7255,6 +7535,7 @@ $$;
 
 CREATE FUNCTION public.tg_contactos_auto_asignacion() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_tenian_datos boolean := FALSE;
@@ -7337,6 +7618,7 @@ $$;
 
 CREATE FUNCTION public.tg_contactos_auto_precalificado() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_tarjeta_id uuid;
@@ -7370,6 +7652,7 @@ $$;
 
 CREATE FUNCTION public.tg_contactos_captura_estado() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 BEGIN
     NEW.captura_estado := public._contacto_captura_estado(
@@ -7397,6 +7680,7 @@ COMMENT ON FUNCTION public.tg_contactos_captura_estado() IS 'Actualiza captura_e
 
 CREATE FUNCTION public.tg_conversaciones_auto_tarjeta() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_tablero uuid;
@@ -7481,6 +7765,7 @@ COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta
 
 CREATE FUNCTION public.tg_lead_tarjeta_sync_cliente() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 BEGIN
     PERFORM public.ensure_cliente_from_lead(NEW.id);
@@ -7495,6 +7780,7 @@ $$;
 
 CREATE FUNCTION public.tg_lead_tarjetas_after_write() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_old_cat public.lead_categoria;
@@ -7557,6 +7843,7 @@ COMMENT ON FUNCTION public.tg_lead_tarjetas_after_write() IS 'Registra movimient
 
 CREATE FUNCTION public.tg_lead_tarjetas_auto_precalificado() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 BEGIN
     PERFORM public._lead_tarjeta_auto_precalificar(NEW.id);
@@ -7571,6 +7858,7 @@ $$;
 
 CREATE FUNCTION public.tg_lead_tarjetas_before_write() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_default_tablero uuid;
@@ -7704,6 +7992,7 @@ COMMENT ON FUNCTION public.tg_lead_tarjetas_before_write() IS 'Normaliza campos 
 
 CREATE FUNCTION public.tg_sync_lead_score_from_insights() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 BEGIN
     UPDATE public.lead_tarjetas
@@ -7721,6 +8010,7 @@ $$;
 
 CREATE FUNCTION public.tg_touch_updated_at() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 DECLARE
     v_row jsonb := to_jsonb(NEW);
@@ -7754,6 +8044,7 @@ COMMENT ON FUNCTION public.tg_touch_updated_at() IS 'Actualiza la columna actual
 
 CREATE FUNCTION public.touch_conversaciones_controles_updated_at() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 BEGIN
     NEW.updated_at := now();
@@ -7768,6 +8059,7 @@ $$;
 
 CREATE FUNCTION public.trg_busquedas_set_centro() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 begin
   if new.lat is not null and new.lng is not null then
@@ -7785,6 +8077,7 @@ end$$;
 
 CREATE FUNCTION public.trg_resultados_set_geom() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 begin
   if new.lat is not null and new.lng is not null then
@@ -7802,6 +8095,7 @@ end$$;
 
 CREATE FUNCTION public.trg_resultados_set_tsv() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public, pg_temp'
     AS $$
 begin
   new.tsv :=
@@ -7818,6 +8112,7 @@ end$$;
 
 CREATE FUNCTION public.upsert_resultados_lote(p_busqueda_id uuid, p_fuente public.fuente_resultado, p_items jsonb) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public, pg_temp'
     AS $$
 declare
   v_count int := 0;
@@ -10160,6 +10455,136 @@ COMMENT ON TABLE public.calendar_slot_holds IS 'Reservas temporales mientras el 
 
 
 --
+-- Name: catalog_item_prices; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_item_prices (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    item_id uuid NOT NULL,
+    etiqueta text,
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    unidad text DEFAULT 'unidad'::text NOT NULL,
+    precio numeric(14,2) NOT NULL,
+    descuento_porcentaje numeric(5,2),
+    canal text,
+    segmento text,
+    vigente_desde date,
+    vigente_hasta date,
+    es_principal boolean DEFAULT false NOT NULL,
+    metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT catalog_item_prices_descuento_check CHECK (((descuento_porcentaje IS NULL) OR ((descuento_porcentaje >= (0)::numeric) AND (descuento_porcentaje <= (100)::numeric)))),
+    CONSTRAINT catalog_item_prices_moneda_check CHECK ((char_length(moneda) = 3)),
+    CONSTRAINT catalog_item_prices_precio_check CHECK ((precio >= (0)::numeric))
+);
+
+
+--
+-- Name: catalog_item_tags; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_item_tags (
+    item_id uuid NOT NULL,
+    tag_id uuid NOT NULL,
+    agregado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: catalog_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_items (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slug text,
+    nombre text NOT NULL,
+    tipo public.catalog_item_tipo DEFAULT 'servicio'::public.catalog_item_tipo NOT NULL,
+    descripcion_corta text,
+    descripcion_larga text,
+    unidad text DEFAULT 'unidad'::text NOT NULL,
+    precio_base numeric(14,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    impuestos jsonb DEFAULT '[]'::jsonb NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    requiere_factura boolean DEFAULT false NOT NULL,
+    clave_sat text,
+    unidad_sat text,
+    metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_by uuid,
+    updated_by uuid,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT catalog_items_moneda_check CHECK ((char_length(moneda) = 3)),
+    CONSTRAINT catalog_items_precio_check CHECK (((precio_base IS NULL) OR (precio_base >= (0)::numeric)))
+);
+
+
+--
+-- Name: TABLE catalog_items; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.catalog_items IS 'Listado administrable de productos, servicios o paquetes disponibles para cotizar.';
+
+
+--
+-- Name: COLUMN catalog_items.slug; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.catalog_items.slug IS 'Identificador legible para URLs o integraciones.';
+
+
+--
+-- Name: COLUMN catalog_items.tipo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.catalog_items.tipo IS 'Clasificación general (producto, servicio o paquete).';
+
+
+--
+-- Name: COLUMN catalog_items.unidad; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.catalog_items.unidad IS 'Unidad de medida mostrada en cotizaciones.';
+
+
+--
+-- Name: COLUMN catalog_items.precio_base; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.catalog_items.precio_base IS 'Precio sugerido por unidad antes de descuentos.';
+
+
+--
+-- Name: COLUMN catalog_items.impuestos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.catalog_items.impuestos IS 'Lista JSON de impuestos aplicables (ej. IVA, ISR).';
+
+
+--
+-- Name: catalog_tags; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_tags (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slug text NOT NULL,
+    nombre text NOT NULL,
+    color text,
+    descripcion text,
+    metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE catalog_tags; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.catalog_tags IS 'Etiquetas reutilizables para segmentar productos/servicios.';
+
+
+--
 -- Name: cliente_documentos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10382,7 +10807,7 @@ CREATE TABLE public.usuarios (
 -- Name: conversaciones_en_curso; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.conversaciones_en_curso AS
+CREATE VIEW public.conversaciones_en_curso WITH (security_invoker='true') AS
  SELECT c.id AS conversacion_id,
     c.canal,
     c.estado,
@@ -10525,7 +10950,7 @@ COMMENT ON COLUMN public.lead_tarjetas.proyecto_necesidades IS 'Resumen de neces
 -- Name: embudo; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.embudo AS
+CREATE VIEW public.embudo WITH (security_invoker='true') AS
  SELECT lt.id,
     lt.tablero_id,
     lt.etapa_id,
@@ -10565,66 +10990,38 @@ CREATE VIEW public.embudo AS
 
 
 --
--- Name: empleados; Type: TABLE; Schema: public; Owner: -
+-- Name: lead_cotizacion_items; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.empleados (
-    usuario_id uuid NOT NULL,
-    departamento_id uuid,
-    es_gestor boolean DEFAULT false NOT NULL,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    puesto_id uuid,
-    es_vendedor boolean DEFAULT false NOT NULL,
-    ultimo_lead_asignado_en timestamp with time zone
-);
-
-
---
--- Name: eventos_auditoria; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.eventos_auditoria (
+CREATE TABLE public.lead_cotizacion_items (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    actor_usuario_id uuid,
-    entidad text NOT NULL,
-    entidad_id uuid NOT NULL,
-    accion text NOT NULL,
-    datos jsonb,
-    id_solicitud text,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: eventos_entrega; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.eventos_entrega (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    mensaje_id uuid NOT NULL,
-    proveedor text DEFAULT 'twilio'::text NOT NULL,
-    evento text NOT NULL,
-    proveedor_ts timestamp with time zone,
-    codigo_error text,
-    payload_crudo jsonb,
+    cotizacion_id uuid NOT NULL,
+    catalog_item_id uuid,
+    titulo text,
+    descripcion text,
+    unidad text DEFAULT 'unidad'::text NOT NULL,
+    cantidad numeric(12,2) DEFAULT 1 NOT NULL,
+    precio_unitario numeric(14,2),
+    descuento numeric(14,2),
+    subtotal numeric(14,2),
+    impuestos numeric(14,2),
+    total numeric(14,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    orden integer DEFAULT 1 NOT NULL,
+    metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT eventos_entrega_evento_check CHECK ((evento = ANY (ARRAY['en_cola'::text, 'enviado'::text, 'entregado'::text, 'leido'::text, 'fallido'::text])))
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lead_cotizacion_items_cantidad_check CHECK ((cantidad > (0)::numeric)),
+    CONSTRAINT lead_cotizacion_items_moneda_check CHECK ((char_length(moneda) = 3)),
+    CONSTRAINT lead_cotizacion_items_precio_check CHECK ((((precio_unitario IS NULL) OR (precio_unitario >= (0)::numeric)) AND ((descuento IS NULL) OR (descuento >= (0)::numeric)) AND ((subtotal IS NULL) OR (subtotal >= (0)::numeric)) AND ((impuestos IS NULL) OR (impuestos >= (0)::numeric)) AND ((total IS NULL) OR (total >= (0)::numeric))))
 );
 
 
 --
--- Name: identidades_canal; Type: TABLE; Schema: public; Owner: -
+-- Name: TABLE lead_cotizacion_items; Type: COMMENT; Schema: public; Owner: -
 --
 
-CREATE TABLE public.identidades_canal (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    contacto_id uuid NOT NULL,
-    canal text NOT NULL,
-    id_externo text NOT NULL,
-    metadatos jsonb,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT identidades_canal_canal_check CHECK ((canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text])))
-);
+COMMENT ON TABLE public.lead_cotizacion_items IS 'Detalle normalizado de partidas incluidas en cada cotización.';
 
 
 --
@@ -10764,6 +11161,103 @@ COMMENT ON COLUMN public.lead_cotizaciones.metadatos IS 'Campos adicionales (fir
 
 
 --
+-- Name: embudo_por_producto; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.embudo_por_producto WITH (security_invoker='true') AS
+ WITH latest_quotes AS (
+         SELECT DISTINCT ON (lc.tarjeta_id) lc.id,
+            lc.tarjeta_id,
+            lc.estado
+           FROM public.lead_cotizaciones lc
+          ORDER BY lc.tarjeta_id, lc.version DESC
+        )
+ SELECT lt.tablero_id,
+    lt.etapa_id,
+    lci.catalog_item_id,
+    COALESCE(ci.nombre, lci.titulo) AS item_nombre,
+    lci.moneda,
+    sum(COALESCE(lci.total, lci.subtotal, (lci.cantidad * COALESCE(lci.precio_unitario, (0)::numeric)))) AS monto_estimado,
+    count(DISTINCT lt.id) AS leads_con_cotizacion
+   FROM (((latest_quotes lq
+     JOIN public.lead_tarjetas lt ON ((lt.id = lq.tarjeta_id)))
+     JOIN public.lead_cotizacion_items lci ON ((lci.cotizacion_id = lq.id)))
+     LEFT JOIN public.catalog_items ci ON ((ci.id = lci.catalog_item_id)))
+  WHERE (lt.cerrado_en IS NULL)
+  GROUP BY lt.tablero_id, lt.etapa_id, lci.catalog_item_id, COALESCE(ci.nombre, lci.titulo), lci.moneda;
+
+
+--
+-- Name: VIEW embudo_por_producto; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.embudo_por_producto IS 'Vista del pipeline agrupado por producto y etapa usando la última cotización disponible.';
+
+
+--
+-- Name: empleados; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.empleados (
+    usuario_id uuid NOT NULL,
+    departamento_id uuid,
+    es_gestor boolean DEFAULT false NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    puesto_id uuid,
+    es_vendedor boolean DEFAULT false NOT NULL,
+    ultimo_lead_asignado_en timestamp with time zone
+);
+
+
+--
+-- Name: eventos_auditoria; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.eventos_auditoria (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    actor_usuario_id uuid,
+    entidad text NOT NULL,
+    entidad_id uuid NOT NULL,
+    accion text NOT NULL,
+    datos jsonb,
+    id_solicitud text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: eventos_entrega; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.eventos_entrega (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    mensaje_id uuid NOT NULL,
+    proveedor text DEFAULT 'twilio'::text NOT NULL,
+    evento text NOT NULL,
+    proveedor_ts timestamp with time zone,
+    codigo_error text,
+    payload_crudo jsonb,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT eventos_entrega_evento_check CHECK ((evento = ANY (ARRAY['en_cola'::text, 'enviado'::text, 'entregado'::text, 'leido'::text, 'fallido'::text])))
+);
+
+
+--
+-- Name: identidades_canal; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.identidades_canal (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    contacto_id uuid NOT NULL,
+    canal text NOT NULL,
+    id_externo text NOT NULL,
+    metadatos jsonb,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT identidades_canal_canal_check CHECK ((canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text])))
+);
+
+
+--
 -- Name: lead_etapas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10843,6 +11337,42 @@ CREATE TABLE public.lead_tableros (
 
 
 --
+-- Name: lead_tarjeta_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_tarjeta_items (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    lead_tarjeta_id uuid NOT NULL,
+    cotizacion_item_id uuid,
+    catalog_item_id uuid,
+    titulo text,
+    descripcion text,
+    unidad text DEFAULT 'unidad'::text NOT NULL,
+    cantidad numeric(12,2) DEFAULT 1 NOT NULL,
+    precio_unitario numeric(14,2),
+    descuento numeric(14,2),
+    subtotal numeric(14,2),
+    impuestos numeric(14,2),
+    total numeric(14,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    cerrado_en timestamp with time zone,
+    metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lead_tarjeta_items_cantidad_check CHECK ((cantidad > (0)::numeric)),
+    CONSTRAINT lead_tarjeta_items_moneda_check CHECK ((char_length(moneda) = 3)),
+    CONSTRAINT lead_tarjeta_items_precio_check CHECK ((((precio_unitario IS NULL) OR (precio_unitario >= (0)::numeric)) AND ((descuento IS NULL) OR (descuento >= (0)::numeric)) AND ((subtotal IS NULL) OR (subtotal >= (0)::numeric)) AND ((impuestos IS NULL) OR (impuestos >= (0)::numeric)) AND ((total IS NULL) OR (total >= (0)::numeric))))
+);
+
+
+--
+-- Name: TABLE lead_tarjeta_items; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lead_tarjeta_items IS 'Snapshot de los productos/servicios realmente vendidos al cerrar la oportunidad.';
+
+
+--
 -- Name: llamadas; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10860,6 +11390,51 @@ CREATE TABLE public.llamadas (
     transcripcion text,
     CONSTRAINT llamadas_direccion_check CHECK ((direccion = ANY (ARRAY['entrante'::text, 'saliente'::text])))
 );
+
+
+--
+-- Name: logos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.logos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    nombre text NOT NULL,
+    descripcion text,
+    file_path text NOT NULL,
+    file_url text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    uploaded_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE logos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.logos IS 'Repositorio central de logos que puede utilizar cualquier documento o vista.';
+
+
+--
+-- Name: COLUMN logos.file_path; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.logos.file_path IS 'Ruta interna en el bucket logos.';
+
+
+--
+-- Name: COLUMN logos.file_url; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.logos.file_url IS 'URL pública o firmada del logo.';
+
+
+--
+-- Name: COLUMN logos.metadata; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.logos.metadata IS 'Información adicional (colores sugeridos, contraste, etc.).';
 
 
 --
@@ -10934,7 +11509,7 @@ CREATE MATERIALIZED VIEW public.mv_resultados_por_actividad AS
 -- Name: panel_calendar_bookings; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.panel_calendar_bookings AS
+CREATE VIEW public.panel_calendar_bookings WITH (security_invoker='true') AS
  SELECT cb.id,
     cb.resource_id,
     cb.hold_id,
@@ -11154,6 +11729,118 @@ CREATE TABLE public.puestos (
 
 
 --
+-- Name: quote_templates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.quote_templates (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slug text NOT NULL,
+    nombre text NOT NULL,
+    descripcion text,
+    html text NOT NULL,
+    css text DEFAULT ''::text NOT NULL,
+    variables jsonb DEFAULT '[]'::jsonb NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
+-- Name: TABLE quote_templates; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.quote_templates IS 'Plantillas HTML utilizadas para renderizar las cotizaciones del panel.';
+
+
+--
+-- Name: COLUMN quote_templates.slug; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.slug IS 'Identificador lógico (ej. "default") para seleccionar la plantilla.';
+
+
+--
+-- Name: COLUMN quote_templates.nombre; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.nombre IS 'Nombre visible del formato.';
+
+
+--
+-- Name: COLUMN quote_templates.descripcion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.descripcion IS 'Notas o contexto sobre el formato.';
+
+
+--
+-- Name: COLUMN quote_templates.html; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.html IS 'Markup principal con placeholders moustache {{token}}.';
+
+
+--
+-- Name: COLUMN quote_templates.css; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.css IS 'Bloque CSS que se inyecta en el template.';
+
+
+--
+-- Name: COLUMN quote_templates.variables; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.variables IS 'Listado JSON con los tokens soportados por el template.';
+
+
+--
+-- Name: COLUMN quote_templates.version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.version IS 'Número de versión para mantener historial de cambios.';
+
+
+--
+-- Name: COLUMN quote_templates.is_active; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.is_active IS 'Indica si la plantilla puede seleccionarse para renderizar PDFs.';
+
+
+--
+-- Name: COLUMN quote_templates.updated_by; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.updated_by IS 'Usuario que realizó la última edición desde el panel.';
+
+
+--
+-- Name: COLUMN quote_templates.created_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.created_at IS 'Fecha de creación.';
+
+
+--
+-- Name: COLUMN quote_templates.updated_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.updated_at IS 'Fecha de última modificación.';
+
+
+--
+-- Name: COLUMN quote_templates.config; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.quote_templates.config IS 'Configuración declarativa (logo, colores, textos) usada para construir el HTML.';
+
+
+--
 -- Name: roles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11208,7 +11895,7 @@ CREATE TABLE public.usuarios_roles (
 -- Name: v_configuracion_personal; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_configuracion_personal AS
+CREATE VIEW public.v_configuracion_personal WITH (security_invoker='true') AS
  SELECT u.id AS usuario_id,
     u.correo,
     u.nombre_completo,
@@ -11239,7 +11926,7 @@ CREATE VIEW public.v_configuracion_personal AS
 -- Name: v_denue_contactables; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_denue_contactables AS
+CREATE VIEW public.v_denue_contactables WITH (security_invoker='true') AS
  SELECT r.id AS resultado_id,
     r.busqueda_id,
     r.fuente AS fuente_resultado,
@@ -11288,7 +11975,7 @@ COMMENT ON VIEW public.v_denue_contactables IS 'Resultados de búsquedas DENUE l
 -- Name: v_google_places_contactables; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_google_places_contactables AS
+CREATE VIEW public.v_google_places_contactables WITH (security_invoker='true') AS
  SELECT r.id AS resultado_id,
     r.busqueda_id,
     r.fuente AS fuente_resultado,
@@ -11344,7 +12031,7 @@ COMMENT ON VIEW public.v_google_places_contactables IS 'Resultados de búsquedas
 -- Name: v_resultados_mapa; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_resultados_mapa AS
+CREATE VIEW public.v_resultados_mapa WITH (security_invoker='true') AS
  SELECT id,
     busqueda_id,
     fuente,
@@ -11365,7 +12052,7 @@ CREATE VIEW public.v_resultados_mapa AS
 -- Name: v_resultados_unificados; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_resultados_unificados AS
+CREATE VIEW public.v_resultados_unificados WITH (security_invoker='true') AS
  SELECT r.id,
     r.busqueda_id,
     b.fuente AS fuente_busqueda,
@@ -11389,6 +12076,31 @@ CREATE VIEW public.v_resultados_unificados AS
     r.creado_en
    FROM (public.resultados r
      JOIN public.busquedas b ON ((b.id = r.busqueda_id)));
+
+
+--
+-- Name: ventas_por_producto_mes; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.ventas_por_producto_mes WITH (security_invoker='true') AS
+ SELECT (date_trunc('month'::text, COALESCE(lt.cerrado_en, lti.creado_en)))::date AS mes,
+    lti.catalog_item_id,
+    COALESCE(ci.nombre, lti.titulo) AS item_nombre,
+    lti.moneda,
+    sum(COALESCE(lti.total, lti.subtotal, (lti.cantidad * COALESCE(lti.precio_unitario, (0)::numeric)))) AS total_vendido,
+    sum(COALESCE(lti.cantidad, (0)::numeric)) AS unidades_vendidas,
+    count(DISTINCT lti.lead_tarjeta_id) AS leads_ganados
+   FROM ((public.lead_tarjeta_items lti
+     JOIN public.lead_tarjetas lt ON ((lt.id = lti.lead_tarjeta_id)))
+     LEFT JOIN public.catalog_items ci ON ((ci.id = lti.catalog_item_id)))
+  GROUP BY ((date_trunc('month'::text, COALESCE(lt.cerrado_en, lti.creado_en)))::date), lti.catalog_item_id, COALESCE(ci.nombre, lti.titulo), lti.moneda;
+
+
+--
+-- Name: VIEW ventas_por_producto_mes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.ventas_por_producto_mes IS 'Agregados mensuales de ventas por producto/servicio usando los items cerrados.';
 
 
 --
@@ -12156,6 +12868,54 @@ ALTER TABLE ONLY public.llamadas
 
 
 --
+-- Name: catalog_item_prices catalog_item_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_prices
+    ADD CONSTRAINT catalog_item_prices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_item_tags catalog_item_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_tags
+    ADD CONSTRAINT catalog_item_tags_pkey PRIMARY KEY (item_id, tag_id);
+
+
+--
+-- Name: catalog_items catalog_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_items
+    ADD CONSTRAINT catalog_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_items catalog_items_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_items
+    ADD CONSTRAINT catalog_items_slug_key UNIQUE (slug);
+
+
+--
+-- Name: catalog_tags catalog_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_tags
+    ADD CONSTRAINT catalog_tags_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_tags catalog_tags_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_tags
+    ADD CONSTRAINT catalog_tags_slug_key UNIQUE (slug);
+
+
+--
 -- Name: identidades_canal channel_identities_channel_external_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12324,6 +13084,14 @@ ALTER TABLE ONLY public.eventos_auditoria
 
 
 --
+-- Name: lead_cotizacion_items lead_cotizacion_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_cotizacion_items
+    ADD CONSTRAINT lead_cotizacion_items_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: lead_cotizaciones lead_cotizaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12396,11 +13164,27 @@ ALTER TABLE ONLY public.lead_tableros
 
 
 --
+-- Name: lead_tarjeta_items lead_tarjeta_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjeta_items
+    ADD CONSTRAINT lead_tarjeta_items_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: lead_tarjetas lead_tarjetas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.lead_tarjetas
     ADD CONSTRAINT lead_tarjetas_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: logos logos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.logos
+    ADD CONSTRAINT logos_pkey PRIMARY KEY (id);
 
 
 --
@@ -12481,6 +13265,22 @@ ALTER TABLE ONLY public.prompts
 
 ALTER TABLE ONLY public.puestos
     ADD CONSTRAINT puestos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: quote_templates quote_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quote_templates
+    ADD CONSTRAINT quote_templates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: quote_templates quote_templates_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quote_templates
+    ADD CONSTRAINT quote_templates_slug_key UNIQUE (slug);
 
 
 --
@@ -13114,6 +13914,13 @@ CREATE INDEX calendar_bookings_conversation_idx ON public.calendar_bookings USIN
 
 
 --
+-- Name: calendar_bookings_hold_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX calendar_bookings_hold_id_idx ON public.calendar_bookings USING btree (hold_id);
+
+
+--
 -- Name: calendar_bookings_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13153,6 +13960,27 @@ CREATE INDEX calendar_slot_holds_resource_start_idx ON public.calendar_slot_hold
 --
 
 CREATE INDEX calendar_slot_holds_tarjeta_idx ON public.calendar_slot_holds USING btree (tarjeta_id);
+
+
+--
+-- Name: catalog_item_prices_item_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX catalog_item_prices_item_idx ON public.catalog_item_prices USING btree (item_id, vigente_desde);
+
+
+--
+-- Name: catalog_item_prices_principal_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX catalog_item_prices_principal_idx ON public.catalog_item_prices USING btree (item_id, moneda) WHERE es_principal;
+
+
+--
+-- Name: catalog_items_activo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX catalog_items_activo_idx ON public.catalog_items USING btree (activo, tipo);
 
 
 --
@@ -13457,6 +14285,20 @@ CREATE INDEX ix_resultados_tsv ON public.resultados USING gin (tsv);
 
 
 --
+-- Name: lead_cotizacion_items_catalog_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_cotizacion_items_catalog_idx ON public.lead_cotizacion_items USING btree (catalog_item_id);
+
+
+--
+-- Name: lead_cotizacion_items_cotizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_cotizacion_items_cotizacion_idx ON public.lead_cotizacion_items USING btree (cotizacion_id, orden);
+
+
+--
 -- Name: lead_cotizaciones_enviada_en_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13499,6 +14341,20 @@ CREATE INDEX lead_recordatorios_due_idx ON public.lead_recordatorios USING btree
 
 
 --
+-- Name: lead_tarjeta_items_catalog_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjeta_items_catalog_idx ON public.lead_tarjeta_items USING btree (catalog_item_id);
+
+
+--
+-- Name: lead_tarjeta_items_lead_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjeta_items_lead_idx ON public.lead_tarjeta_items USING btree (lead_tarjeta_id);
+
+
+--
 -- Name: lead_tarjetas_asignado_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13527,6 +14383,13 @@ CREATE INDEX lead_tarjetas_tablero_etapa_idx ON public.lead_tarjetas USING btree
 
 
 --
+-- Name: logos_created_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX logos_created_idx ON public.logos USING btree (created_at DESC);
+
+
+--
 -- Name: prompt_bindings_agente_activo_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13534,17 +14397,17 @@ CREATE INDEX prompt_bindings_agente_activo_idx ON public.prompt_bindings USING b
 
 
 --
+-- Name: quote_templates_active_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX quote_templates_active_idx ON public.quote_templates USING btree (is_active, updated_at DESC);
+
+
+--
 -- Name: uniq_ejecuciones_response_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uniq_ejecuciones_response_id ON public.ejecuciones_asistente USING btree (response_id) WHERE (response_id IS NOT NULL);
-
-
---
--- Name: uniq_ejecuciones_run_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uniq_ejecuciones_run_id ON public.ejecuciones_asistente USING btree (response_id) WHERE (response_id IS NOT NULL);
 
 
 --
@@ -13856,6 +14719,20 @@ CREATE TRIGGER calendar_slot_holds_touch_updated_at BEFORE UPDATE ON public.cale
 
 
 --
+-- Name: catalog_item_prices catalog_item_prices_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER catalog_item_prices_touch_updated_at BEFORE UPDATE ON public.catalog_item_prices FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: catalog_items catalog_items_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER catalog_items_touch_updated_at BEFORE UPDATE ON public.catalog_items FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
 -- Name: cliente_documentos cliente_documentos_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -13912,6 +14789,13 @@ CREATE TRIGGER conversaciones_auto_tarjeta AFTER INSERT ON public.conversaciones
 
 
 --
+-- Name: lead_cotizacion_items lead_cotizacion_items_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_cotizacion_items_touch_updated_at BEFORE UPDATE ON public.lead_cotizacion_items FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
 -- Name: lead_cotizaciones lead_cotizaciones_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -13937,6 +14821,13 @@ CREATE TRIGGER lead_recordatorios_touch_updated_at BEFORE UPDATE ON public.lead_
 --
 
 CREATE TRIGGER lead_tableros_touch_updated_at BEFORE UPDATE ON public.lead_tableros FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: lead_tarjeta_items lead_tarjeta_items_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER lead_tarjeta_items_touch_updated_at BEFORE UPDATE ON public.lead_tarjeta_items FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -13972,6 +14863,20 @@ CREATE TRIGGER lead_tarjetas_sync_cliente AFTER INSERT OR UPDATE ON public.lead_
 --
 
 CREATE TRIGGER lead_tarjetas_sync_from_insights AFTER INSERT OR UPDATE ON public.conversaciones_insights FOR EACH ROW EXECUTE FUNCTION public.tg_sync_lead_score_from_insights();
+
+
+--
+-- Name: logos logos_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER logos_touch_updated_at BEFORE UPDATE ON public.logos FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+--
+-- Name: quote_templates quote_templates_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER quote_templates_touch_updated_at BEFORE UPDATE ON public.quote_templates FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
 
 
 --
@@ -14273,6 +15178,30 @@ ALTER TABLE ONLY public.llamadas
 
 
 --
+-- Name: catalog_item_prices catalog_item_prices_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_prices
+    ADD CONSTRAINT catalog_item_prices_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalog_items(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalog_item_tags catalog_item_tags_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_tags
+    ADD CONSTRAINT catalog_item_tags_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalog_items(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalog_item_tags catalog_item_tags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_tags
+    ADD CONSTRAINT catalog_item_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.catalog_tags(id) ON DELETE CASCADE;
+
+
+--
 -- Name: identidades_canal channel_identities_contact_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -14473,6 +15402,22 @@ ALTER TABLE ONLY public.eventos_auditoria
 
 
 --
+-- Name: lead_cotizacion_items lead_cotizacion_items_catalog_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_cotizacion_items
+    ADD CONSTRAINT lead_cotizacion_items_catalog_item_id_fkey FOREIGN KEY (catalog_item_id) REFERENCES public.catalog_items(id);
+
+
+--
+-- Name: lead_cotizacion_items lead_cotizacion_items_cotizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_cotizacion_items
+    ADD CONSTRAINT lead_cotizacion_items_cotizacion_id_fkey FOREIGN KEY (cotizacion_id) REFERENCES public.lead_cotizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_cotizaciones lead_cotizaciones_enviada_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -14561,6 +15506,30 @@ ALTER TABLE ONLY public.lead_tableros
 
 
 --
+-- Name: lead_tarjeta_items lead_tarjeta_items_catalog_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjeta_items
+    ADD CONSTRAINT lead_tarjeta_items_catalog_item_id_fkey FOREIGN KEY (catalog_item_id) REFERENCES public.catalog_items(id);
+
+
+--
+-- Name: lead_tarjeta_items lead_tarjeta_items_cotizacion_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjeta_items
+    ADD CONSTRAINT lead_tarjeta_items_cotizacion_item_id_fkey FOREIGN KEY (cotizacion_item_id) REFERENCES public.lead_cotizacion_items(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tarjeta_items lead_tarjeta_items_lead_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjeta_items
+    ADD CONSTRAINT lead_tarjeta_items_lead_tarjeta_id_fkey FOREIGN KEY (lead_tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_tarjetas lead_tarjetas_asignado_a_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -14609,6 +15578,14 @@ ALTER TABLE ONLY public.lead_tarjetas
 
 
 --
+-- Name: logos logos_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.logos
+    ADD CONSTRAINT logos_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.usuarios(id);
+
+
+--
 -- Name: mensajes messages_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -14654,6 +15631,14 @@ ALTER TABLE ONLY public.prompt_versions
 
 ALTER TABLE ONLY public.puestos
     ADD CONSTRAINT puestos_departamento_id_fkey FOREIGN KEY (departamento_id) REFERENCES public.departamentos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: quote_templates quote_templates_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quote_templates
+    ADD CONSTRAINT quote_templates_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.usuarios(id);
 
 
 --
@@ -14887,24 +15872,44 @@ ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.adjuntos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: adjuntos adjuntos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: adjuntos adjuntos_delete_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY adjuntos_admin_todo ON public.adjuntos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: adjuntos adjuntos_insert_visible; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY adjuntos_insert_visible ON public.adjuntos FOR INSERT TO authenticated WITH CHECK (public.puede_ver_mensaje(mensaje_id));
+CREATE POLICY adjuntos_delete_admin ON public.adjuntos FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
--- Name: adjuntos adjuntos_select_visible; Type: POLICY; Schema: public; Owner: -
+-- Name: adjuntos adjuntos_insert_authenticated; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY adjuntos_select_visible ON public.adjuntos FOR SELECT TO authenticated USING (public.puede_ver_mensaje(mensaje_id));
+CREATE POLICY adjuntos_insert_authenticated ON public.adjuntos FOR INSERT TO authenticated WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id)));
+
+
+--
+-- Name: adjuntos adjuntos_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY adjuntos_select_authenticated ON public.adjuntos FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id)));
+
+
+--
+-- Name: adjuntos adjuntos_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY adjuntos_update_admin ON public.adjuntos FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: agentes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.agentes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: agentes agentes_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY agentes_select_authenticated ON public.agentes FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -14914,27 +15919,193 @@ CREATE POLICY adjuntos_select_visible ON public.adjuntos FOR SELECT TO authentic
 ALTER TABLE public.busquedas ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: calendar_availability_patterns; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.calendar_availability_patterns ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: calendar_availability_patterns calendar_availability_patterns_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY calendar_availability_patterns_select_authenticated ON public.calendar_availability_patterns FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: calendar_bookings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.calendar_bookings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: calendar_bookings calendar_bookings_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY calendar_bookings_select_authenticated ON public.calendar_bookings FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: calendar_exceptions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.calendar_exceptions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: calendar_exceptions calendar_exceptions_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY calendar_exceptions_select_authenticated ON public.calendar_exceptions FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: calendar_resources; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.calendar_resources ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: calendar_resources calendar_resources_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY calendar_resources_select_authenticated ON public.calendar_resources FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: calendar_slot_holds; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.calendar_slot_holds ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: calendar_slot_holds calendar_slot_holds_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY calendar_slot_holds_select_authenticated ON public.calendar_slot_holds FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: catalog_item_prices; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.catalog_item_prices ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalog_item_prices catalog_item_prices_delete_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_item_prices_delete_admin ON public.catalog_item_prices FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_item_prices catalog_item_prices_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_item_prices_insert_admin ON public.catalog_item_prices FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_item_prices catalog_item_prices_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_item_prices_select ON public.catalog_item_prices FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: catalog_item_prices catalog_item_prices_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_item_prices_update_admin ON public.catalog_item_prices FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_item_tags; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.catalog_item_tags ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalog_item_tags catalog_item_tags_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_item_tags_select ON public.catalog_item_tags FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: catalog_item_tags catalog_item_tags_write_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_item_tags_write_admin ON public.catalog_item_tags TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.catalog_items ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalog_items catalog_items_delete_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_items_delete_admin ON public.catalog_items FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_items catalog_items_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_items_insert_admin ON public.catalog_items FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_items catalog_items_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_items_select ON public.catalog_items FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: catalog_items catalog_items_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_items_update_admin ON public.catalog_items FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: catalog_tags; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.catalog_tags ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalog_tags catalog_tags_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_tags_select ON public.catalog_tags FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: catalog_tags catalog_tags_write_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_tags_write_admin ON public.catalog_tags TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
 -- Name: cliente_documentos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.cliente_documentos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: cliente_documentos cliente_documentos_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: cliente_documentos cliente_documentos_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cliente_documentos_admin_all ON public.cliente_documentos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: cliente_documentos cliente_documentos_member_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY cliente_documentos_member_all ON public.cliente_documentos TO authenticated USING ((EXISTS ( SELECT 1
+CREATE POLICY cliente_documentos_access ON public.cliente_documentos TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
    FROM public.clientes c
-  WHERE ((c.id = cliente_documentos.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((c.id = cliente_documentos.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id)))))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
    FROM public.clientes c
-  WHERE ((c.id = cliente_documentos.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id)))));
+  WHERE ((c.id = cliente_documentos.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id))))));
 
 
 --
@@ -14944,10 +16115,21 @@ CREATE POLICY cliente_documentos_member_all ON public.cliente_documentos TO auth
 ALTER TABLE public.cliente_portal_tokens ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: cliente_portal_tokens cliente_portal_tokens_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: cliente_portal_tokens cliente_portal_tokens_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cliente_portal_tokens_admin_all ON public.cliente_portal_tokens TO authenticated USING ((EXISTS ( SELECT 1
+CREATE POLICY cliente_portal_tokens_access ON public.cliente_portal_tokens TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
+   FROM public.clientes c
+  WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id)))))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
+   FROM public.clientes c
+  WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id))))));
+
+
+--
+-- Name: cliente_portal_tokens cliente_portal_tokens_member_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cliente_portal_tokens_member_all ON public.cliente_portal_tokens TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.clientes c
   WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM public.clientes c
@@ -14961,21 +16143,14 @@ CREATE POLICY cliente_portal_tokens_admin_all ON public.cliente_portal_tokens TO
 ALTER TABLE public.cliente_responsables ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: cliente_responsables cliente_responsables_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: cliente_responsables cliente_responsables_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cliente_responsables_admin_all ON public.cliente_responsables USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: cliente_responsables cliente_responsables_member_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY cliente_responsables_member_all ON public.cliente_responsables TO authenticated USING ((EXISTS ( SELECT 1
+CREATE POLICY cliente_responsables_access ON public.cliente_responsables TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
    FROM public.clientes c
-  WHERE ((c.id = cliente_responsables.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((c.id = cliente_responsables.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id)))))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
    FROM public.clientes c
-  WHERE ((c.id = cliente_responsables.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id)))));
+  WHERE ((c.id = cliente_responsables.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id))))));
 
 
 --
@@ -14985,17 +16160,10 @@ CREATE POLICY cliente_responsables_member_all ON public.cliente_responsables TO 
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: clientes clientes_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: clientes clientes_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY clientes_admin_all ON public.clientes USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: clientes clientes_member_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY clientes_member_all ON public.clientes TO authenticated USING (((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id))) WITH CHECK (((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id)));
+CREATE POLICY clientes_access ON public.clientes TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR ((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id)))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR ((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id))));
 
 
 --
@@ -15005,17 +16173,17 @@ CREATE POLICY clientes_member_all ON public.clientes TO authenticated USING (((l
 ALTER TABLE public.contactos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: contactos contactos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: contactos contactos_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY contactos_admin_todo ON public.contactos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY contactos_admin_all ON public.contactos TO authenticated USING (( SELECT public.es_admin(auth.uid()) AS es_admin)) WITH CHECK (( SELECT public.es_admin(auth.uid()) AS es_admin));
 
 
 --
--- Name: contactos contactos_propietario_crud; Type: POLICY; Schema: public; Owner: -
+-- Name: contactos contactos_propietario_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY contactos_propietario_crud ON public.contactos TO authenticated USING ((propietario_usuario_id = auth.uid())) WITH CHECK ((propietario_usuario_id = auth.uid()));
+CREATE POLICY contactos_propietario_all ON public.contactos TO authenticated USING ((propietario_usuario_id = ( SELECT auth.uid() AS uid))) WITH CHECK ((propietario_usuario_id = ( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15025,10 +16193,10 @@ CREATE POLICY contactos_propietario_crud ON public.contactos TO authenticated US
 ALTER TABLE public.conversaciones ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: conversaciones conversaciones_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: conversaciones conversaciones_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY conversaciones_admin_todo ON public.conversaciones USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY conversaciones_admin_all ON public.conversaciones TO authenticated USING (( SELECT public.es_admin(auth.uid()) AS es_admin)) WITH CHECK (( SELECT public.es_admin(auth.uid()) AS es_admin));
 
 
 --
@@ -15051,10 +16219,10 @@ CREATE POLICY conversaciones_controles_service_role ON public.conversaciones_con
 ALTER TABLE public.conversaciones_insights ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: conversaciones_insights conversaciones_insights_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: conversaciones_insights conversaciones_insights_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY conversaciones_insights_admin_todo ON public.conversaciones_insights USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY conversaciones_insights_admin ON public.conversaciones_insights TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15070,7 +16238,7 @@ CREATE POLICY conversaciones_miembro_delete ON public.conversaciones FOR DELETE 
 
 CREATE POLICY conversaciones_miembro_insert ON public.conversaciones FOR INSERT TO authenticated WITH CHECK (((EXISTS ( SELECT 1
    FROM public.contactos ct
-  WHERE ((ct.id = conversaciones.contacto_id) AND (ct.propietario_usuario_id = auth.uid())))) OR (asignado_a_usuario_id = auth.uid())));
+  WHERE ((ct.id = conversaciones.contacto_id) AND (ct.propietario_usuario_id = ( SELECT auth.uid() AS uid))))) OR (asignado_a_usuario_id = ( SELECT auth.uid() AS uid))));
 
 
 --
@@ -15086,7 +16254,20 @@ CREATE POLICY conversaciones_miembro_select ON public.conversaciones FOR SELECT 
 
 CREATE POLICY conversaciones_miembro_update ON public.conversaciones FOR UPDATE TO authenticated USING (public.puede_ver_conversacion(id)) WITH CHECK (((EXISTS ( SELECT 1
    FROM public.contactos ct
-  WHERE ((ct.id = conversaciones.contacto_id) AND (ct.propietario_usuario_id = auth.uid())))) OR (asignado_a_usuario_id = auth.uid())));
+  WHERE ((ct.id = conversaciones.contacto_id) AND (ct.propietario_usuario_id = ( SELECT auth.uid() AS uid))))) OR (asignado_a_usuario_id = ( SELECT auth.uid() AS uid))));
+
+
+--
+-- Name: custom_fields; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.custom_fields ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: custom_fields custom_fields_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY custom_fields_select_authenticated ON public.custom_fields FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -15096,10 +16277,10 @@ CREATE POLICY conversaciones_miembro_update ON public.conversaciones FOR UPDATE 
 ALTER TABLE public.departamentos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: departamentos departamentos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: departamentos departamentos_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY departamentos_admin_todo ON public.departamentos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY departamentos_admin ON public.departamentos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15109,10 +16290,10 @@ CREATE POLICY departamentos_admin_todo ON public.departamentos USING (public.es_
 ALTER TABLE public.ejecuciones_asistente ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: ejecuciones_asistente ejecuciones_asistente_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: ejecuciones_asistente ejecuciones_asistente_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ejecuciones_asistente_admin_todo ON public.ejecuciones_asistente USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY ejecuciones_asistente_admin ON public.ejecuciones_asistente TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15122,17 +16303,31 @@ CREATE POLICY ejecuciones_asistente_admin_todo ON public.ejecuciones_asistente U
 ALTER TABLE public.empleados ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: empleados empleados_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: empleados empleados_delete_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY empleados_admin_todo ON public.empleados USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY empleados_delete_admin ON public.empleados FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
--- Name: empleados empleados_self_read; Type: POLICY; Schema: public; Owner: -
+-- Name: empleados empleados_insert_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY empleados_self_read ON public.empleados FOR SELECT USING (((usuario_id = auth.uid()) OR public.es_admin(auth.uid())));
+CREATE POLICY empleados_insert_admin ON public.empleados FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: empleados empleados_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY empleados_select_authenticated ON public.empleados FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (usuario_id = ( SELECT auth.uid() AS uid))));
+
+
+--
+-- Name: empleados empleados_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY empleados_update_admin ON public.empleados FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15142,38 +16337,31 @@ CREATE POLICY empleados_self_read ON public.empleados FOR SELECT USING (((usuari
 ALTER TABLE public.eventos_auditoria ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: eventos_auditoria eventos_auditoria_actor_delete; Type: POLICY; Schema: public; Owner: -
+-- Name: eventos_auditoria eventos_auditoria_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY eventos_auditoria_actor_delete ON public.eventos_auditoria FOR DELETE TO authenticated USING ((actor_usuario_id = auth.uid()));
-
-
---
--- Name: eventos_auditoria eventos_auditoria_actor_modify; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY eventos_auditoria_actor_modify ON public.eventos_auditoria FOR INSERT TO authenticated WITH CHECK ((actor_usuario_id = auth.uid()));
+CREATE POLICY eventos_auditoria_delete ON public.eventos_auditoria FOR DELETE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (actor_usuario_id = ( SELECT auth.uid() AS uid))));
 
 
 --
--- Name: eventos_auditoria eventos_auditoria_actor_select; Type: POLICY; Schema: public; Owner: -
+-- Name: eventos_auditoria eventos_auditoria_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY eventos_auditoria_actor_select ON public.eventos_auditoria FOR SELECT TO authenticated USING ((actor_usuario_id = auth.uid()));
-
-
---
--- Name: eventos_auditoria eventos_auditoria_actor_update; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY eventos_auditoria_actor_update ON public.eventos_auditoria FOR UPDATE TO authenticated USING ((actor_usuario_id = auth.uid())) WITH CHECK ((actor_usuario_id = auth.uid()));
+CREATE POLICY eventos_auditoria_insert ON public.eventos_auditoria FOR INSERT TO authenticated WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (actor_usuario_id = ( SELECT auth.uid() AS uid))));
 
 
 --
--- Name: eventos_auditoria eventos_auditoria_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: eventos_auditoria eventos_auditoria_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY eventos_auditoria_admin_todo ON public.eventos_auditoria USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY eventos_auditoria_select ON public.eventos_auditoria FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (actor_usuario_id = ( SELECT auth.uid() AS uid))));
+
+
+--
+-- Name: eventos_auditoria eventos_auditoria_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY eventos_auditoria_update ON public.eventos_auditoria FOR UPDATE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (actor_usuario_id = ( SELECT auth.uid() AS uid)))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (actor_usuario_id = ( SELECT auth.uid() AS uid))));
 
 
 --
@@ -15183,38 +16371,31 @@ CREATE POLICY eventos_auditoria_admin_todo ON public.eventos_auditoria USING (pu
 ALTER TABLE public.eventos_entrega ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: eventos_entrega eventos_entrega_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: eventos_entrega eventos_entrega_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY eventos_entrega_admin_todo ON public.eventos_entrega USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: eventos_entrega eventos_entrega_mensaje_visible_delete; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY eventos_entrega_mensaje_visible_delete ON public.eventos_entrega FOR DELETE TO authenticated USING (public.puede_ver_mensaje(mensaje_id));
+CREATE POLICY eventos_entrega_delete ON public.eventos_entrega FOR DELETE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id)));
 
 
 --
--- Name: eventos_entrega eventos_entrega_mensaje_visible_modify; Type: POLICY; Schema: public; Owner: -
+-- Name: eventos_entrega eventos_entrega_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY eventos_entrega_mensaje_visible_modify ON public.eventos_entrega FOR INSERT TO authenticated WITH CHECK (public.puede_ver_mensaje(mensaje_id));
-
-
---
--- Name: eventos_entrega eventos_entrega_mensaje_visible_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY eventos_entrega_mensaje_visible_select ON public.eventos_entrega FOR SELECT TO authenticated USING (public.puede_ver_mensaje(mensaje_id));
+CREATE POLICY eventos_entrega_insert ON public.eventos_entrega FOR INSERT TO authenticated WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id)));
 
 
 --
--- Name: eventos_entrega eventos_entrega_mensaje_visible_update; Type: POLICY; Schema: public; Owner: -
+-- Name: eventos_entrega eventos_entrega_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY eventos_entrega_mensaje_visible_update ON public.eventos_entrega FOR UPDATE TO authenticated USING (public.puede_ver_mensaje(mensaje_id)) WITH CHECK (public.puede_ver_mensaje(mensaje_id));
+CREATE POLICY eventos_entrega_select ON public.eventos_entrega FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id)));
+
+
+--
+-- Name: eventos_entrega eventos_entrega_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY eventos_entrega_update ON public.eventos_entrega FOR UPDATE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(mensaje_id)));
 
 
 --
@@ -15224,10 +16405,32 @@ CREATE POLICY eventos_entrega_mensaje_visible_update ON public.eventos_entrega F
 ALTER TABLE public.identidades_canal ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: identidades_canal identidades_canal_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: identidades_canal identidades_canal_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY identidades_canal_admin_todo ON public.identidades_canal USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY identidades_canal_admin ON public.identidades_canal TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: lead_cotizacion_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_cotizacion_items ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_cotizacion_items lead_cotizacion_items_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_cotizacion_items_select ON public.lead_cotizacion_items FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
+   FROM public.lead_cotizaciones lc
+  WHERE ((lc.id = lead_cotizacion_items.cotizacion_id) AND public.puede_ver_lead(lc.tarjeta_id))))));
+
+
+--
+-- Name: lead_cotizacion_items lead_cotizacion_items_write_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_cotizacion_items_write_admin ON public.lead_cotizacion_items TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15237,17 +16440,31 @@ CREATE POLICY identidades_canal_admin_todo ON public.identidades_canal USING (pu
 ALTER TABLE public.lead_cotizaciones ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_cotizaciones lead_cotizaciones_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_cotizaciones lead_cotizaciones_delete_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_cotizaciones_admin_all ON public.lead_cotizaciones USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY lead_cotizaciones_delete_admin ON public.lead_cotizaciones FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: lead_cotizaciones lead_cotizaciones_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_cotizaciones_insert_admin ON public.lead_cotizaciones FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
 -- Name: lead_cotizaciones lead_cotizaciones_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_cotizaciones_select ON public.lead_cotizaciones FOR SELECT TO authenticated USING (public.puede_ver_lead(tarjeta_id));
+CREATE POLICY lead_cotizaciones_select ON public.lead_cotizaciones FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id)));
+
+
+--
+-- Name: lead_cotizaciones lead_cotizaciones_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_cotizaciones_update_admin ON public.lead_cotizaciones FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15257,17 +16474,17 @@ CREATE POLICY lead_cotizaciones_select ON public.lead_cotizaciones FOR SELECT TO
 ALTER TABLE public.lead_etapas ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_etapas lead_etapas_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_etapas lead_etapas_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_etapas_admin_all ON public.lead_etapas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY lead_etapas_access ON public.lead_etapas TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(tablero_id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(tablero_id)));
 
 
 --
--- Name: lead_etapas lead_etapas_select; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_etapas lead_etapas_member_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_etapas_select ON public.lead_etapas FOR SELECT TO authenticated USING (public.puede_ver_tablero(tablero_id));
+CREATE POLICY lead_etapas_member_all ON public.lead_etapas TO authenticated USING (public.puede_ver_tablero(tablero_id)) WITH CHECK (public.puede_ver_tablero(tablero_id));
 
 
 --
@@ -15277,17 +16494,31 @@ CREATE POLICY lead_etapas_select ON public.lead_etapas FOR SELECT TO authenticat
 ALTER TABLE public.lead_movimientos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_movimientos lead_movimientos_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_movimientos lead_movimientos_delete_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_movimientos_admin_all ON public.lead_movimientos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY lead_movimientos_delete_admin ON public.lead_movimientos FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: lead_movimientos lead_movimientos_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_movimientos_insert_admin ON public.lead_movimientos FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
 -- Name: lead_movimientos lead_movimientos_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_movimientos_select ON public.lead_movimientos FOR SELECT TO authenticated USING (public.puede_ver_lead(tarjeta_id));
+CREATE POLICY lead_movimientos_select ON public.lead_movimientos FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id)));
+
+
+--
+-- Name: lead_movimientos lead_movimientos_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_movimientos_update_admin ON public.lead_movimientos FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15297,17 +16528,10 @@ CREATE POLICY lead_movimientos_select ON public.lead_movimientos FOR SELECT TO a
 ALTER TABLE public.lead_recordatorios ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_recordatorios lead_recordatorios_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_recordatorios lead_recordatorios_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_recordatorios_admin_all ON public.lead_recordatorios USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: lead_recordatorios lead_recordatorios_crud; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_recordatorios_crud ON public.lead_recordatorios TO authenticated USING (public.puede_ver_lead(tarjeta_id)) WITH CHECK (public.puede_ver_lead(tarjeta_id));
+CREATE POLICY lead_recordatorios_access ON public.lead_recordatorios TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id)));
 
 
 --
@@ -15317,17 +16541,37 @@ CREATE POLICY lead_recordatorios_crud ON public.lead_recordatorios TO authentica
 ALTER TABLE public.lead_tableros ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_tableros lead_tableros_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tableros lead_tableros_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tableros_admin_all ON public.lead_tableros USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY lead_tableros_access ON public.lead_tableros TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(id)));
 
 
 --
--- Name: lead_tableros lead_tableros_select_default; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tableros lead_tableros_member_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tableros_select_default ON public.lead_tableros FOR SELECT TO authenticated USING (public.puede_ver_tablero(id));
+CREATE POLICY lead_tableros_member_all ON public.lead_tableros TO authenticated USING (public.puede_ver_tablero(id)) WITH CHECK (public.puede_ver_tablero(id));
+
+
+--
+-- Name: lead_tarjeta_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_tarjeta_items ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_tarjeta_items lead_tarjeta_items_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjeta_items_select ON public.lead_tarjeta_items FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(lead_tarjeta_id)));
+
+
+--
+-- Name: lead_tarjeta_items lead_tarjeta_items_write_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjeta_items_write_admin ON public.lead_tarjeta_items TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15337,40 +16581,40 @@ CREATE POLICY lead_tableros_select_default ON public.lead_tableros FOR SELECT TO
 ALTER TABLE public.lead_tarjetas ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_tarjetas lead_tarjetas_admin_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tarjetas lead_tarjetas_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_admin_all ON public.lead_tarjetas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: lead_tarjetas lead_tarjetas_member_delete; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_tarjetas_member_delete ON public.lead_tarjetas FOR DELETE TO authenticated USING (public.puede_ver_lead(id));
+CREATE POLICY lead_tarjetas_delete ON public.lead_tarjetas FOR DELETE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(id)));
 
 
 --
--- Name: lead_tarjetas lead_tarjetas_member_insert; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tarjetas lead_tarjetas_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_member_insert ON public.lead_tarjetas FOR INSERT TO authenticated WITH CHECK ((public.es_admin(auth.uid()) OR (auth.uid() = propietario_usuario_id) OR (auth.uid() = asignado_a_usuario_id) OR (EXISTS ( SELECT 1
+CREATE POLICY lead_tarjetas_insert ON public.lead_tarjetas FOR INSERT TO authenticated WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (( SELECT auth.uid() AS uid) = propietario_usuario_id) OR (( SELECT auth.uid() AS uid) = asignado_a_usuario_id) OR (EXISTS ( SELECT 1
    FROM public.contactos ct
-  WHERE ((ct.id = lead_tarjetas.contacto_id) AND (ct.propietario_usuario_id = auth.uid()))))));
+  WHERE ((ct.id = lead_tarjetas.contacto_id) AND (ct.propietario_usuario_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
--- Name: lead_tarjetas lead_tarjetas_member_select; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tarjetas lead_tarjetas_member_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_member_select ON public.lead_tarjetas FOR SELECT TO authenticated USING (public.puede_ver_lead(id));
+CREATE POLICY lead_tarjetas_member_all ON public.lead_tarjetas TO authenticated USING (public.puede_ver_lead(id)) WITH CHECK (public.puede_ver_lead(id));
 
 
 --
--- Name: lead_tarjetas lead_tarjetas_member_update; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tarjetas lead_tarjetas_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_member_update ON public.lead_tarjetas FOR UPDATE TO authenticated USING (public.puede_ver_lead(id)) WITH CHECK (public.puede_ver_lead(id));
+CREATE POLICY lead_tarjetas_select ON public.lead_tarjetas FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(id)));
+
+
+--
+-- Name: lead_tarjetas lead_tarjetas_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tarjetas_update ON public.lead_tarjetas FOR UPDATE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(id))) WITH CHECK ((public.puede_ver_lead(id) OR public.es_admin(( SELECT auth.uid() AS uid))));
 
 
 --
@@ -15380,10 +16624,44 @@ CREATE POLICY lead_tarjetas_member_update ON public.lead_tarjetas FOR UPDATE TO 
 ALTER TABLE public.llamadas ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: llamadas llamadas_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: llamadas llamadas_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY llamadas_admin_todo ON public.llamadas USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY llamadas_admin ON public.llamadas TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: logos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.logos ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: logos logos_delete_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY logos_delete_admin ON public.logos FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: logos logos_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY logos_insert_admin ON public.logos FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: logos logos_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY logos_select ON public.logos FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: logos logos_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY logos_update_admin ON public.logos FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15393,38 +16671,31 @@ CREATE POLICY llamadas_admin_todo ON public.llamadas USING (public.es_admin(auth
 ALTER TABLE public.mensajes ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: mensajes mensajes_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: mensajes mensajes_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY mensajes_admin_todo ON public.mensajes USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: mensajes mensajes_conversacion_visible_delete; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY mensajes_conversacion_visible_delete ON public.mensajes FOR DELETE TO authenticated USING (public.puede_ver_mensaje(id));
+CREATE POLICY mensajes_delete ON public.mensajes FOR DELETE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(id)));
 
 
 --
--- Name: mensajes mensajes_conversacion_visible_modify; Type: POLICY; Schema: public; Owner: -
+-- Name: mensajes mensajes_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY mensajes_conversacion_visible_modify ON public.mensajes FOR INSERT TO authenticated WITH CHECK (public.puede_ver_conversacion(conversacion_id));
-
-
---
--- Name: mensajes mensajes_conversacion_visible_select; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY mensajes_conversacion_visible_select ON public.mensajes FOR SELECT TO authenticated USING (public.puede_ver_mensaje(id));
+CREATE POLICY mensajes_insert ON public.mensajes FOR INSERT TO authenticated WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_conversacion(conversacion_id)));
 
 
 --
--- Name: mensajes mensajes_conversacion_visible_update; Type: POLICY; Schema: public; Owner: -
+-- Name: mensajes mensajes_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY mensajes_conversacion_visible_update ON public.mensajes FOR UPDATE TO authenticated USING (public.puede_ver_mensaje(id)) WITH CHECK (public.puede_ver_conversacion(conversacion_id));
+CREATE POLICY mensajes_select ON public.mensajes FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(id)));
+
+
+--
+-- Name: mensajes mensajes_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY mensajes_update ON public.mensajes FOR UPDATE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_mensaje(id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_conversacion(conversacion_id)));
 
 
 --
@@ -15456,16 +16727,81 @@ CREATE POLICY p_select_resultados ON public.resultados FOR SELECT TO authenticat
 
 
 --
+-- Name: panel_calendar_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.panel_calendar_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: panel_calendar_settings panel_calendar_settings_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY panel_calendar_settings_select_authenticated ON public.panel_calendar_settings FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: panel_email_templates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.panel_email_templates ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: panel_email_templates panel_email_templates_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY panel_email_templates_select_authenticated ON public.panel_email_templates FOR SELECT TO authenticated USING (true);
+
+
+--
 -- Name: permisos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.permisos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: permisos permisos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: permisos permisos_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY permisos_admin_todo ON public.permisos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY permisos_admin ON public.permisos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: prompt_bindings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.prompt_bindings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: prompt_bindings prompt_bindings_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY prompt_bindings_select_authenticated ON public.prompt_bindings FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: prompt_versions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.prompt_versions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: prompt_versions prompt_versions_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY prompt_versions_select_authenticated ON public.prompt_versions FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: prompts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.prompts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: prompts prompts_select_authenticated; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY prompts_select_authenticated ON public.prompts FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -15475,10 +16811,37 @@ CREATE POLICY permisos_admin_todo ON public.permisos USING (public.es_admin(auth
 ALTER TABLE public.puestos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: puestos puestos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: puestos puestos_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY puestos_admin_todo ON public.puestos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY puestos_admin ON public.puestos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: quote_templates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.quote_templates ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: quote_templates quote_templates_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY quote_templates_insert_admin ON public.quote_templates FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: quote_templates quote_templates_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY quote_templates_select ON public.quote_templates FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: quote_templates quote_templates_update_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY quote_templates_update_admin ON public.quote_templates FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15494,10 +16857,10 @@ ALTER TABLE public.resultados ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: roles roles_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: roles roles_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY roles_admin_todo ON public.roles USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY roles_admin ON public.roles TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15507,10 +16870,10 @@ CREATE POLICY roles_admin_todo ON public.roles USING (public.es_admin(auth.uid()
 ALTER TABLE public.roles_permisos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: roles_permisos roles_permisos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: roles_permisos roles_permisos_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY roles_permisos_admin_todo ON public.roles_permisos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY roles_permisos_admin ON public.roles_permisos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15520,10 +16883,10 @@ CREATE POLICY roles_permisos_admin_todo ON public.roles_permisos USING (public.e
 ALTER TABLE public.secretos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: secretos secretos_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: secretos secretos_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY secretos_admin_todo ON public.secretos USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY secretos_admin ON public.secretos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15533,10 +16896,17 @@ CREATE POLICY secretos_admin_todo ON public.secretos USING (public.es_admin(auth
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: usuarios usuarios_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: usuarios usuarios_delete_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY usuarios_admin_todo ON public.usuarios USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY usuarios_delete_admin ON public.usuarios FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: usuarios usuarios_insert_admin; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY usuarios_insert_admin ON public.usuarios FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15546,24 +16916,24 @@ CREATE POLICY usuarios_admin_todo ON public.usuarios USING (public.es_admin(auth
 ALTER TABLE public.usuarios_roles ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: usuarios_roles usuarios_roles_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: usuarios_roles usuarios_roles_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY usuarios_roles_admin_todo ON public.usuarios_roles USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
-
-
---
--- Name: usuarios usuarios_self_read; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY usuarios_self_read ON public.usuarios FOR SELECT USING (((id = auth.uid()) OR public.es_admin(auth.uid())));
+CREATE POLICY usuarios_roles_admin ON public.usuarios_roles TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
--- Name: usuarios usuarios_self_update; Type: POLICY; Schema: public; Owner: -
+-- Name: usuarios usuarios_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY usuarios_self_update ON public.usuarios FOR UPDATE USING (((id = auth.uid()) OR public.es_admin(auth.uid()))) WITH CHECK (((id = auth.uid()) OR public.es_admin(auth.uid())));
+CREATE POLICY usuarios_select ON public.usuarios FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (id = ( SELECT auth.uid() AS uid))));
+
+
+--
+-- Name: usuarios usuarios_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY usuarios_update ON public.usuarios FOR UPDATE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (id = ( SELECT auth.uid() AS uid)))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (id = ( SELECT auth.uid() AS uid))));
 
 
 --
@@ -15599,10 +16969,10 @@ CREATE POLICY webchat_visitantes_service_role ON public.webchat_visitantes TO se
 ALTER TABLE public.webhooks_entrantes ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: webhooks_entrantes webhooks_entrantes_admin_todo; Type: POLICY; Schema: public; Owner: -
+-- Name: webhooks_entrantes webhooks_entrantes_admin; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY webhooks_entrantes_admin_todo ON public.webhooks_entrantes USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+CREATE POLICY webhooks_entrantes_admin ON public.webhooks_entrantes TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
 
 
 --
@@ -15742,5 +17112,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict bYPHj5PPVzeCsOr7VybCdyo8y46ToIiL1CBOdZOLYC0kyUp7K6ZmVkufv76YGMW
+\unrestrict rGwYBHJOUyuFzLgoP0VaDTJ6jBx8LquhTqocrEafE5lXDy2vig6QNw5LvIIfsri
 

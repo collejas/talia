@@ -55,10 +55,41 @@ poetry run uvicorn app.main:app --reload --port 8004
 
 ## hacer un respaldo
 
+Usa el script `backend/scripts/backup_db.py`, que ya carga `backend/.env` o `.env` para recuperar `DATABASE_URL`. Cada corrida crea una carpeta `backups/<prefijo>_<timestamp>/` con los archivos generados.
+
+- Respaldo completo (datos + esquema) **y** roles/permisos:
+  ```bash
+  cd ~/talia
+  poetry run python backend/scripts/backup_db.py --output-dir backups
+  ```
+- Sólo dump completo y de esquema (sin roles globales):
+  ```bash
+  cd ~/talia
+  poetry run python backend/scripts/backup_db.py --output-dir backups --no-globals
+  ```
+- Sólo roles/permisos globales (se creará también un `.sql` de esquema en la misma carpeta, puedes ignorarlo si no lo necesitas):
+  ```bash
+  cd ~/talia
+  poetry run python backend/scripts/backup_db.py --mode schema --globals --output-dir backups
+  ```
+- Sólo dump completo:
+  ```bash
+  cd ~/talia
+  poetry run python backend/scripts/backup_db.py --mode full --no-globals --output-dir backups
+  ```
+
+Dentro de cada carpeta verás los archivos `<prefijo>_<timestamp>_{full.dump|schema.sql|globals.sql}`.
+
 ## exportar url
 export SUPABASE_DB_URL="postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 
 ## HAcer el restore de algun archivo *.dump
+
+1. Restaura primero los roles/permisos globales para que los `GRANT` del dump principal se apliquen sin errores:
+   ```bash
+   psql "$SUPABASE_DB_URL" -f backups/<archivo>_globals.sql
+   ```
+2. Después ejecuta el `pg_restore` del dump completo (como se muestra abajo) o aplica el `.sql` de esquema según necesites.
 pg_restore --clean --if-exists --no-owner --no-acl \
   --dbname "$SUPABASE_DB_URL" \
   supabase/migrations/20251023_131845_full.dump
@@ -82,6 +113,8 @@ sudo systemctl restart talia-api.service
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
+
+codex resume 019aac47-3a8d-7d60-8b22-190acf5cca02
 
 codex resume 019aa6e2-3fc7-7471-9c1a-207613e173ee
 
