@@ -667,6 +667,64 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear evento de lead: {row!r}")
         return row
 
+    async def list_notes(
+        self,
+        *,
+        organizacion_id: UUID,
+        relacion_tipo: str | None = None,
+        relacion_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+        }
+        if relacion_tipo:
+            params["relacion_tipo"] = f"eq.{relacion_tipo}"
+        if relacion_id:
+            params["relacion_id"] = f"eq.{relacion_id}"
+        resp = await self._request("GET", "/rest/v1/notas", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar notas: {data!r}")
+        return data
+
+    async def create_note(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/notas",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la nota creada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear nota: {row!r}")
+        return row
+
+    async def list_audit_logs(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+            "limit": "200",
+        }
+        resp = await self._request("GET", "/rest/v1/audit_logs", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar audit logs: {data!r}")
+        return data
+
     async def append_stage_history(
         self,
         *,

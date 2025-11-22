@@ -440,6 +440,52 @@ class DummyCRMRepository(CRMRepository):
             "registrado_en": "2024-01-02T00:00:00Z",
         }
 
+    async def list_notes(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_notes", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "relacion_tipo": kwargs.get("relacion_tipo") or "oportunidad",
+                "relacion_id": str(kwargs.get("relacion_id") or uuid.uuid4()),
+                "texto": "Nota interna",
+                "visible_para_cliente": False,
+                "tipo": "interna",
+                "creado_por_usuario_id": str(uuid.uuid4()),
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_note(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_note", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "visible_para_cliente": kwargs["payload"].get("visible_para_cliente", False),
+            "tipo": kwargs["payload"].get("tipo", "interna"),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_audit_logs(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_audit_logs", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "usuario_id": str(uuid.uuid4()),
+                "accion": "update",
+                "tabla": "oportunidades",
+                "registro_id": str(uuid.uuid4()),
+                "cambios": {"estado": "ganada"},
+                "ip": "1.1.1.1",
+                "user_agent": "pytest",
+                "creado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -746,3 +792,29 @@ async def test_create_lead_event_mismatch(client: AsyncClient) -> None:
     body = {"lead_id": str(uuid.uuid4()), "tipo": "click"}
     resp = await client.post(f"/crm/leads/{lead_id}/eventos", headers=_headers(), json=body)
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_notes(client: AsyncClient) -> None:
+    resp = await client.get("/crm/notas", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()
+
+
+@pytest.mark.asyncio
+async def test_create_note(client: AsyncClient) -> None:
+    body = {
+        "relacion_tipo": "oportunidad",
+        "relacion_id": str(uuid.uuid4()),
+        "texto": "Seguimiento interno",
+    }
+    resp = await client.post("/crm/notas", headers=_headers(), json=body)
+    assert resp.status_code == 201
+    assert resp.json()["texto"] == "Seguimiento interno"
+
+
+@pytest.mark.asyncio
+async def test_list_audit_logs(client: AsyncClient) -> None:
+    resp = await client.get("/crm/audit_logs", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()

@@ -458,6 +458,41 @@ class CRMLeadEventCreate(BaseModel):
     metadata: dict | None = Field(default_factory=dict)
 
 
+class CRMNote(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    relacion_tipo: str
+    relacion_id: UUID
+    texto: str
+    visible_para_cliente: bool
+    tipo: str
+    creado_por_usuario_id: UUID | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMNoteCreate(BaseModel):
+    relacion_tipo: str = Field(..., max_length=100)
+    relacion_id: UUID
+    texto: str = Field(..., max_length=4000)
+    visible_para_cliente: bool = False
+    tipo: str = Field(default="interna", max_length=50)
+    creado_por_usuario_id: UUID | None = None
+
+
+class CRMAuditLog(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    usuario_id: UUID | None = None
+    accion: str
+    tabla: str
+    registro_id: UUID | None = None
+    cambios: dict | None = None
+    ip: str | None = None
+    user_agent: str | None = None
+    creado_en: datetime
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -1090,3 +1125,56 @@ async def create_lead_event(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMLeadEvent.model_validate(row)
+
+
+@router.get("/notas", response_model=list[CRMNote])
+async def list_notes(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    relacion_tipo: str | None = Query(default=None),
+    relacion_id: UUID | None = Query(default=None),
+) -> list[CRMNote]:
+    try:
+        rows = await repo.list_notes(
+            organizacion_id=organizacion_id,
+            relacion_tipo=relacion_tipo,
+            relacion_id=relacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMNote.model_validate(row) for row in rows]
+
+
+@router.post("/notas", response_model=CRMNote, status_code=status.HTTP_201_CREATED)
+async def create_note(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMNoteCreate,
+) -> CRMNote:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body.get("creado_por_usuario_id") and usuario_id:
+        body["creado_por_usuario_id"] = str(usuario_id)
+    try:
+        row = await repo.create_note(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMNote.model_validate(row)
+
+
+@router.get("/audit_logs", response_model=list[CRMAuditLog])
+async def list_audit_logs(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> list[CRMAuditLog]:
+    try:
+        rows = await repo.list_audit_logs(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMAuditLog.model_validate(row) for row in rows]
