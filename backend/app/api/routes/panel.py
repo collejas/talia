@@ -8,6 +8,8 @@ usa service_role en el backend y se extrae el `sub` del JWT (sin verificar).
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import json
 import secrets
 from collections.abc import Sequence
@@ -1400,6 +1402,41 @@ def _require_token(authorization: str | None) -> str:
     if not token:
         raise HTTPException(status_code=401, detail="auth_required")
     return token
+
+
+def _render_sales_csv(rows: list[Any]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["mes", "producto", "moneda", "total_vendido", "unidades_vendidas", "leads_ganados"]
+    )
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        writer.writerow(
+            [
+                row.get("mes") or "",
+                row.get("item_nombre") or "",
+                row.get("moneda") or "",
+                row.get("total_vendido") or 0,
+                row.get("unidades_vendidas") or 0,
+                row.get("leads_ganados") or 0,
+            ]
+        )
+    return output.getvalue()
+
+
+def _sales_csv_filename(mes_desde: str | None, mes_hasta: str | None, moneda: str | None) -> str:
+    parts = ["ventas-productos"]
+    if mes_desde and mes_hasta:
+        parts.append(f"{mes_desde}_a_{mes_hasta}")
+    elif mes_desde:
+        parts.append(f"desde_{mes_desde}")
+    elif mes_hasta:
+        parts.append(f"hasta_{mes_hasta}")
+    if moneda:
+        parts.append(moneda.lower())
+    return "-".join(parts) + ".csv"
 
 
 def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
@@ -6893,3 +6930,36 @@ async def panel_env_js() -> Response:
     anon = getattr(settings, "supabase_anon", None) or ""
     body = "window.SUPABASE_URL = '" + url + "';\n" "window.SUPABASE_ANON_KEY = '" + anon + "';\n"
     return Response(content=body, media_type="application/javascript")
+
+
+@router.get("/analytics/catalog/ventas.csv")
+async def catalogo_kpi_ventas_csv(
+    mes_desde: str | None = Query(default=None, description="YYYY-MM-01"),
+    mes_hasta: str | None = Query(default=None, description="YYYY-MM-01"),
+    moneda: str | None = Query(default=None, min_length=3, max_length=3),
+    authorization: str | None = Header(default=None),
+):
+    token = _require_token(authorization)
+    params: dict[str, str] = {
+        "select": "mes,catalog_item_id,item_nombre,moneda,total_vendido,unidades_vendidas,leads_ganados",
+        "order": "mes.asc,item_nombre.asc",
+    }
+    if mes_desde and mes_hasta:
+        params["and"] = f"(mes.gte.{mes_desde},mes.lte.{mes_hasta})"
+    elif mes_desde:
+        params["mes"] = f"gte.{mes_desde}"
+    elif mes_hasta:
+        params["mes"] = f"lte.{mes_hasta}"
+    if moneda:
+        params["moneda"] = f"eq.{moneda.upper()}"
+    resp = await _sb_get("/rest/v1/ventas_por_producto_mes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando ventas por producto")
+    rows = resp.json() or []
+    csv_content = _render_sales_csv(rows)
+    filename = _sales_csv_filename(mes_desde, mes_hasta, moneda)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

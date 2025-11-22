@@ -3,15 +3,20 @@ import { ChartAreaInteractive } from '@/components/chart-area-interactive'
 import { DataTable } from '@/components/data-table'
 import { SectionCards } from '@/components/section-cards'
 import { SiteHeader } from '@/components/site-header'
-import {
-  SidebarInset,
-  SidebarProvider,
-} from '@/components/ui/sidebar'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { CatalogSalesCard } from '@/components/dashboard/catalog-sales-card'
+import { CatalogPipelineCard } from '@/components/dashboard/catalog-pipeline-card'
 
 import data from "./data.json"
+import { fetchCatalogPipelineKpi, fetchCatalogSalesKpi } from "./catalog-analytics"
 
-export default function Page() {
+export default async function Page() {
+  const [salesRows, pipelineRows] = await Promise.all([
+    fetchCatalogSalesKpi().catch(() => []),
+    fetchCatalogPipelineKpi().catch(() => []),
+  ])
+
   return (
     <SidebarProvider
       style={
@@ -30,6 +35,10 @@ export default function Page() {
               <SectionCards />
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive />
+              </div>
+              <div className="grid gap-4 px-4 lg:px-6 @[1000px]/main:grid-cols-2">
+                <CatalogSalesCard data={salesRows} />
+                <CatalogPipelineCard data={pipelineRows} />
               </div>
               <DataTable data={data} />
             </div>
