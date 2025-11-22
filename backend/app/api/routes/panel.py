@@ -3551,6 +3551,53 @@ async def crear_link_portal_cliente(
     }
 
 
+@router.get("/analytics/catalog/ventas")
+async def catalogo_kpi_ventas(
+    mes_desde: str | None = Query(default=None, description="YYYY-MM-01"),
+    mes_hasta: str | None = Query(default=None, description="YYYY-MM-01"),
+    moneda: str | None = Query(default=None, min_length=3, max_length=3),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _require_token(authorization)
+    params: dict[str, str] = {
+        "select": "mes,catalog_item_id,item_nombre,moneda,total_vendido,unidades_vendidas,leads_ganados"
+    }
+    if mes_desde and mes_hasta:
+        params["and"] = f"(mes.gte.{mes_desde},mes.lte.{mes_hasta})"
+    elif mes_desde:
+        params["mes"] = f"gte.{mes_desde}"
+    elif mes_hasta:
+        params["mes"] = f"lte.{mes_hasta}"
+    if moneda:
+        params["moneda"] = f"eq.{moneda.upper()}"
+    resp = await _sb_get("/rest/v1/ventas_por_producto_mes", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando ventas por producto")
+    data = resp.json() or []
+    return {"ok": True, "rows": data}
+
+
+@router.get("/analytics/catalog/embudo")
+async def catalogo_kpi_embudo(
+    tablero_id: UUID | None = Query(default=None),
+    etapa_id: UUID | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    token = _require_token(authorization)
+    params: dict[str, str] = {
+        "select": "tablero_id,etapa_id,catalog_item_id,item_nombre,moneda,monto_estimado,leads_con_cotizacion",
+    }
+    if tablero_id:
+        params["tablero_id"] = f"eq.{tablero_id}"
+    if etapa_id:
+        params["etapa_id"] = f"eq.{etapa_id}"
+    resp = await _sb_get("/rest/v1/embudo_por_producto", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando embudo por producto")
+    data = resp.json() or []
+    return {"ok": True, "rows": data}
+
+
 @router.get("/portal/clientes/{portal_token}")
 async def portal_cliente_estado(portal_token: str, request: Request) -> dict[str, Any]:
     """Devuelve el estado actual del cliente para el portal público."""
