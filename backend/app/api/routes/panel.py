@@ -28,7 +28,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
@@ -57,6 +57,7 @@ router = APIRouter(prefix="", tags=["panel"])
 logger = get_logger(__name__)
 
 DEFAULT_PORTAL_TOKEN_DAYS = 14
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
 
 
 class ManualOverridePayload(BaseModel):
@@ -401,6 +402,105 @@ class ClientePortalLinkPayload(BaseModel):
     )
 
 
+class CatalogItem(BaseModel):
+    id: UUID
+    slug: str | None = None
+    nombre: str
+    tipo: Literal["producto", "servicio", "paquete"] = "servicio"
+    descripcion_corta: str | None = None
+    descripcion_larga: str | None = None
+    unidad: str | None = None
+    precio_base: float | None = None
+    moneda: str | None = None
+    impuestos: list[dict[str, Any]] | None = None
+    activo: bool = True
+    requiere_factura: bool | None = None
+    clave_sat: str | None = None
+    unidad_sat: str | None = None
+    metadatos: dict[str, Any] | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class CatalogItemResponse(BaseModel):
+    item: CatalogItem
+
+
+class CatalogItemListResponse(BaseModel):
+    items: list[CatalogItem] = Field(default_factory=list)
+
+
+class CatalogItemBasePayload(BaseModel):
+    slug: str | None = Field(default=None, max_length=120)
+    tipo: Literal["producto", "servicio", "paquete"] = Field(default="servicio")
+    descripcion_corta: str | None = Field(default=None, max_length=400)
+    descripcion_larga: str | None = Field(default=None, max_length=4000)
+    unidad: str | None = Field(default=None, max_length=60)
+    precio_base: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    impuestos: list[dict[str, Any]] | list[Any] | None = Field(default=None)
+    activo: bool | None = Field(default=None)
+    requiere_factura: bool | None = Field(default=None)
+    clave_sat: str | None = Field(default=None, max_length=40)
+    unidad_sat: str | None = Field(default=None, max_length=40)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CatalogItemCreatePayload(CatalogItemBasePayload):
+    nombre: str = Field(..., min_length=1, max_length=200)
+
+
+class CatalogItemUpdatePayload(CatalogItemBasePayload):
+    nombre: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class LeadQuoteItemPayload(BaseModel):
+    catalog_item_id: UUID | None = Field(default=None)
+    titulo: str | None = Field(default=None, max_length=200)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    unidad: str | None = Field(default=None, max_length=60)
+    cantidad: float | None = Field(default=None, gt=0)
+    precio_unitario: float | None = Field(default=None, ge=0)
+    descuento: float | None = Field(default=None, ge=0)
+    subtotal: float | None = Field(default=None, ge=0)
+    impuestos: float | None = Field(default=None, ge=0)
+    total: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    orden: int | None = Field(default=None, ge=1)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class LeadQuoteItem(BaseModel):
+    id: UUID
+    cotizacion_id: UUID
+    catalog_item_id: UUID | None = None
+    catalog_item: CatalogItem | None = None
+    titulo: str | None = None
+    descripcion: str | None = None
+    unidad: str | None = None
+    cantidad: float | None = None
+    precio_unitario: float | None = None
+    descuento: float | None = None
+    subtotal: float | None = None
+    impuestos: float | None = None
+    total: float | None = None
+    moneda: str | None = None
+    orden: int | None = None
+    metadatos: dict[str, Any] | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 class LeadQuoteCreatePayload(BaseModel):
     """Datos para crear una cotización ligada a un lead."""
 
@@ -422,6 +522,10 @@ class LeadQuoteCreatePayload(BaseModel):
     pdf_url: str | None = Field(default=None, max_length=2048)
     pdf_path: str | None = Field(default=None, max_length=512)
     metadatos: dict[str, Any] | None = Field(default=None, description="Datos adicionales del PDF.")
+    items: list[LeadQuoteItemPayload] | None = Field(
+        default=None,
+        description="Detalle estructurado de productos/servicios que componen la cotización.",
+    )
 
     model_config = ConfigDict(extra="ignore")
 
@@ -489,6 +593,7 @@ class LeadQuote(BaseModel):
     metadatos: dict[str, Any] | None = None
     creado_en: datetime | None = None
     actualizado_en: datetime | None = None
+    items: list[LeadQuoteItem] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 
@@ -1129,6 +1234,174 @@ def _ensure_concept_list(value: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _ensure_metadata_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _to_float(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    if not isinstance(items, list):
+        return normalized
+    for idx, raw in enumerate(items, start=1):
+        if isinstance(raw, BaseModel):
+            raw_item = raw.model_dump(exclude_none=True)
+        elif isinstance(raw, dict):
+            raw_item = raw
+        else:
+            continue
+        entry: dict[str, Any] = {}
+        catalog_id = raw_item.get("catalog_item_id")
+        if catalog_id:
+            entry["catalog_item_id"] = str(catalog_id)
+        for key in ("titulo", "descripcion", "unidad"):
+            value = raw_item.get(key)
+            if isinstance(value, str):
+                trimmed = value.strip()
+                if trimmed:
+                    entry[key] = trimmed
+        if isinstance(raw_item.get("metadatos"), dict):
+            entry["metadatos"] = raw_item["metadatos"]
+        for key in ("cantidad", "precio_unitario", "descuento", "subtotal", "impuestos", "total"):
+            number = _to_float(raw_item.get(key))
+            if number is not None:
+                entry[key] = number
+        currency = _clean_currency(raw_item.get("moneda"))
+        if currency:
+            entry["moneda"] = currency
+        order_value = raw_item.get("orden")
+        if isinstance(order_value, int) and order_value > 0:
+            entry["orden"] = order_value
+        else:
+            entry["orden"] = idx
+        normalized.append(entry)
+    return normalized
+
+
+def _concepts_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    concepts: list[dict[str, Any]] = []
+    for item in items:
+        title = item.get("titulo")
+        desc = item.get("descripcion")
+        total = item.get("total") or item.get("subtotal")
+        if total is None:
+            qty = item.get("cantidad")
+            price = item.get("precio_unitario")
+            descuento = item.get("descuento") or 0
+            if qty is not None and price is not None:
+                total = max(qty * price - descuento, 0)
+        concept = {
+            "titulo": title,
+            "descripcion": desc,
+        }
+        if total is not None:
+            concept["total"] = total
+        if any(value for value in concept.values()):
+            concepts.append(concept)
+    return concepts
+
+
+def _catalog_item_from_row(row: Any) -> CatalogItem | None:
+    if not isinstance(row, dict):
+        return None
+    data = dict(row)
+    impuestos = data.get("impuestos")
+    if isinstance(impuestos, str):
+        try:
+            impuestos = json.loads(impuestos)
+        except json.JSONDecodeError:
+            impuestos = None
+    if impuestos is not None and not isinstance(impuestos, list):
+        impuestos = None
+    if impuestos is not None:
+        data["impuestos"] = impuestos
+    metadatos = _ensure_metadata_dict(data.get("metadatos"))
+    data["metadatos"] = metadatos or None
+    try:
+        return CatalogItem.model_validate(data)
+    except ValidationError:
+        return None
+
+
+def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
+    if not isinstance(value, list):
+        return []
+    parsed: list[LeadQuoteItem] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        data = dict(raw)
+        catalog_obj = _catalog_item_from_row(data.get("catalog_item"))
+        data["catalog_item"] = catalog_obj
+        try:
+            parsed.append(LeadQuoteItem.model_validate(data))
+        except ValidationError:
+            continue
+    return parsed
+
+
+def _normalize_catalog_body(payload: CatalogItemBasePayload) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True)
+    for key in (
+        "slug",
+        "descripcion_corta",
+        "descripcion_larga",
+        "unidad",
+        "clave_sat",
+        "unidad_sat",
+    ):
+        value = body.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                body[key] = trimmed
+            else:
+                body.pop(key, None)
+    if "moneda" in body:
+        moneda = _clean_currency(body.get("moneda"))
+        if moneda:
+            body["moneda"] = moneda
+        else:
+            body.pop("moneda", None)
+    impuestos = body.get("impuestos")
+    if impuestos is not None and not isinstance(impuestos, list):
+        body["impuestos"] = []
+    metadatos = body.get("metadatos")
+    if metadatos is not None:
+        if not isinstance(metadatos, dict):
+            body["metadatos"] = {}
+    return body
+
+
+def _require_token(authorization: str | None) -> str:
+    token = _parse_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="auth_required")
+    return token
+
+
 def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
     return LeadQuote(
         id=row.get("id"),
@@ -1153,6 +1426,7 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         metadatos=(row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None),
         creado_en=_parse_timestamp(row.get("creado_en")),
         actualizado_en=_parse_timestamp(row.get("actualizado_en")),
+        items=_parse_quote_items(row.get("items")),
     )
 
 
@@ -1186,8 +1460,16 @@ def _logo_from_row(row: dict[str, Any]) -> LogoAsset:
 
 def _quote_payload_from_body(payload: LeadQuoteCreatePayload) -> dict[str, Any]:
     body = payload.model_dump(exclude_none=True)
+    if "items" in body:
+        items = _normalize_quote_items(body.get("items"))
+        if items:
+            body["items"] = items
+        else:
+            body.pop("items", None)
     if "conceptos" in body:
         body["conceptos"] = _ensure_concept_list(body.get("conceptos"))
+    if not body.get("conceptos") and body.get("items"):
+        body["conceptos"] = _concepts_from_items(body.get("items") or [])
     if "moneda" in body:
         body["moneda"] = _clean_currency(body["moneda"]) or "MXN"
     if "valido_hasta" in body and isinstance(body["valido_hasta"], date):
@@ -1224,6 +1506,23 @@ async def _fetch_lead_for_quote(lead_id: UUID, token: str) -> dict[str, Any]:
     row = _first_row(rows)
     if not isinstance(row, dict):
         raise HTTPException(status_code=404, detail="lead_not_found")
+    return row
+
+
+async def _fetch_quote_with_items(quote_id: UUID, token: str) -> dict[str, Any]:
+    params = {
+        "id": f"eq.{quote_id}",
+        "select": QUOTE_WITH_ITEMS_SELECT,
+        "limit": "1",
+        "items.order": "orden.asc",
+    }
+    resp = await _sb_get("/rest/v1/lead_cotizaciones", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando cotización")
+    rows = resp.json() or []
+    row = _first_row(rows)
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=404, detail="quote_not_found")
     return row
 
 
@@ -3432,18 +3731,158 @@ async def eliminar_lead(
     return {"ok": True}
 
 
+# --- Catálogo de productos/servicios ---
+
+
+@router.get("/catalog/items", response_model=CatalogItemListResponse)
+async def catalog_list_items(
+    authorization: str | None = Header(default=None),
+    search: str | None = Query(default=None, max_length=200),
+    tipo: Literal["producto", "servicio", "paquete"] | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
+    limit: int = Query(default=200, ge=1, le=500),
+) -> CatalogItemListResponse:
+    token = _require_token(authorization)
+    params: dict[str, str] = {
+        "select": "*",
+        "order": "nombre.asc",
+        "limit": str(limit),
+    }
+    if not include_inactive:
+        params["activo"] = "eq.true"
+    if tipo:
+        params["tipo"] = f"eq.{tipo}"
+    if search:
+        pattern = _ilike_param(search)
+        params["or"] = f"(nombre.{pattern},slug.{pattern},descripcion_corta.{pattern})"
+    resp = await _sb_get("/rest/v1/catalog_items", params=params, token=token)
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error consultando catálogo")
+    rows = resp.json() or []
+    items: list[CatalogItem] = []
+    if isinstance(rows, list):
+        for row in rows:
+            catalog = _catalog_item_from_row(row)
+            if catalog:
+                items.append(catalog)
+    return CatalogItemListResponse(items=items)
+
+
+@router.post("/catalog/items", status_code=201, response_model=CatalogItemResponse)
+async def catalog_create_item(
+    payload: CatalogItemCreatePayload,
+    authorization: str | None = Header(default=None),
+) -> CatalogItemResponse:
+    user_id = await _require_admin(authorization)
+    nombre = payload.nombre.strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="nombre_required")
+    body = _normalize_catalog_body(payload)
+    body["nombre"] = nombre
+    body.setdefault("moneda", "MXN")
+    body.setdefault("activo", True)
+    body["created_by"] = user_id
+    body["updated_by"] = user_id
+
+    resp = await _sb_post(
+        "/rest/v1/catalog_items",
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error creando producto")
+    rows = resp.json() or []
+    item = _catalog_item_from_row(_first_row(rows))
+    if not item:
+        raise HTTPException(status_code=502, detail="catalog_create_unexpected_response")
+    return CatalogItemResponse(item=item)
+
+
+@router.patch("/catalog/items/{item_id}", response_model=CatalogItemResponse)
+async def catalog_update_item(
+    item_id: UUID,
+    payload: CatalogItemUpdatePayload,
+    authorization: str | None = Header(default=None),
+) -> CatalogItemResponse:
+    user_id = await _require_admin(authorization)
+    body = _normalize_catalog_body(payload)
+    if payload.nombre is not None:
+        nombre = payload.nombre.strip()
+        if not nombre:
+            raise HTTPException(status_code=400, detail="nombre_required")
+        body["nombre"] = nombre
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    body["updated_by"] = user_id
+
+    resp = await _sb_patch(
+        "/rest/v1/catalog_items",
+        params={"id": f"eq.{item_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error actualizando producto")
+    row = _first_row(resp.json() or [])
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    item = _catalog_item_from_row(row)
+    if not item:
+        raise HTTPException(status_code=502, detail="catalog_update_unexpected_response")
+    return CatalogItemResponse(item=item)
+
+
+@router.delete("/catalog/items/{item_id}")
+async def catalog_delete_item(
+    item_id: UUID,
+    authorization: str | None = Header(default=None),
+    hard: bool = Query(default=False),
+) -> dict[str, Any]:
+    user_id = await _require_admin(authorization)
+    if hard:
+        resp = await _sb_delete(
+            "/rest/v1/catalog_items",
+            params={"id": f"eq.{item_id}"},
+            prefer="return=representation",
+        )
+        if resp.status_code >= 400:
+            raise _supabase_error(resp, "Error eliminando producto")
+        deleted_row = _first_row(resp.json() or [])
+        item = _catalog_item_from_row(deleted_row) if isinstance(deleted_row, dict) else None
+        if not item:
+            raise HTTPException(status_code=404, detail="catalog_item_not_found")
+        return {"ok": True, "item": item, "hard_deleted": True}
+
+    body = {"activo": False, "updated_by": user_id}
+    resp = await _sb_patch(
+        "/rest/v1/catalog_items",
+        params={"id": f"eq.{item_id}"},
+        json=body,
+        prefer="return=representation",
+    )
+    if resp.status_code >= 400:
+        raise _supabase_error(resp, "Error archivando producto")
+    row = _first_row(resp.json() or [])
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    item = _catalog_item_from_row(row)
+    if not item:
+        raise HTTPException(status_code=502, detail="catalog_update_unexpected_response")
+    return {"ok": True, "item": item, "hard_deleted": False}
+
+
 @router.get("/leads/{lead_id}/quotes", response_model=LeadQuoteListResponse)
 async def listar_cotizaciones_lead(
     lead_id: UUID,
     authorization: str | None = Header(default=None),
 ) -> LeadQuoteListResponse:
-    token = _parse_bearer(authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="auth_required")
+    token = _require_token(authorization)
 
     params = {
         "tarjeta_id": f"eq.{lead_id}",
         "order": "version.desc",
+        "select": QUOTE_WITH_ITEMS_SELECT,
+        "items.order": "orden.asc",
     }
     resp = await _sb_get("/rest/v1/lead_cotizaciones", params=params, token=token)
     if resp.status_code >= 400:
@@ -3467,9 +3906,7 @@ async def crear_cotizacion_lead(
     payload: LeadQuoteCreatePayload,
     authorization: str | None = Header(default=None),
 ) -> LeadQuoteResponse:
-    token = _parse_bearer(authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="auth_required")
+    token = _require_token(authorization)
 
     body = {
         "p_tarjeta_id": str(lead_id),
@@ -3482,7 +3919,11 @@ async def crear_cotizacion_lead(
     row = _first_row(data)
     if not isinstance(row, dict):
         raise HTTPException(status_code=502, detail="quote_create_unexpected_response")
-    quote = _quote_from_row(row)
+    quote_id = row.get("id")
+    if not quote_id:
+        raise HTTPException(status_code=502, detail="quote_create_missing_id")
+    fresh_row = await _fetch_quote_with_items(UUID(str(quote_id)), token)
+    quote = _quote_from_row(fresh_row)
     return LeadQuoteResponse(quote=quote)
 
 
@@ -3495,9 +3936,7 @@ async def enviar_cotizacion_lead(
     payload: LeadQuoteSendPayload,
     authorization: str | None = Header(default=None),
 ) -> LeadQuoteResponse:
-    token = _parse_bearer(authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="auth_required")
+    token = _require_token(authorization)
 
     lead_row = await _fetch_lead_for_quote(lead_id, token)
     contact = _single_related(lead_row.get("contacto")) or {}
@@ -3508,6 +3947,9 @@ async def enviar_cotizacion_lead(
         exclude_none=True,
     )
     base_payload = LeadQuoteCreatePayload(**base_payload_data)
+    normalized_items = _normalize_quote_items(base_payload.items or [])
+    conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
+
     quote_context = quotes_service.QuoteRenderContext(
         lead_label=_resolve_lead_label(lead_row),
         reference=str(lead_id).split("-")[0],
@@ -3517,7 +3959,7 @@ async def enviar_cotizacion_lead(
         contact_company=_clean_str(contact.get("company_name")),
         contact_email=_clean_str(contact.get("correo")),
         contact_phone=_clean_str(contact.get("telefono_e164")),
-        conceptos=base_payload.conceptos or [],
+        conceptos=conceptos_context,
         subtotal=base_payload.subtotal,
         impuestos=base_payload.impuestos,
         total=base_payload.total,
@@ -3525,6 +3967,7 @@ async def enviar_cotizacion_lead(
         valido_hasta=base_payload.valido_hasta,
         descripcion=base_payload.descripcion or base_payload.titulo,
         notes=lead_row.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+        items=normalized_items,
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -3551,6 +3994,10 @@ async def enviar_cotizacion_lead(
     row_created = _first_row(resp_create.json() or {})
     if not isinstance(row_created, dict):
         raise HTTPException(status_code=502, detail="quote_create_unexpected_response")
+    quote_id_value = row_created.get("id")
+    if not quote_id_value:
+        raise HTTPException(status_code=502, detail="quote_create_missing_id")
+    quote_uuid = UUID(str(quote_id_value))
 
     channel = payload.channel
     extra_data: dict[str, Any]
@@ -3594,7 +4041,7 @@ async def enviar_cotizacion_lead(
         extra_data = _quote_mark_extra({"whatsapp_to": whatsapp_number})
 
     mark_body = {
-        "p_quote_id": str(row_created.get("id")),
+        "p_quote_id": str(quote_uuid),
         "p_estado": "enviada",
         "p_canal": channel,
         "p_extra": extra_data,
@@ -3606,7 +4053,11 @@ async def enviar_cotizacion_lead(
     if not isinstance(row_marked, dict):
         raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
 
-    quote = _quote_from_row(row_marked)
+    refreshed_row = await _fetch_quote_with_items(
+        UUID(str(row_marked.get("id") or quote_uuid)),
+        token,
+    )
+    quote = _quote_from_row(refreshed_row)
     if quote.estado == "aceptada":
         await _auto_move_lead_to_won(UUID(str(quote.tarjeta_id)), token=token, quote=quote)
     return LeadQuoteResponse(quote=quote)
@@ -3621,9 +4072,7 @@ async def actualizar_estado_cotizacion(
     payload: LeadQuoteMarkPayload,
     authorization: str | None = Header(default=None),
 ) -> LeadQuoteResponse:
-    token = _parse_bearer(authorization)
-    if not token:
-        raise HTTPException(status_code=401, detail="auth_required")
+    token = _require_token(authorization)
 
     body = {
         "p_quote_id": str(quote_id),
@@ -3638,7 +4087,8 @@ async def actualizar_estado_cotizacion(
     row = _first_row(data)
     if not isinstance(row, dict):
         raise HTTPException(status_code=502, detail="quote_mark_unexpected_response")
-    quote = _quote_from_row(row)
+    fresh_row = await _fetch_quote_with_items(quote_id, token)
+    quote = _quote_from_row(fresh_row)
     if quote.estado == "aceptada":
         await _auto_move_lead_to_won(UUID(str(quote.tarjeta_id)), token=token, quote=quote)
     return LeadQuoteResponse(quote=quote)

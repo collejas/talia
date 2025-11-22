@@ -41,6 +41,7 @@ class QuoteRenderContext:
     valido_hasta: date | None
     descripcion: str | None = None
     notes: str | None = None
+    items: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
