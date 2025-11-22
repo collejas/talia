@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.logging import get_logger
@@ -259,6 +259,59 @@ class CRMTicketCommentCreate(BaseModel):
     autor_usuario_id: UUID | None = None
     autor_cliente_id: UUID | None = None
     metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMFile(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    relacion_tipo: str
+    relacion_id: UUID
+    nombre_original: str
+    content_type: str | None = None
+    tamano_bytes: int | None = None
+    storage_path: str
+    metadata: dict | None = None
+    subido_por_usuario_id: UUID | None = None
+    subido_en: datetime
+
+
+class CRMFileCreate(BaseModel):
+    relacion_tipo: str = Field(..., max_length=100)
+    relacion_id: UUID
+    nombre_original: str = Field(..., max_length=255)
+    content_type: str | None = Field(default=None, max_length=120)
+    tamano_bytes: int | None = Field(default=None, ge=0)
+    storage_path: str = Field(..., max_length=500)
+    metadata: dict | None = Field(default_factory=dict)
+    subido_por_usuario_id: UUID | None = None
+
+
+class CRMTag(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre: str
+    color: str | None = None
+    creado_en: datetime
+
+
+class CRMTagCreate(BaseModel):
+    nombre: str = Field(..., max_length=120)
+    color: str | None = Field(default=None, max_length=20)
+
+
+class CRMTagging(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    tag_id: UUID
+    relacion_tipo: str
+    relacion_id: UUID
+    creado_en: datetime
+
+
+class CRMTaggingCreate(BaseModel):
+    tag_id: UUID
+    relacion_tipo: str = Field(..., max_length=100)
+    relacion_id: UUID
 
 
 @router.get("/cuentas", response_model=CRMAccountsResponse)
@@ -575,3 +628,109 @@ async def create_ticket_comment(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMTicketComment.model_validate(row)
+
+
+@router.get("/archivos", response_model=list[CRMFile])
+async def list_files(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    relacion_tipo: str | None = Query(default=None),
+    relacion_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[CRMFile]:
+    try:
+        rows = await repo.list_files(
+            organizacion_id=organizacion_id,
+            relacion_tipo=relacion_tipo,
+            relacion_id=relacion_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMFile.model_validate(row) for row in rows]
+
+
+@router.post("/archivos", response_model=CRMFile, status_code=status.HTTP_201_CREATED)
+async def create_file(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMFileCreate,
+) -> CRMFile:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body.get("subido_por_usuario_id") and usuario_id:
+        body["subido_por_usuario_id"] = str(usuario_id)
+    try:
+        row = await repo.create_file(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMFile.model_validate(row)
+
+
+@router.get("/tags", response_model=list[CRMTag])
+async def list_tags(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> list[CRMTag]:
+    try:
+        rows = await repo.list_tags(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMTag.model_validate(row) for row in rows]
+
+
+@router.post("/tags", response_model=CRMTag, status_code=status.HTTP_201_CREATED)
+async def create_tag(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMTagCreate,
+) -> CRMTag:
+    try:
+        row = await repo.create_tag(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMTag.model_validate(row)
+
+
+@router.post("/taggings", response_model=CRMTagging, status_code=status.HTTP_201_CREATED)
+async def create_tagging(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMTaggingCreate,
+) -> CRMTagging:
+    try:
+        row = await repo.create_tagging(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMTagging.model_validate(row)
+
+
+@router.delete(
+    "/taggings/{tagging_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_tagging(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    tagging_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_tagging(organizacion_id=organizacion_id, tagging_id=tagging_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

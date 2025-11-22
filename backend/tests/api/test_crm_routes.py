@@ -216,6 +216,66 @@ class DummyCRMRepository(CRMRepository):
             "creado_en": "2024-01-01T00:00:00Z",
         }
 
+    async def list_files(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_files", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "relacion_tipo": kwargs.get("relacion_tipo") or "oportunidad",
+                "relacion_id": str(kwargs.get("relacion_id") or uuid.uuid4()),
+                "nombre_original": "archivo.pdf",
+                "content_type": "application/pdf",
+                "tamano_bytes": 1234,
+                "storage_path": "files/archivo.pdf",
+                "metadata": {},
+                "subido_por_usuario_id": str(uuid.uuid4()),
+                "subido_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_file(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_file", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "subido_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_tags(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_tags", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "nombre": "VIP",
+                "color": "#FF0000",
+                "creado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_tag(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_tag", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "creado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def create_tagging(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_tagging", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "creado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def delete_tagging(self, **kwargs: Any) -> None:
+        self.calls.append(("delete_tagging", kwargs))
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -342,3 +402,56 @@ async def test_create_ticket_comment_mismatch(client: AsyncClient) -> None:
     body = {"ticket_id": str(other_id), "mensaje": "Error"}
     resp = await client.post(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers(), json=body)
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_files(client: AsyncClient) -> None:
+    resp = await client.get("/crm/archivos", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()
+
+
+@pytest.mark.asyncio
+async def test_create_file(client: AsyncClient) -> None:
+    body = {
+        "relacion_tipo": "oportunidad",
+        "relacion_id": str(uuid.uuid4()),
+        "nombre_original": "doc.pdf",
+        "storage_path": "files/doc.pdf",
+    }
+    resp = await client.post("/crm/archivos", headers=_headers(), json=body)
+    assert resp.status_code == 201
+    assert resp.json()["nombre_original"] == "doc.pdf"
+
+
+@pytest.mark.asyncio
+async def test_list_tags(client: AsyncClient) -> None:
+    resp = await client.get("/crm/tags", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()[0]["nombre"] == "VIP"
+
+
+@pytest.mark.asyncio
+async def test_create_tag(client: AsyncClient) -> None:
+    resp = await client.post("/crm/tags", headers=_headers(), json={"nombre": "Nuevo"})
+    assert resp.status_code == 201
+    assert resp.json()["nombre"] == "Nuevo"
+
+
+@pytest.mark.asyncio
+async def test_create_and_delete_tagging(client: AsyncClient) -> None:
+    tag_id = uuid.uuid4()
+    relacion_id = uuid.uuid4()
+    resp = await client.post(
+        "/crm/taggings",
+        headers=_headers(),
+        json={
+            "tag_id": str(tag_id),
+            "relacion_tipo": "oportunidad",
+            "relacion_id": str(relacion_id),
+        },
+    )
+    assert resp.status_code == 201
+    tagging_id = resp.json()["id"]
+    del_resp = await client.delete(f"/crm/taggings/{tagging_id}", headers=_headers())
+    assert del_resp.status_code == 204

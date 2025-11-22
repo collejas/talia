@@ -315,6 +315,128 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear comentario: {row!r}")
         return row
 
+    async def list_files(
+        self,
+        *,
+        organizacion_id: UUID,
+        relacion_tipo: str | None = None,
+        relacion_id: UUID | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "subido_en.desc",
+            "limit": str(limit),
+        }
+        if relacion_tipo:
+            params["relacion_tipo"] = f"eq.{relacion_tipo}"
+        if relacion_id:
+            params["relacion_id"] = f"eq.{relacion_id}"
+        resp = await self._request("GET", "/rest/v1/archivos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar archivos: {data!r}")
+        return data
+
+    async def create_file(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/archivos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el archivo creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear archivo: {row!r}")
+        return row
+
+    async def list_tags(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+        }
+        resp = await self._request("GET", "/rest/v1/tags", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar tags: {data!r}")
+        return data
+
+    async def create_tag(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/tags",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el tag creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear tag: {row!r}")
+        return row
+
+    async def create_tagging(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/taggings",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el tagging creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear tagging: {row!r}")
+        return row
+
+    async def delete_tagging(
+        self,
+        *,
+        organizacion_id: UUID,
+        tagging_id: UUID,
+    ) -> None:
+        params = {
+            "id": f"eq.{tagging_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/taggings",
+            params=params,
+            prefer="return=minimal",
+        )
+        if resp.status_code not in (200, 204):
+            raise CRMRepositoryError(
+                f"Supabase respondió error al eliminar tagging: {resp.status_code} {resp.text}"
+            )
+
     async def append_stage_history(
         self,
         *,
