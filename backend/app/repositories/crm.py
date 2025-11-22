@@ -140,6 +140,75 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad: {row!r}")
         return row
 
+    async def list_activities(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID | None = None,
+        cuenta_id: UUID | None = None,
+        contacto_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "inicio_en.desc.nullslast",
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        if oportunidad_id:
+            params["oportunidad_id"] = f"eq.{oportunidad_id}"
+        if cuenta_id:
+            params["cuenta_id"] = f"eq.{cuenta_id}"
+        if contacto_id:
+            params["contacto_id"] = f"eq.{contacto_id}"
+        resp = await self._request("GET", "/rest/v1/actividades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar actividades: {data!r}")
+        return data
+
+    async def create_activity(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/actividades",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la actividad creada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear actividad: {row!r}")
+        return row
+
+    async def get_activity(
+        self,
+        *,
+        organizacion_id: UUID,
+        activity_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{activity_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/actividades", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener actividad: {row!r}")
+        return row
+
     async def append_stage_history(
         self,
         *,

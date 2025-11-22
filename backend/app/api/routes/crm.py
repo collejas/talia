@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -156,6 +157,56 @@ class CRMOpportunitiesResponse(BaseModel):
     offset: int
 
 
+class CRMActivity(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    tipo: str
+    canal: str | None = None
+    asunto: str | None = None
+    descripcion: str | None = None
+    estado: str
+    prioridad: str
+    fecha_vencimiento: datetime | None = None
+    inicio_en: datetime | None = None
+    fin_en: datetime | None = None
+    sla_horas: int | None = None
+    recordatorio_en: datetime | None = None
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    oportunidad_id: UUID | None = None
+    creado_por_usuario_id: UUID | None = None
+    asignado_a_usuario_id: UUID | None = None
+    metadata: dict | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMActivityCreate(BaseModel):
+    tipo: str = Field(..., max_length=50)
+    canal: str | None = Field(default=None, max_length=50)
+    asunto: str | None = Field(default=None, max_length=255)
+    descripcion: str | None = Field(default=None, max_length=4000)
+    estado: str = Field(default="pendiente")
+    prioridad: str = Field(default="media")
+    fecha_vencimiento: datetime | None = None
+    inicio_en: datetime | None = None
+    fin_en: datetime | None = None
+    sla_horas: int | None = Field(default=None, ge=0)
+    recordatorio_en: datetime | None = None
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    oportunidad_id: UUID | None = None
+    creado_por_usuario_id: UUID | None = None
+    asignado_a_usuario_id: UUID | None = None
+    metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMActivitiesResponse(BaseModel):
+    items: list[CRMActivity]
+    limit: int
+    offset: int
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -186,7 +237,7 @@ async def create_account(
     try:
         row = await repo.create_account(
             organizacion_id=organizacion_id,
-            payload=payload.model_dump(exclude_unset=True),
+            payload=payload.model_dump(mode="json", exclude_unset=True),
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -254,7 +305,7 @@ async def create_opportunity(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMOpportunityCreate,
 ) -> CRMOpportunity:
-    body = payload.model_dump(exclude_unset=True)
+    body = payload.model_dump(mode="json", exclude_unset=True)
     try:
         row = await repo.create_opportunity(
             organizacion_id=organizacion_id,
@@ -301,3 +352,66 @@ async def get_opportunity(
             status_code=status.HTTP_404_NOT_FOUND, detail="oportunidad_no_encontrada"
         )
     return CRMOpportunity.model_validate(row)
+
+
+@router.get("/actividades", response_model=CRMActivitiesResponse)
+async def list_activities(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    oportunidad_id: UUID | None = Query(default=None),
+    cuenta_id: UUID | None = Query(default=None),
+    contacto_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CRMActivitiesResponse:
+    try:
+        rows = await repo.list_activities(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            cuenta_id=cuenta_id,
+            contacto_id=contacto_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    items = [CRMActivity.model_validate(row) for row in rows]
+    return CRMActivitiesResponse(items=items, limit=limit, offset=offset)
+
+
+@router.post("/actividades", response_model=CRMActivity, status_code=status.HTTP_201_CREATED)
+async def create_activity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMActivityCreate,
+) -> CRMActivity:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if "creado_por_usuario_id" not in body and usuario_id:
+        body["creado_por_usuario_id"] = str(usuario_id)
+    try:
+        row = await repo.create_activity(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMActivity.model_validate(row)
+
+
+@router.get("/actividades/{actividad_id}", response_model=CRMActivity)
+async def get_activity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    actividad_id: UUID,
+) -> CRMActivity:
+    try:
+        row = await repo.get_activity(organizacion_id=organizacion_id, activity_id=actividad_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="actividad_no_encontrada")
+    return CRMActivity.model_validate(row)

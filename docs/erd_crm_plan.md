@@ -98,9 +98,9 @@ erDiagram
 ```
 
 ## Migración y pasos sugeridos
-1. [ ] Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`.
-2. [ ] Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento.
-3. [ ] Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`).
+1. [x] Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`. _Implementado en `supabase/migrations/20260601_200000_multitenant_core.sql` (tablas/columnas) y `20260601_201500_crm_rls_policies.sql` (políticas iniciales)._
+2. [x] Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento. _Misma migración `20260601_200000_multitenant_core.sql` agrega y rellena `organizacion_id` en `contactos`, `lead_*`, `clientes`. Falta aplicar RLS equivalente en estas tablas para cerrar la fase._
+3. [x] Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`). _`supabase/migrations/20260601_200500_crm_core_entities.sql` crea todas las entidades del ERD central._
 4. [ ] Introducir `actividades` y/o `tareas`, agregando `prioridad`, `fecha_vencimiento`, `sla_horas` y `recordatorio_en`, y migrar llamadas/conversaciones a este modelo.
 5. [ ] Implementar `tickets` y `ticket_comentarios` si aplica al soporte actual.
 6. [ ] Incorporar `productos`, `cotizaciones`, `cotizacion_items` cuando se active ventas/cobranzas.
@@ -130,8 +130,12 @@ Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado
 - **Notas polimórficas y visibilidad:** crear `notas` con `relacion_tipo`, `relacion_id`, `texto`, `creado_por_usuario_id`, `creado_en`, `visible_para_cliente` (booleano) y `tipo` (por ejemplo `interna`, `publica`, `sistema`). Para casos simples puede mantenerse `actividades.tipo = 'nota'`, pero cuando se requiera aislamiento (soporte interno) el frontend mostrará sólo las notas `visibles_para_cliente = true` en portales públicos y todas en vistas internas; el backend filtra por `organizacion_id` y el flag de visibilidad.
 - **Archivos y etiquetas polimórficas:** centralizar la carga y listado en `archivos` y `taggings` usando `relacion_tipo`/`relacion_id` (cuentas, contactos, oportunidades, tickets, actividades). Exponer en el backend endpoints polimórficos (`POST /archivos/{relacion_tipo}/{relacion_id}` y `POST /taggings/{relacion_tipo}/{relacion_id}`) y adaptar el frontend para reutilizar un componente común de adjuntos/etiquetas que se configure por tipo; validar en backend que `relacion_tipo` pertenezca a un catálogo permitido para evitar referencias huérfanas. Ya existen endpoints REST en el backend (`/crm/archivos`, `/crm/taggings` y `/crm/notas`) que aplican esta validación y se apoyan en RLS por `organizacion_id`.
 
+- ### Avance actual (backend)
+  - `backend/app/api/routes/crm.py` expone `GET/POST /crm/cuentas`, `GET /crm/etapas` y `GET/POST /crm/oportunidades`, apoyándose en `backend/app/repositories/crm.py` que llama Supabase con el service role y registra historial inicial.
+  - Los endpoints legacy de `panel.py` siguen usando `/rest/v1/lead_*`; aún falta crear rutas equivalentes para `actividades`, `tickets`, `productos`, `campanas`, adjuntos y notas.
+
 ### Cierre del plan
-- Se deben crear endpoints `/crm/...` en el backend (`backend/app/api`) que expongan el nuevo modelo multi-tenant (`cuentas`, `contactos`, `oportunidades`, `actividades`, etc.) sobre Supabase/RLS; actualmente todo el panel sigue pegado a `/rest/v1/lead_*` desde `panel.py`.
+- Se deben crear endpoints restantes `/crm/...` en el backend (`backend/app/api`) que expongan el nuevo modelo multi-tenant (`actividades`, `tickets`, marketing, adjuntos polimórficos) sobre Supabase/RLS; actualmente todo el panel sigue pegado a `/rest/v1/lead_*` desde `panel.py`.
 - El frontend carece de un cliente `crm.ts`; sólo existe `frontend/panel/src/lib/api/panel.ts`, por lo que habrá que añadir un wrapper que consuma los nuevos endpoints y migrar gradualmente los componentes del embudo hacia ese cliente.
 
 Con estas definiciones, el plan queda completo respecto a la lista recomendada; la ejecución requiere seguir las migraciones y ajustes de frontend/backend que se describen abajo.
