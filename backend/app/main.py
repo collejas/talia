@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
+from app.api.routes.crm import router as crm_router
 from app.api.routes.health import router as health_router
 from app.api.routes.panel import router as panel_router
 from app.channels.voice.router import router as voice_router
@@ -32,7 +33,9 @@ class SPAStaticFiles(StaticFiles):
 
 def create_app() -> FastAPI:
     """Crea y configura la instancia de FastAPI."""
-    default_log_level = logging.DEBUG if settings.environment != "production" else logging.INFO
+    default_log_level = (
+        logging.DEBUG if settings.environment != "production" else logging.INFO
+    )
     log_level = resolve_log_level(settings.log_level, default=default_log_level)
     log_dir = Path(settings.log_file_path).parent
     per_logger_files = {
@@ -62,6 +65,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
 
     app.include_router(health_router)
+    app.include_router(crm_router)
     app.include_router(panel_router)
     app.include_router(webchat_router)
     app.include_router(whatsapp_router)
@@ -98,7 +102,9 @@ def create_app() -> FastAPI:
             app.mount("/api/panel-react", modern_static, name="panel_react_alt")
             log.info("panel_react.static_mounted", extra={"path": str(modern_panel)})
         else:
-            log.info("panel_react.static_missing", extra={"expected_path": str(modern_panel)})
+            log.info(
+                "panel_react.static_missing", extra={"expected_path": str(modern_panel)}
+            )
 
         if shared.exists():
             shared_static = StaticFiles(directory=str(shared), html=False)
