@@ -1394,9 +1394,9 @@ export function LeadDrawer({
       setQuoteMessage(defaultMessage);
       setQuoteEmailTo(card.correo ?? "");
       setQuoteWhatsappTo(card.telefono ?? "");
-      setQuoteSubtotal(defaultSubtotal);
-      setQuoteImpuestos(defaultTaxes);
-      setQuoteTotal(defaultTotal);
+      setQuoteSubtotal(formatPresetNumberString(defaultSubtotal));
+      setQuoteImpuestos(formatPresetNumberString(defaultTaxes));
+      setQuoteTotal(formatPresetNumberString(defaultTotal));
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
       setQuoteItems(fallbackItems);
@@ -3444,7 +3444,28 @@ function computeQuoteTotals(forms: QuoteItemForm[]): QuoteTotalsSummary | null {
 
 function formatNumberInputValue(value: number | null): string {
   if (value == null) return "";
-  return value.toFixed(2);
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return value.toFixed(2);
+  }
+}
+
+function formatPresetNumberString(value: string | number | null | undefined): string {
+  if (value == null) return "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return formatNumberInputValue(value);
+  }
+  if (typeof value === "string" && value.trim().length) {
+    const parsed = parseNumberInput(value);
+    if (parsed != null) {
+      return formatNumberInputValue(parsed);
+    }
+  }
+  return "";
 }
 
 function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, unknown>> {
