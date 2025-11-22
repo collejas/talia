@@ -14,6 +14,7 @@ import json
 import secrets
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -60,6 +61,8 @@ logger = get_logger(__name__)
 
 DEFAULT_PORTAL_TOKEN_DAYS = 14
 QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
+CURRENCY_QUANTUM = Decimal("0.01")
 
 
 class ManualOverridePayload(BaseModel):
@@ -1302,6 +1305,61 @@ def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+def _decimal_from_value(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return Decimal(cleaned)
+        except InvalidOperation:
+            return None
+    return None
+
+
+def _round_currency_decimal(value: Decimal) -> Decimal:
+    return value.quantize(CURRENCY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _quote_totals_from_items(items: list[dict[str, Any]]) -> dict[str, float] | None:
+    subtotals: list[Decimal] = []
+    for item in items:
+        total_value = _decimal_from_value(item.get("total"))
+        if total_value is None:
+            qty = _decimal_from_value(item.get("cantidad"))
+            price = _decimal_from_value(item.get("precio_unitario"))
+            discount = _decimal_from_value(item.get("descuento")) or Decimal("0")
+            if qty is not None and price is not None:
+                total_value = qty * price - discount
+        if total_value is None:
+            continue
+        if total_value <= 0:
+            continue
+        subtotals.append(total_value)
+    if not subtotals:
+        return None
+
+    subtotal_sum = sum(subtotals)
+    subtotal_amount = _round_currency_decimal(subtotal_sum)
+    impuestos_amount = _round_currency_decimal(subtotal_sum * QUOTE_DEFAULT_TAX_RATE)
+    total_amount = _round_currency_decimal(subtotal_amount + impuestos_amount)
+
+    return {
+        "subtotal": float(subtotal_amount),
+        "impuestos": float(impuestos_amount),
+        "total": float(total_amount),
+    }
+
+
 def _concepts_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     concepts: list[dict[str, Any]] = []
     for item in items:
@@ -1501,6 +1559,9 @@ def _quote_payload_from_body(payload: LeadQuoteCreatePayload) -> dict[str, Any]:
         items = _normalize_quote_items(body.get("items"))
         if items:
             body["items"] = items
+            totals = _quote_totals_from_items(items)
+            if totals:
+                body.update(totals)
         else:
             body.pop("items", None)
     if "conceptos" in body:
@@ -4032,6 +4093,11 @@ async def enviar_cotizacion_lead(
     )
     base_payload = LeadQuoteCreatePayload(**base_payload_data)
     normalized_items = _normalize_quote_items(base_payload.items or [])
+    totals = _quote_totals_from_items(normalized_items)
+    if totals:
+        base_payload.subtotal = totals["subtotal"]
+        base_payload.impuestos = totals["impuestos"]
+        base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
 
     quote_context = quotes_service.QuoteRenderContext(

@@ -57,6 +57,7 @@ import {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const EMPTY_SELECT_VALUE = "__talia_empty__";
+const QUOTE_TAX_RATE = 0.16;
 
 const formSchema = z.object({
   nombre: z.string().trim().max(120).optional().or(z.literal("")),
@@ -177,6 +178,12 @@ type QuoteItemForm = {
   precioUnitario: string;
   descuento: string;
   moneda: string;
+};
+
+type QuoteTotalsSummary = {
+  subtotal: number;
+  taxes: number;
+  total: number;
 };
 
 type CatalogItemOption = {
@@ -688,6 +695,7 @@ export function LeadDrawer({
     formatDateInput(addDays(new Date(), 14)),
   );
   const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => [createQuoteItemForm()]);
+  const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
   const [catalogState, setCatalogState] = useState<CatalogItemsState>({ status: "idle", items: [] });
   const [catalogSearch, setCatalogSearch] = useState("");
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -728,6 +736,16 @@ export function LeadDrawer({
     setQuoteItems([createQuoteItemForm({ moneda: card?.moneda ?? "MXN" })]);
     setCatalogSearch("");
   }, [card?.tarjetaId, card?.moneda]);
+
+  useEffect(() => {
+    if (!computedQuoteTotals) return;
+    const subtotalString = formatNumberInputValue(computedQuoteTotals.subtotal);
+    const taxesString = formatNumberInputValue(computedQuoteTotals.taxes);
+    const totalString = formatNumberInputValue(computedQuoteTotals.total);
+    setQuoteSubtotal((prev) => (prev === subtotalString ? prev : subtotalString));
+    setQuoteImpuestos((prev) => (prev === taxesString ? prev : taxesString));
+    setQuoteTotal((prev) => (prev === totalString ? prev : totalString));
+  }, [computedQuoteTotals]);
 
   useEffect(() => {
     if (noteError && noteText.trim()) {
@@ -1419,9 +1437,10 @@ export function LeadDrawer({
     startQuoteAction(async () => {
       try {
         const emails = parseEmailList(quoteEmailTo);
-        const subtotalValue = parseNumberInput(quoteSubtotal);
-        const taxValue = parseNumberInput(quoteImpuestos);
-        const totalValue = parseNumberInput(quoteTotal);
+        const subtotalValue =
+          computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
+        const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
+        const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
         const itemsPayload = buildQuoteItemsPayload(quoteItems);
         const conceptsPayload = itemsPayload
           .map((item) => {
@@ -2671,16 +2690,18 @@ export function LeadDrawer({
               <label className="text-xs font-medium text-muted-foreground">Subtotal</label>
               <Input
                 value={quoteSubtotal}
-                onChange={(event) => setQuoteSubtotal(event.target.value)}
+                readOnly
                 disabled={quotePending}
                 placeholder="0.00"
               />
             </div>
             <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Impuestos</label>
+              <label className="text-xs font-medium text-muted-foreground">
+                Impuestos (IVA 16%)
+              </label>
               <Input
                 value={quoteImpuestos}
-                onChange={(event) => setQuoteImpuestos(event.target.value)}
+                readOnly
                 disabled={quotePending}
                 placeholder="0.00"
               />
@@ -2689,7 +2710,7 @@ export function LeadDrawer({
               <label className="text-xs font-medium text-muted-foreground">Total</label>
               <Input
                 value={quoteTotal}
-                onChange={(event) => setQuoteTotal(event.target.value)}
+                readOnly
                 disabled={quotePending}
                 placeholder="0.00"
               />
@@ -3401,6 +3422,29 @@ function computeQuoteItemTotal(form: QuoteItemForm): number | null {
     return null;
   }
   return Number(total.toFixed(2));
+}
+
+function computeQuoteTotals(forms: QuoteItemForm[]): QuoteTotalsSummary | null {
+  const parsedTotals = forms
+    .map((form) => computeQuoteItemTotal(form))
+    .filter((value): value is number => value != null);
+  if (!parsedTotals.length) {
+    return null;
+  }
+  const subtotal = parsedTotals.reduce((acc, value) => acc + value, 0);
+  const roundedSubtotal = Number(subtotal.toFixed(2));
+  const taxes = Number((roundedSubtotal * QUOTE_TAX_RATE).toFixed(2));
+  const total = Number((roundedSubtotal + taxes).toFixed(2));
+  return {
+    subtotal: roundedSubtotal,
+    taxes,
+    total,
+  };
+}
+
+function formatNumberInputValue(value: number | null): string {
+  if (value == null) return "";
+  return value.toFixed(2);
 }
 
 function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, unknown>> {

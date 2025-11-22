@@ -53,4 +53,4 @@
 - [ ] Guía de actualización para usuarios (release notes, video corto, checklist de pruebas UAT).
 - [ ] Feature flag / rollout gradual para equipos piloto.
 - [ ] Retroalimentación y mejoras post-lanzamiento (encuestas, métricas de adopción).
-
+- [ ] Habilitar monitoreo (dashboard de adopción, alertas) y documentar owners por módulo.
