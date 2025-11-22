@@ -1270,6 +1270,19 @@ export function LeadDrawer({
     [],
   );
 
+  const handleItemPriceBlur = useCallback((index: number) => {
+    setQuoteItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item;
+        const formatted = formatPresetNumberString(item.precioUnitario);
+        if (formatted === item.precioUnitario) {
+          return item;
+        }
+        return { ...item, precioUnitario: formatted };
+      }),
+    );
+  }, []);
+
   const handleRemoveItem = useCallback(
     (index: number) => {
       setQuoteItems((prev) => {
@@ -2651,6 +2664,7 @@ export function LeadDrawer({
                         <Input
                           value={item.precioUnitario}
                           onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
+                          onBlur={() => handleItemPriceBlur(index)}
                           disabled={quotePending}
                           placeholder="0.00"
                         />
@@ -3395,7 +3409,7 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
     descripcion: initial?.descripcion ?? "",
     unidad: initial?.unidad ?? "unidad",
     cantidad: initial?.cantidad ?? "1",
-    precioUnitario: initial?.precioUnitario ?? "",
+    precioUnitario: formatPresetNumberString(initial?.precioUnitario),
     descuento: initial?.descuento ?? "",
     moneda: (initial?.moneda ?? "MXN").toUpperCase(),
   };
