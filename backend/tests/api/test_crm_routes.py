@@ -68,6 +68,128 @@ class DummyCRMRepository(CRMRepository):
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
 
+    async def list_activities(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_activities", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "tipo": "llamada",
+                "canal": "telefono",
+                "asunto": "Seguimiento",
+                "descripcion": None,
+                "estado": "pendiente",
+                "prioridad": "alta",
+                "fecha_vencimiento": None,
+                "inicio_en": "2024-01-02T12:00:00Z",
+                "fin_en": None,
+                "sla_horas": None,
+                "recordatorio_en": None,
+                "cuenta_id": None,
+                "contacto_id": None,
+                "oportunidad_id": None,
+                "creado_por_usuario_id": None,
+                "asignado_a_usuario_id": None,
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_activity(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_activity", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "estado": kwargs["payload"].get("estado", "pendiente"),
+            "prioridad": kwargs["payload"].get("prioridad", "media"),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def get_activity(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_activity", kwargs))
+        if kwargs["activity_id"] == uuid.UUID(int=1):
+            return None
+        return {
+            "id": str(kwargs["activity_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "tipo": "llamada",
+            "canal": "telefono",
+            "asunto": "Seguimiento",
+            "descripcion": None,
+            "estado": "pendiente",
+            "prioridad": "media",
+            "fecha_vencimiento": None,
+            "inicio_en": "2024-01-02T12:00:00Z",
+            "fin_en": None,
+            "sla_horas": None,
+            "recordatorio_en": None,
+            "cuenta_id": None,
+            "contacto_id": None,
+            "oportunidad_id": None,
+            "creado_por_usuario_id": None,
+            "asignado_a_usuario_id": None,
+            "metadata": {},
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_tickets(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_tickets", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "asunto": "Incidencia",
+                "descripcion": None,
+                "estado": "abierto",
+                "prioridad": "media",
+                "canal_origen": "whatsapp",
+                "cuenta_id": None,
+                "contacto_id": None,
+                "asignado_a_usuario_id": None,
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+                "cerrado_en": None,
+            }
+        ]
+
+    async def create_ticket(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_ticket", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "estado": kwargs["payload"].get("estado", "abierto"),
+            "prioridad": kwargs["payload"].get("prioridad", "media"),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def get_ticket(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_ticket", kwargs))
+        if kwargs["ticket_id"] == uuid.UUID(int=1):
+            return None
+        return {
+            "id": str(kwargs["ticket_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "asunto": "Incidencia",
+            "descripcion": None,
+            "estado": "abierto",
+            "prioridad": "media",
+            "canal_origen": "whatsapp",
+            "cuenta_id": None,
+            "contacto_id": None,
+            "asignado_a_usuario_id": None,
+            "metadata": {},
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+            "cerrado_en": None,
+        }
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -126,3 +248,44 @@ async def test_get_account_not_found(client: AsyncClient) -> None:
 async def test_missing_org_header_returns_400(client: AsyncClient) -> None:
     resp = await client.get("/crm/cuentas")
     assert resp.status_code == 422  # FastAPI validation error for header
+
+
+@pytest.mark.asyncio
+async def test_list_activities(client: AsyncClient) -> None:
+    resp = await client.get("/crm/actividades", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()["items"]
+
+
+@pytest.mark.asyncio
+async def test_create_activity(client: AsyncClient) -> None:
+    body = {"tipo": "llamada", "asunto": "Seguimiento"}
+    resp = await client.post("/crm/actividades", headers=_headers(), json=body)
+    assert resp.status_code == 201
+    assert resp.json()["tipo"] == "llamada"
+
+
+@pytest.mark.asyncio
+async def test_get_activity_not_found(client: AsyncClient) -> None:
+    resp = await client.get(f"/crm/actividades/{uuid.UUID(int=1)}", headers=_headers())
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_tickets(client: AsyncClient) -> None:
+    resp = await client.get("/crm/tickets", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()["items"]
+
+
+@pytest.mark.asyncio
+async def test_create_ticket(client: AsyncClient) -> None:
+    resp = await client.post("/crm/tickets", headers=_headers(), json={"asunto": "Incidencia"})
+    assert resp.status_code == 201
+    assert resp.json()["asunto"] == "Incidencia"
+
+
+@pytest.mark.asyncio
+async def test_get_ticket_not_found(client: AsyncClient) -> None:
+    resp = await client.get(f"/crm/tickets/{uuid.UUID(int=1)}", headers=_headers())
+    assert resp.status_code == 404

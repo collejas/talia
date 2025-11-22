@@ -207,6 +207,41 @@ class CRMActivitiesResponse(BaseModel):
     offset: int
 
 
+class CRMTicket(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    asunto: str
+    descripcion: str | None = None
+    estado: str
+    prioridad: str
+    canal_origen: str | None = None
+    asignado_a_usuario_id: UUID | None = None
+    metadata: dict | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    cerrado_en: datetime | None = None
+
+
+class CRMTicketCreate(BaseModel):
+    asunto: str = Field(..., max_length=255)
+    descripcion: str | None = Field(default=None, max_length=4000)
+    estado: str = Field(default="abierto")
+    prioridad: str = Field(default="media")
+    canal_origen: str | None = Field(default=None, max_length=50)
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    asignado_a_usuario_id: UUID | None = None
+    metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMTicketsResponse(BaseModel):
+    items: list[CRMTicket]
+    limit: int
+    offset: int
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -415,3 +450,61 @@ async def get_activity(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="actividad_no_encontrada")
     return CRMActivity.model_validate(row)
+
+
+@router.get("/tickets", response_model=CRMTicketsResponse)
+async def list_tickets(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    estado: str | None = Query(default=None),
+    prioridad: str | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CRMTicketsResponse:
+    try:
+        rows = await repo.list_tickets(
+            organizacion_id=organizacion_id,
+            estado=estado,
+            prioridad=prioridad,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    items = [CRMTicket.model_validate(row) for row in rows]
+    return CRMTicketsResponse(items=items, limit=limit, offset=offset)
+
+
+@router.post("/tickets", response_model=CRMTicket, status_code=status.HTTP_201_CREATED)
+async def create_ticket(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMTicketCreate,
+) -> CRMTicket:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.create_ticket(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMTicket.model_validate(row)
+
+
+@router.get("/tickets/{ticket_id}", response_model=CRMTicket)
+async def get_ticket(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    ticket_id: UUID,
+) -> CRMTicket:
+    try:
+        row = await repo.get_ticket(organizacion_id=organizacion_id, ticket_id=ticket_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ticket_no_encontrado")
+    return CRMTicket.model_validate(row)

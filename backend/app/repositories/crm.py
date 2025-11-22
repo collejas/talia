@@ -209,6 +209,72 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al obtener actividad: {row!r}")
         return row
 
+    async def list_tickets(
+        self,
+        *,
+        organizacion_id: UUID,
+        estado: str | None = None,
+        prioridad: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        if estado:
+            params["estado"] = f"eq.{estado}"
+        if prioridad:
+            params["prioridad"] = f"eq.{prioridad}"
+        resp = await self._request("GET", "/rest/v1/tickets", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar tickets: {data!r}")
+        return data
+
+    async def create_ticket(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/tickets",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el ticket creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear ticket: {row!r}")
+        return row
+
+    async def get_ticket(
+        self,
+        *,
+        organizacion_id: UUID,
+        ticket_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{ticket_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/tickets", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener ticket: {row!r}")
+        return row
+
     async def append_stage_history(
         self,
         *,
