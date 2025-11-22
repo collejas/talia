@@ -65,6 +65,102 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear cuenta: {row!r}")
         return row
 
+    async def list_pipelines(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "orden.asc",
+        }
+        resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar etapas: {data!r}")
+        return data
+
+    async def list_opportunities(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
+        return data
+
+    async def create_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/oportunidades",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la oportunidad creada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear oportunidad: {row!r}")
+        return row
+
+    async def get_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        opportunity_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{opportunity_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad: {row!r}")
+        return row
+
+    async def append_stage_history(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/oportunidad_etapas_historial",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el historial de etapa")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al registrar historial: {row!r}")
+        return row
+
     async def get_account(
         self,
         *,
