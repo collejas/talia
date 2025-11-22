@@ -55,6 +55,20 @@ const NAVIGATION = {
     { title: "Contactos", url: "/contactos", icon: IconAddressBook },
     { title: "Clientes", url: "/clientes", icon: IconUsersGroup },
     {
+      title: "CRM (beta)",
+      url: "/crm",
+      icon: IconFolder,
+      children: [
+        { title: "Cuentas", url: "/crm" },
+        { title: "Oportunidades", url: "/crm/oportunidades" },
+        { title: "Actividades", url: "/crm/actividades" },
+        { title: "Tickets", url: "/crm/tickets" },
+        { title: "Campañas", url: "/crm/campanas" },
+        { title: "Leads", url: "/crm/leads" },
+        { title: "Notas", url: "/crm/notas" },
+      ],
+    },
+    {
       title: "Prospeccion",
       url: "/prospeccion",
       icon: IconTargetArrow,

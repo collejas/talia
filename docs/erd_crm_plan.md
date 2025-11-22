@@ -133,7 +133,7 @@ Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado
 - ### Avance actual (backend/frontend)
   - `backend/app/api/routes/crm.py` cubre todo el ERD (cuentas, oportunidades, actividades, tickets/comentarios, archivos, tags/taggings, productos, cotizaciones, campañas, leads, notas y audit logs) con pruebas en `backend/tests/api/test_crm_routes.py`.
   - Las tablas legacy (`lead_*`, `cliente_*`) ya tienen `organizacion_id` y políticas RLS multi-tenant (`20260601_201700_rls_legacy_leads.sql`), por lo que el modelo antiguo sigue operativo sin mezclar tenants.
-  - El frontend cuenta con `frontend/panel/src/lib/api/crm.ts` y una vista `/crm` que consume `/crm/cuentas`; falta migrar las secciones principales para abandonar `callSupabaseRest/Rpc`.
+  - El frontend cuenta con `frontend/panel/src/lib/api/crm.ts` y vistas `/crm`, `/crm/oportunidades`, `/crm/tickets`, `/crm/actividades`, `/crm/campanas` y `/crm/leads` (todas apoyadas en `ClientDataTable`); falta migrar las secciones principales (clientes, embudo, etc.) para abandonar `callSupabaseRest/Rpc`.
 
 ### Cierre del plan
 - Con la API `/crm` y el RLS completados, el siguiente foco es migrar gradualmente las vistas del panel y ejecutar la fase de datos/UI (doble escritura, migración de leads legacy y corte definitivo) descrita en las Fases 3 y 4.
