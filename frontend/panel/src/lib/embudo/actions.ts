@@ -7,62 +7,20 @@ import { updateTag } from "next/cache";
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
-import { callSupabaseRest, callSupabaseRpc } from "@/lib/leads/supabase";
-import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
+import { callCrmApi } from "@/lib/api/crm";
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
-
-type LeadRow = {
-  tarjeta_id: string;
-  contacto_id: string;
-  contacto_nombre: string | null;
-  contacto_correo: string | null;
-  contacto_telefono: string | null;
-  contacto_empresa: string | null;
-  contacto_notas: string | null;
-  contacto_necesidad: string | null;
-  contacto_estado: string | null;
-  canal: string | null;
-  etapa_id: string;
-  etapa_nombre: string;
-  etapa_codigo: string;
-  etapa_metadatos: Record<string, unknown> | null;
-  etapa_orden: number;
-  categoria: "abierta" | "ganada" | "perdida";
-  creado_en: string;
-  actualizado_en: string;
-  cerrado_en: string | null;
-  monto_estimado: number | null;
-  moneda: string | null;
-  probabilidad: number | null;
-  proyecto_nombre: string | null;
-  proyecto_necesidades: string | null;
-  lead_score: number | null;
-  asignado_id: string | null;
-  asignado_nombre: string | null;
-  propietario_id: string | null;
-  propietario_nombre: string | null;
-  conversacion_id: string | null;
-  ultimo_mensaje_en: string | null;
-  motivo_cierre: string | null;
-  tags: string[] | null;
-  metadata: Record<string, unknown>;
-  total_rows: number;
-};
-
-type DeleteLeadRow = {
-  tarjeta_id: string;
-  contacto_id: string;
-  contacto_nombre: string | null;
-  contacto_correo: string | null;
-  contacto_telefono: string | null;
-  tablero_id: string;
-  etapa_id: string;
-  etapa_codigo: string | null;
-  eliminado_en: string;
-};
+import { callSupabaseRest, callSupabaseRpc } from "@/lib/leads/supabase";
+import type {
+  EmbudoCard,
+  EmbudoStage,
+  PipelineBoardCard,
+  PipelineBoardStage,
+} from "@/lib/embudo/data";
+import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 
 export type UpdateLeadInput = {
   tarjetaId: string;
+  contactoId?: string | null;
   contacto?: Record<string, unknown>;
   tarjeta?: Record<string, unknown>;
   mergeMetadata?: boolean;
@@ -87,6 +45,7 @@ export type MoveLeadInput = {
 
 export type DeleteLeadInput = {
   tarjetaId: string;
+  contactoId?: string | null;
   motivo?: string | null;
 };
 
@@ -95,6 +54,11 @@ export type LeadActionResult =
   | { ok: false; error: string };
 
 export type LeadDeleteResult = { ok: true; tarjetaId: string; contactoId: string } | { ok: false; error: string };
+
+type PipelineCardResponse = {
+  stage: PipelineBoardStage;
+  card: PipelineBoardCard;
+};
 
 type CalendarBookingResponseRow = {
   status: "ok";
@@ -122,12 +86,6 @@ export type ScheduleLeadDemoResult =
 
 type ContactInsertRow = {
   id: string;
-};
-
-type LeadInsertRow = {
-  id: string;
-  tablero_id: string;
-  etapa_id: string;
 };
 
 type ContactSearchRow = {
@@ -200,6 +158,26 @@ function removeUndefined<T extends Record<string, unknown>>(record: T): T {
   return record;
 }
 
+function normalizeMetadata(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return {};
+}
+
+function mapPipelineCardResponse(payload: PipelineCardResponse): { stage: EmbudoStage; card: EmbudoCard } {
+  const stageMeta = parseMetadatos(payload.stage.metadatos);
+  const stage = adaptStage(payload.stage, stageMeta);
+  const card = adaptCard(payload.card);
+  return {
+    stage: {
+      ...stage,
+      tarjetas: [],
+    },
+    card,
+  };
+}
+
 const LOG_PREFIX = "[embudo:createLeadCard]";
 
 function logDebug(step: string, payload?: Record<string, unknown>) {
@@ -241,60 +219,6 @@ export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<Sc
     const message = error instanceof Error ? error.message : "No se pudo agendar la demo.";
     return { ok: false, error: message };
   }
-}
-
-function mapRowToStage(row: LeadRow): { stage: EmbudoStage; card: EmbudoCard } {
-  const stageMetadata =
-    row.etapa_metadatos && typeof row.etapa_metadatos === "object" && !Array.isArray(row.etapa_metadatos)
-      ? (row.etapa_metadatos as Record<string, unknown>)
-      : {};
-
-  const stage: EmbudoStage = {
-    id: row.etapa_id,
-    nombre: row.etapa_nombre,
-    codigo: row.etapa_codigo || "",
-    categoria: row.categoria,
-    orden: row.etapa_orden ?? Number.MAX_SAFE_INTEGER,
-    tableroId: "",
-    metadatos: stageMetadata,
-    tarjetas: [],
-  };
-
-  const card: EmbudoCard = {
-    tarjetaId: row.tarjeta_id,
-    contactoId: row.contacto_id,
-    conversacionId: row.conversacion_id,
-    nombre: row.contacto_nombre?.trim() || "Lead sin nombre",
-    correo: row.contacto_correo,
-    telefono: row.contacto_telefono,
-    empresa: row.contacto_empresa ?? null,
-  notas: row.contacto_notas ?? null,
-  necesidadProposito: row.contacto_necesidad ?? null,
-    canal: row.canal,
-    estado: row.contacto_estado,
-    etapaId: row.etapa_id,
-    etapaNombre: row.etapa_nombre,
-    monto: row.monto_estimado,
-    moneda: row.moneda,
-    probabilidad: row.probabilidad,
-    proyectoNombre: row.proyecto_nombre ?? null,
-    proyectoNecesidades: row.proyecto_necesidades ?? null,
-    asignadoId: row.asignado_id,
-    asignadoNombre: row.asignado_nombre,
-    prioridad: row.lead_score ?? 0,
-    actualizadoEn: row.actualizado_en,
-    etiquetas: row.tags ?? [],
-    metadata: row.metadata ?? {},
-  };
-
-  return { stage, card };
-}
-
-function extractRow(data: unknown): LeadRow | null {
-  if (!Array.isArray(data) || !data.length) return null;
-  const row = data[0] as LeadRow;
-  if (!row || typeof row !== "object") return null;
-  return row;
 }
 
 export async function searchEmbudoContacts(query: string, limit = 8): Promise<ContactSearchResult[]> {
@@ -410,110 +334,6 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     logDebug("contact-created", { contactId });
   }
 
-  const cardPayload = input.tarjeta ?? {};
-
-  const metadata: Record<string, unknown> = isRecord(cardPayload.metadata) ? { ...cardPayload.metadata } : {};
-  if (!("created_via" in metadata)) {
-    metadata.created_via = "embudo_manual";
-  }
-  if (!("created_stage_id" in metadata)) {
-    metadata.created_stage_id = input.stageId;
-  }
-
-  const leadPayload: Record<string, unknown> = {
-    contacto_id: contactId,
-    tablero_id: input.tableroId,
-    etapa_id: input.stageId,
-    propietario_usuario_id: userId,
-    asignado_a_usuario_id: userId,
-    metadata,
-  };
-
-  const allowedFuentes = new Set(["humano", "asistente", "api"]);
-  const requestedFuente =
-    typeof cardPayload.fuente === "string" ? cardPayload.fuente.trim().toLowerCase() : null;
-  leadPayload.fuente = requestedFuente && allowedFuentes.has(requestedFuente)
-    ? requestedFuente
-    : "api";
-
-  if ("monto_estimado" in cardPayload) {
-    leadPayload.monto_estimado = cardPayload.monto_estimado;
-  }
-
-  if ("moneda" in cardPayload) {
-    const monedaValue = sanitizeNullableString(cardPayload.moneda);
-    if (monedaValue) {
-      leadPayload.moneda = monedaValue.toUpperCase();
-    }
-  }
-
-  if ("probabilidad_override" in cardPayload) {
-    leadPayload.probabilidad_override = cardPayload.probabilidad_override;
-  }
-
-  if ("proyecto_nombre" in cardPayload) {
-    const proyectoNombreValue = sanitizeNullableString(cardPayload.proyecto_nombre);
-    if (proyectoNombreValue !== null) {
-      leadPayload.proyecto_nombre = proyectoNombreValue;
-    }
-  }
-
-  if ("proyecto_necesidades" in cardPayload) {
-    const proyectoNeedsValue = sanitizeNullableString(cardPayload.proyecto_necesidades);
-    if (proyectoNeedsValue !== null) {
-      leadPayload.proyecto_necesidades = proyectoNeedsValue;
-    }
-  }
-
-  removeUndefined(leadPayload);
-  logDebug("build-lead-payload", { leadPayload });
-
-  const leadResult = await callSupabaseRest<LeadInsertRow[]>("lead_tarjetas", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: leadPayload,
-  });
-
-  if (!leadResult.ok) {
-    console.error(`${LOG_PREFIX} lead-insert-failed`, {
-      error: leadResult.error,
-      leadPayload,
-    });
-    if (createdContactId) {
-      await callSupabaseRest("contactos", {
-        method: "DELETE",
-        headers: { Prefer: "return=minimal" },
-        query: { id: `eq.${createdContactId}` },
-      }).catch(() => undefined);
-    }
-    return { ok: false, error: leadResult.error };
-  }
-
-  const leadRow = Array.isArray(leadResult.data) ? (leadResult.data[0] as LeadInsertRow | undefined) : undefined;
-  if (!leadRow?.id) {
-    console.error(`${LOG_PREFIX} lead-insert-missing-id`, { leadPayload, leadResult: leadResult.data });
-    return { ok: false, error: "No se pudo crear el lead." };
-  }
-  logDebug("lead-created", { leadId: leadRow.id, etapaId: leadRow.etapa_id });
-
-  const detailResult = await callSupabaseRpc<LeadRow[]>("panel_lead_update", {
-    body: { p_tarjeta_id: leadRow.id },
-  });
-
-  if (!detailResult.ok) {
-    console.error(`${LOG_PREFIX} lead-detail-failed`, {
-      error: detailResult.error,
-      tarjetaId: leadRow.id,
-    });
-    return { ok: false, error: detailResult.error };
-  }
-
-  const row = extractRow(detailResult.data);
-  if (!row) {
-    console.error(`${LOG_PREFIX} lead-detail-empty`, { tarjetaId: leadRow.id });
-    return { ok: false, error: "No se recibió información del lead creado." };
-  }
-
   if (Object.keys(contactUpdatePayload).length) {
     logDebug("contact-update", { contactId, fields: Object.keys(contactUpdatePayload) });
     const updateResult = await callSupabaseRest("contactos", {
@@ -532,9 +352,57 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     }
   }
 
+  const cardPayload = input.tarjeta ?? {};
+  const baseMetadata = normalizeMetadata(cardPayload.metadata);
+  if (!("created_via" in baseMetadata)) {
+    baseMetadata.created_via = "embudo_manual";
+  }
+  if (!("created_stage_id" in baseMetadata)) {
+    baseMetadata.created_stage_id = input.stageId;
+  }
+
+  const opportunityPayload: Record<string, unknown> = {
+    etapa_id: input.stageId,
+    contacto_principal_id: contactId,
+    titulo:
+      sanitizeNullableString(cardPayload.proyecto_nombre) ??
+      nombreValue ??
+      companyValue ??
+      "Lead sin nombre",
+    descripcion: sanitizeNullableString(cardPayload.proyecto_necesidades),
+    monto_estimado: cardPayload.monto_estimado ?? null,
+    moneda: sanitizeNullableString(cardPayload.moneda)?.toUpperCase() ?? "MXN",
+    probabilidad: cardPayload.probabilidad_override ?? null,
+    propietario_usuario_id: userId,
+    asignado_a_usuario_id: userId,
+    metadata: {
+      ...baseMetadata,
+      canal: cardPayload.canal ?? baseMetadata.canal,
+      lead_score: cardPayload.lead_score ?? baseMetadata.lead_score,
+    },
+  };
+  removeUndefined(opportunityPayload);
+
+  const response = await callCrmApi<PipelineCardResponse>("/crm/pipeline/opportunities", {
+    method: "POST",
+    body: opportunityPayload,
+  });
+
+  if (!response.ok) {
+    console.error(`${LOG_PREFIX} opportunity-create-failed`, { error: response.error, opportunityPayload });
+    if (createdContactId) {
+      await callSupabaseRest("contactos", {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+        query: { id: `eq.${createdContactId}` },
+      }).catch(() => undefined);
+    }
+    return { ok: false, error: response.error };
+  }
+
   updateTag("embudo");
 
-  const mapped = mapRowToStage(row);
+  const mapped = mapPipelineCardResponse(response.data);
   if (!mapped.stage.tableroId) {
     mapped.stage.tableroId = input.tableroId;
   }
@@ -543,42 +411,109 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 }
 
 export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadActionResult> {
-  const payload = {
-    p_tarjeta_id: input.tarjetaId,
-    p_contacto: input.contacto ?? {},
-    p_tarjeta: input.tarjeta ?? {},
-    p_merge_metadata: input.mergeMetadata ?? true,
-  };
+  const contactoPayload = isRecord(input.contacto) ? removeUndefined({ ...input.contacto }) : {};
+  const tarjetaPayload = isRecord(input.tarjeta) ? { ...input.tarjeta } : {};
 
-  const response = await callSupabaseRpc<LeadRow[]>("panel_lead_update", {
-    body: payload,
-  });
+  const opportunityPayload: Record<string, unknown> = {};
 
-  if (!response.ok) {
-    return { ok: false, error: response.error };
+  if ("monto_estimado" in tarjetaPayload) {
+    opportunityPayload.monto_estimado = tarjetaPayload.monto_estimado ?? null;
+  }
+  if ("moneda" in tarjetaPayload) {
+    const monedaValue = sanitizeNullableString(tarjetaPayload.moneda);
+    opportunityPayload.moneda = monedaValue ? monedaValue.toUpperCase() : null;
+  }
+  if ("probabilidad_override" in tarjetaPayload) {
+    opportunityPayload.probabilidad = tarjetaPayload.probabilidad_override ?? null;
+  }
+  if ("proyecto_nombre" in tarjetaPayload) {
+    opportunityPayload.titulo = sanitizeNullableString(tarjetaPayload.proyecto_nombre);
+  }
+  if ("proyecto_necesidades" in tarjetaPayload) {
+    opportunityPayload.descripcion = sanitizeNullableString(tarjetaPayload.proyecto_necesidades);
+  }
+  if ("metadata" in tarjetaPayload) {
+    const metadata = normalizeMetadata(tarjetaPayload.metadata);
+    if (Object.keys(metadata).length) {
+      opportunityPayload.metadata = metadata;
+    }
   }
 
-  const row = extractRow(response.data);
-  if (!row) {
-    return { ok: false, error: "No se recibió información del lead actualizado." };
+  const needsContactUpdate = Object.keys(contactoPayload).length > 0;
+  const hasOpportunityUpdates = Object.keys(opportunityPayload).length > 0;
+
+  let contactId =
+    typeof input.contactoId === "string" && input.contactoId.trim().length ? input.contactoId.trim() : null;
+
+  if (needsContactUpdate) {
+    if (!contactId) {
+      const currentCard = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+      if (!currentCard.ok) {
+        return { ok: false, error: currentCard.error };
+      }
+      contactId = currentCard.data.card.contacto_id ?? null;
+    }
+
+    if (!contactId) {
+      return { ok: false, error: "No se encontró el contacto del lead." };
+    }
+
+    const contactResult = await callSupabaseRest("contactos", {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      query: { id: `eq.${contactId}` },
+      body: contactoPayload,
+    });
+
+    if (!contactResult.ok) {
+      return { ok: false, error: contactResult.error };
+    }
+  }
+
+  let cardResponse: PipelineCardResponse | null = null;
+  if (hasOpportunityUpdates) {
+    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.tarjetaId}`, {
+      method: "PATCH",
+      body: opportunityPayload,
+    });
+    if (!response.ok) {
+      return { ok: false, error: response.error };
+    }
+    cardResponse = response.data;
+  } else {
+    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+    if (!response.ok) {
+      return { ok: false, error: response.error };
+    }
+    cardResponse = response.data;
   }
 
   updateTag("embudo");
-  const mapped = mapRowToStage(row);
+  const mapped = mapPipelineCardResponse(cardResponse);
   return { ok: true, stage: mapped.stage, card: mapped.card };
 }
 
 export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResult> {
-  const payload = {
-    p_tarjeta_id: input.tarjetaId,
-    p_etapa_destino: input.etapaDestino,
-    p_fuente: input.fuente ?? "humano",
-    p_motivo: input.motivo ?? null,
-    p_metadata: input.metadata ?? {},
-    p_expected_etapa: input.expectedEtapa ?? null,
+  const payload: Record<string, unknown> = {
+    etapa_id: input.etapaDestino,
+    fuente: input.fuente ?? "humano",
   };
 
-  const response = await callSupabaseRpc<LeadRow[]>("panel_lead_move", {
+  if (input.motivo !== undefined) {
+    payload.motivo = input.motivo;
+  }
+  if (input.expectedEtapa) {
+    payload.expected_etapa_id = input.expectedEtapa;
+  }
+  if (input.metadata) {
+    const metadata = normalizeMetadata(input.metadata);
+    if (Object.keys(metadata).length) {
+      payload.metadata = metadata;
+    }
+  }
+
+  const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.tarjetaId}`, {
+    method: "PATCH",
     body: payload,
   });
 
@@ -586,33 +521,31 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
     return { ok: false, error: response.error };
   }
 
-  const row = extractRow(response.data);
-  if (!row) {
-    return { ok: false, error: "No se recibió información del movimiento del lead." };
-  }
-
   updateTag("embudo");
-  const mapped = mapRowToStage(row);
+  const mapped = mapPipelineCardResponse(response.data);
   return { ok: true, stage: mapped.stage, card: mapped.card };
 }
 
 export async function deleteLeadCard(input: DeleteLeadInput): Promise<LeadDeleteResult> {
-  const response = await callSupabaseRpc<DeleteLeadRow[]>("panel_lead_delete", {
-    body: {
-      p_tarjeta_id: input.tarjetaId,
-      p_motivo: input.motivo ?? null,
-    },
+  let contactoId =
+    typeof input.contactoId === "string" && input.contactoId.trim().length ? input.contactoId.trim() : null;
+
+  if (!contactoId) {
+    const cardResponse = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+    if (!cardResponse.ok) {
+      return { ok: false, error: cardResponse.error };
+    }
+    contactoId = cardResponse.data.card.contacto_id ?? null;
+  }
+
+  const response = await callCrmApi<unknown>(`/crm/pipeline/opportunities/${input.tarjetaId}`, {
+    method: "DELETE",
   });
 
   if (!response.ok) {
     return { ok: false, error: response.error };
   }
 
-  const row = Array.isArray(response.data) && response.data.length ? (response.data[0] as DeleteLeadRow) : null;
-  if (!row?.tarjeta_id) {
-    return { ok: false, error: "No se recibió confirmación de eliminación." };
-  }
-
   updateTag("embudo");
-  return { ok: true, tarjetaId: row.tarjeta_id, contactoId: row.contacto_id };
+  return { ok: true, tarjetaId: input.tarjetaId, contactoId: contactoId ?? "" };
 }

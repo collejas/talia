@@ -676,6 +676,103 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar eventos de lead: {data!r}")
         return data
 
+    async def get_pipeline_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{oportunidad_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+            "select": self._PIPELINE_SELECT,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener oportunidad del pipeline: {row!r}"
+            )
+        return row
+
+    async def update_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {
+            "id": f"eq.{oportunidad_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/oportunidades",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la oportunidad actualizada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar oportunidad: {row!r}")
+        return row
+
+    async def delete_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+    ) -> None:
+        params = {
+            "id": f"eq.{oportunidad_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/oportunidades",
+            params=params,
+            prefer="return=representation",
+        )
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} al eliminar oportunidad: {resp.text}"
+            )
+
+    async def count_pipeline_visitors(
+        self,
+        *,
+        closed_after: datetime | None = None,
+        closed_before: datetime | None = None,
+    ) -> int:
+        body = {
+            "p_closed_after": closed_after.isoformat() if closed_after else None,
+            "p_closed_before": closed_before.isoformat() if closed_before else None,
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/embudo_visitantes_contador",
+            json=body,
+        )
+        data = resp.json()
+        if isinstance(data, list) and data:
+            entry = data[0]
+            if isinstance(entry, dict) and isinstance(entry.get("total"), (int, float)):
+                return int(entry["total"])
+        if isinstance(data, dict) and isinstance(data.get("total"), (int, float)):
+            return int(data["total"])
+        if isinstance(data, (int, float)):
+            return int(data)
+        raise CRMRepositoryError(f"Respuesta inesperada al contar visitantes: {data!r}")
+
     async def create_lead_event(
         self,
         *,

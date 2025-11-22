@@ -152,6 +152,23 @@ class CRMOpportunityCreate(BaseModel):
         return value.upper()
 
 
+class CRMOpportunityUpdate(BaseModel):
+    cuenta_id: UUID | None = None
+    contacto_principal_id: UUID | None = None
+    etapa_id: UUID | None = None
+    titulo: str | None = Field(default=None, max_length=255)
+    descripcion: str | None = Field(default=None, max_length=1000)
+    monto_estimado: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    probabilidad: float | None = Field(default=None, ge=0, le=100)
+    fecha_cierre_probable: str | None = None
+    estado: str | None = None
+    motivo_perdida: str | None = None
+    propietario_usuario_id: UUID | None = None
+    asignado_a_usuario_id: UUID | None = None
+    metadata: dict | None = Field(default=None)
+
+
 class CRMOpportunitiesResponse(BaseModel):
     items: list[CRMOpportunity]
     limit: int
@@ -541,6 +558,18 @@ class CRMPipelineBoardStage(BaseModel):
 class CRMPipelineBoard(BaseModel):
     stages: list[CRMPipelineBoardStage]
     sin_conversacion: list[CRMPipelineBoardCard]
+    visitantes_sin_chat: int = 0
+
+
+class CRMPipelineCardResponse(BaseModel):
+    stage: CRMPipelineBoardStage
+    card: CRMPipelineBoardCard
+
+
+class CRMPipelineOpportunityPatch(CRMOpportunityUpdate):
+    expected_etapa_id: UUID | None = None
+    motivo: str | None = None
+    fuente: str | None = Field(default=None, max_length=50)
 
 
 class CRMNote(BaseModel):
@@ -723,6 +752,132 @@ async def get_opportunity(
             status_code=status.HTTP_404_NOT_FOUND, detail="oportunidad_no_encontrada"
         )
     return CRMOpportunity.model_validate(row)
+
+
+@router.post(
+    "/pipeline/opportunities",
+    response_model=CRMPipelineCardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def pipeline_create_opportunity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMOpportunityCreate,
+) -> CRMPipelineCardResponse:
+    try:
+        row = await repo.create_opportunity(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    opportunity_id = row.get("id")
+    if not opportunity_id:
+        raise HTTPException(status_code=502, detail="opportunity_create_without_id")
+    return await _build_pipeline_card_response(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=UUID(str(opportunity_id)),
+    )
+
+
+@router.patch(
+    "/pipeline/opportunities/{oportunidad_id}",
+    response_model=CRMPipelineCardResponse,
+)
+async def pipeline_update_opportunity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    oportunidad_id: UUID,
+    payload: CRMPipelineOpportunityPatch,
+) -> CRMPipelineCardResponse:
+    current = await repo.get_pipeline_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if current is None:
+        raise HTTPException(status_code=404, detail="opportunity_not_found")
+    current_stage = _safe_uuid(current.get("etapa_id"))
+    if payload.expected_etapa_id and current_stage and payload.expected_etapa_id != current_stage:
+        raise HTTPException(status_code=409, detail="opportunity_stage_conflict")
+    update_body = payload.model_dump(
+        mode="json",
+        exclude_none=True,
+        exclude={"expected_etapa_id", "motivo", "fuente"},
+    )
+    if "metadata" in update_body:
+        current_metadata = _ensure_dict(current.get("metadata"), default={})
+        new_metadata = _ensure_dict(update_body.get("metadata"), default={})
+        merged_metadata = {**current_metadata, **new_metadata}
+        update_body["metadata"] = merged_metadata
+    try:
+        await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            payload=update_body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if payload.etapa_id and current_stage and payload.etapa_id != current_stage:
+        history_payload = {
+            "oportunidad_id": str(oportunidad_id),
+            "etapa_origen_id": str(current_stage),
+            "etapa_destino_id": str(payload.etapa_id),
+            "cambiado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            "motivo": payload.motivo,
+            "fuente": payload.fuente or "humano",
+            "metadata": payload.metadata or {},
+        }
+        await repo.append_stage_history(
+            organizacion_id=organizacion_id,
+            payload={k: v for k, v in history_payload.items() if v is not None},
+        )
+    return await _build_pipeline_card_response(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+
+
+@router.delete(
+    "/pipeline/opportunities/{oportunidad_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def pipeline_delete_opportunity(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    oportunidad_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/pipeline/cards/{oportunidad_id}",
+    response_model=CRMPipelineCardResponse,
+)
+async def pipeline_get_card(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    oportunidad_id: UUID,
+) -> CRMPipelineCardResponse:
+    return await _build_pipeline_card_response(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
 
 
 @router.get("/actividades", response_model=CRMActivitiesResponse)
@@ -1300,10 +1455,17 @@ async def pipeline_board(
             organizacion_id=organizacion_id,
             limit=limit,
         )
+        visitors = await repo.count_pipeline_visitors(
+            closed_after=datetime.now(timezone.utc) - timedelta(days=30)
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     board = _build_pipeline_board(stages, rows)
-    return board
+    return CRMPipelineBoard(
+        stages=board.stages,
+        sin_conversacion=board.sin_conversacion,
+        visitantes_sin_chat=visitors,
+    )
 
 
 def _build_pipeline_overview(
@@ -1569,7 +1731,30 @@ def _build_pipeline_board(
         reverse=True,
     )
 
-    return CRMPipelineBoard(stages=ordered_stages, sin_conversacion=sin_conversacion)
+    return CRMPipelineBoard(
+        stages=ordered_stages,
+        sin_conversacion=sin_conversacion,
+        visitantes_sin_chat=0,
+    )
+
+
+async def _build_pipeline_card_response(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+) -> CRMPipelineCardResponse:
+    row = await repo.get_pipeline_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="opportunity_not_found")
+    stage = _stage_from_opportunity(row)
+    card = _card_from_opportunity(row)
+    if stage is None or card is None:
+        raise HTTPException(status_code=404, detail="pipeline_card_unavailable")
+    return CRMPipelineCardResponse(stage=stage, card=card)
 
 
 def _stage_from_row(row: dict[str, Any]) -> CRMPipelineBoardStage | None:

@@ -1,7 +1,7 @@
 "use server";
 
 import { callCrmApi } from "@/lib/api/crm";
-import { callSupabaseRpc } from "@/lib/leads/supabase";
+import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 
 const DEFAULT_LIMIT = 200;
 
@@ -50,7 +50,7 @@ export type EmbudoData = {
   errors: string[];
 };
 
-type PipelineBoardCard = {
+export type PipelineBoardCard = {
   tarjeta_id: string;
   contacto_id: string | null;
   conversacion_id: string | null;
@@ -77,7 +77,7 @@ type PipelineBoardCard = {
   metadata: Record<string, unknown> | null;
 };
 
-type PipelineBoardStage = {
+export type PipelineBoardStage = {
   id: string;
   nombre: string;
   codigo: string;
@@ -88,21 +88,11 @@ type PipelineBoardStage = {
   tarjetas: PipelineBoardCard[];
 };
 
-type PipelineBoardResponse = {
+export type PipelineBoardResponse = {
   stages: PipelineBoardStage[];
   sin_conversacion: PipelineBoardCard[];
+  visitantes_sin_chat: number;
 };
-
-type VisitantesCounterRow = {
-  total: number | string | null | undefined;
-};
-
-function parseMetadatos(input: Record<string, unknown> | null | undefined): Record<string, unknown> {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    return {};
-  }
-  return input;
-}
 
 function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
   const value = metadatos["is_counter_only"];
@@ -110,42 +100,23 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
 }
 
 export async function loadEmbudoData(): Promise<EmbudoData> {
-  const [boardResponse, visitantesResult] = await Promise.all([
-    callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
-      searchParams: {
-        limit: String(DEFAULT_LIMIT),
-      },
-    }),
-    callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>("embudo_visitantes_contador", {
-      body: {
-        p_closed_after: null,
-        p_closed_before: null,
-      },
-    }),
-  ]);
+  const boardResponse = await callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
+    searchParams: {
+      limit: String(DEFAULT_LIMIT),
+    },
+  });
 
   const errors: string[] = [];
   if (!boardResponse.ok) errors.push(boardResponse.error);
-  if (!visitantesResult.ok) errors.push(visitantesResult.error);
 
   const { stages, sinConversacion } = boardResponse.ok
     ? adaptPipelineBoard(boardResponse.data)
     : { stages: [], sinConversacion: [] };
 
-  let visitantesSinChat = 0;
-  if (visitantesResult.ok) {
-    const payload = visitantesResult.data;
-    const row = Array.isArray(payload) ? payload[0] : payload;
-    const value = row?.total;
-    if (typeof value === "number") {
-      visitantesSinChat = value;
-    } else if (typeof value === "string") {
-      const parsed = parseInt(value, 10);
-      if (!Number.isNaN(parsed)) {
-        visitantesSinChat = parsed;
-      }
-    }
-  }
+  const visitantesSinChat =
+    boardResponse.ok && typeof boardResponse.data?.visitantes_sin_chat === "number"
+      ? boardResponse.data.visitantes_sin_chat
+      : 0;
 
   return {
     stages,
@@ -184,57 +155,4 @@ function adaptPipelineBoard(
     : [];
 
   return { stages, sinConversacion };
-}
-
-function adaptStage(stage: PipelineBoardStage, metadatos: Record<string, unknown>): EmbudoStage {
-  const tarjetas = Array.isArray(stage.tarjetas)
-    ? stage.tarjetas
-        .map(adaptCard)
-        .sort(
-          (a, b) =>
-            (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) -
-            (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0),
-        )
-    : [];
-
-  return {
-    id: stage.id,
-    nombre: stage.nombre,
-    codigo: stage.codigo,
-    categoria: stage.categoria,
-    orden: typeof stage.orden === "number" ? stage.orden : Number.MAX_SAFE_INTEGER,
-    tableroId: stage.tablero_id ?? "",
-    metadatos,
-    tarjetas,
-  };
-}
-
-function adaptCard(card: PipelineBoardCard): EmbudoCard {
-  const metadata = parseMetadatos(card.metadata);
-  return {
-    tarjetaId: card.tarjeta_id,
-    contactoId: card.contacto_id ?? "",
-    conversacionId: card.conversacion_id ?? null,
-    nombre: card.nombre || "Lead sin nombre",
-    correo: card.correo,
-    telefono: card.telefono,
-    empresa: card.empresa,
-    notas: card.notas,
-    necesidadProposito: card.necesidad_proposito ?? null,
-    canal: card.canal,
-    estado: card.estado,
-    etapaId: card.etapa_id,
-    etapaNombre: card.etapa_nombre,
-    monto: card.monto,
-    moneda: card.moneda,
-    probabilidad: card.probabilidad,
-    proyectoNombre: card.proyecto_nombre ?? null,
-    proyectoNecesidades: card.proyecto_necesidades ?? null,
-    asignadoId: card.asignado_id,
-    asignadoNombre: card.asignado_nombre,
-    prioridad: card.prioridad ?? 0,
-    actualizadoEn: typeof card.actualizado_en === "string" ? card.actualizado_en : null,
-    etiquetas: Array.isArray(card.etiquetas) ? card.etiquetas : [],
-    metadata,
-  };
 }

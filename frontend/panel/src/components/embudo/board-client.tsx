@@ -249,6 +249,7 @@ export function EmbudoBoardClient({
     const stagePrep = buildUpdatedDemoStagePrep(scheduleContext.card, isoValue, bookingResult.booking.booking_id);
     const updateResult = await updateLeadCard({
       tarjetaId: scheduleContext.card.tarjetaId,
+      contactoId: scheduleContext.card.contactoId,
       tarjeta: {
         metadata: {
           stage_prep: stagePrep,
@@ -345,6 +346,7 @@ export function EmbudoBoardClient({
 
     const result = await updateLeadCard({
       tarjetaId: selectedCard.tarjetaId,
+      contactoId: selectedCard.contactoId,
       contacto: payload.contacto,
       tarjeta: payload.tarjeta,
       mergeMetadata: payload.mergeMetadata ?? true,
@@ -402,7 +404,7 @@ export function EmbudoBoardClient({
       return { ok: false, error: "No se encontró el lead seleccionado." };
     }
 
-    const result = await deleteLeadCard({ tarjetaId: selectedCard.tarjetaId });
+    const result = await deleteLeadCard({ tarjetaId: selectedCard.tarjetaId, contactoId: selectedCard.contactoId });
     if (result.ok) {
       setStages((prev) =>
         sortStages(
