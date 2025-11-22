@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useState, useTransition } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import {
   IconArchive,
   IconCircleCheck,
@@ -159,6 +159,11 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
   const [isPending, startTransition] = useTransition()
 
   const form = useForm<CatalogItemFormValues>({ defaultValues: EMPTY_FORM })
+
+  const tipoWatch = useWatch({ control: form.control, name: "tipo" }) as CatalogItemFormValues["tipo"] | undefined;
+  const monedaWatch = useWatch({ control: form.control, name: "moneda" }) as string | undefined;
+  const activoWatch = useWatch({ control: form.control, name: "activo" }) as boolean | undefined;
+  const requiereFacturaWatch = useWatch({ control: form.control, name: "requiereFactura" }) as boolean | undefined;
 
   const visibleItems = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -517,7 +522,7 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="catalog-tipo">Tipo</Label>
-                <Select value={form.watch("tipo")} onValueChange={(value) => form.setValue("tipo", value as CatalogItemFormValues["tipo"])}>
+                <Select value={tipoWatch} onValueChange={(value) => form.setValue("tipo", value as CatalogItemFormValues["tipo"])}>
                   <SelectTrigger id="catalog-tipo">
                     <SelectValue placeholder="Selecciona un tipo" />
                   </SelectTrigger>
@@ -547,7 +552,7 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-moneda">Moneda</Label>
-                <Select value={form.watch("moneda")} onValueChange={(value) => form.setValue("moneda", value)}>
+                <Select value={monedaWatch} onValueChange={(value) => form.setValue("moneda", value)}>
                   <SelectTrigger id="catalog-moneda">
                     <SelectValue placeholder="Moneda" />
                   </SelectTrigger>
@@ -593,7 +598,7 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="catalog-activo"
-                  checked={form.watch("activo")}
+                  checked={activoWatch}
                   onCheckedChange={(checked) => form.setValue("activo", Boolean(checked))}
                 />
                 <Label htmlFor="catalog-activo" className="text-sm font-normal">
@@ -603,7 +608,7 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="catalog-requiere-factura"
-                  checked={form.watch("requiereFactura")}
+                  checked={requiereFacturaWatch}
                   onCheckedChange={(checked) => form.setValue("requiereFactura", Boolean(checked))}
                 />
                 <Label htmlFor="catalog-requiere-factura" className="text-sm font-normal">

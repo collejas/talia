@@ -18,6 +18,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -48,6 +49,7 @@ import {
   IconMail,
   IconMessageCircle,
   IconPlus,
+  IconSearch,
   IconTargetArrow,
   IconTrash,
   IconTrophy,
@@ -141,6 +143,7 @@ type LeadQuoteEntry = {
   subtotal: number | null;
   taxes: number | null;
   validUntil: string | null;
+  items: LeadQuoteItemEntry[] | null;
 };
 
 type QuotesState =
@@ -149,11 +152,48 @@ type QuotesState =
   | { status: "loaded"; data: LeadQuoteEntry[] }
   | { status: "error"; data: LeadQuoteEntry[]; error: string };
 
-type QuoteConceptForm = {
-  title: string;
-  description: string;
-  amount: string;
+type LeadQuoteItemEntry = {
+  id: string;
+  catalogItemId: string | null;
+  title: string | null;
+  description: string | null;
+  unit: string | null;
+  quantity: number | null;
+  unitPrice: number | null;
+  discount: number | null;
+  subtotal: number | null;
+  taxes: number | null;
+  total: number | null;
+  currency: string | null;
 };
+
+type QuoteItemForm = {
+  key: string;
+  catalogItemId: string | null;
+  nombre: string;
+  descripcion: string;
+  unidad: string;
+  cantidad: string;
+  precioUnitario: string;
+  descuento: string;
+  moneda: string;
+};
+
+type CatalogItemOption = {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  unidad: string;
+  precioBase: number | null;
+  moneda: string;
+  activo: boolean;
+};
+
+type CatalogItemsState =
+  | { status: "idle"; items: CatalogItemOption[] }
+  | { status: "loading"; items: CatalogItemOption[] }
+  | { status: "loaded"; items: CatalogItemOption[] }
+  | { status: "error"; items: CatalogItemOption[]; error: string };
 
 type DrawerPrepOption = {
   value: string;
@@ -647,7 +687,9 @@ export function LeadDrawer({
   const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
     formatDateInput(addDays(new Date(), 14)),
   );
-  const [quoteConcepts, setQuoteConcepts] = useState<QuoteConceptForm[]>([{ title: "", description: "", amount: "" }]);
+  const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => [createQuoteItemForm()]);
+  const [catalogState, setCatalogState] = useState<CatalogItemsState>({ status: "idle", items: [] });
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteSuccess, setQuoteSuccess] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -681,6 +723,11 @@ export function LeadDrawer({
     setQuoteSheetOpen(false);
     setQuoteSuccess(null);
   }, [card?.tarjetaId]);
+
+  useEffect(() => {
+    setQuoteItems([createQuoteItemForm({ moneda: card?.moneda ?? "MXN" })]);
+    setCatalogSearch("");
+  }, [card?.tarjetaId, card?.moneda]);
 
   useEffect(() => {
     if (noteError && noteText.trim()) {
@@ -819,6 +866,37 @@ export function LeadDrawer({
     }
   }, [card]);
 
+  const loadCatalogItems = useCallback(async () => {
+    setCatalogState((prev) => {
+      if (prev.status === "loading") {
+        return prev;
+      }
+      return { status: "loading", items: prev.items };
+    });
+    try {
+      const response = await fetch(`/api/catalog/items?limit=500`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = typeof body?.error === "string" ? body.error : `Error ${response.status}`;
+        throw new Error(message);
+      }
+      const rows = Array.isArray(body?.items) ? (body.items as unknown[]) : [];
+      const mapped = rows
+        .map((row: unknown) => mapCatalogApiRow(row))
+        .filter((item): item is CatalogItemOption => !!item);
+      setCatalogState({ status: "loaded", items: mapped });
+    } catch (catalogError) {
+      setCatalogState({
+        status: "error",
+        items: [],
+        error:
+          catalogError instanceof Error
+            ? catalogError.message
+            : "No se pudo cargar el catálogo.",
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (!open || !card?.tarjetaId) return;
     if (activeTab === "notas" || activeTab === "historial") {
@@ -836,6 +914,12 @@ export function LeadDrawer({
   }, [open, card?.tarjetaId, quotesState.status, fetchQuotes]);
 
   useEffect(() => {
+    if (quoteSheetOpen && catalogState.status === "idle") {
+      void loadCatalogItems();
+    }
+  }, [quoteSheetOpen, catalogState.status, loadCatalogItems]);
+
+  useEffect(() => {
     if (card?.moneda) {
       setQuoteMoneda(card.moneda);
     }
@@ -848,6 +932,16 @@ export function LeadDrawer({
       ),
     [historyState.data],
   );
+
+  const filteredCatalogItems = useMemo(() => {
+    const baseList = catalogState.items.filter((item) => item.activo);
+    const query = catalogSearch.trim().toLowerCase();
+    if (!query) return baseList;
+    return baseList.filter((item) => {
+      const haystack = `${item.nombre} ${item.descripcion ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [catalogState.items, catalogSearch]);
 
   const handleAddNote = useCallback(async () => {
     if (!card) return;
@@ -1136,22 +1230,43 @@ export function LeadDrawer({
     setContactSearchError(null);
   };
 
-  const handleConceptFieldChange = (index: number, field: keyof QuoteConceptForm, value: string) => {
-    setQuoteConcepts((prev) =>
-      prev.map((concept, idx) => (idx === index ? { ...concept, [field]: value } : concept)),
-    );
-  };
+  const handleAddEmptyItem = useCallback(() => {
+    setQuoteItems((prev) => [...prev, createQuoteItemForm({ moneda: quoteMoneda || "MXN" })]);
+  }, [quoteMoneda]);
 
-  const handleAddConceptRow = () => {
-    setQuoteConcepts((prev) => [...prev, { title: "", description: "", amount: "" }]);
-  };
+  const handleAddCatalogItem = useCallback(
+    (option: CatalogItemOption) => {
+      setQuoteItems((prev) => [
+        ...prev,
+        catalogOptionToQuoteItem(option, quoteMoneda || option.moneda || "MXN"),
+      ]);
+      setQuoteError(null);
+    },
+    [quoteMoneda],
+  );
 
-  const handleRemoveConceptRow = (index: number) => {
-    setQuoteConcepts((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((_, idx) => idx !== index);
-    });
-  };
+  const handleItemFieldChange = useCallback(
+    (index: number, field: keyof QuoteItemForm, value: string) => {
+      setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item)));
+    },
+    [],
+  );
+
+  const handleRemoveItem = useCallback(
+    (index: number) => {
+      setQuoteItems((prev) => {
+        if (prev.length <= 1) {
+          return [createQuoteItemForm({ moneda: quoteMoneda || "MXN" })];
+        }
+        return prev.filter((_, idx) => idx !== index);
+      });
+    },
+    [quoteMoneda],
+  );
+
+  const handleUnlinkCatalogItem = useCallback((index: number) => {
+    setQuoteItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, catalogItemId: null } : item)));
+  }, []);
 
   const handleQuoteChannelChange = (nextChannel: QuoteChannel) => {
     setQuoteChannel(nextChannel);
@@ -1242,14 +1357,17 @@ export function LeadDrawer({
         latestQuote?.taxes != null && Number.isFinite(latestQuote.taxes) ? String(latestQuote.taxes) : "";
       const validUntil =
         formatIsoDateForInput(latestQuote?.validUntil) ?? formatDateInput(addDays(new Date(), 14));
-      const conceptForms = latestQuote?.concepts?.length
-        ? convertConceptRecordsToForm(latestQuote.concepts)
+      const initialItems = quoteEntryToItemForms(latestQuote, defaultDescription, defaultMoneda);
+      const fallbackItems = initialItems.length
+        ? initialItems
         : [
-            {
-              title: card.proyectoNombre?.trim() || "Implementación Tal-IA",
-              description: defaultDescription,
-              amount: defaultSubtotal,
-            },
+            createQuoteItemForm({
+              nombre: card.proyectoNombre?.trim() || "Implementación Tal-IA",
+              descripcion: defaultDescription,
+              cantidad: defaultSubtotal ? "1" : "1",
+              precioUnitario: defaultSubtotal || "",
+              moneda: defaultMoneda,
+            }),
           ];
       setQuoteChannel(channel);
       setQuoteTitle(defaultTitle);
@@ -1263,7 +1381,7 @@ export function LeadDrawer({
       setQuoteTotal(defaultTotal);
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
-      setQuoteConcepts(conceptForms);
+      setQuoteItems(fallbackItems);
       setQuoteError(null);
       setQuoteSuccess(null);
       setQuoteSheetOpen(true);
@@ -1304,26 +1422,27 @@ export function LeadDrawer({
         const subtotalValue = parseNumberInput(quoteSubtotal);
         const taxValue = parseNumberInput(quoteImpuestos);
         const totalValue = parseNumberInput(quoteTotal);
-        const conceptsPayload = quoteConcepts
-          .map((concept) => {
-            const title = concept.title.trim();
-            const description = concept.description.trim();
-            const amount = parseNumberInput(concept.amount);
-            if (!title && !description && amount == null) {
+        const itemsPayload = buildQuoteItemsPayload(quoteItems);
+        const conceptsPayload = itemsPayload
+          .map((item) => {
+            const title = typeof item.titulo === "string" ? item.titulo : null;
+            const description = typeof item.descripcion === "string" ? item.descripcion : null;
+            const total = typeof item.total === "number" ? item.total : null;
+            if (!title && !description && total == null) {
               return null;
             }
-            const payload: Record<string, unknown> = {};
-            if (title) payload.titulo = title;
-            if (description) payload.descripcion = description;
-            if (amount != null) payload.total = amount;
-            return payload;
+            return {
+              titulo: title,
+              descripcion: description,
+              total,
+            };
           })
-          .filter(Boolean);
+          .filter((concept): concept is { titulo: string | null; descripcion: string | null; total: number | null } => !!concept);
 
-        const hasConcepts = conceptsPayload.length > 0;
+        const hasItems = itemsPayload.length > 0;
         const hasTotals = subtotalValue != null || totalValue != null;
-        if (!hasConcepts && !hasTotals) {
-          setQuoteError("Agrega al menos un concepto o define un monto estimado.");
+        if (!hasItems && !hasTotals) {
+          setQuoteError("Agrega al menos un concepto con cantidad o define un monto estimado.");
           return;
         }
         const currencyValue = (quoteMoneda || "MXN").trim().toUpperCase();
@@ -1336,7 +1455,8 @@ export function LeadDrawer({
           channel: quoteChannel,
           titulo: quoteTitle.trim() || null,
           descripcion: quoteDescription.trim() || null,
-          conceptos: conceptsPayload,
+          conceptos: conceptsPayload.length ? conceptsPayload : undefined,
+          items: itemsPayload,
           subtotal: subtotalValue ?? null,
           impuestos: taxValue ?? null,
           total: totalValue ?? null,
@@ -2370,62 +2490,178 @@ export function LeadDrawer({
               />
             </div>
 
-            <div className="space-y-3 rounded-xl border border-border/70 bg-background/60 p-3">
-              <div className="flex items-start justify-between">
+            <div className="space-y-4 rounded-xl border border-border/70 bg-background/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h5 className="text-sm font-semibold text-foreground">Conceptos</h5>
-                  <p className="text-xs text-muted-foreground">Puedes listar servicios o partidas.</p>
+                  <h5 className="text-sm font-semibold text-foreground">Productos y conceptos</h5>
+                  <p className="text-xs text-muted-foreground">
+                    Selecciona elementos del catálogo o captura partidas manuales.
+                  </p>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="gap-1"
-                  onClick={handleAddConceptRow}
-                  disabled={quotePending || quoteConcepts.length >= 8}
-                >
+                <Button type="button" size="sm" className="gap-1" onClick={handleAddEmptyItem} disabled={quotePending}>
                   <IconPlus className="size-4" />
-                  Agregar
+                  Línea en blanco
                 </Button>
               </div>
+
+              <div className="space-y-2 rounded-lg border border-dashed border-border/70 bg-background p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex flex-1 items-center gap-2">
+                    <IconSearch className="size-4 text-muted-foreground" />
+                    <Input
+                      value={catalogSearch}
+                      onChange={(event) => setCatalogSearch(event.target.value)}
+                      placeholder="Buscar en catálogo"
+                      disabled={catalogState.status === "loading"}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCatalogSearch("")}
+                    disabled={!catalogSearch.length}
+                  >
+                    Limpiar
+                  </Button>
+                </div>
+                <div className="rounded-lg border bg-muted/10">
+                  <ScrollArea className="max-h-48">
+                    {catalogState.status === "loading" || catalogState.status === "idle" ? (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Cargando catálogo…</p>
+                    ) : catalogState.status === "error" ? (
+                      <p className="px-3 py-2 text-xs text-destructive">
+                        {catalogState.error || "No se pudo cargar el catálogo."}
+                      </p>
+                    ) : filteredCatalogItems.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        {catalogSearch ? "Sin resultados para tu búsqueda." : "No hay productos activos."}
+                      </p>
+                    ) : (
+                      filteredCatalogItems.slice(0, 12).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="w-full border-b border-border/40 px-3 py-2 text-left text-xs last:border-b-0 hover:bg-muted/50"
+                          onClick={() => handleAddCatalogItem(item)}
+                          disabled={quotePending}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-sm font-medium">
+                            <span className="line-clamp-1">{item.nombre}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatQuoteCurrency(item.precioBase, item.moneda)}
+                            </span>
+                          </div>
+                          {item.descripcion ? (
+                            <p className="line-clamp-2 text-[11px] text-muted-foreground">{item.descripcion}</p>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </ScrollArea>
+                </div>
+              </div>
+
               <div className="space-y-3">
-                {quoteConcepts.map((concept, index) => (
-                  <div key={`concept-${index}`} className="space-y-2 rounded-lg border border-border/50 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-muted-foreground">Concepto {index + 1}</span>
-                      {quoteConcepts.length > 1 ? (
+                {quoteItems.map((item, index) => (
+                  <div key={item.key} className="space-y-3 rounded-lg border border-border/50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-muted-foreground">Concepto {index + 1}</span>
+                        {item.catalogItemId ? (
+                          <span className="text-[11px] text-emerald-600">Vinculado al catálogo</span>
+                        ) : null}
+                      </div>
+                      <div className="flex gap-2">
+                        {item.catalogItemId ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUnlinkCatalogItem(index)}
+                            disabled={quotePending}
+                          >
+                            Quitar vínculo
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           size="icon"
                           variant="ghost"
-                          onClick={() => handleRemoveConceptRow(index)}
+                          onClick={() => handleRemoveItem(index)}
                           disabled={quotePending}
                         >
                           <IconTrash className="size-4" />
                         </Button>
-                      ) : null}
+                      </div>
                     </div>
                     <Input
-                      value={concept.title}
-                      onChange={(event) => handleConceptFieldChange(index, "title", event.target.value)}
+                      value={item.nombre}
+                      onChange={(event) => handleItemFieldChange(index, "nombre", event.target.value)}
                       disabled={quotePending}
                       placeholder="Nombre del concepto"
                     />
                     <Textarea
-                      value={concept.description}
-                      onChange={(event) =>
-                        handleConceptFieldChange(index, "description", event.target.value)
-                      }
+                      value={item.descripcion}
+                      onChange={(event) => handleItemFieldChange(index, "descripcion", event.target.value)}
                       disabled={quotePending}
                       rows={2}
                       placeholder="Descripción o notas"
                     />
-                    <Input
-                      value={concept.amount}
-                      onChange={(event) => handleConceptFieldChange(index, "amount", event.target.value)}
-                      disabled={quotePending}
-                      placeholder="Monto (opcional)"
-                    />
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Cantidad</label>
+                        <Input
+                          value={item.cantidad}
+                          onChange={(event) => handleItemFieldChange(index, "cantidad", event.target.value)}
+                          disabled={quotePending}
+                          placeholder="1"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Unidad</label>
+                        <Input
+                          value={item.unidad}
+                          onChange={(event) => handleItemFieldChange(index, "unidad", event.target.value)}
+                          disabled={quotePending}
+                          placeholder="unidad"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Precio unitario</label>
+                        <Input
+                          value={item.precioUnitario}
+                          onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
+                          disabled={quotePending}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Descuento</label>
+                        <Input
+                          value={item.descuento}
+                          onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
+                          disabled={quotePending}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium uppercase text-muted-foreground">Moneda</label>
+                        <Input
+                          value={item.moneda}
+                          onChange={(event) => handleItemFieldChange(index, "moneda", event.target.value.toUpperCase())}
+                          disabled={quotePending}
+                          maxLength={3}
+                          placeholder={quoteMoneda || "MXN"}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Total estimado</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatQuoteCurrency(computeQuoteItemTotal(item), item.moneda || quoteMoneda)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2984,9 +3220,7 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
   const row = isRecord(input) ? input : {};
   const totalValue = toNumber(row.total);
   return {
-    id: String(
-      row.id ?? `${row.version ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`,
-    ),
+    id: String(row.id ?? `${row.version ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`),
     version: Number.isFinite(Number(row.version)) ? Number(row.version) : 1,
     status: typeof row.estado === "string" ? row.estado : "borrador",
     channel: typeof row.canal_envio === "string" ? row.canal_envio : null,
@@ -3001,6 +3235,39 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),
     validUntil: typeof row.valido_hasta === "string" ? row.valido_hasta : null,
+    items: Array.isArray(row.items)
+      ? (row.items as unknown[])
+          .map((item) => mapQuoteItemEntry(item))
+          .filter((entry) => !!entry)
+      : null,
+  };
+}
+
+function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
+  const row = isRecord(input) ? input : {};
+  return {
+    id: String(row.id ?? generateLocalId()),
+    catalogItemId: typeof row.catalog_item_id === "string" ? row.catalog_item_id : null,
+    title:
+      typeof row.titulo === "string"
+        ? row.titulo
+        : typeof row.title === "string"
+          ? row.title
+          : null,
+    description:
+      typeof row.descripcion === "string"
+        ? row.descripcion
+        : typeof row.description === "string"
+          ? row.description
+          : null,
+    unit: typeof row.unidad === "string" ? row.unidad : null,
+    quantity: toNumber(row.cantidad),
+    unitPrice: toNumber(row.precio_unitario ?? row.precioUnitario),
+    discount: toNumber(row.descuento),
+    subtotal: toNumber(row.subtotal),
+    taxes: toNumber(row.impuestos),
+    total: toNumber(row.total),
+    currency: typeof row.moneda === "string" ? row.moneda : null,
   };
 }
 
@@ -3099,29 +3366,163 @@ function parseEmailList(value: string): string[] {
     .filter((item) => item.length > 0);
 }
 
-function convertConceptRecordsToForm(records: Record<string, unknown>[]): QuoteConceptForm[] {
-  if (!records.length) {
-    return [{ title: "", description: "", amount: "" }];
+function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
+  return {
+    key: generateLocalId(),
+    catalogItemId: initial?.catalogItemId ?? null,
+    nombre: initial?.nombre ?? "",
+    descripcion: initial?.descripcion ?? "",
+    unidad: initial?.unidad ?? "unidad",
+    cantidad: initial?.cantidad ?? "1",
+    precioUnitario: initial?.precioUnitario ?? "",
+    descuento: initial?.descuento ?? "",
+    moneda: (initial?.moneda ?? "MXN").toUpperCase(),
+  };
+}
+
+function catalogOptionToQuoteItem(option: CatalogItemOption, fallbackCurrency: string): QuoteItemForm {
+  return createQuoteItemForm({
+    catalogItemId: option.id,
+    nombre: option.nombre,
+    descripcion: option.descripcion,
+    unidad: option.unidad,
+    cantidad: "1",
+    precioUnitario: option.precioBase != null ? String(option.precioBase) : "",
+    moneda: option.moneda || fallbackCurrency,
+  });
+}
+
+function computeQuoteItemTotal(form: QuoteItemForm): number | null {
+  const quantity = parseNumberInput(form.cantidad) ?? 1;
+  const unitPrice = parseNumberInput(form.precioUnitario) ?? 0;
+  const discount = parseNumberInput(form.descuento) ?? 0;
+  const total = quantity * unitPrice - discount;
+  if (!Number.isFinite(total) || total < 0) {
+    return null;
   }
-  const entries = records
+  return Number(total.toFixed(2));
+}
+
+function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, unknown>> {
+  return forms
+    .map((form, index) => {
+      const quantity = parseNumberInput(form.cantidad);
+      const unitPrice = parseNumberInput(form.precioUnitario);
+      const discount = parseNumberInput(form.descuento);
+      const total = computeQuoteItemTotal(form);
+      const hasContent =
+        (form.nombre && form.nombre.trim()) ||
+        (form.descripcion && form.descripcion.trim()) ||
+        quantity != null ||
+        unitPrice != null ||
+        discount != null;
+      if (!hasContent) {
+        return null;
+      }
+      const payload: Record<string, unknown> = {
+        catalog_item_id: form.catalogItemId,
+        titulo: form.nombre.trim() || null,
+        descripcion: form.descripcion.trim() || null,
+        unidad: form.unidad.trim() || "unidad",
+        cantidad: quantity ?? null,
+        precio_unitario: unitPrice ?? null,
+        descuento: discount ?? null,
+        total,
+        moneda: form.moneda.trim().slice(0, 3).toUpperCase(),
+        orden: index + 1,
+      };
+      return payload;
+    })
+    .filter((item): item is Record<string, unknown> => !!item);
+}
+
+function quoteEntryToItemForms(
+  entry: LeadQuoteEntry | undefined,
+  fallbackDescription: string,
+  fallbackCurrency: string,
+): QuoteItemForm[] {
+  if (!entry) return [];
+  if (entry.items && entry.items.length) {
+    return entry.items.map((item) =>
+      createQuoteItemForm({
+        catalogItemId: item.catalogItemId,
+        nombre: item.title ?? "",
+        descripcion: item.description ?? fallbackDescription,
+        unidad: item.unit ?? "unidad",
+        cantidad: item.quantity != null ? String(item.quantity) : "1",
+        precioUnitario: item.unitPrice != null ? String(item.unitPrice) : "",
+        descuento: item.discount != null ? String(item.discount) : "",
+        moneda: item.currency ?? fallbackCurrency,
+      }),
+    );
+  }
+  if (entry.concepts && entry.concepts.length) {
+    return convertConceptsToItemForms(entry.concepts, fallbackDescription, fallbackCurrency);
+  }
+  return [];
+}
+
+function convertConceptsToItemForms(
+  records: Record<string, unknown>[],
+  fallbackDescription: string,
+  fallbackCurrency: string,
+): QuoteItemForm[] {
+  if (!records.length) {
+    return [];
+  }
+  return records
     .map((record) => {
       if (!isRecord(record)) return null;
-      return {
-        title: typeof record.titulo === "string" ? record.titulo : typeof record.title === "string" ? record.title : "",
-        description:
-          typeof record.descripcion === "string"
-            ? record.descripcion
-            : typeof record.description === "string"
-              ? record.description
-              : "",
-        amount:
-          record.total != null && Number.isFinite(Number(record.total))
-            ? String(Number(record.total))
-            : "",
-      };
+      const title =
+        typeof record.titulo === "string"
+          ? record.titulo
+          : typeof record.title === "string"
+            ? record.title
+            : "";
+      const description =
+        typeof record.descripcion === "string"
+          ? record.descripcion
+          : typeof record.description === "string"
+            ? record.description
+            : fallbackDescription;
+      const total = toNumber(record.total);
+      return createQuoteItemForm({
+        nombre: title,
+        descripcion: description,
+        cantidad: "1",
+        precioUnitario: total != null ? String(total) : "",
+        moneda: fallbackCurrency,
+      });
     })
-    .filter(Boolean) as QuoteConceptForm[];
-  return entries.length ? entries : [{ title: "", description: "", amount: "" }];
+    .filter((item): item is QuoteItemForm => !!item);
+}
+
+function mapCatalogApiRow(input: unknown): CatalogItemOption | null {
+  const row = isRecord(input) ? input : null;
+  if (!row) return null;
+  const id = typeof row.id === "string" ? row.id : null;
+  if (!id) return null;
+  return {
+    id,
+    nombre: typeof row.nombre === "string" ? row.nombre : "Producto sin nombre",
+    descripcion:
+      typeof row.descripcion_corta === "string"
+        ? row.descripcion_corta
+        : typeof row.descripcion === "string"
+          ? row.descripcion
+          : "",
+    unidad: typeof row.unidad === "string" && row.unidad.trim() ? row.unidad : "unidad",
+    precioBase: toNumber(row.precio_base ?? row.precioBase),
+    moneda: (typeof row.moneda === "string" && row.moneda.trim()) ? row.moneda.toUpperCase() : "MXN",
+    activo: typeof row.activo === "boolean" ? row.activo : true,
+  };
+}
+
+function generateLocalId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function formatIsoDateForInput(value: string | null): string | null {

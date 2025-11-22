@@ -198,7 +198,7 @@ async function authenticatedFetch(path: string, init: RequestInit = {}): Promise
   })
 }
 
-async function parseJson(response: Response): Promise<any> {
+async function parseJson(response: Response): Promise<unknown> {
   try {
     return await response.json()
   } catch {
@@ -206,12 +206,20 @@ async function parseJson(response: Response): Promise<any> {
   }
 }
 
-function extractError(payload: any, fallback: string): string {
-  if (payload && typeof payload === "object") {
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object") {
+    return value as Record<string, unknown>
+  }
+  return null
+}
+
+function extractError(payload: unknown, fallback: string): string {
+  const record = asRecord(payload)
+  if (record) {
     return (
-      (typeof payload.error === "string" && payload.error) ||
-      (typeof payload.detail === "string" && payload.detail) ||
-      (typeof payload.message === "string" && payload.message) ||
+      (typeof record.error === "string" && record.error) ||
+      (typeof record.detail === "string" && record.detail) ||
+      (typeof record.message === "string" && record.message) ||
       fallback
     )
   }
@@ -233,7 +241,9 @@ export async function fetchCatalogItems(options?: FetchOptions): Promise<Catalog
     if (!response.ok) {
       throw new Error(extractError(payload, "No se pudo cargar el catálogo."))
     }
-    const rows = Array.isArray(payload?.items) ? (payload.items as Record<string, unknown>[]) : []
+    const payloadRecord = asRecord(payload)
+    const itemsValue = payloadRecord?.items
+    const rows = Array.isArray(itemsValue) ? itemsValue : []
     return rows.map((row) => normalizeCatalogItem(row))
   } catch (error) {
     console.warn("[catalog] fetchCatalogItems failed", error)
@@ -254,7 +264,8 @@ export async function createCatalogItem(input: CatalogItemInput): Promise<Catalo
   if (!response.ok) {
     throw new Error(extractError(payload, "No se pudo crear el producto."))
   }
-  const item = payload?.item
+  const payloadRecord = asRecord(payload)
+  const item = payloadRecord?.item
   if (!item || typeof item !== "object") {
     throw new Error("La respuesta del servidor es inválida.")
   }
@@ -278,7 +289,8 @@ export async function updateCatalogItem(id: string, input: CatalogItemInput): Pr
   if (!response.ok) {
     throw new Error(extractError(payload, "No se pudo actualizar el producto."))
   }
-  const item = payload?.item
+  const payloadRecord = asRecord(payload)
+  const item = payloadRecord?.item
   if (!item || typeof item !== "object") {
     throw new Error("La respuesta del servidor es inválida.")
   }
@@ -301,7 +313,8 @@ export async function deleteCatalogItem(
   if (!response.ok) {
     throw new Error(extractError(payload, "No se pudo eliminar el producto."))
   }
-  const item = payload?.item
+  const payloadRecord = asRecord(payload)
+  const item = payloadRecord?.item
   revalidatePath(SETTINGS_PATH)
   if (!item || typeof item !== "object") {
     return null
