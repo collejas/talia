@@ -1,6 +1,7 @@
 "use server";
 
-import { callSupabaseRest, callSupabaseRpc } from "@/lib/leads/supabase";
+import { callCrmApi } from "@/lib/api/crm";
+import { callSupabaseRpc } from "@/lib/leads/supabase";
 
 const DEFAULT_LIMIT = 200;
 
@@ -49,52 +50,47 @@ export type EmbudoData = {
   errors: string[];
 };
 
-type LeadListRow = {
+type PipelineBoardCard = {
   tarjeta_id: string;
-  contacto_id: string;
-  contacto_nombre: string | null;
-  contacto_correo: string | null;
-  contacto_telefono: string | null;
-  contacto_empresa: string | null;
-  contacto_notas: string | null;
-  contacto_necesidad: string | null;
-  contacto_estado: string | null;
+  contacto_id: string | null;
+  conversacion_id: string | null;
+  nombre: string;
+  correo: string | null;
+  telefono: string | null;
+  empresa: string | null;
+  notas: string | null;
+  necesidad_proposito: string | null;
   canal: string | null;
+  estado: string | null;
   etapa_id: string;
   etapa_nombre: string;
-  etapa_codigo: string;
-  categoria: string;
-  etapa_orden: number;
-  etapa_metadatos: Record<string, unknown> | null;
-  creado_en: string;
-  actualizado_en: string | null;
-  cerrado_en: string | null;
-  monto_estimado: number | null;
+  monto: number | null;
   moneda: string | null;
   probabilidad: number | null;
   proyecto_nombre: string | null;
   proyecto_necesidades: string | null;
-  lead_score: number | null;
   asignado_id: string | null;
   asignado_nombre: string | null;
-  propietario_id: string | null;
-  propietario_nombre: string | null;
-  conversacion_id: string | null;
-  ultimo_mensaje_en: string | null;
-  motivo_cierre: string | null;
-  tags: string[] | null;
+  prioridad: number | null;
+  actualizado_en: string | null;
+  etiquetas: string[] | null;
   metadata: Record<string, unknown> | null;
-  total_rows: number;
 };
 
-type LeadStageRow = {
+type PipelineBoardStage = {
   id: string;
-  tablero_id: string;
-  codigo: string;
   nombre: string;
+  codigo: string;
   categoria: string;
-  orden: number | null;
+  orden: number;
+  tablero_id: string | null;
   metadatos: Record<string, unknown> | null;
+  tarjetas: PipelineBoardCard[];
+};
+
+type PipelineBoardResponse = {
+  stages: PipelineBoardStage[];
+  sin_conversacion: PipelineBoardCard[];
 };
 
 type VisitantesCounterRow = {
@@ -114,19 +110,10 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
 }
 
 export async function loadEmbudoData(): Promise<EmbudoData> {
-  const [stageResult, listResult, visitantesResult] = await Promise.all([
-    callSupabaseRest<LeadStageRow[]>("lead_etapas", {
-      query: {
-        select: "id,tablero_id,codigo,nombre,categoria,orden,metadatos",
-        order: "orden.asc,nombre.asc",
-      },
-    }),
-    callSupabaseRpc<LeadListRow[]>("panel_leads_list", {
-      body: {
-        p_limit: DEFAULT_LIMIT,
-        p_offset: 0,
-        p_order_by: "actualizado_en",
-        p_order_dir: "desc",
+  const [boardResponse, visitantesResult] = await Promise.all([
+    callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
+      searchParams: {
+        limit: String(DEFAULT_LIMIT),
       },
     }),
     callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>("embudo_visitantes_contador", {
@@ -138,14 +125,12 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
   ]);
 
   const errors: string[] = [];
-  if (!stageResult.ok) errors.push(stageResult.error);
-  if (!listResult.ok) errors.push(listResult.error);
+  if (!boardResponse.ok) errors.push(boardResponse.error);
   if (!visitantesResult.ok) errors.push(visitantesResult.error);
 
-  const { stages, sinConversacion } = mapStages(
-    stageResult.ok ? stageResult.data : [],
-    listResult.ok ? listResult.data : [],
-  );
+  const { stages, sinConversacion } = boardResponse.ok
+    ? adaptPipelineBoard(boardResponse.data)
+    : { stages: [], sinConversacion: [] };
 
   let visitantesSinChat = 0;
   if (visitantesResult.ok) {
@@ -170,143 +155,86 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
   };
 }
 
-function mapStages(
-  stageRows: LeadStageRow[] | undefined,
-  rows: LeadListRow[] | undefined,
+function adaptPipelineBoard(
+  payload?: PipelineBoardResponse,
 ): { stages: EmbudoStage[]; sinConversacion: EmbudoCard[] } {
-  const stageMap = new Map<string, EmbudoStage>();
-  const sinConversacion: EmbudoCard[] = [];
-
-  if (stageRows && stageRows.length) {
-    for (const stageRow of stageRows) {
-      const metadatos = parseMetadatos(stageRow.metadatos);
-      if (isCounterOnlyStage(metadatos)) {
-        continue;
-      }
-
-      stageMap.set(stageRow.id, {
-        id: stageRow.id,
-        nombre: stageRow.nombre,
-        codigo: stageRow.codigo,
-        categoria: stageRow.categoria,
-        orden: typeof stageRow.orden === "number" ? stageRow.orden : Number.MAX_SAFE_INTEGER,
-        tableroId: stageRow.tablero_id,
-        metadatos,
-        tarjetas: [],
-      });
-    }
+  if (!payload) {
+    return { stages: [], sinConversacion: [] };
   }
 
-  if (!rows || !rows.length) {
-    const orderedStages = Array.from(stageMap.values()).sort(
-      (a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"),
-    );
-    return { stages: orderedStages, sinConversacion };
-  }
+  const stages = Array.isArray(payload.stages)
+    ? payload.stages
+        .map((stage) => {
+          const metadatos = parseMetadatos(stage.metadatos);
+          return { stage, metadatos };
+        })
+        .filter(({ metadatos }) => !isCounterOnlyStage(metadatos))
+        .map(({ stage, metadatos }) => adaptStage(stage, metadatos))
+        .sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"))
+    : [];
 
-  for (const row of rows) {
-    const stageMetadatos = parseMetadatos(row.etapa_metadatos);
-    if (isCounterOnlyStage(stageMetadatos)) {
-      continue;
-    }
+  const sinConversacion = Array.isArray(payload.sin_conversacion)
+    ? payload.sin_conversacion
+        .map(adaptCard)
+        .sort(
+          (a, b) =>
+            (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) -
+            (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0),
+        )
+    : [];
 
-    const tarjeta: EmbudoCard = {
-      tarjetaId: row.tarjeta_id,
-      contactoId: row.contacto_id,
-      conversacionId: row.conversacion_id,
-      nombre: row.contacto_nombre?.trim() || "Lead sin nombre",
-      correo: row.contacto_correo,
-      telefono: row.contacto_telefono,
-      empresa: row.contacto_empresa,
-      notas: row.contacto_notas,
-      necesidadProposito: row.contacto_necesidad ?? null,
-      canal: row.canal,
-      estado: row.contacto_estado,
-      etapaId: row.etapa_id,
-      etapaNombre: row.etapa_nombre,
-      monto: row.monto_estimado,
-      moneda: row.moneda,
-      probabilidad: row.probabilidad,
-      proyectoNombre: row.proyecto_nombre ?? null,
-      proyectoNecesidades: row.proyecto_necesidades ?? null,
-      asignadoId: row.asignado_id,
-      asignadoNombre: row.asignado_nombre,
-      prioridad: row.lead_score ?? 0,
-      actualizadoEn: row.actualizado_en,
-      etiquetas: row.tags ?? [],
-      metadata: row.metadata ?? {},
-    };
-
-    const existingStage = stageMap.get(row.etapa_id);
-    const stage = ensureStage(
-      stageMap,
-      row.etapa_id,
-      row.etapa_codigo,
-      row.etapa_nombre,
-      row.categoria,
-      row.etapa_orden ?? Number.MAX_SAFE_INTEGER,
-      stageMetadatos,
-      existingStage?.tableroId,
-    );
-    stage.tarjetas.push(tarjeta);
-
-    let createdVia: string | undefined;
-    if (tarjeta.metadata && typeof tarjeta.metadata === "object" && !Array.isArray(tarjeta.metadata)) {
-      const record = tarjeta.metadata as Record<string, unknown>;
-      createdVia = typeof record.created_via === "string" ? record.created_via : undefined;
-    }
-
-    const isManualLead = createdVia === "embudo_manual";
-
-    if (!row.conversacion_id && !isManualLead) {
-      sinConversacion.push(tarjeta);
-    }
-  }
-
-  for (const stage of stageMap.values()) {
-    stage.tarjetas.sort((a, b) => (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) - (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0));
-  }
-
-  const orderedStages = Array.from(stageMap.values()).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"));
-
-  sinConversacion.sort((a, b) => (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) - (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0));
-
-  return { stages: orderedStages, sinConversacion };
+  return { stages, sinConversacion };
 }
 
-function ensureStage(
-  map: Map<string, EmbudoStage>,
-  id: string,
-  codigo: string,
-  nombre: string,
-  categoria: string,
-  orden: number,
-  metadatos: Record<string, unknown>,
-  tableroId?: string,
-): EmbudoStage {
-  if (!map.has(id)) {
-    map.set(id, {
-      id,
-      nombre,
-      codigo,
-      categoria,
-      orden,
-      tableroId: tableroId ?? "",
-      metadatos,
-      tarjetas: [],
-    });
-  } else {
-    const stage = map.get(id)!;
-    stage.nombre = nombre;
-    stage.codigo = codigo;
-    stage.categoria = categoria;
-    stage.orden = orden;
-    if (tableroId && !stage.tableroId) {
-      stage.tableroId = tableroId;
-    }
-    if (Object.keys(metadatos).length) {
-      stage.metadatos = metadatos;
-    }
-  }
-  return map.get(id)!;
+function adaptStage(stage: PipelineBoardStage, metadatos: Record<string, unknown>): EmbudoStage {
+  const tarjetas = Array.isArray(stage.tarjetas)
+    ? stage.tarjetas
+        .map(adaptCard)
+        .sort(
+          (a, b) =>
+            (b.actualizadoEn ? Date.parse(b.actualizadoEn) : 0) -
+            (a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0),
+        )
+    : [];
+
+  return {
+    id: stage.id,
+    nombre: stage.nombre,
+    codigo: stage.codigo,
+    categoria: stage.categoria,
+    orden: typeof stage.orden === "number" ? stage.orden : Number.MAX_SAFE_INTEGER,
+    tableroId: stage.tablero_id ?? "",
+    metadatos,
+    tarjetas,
+  };
+}
+
+function adaptCard(card: PipelineBoardCard): EmbudoCard {
+  const metadata = parseMetadatos(card.metadata);
+  return {
+    tarjetaId: card.tarjeta_id,
+    contactoId: card.contacto_id ?? "",
+    conversacionId: card.conversacion_id ?? null,
+    nombre: card.nombre || "Lead sin nombre",
+    correo: card.correo,
+    telefono: card.telefono,
+    empresa: card.empresa,
+    notas: card.notas,
+    necesidadProposito: card.necesidad_proposito ?? null,
+    canal: card.canal,
+    estado: card.estado,
+    etapaId: card.etapa_id,
+    etapaNombre: card.etapa_nombre,
+    monto: card.monto,
+    moneda: card.moneda,
+    probabilidad: card.probabilidad,
+    proyectoNombre: card.proyecto_nombre ?? null,
+    proyectoNecesidades: card.proyecto_necesidades ?? null,
+    asignadoId: card.asignado_id,
+    asignadoNombre: card.asignado_nombre,
+    prioridad: card.prioridad ?? 0,
+    actualizadoEn: typeof card.actualizado_en === "string" ? card.actualizado_en : null,
+    etiquetas: Array.isArray(card.etiquetas) ? card.etiquetas : [],
+    metadata,
+  };
 }

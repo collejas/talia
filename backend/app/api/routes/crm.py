@@ -500,6 +500,49 @@ class CRMPipelineOverview(BaseModel):
     total_rows: int
 
 
+class CRMPipelineBoardCard(BaseModel):
+    tarjeta_id: UUID
+    contacto_id: UUID | None = None
+    conversacion_id: UUID | None = None
+    nombre: str
+    correo: str | None = None
+    telefono: str | None = None
+    empresa: str | None = None
+    notas: str | None = None
+    necesidad_proposito: str | None = None
+    canal: str | None = None
+    estado: str | None = None
+    etapa_id: UUID
+    etapa_nombre: str
+    monto: float | None = None
+    moneda: str | None = None
+    probabilidad: float | None = None
+    proyecto_nombre: str | None = None
+    proyecto_necesidades: str | None = None
+    asignado_id: UUID | None = None
+    asignado_nombre: str | None = None
+    prioridad: float | None = None
+    actualizado_en: datetime | None = None
+    etiquetas: list[str] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class CRMPipelineBoardStage(BaseModel):
+    id: UUID
+    nombre: str
+    codigo: str
+    categoria: str
+    orden: int
+    tablero_id: str | None = None
+    metadatos: dict[str, Any]
+    tarjetas: list[CRMPipelineBoardCard]
+
+
+class CRMPipelineBoard(BaseModel):
+    stages: list[CRMPipelineBoardStage]
+    sin_conversacion: list[CRMPipelineBoardCard]
+
+
 class CRMNote(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -1244,6 +1287,25 @@ async def pipeline_overview(
     return overview
 
 
+@router.get("/pipeline/board", response_model=CRMPipelineBoard)
+async def pipeline_board(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    limit: Annotated[int, Query(ge=50, le=1000)] = 400,
+) -> CRMPipelineBoard:
+    try:
+        stages = await repo.list_pipelines(organizacion_id=organizacion_id)
+        rows, _ = await repo.list_pipeline_opportunities(
+            organizacion_id=organizacion_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    board = _build_pipeline_board(stages, rows)
+    return board
+
+
 def _build_pipeline_overview(
     rows: list[dict[str, Any]],
     total_rows: int,
@@ -1463,3 +1525,151 @@ def _safe_uuid(value: str | UUID | None) -> UUID | None:
         except ValueError:
             return None
     return None
+
+
+def _build_pipeline_board(
+    stage_rows: list[dict[str, Any]],
+    opportunity_rows: list[dict[str, Any]],
+) -> CRMPipelineBoard:
+    stage_map: dict[UUID, CRMPipelineBoardStage] = {}
+    for stage_row in stage_rows:
+        stage = _stage_from_row(stage_row)
+        if stage:
+            stage_map[stage.id] = stage
+
+    sin_conversacion: list[CRMPipelineBoardCard] = []
+
+    for row in opportunity_rows:
+        card = _card_from_opportunity(row)
+        if card is None:
+            continue
+        stage = stage_map.get(card.etapa_id)
+        if stage is None:
+            stage = _stage_from_opportunity(row)
+            if stage:
+                stage_map[stage.id] = stage
+        if stage:
+            stage.tarjetas.append(card)
+        if not card.conversacion_id and not _is_manual_card(card.metadata):
+            sin_conversacion.append(card)
+
+    for stage in stage_map.values():
+        stage.tarjetas.sort(
+            key=lambda card: card.actualizado_en or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+
+    ordered_stages = sorted(
+        stage_map.values(),
+        key=lambda stage: (stage.orden, stage.nombre.lower()),
+    )
+
+    sin_conversacion.sort(
+        key=lambda card: card.actualizado_en or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+
+    return CRMPipelineBoard(stages=ordered_stages, sin_conversacion=sin_conversacion)
+
+
+def _stage_from_row(row: dict[str, Any]) -> CRMPipelineBoardStage | None:
+    stage_id = _safe_uuid(row.get("id"))
+    if not stage_id:
+        return None
+    metadata = _ensure_dict(row.get("metadata") or row.get("metadatos"), default={})
+    tablero_id = metadata.get("tablero_id")
+    return CRMPipelineBoardStage(
+        id=stage_id,
+        nombre=row.get("nombre") or "Sin etapa",
+        codigo=row.get("codigo") or "",
+        categoria=row.get("categoria") or "abierta",
+        orden=int(row.get("orden") or 0),
+        tablero_id=str(tablero_id) if tablero_id else None,
+        metadatos=metadata,
+        tarjetas=[],
+    )
+
+
+def _stage_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardStage | None:
+    etapa = row.get("etapa") or {}
+    etapa_id = _safe_uuid(row.get("etapa_id") or etapa.get("id"))
+    if not etapa_id:
+        return None
+    metadata = _ensure_dict(etapa.get("metadata"), default={})
+    tablero_id = metadata.get("tablero_id")
+    return CRMPipelineBoardStage(
+        id=etapa_id,
+        nombre=etapa.get("nombre") or "Sin etapa",
+        codigo=etapa.get("codigo") or "",
+        categoria=etapa.get("categoria") or row.get("estado") or "abierta",
+        orden=int(etapa.get("orden") or 0),
+        tablero_id=str(tablero_id) if tablero_id else None,
+        metadatos=metadata,
+        tarjetas=[],
+    )
+
+
+def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
+    oportunidad_id = _safe_uuid(row.get("id"))
+    etapa_id = _safe_uuid(row.get("etapa_id"))
+    if not oportunidad_id or not etapa_id:
+        return None
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    contacto = _ensure_dict(row.get("contacto"), default={})
+    cuenta = _ensure_dict(row.get("cuenta"), default={})
+    asignado = _ensure_dict(row.get("asignado"), default={})
+    nombre = (
+        row.get("titulo")
+        or contacto.get("nombre_completo")
+        or cuenta.get("nombre")
+        or "Oportunidad sin nombre"
+    )
+    conversacion_id = _safe_uuid(metadata.get("conversacion_id"))
+    asignado_nombre = asignado.get("nombre_completo") or asignado.get("correo")
+    prioridad = metadata.get("lead_score")
+    tags_value = metadata.get("tags")
+    etiquetas = (
+        [str(tag) for tag in tags_value if isinstance(tag, str)]
+        if isinstance(tags_value, list)
+        else None
+    )
+    actualizado_en = _parse_datetime(row.get("actualizado_en"))
+    return CRMPipelineBoardCard(
+        tarjeta_id=oportunidad_id,
+        contacto_id=_safe_uuid(contacto.get("id")),
+        conversacion_id=conversacion_id,
+        nombre=nombre,
+        correo=contacto.get("correo"),
+        telefono=contacto.get("telefono_e164"),
+        empresa=contacto.get("company_name"),
+        notas=contacto.get("notes"),
+        necesidad_proposito=contacto.get("necesidad_proposito"),
+        canal=metadata.get("canal"),
+        estado=contacto.get("estado") or contacto.get("captura_estado"),
+        etapa_id=etapa_id,
+        etapa_nombre=(row.get("etapa") or {}).get("nombre") or "Sin etapa",
+        monto=row.get("monto_estimado"),
+        moneda=row.get("moneda"),
+        probabilidad=row.get("probabilidad"),
+        proyecto_nombre=row.get("descripcion"),
+        proyecto_necesidades=metadata.get("proyecto_necesidades"),
+        asignado_id=_safe_uuid(row.get("asignado_a_usuario_id")),
+        asignado_nombre=asignado_nombre,
+        prioridad=float(prioridad) if isinstance(prioridad, (int, float)) else None,
+        actualizado_en=actualizado_en,
+        etiquetas=etiquetas,
+        metadata=metadata,
+    )
+
+
+def _ensure_dict(value: Any, default: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return dict(default)
+
+
+def _is_manual_card(metadata: dict[str, Any] | None) -> bool:
+    if not metadata:
+        return False
+    created_via = metadata.get("created_via")
+    return isinstance(created_via, str) and created_via == "embudo_manual"
