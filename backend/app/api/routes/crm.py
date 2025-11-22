@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Annotated
+from collections import Counter
+from datetime import date, datetime, timedelta, timezone
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -456,6 +457,47 @@ class CRMLeadEventCreate(BaseModel):
     lead_id: UUID
     tipo: str = Field(..., max_length=120)
     metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMPipelineTopSeller(BaseModel):
+    id: UUID | None = None
+    nombre: str | None = None
+    total: int = 0
+
+
+class CRMPipelineCards(BaseModel):
+    total: int = 0
+    abiertas: int = 0
+    ganadas: int = 0
+    perdidas: int = 0
+    nuevas: int = 0
+    monto_total: float = 0
+    top_vendedor: CRMPipelineTopSeller | None = None
+
+
+class CRMPipelineChartPoint(BaseModel):
+    date: str
+    nuevos: int = 0
+    ganados: int = 0
+    perdidos: int = 0
+
+
+class CRMPipelineTableRow(BaseModel):
+    id: int
+    header: str
+    type: str
+    status: str
+    target: str
+    limit: str
+    reviewer: str
+    raw: dict[str, Any] | None = None
+
+
+class CRMPipelineOverview(BaseModel):
+    cards: CRMPipelineCards
+    chart: list[CRMPipelineChartPoint]
+    table: list[CRMPipelineTableRow]
+    total_rows: int
 
 
 class CRMNote(BaseModel):
@@ -1178,3 +1220,246 @@ async def list_audit_logs(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMAuditLog.model_validate(row) for row in rows]
+
+
+@router.get("/pipeline/overview", response_model=CRMPipelineOverview)
+async def pipeline_overview(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    limit: Annotated[int, Query(ge=10, le=500)] = 200,
+    days: Annotated[int, Query(ge=7, le=90)] = 30,
+) -> CRMPipelineOverview:
+    created_from = datetime.now(timezone.utc) - timedelta(days=days)
+    fetch_limit = max(limit, 500)
+    try:
+        rows, total_rows = await repo.list_pipeline_opportunities(
+            organizacion_id=organizacion_id,
+            limit=fetch_limit,
+            created_from=created_from,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    overview = _build_pipeline_overview(rows, total_rows, limit, days)
+    return overview
+
+
+def _build_pipeline_overview(
+    rows: list[dict[str, Any]],
+    total_rows: int,
+    table_limit: int,
+    days_range: int,
+) -> CRMPipelineOverview:
+    cards = _build_pipeline_cards(rows)
+    chart = _build_pipeline_chart(rows, days_range)
+    table = _build_pipeline_table(rows, table_limit)
+    return CRMPipelineOverview(cards=cards, chart=chart, table=table, total_rows=total_rows)
+
+
+def _build_pipeline_cards(rows: list[dict[str, Any]]) -> CRMPipelineCards:
+    now = datetime.now(timezone.utc)
+    nuevas_threshold = now - timedelta(days=1)
+    abiertas = ganadas = perdidas = nuevas = 0
+    monto_total = 0.0
+    top_counter: Counter[str] = Counter()
+    top_names: dict[str, str] = {}
+
+    for row in rows:
+        estado = (row.get("estado") or "").lower()
+        if estado == "ganada":
+            ganadas += 1
+        elif estado == "perdida":
+            perdidas += 1
+        else:
+            abiertas += 1
+        monto = row.get("monto_estimado")
+        if isinstance(monto, (int, float)):
+            monto_total += float(monto)
+        created_at = _parse_datetime(row.get("creado_en"))
+        if created_at and created_at >= nuevas_threshold:
+            nuevas += 1
+        asignado = row.get("asignado") or {}
+        user_id = asignado.get("id") or row.get("asignado_a_usuario_id")
+        display_name = asignado.get("nombre_completo") or asignado.get("correo")
+        if user_id:
+            key = str(user_id)
+            top_counter[key] += 1
+            if display_name:
+                top_names[key] = display_name
+
+    top_vendedor = None
+    if top_counter:
+        user_key, total = top_counter.most_common(1)[0]
+        top_vendedor = CRMPipelineTopSeller(
+            id=_safe_uuid(user_key),
+            nombre=top_names.get(user_key),
+            total=total,
+        )
+
+    return CRMPipelineCards(
+        total=len(rows),
+        abiertas=abiertas,
+        ganadas=ganadas,
+        perdidas=perdidas,
+        nuevas=nuevas,
+        monto_total=monto_total,
+        top_vendedor=top_vendedor,
+    )
+
+
+def _build_pipeline_chart(
+    rows: list[dict[str, Any]], days_range: int
+) -> list[CRMPipelineChartPoint]:
+    if days_range < 1:
+        days_range = 1
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=days_range - 1)
+    buckets: dict[date, CRMPipelineChartPoint] = {}
+    for offset in range(days_range):
+        bucket_date = start_date + timedelta(days=offset)
+        buckets[bucket_date] = CRMPipelineChartPoint(
+            date=bucket_date.isoformat(),
+            nuevos=0,
+            ganados=0,
+            perdidos=0,
+        )
+
+    for row in rows:
+        created_at = _parse_datetime(row.get("creado_en"))
+        if created_at:
+            bucket = buckets.get(created_at.date())
+            if bucket:
+                bucket.nuevos += 1
+        estado = (row.get("estado") or "").lower()
+        cerrado_at = _parse_datetime(row.get("cerrado_en"))
+        if not cerrado_at:
+            continue
+        bucket = buckets.get(cerrado_at.date())
+        if not bucket:
+            continue
+        if estado == "ganada":
+            bucket.ganados += 1
+        elif estado == "perdida":
+            bucket.perdidos += 1
+
+    return [buckets[bucket_date] for bucket_date in sorted(buckets)]
+
+
+def _build_pipeline_table(
+    rows: list[dict[str, Any]], table_limit: int
+) -> list[CRMPipelineTableRow]:
+    sorted_rows = sorted(
+        rows,
+        key=lambda r: _parse_datetime(r.get("creado_en"))
+        or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    table: list[CRMPipelineTableRow] = []
+    for index, row in enumerate(sorted_rows[:table_limit], start=1):
+        etapa = row.get("etapa") or {}
+        contacto = row.get("contacto") or {}
+        asignado = row.get("asignado") or {}
+        propietario = row.get("propietario") or {}
+        cuenta = row.get("cuenta") or {}
+        categoria = (etapa.get("categoria") or row.get("estado") or "abierta").lower()
+        cerrado_dt = _parse_datetime(row.get("cerrado_en"))
+        monto_estimado = row.get("monto_estimado")
+        moneda = row.get("moneda") or "MXN"
+        metric_meta = {
+            "value": monto_estimado,
+            "currency": moneda,
+            "formatted": _format_currency(monto_estimado, moneda),
+        }
+        status_meta = _build_status_meta(categoria, cerrado_dt)
+        header = (
+            row.get("titulo")
+            or contacto.get("nombre_completo")
+            or cuenta.get("nombre")
+            or "Oportunidad sin nombre"
+        )
+        reviewer = asignado.get("nombre_completo") or "Sin asignar"
+        table.append(
+            CRMPipelineTableRow(
+                id=index,
+                header=header,
+                type=etapa.get("nombre") or "Sin etapa",
+                status=categoria,
+                target=str(monto_estimado or 0),
+                limit=contacto.get("correo") or "—",
+                reviewer=reviewer,
+                raw={
+                    "lead_id": row.get("id"),
+                    "contacto_id": contacto.get("id"),
+                    "etapa_id": row.get("etapa_id"),
+                    "etapa_nombre": etapa.get("nombre"),
+                    "etapa_codigo": etapa.get("codigo"),
+                    "etapa_metadatos": etapa.get("metadata"),
+                    "categoria": categoria,
+                    "canal": (row.get("metadata") or {}).get("canal"),
+                    "creado_en": row.get("creado_en"),
+                    "actualizado_en": row.get("actualizado_en"),
+                    "cerrado_en": row.get("cerrado_en"),
+                    "monto_estimado": monto_estimado,
+                    "moneda": moneda,
+                    "probabilidad": row.get("probabilidad"),
+                    "proyecto_nombre": row.get("descripcion"),
+                    "lead_score": (row.get("metadata") or {}).get("lead_score"),
+                    "asignado_id": row.get("asignado_a_usuario_id"),
+                    "asignado_nombre": reviewer,
+                    "propietario_id": row.get("propietario_usuario_id"),
+                    "propietario_nombre": propietario.get("nombre_completo"),
+                    "contacto_correo": contacto.get("correo"),
+                    "contacto_telefono": contacto.get("telefono_e164"),
+                    "contacto_empresa": contacto.get("company_name"),
+                    "contacto_notas": contacto.get("notes"),
+                    "contacto_estado": contacto.get("estado") or contacto.get("captura_estado"),
+                    "motivo_cierre": row.get("motivo_perdida"),
+                    "tags": (row.get("metadata") or {}).get("tags"),
+                    "metadata": row.get("metadata"),
+                    "status_meta": status_meta,
+                    "metric_meta": metric_meta,
+                },
+            )
+        )
+    return table
+
+
+def _build_status_meta(categoria: str, cerrado_en: datetime | None) -> dict[str, str]:
+    if categoria == "ganada":
+        return {"label": "Ganado", "variant": "default"}
+    if categoria == "perdida":
+        return {"label": "Perdido", "variant": "destructive"}
+    if cerrado_en:
+        return {"label": "Cerrado", "variant": "secondary"}
+    return {"label": "En proceso", "variant": "outline"}
+
+
+def _format_currency(value: Any, currency: str) -> str:
+    if not isinstance(value, (int, float)):
+        return "—"
+    formatted = f"{value:,.0f}"
+    return f"{formatted} {currency}".strip()
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str) and value:
+        try:
+            normalized = value.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+def _safe_uuid(value: str | UUID | None) -> UUID | None:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        try:
+            return UUID(value)
+        except ValueError:
+            return None
+    return None

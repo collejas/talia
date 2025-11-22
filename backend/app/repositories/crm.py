@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -16,6 +17,35 @@ class CRMRepositoryError(RuntimeError):
 
 class CRMRepository:
     """Cliente ligero contra Supabase REST usando service role."""
+
+    _PIPELINE_SELECT = ",".join(
+        [
+            "id",
+            "organizacion_id",
+            "cuenta_id",
+            "contacto_principal_id",
+            "etapa_id",
+            "titulo",
+            "descripcion",
+            "monto_estimado",
+            "moneda",
+            "probabilidad",
+            "fecha_cierre_probable",
+            "estado",
+            "motivo_perdida",
+            "propietario_usuario_id",
+            "asignado_a_usuario_id",
+            "metadata",
+            "creado_en",
+            "actualizado_en",
+            "cerrado_en",
+            "asignado:usuarios!oportunidades_asignado_a_usuario_id_fkey(id,nombre_completo,correo)",
+            "propietario:usuarios!oportunidades_propietario_usuario_id_fkey(id,nombre_completo,correo)",
+            "etapa:etapas_pipeline!oportunidades_etapa_id_fkey(id,nombre,codigo,categoria,orden,metadata)",
+            "contacto:contactos!oportunidades_contacto_principal_id_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado)",
+            "cuenta:cuentas!oportunidades_cuenta_id_fkey(id,nombre,telefono,correo)",
+        ]
+    )
 
     def __init__(self, *, timeout: float = 10.0) -> None:
         if not settings.supabase_url or not settings.supabase_service_role:
@@ -765,6 +795,46 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener cuenta: {row!r}")
         return row
+
+    async def list_pipeline_opportunities(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 500,
+        created_from: datetime | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+            "limit": str(limit),
+            "select": self._PIPELINE_SELECT,
+        }
+        if created_from:
+            params["creado_en"] = f"gte.{created_from.isoformat()}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/oportunidades",
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
+            )
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
+    @staticmethod
+    def _extract_total_count(content_range: str | None) -> int | None:
+        if not content_range or "/" not in content_range:
+            return None
+        _, total_str = content_range.split("/", 1)
+        try:
+            total_value = int(total_str)
+        except ValueError:
+            return None
+        return total_value if total_value >= 0 else None
 
     async def _request(
         self,
