@@ -363,6 +363,83 @@ class DummyCRMRepository(CRMRepository):
             "cantidad": kwargs["payload"].get("cantidad", 1),
         }
 
+    async def list_campaigns(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_campaigns", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "nombre": "Campaña",
+                "tipo": "email",
+                "canal": "email",
+                "presupuesto": 1000.0,
+                "fecha_inicio": "2024-01-01",
+                "fecha_fin": "2024-01-31",
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_campaign(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_campaign", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_leads(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_leads", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "campana_id": None,
+                "contacto_id": None,
+                "cuenta_id": None,
+                "origen": "ads",
+                "estado": kwargs.get("estado") or "nuevo",
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_lead(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_lead", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "estado": kwargs["payload"].get("estado", "nuevo"),
+            "metadata": kwargs["payload"].get("metadata", {}),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_lead_events(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_lead_events", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "lead_id": str(kwargs["lead_id"]),
+                "tipo": "click",
+                "metadata": {},
+                "registrado_en": "2024-01-02T00:00:00Z",
+            }
+        ]
+
+    async def create_lead_event(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_lead_event", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            **kwargs["payload"],
+            "registrado_en": "2024-01-02T00:00:00Z",
+        }
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -615,4 +692,57 @@ async def test_create_quote_item_mismatch(client: AsyncClient) -> None:
             "descripcion": "Bad",
         },
     )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_campaigns(client: AsyncClient) -> None:
+    resp = await client.get("/crm/campanas", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()[0]["nombre"] == "Campaña"
+
+
+@pytest.mark.asyncio
+async def test_create_campaign(client: AsyncClient) -> None:
+    resp = await client.post("/crm/campanas", headers=_headers(), json={"nombre": "Nueva"})
+    assert resp.status_code == 201
+    assert resp.json()["nombre"] == "Nueva"
+
+
+@pytest.mark.asyncio
+async def test_list_leads(client: AsyncClient) -> None:
+    resp = await client.get("/crm/leads", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()
+
+
+@pytest.mark.asyncio
+async def test_create_lead(client: AsyncClient) -> None:
+    resp = await client.post("/crm/leads", headers=_headers(), json={"origen": "ads"})
+    assert resp.status_code == 201
+    assert resp.json()["origen"] == "ads"
+
+
+@pytest.mark.asyncio
+async def test_list_lead_events(client: AsyncClient) -> None:
+    lead_id = uuid.uuid4()
+    resp = await client.get(f"/crm/leads/{lead_id}/eventos", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()[0]["lead_id"] == str(lead_id)
+
+
+@pytest.mark.asyncio
+async def test_create_lead_event(client: AsyncClient) -> None:
+    lead_id = uuid.uuid4()
+    body = {"lead_id": str(lead_id), "tipo": "click"}
+    resp = await client.post(f"/crm/leads/{lead_id}/eventos", headers=_headers(), json=body)
+    assert resp.status_code == 201
+    assert resp.json()["tipo"] == "click"
+
+
+@pytest.mark.asyncio
+async def test_create_lead_event_mismatch(client: AsyncClient) -> None:
+    lead_id = uuid.uuid4()
+    body = {"lead_id": str(uuid.uuid4()), "tipo": "click"}
+    resp = await client.post(f"/crm/leads/{lead_id}/eventos", headers=_headers(), json=body)
     assert resp.status_code == 400

@@ -555,6 +555,118 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear item de cotización: {row!r}")
         return row
 
+    async def list_campaigns(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+        }
+        resp = await self._request("GET", "/rest/v1/campanas", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar campañas: {data!r}")
+        return data
+
+    async def create_campaign(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/campanas",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la campaña creada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear campaña: {row!r}")
+        return row
+
+    async def list_leads(
+        self,
+        *,
+        organizacion_id: UUID,
+        estado: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+        }
+        if estado:
+            params["estado"] = f"eq.{estado}"
+        resp = await self._request("GET", "/rest/v1/leads", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar leads: {data!r}")
+        return data
+
+    async def create_lead(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/leads",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el lead creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear lead: {row!r}")
+        return row
+
+    async def list_lead_events(
+        self,
+        *,
+        organizacion_id: UUID,
+        lead_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "lead_id": f"eq.{lead_id}",
+            "order": "registrado_en.asc",
+        }
+        resp = await self._request("GET", "/rest/v1/lead_eventos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar eventos de lead: {data!r}")
+        return data
+
+    async def create_lead_event(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/lead_eventos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el evento del lead")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear evento de lead: {row!r}")
+        return row
+
     async def append_stage_history(
         self,
         *,

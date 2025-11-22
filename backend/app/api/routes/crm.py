@@ -398,6 +398,66 @@ class CRMQuoteItemCreate(BaseModel):
     metadata: dict | None = Field(default_factory=dict)
 
 
+class CRMCampaign(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre: str
+    tipo: str | None = None
+    canal: str | None = None
+    presupuesto: float | None = None
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    metadata: dict | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMCampaignCreate(BaseModel):
+    nombre: str = Field(..., max_length=255)
+    tipo: str | None = Field(default=None, max_length=120)
+    canal: str | None = Field(default=None, max_length=120)
+    presupuesto: float | None = Field(default=None, ge=0)
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMLead(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    campana_id: UUID | None = None
+    contacto_id: UUID | None = None
+    cuenta_id: UUID | None = None
+    origen: str | None = None
+    estado: str
+    metadata: dict | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMLeadCreate(BaseModel):
+    campana_id: UUID | None = None
+    contacto_id: UUID | None = None
+    cuenta_id: UUID | None = None
+    origen: str | None = Field(default=None, max_length=120)
+    estado: str = Field(default="nuevo")
+    metadata: dict | None = Field(default_factory=dict)
+
+
+class CRMLeadEvent(BaseModel):
+    id: UUID
+    lead_id: UUID
+    tipo: str
+    metadata: dict | None = None
+    registrado_en: datetime
+
+
+class CRMLeadEventCreate(BaseModel):
+    lead_id: UUID
+    tipo: str = Field(..., max_length=120)
+    metadata: dict | None = Field(default_factory=dict)
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -928,3 +988,105 @@ async def create_quote_item(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuoteItem.model_validate(row)
+
+
+@router.get("/campanas", response_model=list[CRMCampaign])
+async def list_campaigns(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> list[CRMCampaign]:
+    try:
+        rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMCampaign.model_validate(row) for row in rows]
+
+
+@router.post("/campanas", response_model=CRMCampaign, status_code=status.HTTP_201_CREATED)
+async def create_campaign(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMCampaignCreate,
+) -> CRMCampaign:
+    try:
+        row = await repo.create_campaign(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMCampaign.model_validate(row)
+
+
+@router.get("/leads", response_model=list[CRMLead])
+async def list_leads(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    estado: str | None = Query(default=None),
+) -> list[CRMLead]:
+    try:
+        rows = await repo.list_leads(organizacion_id=organizacion_id, estado=estado)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMLead.model_validate(row) for row in rows]
+
+
+@router.post("/leads", response_model=CRMLead, status_code=status.HTTP_201_CREATED)
+async def create_lead(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMLeadCreate,
+) -> CRMLead:
+    try:
+        row = await repo.create_lead(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMLead.model_validate(row)
+
+
+@router.get("/leads/{lead_id}/eventos", response_model=list[CRMLeadEvent])
+async def list_lead_events(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    lead_id: UUID,
+) -> list[CRMLeadEvent]:
+    try:
+        rows = await repo.list_lead_events(
+            organizacion_id=organizacion_id,
+            lead_id=lead_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMLeadEvent.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/leads/{lead_id}/eventos",
+    response_model=CRMLeadEvent,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_lead_event(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    lead_id: UUID,
+    payload: CRMLeadEventCreate,
+) -> CRMLeadEvent:
+    if payload.lead_id != lead_id:
+        raise HTTPException(status_code=400, detail="lead_id_mismatch")
+    try:
+        row = await repo.create_lead_event(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMLeadEvent.model_validate(row)
