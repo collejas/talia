@@ -101,11 +101,13 @@ erDiagram
 1. [ ] Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`.
 2. [ ] Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento.
 3. [ ] Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`).
-4. [ ] Introducir `actividades` y/o `tareas` y migrar llamadas/conversaciones a este modelo.
+4. [ ] Introducir `actividades` y/o `tareas`, agregando `prioridad`, `fecha_vencimiento`, `sla_horas` y `recordatorio_en`, y migrar llamadas/conversaciones a este modelo.
 5. [ ] Implementar `tickets` y `ticket_comentarios` si aplica al soporte actual.
 6. [ ] Incorporar `productos`, `cotizaciones`, `cotizacion_items` cuando se active ventas/cobranzas.
 7. [ ] Añadir `campanas`, `leads`, `lead_eventos` para captación y alimentar el funnel.
 8. [ ] Integrar `tags`, `archivos`, `audit_logs` y ajustar APIs para exponer CRUD filtrados por `organizacion_id` y `propietario_usuario_id`.
+9. [ ] Crear `notas` polimórficas con flag de visibilidad y conectarlas a las entidades (cuentas, contactos, oportunidades, tickets, actividades) respetando RLS.
+10. [ ] Publicar endpoints polimórficos para `archivos`, `taggings` y `notas`, validando el catálogo de `relacion_tipo` y adoptando componentes frontend reutilizables con visibilidad y permisos por tenant.
 
 Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado para crecer con auditoría, etiquetado y metadatos sin romper compatibilidad.
 
@@ -118,7 +120,7 @@ Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado
 - **Campanas**, **leads** y **lead_eventos** abarcan marketing y origenes.
 - **Tags**, **taggings**, **archivos** y **audit_logs** cubren etiquetas, archivos y auditoría como elementos transversales.
 
-## Complementos pendientes para cubrir al 100 % la propuesta
+## Complementos para cerrar al 100 % la propuesta
 - Definir si `actividades` seguirá siendo la tabla única o si se crea una tabla `tareas` separada con `prioridad`, `fecha_vencimiento` y SLA explícitos; el frontend actual no expone prioridades y habrá que ajustar formularios/listados cuando se materialicen.
 - Incorporar una tabla `notas` polimórfica si se requiere visibilidad distinta a las actividades estándar (por ejemplo, notas internas del equipo de soporte que no se muestran al cliente).
 - Ajustar la carga de archivos y comentarios en frontend/backend para reutilizar `archivos` y `taggings` de forma polimórfica en todas las entidades relacionadas (cuentas, contactos, oportunidades, tickets, actividades).
@@ -127,6 +129,8 @@ Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado
 - **Actividades vs. tareas:** mantener `actividades` como tabla única para no duplicar lógica y agregar campos obligatorios `prioridad` (enum `baja`/`media`/`alta`/`critica`), `fecha_vencimiento`, `sla_horas` (nullable) y `recordatorio_en`. El frontend debe exponer prioridad y vencimiento en creación/edición y permitir ordenar/filtrar por esos campos; el backend debe validar SLA y calcular estados derivados (`vencida`, `al_dia`) en vistas o materialized views.
 - **Notas polimórficas y visibilidad:** crear `notas` con `relacion_tipo`, `relacion_id`, `texto`, `creado_por_usuario_id`, `creado_en`, `visible_para_cliente` (booleano) y `tipo` (por ejemplo `interna`, `publica`, `sistema`). Para casos simples puede mantenerse `actividades.tipo = 'nota'`, pero cuando se requiera aislamiento (soporte interno) el frontend mostrará sólo las notas `visibles_para_cliente = true` en portales públicos y todas en vistas internas; el backend filtra por `organizacion_id` y el flag de visibilidad.
 - **Archivos y etiquetas polimórficas:** centralizar la carga y listado en `archivos` y `taggings` usando `relacion_tipo`/`relacion_id` (cuentas, contactos, oportunidades, tickets, actividades). Exponer en el backend endpoints polimórficos (`POST /archivos/{relacion_tipo}/{relacion_id}` y `POST /taggings/{relacion_tipo}/{relacion_id}`) y adaptar el frontend para reutilizar un componente común de adjuntos/etiquetas que se configure por tipo; validar en backend que `relacion_tipo` pertenezca a un catálogo permitido para evitar referencias huérfanas.
+
+Con estas definiciones, el plan queda completo respecto a la lista recomendada; la ejecución requiere seguir las migraciones y ajustes de frontend/backend que se describen abajo.
 
 ## Brechas detectadas en el backup `backups/postgres_20251122_164957`
 - Las tablas actuales clave (`clientes`, `contactos`, `usuarios`, `roles`, `usuarios_roles`) no tienen columna de tenant ni RLS, por lo que el plan debe añadir `organizacion_id` y políticas de aislamiento antes de exponerlas como multi-tenant. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L1225-L1247】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10735-L10751】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10793-L10802】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11847-L11891】
