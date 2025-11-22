@@ -98,14 +98,14 @@ erDiagram
 ```
 
 ## Migración y pasos sugeridos
-1. Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`.
-2. Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento.
-3. Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`).
-4. Introducir `actividades` y/o `tareas` y migrar llamadas/conversaciones a este modelo.
-5. Implementar `tickets` y `ticket_comentarios` si aplica al soporte actual.
-6. Incorporar `productos`, `cotizaciones`, `cotizacion_items` cuando se active ventas/cobranzas.
-7. Añadir `campanas`, `leads`, `lead_eventos` para captación y alimentar el funnel.
-8. Integrar `tags`, `archivos`, `audit_logs` y ajustar APIs para exponer CRUD filtrados por `organizacion_id` y `propietario_usuario_id`.
+1. [ ] Crear tablas base (`organizaciones`, `roles`, `usuarios`, `usuario_roles`) y activar RLS por `organizacion_id`.
+2. [ ] Añadir `organizacion_id` a tablas existentes y migrar datos actuales respetando el aislamiento.
+3. [ ] Crear tablas del núcleo CRM (`cuentas`, `contactos`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`).
+4. [ ] Introducir `actividades` y/o `tareas` y migrar llamadas/conversaciones a este modelo.
+5. [ ] Implementar `tickets` y `ticket_comentarios` si aplica al soporte actual.
+6. [ ] Incorporar `productos`, `cotizaciones`, `cotizacion_items` cuando se active ventas/cobranzas.
+7. [ ] Añadir `campanas`, `leads`, `lead_eventos` para captación y alimentar el funnel.
+8. [ ] Integrar `tags`, `archivos`, `audit_logs` y ajustar APIs para exponer CRUD filtrados por `organizacion_id` y `propietario_usuario_id`.
 
 Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado para crecer con auditoría, etiquetado y metadatos sin romper compatibilidad.
 
@@ -117,3 +117,8 @@ Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado
 - **Tickets** y **ticket_comentarios** coinciden con el apartado de soporte.
 - **Campanas**, **leads** y **lead_eventos** abarcan marketing y origenes.
 - **Tags**, **taggings**, **archivos** y **audit_logs** cubren etiquetas, archivos y auditoría como elementos transversales.
+
+## Brechas detectadas en el backup `backups/postgres_20251122_164957`
+- Las tablas actuales clave (`clientes`, `contactos`, `usuarios`, `roles`, `usuarios_roles`) no tienen columna de tenant ni RLS, por lo que el plan debe añadir `organizacion_id` y políticas de aislamiento antes de exponerlas como multi-tenant. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L1225-L1247】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10735-L10751】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10793-L10802】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11847-L11891】
+- El pipeline vigente está centrado en `lead_tableros`/`lead_etapas`/`lead_tarjetas` y su historial (`lead_movimientos`), sin entidades de `cuentas` u `oportunidades`; el plan debe incluir migraciones de esos tableros y movimientos hacia el nuevo modelo de oportunidades y etapas. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11264-L11298】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11325-L11336】
+- Las actividades actuales se reparten entre `conversaciones` (mensajería) y `llamadas`, sin unificarse en una tabla polimórfica; se requiere una estrategia de consolidación hacia `actividades` con enlaces a cuentas/contactos/oportunidades y campos de SLA. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10758-L10775】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11379-L11392】
