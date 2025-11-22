@@ -22,13 +22,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   searchEmbudoContacts,
   type ContactSearchResult,
@@ -679,7 +679,7 @@ export function LeadDrawer({
   const [error, setError] = useState<string | null>(null);
   const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
   const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
-  const [quoteSheetOpen, setQuoteSheetOpen] = useState(false);
+  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
   const [quoteDescription, setQuoteDescription] = useState("");
@@ -728,7 +728,7 @@ export function LeadDrawer({
 
   useEffect(() => {
     setQuotesState({ status: "idle", data: [] });
-    setQuoteSheetOpen(false);
+    setQuoteDialogOpen(false);
     setQuoteSuccess(null);
   }, [card?.tarjetaId]);
 
@@ -756,7 +756,7 @@ export function LeadDrawer({
   useEffect(() => {
     if (!open) {
       setActiveTab("resumen");
-      setQuoteSheetOpen(false);
+      setQuoteDialogOpen(false);
     }
   }, [open]);
 
@@ -932,10 +932,10 @@ export function LeadDrawer({
   }, [open, card?.tarjetaId, quotesState.status, fetchQuotes]);
 
   useEffect(() => {
-    if (quoteSheetOpen && catalogState.status === "idle") {
+    if (quoteDialogOpen && catalogState.status === "idle") {
       void loadCatalogItems();
     }
-  }, [quoteSheetOpen, catalogState.status, loadCatalogItems]);
+  }, [quoteDialogOpen, catalogState.status, loadCatalogItems]);
 
   useEffect(() => {
     if (card?.moneda) {
@@ -1352,7 +1352,7 @@ export function LeadDrawer({
     updateWonStagePrep(acceptedQuote.total ?? null);
   }, [card?.tarjetaId, quotesState.status, quotesState.data, updateWonStagePrep]);
 
-  const openQuoteSheet = useCallback(
+  const openQuoteDialog = useCallback(
     (channel: QuoteChannel) => {
       if (!card) return;
       const latestQuote = quotesState.data[0];
@@ -1415,14 +1415,14 @@ export function LeadDrawer({
       setQuoteItems(fallbackItems);
       setQuoteError(null);
       setQuoteSuccess(null);
-      setQuoteSheetOpen(true);
+      setQuoteDialogOpen(true);
     },
     [card, quoteMoneda, quotesState.data],
   );
 
-  const handleQuoteSheetOpenChange = (openState: boolean) => {
+  const handleQuoteDialogOpenChange = (openState: boolean) => {
     if (!openState) {
-      setQuoteSheetOpen(false);
+      setQuoteDialogOpen(false);
       setQuoteError(null);
     }
   };
@@ -1512,7 +1512,7 @@ export function LeadDrawer({
           setQuoteError(message);
           return;
         }
-        setQuoteSheetOpen(false);
+        setQuoteDialogOpen(false);
         setQuoteError(null);
         setQuoteSuccess("Cotización enviada correctamente.");
         await fetchQuotes();
@@ -2009,7 +2009,7 @@ export function LeadDrawer({
                         type="button"
                         size="sm"
                         className="gap-1"
-                        onClick={() => openQuoteSheet(quoteChannel)}
+                        onClick={() => openQuoteDialog(quoteChannel)}
                         disabled={isBusy}
                       >
                         <IconChecklist className="size-4" />
@@ -2411,19 +2411,20 @@ export function LeadDrawer({
       </DrawerContent>
     </Drawer>
     {!isCreateMode && card ? (
-      <Sheet open={quoteSheetOpen} onOpenChange={handleQuoteSheetOpenChange}>
-        <SheetContent side="right" className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Enviar cotización</SheetTitle>
-            <SheetDescription>
-              Genera y envía una cotización en PDF para {card.nombre ?? "el lead seleccionado"}.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
+      <Dialog open={quoteDialogOpen} onOpenChange={handleQuoteDialogOpenChange}>
+        <DialogContent className="flex h-[85vh] w-[85vw] max-w-[85vw] flex-col overflow-hidden p-0">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <DialogHeader>
+              <DialogTitle>Enviar cotización</DialogTitle>
+              <DialogDescription>
+                Genera y envía una cotización en PDF para {card.nombre ?? "el lead seleccionado"}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
                 className="gap-1"
                 variant={quoteChannel === "email" ? "default" : "outline"}
                 onClick={() => handleQuoteChannelChange("email")}
@@ -2453,11 +2454,11 @@ export function LeadDrawer({
                 disabled={quotePending}
                 placeholder="Implementación Tal-IA"
               />
-            </div>
+              </div>
 
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Descripción / resumen</label>
-              <Textarea
+              <div className="grid gap-2">
+                <label className="text-xs font-medium text-muted-foreground">Descripción / resumen</label>
+                <Textarea
                 value={quoteDescription}
                 onChange={(event) => setQuoteDescription(event.target.value)}
                 disabled={quotePending}
@@ -2737,8 +2738,9 @@ export function LeadDrawer({
                 disabled={quotePending}
               />
             </div>
+            </div>
           </div>
-          <SheetFooter className="flex flex-col gap-2 pt-2">
+          <DialogFooter className="flex flex-col gap-2 border-t border-border/60 px-6 py-4">
             {quoteError ? (
               <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 {quoteError}
@@ -2747,12 +2749,12 @@ export function LeadDrawer({
             <Button type="button" onClick={handleSendQuote} disabled={quotePending}>
               {quotePending ? "Enviando..." : "Enviar cotización"}
             </Button>
-            <Button type="button" variant="ghost" onClick={() => setQuoteSheetOpen(false)} disabled={quotePending}>
+            <Button type="button" variant="ghost" onClick={() => setQuoteDialogOpen(false)} disabled={quotePending}>
               Cancelar
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     ) : null}
     </>
   );
