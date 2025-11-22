@@ -1,0 +1,192 @@
+"use server";
+
+import { Buffer } from "node:buffer";
+import { cookies } from "next/headers";
+
+import { getPanelApiBaseUrl } from "@/lib/api/panel";
+import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
+import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+
+type CrmFetchOptions = {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  searchParams?: Record<string, string | number | boolean | null | undefined>;
+  body?: unknown;
+  headers?: Record<string, string | undefined>;
+  organizacionId?: string;
+  usuarioId?: string | null;
+};
+
+export type CrmResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; status?: number };
+
+const CRM_ORG_ENV_KEYS = [
+  "PANEL_ORGANIZACION_ID",
+  "TALIA_ORGANIZACION_ID",
+  "NEXT_PUBLIC_ORGANIZACION_ID",
+] as const;
+
+const CRM_USER_ENV_KEYS = [
+  "PANEL_USUARIO_ID",
+  "TALIA_USUARIO_ID",
+  "NEXT_PUBLIC_USUARIO_ID",
+] as const;
+
+export async function callCrmApi<T = unknown>(
+  path: string,
+  options: CrmFetchOptions = {},
+): Promise<CrmResult<T>> {
+  let baseUrl: string;
+  let token: string;
+  try {
+    baseUrl = getPanelApiBaseUrl();
+    token = await resolvePanelApiToken();
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Configura PANEL_API_URL y el token del panel.",
+    };
+  }
+
+  const organizacionId = options.organizacionId ?? resolveDefaultOrganizacionId();
+  const usuarioId = options.usuarioId ?? (await resolveCurrentUsuarioId());
+
+  const sanitizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = new URL(`${baseUrl}${sanitizedPath}`);
+  if (options.searchParams) {
+    for (const [key, value] of Object.entries(options.searchParams)) {
+      if (value === undefined || value === null) continue;
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const method = options.method ?? (options.body ? "POST" : "GET");
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+    "X-Organizacion-Id": organizacionId,
+    ...(options.headers ?? {}),
+  };
+  if (usuarioId) {
+    headers["X-Usuario-Id"] = usuarioId;
+  }
+
+  let body: BodyInit | undefined;
+  if (options.body != null && method !== "GET") {
+    if (!headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+    body =
+      typeof options.body === "string"
+        ? options.body
+        : (JSON.stringify(options.body) as BodyInit);
+  }
+
+  const response = await fetch(url.toString(), {
+    method,
+    headers,
+    cache: "no-store",
+    ...(body ? { body } : {}),
+  });
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: await mapResponseError(response),
+    };
+  }
+
+  if (response.status === 204 || method === "DELETE") {
+    return { ok: true, data: ([] as unknown) as T };
+  }
+
+  const text = await response.text();
+  if (!text.length) {
+    return { ok: true, data: ([] as unknown) as T };
+  }
+
+  try {
+    return { ok: true, data: JSON.parse(text) as T };
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Respuesta inválida del CRM (${(error as Error).message})`,
+    };
+  }
+}
+
+function resolveDefaultOrganizacionId(): string {
+  for (const key of CRM_ORG_ENV_KEYS) {
+    const value = process.env[key];
+    if (value && value.trim().length) {
+      return value.trim();
+    }
+  }
+  throw new Error(
+    "Configura PANEL_ORGANIZACION_ID (o NEXT_PUBLIC_ORGANIZACION_ID) para contactar el CRM.",
+  );
+}
+
+async function resolveCurrentUsuarioId(): Promise<string | null> {
+  for (const key of CRM_USER_ENV_KEYS) {
+    const value = process.env[key];
+    if (value && value.trim().length) {
+      return value.trim();
+    }
+  }
+  try {
+    const store = await cookies();
+    const token =
+      store.get(ACCESS_TOKEN_COOKIE)?.value ||
+      store.get("sb-access-token")?.value ||
+      store.get("access_token")?.value;
+    return decodeJwtUserId(token);
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtUserId(token: string | null | undefined): string | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  try {
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    const payload = JSON.parse(decoded) as { sub?: string; user_id?: string };
+    if (payload.sub && typeof payload.sub === "string") return payload.sub;
+    if (payload.user_id && typeof payload.user_id === "string") return payload.user_id;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function mapResponseError(response: Response): Promise<string> {
+  if (response.status === 401 || response.status === 403) {
+    return "Tu sesión caducó. Vuelve a iniciar sesión.";
+  }
+  try {
+    const text = await response.text();
+    if (!text) return `Error ${response.status}`;
+    try {
+      const json = JSON.parse(text);
+      if (typeof json === "string") return json;
+      if (json && typeof json === "object") {
+        return (
+          json.error_description ||
+          json.message ||
+          json.error ||
+          `Error ${response.status}`
+        );
+      }
+      return text;
+    } catch {
+      return text;
+    }
+  } catch {
+    return `Error ${response.status}`;
+  }
+}
