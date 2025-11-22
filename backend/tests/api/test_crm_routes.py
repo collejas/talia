@@ -3,7 +3,7 @@ from typing import Any, AsyncIterator
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from app.api.routes import crm as crm_routes
 from app.repositories.crm import CRMRepository
@@ -190,6 +190,32 @@ class DummyCRMRepository(CRMRepository):
             "cerrado_en": None,
         }
 
+    async def list_ticket_comments(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_ticket_comments", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "ticket_id": str(kwargs["ticket_id"]),
+                "autor_usuario_id": str(uuid.uuid4()),
+                "autor_cliente_id": None,
+                "mensaje": "Comentario",
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_ticket_comment(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_ticket_comment", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "mensaje": kwargs["payload"]["mensaje"],
+            "metadata": kwargs["payload"].get("metadata", {}),
+            "creado_en": "2024-01-01T00:00:00Z",
+        }
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -206,7 +232,8 @@ def app(fake_repo: DummyCRMRepository) -> FastAPI:
 
 @pytest.fixture()
 async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
-    async with AsyncClient(app=app, base_url="http://testserver") as session:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as session:
         yield session
 
 
@@ -289,3 +316,29 @@ async def test_create_ticket(client: AsyncClient) -> None:
 async def test_get_ticket_not_found(client: AsyncClient) -> None:
     resp = await client.get(f"/crm/tickets/{uuid.UUID(int=1)}", headers=_headers())
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_ticket_comments(client: AsyncClient) -> None:
+    ticket_id = uuid.uuid4()
+    resp = await client.get(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()[0]["ticket_id"] == str(ticket_id)
+
+
+@pytest.mark.asyncio
+async def test_create_ticket_comment(client: AsyncClient) -> None:
+    ticket_id = uuid.uuid4()
+    body = {"ticket_id": str(ticket_id), "mensaje": "Seguimiento"}
+    resp = await client.post(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers(), json=body)
+    assert resp.status_code == 201
+    assert resp.json()["mensaje"] == "Seguimiento"
+
+
+@pytest.mark.asyncio
+async def test_create_ticket_comment_mismatch(client: AsyncClient) -> None:
+    ticket_id = uuid.uuid4()
+    other_id = uuid.uuid4()
+    body = {"ticket_id": str(other_id), "mensaje": "Error"}
+    resp = await client.post(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers(), json=body)
+    assert resp.status_code == 400

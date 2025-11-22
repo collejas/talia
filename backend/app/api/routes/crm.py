@@ -242,6 +242,25 @@ class CRMTicketsResponse(BaseModel):
     offset: int
 
 
+class CRMTicketComment(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    ticket_id: UUID
+    autor_usuario_id: UUID | None = None
+    autor_cliente_id: UUID | None = None
+    mensaje: str
+    metadata: dict | None = None
+    creado_en: datetime
+
+
+class CRMTicketCommentCreate(BaseModel):
+    ticket_id: UUID
+    mensaje: str = Field(..., max_length=4000)
+    autor_usuario_id: UUID | None = None
+    autor_cliente_id: UUID | None = None
+    metadata: dict | None = Field(default_factory=dict)
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -508,3 +527,51 @@ async def get_ticket(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ticket_no_encontrado")
     return CRMTicket.model_validate(row)
+
+
+@router.get(
+    "/tickets/{ticket_id}/comentarios",
+    response_model=list[CRMTicketComment],
+)
+async def list_ticket_comments(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    ticket_id: UUID,
+) -> list[CRMTicketComment]:
+    try:
+        rows = await repo.list_ticket_comments(
+            organizacion_id=organizacion_id,
+            ticket_id=ticket_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMTicketComment.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/tickets/{ticket_id}/comentarios",
+    response_model=CRMTicketComment,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ticket_comment(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    ticket_id: UUID,
+    payload: CRMTicketCommentCreate,
+) -> CRMTicketComment:
+    if payload.ticket_id != ticket_id:
+        raise HTTPException(status_code=400, detail="ticket_id_mismatch")
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body.get("autor_usuario_id") and usuario_id:
+        body["autor_usuario_id"] = str(usuario_id)
+    try:
+        row = await repo.create_ticket_comment(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMTicketComment.model_validate(row)

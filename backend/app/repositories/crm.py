@@ -275,6 +275,46 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al obtener ticket: {row!r}")
         return row
 
+    async def list_ticket_comments(
+        self,
+        *,
+        organizacion_id: UUID,
+        ticket_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "ticket_id": f"eq.{ticket_id}",
+            "order": "creado_en.asc",
+        }
+        resp = await self._request("GET", "/rest/v1/ticket_comentarios", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar comentarios de ticket: {data!r}"
+            )
+        return data
+
+    async def create_ticket_comment(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/ticket_comentarios",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el comentario del ticket")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear comentario: {row!r}")
+        return row
+
     async def append_stage_history(
         self,
         *,
