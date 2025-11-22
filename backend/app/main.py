@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.staticfiles import StaticFiles
 
+from app.api.routes.crm import router as crm_router
 from app.api.routes.health import router as health_router
 from app.api.routes.panel import router as panel_router
 from app.channels.voice.router import router as voice_router
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(panel_router)
+    app.include_router(crm_router)
     app.include_router(webchat_router)
     app.include_router(whatsapp_router)
     app.include_router(voice_router)
