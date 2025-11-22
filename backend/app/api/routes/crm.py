@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -312,6 +312,90 @@ class CRMTaggingCreate(BaseModel):
     tag_id: UUID
     relacion_tipo: str = Field(..., max_length=100)
     relacion_id: UUID
+
+
+class CRMProduct(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    codigo: str
+    nombre: str
+    descripcion: str | None = None
+    precio_base: float | None = None
+    moneda: str
+    activo: bool
+    metadata: dict | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMProductCreate(BaseModel):
+    codigo: str = Field(..., max_length=120)
+    nombre: str = Field(..., max_length=255)
+    descripcion: str | None = Field(default=None, max_length=1000)
+    precio_base: float | None = Field(default=None, ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    activo: bool = True
+    metadata: dict | None = Field(default_factory=dict)
+
+    @field_validator("moneda")
+    @classmethod
+    def uppercase_currency(cls, value: str) -> str:
+        return value.upper()
+
+
+class CRMQuote(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    oportunidad_id: UUID | None = None
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    estatus: str
+    total: float | None = None
+    moneda: str
+    valida_hasta: date | None = None
+    creada_por_usuario_id: UUID | None = None
+    metadata: dict | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMQuoteCreate(BaseModel):
+    oportunidad_id: UUID | None = None
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    estatus: str = Field(default="borrador")
+    total: float | None = Field(default=None, ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    valida_hasta: date | None = None
+    metadata: dict | None = Field(default_factory=dict)
+
+    @field_validator("moneda")
+    @classmethod
+    def uppercase_currency(cls, value: str) -> str:
+        return value.upper()
+
+
+class CRMQuoteItem(BaseModel):
+    id: UUID
+    cotizacion_id: UUID
+    producto_id: UUID | None = None
+    descripcion: str
+    cantidad: float
+    precio_unitario: float | None = None
+    descuento_porcentaje: float | None = None
+    subtotal: float | None = None
+    metadata: dict | None = None
+
+
+class CRMQuoteItemCreate(BaseModel):
+    cotizacion_id: UUID
+    producto_id: UUID | None = None
+    descripcion: str = Field(..., max_length=500)
+    cantidad: float = Field(default=1, gt=0)
+    precio_unitario: float | None = Field(default=None, ge=0)
+    descuento_porcentaje: float | None = Field(default=None, ge=0, le=100)
+    subtotal: float | None = Field(default=None, ge=0)
+    metadata: dict | None = Field(default_factory=dict)
 
 
 @router.get("/cuentas", response_model=CRMAccountsResponse)
@@ -734,3 +818,113 @@ async def delete_tagging(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/productos", response_model=list[CRMProduct])
+async def list_products(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    activos: bool | None = Query(default=None),
+) -> list[CRMProduct]:
+    try:
+        rows = await repo.list_products(organizacion_id=organizacion_id, activos=activos)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMProduct.model_validate(row) for row in rows]
+
+
+@router.post("/productos", response_model=CRMProduct, status_code=status.HTTP_201_CREATED)
+async def create_product(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMProductCreate,
+) -> CRMProduct:
+    try:
+        row = await repo.create_product(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMProduct.model_validate(row)
+
+
+@router.get("/cotizaciones", response_model=list[CRMQuote])
+async def list_quotes(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    oportunidad_id: UUID | None = Query(default=None),
+) -> list[CRMQuote]:
+    try:
+        rows = await repo.list_quotes(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMQuote.model_validate(row) for row in rows]
+
+
+@router.post("/cotizaciones", response_model=CRMQuote, status_code=status.HTTP_201_CREATED)
+async def create_quote(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMQuoteCreate,
+) -> CRMQuote:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body.get("creada_por_usuario_id") and usuario_id:
+        body["creada_por_usuario_id"] = str(usuario_id)
+    try:
+        row = await repo.create_quote(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMQuote.model_validate(row)
+
+
+@router.get("/cotizaciones/{cotizacion_id}/items", response_model=list[CRMQuoteItem])
+async def list_quote_items(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    cotizacion_id: UUID,
+) -> list[CRMQuoteItem]:
+    try:
+        rows = await repo.list_quote_items(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMQuoteItem.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/items",
+    response_model=CRMQuoteItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_quote_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    cotizacion_id: UUID,
+    payload: CRMQuoteItemCreate,
+) -> CRMQuoteItem:
+    if payload.cotizacion_id != cotizacion_id:
+        raise HTTPException(status_code=400, detail="cotizacion_id_mismatch")
+    try:
+        row = await repo.add_quote_item(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMQuoteItem.model_validate(row)

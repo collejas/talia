@@ -437,6 +437,124 @@ class CRMRepository:
                 f"Supabase respondió error al eliminar tagging: {resp.status_code} {resp.text}"
             )
 
+    async def list_products(
+        self,
+        *,
+        organizacion_id: UUID,
+        activos: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+        }
+        if activos is not None:
+            params["activo"] = f"eq.{str(activos).lower()}"
+        resp = await self._request("GET", "/rest/v1/productos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar productos: {data!r}")
+        return data
+
+    async def create_product(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/productos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el producto creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear producto: {row!r}")
+        return row
+
+    async def list_quotes(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+        }
+        if oportunidad_id:
+            params["oportunidad_id"] = f"eq.{oportunidad_id}"
+        resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones: {data!r}")
+        return data
+
+    async def create_quote(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/cotizaciones",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió la cotización creada")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear cotización: {row!r}")
+        return row
+
+    async def list_quote_items(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "cotizacion_id": f"eq.{cotizacion_id}",
+            "order": "id.asc",
+        }
+        resp = await self._request("GET", "/rest/v1/cotizacion_items", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar items de cotización: {data!r}"
+            )
+        return data
+
+    async def add_quote_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/cotizacion_items",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el item de cotización creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear item de cotización: {row!r}")
+        return row
+
     async def append_stage_history(
         self,
         *,

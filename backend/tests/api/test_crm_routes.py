@@ -276,6 +276,93 @@ class DummyCRMRepository(CRMRepository):
     async def delete_tagging(self, **kwargs: Any) -> None:
         self.calls.append(("delete_tagging", kwargs))
 
+    async def list_products(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_products", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "codigo": "SKU-1",
+                "nombre": "Producto",
+                "descripcion": None,
+                "precio_base": 100.0,
+                "moneda": "MXN",
+                "activo": True,
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_product(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_product", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "moneda": kwargs["payload"].get("moneda", "MXN"),
+            "activo": kwargs["payload"].get("activo", True),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_quotes(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_quotes", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "oportunidad_id": kwargs.get("oportunidad_id"),
+                "cuenta_id": None,
+                "contacto_id": None,
+                "estatus": "borrador",
+                "total": 1000.0,
+                "moneda": "MXN",
+                "valida_hasta": None,
+                "creada_por_usuario_id": str(uuid.uuid4()),
+                "metadata": {},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+    async def create_quote(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_quote", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+            "estatus": kwargs["payload"].get("estatus", "borrador"),
+            "moneda": kwargs["payload"].get("moneda", "MXN"),
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def list_quote_items(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_quote_items", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "cotizacion_id": str(kwargs["cotizacion_id"]),
+                "producto_id": None,
+                "descripcion": "Servicio",
+                "cantidad": 1,
+                "precio_unitario": 1000.0,
+                "descuento_porcentaje": None,
+                "subtotal": 1000.0,
+                "metadata": {},
+            }
+        ]
+
+    async def add_quote_item(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("add_quote_item", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            **kwargs["payload"],
+            "descripcion": kwargs["payload"]["descripcion"],
+            "cantidad": kwargs["payload"].get("cantidad", 1),
+        }
+
 
 @pytest.fixture()
 def fake_repo() -> DummyCRMRepository:
@@ -455,3 +542,77 @@ async def test_create_and_delete_tagging(client: AsyncClient) -> None:
     tagging_id = resp.json()["id"]
     del_resp = await client.delete(f"/crm/taggings/{tagging_id}", headers=_headers())
     assert del_resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_list_products(client: AsyncClient) -> None:
+    resp = await client.get("/crm/productos", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()[0]["codigo"] == "SKU-1"
+
+
+@pytest.mark.asyncio
+async def test_create_product(client: AsyncClient) -> None:
+    resp = await client.post(
+        "/crm/productos",
+        headers=_headers(),
+        json={"codigo": "SKU-2", "nombre": "Nuevo"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["codigo"] == "SKU-2"
+
+
+@pytest.mark.asyncio
+async def test_list_quotes(client: AsyncClient) -> None:
+    resp = await client.get("/crm/cotizaciones", headers=_headers())
+    assert resp.status_code == 200
+    assert resp.json()
+
+
+@pytest.mark.asyncio
+async def test_create_quote(client: AsyncClient) -> None:
+    resp = await client.post("/crm/cotizaciones", headers=_headers(), json={})
+    assert resp.status_code == 201
+    assert resp.json()["estatus"] == "borrador"
+
+
+@pytest.mark.asyncio
+async def test_list_quote_items(client: AsyncClient) -> None:
+    cotizacion_id = uuid.uuid4()
+    resp = await client.get(
+        f"/crm/cotizaciones/{cotizacion_id}/items",
+        headers=_headers(),
+    )
+    assert resp.status_code == 200
+    assert resp.json()[0]["cotizacion_id"] == str(cotizacion_id)
+
+
+@pytest.mark.asyncio
+async def test_create_quote_item(client: AsyncClient) -> None:
+    cotizacion_id = uuid.uuid4()
+    body = {
+        "cotizacion_id": str(cotizacion_id),
+        "descripcion": "Servicio",
+        "cantidad": 2,
+    }
+    resp = await client.post(
+        f"/crm/cotizaciones/{cotizacion_id}/items",
+        headers=_headers(),
+        json=body,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["descripcion"] == "Servicio"
+
+
+@pytest.mark.asyncio
+async def test_create_quote_item_mismatch(client: AsyncClient) -> None:
+    cotizacion_id = uuid.uuid4()
+    resp = await client.post(
+        f"/crm/cotizaciones/{cotizacion_id}/items",
+        headers=_headers(),
+        json={
+            "cotizacion_id": str(uuid.uuid4()),
+            "descripcion": "Bad",
+        },
+    )
+    assert resp.status_code == 400
