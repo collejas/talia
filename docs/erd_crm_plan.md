@@ -128,7 +128,11 @@ Este ERD cubre los casos propuestos (ventas, soporte, marketing) y está pensado
 ## Propuestas para cerrar los complementos
 - **Actividades vs. tareas:** mantener `actividades` como tabla única para no duplicar lógica y agregar campos obligatorios `prioridad` (enum `baja`/`media`/`alta`/`critica`), `fecha_vencimiento`, `sla_horas` (nullable) y `recordatorio_en`. El frontend debe exponer prioridad y vencimiento en creación/edición y permitir ordenar/filtrar por esos campos; el backend debe validar SLA y calcular estados derivados (`vencida`, `al_dia`) en vistas o materialized views.
 - **Notas polimórficas y visibilidad:** crear `notas` con `relacion_tipo`, `relacion_id`, `texto`, `creado_por_usuario_id`, `creado_en`, `visible_para_cliente` (booleano) y `tipo` (por ejemplo `interna`, `publica`, `sistema`). Para casos simples puede mantenerse `actividades.tipo = 'nota'`, pero cuando se requiera aislamiento (soporte interno) el frontend mostrará sólo las notas `visibles_para_cliente = true` en portales públicos y todas en vistas internas; el backend filtra por `organizacion_id` y el flag de visibilidad.
-- **Archivos y etiquetas polimórficas:** centralizar la carga y listado en `archivos` y `taggings` usando `relacion_tipo`/`relacion_id` (cuentas, contactos, oportunidades, tickets, actividades). Exponer en el backend endpoints polimórficos (`POST /archivos/{relacion_tipo}/{relacion_id}` y `POST /taggings/{relacion_tipo}/{relacion_id}`) y adaptar el frontend para reutilizar un componente común de adjuntos/etiquetas que se configure por tipo; validar en backend que `relacion_tipo` pertenezca a un catálogo permitido para evitar referencias huérfanas.
+- **Archivos y etiquetas polimórficas:** centralizar la carga y listado en `archivos` y `taggings` usando `relacion_tipo`/`relacion_id` (cuentas, contactos, oportunidades, tickets, actividades). Exponer en el backend endpoints polimórficos (`POST /archivos/{relacion_tipo}/{relacion_id}` y `POST /taggings/{relacion_tipo}/{relacion_id}`) y adaptar el frontend para reutilizar un componente común de adjuntos/etiquetas que se configure por tipo; validar en backend que `relacion_tipo` pertenezca a un catálogo permitido para evitar referencias huérfanas. Ya existen endpoints REST en el backend (`/crm/archivos`, `/crm/taggings` y `/crm/notas`) que aplican esta validación y se apoyan en RLS por `organizacion_id`.
+
+### Cierre del plan
+- Se deben crear endpoints `/crm/...` en el backend (`backend/app/api`) que expongan el nuevo modelo multi-tenant (`cuentas`, `contactos`, `oportunidades`, `actividades`, etc.) sobre Supabase/RLS; actualmente todo el panel sigue pegado a `/rest/v1/lead_*` desde `panel.py`.
+- El frontend carece de un cliente `crm.ts`; sólo existe `frontend/panel/src/lib/api/panel.ts`, por lo que habrá que añadir un wrapper que consuma los nuevos endpoints y migrar gradualmente los componentes del embudo hacia ese cliente.
 
 Con estas definiciones, el plan queda completo respecto a la lista recomendada; la ejecución requiere seguir las migraciones y ajustes de frontend/backend que se describen abajo.
 
@@ -136,3 +140,58 @@ Con estas definiciones, el plan queda completo respecto a la lista recomendada; 
 - Las tablas actuales clave (`clientes`, `contactos`, `usuarios`, `roles`, `usuarios_roles`) no tienen columna de tenant ni RLS, por lo que el plan debe añadir `organizacion_id` y políticas de aislamiento antes de exponerlas como multi-tenant. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L1225-L1247】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10735-L10751】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10793-L10802】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11847-L11891】
 - El pipeline vigente está centrado en `lead_tableros`/`lead_etapas`/`lead_tarjetas` y su historial (`lead_movimientos`), sin entidades de `cuentas` u `oportunidades`; el plan debe incluir migraciones de esos tableros y movimientos hacia el nuevo modelo de oportunidades y etapas. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11264-L11298】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11325-L11336】
 - Las actividades actuales se reparten entre `conversaciones` (mensajería) y `llamadas`, sin unificarse en una tabla polimórfica; se requiere una estrategia de consolidación hacia `actividades` con enlaces a cuentas/contactos/oportunidades y campos de SLA. 【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L10758-L10775】【F:backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql†L11379-L11392】
+
+## Brechas detectadas en el backend/frontend actuales
+- `backend/app/api/routes/panel.py` sigue consultando Supabase con `lead_tarjetas`, `lead_etapas` y `contactos` para componer cotizaciones y movimientos (por ejemplo, el helper `_fetch_lead_for_quote` en las líneas 1589-1607). No hay endpoints que sirvan `cuentas`/`oportunidades`, así que la primera fase del plan debe introducir un módulo `/crm` paralelo que oculte las nuevas tablas detrás del backend antes de tocar el frontend.
+- `backend/app/services/storage.py:1792-1854` crea o actualiza tarjetas directamente en `/rest/v1/lead_tarjetas` para sincronizar conversaciones; esta dependencia obliga a definir cómo se mapearán chats/llamadas hacia `actividades` y `oportunidades` para no romper el inbox durante la migración.
+- En el frontend, `frontend/panel/src/lib/leads/supabase.ts:67-193` encapsula el consumo directo de Supabase (`callSupabaseRest`/`callSupabaseRpc`), sin noción de `organizacion_id`. Cualquier multi-tenant serio debe mover esta lógica al backend o, al menos, incluir filtros por tenant antes de exponer los datos al navegador.
+- La creación y actualización de leads (`frontend/panel/src/lib/embudo/actions.ts:423-520`) inserta filas en `lead_tarjetas` y ejecuta RPC como `panel_lead_update`; habrá que reescribir estas acciones para crear `oportunidades` y su historial en lugar de tarjetas del tablero.
+- La vista de clientes (`frontend/panel/src/lib/clientes/data.ts:22-48`) obtiene `clientes` y sus responsables directamente desde Supabase, por lo que el nuevo modelo de `cuentas` deberá exponer un endpoint equivalente antes de migrar la pantalla.
+- El único helper HTTP del frontend es `frontend/panel/src/lib/api/panel.ts:1-18`, que únicamente resuelve `PANEL_API_URL`; no existe `frontend/panel/src/lib/api/crm.ts`, por lo que se necesita crear dicho cliente (o ampliar el existente) para consumir los endpoints que se añadan en FastAPI.
+- Las migraciones vivas (`supabase/migrations_tmp/20251026_210000_leads_kanban.sql:128-190`) definen `lead_tarjetas`, `lead_movimientos` y `lead_recordatorios` sin `organizacion_id`, reafirmando que habrá que introducir nuevas tablas o columnas —y migraciones de datos— antes de habilitar RLS multi-tenant.
+
+## Estado actual resumido
+- **Base de datos:** respalda `backups/postgres_20251122_164957/postgres_20251122_164957_schema.sql` muestran un CRM basado en leads (tarjetas de tablero), sin entidades de cuentas/u oportunidades ni `organizacion_id`. Existen múltiples vistas y triggers acoplados a `lead_tarjetas`.
+- **Backend:** FastAPI (ruta `backend/app/api/routes/panel.py`) expone endpoints que actúan como pasarela hacia Supabase, sin capa de dominio para CRM; la sincronización de conversaciones (`backend/app/services/storage.py`) también depende de `lead_tarjetas`.
+- **Frontend:** Next.js (`frontend/panel`) se conecta directo a Supabase mediante `callSupabaseRest` y `callSupabaseRpc`, usa componentes diseñados para un tablero kanban y carece de cliente HTTP hacia el backend para CRM.
+- **Infra/RLS:** existen políticas parciales para `lead_tarjetas`, pero no para las tablas clave (`clientes`, `contactos`, `usuarios`). No hay control por tenant.
+
+## Plan de ejecución detallado
+
+### Fase 0 · Preparación operativa
+1. **Inventario y respaldos:** congelar un dump completo (ya existe `backups/postgres_20251122_164957`) y documentar qué tablas/vistas tocan los servicios activos (inbox, agenda, clientes). Registrar métricas de volumen para planear migraciones.
+2. **Variables y secretos:** validar que `SUPABASE_SERVICE_ROLE`, `SUPABASE_URL`, `PANEL_API_URL` y las llaves utilizadas por backend/frontend estén almacenadas en `.env` o en el gestor correspondiente antes de modificar servicios.
+3. **Entorno de staging:** montar un Supabase o Postgres de prueba, apuntar `backend` y `frontend` a ese entorno para validar cada fase sin impactar producción. Documentar la configuración en `supabase/README.md`.
+
+### Fase 1 · Núcleo multi-tenant en la base de datos
+1. **Crear tablas de tenant:** `organizaciones`, `roles`, `usuarios`, `usuario_roles` con `organizacion_id` y RLS (`supabase/migrations/20XX..._core_multitenant.sql`). Migrar datos históricos creando una `organizacion` por instancia actual.
+2. **Agregar `organizacion_id`:** extender `clientes`, `contactos`, `lead_tableros`, `lead_etapas`, `lead_tarjetas`, `conversaciones`, `llamadas`, `cotizaciones`, etc., rellenando el campo con la organización actual y creando índices (`organizacion_id`, `organizacion_id + estado`).
+3. **Tablas nuevas del ERD:** `cuentas`, `etapas_pipeline`, `oportunidades`, `oportunidad_etapas_historial`, `actividades`, `tickets`, `productos`, `cotizaciones`, `campanas`, `leads`, `lead_eventos`, `tags`, `taggings`, `archivos`, `audit_logs`, `notas`.
+4. **Triggers y vistas:** reescribir los triggers que hoy dependen de `lead_tarjetas` para que actualicen `oportunidades`/`historial`. Crear vistas de compatibilidad (`v_leads_legacy`) para que los servicios actuales sigan funcionando durante la transición.
+5. **RLS por tenant:** habilitar políticas `USING (organizacion_id = current_setting('app.organizacion_id')::uuid)` y exponer funciones `set_config('app.organizacion_id', ...)` en los RPC usados por el backend.
+
+### Fase 2 · Backend FastAPI (/crm)
+1. **Cliente Supabase de servicio:** encapsular en `backend/app/repositories/crm_repository.py` todas las llamadas a Supabase usando el service role y el nuevo `organizacion_id`.
+2. **Endpoints REST `/crm`:** crear routers dedicados (`backend/app/api/routes/crm/accounts.py`, `.../opportunities.py`, etc.) que expongan CRUD filtrado por tenant y traduzcan los modelos Pydantic nuevos (`backend/app/models/crm.py`).
+3. **Integraciones existentes:** actualizar `panel.py` para que el flujo de cotizaciones y el inbox usen `crm_repository` en lugar de pegarle directo a Supabase. Mientras no exista UI nueva, mapear `lead_tarjetas` ⇄ `oportunidades` mediante vistas temporales.
+4. **Sincronización de conversaciones:** modificar `backend/app/services/storage.py` para que `ensure_lead_tarjeta` evolucione a `ensure_opportunity_activity`, creando registros en `actividades` y manteniendo referencias a `conversaciones`.
+5. **Validaciones y pruebas:** crear pruebas unitarias/contract en `backend/tests/api/test_crm_*.py` que cubran permisos, filtros por tenant y transiciones de etapas.
+
+### Fase 3 · Frontend Panel
+1. **Cliente HTTP CRM:** añadir `frontend/panel/src/lib/api/crm.ts` que use `PANEL_API_URL` (desde `panel.ts`) para llamar al backend con fetch y manejar tokens de sesión.
+2. **Hooks y stores:** crear hooks (`useCRMAccounts`, `useOpportunitiesPipeline`) que consuman el nuevo cliente y reemplacen gradualmente el acceso directo a Supabase (`frontend/panel/src/lib/leads/supabase.ts`).
+3. **UI de cuentas/contactos:** migrar `frontend/panel/src/lib/clientes` a `cuentas`, mostrando datos provenientes de `/crm/accounts`. Mantener la pantalla legacy detrás de un feature flag hasta completar la migración.
+4. **Embudo y actividades:** rediseñar `frontend/panel/src/lib/embudo` para usar `oportunidades`, `etapas_pipeline` y `actividades`. Reaprovechar componentes de drag & drop, pero colgarse del nuevo API para mover etapas y registrar historial.
+5. **Soporte/marketing:** cuando ventas esté estable, activar vistas de tickets, campañas y leads de marketing reutilizando los mismos componentes para tags, archivos y notas.
+
+### Fase 4 · Migración de datos y corte
+1. **Poblado inicial:** scripts de migración que conviertan `lead_tarjetas` → `oportunidades` (mapeando `tablero` a `pipeline`, `etapa_id` a `etapa_id`, `contacto_id` a `cuenta/contacto`). Guardar IDs legacy en columnas `legacy_id`.
+2. **Doble escritura:** durante un periodo, escribir en paralelo en `lead_tarjetas` y `oportunidades` mediante triggers o lógica de backend para asegurar consistencia.
+3. **Medición/regresión:** dashboards temporales que comparen conteos entre el modelo viejo y el nuevo para validar que no se pierden registros.
+4. **Desactivación legacy:** una vez estabilizado, remover vistas/triggers de compatibilidad, limpiar código que hable directo con Supabase y archivar las tablas `lead_*`.
+
+### Fase 5 · Observabilidad y capacitación
+1. **Auditoría:** aprovechar `audit_logs` para registrar acciones sensibles y exponerlas en un endpoint `/crm/audit`.
+2. **Alertas:** integrar paneles de métricas (Prometheus/Grafana o Supabase logs) que avisen si fallan las migraciones o si RLS bloquea tráfico legítimo.
+3. **Documentación:** actualizar `README.md`, `docs/` y la wiki interna con diagramas ERD, contratos de API y guías de onboarding multi-tenant.
+4. **Handoff:** capacitar al equipo de soporte y ventas sobre los nuevos conceptos (`cuentas` vs `clientes`, `oportunidades`, `actividades`) y actualizar scripts de adopción.
