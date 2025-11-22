@@ -2,14 +2,34 @@
 
 import type { LeadCards, LeadChartPoint } from "@/lib/leads/data";
 import type { DataTableRow } from "@/components/data-table";
-import { callSupabaseRest } from "@/lib/leads/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 import type { ClienteRecord, ClienteResponsable } from "@/types/clientes";
 
 const DEFAULT_LIMIT = 200;
-const CLIENTE_SELECT =
-  "id,contacto_id,lead_tarjeta_id,estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en," +
-  "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name)," +
-  "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,es_responsable_principal)";
+
+type CRMAccount = {
+  id: string;
+  organizacion_id: string;
+  nombre: string;
+  alias: string | null;
+  tipo: string | null;
+  industria: string | null;
+  tamano: string | null;
+  sitio_web: string | null;
+  telefono: string | null;
+  correo: string | null;
+  direccion: Record<string, unknown> | null;
+  propietario_usuario_id: string | null;
+  metadata: Record<string, unknown> | null;
+  creado_en: string;
+  actualizado_en: string;
+};
+
+type CRMAccountsResponse = {
+  items: CRMAccount[];
+  limit: number;
+  offset: number;
+};
 
 export type ClientesPayload = {
   cards: LeadCards;
@@ -20,20 +40,24 @@ export type ClientesPayload = {
 };
 
 export async function loadClientesData(): Promise<ClientesPayload> {
-  const response = await callSupabaseRest<ClienteRecord[]>("clientes", {
-    query: {
-      select: CLIENTE_SELECT,
-      order: "creado_en.desc",
+  const errors: string[] = [];
+
+  const response = await callCrmApi<CRMAccountsResponse>("/crm/cuentas", {
+    searchParams: {
       limit: String(DEFAULT_LIMIT),
+      offset: "0",
     },
   });
 
-  const errors: string[] = [];
   if (!response.ok) {
     errors.push(response.error);
   }
 
-  const rows = response.ok && Array.isArray(response.data) ? response.data : [];
+  const rows: ClienteRecord[] =
+    response.ok && Array.isArray(response.data.items)
+      ? response.data.items.map(adaptAccountToClienteRecord)
+      : [];
+
   const cards = mapCards(rows);
   const chart = mapChart(rows);
   const table = mapTable(rows);
@@ -44,6 +68,38 @@ export async function loadClientesData(): Promise<ClientesPayload> {
     table,
     errors,
     totalRows: rows.length,
+  };
+}
+
+function adaptAccountToClienteRecord(account: CRMAccount): ClienteRecord {
+  const metadata = isPlainObject(account.metadata) ? account.metadata : {};
+  const estado = resolveEstadoOnboarding(metadata.estado_onboarding);
+
+  return {
+    id: account.id,
+    contacto_id: typeof metadata.contacto_id === "string" && metadata.contacto_id.length
+      ? metadata.contacto_id
+      : account.id,
+    lead_tarjeta_id: null,
+    tablero_id: null,
+    etapa_id: null,
+    estado_onboarding: estado,
+    rfc: toNullableString(metadata.rfc),
+    razon_social: account.nombre || account.alias || toNullableString(metadata.razon_social),
+    domicilio_fiscal: toNullableString(metadata.domicilio_fiscal),
+    domicilio_fisico: toNullableString(metadata.domicilio_fisico),
+    regimen_fiscal: toNullableString(metadata.regimen_fiscal),
+    datos_facturacion: isPlainObject(metadata.datos_facturacion) ? metadata.datos_facturacion : null,
+    fuente: toNullableString(metadata.fuente) ?? account.tipo,
+    monto_estimado: typeof metadata.monto_estimado === "number" ? metadata.monto_estimado : null,
+    moneda: toNullableString(metadata.moneda),
+    metadatos: metadata,
+    ganado_en: toNullableString(metadata.ganado_en),
+    creado_en: account.creado_en,
+    actualizado_en: account.actualizado_en,
+    contacto: extractContacto(metadata, account),
+    documentos: [],
+    responsables: [],
   };
 }
 
@@ -154,4 +210,42 @@ function isWithinDays(date: string | null | undefined, days: number): boolean {
   if (Number.isNaN(parsed)) return false;
   const diff = Date.now() - parsed;
   return diff >= 0 && diff <= days * 24 * 60 * 60 * 1000;
+}
+
+function resolveEstadoOnboarding(
+  value: unknown,
+): ClienteRecord["estado_onboarding"] {
+  if (value === "pendiente" || value === "en_progreso" || value === "completado") {
+    return value;
+  }
+  return "completado";
+}
+
+function toNullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractContacto(
+  metadata: Record<string, unknown>,
+  account: CRMAccount,
+): ClienteRecord["contacto"] {
+  const raw = metadata.contacto;
+  if (!isPlainObject(raw)) return null;
+
+  return {
+    id: typeof raw.id === "string" && raw.id.length ? raw.id : account.id,
+    nombre_completo:
+      toNullableString(raw.nombre_completo) ??
+      toNullableString(raw.nombre) ??
+      account.nombre,
+    correo: toNullableString(raw.correo),
+    telefono_e164: toNullableString(raw.telefono_e164 ?? raw.telefono),
+    company_name: toNullableString(raw.company_name ?? raw.empresa),
+  };
 }

@@ -104,6 +104,8 @@ sudo systemctl daemon-reload
 sudo systemctl stop talia-panel.service
 sudo systemctl stop talia-api.service
 
+npm run build
+
 npm run lint
 npm run build --webpack
 npm run build --webpack && npm start
