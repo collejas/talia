@@ -170,47 +170,13 @@ async def resolve_webchat_conversation_from_session(
     if not contact_id:
         return None
 
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-
-    conv_url = f"{base_url}/rest/v1/conversaciones"
-    conv_params = {
-        "select": (
-            "id,contacto_id,canal,conversacion_openai_id,last_response_id,"
-            "conversaciones_controles(manual_override)"
-        ),
-        "contacto_id": f"eq.{contact_id}",
-        "canal": "eq.webchat",
-        "order": "iniciada_en.desc",
-        "limit": "1",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            conv_resp = await client.get(conv_url, headers=headers, params=conv_params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar conversación webchat por contacto: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if conv_resp.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar conversaciones webchat"
-            f" (status={conv_resp.status_code}, body={conv_resp.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    conv_data = conv_resp.json() or []
-    if not isinstance(conv_data, list) or not conv_data:
+        row = await repo.get_latest_webchat_conversation(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    if not row:
         return None
-    row = conv_data[0]
     ctrl = row.get("conversaciones_controles")
     manual_override = _normalize_manual_override(ctrl)
     return {
@@ -225,33 +191,11 @@ async def resolve_webchat_conversation_from_session(
 
 async def record_webchat_session_closure(session_id: str) -> None:
     """Persiste el cierre explícito de una sesión webchat."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/webchat_session_closures"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates",
-    }
-    payload = {"session_id": session_id}
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al registrar cierre de sesión webchat: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al registrar cierre de sesión webchat"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
+        await repo.record_webchat_session_closure(session_id=session_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def record_webchat_visit(
@@ -269,19 +213,9 @@ async def record_webchat_visit(
     landing_url: str | None = None,
 ) -> None:
     """Actualiza/crea el registro del visitante con metadata adicional."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    repo = CRMRepository()
 
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/record_webchat_visitante"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-    }
-
-    payload: dict[str, Any] = {"p_session_id": session_id}
+    payload: dict[str, Any] = {}
     if ip:
         payload["p_ip"] = ip
     if device_type:
@@ -304,57 +238,18 @@ async def record_webchat_visit(
         payload["p_landing_url"] = landing_url
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al registrar visitante webchat: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al registrar visitante webchat"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
+        await repo.record_webchat_visit(session_id=session_id, payload=payload)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def update_conversation(conversation_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     """Actualiza campos de una conversación."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/conversaciones"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Prefer": "return=representation",
-    }
-    params = {"id": f"eq.{conversation_id}", "limit": "1"}
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.patch(url, headers=headers, params=params, json=patch)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al actualizar conversación: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al actualizar conversación"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    rows = response.json() or []
-    if not rows:
-        raise StorageError("No se encontró la conversación a actualizar")
-    return rows[0]
+        return await repo.update_conversation(conversation_id=conversation_id, patch=patch)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def upsert_conversation_insights(

@@ -1295,6 +1295,80 @@ class CRMRepository:
         session_id = row.get("id_externo")
         return str(session_id) if session_id else None
 
+    async def get_latest_webchat_conversation(self, *, contact_id: str) -> dict[str, Any] | None:
+        contact_key = contact_id.strip()
+        if not contact_key:
+            return None
+        params = {
+            "select": (
+                "id,contacto_id,canal,conversacion_openai_id,last_response_id,"
+                "conversaciones_controles(manual_override)"
+            ),
+            "contacto_id": f"eq.{contact_key}",
+            "canal": "eq.webchat",
+            "order": "iniciada_en.desc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            return None
+        if not isinstance(row, dict):
+            return None
+        return row
+
+    async def record_webchat_session_closure(self, *, session_id: str) -> None:
+        session_key = session_id.strip()
+        if not session_key:
+            raise CRMRepositoryError("session_id_required")
+        await self._request(
+            "POST",
+            "/rest/v1/webchat_session_closures",
+            json={"session_id": session_key},
+            prefer="resolution=merge-duplicates",
+        )
+
+    async def record_webchat_visit(
+        self,
+        *,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        session_key = session_id.strip()
+        if not session_key:
+            raise CRMRepositoryError("session_id_required")
+        body = {"p_session_id": session_key, **payload}
+        await self._rpc("record_webchat_visitante", body)
+
+    async def update_conversation(
+        self, *, conversation_id: str, patch: dict[str, Any]
+    ) -> dict[str, Any]:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+        params = {"id": f"eq.{conversation_key}", "limit": "1"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/conversaciones",
+            params=params,
+            json=patch,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("conversation_not_found")
+        return row
+
     async def _get_default_stage_id(self, *, organizacion_id: UUID) -> UUID:
         cache_key = str(organizacion_id)
         cached = self._stage_cache.get(cache_key)
