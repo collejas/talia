@@ -989,3 +989,65 @@ async def promote_opportunity_stage(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     return True
+
+
+async def capture_lead_if_ready(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    channel: str | None = None,
+) -> bool:
+    """Crea/promueve la oportunidad cuando el contacto ya tiene al menos un dato válido."""
+    try:
+        contact = await fetch_contact(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "storage.capture_lead.contact_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        return False
+
+    correo = str(contact.get("correo") or "").strip()
+    telefono = str(contact.get("telefono_e164") or "").strip()
+    if not correo and not telefono:
+        return False
+
+    capture_channel = channel or "assistant"
+    try:
+        oportunidad_id = await ensure_lead_tarjeta(
+            tarjeta_id=None,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            channel=capture_channel,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "storage.capture_lead.ensure_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return False
+
+    organizacion_id = contact.get("organizacion_id")
+    if not organizacion_id:
+        return True
+
+    try:
+        await promote_opportunity_stage(
+            oportunidad_id=oportunidad_id,
+            organizacion_id=str(organizacion_id),
+            stage_code="captado",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "storage.capture_lead.promote_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+    return True

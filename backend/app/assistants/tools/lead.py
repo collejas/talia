@@ -57,13 +57,21 @@ async def try_execute_lead_tool(
     if tool_name == "set_email":
         email = _require_argument(arguments, "email").lower()
         await storage.update_contact(context.contact_id, {"correo": email})
-        await _maybe_capture_lead(context)
+        await storage.capture_lead_if_ready(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "webchat",
+        )
         return {"status": "ok", "email": email}
 
     if tool_name == "set_phone_number":
         phone_number = _require_argument(arguments, "phone_number")
         await storage.update_contact(context.contact_id, {"telefono_e164": phone_number})
-        await _maybe_capture_lead(context)
+        await storage.capture_lead_if_ready(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "webchat",
+        )
         return {"status": "ok", "phone_number": phone_number}
 
     if tool_name == "set_company_name":
@@ -262,48 +270,6 @@ async def _handle_information_email(
         "email": email_value,
         "message_id": message_id,
     }
-
-
-async def _maybe_capture_lead(context: ToolRuntimeContext) -> None:
-    """Crea y promueve la oportunidad cuando ya tenemos al menos un dato de contacto."""
-    contact = await _fetch_contact(context.contact_id)
-    if not contact:
-        return
-
-    has_email = bool(str(contact.get("correo") or "").strip())
-    has_phone = bool(str(contact.get("telefono_e164") or "").strip())
-    if not (has_email or has_phone):
-        return
-
-    try:
-        tarjeta_id = await storage.ensure_lead_tarjeta(
-            tarjeta_id=None,
-            conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
-            channel=context.channel or "webchat",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "lead_tools.capture.ensure_tarjeta_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
-        return
-
-    organizacion_id = contact.get("organizacion_id")
-    if not organizacion_id:
-        return
-
-    try:
-        await storage.promote_opportunity_stage(
-            oportunidad_id=tarjeta_id,
-            organizacion_id=str(organizacion_id),
-            stage_code="captado",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "lead_tools.capture.promote_stage_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
-        )
 
 
 async def _fetch_contact(contact_id: str | None) -> dict[str, Any] | None:

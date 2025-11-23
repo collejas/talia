@@ -65,11 +65,21 @@ async def execute_tool(
     if func == "set_email":
         email = _require(arguments, "email").lower()
         await storage.update_contact(context.contact_id, {"correo": email})
+        await storage.capture_lead_if_ready(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "whatsapp",
+        )
         return {"status": "ok", "email": email}
 
     if func == "set_phone_number":
         phone = _require(arguments, "phone_number")
         await storage.update_contact(context.contact_id, {"telefono_e164": phone})
+        await storage.capture_lead_if_ready(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "whatsapp",
+        )
         return {"status": "ok", "phone_number": phone}
 
     if func == "set_company_name":
