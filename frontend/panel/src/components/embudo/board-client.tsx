@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
+import { toast } from "sonner";
 
 type EmbudoBoardClientProps = {
   etapas: EmbudoStage[];
@@ -290,6 +291,7 @@ export function EmbudoBoardClient({
   };
 
   function applyLeadResult(result: LeadActionResult) {
+    notifyLeadConflict(result);
     const stage = result.ok ? result.stage : result.latestStage;
     const card = result.ok ? result.card : result.latestCard;
     if (!stage || !card) return;
@@ -338,6 +340,17 @@ export function EmbudoBoardClient({
     setSelectedStage(stage);
     setSelectedCard(card);
     setDrawerMode("edit");
+  }
+
+  function notifyLeadConflict(result: LeadActionResult) {
+    if (result.ok || !result.latestStage) {
+      return;
+    }
+    const stageLabel = result.latestStage.nombre || "otra etapa";
+    const cardLabel = result.latestCard?.nombre || "El lead";
+    toast.info(`${cardLabel} cambió a ${stageLabel} en otra sesión. Actualizamos la tarjeta.`, {
+      duration: 6000,
+    });
   }
 
   async function handleLeadSubmit(payload: LeadDrawerSubmitPayload) {
