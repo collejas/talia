@@ -741,42 +741,11 @@ async def fetch_visitantes_estados(
     date_to: datetime | None = None,
 ) -> dict[str, Any]:
     """Recupera totales de visitantes sin chat agregados por estado."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/panel_visitantes_sin_chat_estados"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
-    payload: dict[str, Any] = {}
-    if date_from:
-        payload["p_from"] = date_from.isoformat()
-    if date_to:
-        payload["p_to"] = date_to.isoformat()
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload or None)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar visitantes sin chat por estado: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar visitantes sin chat por estado"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json()
-    if not isinstance(data, dict):
-        raise StorageError(f"Respuesta inesperada de visitantes por estado: {data!r}")
-    return data
+        return await repo.visitas_estados(date_from=date_from, date_to=date_to)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_visitantes_municipios(
@@ -786,42 +755,15 @@ async def fetch_visitantes_municipios(
     date_to: datetime | None = None,
 ) -> dict[str, Any]:
     """Recupera totales de visitantes sin chat agregados por municipio."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/panel_visitantes_sin_chat_municipios"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
-    payload: dict[str, Any] = {"p_estado": state_code}
-    if date_from:
-        payload["p_from"] = date_from.isoformat()
-    if date_to:
-        payload["p_to"] = date_to.isoformat()
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar visitantes sin chat por municipio: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar visitantes sin chat por municipio"
-            f" (status={response.status_code}, body={response.text!r})"
+        return await repo.visitas_municipios(
+            state_code=state_code,
+            date_from=date_from,
+            date_to=date_to,
         )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json()
-    if not isinstance(data, dict):
-        raise StorageError(f"Respuesta inesperada de visitantes por municipio: {data!r}")
-    return data
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_visitantes_paises(
@@ -830,42 +772,11 @@ async def fetch_visitantes_paises(
     date_to: datetime | None = None,
 ) -> dict[str, Any]:
     """Recupera totales de visitantes agrupados por país."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/panel_visitantes_world_paises"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
-    payload: dict[str, Any] = {}
-    if date_from:
-        payload["p_from"] = date_from.isoformat()
-    if date_to:
-        payload["p_to"] = date_to.isoformat()
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload or None)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar visitantes por país: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar visitantes por país"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json()
-    if not isinstance(data, dict):
-        raise StorageError(f"Respuesta inesperada de visitantes por país: {data!r}")
-    return data
+        return await repo.visitas_paises(date_from=date_from, date_to=date_to)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_webchat_visitas_detalle(
@@ -899,19 +810,8 @@ async def fetch_webchat_visitas_detalle(
     offset: int = 0,
 ) -> dict[str, Any]:
     """Consulta visitas (con y sin chat) del webchat para el panel."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/panel_webchat_visitas_detalle"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
     country_value = country.strip() if isinstance(country, str) else country
     if isinstance(country_value, str) and not country_value:
         country_value = None
@@ -972,47 +872,11 @@ async def fetch_webchat_visitas_detalle(
     if order_dir:
         payload["p_order_dir"] = order_dir
 
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar visitas webchat: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code == 400:
-        try:
-            error_json = response.json()
-        except ValueError:
-            error_json = None
-        if (
-            isinstance(error_json, dict)
-            and error_json.get("code") == "PGRST203"
-            and "p_country" not in payload
-            and "p_city" not in payload
-        ):
-            retry_payload = dict(payload)
-            retry_payload["p_country"] = country or None
-            retry_payload["p_city"] = city or None
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.post(url, headers=headers, json=retry_payload)
-            except httpx.RequestError as exc:
-                msg = f"Error de red al consultar visitas webchat: {exc}"
-                logger.exception(msg)
-                raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar visitas webchat"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json() or []
-    if not isinstance(data, list):
-        raise StorageError(f"Respuesta inesperada de visitas webchat: {data!r}")
+        data = await repo.visitas_detalle_custom(payload=payload)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
     total = 0
     total_chat = 0
@@ -1058,44 +922,15 @@ async def fetch_leads_states(
     date_to: datetime | None = None,
 ) -> dict[str, Any]:
     """Recupera totales de leads agrupados por estado."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/panel_leads_geo_estados"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
-    payload: dict[str, Any] = {}
-    if channels:
-        payload["p_canales"] = ",".join(channels)
-    if date_from:
-        payload["p_from"] = date_from.isoformat()
-    if date_to:
-        payload["p_to"] = date_to.isoformat()
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload or None)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar leads por estado: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar leads por estado"
-            f" (status={response.status_code}, body={response.text!r})"
+        return await repo.leads_estados(
+            channels=channels,
+            date_from=date_from,
+            date_to=date_to,
         )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json()
-    if not isinstance(data, dict):
-        raise StorageError(f"Respuesta inesperada de leads por estado: {data!r}")
-    return data
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_leads_municipios(
@@ -1106,44 +941,16 @@ async def fetch_leads_municipios(
     date_to: datetime | None = None,
 ) -> dict[str, Any]:
     """Recupera totales de leads agrupados por municipio."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/panel_leads_geo_municipios"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
-    payload: dict[str, Any] = {"p_estado": state_code}
-    if channels:
-        payload["p_canales"] = ",".join(channels)
-    if date_from:
-        payload["p_from"] = date_from.isoformat()
-    if date_to:
-        payload["p_to"] = date_to.isoformat()
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar leads por municipio: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar leads por municipio"
-            f" (status={response.status_code}, body={response.text!r})"
+        return await repo.leads_municipios(
+            state_code=state_code,
+            channels=channels,
+            date_from=date_from,
+            date_to=date_to,
         )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json()
-    if not isinstance(data, dict):
-        raise StorageError(f"Respuesta inesperada de leads por municipio: {data!r}")
-    return data
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def ensure_lead_tarjeta(

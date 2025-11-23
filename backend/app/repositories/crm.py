@@ -2183,21 +2183,166 @@ class CRMRepository:
     async def visitas_estados(
         self,
         *,
-        usuario_token: str,
+        usuario_token: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> dict[str, Any]:
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/panel_visitantes_sin_chat_estados",
-            token=usuario_token,
-            json={},
-            prefer="return=representation",
-        )
+        payload: dict[str, Any] = {}
+        if date_from:
+            payload["p_from"] = date_from.isoformat()
+        if date_to:
+            payload["p_to"] = date_to.isoformat()
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/panel_visitantes_sin_chat_estados",
+                token=usuario_token,
+                json=payload or None,
+                prefer="return=representation",
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/panel_visitantes_sin_chat_estados",
+                json=payload or None,
+                prefer="return=representation",
+            )
         data = resp.json()
         if isinstance(data, dict):
             return data
         raise CRMRepositoryError(
             f"Respuesta inesperada en panel_visitantes_sin_chat_estados: {data!r}"
         )
+
+    async def visitas_municipios(
+        self,
+        *,
+        state_code: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"p_estado": state_code}
+        if date_from:
+            payload["p_from"] = date_from.isoformat()
+        if date_to:
+            payload["p_to"] = date_to.isoformat()
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/panel_visitantes_sin_chat_municipios",
+                token=usuario_token,
+                json=payload,
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/panel_visitantes_sin_chat_municipios",
+                json=payload,
+            )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_visitantes_sin_chat_municipios: {data!r}"
+        )
+
+    async def visitas_paises(
+        self,
+        *,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if date_from:
+            payload["p_from"] = date_from.isoformat()
+        if date_to:
+            payload["p_to"] = date_to.isoformat()
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/panel_visitantes_world_paises",
+                token=usuario_token,
+                json=payload or None,
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/panel_visitantes_world_paises",
+                json=payload or None,
+            )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en panel_visitantes_world_paises: {data!r}")
+
+    async def leads_estados(
+        self,
+        *,
+        channels: list[str] | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if channels:
+            payload["p_canales"] = ",".join(channels)
+        if date_from:
+            payload["p_from"] = date_from.isoformat()
+        if date_to:
+            payload["p_to"] = date_to.isoformat()
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/panel_leads_geo_estados",
+                token=usuario_token,
+                json=payload or None,
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/panel_leads_geo_estados",
+                json=payload or None,
+            )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en panel_leads_geo_estados: {data!r}")
+
+    async def leads_municipios(
+        self,
+        *,
+        state_code: str,
+        channels: list[str] | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"p_estado": state_code}
+        if channels:
+            payload["p_canales"] = ",".join(channels)
+        if date_from:
+            payload["p_from"] = date_from.isoformat()
+        if date_to:
+            payload["p_to"] = date_to.isoformat()
+        if usuario_token:
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/panel_leads_geo_municipios",
+                token=usuario_token,
+                json=payload,
+            )
+        else:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/panel_leads_geo_municipios",
+                json=payload,
+            )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en panel_leads_geo_municipios: {data!r}")
 
     async def analytics_catalog_sales(
         self,
@@ -2285,6 +2430,21 @@ class CRMRepository:
                 f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}"
             )
         return data
+
+    async def visitas_detalle_custom(
+        self,
+        *,
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/panel_webchat_visitas_detalle",
+            json=payload,
+        )
+        data = resp.json() or []
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}")
 
     async def visitas_whatsapp_total(
         self,

@@ -5087,15 +5087,15 @@ async def get_visits_detail(
 ) -> list[dict[str, Any]]:
     if order_dir not in {"asc", "desc"}:
         raise HTTPException(status_code=400, detail="order_dir_invalid")
+    payload: dict[str, Any] = {
+        "p_limit": limit,
+        "p_offset": offset,
+        "p_order_by": order_by or "primera",
+        "p_order_dir": order_dir,
+        "p_with_contacts_only": with_contacts_only,
+    }
     try:
-        rows = await repo.visitas_detalle(
-            usuario_token=user_token,
-            limit=limit,
-            offset=offset,
-            order_by=order_by or "primera",
-            order_dir=order_dir,
-            with_contacts_only=with_contacts_only,
-        )
+        rows = await repo.visitas_detalle(payload=payload, usuario_token=user_token)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return rows
