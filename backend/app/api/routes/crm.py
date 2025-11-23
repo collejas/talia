@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
+from app.channels.webchat import service as webchat_service
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services import calendar as calendar_service
+from app.services.calendar import CalendarError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
@@ -68,6 +73,19 @@ class CRMAccountsResponse(BaseModel):
     offset: int
 
 
+class AgendaReschedulePayload(BaseModel):
+    """Payload para reprogramar citas."""
+
+    start_at: str = Field(..., description="Fecha/hora en ISO 8601 con zona horaria.")
+    notes: str | None = Field(default=None, description="Notas opcionales para la cita.")
+
+
+class AgendaCancelPayload(BaseModel):
+    """Payload para cancelar citas."""
+
+    reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
+
+
 def get_repository() -> CRMRepository:
     try:
         return CRMRepository()
@@ -120,6 +138,246 @@ def require_user_token(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="authorization_invalid",
     )
+
+
+DATE_RANGE_PRESETS: dict[str, timedelta] = {
+    "hoy": timedelta(days=1),
+    "ayer": timedelta(days=1),
+    "semana": timedelta(days=7),
+    "quincena": timedelta(days=15),
+    "mes": timedelta(days=30),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+    "ano": timedelta(days=365),
+}
+
+AGENDA_ACTIVE_ESTADOS = {"confirmada"}
+AGENDA_UPCOMING_WINDOW = timedelta(hours=24)
+
+
+def _looks_like_uuid(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        UUID(str(value))
+        return True
+    except Exception:
+        return False
+
+
+def _resolve_date_range(
+    rango: str | None,
+    desde: str | None,
+    hasta: str | None,
+) -> tuple[datetime | None, datetime | None]:
+    now = datetime.now(timezone.utc)
+    start: datetime | None = None
+    end: datetime | None = None
+
+    rango_norm = (rango or "").strip().lower()
+    if rango_norm:
+        if rango_norm in DATE_RANGE_PRESETS:
+            if rango_norm == "hoy":
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+            elif rango_norm == "ayer":
+                target = now - timedelta(days=1)
+                start = target.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = target.replace(hour=23, minute=59, second=59, microsecond=999999)
+            else:
+                end = now
+                start = now - DATE_RANGE_PRESETS[rango_norm]
+        elif rango_norm == "fechas":
+            start = _parse_date_value(desde, field="fecha_desde")
+            end = _parse_date_value(hasta, field="fecha_hasta")
+        else:
+            raise HTTPException(status_code=400, detail="rango_invalid")
+    else:
+        start = _parse_date_value(desde, field="fecha_desde")
+        end = _parse_date_value(hasta, field="fecha_hasta")
+
+    if start and not end:
+        end = now
+    if start:
+        start = _ensure_utc(start)
+    if end:
+        end = _ensure_utc(end)
+        if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
+            end = end + timedelta(days=1) - timedelta(microseconds=1)
+
+    if start and end and start > end:
+        raise HTTPException(status_code=400, detail="rango_fecha_invalido")
+
+    return start, end
+
+
+def _format_utc(dt: datetime) -> str:
+    return _ensure_utc(dt).isoformat()
+
+
+def _parse_date_value(value: str | None, *, field: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"{field}_invalid") from exc
+    return parsed
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_datetime_input(value: str | None, *, field: str) -> datetime:
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field}_required")
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field}_invalid") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _coerce_metadata(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+    else:
+        return None
+
+    extra = parsed.get("extra")
+    if isinstance(extra, str):
+        try:
+            parsed["extra"] = json.loads(extra)
+        except json.JSONDecodeError:
+            parsed["extra"] = None
+    return parsed
+
+
+def _normalize_agenda_estado(value: Any) -> str:
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+    else:
+        lowered = str(value).strip().lower() if value is not None else ""
+    if not lowered:
+        return "pendiente"
+    if lowered in {"confirmed", "confirmada"}:
+        return "confirmada"
+    if lowered in {"cancelled", "cancelada"}:
+        return "cancelada"
+    if lowered in {"rescheduled", "reprogramada"}:
+        return "reprogramada"
+    if lowered in {"completed", "realizada"}:
+        return "realizada"
+    if lowered in {"pending", "pendiente"}:
+        return "pendiente"
+    return lowered
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        raw = str(value).replace("Z", "+00:00")
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata_raw = row.get("metadata")
+    metadata_parsed = _coerce_metadata(metadata_raw)
+    if metadata_parsed is None and isinstance(metadata_raw, dict):
+        metadata_parsed = metadata_raw
+    metadata: dict[str, Any] = dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
+    estado = _normalize_agenda_estado(row.get("status") or metadata.get("estado"))
+
+    contacto_payload = {
+        "id": row.get("contacto_id") or row.get("contact_id"),
+        "nombre": row.get("contacto_nombre") or "Contacto sin nombre",
+        "correo": row.get("contacto_correo"),
+        "telefono": row.get("contacto_telefono"),
+        "empresa": row.get("contacto_empresa"),
+        "origen": row.get("contacto_origen"),
+    }
+    asignado_payload: dict[str, Any] | None = None
+    if row.get("asignado_a_usuario_id") or row.get("asignado_nombre"):
+        asignado_payload = {
+            "id": row.get("asignado_a_usuario_id"),
+            "nombre": row.get("asignado_nombre"),
+        }
+    propietario_payload: dict[str, Any] | None = None
+    if row.get("propietario_usuario_id") or row.get("propietario_nombre"):
+        propietario_payload = {
+            "id": row.get("propietario_usuario_id"),
+            "nombre": row.get("propietario_nombre"),
+        }
+
+    return {
+        "id": row.get("id"),
+        "resource_id": row.get("resource_id"),
+        "hold_id": row.get("hold_id"),
+        "tarjeta_id": row.get("tarjeta_id"),
+        "contacto_id": contacto_payload["id"],
+        "conversacion_id": row.get("conversacion_id"),
+        "start_at": row.get("start_at"),
+        "end_at": row.get("end_at"),
+        "timezone": row.get("timezone"),
+        "estado": estado,
+        "notes": row.get("notes"),
+        "meeting_url": row.get("meeting_url"),
+        "external_join_url": row.get("external_join_url"),
+        "canal": row.get("tarjeta_canal") or row.get("conversacion_canal"),
+        "provider": "calendar",
+        "lead_score": row.get("tarjeta_lead_score"),
+        "etapa_nombre": row.get("etapa_nombre"),
+        "metadata": metadata,
+        "contacto": contacto_payload,
+        "asignado": asignado_payload,
+        "propietario": propietario_payload,
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _compute_agenda_metrics(items: Sequence[dict[str, Any]]) -> dict[str, int]:
+    metrics = {
+        "total": len(items),
+        "activas": 0,
+        "proximas24h": 0,
+        "canceladas": 0,
+        "realizadas": 0,
+    }
+    now = datetime.now(timezone.utc)
+    window_limit = now + AGENDA_UPCOMING_WINDOW
+
+    for item in items:
+        estado = (item.get("estado") or "").lower()
+        if estado == "cancelada":
+            metrics["canceladas"] += 1
+        if estado == "realizada":
+            metrics["realizadas"] += 1
+        if estado in AGENDA_ACTIVE_ESTADOS:
+            metrics["activas"] += 1
+            start_dt = _parse_iso_datetime(item.get("start_at"))
+            if start_dt and now <= start_dt <= window_limit:
+                metrics["proximas24h"] += 1
+
+    return metrics
 
 
 class CRMPipelineStage(BaseModel):
@@ -1659,6 +1917,287 @@ async def get_inbox_messages(
         before=before,
     )
     return [CRMInboxMessage.model_validate(row) for row in rows]
+
+
+@router.get("/agenda/bookings")
+async def list_agenda_bookings(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    rango: str | None = Query(default=None),
+    fecha_desde: str | None = Query(default=None, alias="from"),
+    fecha_hasta: str | None = Query(default=None, alias="to"),
+    estado: list[str] | None = Query(default=None),
+    assigned: list[str] | None = Query(default=None),
+    provider: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    cursor: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    limit = max(1, min(limit, 500))
+    offset = max(cursor, 0)
+
+    date_from, date_to = _resolve_date_range(rango, fecha_desde, fecha_hasta)
+    if not date_from and not date_to:
+        now = datetime.now(timezone.utc)
+        date_from = now - timedelta(days=30)
+        date_to = now + timedelta(days=30)
+
+    select_clause = (
+        "id,resource_id,hold_id,tarjeta_id,conversacion_id,"
+        "contact_id,contacto_id:contact_id,"
+        "start_at,end_at,timezone,status,notes,meeting_url,external_join_url,metadata,"
+        "created_at,updated_at,tarjeta_canal,tarjeta_lead_score,"
+        "etapa_nombre,asignado_a_usuario_id,asignado_nombre,"
+        "propietario_usuario_id,propietario_nombre,"
+        "contacto_nombre,contacto_correo,contacto_telefono,contacto_empresa,contacto_origen,"
+        "conversacion_canal"
+    )
+
+    params: dict[str, str] = {
+        "select": select_clause,
+        "order": "start_at.asc.nullslast,created_at.asc",
+        "limit": str(limit),
+        "offset": str(offset),
+    }
+
+    and_filters: list[str] = []
+    if date_from:
+        and_filters.append(f"start_at.gte.{_format_utc(date_from)}")
+    if date_to:
+        and_filters.append(f"start_at.lte.{_format_utc(date_to)}")
+    if and_filters:
+        params["and"] = f"({','.join(and_filters)})"
+
+    estado_filters = {
+        value.strip().lower()
+        for value in (estado or [])
+        if isinstance(value, str) and value.strip()
+    }
+    status_filters: set[str] = set()
+    for value in estado_filters:
+        if value in {"cancelada"}:
+            status_filters.add("cancelled")
+        elif value in {"confirmada", "pendiente", "reprogramada"}:
+            status_filters.add("confirmed")
+    if status_filters:
+        if len(status_filters) == 1:
+            params["status"] = f"eq.{next(iter(status_filters))}"
+        else:
+            joined = ",".join(sorted(status_filters))
+            params["status"] = f"in.({joined})"
+
+    assigned_uuid_filters = {
+        value.strip()
+        for value in (assigned or [])
+        if isinstance(value, str) and _looks_like_uuid(value.strip())
+    }
+    if assigned_uuid_filters:
+        if len(assigned_uuid_filters) == 1:
+            params["asignado_a_usuario_id"] = f"eq.{next(iter(assigned_uuid_filters))}"
+        else:
+            params["asignado_a_usuario_id"] = f"in.({','.join(sorted(assigned_uuid_filters))})"
+
+    if search:
+        cleaned = " ".join(search.strip().split())
+        sanitized = "".join(ch for ch in cleaned if ch.isalnum() or ch in "@._+- ")
+        if sanitized:
+            like = sanitized
+            params["or"] = (
+                f"(contacto_nombre.ilike.*{like}*,contacto_correo.ilike.*{like}*,"
+                f"contacto_telefono.ilike.*{like}*,notes.ilike.*{like}*)"
+            )
+
+    provider_filters = {
+        value.strip().lower()
+        for value in (provider or [])
+        if isinstance(value, str) and value.strip()
+    }
+    if provider_filters and "calendar" not in provider_filters:
+        empty_metrics = {
+            "total": 0,
+            "activas": 0,
+            "proximas24h": 0,
+            "canceladas": 0,
+            "realizadas": 0,
+        }
+        return {
+            "ok": True,
+            "items": [],
+            "metrics": empty_metrics,
+            "total": 0,
+            "limit": limit,
+            "offset": offset,
+            "has_more": False,
+        }
+
+    try:
+        raw, total = await repo.list_agenda_bookings(
+            usuario_token=user_token,
+            params=params,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    items = [_map_agenda_row(row) for row in raw if isinstance(row, dict)]
+    filtered_items: list[dict[str, Any]] = []
+    assigned_name_filters = {
+        value.strip().lower()
+        for value in (assigned or [])
+        if isinstance(value, str) and not _looks_like_uuid(value.strip()) and value.strip()
+    }
+
+    for item in items:
+        estado_value = (item.get("estado") or "").lower()
+        if estado_filters and estado_value not in estado_filters:
+            continue
+        if assigned_name_filters:
+            assigned_payload = item.get("asignado") or {}
+            candidate_id = (assigned_payload.get("id") or "").lower()
+            candidate_name = (assigned_payload.get("nombre") or "").lower()
+            if (
+                candidate_id not in assigned_name_filters
+                and candidate_name not in assigned_name_filters
+            ):
+                continue
+        filtered_items.append(item)
+
+    metrics = _compute_agenda_metrics(filtered_items)
+    raw_count = len(raw)
+    computed_total = total if total is not None else offset + raw_count
+
+    return {
+        "ok": True,
+        "items": filtered_items,
+        "metrics": metrics,
+        "total": computed_total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": computed_total > offset + raw_count,
+    }
+
+
+@router.get("/agenda/availability")
+async def get_agenda_availability(
+    *,
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    resource_id: str | None = Query(default=None),
+    fecha_desde: str | None = Query(default=None, alias="from"),
+    fecha_hasta: str | None = Query(default=None, alias="to"),
+    timezone_hint: str | None = Query(default=None, alias="timezone"),
+    max_days: Annotated[int, Query(ge=1, le=60)] = 14,
+) -> dict[str, Any]:
+    calendar_resource = resource_id or settings.webchat_calendar_resource_id
+    if not calendar_resource:
+        raise HTTPException(status_code=400, detail="calendar_resource_missing")
+
+    today = datetime.now(timezone.utc).date()
+    if fecha_desde:
+        start_date = _parse_date_value(fecha_desde, field="from")
+        if not start_date:
+            raise HTTPException(status_code=400, detail="from_invalid")
+        start_day = start_date.date()
+    else:
+        start_day = today
+    if fecha_hasta:
+        end_date_parsed = _parse_date_value(fecha_hasta, field="to")
+        if not end_date_parsed:
+            raise HTTPException(status_code=400, detail="to_invalid")
+        end_day = end_date_parsed.date()
+    else:
+        end_day = start_day + timedelta(days=max_days)
+
+    if start_day > end_day:
+        raise HTTPException(status_code=400, detail="range_invalid")
+
+    allowed_span = timedelta(days=min(max_days, 60))
+    if end_day - start_day > allowed_span:
+        end_day = start_day + allowed_span
+
+    tz_hint = (timezone_hint or settings.webchat_calendar_timezone or "UTC").strip()
+    try:
+        payload = await calendar_service.list_slots(
+            resource_id=calendar_resource,
+            start_date=start_day,
+            end_date=end_day,
+            timezone_hint=tz_hint,
+            max_days=min(max_days, 60),
+        )
+    except CalendarError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "availability": payload}
+
+
+@router.post("/agenda/bookings/{booking_id}/reschedule")
+async def reschedule_agenda_booking(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    booking_id: UUID,
+    payload: AgendaReschedulePayload,
+) -> dict[str, Any]:
+    try:
+        booking_row = await repo.get_calendar_booking(
+            usuario_token=user_token,
+            booking_id=booking_id,
+        )
+    except CRMRepositoryError as exc:
+        if "booking_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="booking_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    conversation_id = booking_row.get("conversacion_id")
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="booking_without_conversation")
+
+    start_dt = _parse_datetime_input(payload.start_at, field="start_at")
+
+    try:
+        booking = await webchat_service.reschedule_calendar_booking(
+            conversation_id=str(conversation_id),
+            booking_id=str(booking_id),
+            start_at=start_dt,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"ok": True, "booking": booking}
+
+
+@router.post("/agenda/bookings/{booking_id}/cancel")
+async def cancel_agenda_booking(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    booking_id: UUID,
+    payload: AgendaCancelPayload,
+) -> dict[str, Any]:
+    try:
+        booking_row = await repo.get_calendar_booking(
+            usuario_token=user_token,
+            booking_id=booking_id,
+        )
+    except CRMRepositoryError as exc:
+        if "booking_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="booking_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    conversation_id = booking_row.get("conversacion_id")
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="booking_without_conversation")
+
+    try:
+        booking = await webchat_service.cancel_calendar_booking(
+            conversation_id=str(conversation_id),
+            booking_id=str(booking_id),
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"ok": True, "booking": booking}
 
 
 @router.get("/visitas/kpis")

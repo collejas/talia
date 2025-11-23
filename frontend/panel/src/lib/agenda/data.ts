@@ -1,9 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
-
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
+import { callCrmApi } from "@/lib/api/crm";
 
 type AgendaApiContact = {
   id: string | null;
@@ -279,53 +276,20 @@ export async function callPanelAgendaEndpoint<T>(
   searchParams: Record<string, string> = {},
   init: RequestInit = {},
 ): Promise<T> {
-  const baseUrl = getPanelApiBaseUrl();
-  const token = await resolvePanelAuthToken();
-  const url = new URL(`${baseUrl}${path}`);
-  for (const [key, value] of Object.entries(searchParams)) {
-    if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, value);
-    }
-  }
-
-  const response = await fetch(url.toString(), {
-    method: init.method ?? "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(init.headers ?? {}),
-    },
+  const crmPath = path.startsWith("/crm") ? path : `/crm${path}`;
+  const normalizedHeaders =
+    init.headers !== undefined
+      ? Object.fromEntries(new Headers(init.headers as HeadersInit).entries())
+      : undefined;
+  const result = await callCrmApi<T>(crmPath, {
+    method: (init.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | undefined) ?? "GET",
+    searchParams,
     body: init.body,
-    cache: "no-store",
+    headers: normalizedHeaders,
+    withUserToken: true,
   });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Error ${response.status}`);
+  if (!result.ok) {
+    throw new Error(result.error || "Error consultando la agenda.");
   }
-
-  return (await response.json()) as T;
-}
-
-export async function resolvePanelAuthToken(): Promise<string> {
-  const store = await cookies();
-  const cookieToken =
-    store.get(ACCESS_TOKEN_COOKIE)?.value ||
-    store.get("talia.access_token")?.value ||
-    store.get("sb-access-token")?.value ||
-    store.get("access_token")?.value;
-
-  if (cookieToken && cookieToken.trim().length) {
-    return cookieToken;
-  }
-
-  const serviceRole =
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_SERVICE_API_KEY;
-
-  if (!serviceRole) {
-    throw new Error("No se encontró token para consultar el backend del panel.");
-  }
-  return serviceRole;
+  return result.data;
 }

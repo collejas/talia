@@ -1517,6 +1517,53 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
         return data
 
+    async def list_agenda_bookings(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], int | None]:
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/panel_calendar_bookings",
+            token=usuario_token,
+            params=params,
+            prefer="count=planned",
+        )
+        raw = resp.json() or []
+        if not isinstance(raw, list):
+            raw = []
+        total = self._extract_total_count(resp.headers.get("content-range"))
+        return raw, total
+
+    async def get_calendar_booking(
+        self,
+        *,
+        usuario_token: str,
+        booking_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "id": f"eq.{booking_id}",
+            "select": "id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/calendar_bookings",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("booking_not_found")
+        return row
+
     async def get_email_template(
         self,
         *,
