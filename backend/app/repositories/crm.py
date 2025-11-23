@@ -47,6 +47,23 @@ class CRMRepository:
         ]
     )
 
+    _HISTORY_SELECT = ",".join(
+        [
+            "id",
+            "oportunidad_id",
+            "cambiado_en",
+            "fuente",
+            "motivo",
+            "metadata",
+            "etapa_origen_id",
+            "etapa_destino_id",
+            "cambiado_por_usuario_id",
+            "etapa_origen:etapas_pipeline!oportunidad_etapas_historial_etapa_origen_id_fkey(id,nombre)",
+            "etapa_destino:etapas_pipeline!oportunidad_etapas_historial_etapa_destino_id_fkey(id,nombre)",
+            "cambiado_por:usuarios!oportunidad_etapas_historial_cambiado_por_usuario_id_fkey(id,nombre_completo,correo)",
+        ]
+    )
+
     def __init__(self, *, timeout: float = 10.0) -> None:
         if not settings.supabase_url or not settings.supabase_service_role:
             raise CRMRepositoryError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
@@ -1042,6 +1059,81 @@ class CRMRepository:
             "/rest/v1/contactos",
             params=params,
             prefer="return=representation",
+        )
+
+    async def list_opportunity_stage_history(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "oportunidad_id": f"eq.{oportunidad_id}",
+            "order": "cambiado_en.desc",
+            "limit": str(limit),
+            "offset": str(offset),
+            "select": self._HISTORY_SELECT,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidad_etapas_historial", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar historial de oportunidad: {data!r}"
+            )
+        return data
+
+    async def get_opportunity_history_entry(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        history_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "oportunidad_id": f"eq.{oportunidad_id}",
+            "id": f"eq.{history_id}",
+            "limit": "1",
+            "select": self._HISTORY_SELECT,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidad_etapas_historial", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener historial: {row!r}")
+        return row
+
+    async def append_note_history(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        etapa_id: UUID,
+        usuario_id: UUID | None,
+        texto: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "oportunidad_id": str(oportunidad_id),
+            "etapa_origen_id": str(etapa_id),
+            "etapa_destino_id": str(etapa_id),
+            "cambiado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            "motivo": None,
+            "fuente": "humano",
+            "metadata": {
+                "tipo": "nota",
+                "nota": texto,
+                **(metadata or {}),
+            },
+        }
+        return await self.append_stage_history(
+            organizacion_id=organizacion_id,
+            payload={k: v for k, v in payload.items() if v is not None},
         )
 
     @staticmethod

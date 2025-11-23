@@ -227,6 +227,34 @@ class CRMContactSearchResponse(BaseModel):
     offset: int
 
 
+class CRMPipelineHistoryItem(BaseModel):
+    id: UUID
+    oportunidad_id: UUID
+    tipo: str
+    cambiado_en: datetime
+    cambiado_por_id: UUID | None = None
+    cambiado_por_nombre: str | None = None
+    fuente: str | None = None
+    etapa_origen_id: UUID | None = None
+    etapa_origen_nombre: str | None = None
+    etapa_destino_id: UUID | None = None
+    etapa_destino_nombre: str | None = None
+    motivo: str | None = None
+    nota: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class CRMPipelineHistoryResponse(BaseModel):
+    items: list[CRMPipelineHistoryItem]
+    limit: int
+    offset: int
+
+
+class CRMHistoryNoteCreate(BaseModel):
+    texto: str = Field(..., min_length=1, max_length=2000)
+    metadata: dict[str, Any] | None = None
+
+
 class CRMActivity(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -930,6 +958,77 @@ async def pipeline_get_card(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
     )
+
+
+@router.get(
+    "/pipeline/opportunities/{oportunidad_id}/history",
+    response_model=CRMPipelineHistoryResponse,
+)
+async def pipeline_get_history(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    oportunidad_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CRMPipelineHistoryResponse:
+    rows = await repo.list_opportunity_stage_history(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        limit=limit,
+        offset=offset,
+    )
+    items = [_history_item_from_row(row) for row in rows]
+    return CRMPipelineHistoryResponse(items=items, limit=limit, offset=offset)
+
+
+@router.post(
+    "/pipeline/opportunities/{oportunidad_id}/history",
+    response_model=CRMPipelineHistoryItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def pipeline_append_history_note(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    oportunidad_id: UUID,
+    payload: CRMHistoryNoteCreate,
+) -> CRMPipelineHistoryItem:
+    texto = (payload.texto or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="note_empty")
+    opportunity = await repo.get_pipeline_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="opportunity_not_found")
+    etapa_actual = _safe_uuid(opportunity.get("etapa_id"))
+    if etapa_actual is None:
+        raise HTTPException(status_code=400, detail="opportunity_stage_missing")
+    metadata = _ensure_dict(payload.metadata, default={})
+    try:
+        entry = await repo.append_note_history(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            etapa_id=etapa_actual,
+            usuario_id=usuario_id,
+            texto=texto,
+            metadata=metadata,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    history_id = _safe_uuid(entry.get("id"))
+    enriched = None
+    if history_id:
+        enriched = await repo.get_opportunity_history_entry(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            history_id=history_id,
+        )
+    row = enriched or entry
+    return _history_item_from_row(row)
 
 
 @router.get("/contacts/search", response_model=CRMContactSearchResponse)
@@ -1903,6 +2002,37 @@ async def _build_pipeline_card_response(
     if stage is None or card is None:
         raise HTTPException(status_code=404, detail="pipeline_card_unavailable")
     return CRMPipelineCardResponse(stage=stage, card=card)
+
+
+def _history_item_from_row(row: dict[str, Any]) -> CRMPipelineHistoryItem:
+    history_id = _safe_uuid(row.get("id"))
+    if history_id is None:
+        raise HTTPException(status_code=502, detail="history_entry_missing_id")
+    opportunity_id = _safe_uuid(row.get("oportunidad_id"))
+    if opportunity_id is None:
+        raise HTTPException(status_code=502, detail="history_entry_missing_opportunity")
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    tipo = metadata.get("tipo") or "movimiento"
+    nota = metadata.get("nota")
+    cambiado_por = _ensure_dict(row.get("cambiado_por"), default={})
+    etapa_origen = _ensure_dict(row.get("etapa_origen"), default={})
+    etapa_destino = _ensure_dict(row.get("etapa_destino"), default={})
+    return CRMPipelineHistoryItem(
+        id=history_id,
+        oportunidad_id=opportunity_id,
+        tipo=str(tipo),
+        cambiado_en=_parse_datetime(row.get("cambiado_en")),
+        cambiado_por_id=_safe_uuid(row.get("cambiado_por_usuario_id")),
+        cambiado_por_nombre=cambiado_por.get("nombre_completo"),
+        fuente=row.get("fuente"),
+        etapa_origen_id=_safe_uuid(row.get("etapa_origen_id")),
+        etapa_origen_nombre=etapa_origen.get("nombre"),
+        etapa_destino_id=_safe_uuid(row.get("etapa_destino_id")),
+        etapa_destino_nombre=etapa_destino.get("nombre"),
+        motivo=row.get("motivo"),
+        nota=nota if isinstance(nota, str) and nota.strip() else None,
+        metadata=metadata or None,
+    )
 
 
 def _stage_from_row(row: dict[str, Any]) -> CRMPipelineBoardStage | None:

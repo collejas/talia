@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 
-import { callSupabaseRpc } from "@/lib/leads/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 
 type LeadHistoryRow = {
   movimiento_id: string;
@@ -19,6 +19,29 @@ type LeadHistoryRow = {
   motivo: string | null;
   nota: string | null;
   metadata: Record<string, unknown> | null;
+};
+
+type CrmHistoryItem = {
+  id: string;
+  oportunidad_id: string;
+  tipo: string;
+  cambiado_en: string;
+  cambiado_por_id: string | null;
+  cambiado_por_nombre: string | null;
+  fuente: string | null;
+  etapa_origen_id: string | null;
+  etapa_origen_nombre: string | null;
+  etapa_destino_id: string | null;
+  etapa_destino_nombre: string | null;
+  motivo: string | null;
+  nota: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+type CrmHistoryResponse = {
+  items: CrmHistoryItem[];
+  limit: number;
+  offset: number;
 };
 
 function parseInteger(value: string | null, fallback: number): number {
@@ -39,13 +62,15 @@ export async function GET(
   const limit = parseInteger(url.searchParams.get("limit"), 50);
   const offset = parseInteger(url.searchParams.get("offset"), 0);
 
-  const response = await callSupabaseRpc<LeadHistoryRow[]>("panel_lead_movimientos", {
-    body: {
-      p_tarjeta_id: tarjetaId,
-      p_limit: limit,
-      p_offset: offset,
+  const response = await callCrmApi<CrmHistoryResponse>(
+    `/crm/pipeline/opportunities/${tarjetaId}/history`,
+    {
+      searchParams: {
+        limit: String(limit),
+        offset: String(offset),
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     return NextResponse.json(
@@ -54,7 +79,8 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({ data: response.data });
+  const data = Array.isArray(response.data?.items) ? response.data.items : [];
+  return NextResponse.json({ data: data.map(mapCrmHistoryToLeadHistory) });
 }
 
 export async function POST(
@@ -82,11 +108,11 @@ export async function POST(
       ? (metadataCandidate as Record<string, unknown>)
       : {};
 
-  const response = await callSupabaseRpc<LeadHistoryRow[]>("panel_lead_add_nota", {
+  const response = await callCrmApi<CrmHistoryItem>(`/crm/pipeline/opportunities/${tarjetaId}/history`, {
+    method: "POST",
     body: {
-      p_tarjeta_id: tarjetaId,
-      p_texto: texto,
-      p_metadata: metadata,
+      texto,
+      metadata,
     },
   });
 
@@ -97,5 +123,24 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ data: response.data });
+  return NextResponse.json({ data: [mapCrmHistoryToLeadHistory(response.data)] });
+}
+
+function mapCrmHistoryToLeadHistory(entry: CrmHistoryItem): LeadHistoryRow {
+  return {
+    movimiento_id: entry.id,
+    tarjeta_id: entry.oportunidad_id,
+    tipo: entry.tipo ?? "movimiento",
+    cambiado_por: entry.cambiado_por_id,
+    cambiado_nombre: entry.cambiado_por_nombre,
+    cambiado_en: entry.cambiado_en,
+    fuente: entry.fuente,
+    etapa_origen_id: entry.etapa_origen_id,
+    etapa_origen_nombre: entry.etapa_origen_nombre,
+    etapa_destino_id: entry.etapa_destino_id,
+    etapa_destino_nombre: entry.etapa_destino_nombre,
+    motivo: entry.motivo,
+    nota: entry.nota,
+    metadata: entry.metadata ?? null,
+  };
 }
