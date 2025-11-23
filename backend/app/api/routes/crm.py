@@ -4231,6 +4231,46 @@ async def pipeline_board(
     )
 
 
+@router.get("/analytics/catalog/ventas")
+async def analytics_catalog_sales(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    mes_desde: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    mes_hasta: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    moneda: Annotated[str | None, Query(min_length=3, max_length=3)] = None,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.analytics_catalog_sales(
+            usuario_token=user_token,
+            mes_desde=mes_desde,
+            mes_hasta=mes_hasta,
+            moneda=moneda,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
+@router.get("/analytics/catalog/embudo")
+async def analytics_catalog_pipeline(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    tablero_id: UUID | None = Query(default=None),
+    etapa_id: UUID | None = Query(default=None),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.analytics_catalog_pipeline(
+            usuario_token=user_token,
+            tablero_id=tablero_id,
+            etapa_id=etapa_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "rows": rows}
+
+
 def _build_pipeline_overview(
     rows: list[dict[str, Any]],
     total_rows: int,

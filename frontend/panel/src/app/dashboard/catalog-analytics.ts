@@ -1,5 +1,4 @@
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { callCrmApi } from "@/lib/api/crm";
 
 export type CatalogSalesRow = {
   mes: string;
@@ -32,51 +31,29 @@ export async function fetchCatalogSalesKpi(options?: SalesOptions): Promise<Cata
   const desde = formatMonth(addMonths(now, -months + 1));
   const hasta = formatMonth(now);
 
-  const params = new URLSearchParams({ mes_desde: desde, mes_hasta: hasta });
-  if (moneda) params.set("moneda", moneda.toUpperCase());
+  const searchParams: Record<string, string> = { mes_desde: desde, mes_hasta: hasta };
+  if (moneda) searchParams.moneda = moneda.toUpperCase();
 
-  const payload = await fetchPanelApi(`/analytics/catalog/ventas?${params.toString()}`);
-  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
-  return rows as CatalogSalesRow[];
+  const response = await callCrmApi<{ rows?: CatalogSalesRow[] }>("/crm/analytics/catalog/ventas", {
+    searchParams,
+    withUserToken: true,
+  });
+
+  if (!response.ok) {
+    throw new Error(response.error);
+  }
+
+  return Array.isArray(response.data?.rows) ? (response.data.rows as CatalogSalesRow[]) : [];
 }
 
 export async function fetchCatalogPipelineKpi(): Promise<CatalogPipelineRow[]> {
-  const payload = await fetchPanelApi("/analytics/catalog/embudo");
-  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
-  return rows as CatalogPipelineRow[];
-}
-
-async function fetchPanelApi(path: string): Promise<Record<string, unknown> | null> {
-  const token = await resolvePanelApiToken();
-  const baseUrl = getPanelApiBaseUrl();
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
+  const response = await callCrmApi<{ rows?: CatalogPipelineRow[] }>("/crm/analytics/catalog/embudo", {
+    withUserToken: true,
   });
-
-  const text = await response.text();
-  const payload = text ? safeJson(text) : null;
   if (!response.ok) {
-    const detail =
-      (payload && typeof payload.detail === "string" && payload.detail) ||
-      (payload && typeof payload.error === "string" && payload.error) ||
-      text ||
-      "Error consultando analytics";
-    throw new Error(detail);
+    throw new Error(response.error);
   }
-  return payload;
-}
-
-function safeJson(value: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(value);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
+  return Array.isArray(response.data?.rows) ? (response.data.rows as CatalogPipelineRow[]) : [];
 }
 
 function formatMonth(date: Date): string {

@@ -1421,6 +1421,62 @@ class CRMRepository:
             f"Respuesta inesperada en panel_visitantes_sin_chat_estados: {data!r}"
         )
 
+    async def analytics_catalog_sales(
+        self,
+        *,
+        usuario_token: str,
+        mes_desde: str | None = None,
+        mes_hasta: str | None = None,
+        moneda: str | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": "mes,catalog_item_id,item_nombre,moneda,total_vendido,unidades_vendidas,leads_ganados",
+            "order": "mes.asc,item_nombre.asc",
+        }
+        if mes_desde and mes_hasta:
+            params["and"] = f"(mes.gte.{mes_desde},mes.lte.{mes_hasta})"
+        elif mes_desde:
+            params["mes"] = f"gte.{mes_desde}"
+        elif mes_hasta:
+            params["mes"] = f"lte.{mes_hasta}"
+        if moneda:
+            params["moneda"] = f"eq.{moneda.upper()}"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/ventas_por_producto_mes",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en ventas_por_producto_mes: {data!r}")
+
+    async def analytics_catalog_pipeline(
+        self,
+        *,
+        usuario_token: str,
+        tablero_id: UUID | None = None,
+        etapa_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": "tablero_id,etapa_id,catalog_item_id,item_nombre,moneda,monto_estimado,leads_con_cotizacion",
+        }
+        if tablero_id:
+            params["tablero_id"] = f"eq.{tablero_id}"
+        if etapa_id:
+            params["etapa_id"] = f"eq.{etapa_id}"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/embudo_por_producto",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en embudo_por_producto: {data!r}")
+
     async def visitas_detalle(
         self,
         *,
