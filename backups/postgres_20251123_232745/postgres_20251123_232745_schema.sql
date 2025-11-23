@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ZXHepbDW0emvQQQZmShivw8XsE7ze8hQbRtngfChKUqwSry9ZcCOHU37ONKQ4yx
+\restrict r9eLKZ2rEH1AeTbBIrphxzn24VGuDefGtnwLeFhI60QUueNDszoA3iqJTwhQYEe
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -1214,6 +1214,39 @@ $$;
 COMMENT ON FUNCTION public._lead_tarjeta_auto_precalificar(p_tarjeta_id uuid) IS 'Promueve automáticamente la tarjeta a la etapa "precalificado" cuando el contacto tiene nombre, correo, teléfono y empresa.';
 
 
+--
+-- Name: check_missing_pipeline_stages(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_missing_pipeline_stages() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    missing jsonb;
+BEGIN
+    SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
+    INTO missing
+    FROM public.organizaciones_missing_etapas_pipeline t;
+
+    IF jsonb_array_length(missing) = 0 THEN
+        RETURN;
+    END IF;
+
+    RAISE EXCEPTION USING
+        MESSAGE = 'missing_pipeline_stages',
+        DETAIL = missing::text;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION check_missing_pipeline_stages(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.check_missing_pipeline_stages() IS 'Lanza una excepción si algún tenant no tiene las etapas canónicas; úsala en jobs/cron (SELECT check_missing_pipeline_stages()).';
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -1242,6 +1275,8 @@ CREATE TABLE public.clientes (
     ganado_en timestamp with time zone,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+    oportunidad_id uuid,
     CONSTRAINT clientes_moneda_check CHECK ((char_length(moneda) = 3)),
     CONSTRAINT clientes_monto_check CHECK (((monto_estimado IS NULL) OR (monto_estimado >= (0)::numeric)))
 );
@@ -1317,6 +1352,13 @@ COMMENT ON COLUMN public.clientes.regimen_fiscal IS 'Régimen fiscal declarado p
 --
 
 COMMENT ON COLUMN public.clientes.datos_facturacion IS 'Metadatos adicionales de facturación (uso CFDI, forma de pago, etc.).';
+
+
+--
+-- Name: COLUMN clientes.oportunidad_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.clientes.oportunidad_id IS 'Referencia a public.oportunidades.id que originó al cliente.';
 
 
 --
@@ -7530,6 +7572,22 @@ $$;
 
 
 --
+-- Name: tg_clientes_sync_oportunidad(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_clientes_sync_oportunidad() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF NEW.oportunidad_id IS NULL THEN
+        NEW.oportunidad_id := NEW.lead_tarjeta_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: tg_contactos_auto_asignacion(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8171,6 +8229,28 @@ begin
 
   return v_count;
 end$$;
+
+
+--
+-- Name: usuario_organizacion_id(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.usuario_organizacion_id(p_uid uuid) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    SELECT organizacion_id
+    FROM public.usuarios
+    WHERE id = p_uid
+    LIMIT 1;
+$$;
+
+
+--
+-- Name: FUNCTION usuario_organizacion_id(p_uid uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.usuario_organizacion_id(p_uid uuid) IS 'Obtiene la organización del usuario autenticado para políticas RLS.';
 
 
 --
@@ -10335,6 +10415,35 @@ COMMENT ON COLUMN auth.users.is_sso_user IS 'Auth: Set this column to true when 
 
 
 --
+-- Name: actividades; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.actividades (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    tipo text NOT NULL,
+    canal text,
+    asunto text,
+    descripcion text,
+    estado text DEFAULT 'pendiente'::text NOT NULL,
+    prioridad text DEFAULT 'media'::text NOT NULL,
+    fecha_vencimiento timestamp with time zone,
+    inicio_en timestamp with time zone,
+    fin_en timestamp with time zone,
+    sla_horas integer,
+    recordatorio_en timestamp with time zone,
+    cuenta_id uuid,
+    contacto_id uuid,
+    oportunidad_id uuid,
+    creado_por_usuario_id uuid,
+    asignado_a_usuario_id uuid,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: adjuntos; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -10366,6 +10475,43 @@ CREATE TABLE public.agentes (
     activo boolean DEFAULT true NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT agentes_canal_check CHECK ((canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text, 'api'::text])))
+);
+
+
+--
+-- Name: archivos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.archivos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    relacion_tipo text NOT NULL,
+    relacion_id uuid NOT NULL,
+    nombre_original text NOT NULL,
+    content_type text,
+    tamano_bytes bigint,
+    storage_path text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    subido_por_usuario_id uuid,
+    subido_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.audit_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    usuario_id uuid,
+    accion text NOT NULL,
+    tabla text NOT NULL,
+    registro_id uuid,
+    cambios jsonb DEFAULT '{}'::jsonb NOT NULL,
+    ip text,
+    user_agent text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -10452,6 +10598,25 @@ CREATE TABLE public.calendar_slot_holds (
 --
 
 COMMENT ON TABLE public.calendar_slot_holds IS 'Reservas temporales mientras el visitante confirma la cita.';
+
+
+--
+-- Name: campanas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.campanas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    nombre text NOT NULL,
+    tipo text,
+    canal text,
+    presupuesto numeric(14,2),
+    fecha_inicio date,
+    fecha_fin date,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -10602,7 +10767,8 @@ CREATE TABLE public.cliente_documentos (
     validado_en timestamp with time zone,
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
 );
 
 ALTER TABLE ONLY public.cliente_documentos REPLICA IDENTITY FULL;
@@ -10708,7 +10874,8 @@ CREATE TABLE public.cliente_responsables (
     es_responsable_principal boolean DEFAULT false NOT NULL,
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
 );
 
 ALTER TABLE ONLY public.cliente_responsables REPLICA IDENTITY FULL;
@@ -10746,9 +10913,18 @@ CREATE TABLE public.contactos (
     notes text,
     necesidad_proposito text,
     captura_estado text DEFAULT 'incompleto'::text NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+    cuenta_id uuid,
     CONSTRAINT contactos_captura_estado_check CHECK ((captura_estado = ANY (ARRAY['incompleto'::text, 'completo'::text]))),
     CONSTRAINT contactos_estado_check CHECK ((estado = ANY (ARRAY['lead'::text, 'activo'::text, 'bloqueado'::text])))
 );
+
+
+--
+-- Name: TABLE contactos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.contactos IS 'Los triggers legacy que sincronizaban lead_tarjetas fueron deshabilitados; la captura se maneja desde el backend CRM.';
 
 
 --
@@ -10798,6 +10974,7 @@ CREATE TABLE public.usuarios (
     ultimo_acceso_en timestamp with time zone,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     telefono_e164 text DEFAULT '+00000000000'::text NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
     CONSTRAINT usuarios_estado_check CHECK ((estado = ANY (ARRAY['activo'::text, 'inactivo'::text]))),
     CONSTRAINT usuarios_telefono_e164_check CHECK ((telefono_e164 ~ '^\+[0-9]{7,15}$'::text))
 );
@@ -10842,6 +11019,74 @@ CREATE TABLE public.conversaciones_insights (
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT conversaciones_insights_sentimiento_check CHECK (((sentimiento = ANY (ARRAY['positivo'::text, 'neutral'::text, 'negativo'::text])) OR (sentimiento IS NULL)))
 );
+
+
+--
+-- Name: cotizacion_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cotizacion_items (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    cotizacion_id uuid NOT NULL,
+    producto_id uuid,
+    descripcion text NOT NULL,
+    cantidad numeric(12,2) DEFAULT 1 NOT NULL,
+    precio_unitario numeric(14,2),
+    descuento_porcentaje numeric(5,2),
+    subtotal numeric(14,2),
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
+-- Name: cotizaciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cotizaciones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    oportunidad_id uuid,
+    cuenta_id uuid,
+    contacto_id uuid,
+    estatus text DEFAULT 'borrador'::text NOT NULL,
+    total numeric(14,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    valida_hasta date,
+    creada_por_usuario_id uuid,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: cuentas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cuentas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    nombre text NOT NULL,
+    alias text,
+    tipo text,
+    industria text,
+    tamano text,
+    sitio_web text,
+    telefono text,
+    correo text,
+    direccion jsonb DEFAULT '{}'::jsonb NOT NULL,
+    propietario_usuario_id uuid,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE cuentas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.cuentas IS 'Empresas (prospectos/clientes) dentro del CRM multi-tenant.';
 
 
 --
@@ -10923,6 +11168,7 @@ CREATE TABLE public.lead_tarjetas (
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
     proyecto_nombre text,
     proyecto_necesidades text,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
     CONSTRAINT lead_tarjetas_amount_check CHECK (((monto_estimado IS NULL) OR (monto_estimado >= (0)::numeric))),
     CONSTRAINT lead_tarjetas_canal_check CHECK (((canal IS NULL) OR (canal = ANY (ARRAY['whatsapp'::text, 'instagram'::text, 'webchat'::text, 'voz'::text, 'api'::text])))),
     CONSTRAINT lead_tarjetas_fuente_check CHECK (((fuente IS NULL) OR (fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text, 'contacto_auto'::text])))),
@@ -10930,6 +11176,13 @@ CREATE TABLE public.lead_tarjetas (
 );
 
 ALTER TABLE ONLY public.lead_tarjetas REPLICA IDENTITY FULL;
+
+
+--
+-- Name: TABLE lead_tarjetas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lead_tarjetas IS 'Tabla legacy (solo lectura) - triggers de normalización/auto-precalificación deshabilitados tras migrar a oportunidades.';
 
 
 --
@@ -11011,6 +11264,7 @@ CREATE TABLE public.lead_cotizacion_items (
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
     CONSTRAINT lead_cotizacion_items_cantidad_check CHECK ((cantidad > (0)::numeric)),
     CONSTRAINT lead_cotizacion_items_moneda_check CHECK ((char_length(moneda) = 3)),
     CONSTRAINT lead_cotizacion_items_precio_check CHECK ((((precio_unitario IS NULL) OR (precio_unitario >= (0)::numeric)) AND ((descuento IS NULL) OR (descuento >= (0)::numeric)) AND ((subtotal IS NULL) OR (subtotal >= (0)::numeric)) AND ((impuestos IS NULL) OR (impuestos >= (0)::numeric)) AND ((total IS NULL) OR (total >= (0)::numeric))))
@@ -11051,6 +11305,7 @@ CREATE TABLE public.lead_cotizaciones (
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
     CONSTRAINT lead_cotizaciones_canal_check CHECK (((canal_envio IS NULL) OR (canal_envio = ANY (ARRAY['email'::text, 'whatsapp'::text, 'manual'::text, 'otro'::text])))),
     CONSTRAINT lead_cotizaciones_impuestos_check CHECK (((impuestos IS NULL) OR (impuestos >= (0)::numeric))),
     CONSTRAINT lead_cotizaciones_moneda_check CHECK ((char_length(moneda) = 3)),
@@ -11210,6 +11465,31 @@ CREATE TABLE public.empleados (
 
 
 --
+-- Name: etapas_pipeline; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.etapas_pipeline (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    codigo text NOT NULL,
+    nombre text NOT NULL,
+    orden smallint NOT NULL,
+    probabilidad numeric(5,2),
+    categoria text DEFAULT 'abierta'::text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE etapas_pipeline; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.etapas_pipeline IS 'Incluye seeds automáticos (metadata.seed = default_stage) cuando falta el catálogo básico.';
+
+
+--
 -- Name: eventos_auditoria; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11273,8 +11553,22 @@ CREATE TABLE public.lead_etapas (
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
     CONSTRAINT lead_etapas_probabilidad_check CHECK (((probabilidad IS NULL) OR ((probabilidad >= (0)::numeric) AND (probabilidad <= (100)::numeric)))),
     CONSTRAINT lead_etapas_sla_check CHECK (((sla_horas IS NULL) OR (sla_horas >= 0)))
+);
+
+
+--
+-- Name: lead_eventos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lead_eventos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    lead_id uuid NOT NULL,
+    tipo text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    registrado_en timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -11292,6 +11586,7 @@ CREATE TABLE public.lead_movimientos (
     motivo text,
     fuente text DEFAULT 'humano'::text NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
     CONSTRAINT lead_movimientos_fuente_check CHECK ((fuente = ANY (ARRAY['humano'::text, 'asistente'::text, 'api'::text, 'contacto_auto'::text])))
 );
 
@@ -11312,7 +11607,8 @@ CREATE TABLE public.lead_recordatorios (
     completado_en timestamp with time zone,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
 );
 
 ALTER TABLE ONLY public.lead_recordatorios REPLICA IDENTITY FULL;
@@ -11332,7 +11628,8 @@ CREATE TABLE public.lead_tableros (
     es_default boolean DEFAULT false NOT NULL,
     activo boolean DEFAULT true NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
 );
 
 
@@ -11370,6 +11667,26 @@ CREATE TABLE public.lead_tarjeta_items (
 --
 
 COMMENT ON TABLE public.lead_tarjeta_items IS 'Snapshot de los productos/servicios realmente vendidos al cerrar la oportunidad.';
+
+
+--
+-- Name: leads; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.leads (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    campana_id uuid,
+    contacto_id uuid,
+    cuenta_id uuid,
+    origen text,
+    estado text DEFAULT 'nuevo'::text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    convertido_a_contacto_id uuid,
+    convertido_a_cuenta_id uuid,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -11503,6 +11820,148 @@ CREATE MATERIALIZED VIEW public.mv_resultados_por_actividad AS
    FROM public.resultados
   GROUP BY actividad, fuente
   WITH NO DATA;
+
+
+--
+-- Name: notas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    relacion_tipo text NOT NULL,
+    relacion_id uuid NOT NULL,
+    texto text NOT NULL,
+    visible_para_cliente boolean DEFAULT false NOT NULL,
+    tipo text DEFAULT 'interna'::text NOT NULL,
+    creado_por_usuario_id uuid,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: oportunidad_etapas_historial; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oportunidad_etapas_historial (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    oportunidad_id uuid NOT NULL,
+    etapa_origen_id uuid,
+    etapa_destino_id uuid NOT NULL,
+    cambiado_por_usuario_id uuid,
+    cambiado_en timestamp with time zone DEFAULT now() NOT NULL,
+    motivo text,
+    fuente text DEFAULT 'humano'::text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
+-- Name: oportunidades; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oportunidades (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    cuenta_id uuid,
+    contacto_principal_id uuid,
+    etapa_id uuid NOT NULL,
+    titulo text NOT NULL,
+    descripcion text,
+    monto_estimado numeric(14,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    probabilidad numeric(5,2),
+    fecha_cierre_probable date,
+    estado text DEFAULT 'abierta'::text NOT NULL,
+    motivo_perdida text,
+    propietario_usuario_id uuid,
+    asignado_a_usuario_id uuid,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    cerrado_en timestamp with time zone
+);
+
+
+--
+-- Name: TABLE oportunidades; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.oportunidades IS 'Negocios en pipeline; reemplaza a lead_tarjetas.';
+
+
+--
+-- Name: organizaciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.organizaciones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    nombre text NOT NULL,
+    razon_social text,
+    rfc text,
+    pais text,
+    estado text,
+    ciudad text,
+    dominio_principal text,
+    telefono text,
+    sitio_web text,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    estado_onboarding text DEFAULT 'pendiente'::text NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    fecha_alta timestamp with time zone DEFAULT now() NOT NULL,
+    fecha_pausa timestamp with time zone,
+    fecha_cancelacion timestamp with time zone,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE organizaciones; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.organizaciones IS 'Tenants del SaaS; agrupan datos y config multi-tenant.';
+
+
+--
+-- Name: COLUMN organizaciones.config; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.organizaciones.config IS 'JSONB con banderas/ajustes (pipelines, features, etc.).';
+
+
+--
+-- Name: COLUMN organizaciones.estado_onboarding; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.organizaciones.estado_onboarding IS 'pendiente|en_progreso|completado|pausado|cancelado';
+
+
+--
+-- Name: organizaciones_missing_etapas_pipeline; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.organizaciones_missing_etapas_pipeline AS
+ WITH stage_defs AS (
+         SELECT t.codigo
+           FROM ( VALUES ('captado'::text), ('precalificado'::text), ('demo'::text), ('propuesta'::text), ('negociacion'::text), ('cerrado_ganado'::text), ('cerrado_perdido'::text)) t(codigo)
+        )
+ SELECT o.id AS organizacion_id,
+    sd.codigo
+   FROM (public.organizaciones o
+     CROSS JOIN stage_defs sd)
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM public.etapas_pipeline ep
+          WHERE ((ep.organizacion_id = o.id) AND (lower(ep.codigo) = sd.codigo)))));
+
+
+--
+-- Name: VIEW organizaciones_missing_etapas_pipeline; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.organizaciones_missing_etapas_pipeline IS 'Lista cada organización/código de etapa faltante para monitorear seeds y alertar si aparece un tenant sin captado/precalificado/etc.';
 
 
 --
@@ -11659,6 +12118,25 @@ CREATE TABLE public.permisos (
     codigo text NOT NULL,
     descripcion text,
     creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: productos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.productos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    codigo text NOT NULL,
+    nombre text NOT NULL,
+    descripcion text,
+    precio_base numeric(14,2),
+    moneda character(3) DEFAULT 'MXN'::bpchar NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -11849,7 +12327,8 @@ CREATE TABLE public.roles (
     codigo text NOT NULL,
     nombre text NOT NULL,
     descripcion text,
-    creado_en timestamp with time zone DEFAULT now() NOT NULL
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
 );
 
 
@@ -11882,12 +12361,78 @@ CREATE TABLE public.secretos (
 
 
 --
+-- Name: taggings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.taggings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    tag_id uuid NOT NULL,
+    relacion_tipo text NOT NULL,
+    relacion_id uuid NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: tags; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tags (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    nombre text NOT NULL,
+    color text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: ticket_comentarios; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ticket_comentarios (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ticket_id uuid NOT NULL,
+    autor_usuario_id uuid,
+    autor_cliente_id uuid,
+    mensaje text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
+);
+
+
+--
+-- Name: tickets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tickets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    organizacion_id uuid NOT NULL,
+    cuenta_id uuid,
+    contacto_id uuid,
+    asunto text NOT NULL,
+    descripcion text,
+    estado text DEFAULT 'abierto'::text NOT NULL,
+    prioridad text DEFAULT 'media'::text NOT NULL,
+    canal_origen text,
+    asignado_a_usuario_id uuid,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    cerrado_en timestamp with time zone
+);
+
+
+--
 -- Name: usuarios_roles; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.usuarios_roles (
     usuario_id uuid NOT NULL,
-    rol_id uuid NOT NULL
+    rol_id uuid NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
 );
 
 
@@ -12780,6 +13325,14 @@ ALTER TABLE ONLY auth.users
 
 
 --
+-- Name: actividades actividades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: agentes agentes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12788,11 +13341,27 @@ ALTER TABLE ONLY public.agentes
 
 
 --
+-- Name: archivos archivos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.archivos
+    ADD CONSTRAINT archivos_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: adjuntos attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.adjuntos
     ADD CONSTRAINT attachments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -12865,6 +13434,14 @@ ALTER TABLE ONLY public.llamadas
 
 ALTER TABLE ONLY public.llamadas
     ADD CONSTRAINT calls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: campanas campanas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.campanas
+    ADD CONSTRAINT campanas_pkey PRIMARY KEY (id);
 
 
 --
@@ -13020,6 +13597,30 @@ ALTER TABLE ONLY public.conversaciones
 
 
 --
+-- Name: cotizacion_items cotizacion_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizacion_items
+    ADD CONSTRAINT cotizacion_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cotizaciones cotizaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizaciones
+    ADD CONSTRAINT cotizaciones_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cuentas cuentas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuentas
+    ADD CONSTRAINT cuentas_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: custom_fields custom_fields_agente_id_entidad_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13065,6 +13666,30 @@ ALTER TABLE ONLY public.ejecuciones_asistente
 
 ALTER TABLE ONLY public.empleados
     ADD CONSTRAINT employees_pkey PRIMARY KEY (usuario_id);
+
+
+--
+-- Name: etapas_pipeline etapas_pipeline_organizacion_id_codigo_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.etapas_pipeline
+    ADD CONSTRAINT etapas_pipeline_organizacion_id_codigo_key UNIQUE (organizacion_id, codigo);
+
+
+--
+-- Name: etapas_pipeline etapas_pipeline_organizacion_id_orden_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.etapas_pipeline
+    ADD CONSTRAINT etapas_pipeline_organizacion_id_orden_key UNIQUE (organizacion_id, orden);
+
+
+--
+-- Name: etapas_pipeline etapas_pipeline_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.etapas_pipeline
+    ADD CONSTRAINT etapas_pipeline_pkey PRIMARY KEY (id);
 
 
 --
@@ -13132,6 +13757,14 @@ ALTER TABLE ONLY public.lead_etapas
 
 
 --
+-- Name: lead_eventos lead_eventos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_eventos
+    ADD CONSTRAINT lead_eventos_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: lead_movimientos lead_movimientos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13180,6 +13813,14 @@ ALTER TABLE ONLY public.lead_tarjetas
 
 
 --
+-- Name: leads leads_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: logos logos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13193,6 +13834,38 @@ ALTER TABLE ONLY public.logos
 
 ALTER TABLE ONLY public.mensajes
     ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notas notas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas
+    ADD CONSTRAINT notas_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_etapas_historial_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidad_etapas_historial
+    ADD CONSTRAINT oportunidad_etapas_historial_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oportunidades oportunidades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: organizaciones organizaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.organizaciones
+    ADD CONSTRAINT organizaciones_pkey PRIMARY KEY (id);
 
 
 --
@@ -13225,6 +13898,22 @@ ALTER TABLE ONLY public.permisos
 
 ALTER TABLE ONLY public.permisos
     ADD CONSTRAINT permissions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: productos productos_organizacion_id_codigo_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.productos
+    ADD CONSTRAINT productos_organizacion_id_codigo_key UNIQUE (organizacion_id, codigo);
+
+
+--
+-- Name: productos productos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.productos
+    ADD CONSTRAINT productos_pkey PRIMARY KEY (id);
 
 
 --
@@ -13329,6 +14018,46 @@ ALTER TABLE ONLY public.secretos
 
 ALTER TABLE ONLY public.secretos
     ADD CONSTRAINT secretos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: taggings taggings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.taggings
+    ADD CONSTRAINT taggings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: taggings taggings_tag_id_relacion_tipo_relacion_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.taggings
+    ADD CONSTRAINT taggings_tag_id_relacion_tipo_relacion_id_key UNIQUE (tag_id, relacion_tipo, relacion_id);
+
+
+--
+-- Name: tags tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tags
+    ADD CONSTRAINT tags_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ticket_comentarios ticket_comentarios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_comentarios
+    ADD CONSTRAINT ticket_comentarios_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tickets tickets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_pkey PRIMARY KEY (id);
 
 
 --
@@ -13893,6 +14622,20 @@ CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous);
 
 
 --
+-- Name: actividades_oportunidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX actividades_oportunidad_idx ON public.actividades USING btree (organizacion_id, oportunidad_id);
+
+
+--
+-- Name: actividades_org_estado_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX actividades_org_estado_idx ON public.actividades USING btree (organizacion_id, estado, prioridad);
+
+
+--
 -- Name: agentes_canal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13991,6 +14734,13 @@ CREATE INDEX cliente_documentos_cliente_idx ON public.cliente_documentos USING b
 
 
 --
+-- Name: cliente_documentos_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_documentos_organizacion_idx ON public.cliente_documentos USING btree (organizacion_id, cliente_id);
+
+
+--
 -- Name: cliente_documentos_tipo_estado_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14026,6 +14776,13 @@ CREATE INDEX cliente_responsables_cliente_idx ON public.cliente_responsables USI
 
 
 --
+-- Name: cliente_responsables_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_responsables_organizacion_idx ON public.cliente_responsables USING btree (organizacion_id, cliente_id);
+
+
+--
 -- Name: clientes_contacto_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14040,10 +14797,59 @@ CREATE INDEX clientes_lead_idx ON public.clientes USING btree (lead_tarjeta_id);
 
 
 --
+-- Name: clientes_oportunidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX clientes_oportunidad_idx ON public.clientes USING btree (oportunidad_id);
+
+
+--
+-- Name: clientes_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX clientes_organizacion_id_idx ON public.clientes USING btree (organizacion_id);
+
+
+--
+-- Name: contactos_cuenta_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX contactos_cuenta_id_idx ON public.contactos USING btree (cuenta_id);
+
+
+--
 -- Name: contactos_datos_gin; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX contactos_datos_gin ON public.contactos USING gin (contacto_datos);
+
+
+--
+-- Name: contactos_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX contactos_organizacion_id_idx ON public.contactos USING btree (organizacion_id);
+
+
+--
+-- Name: cuentas_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuentas_organizacion_id_idx ON public.cuentas USING btree (organizacion_id);
+
+
+--
+-- Name: cuentas_propietario_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cuentas_propietario_idx ON public.cuentas USING btree (organizacion_id, propietario_usuario_id);
+
+
+--
+-- Name: etapas_pipeline_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX etapas_pipeline_org_idx ON public.etapas_pipeline USING btree (organizacion_id, orden);
 
 
 --
@@ -14299,6 +15105,13 @@ CREATE INDEX lead_cotizacion_items_cotizacion_idx ON public.lead_cotizacion_item
 
 
 --
+-- Name: lead_cotizacion_items_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_cotizacion_items_organizacion_idx ON public.lead_cotizacion_items USING btree (organizacion_id, cotizacion_id);
+
+
+--
 -- Name: lead_cotizaciones_enviada_en_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14313,6 +15126,13 @@ CREATE INDEX lead_cotizaciones_estado_idx ON public.lead_cotizaciones USING btre
 
 
 --
+-- Name: lead_cotizaciones_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_cotizaciones_organizacion_idx ON public.lead_cotizaciones USING btree (organizacion_id, tarjeta_id);
+
+
+--
 -- Name: lead_cotizaciones_tarjeta_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14320,10 +15140,24 @@ CREATE INDEX lead_cotizaciones_tarjeta_idx ON public.lead_cotizaciones USING btr
 
 
 --
+-- Name: lead_etapas_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_etapas_organizacion_id_idx ON public.lead_etapas USING btree (organizacion_id, tablero_id);
+
+
+--
 -- Name: lead_etapas_tablero_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX lead_etapas_tablero_idx ON public.lead_etapas USING btree (tablero_id, orden);
+
+
+--
+-- Name: lead_movimientos_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_movimientos_organizacion_idx ON public.lead_movimientos USING btree (organizacion_id, tarjeta_id, cambiado_en);
 
 
 --
@@ -14338,6 +15172,20 @@ CREATE INDEX lead_movimientos_tarjeta_idx ON public.lead_movimientos USING btree
 --
 
 CREATE INDEX lead_recordatorios_due_idx ON public.lead_recordatorios USING btree (due_at, completado);
+
+
+--
+-- Name: lead_recordatorios_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_recordatorios_organizacion_idx ON public.lead_recordatorios USING btree (organizacion_id, due_at);
+
+
+--
+-- Name: lead_tableros_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tableros_organizacion_id_idx ON public.lead_tableros USING btree (organizacion_id);
 
 
 --
@@ -14376,6 +15224,13 @@ CREATE INDEX lead_tarjetas_conversacion_idx ON public.lead_tarjetas USING btree 
 
 
 --
+-- Name: lead_tarjetas_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lead_tarjetas_organizacion_id_idx ON public.lead_tarjetas USING btree (organizacion_id, tablero_id, etapa_id);
+
+
+--
 -- Name: lead_tarjetas_tablero_etapa_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14390,6 +15245,27 @@ CREATE INDEX logos_created_idx ON public.logos USING btree (created_at DESC);
 
 
 --
+-- Name: oportunidad_historial_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oportunidad_historial_org_idx ON public.oportunidad_etapas_historial USING btree (organizacion_id, oportunidad_id, cambiado_en DESC);
+
+
+--
+-- Name: oportunidades_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oportunidades_org_idx ON public.oportunidades USING btree (organizacion_id, etapa_id);
+
+
+--
+-- Name: oportunidades_propietario_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX oportunidades_propietario_idx ON public.oportunidades USING btree (organizacion_id, propietario_usuario_id);
+
+
+--
 -- Name: prompt_bindings_agente_activo_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14401,6 +15277,27 @@ CREATE INDEX prompt_bindings_agente_activo_idx ON public.prompt_bindings USING b
 --
 
 CREATE INDEX quote_templates_active_idx ON public.quote_templates USING btree (is_active, updated_at DESC);
+
+
+--
+-- Name: roles_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX roles_organizacion_id_idx ON public.roles USING btree (organizacion_id);
+
+
+--
+-- Name: ticket_comentarios_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ticket_comentarios_organizacion_id_idx ON public.ticket_comentarios USING btree (organizacion_id, ticket_id, creado_en);
+
+
+--
+-- Name: tickets_org_estado_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tickets_org_estado_idx ON public.tickets USING btree (organizacion_id, estado, prioridad);
 
 
 --
@@ -14422,6 +15319,20 @@ CREATE UNIQUE INDEX uniq_eventos_entrega_msg_evt_ts ON public.eventos_entrega US
 --
 
 CREATE UNIQUE INDEX uniq_mensajes_twilio_sid ON public.mensajes USING btree (twilio_message_sid) WHERE (twilio_message_sid IS NOT NULL);
+
+
+--
+-- Name: usuarios_organizacion_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX usuarios_organizacion_id_idx ON public.usuarios USING btree (organizacion_id);
+
+
+--
+-- Name: usuarios_roles_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX usuarios_roles_organizacion_idx ON public.usuarios_roles USING btree (organizacion_id, usuario_id);
 
 
 --
@@ -14754,6 +15665,13 @@ CREATE TRIGGER cliente_responsables_touch_updated_at BEFORE UPDATE ON public.cli
 
 
 --
+-- Name: clientes clientes_sync_oportunidad; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER clientes_sync_oportunidad BEFORE INSERT OR UPDATE ON public.clientes FOR EACH ROW EXECUTE FUNCTION public.tg_clientes_sync_oportunidad();
+
+
+--
 -- Name: clientes clientes_touch_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -14772,6 +15690,8 @@ CREATE TRIGGER contactos_auto_asignacion BEFORE INSERT OR UPDATE ON public.conta
 --
 
 CREATE TRIGGER contactos_auto_precalificado AFTER INSERT OR UPDATE OF nombre_completo, correo, telefono_e164, company_name ON public.contactos FOR EACH ROW EXECUTE FUNCTION public.tg_contactos_auto_precalificado();
+
+ALTER TABLE public.contactos DISABLE TRIGGER contactos_auto_precalificado;
 
 
 --
@@ -14836,6 +15756,8 @@ CREATE TRIGGER lead_tarjeta_items_touch_updated_at BEFORE UPDATE ON public.lead_
 
 CREATE TRIGGER lead_tarjetas_after_write AFTER INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_after_write();
 
+ALTER TABLE public.lead_tarjetas DISABLE TRIGGER lead_tarjetas_after_write;
+
 
 --
 -- Name: lead_tarjetas lead_tarjetas_auto_precalificado; Type: TRIGGER; Schema: public; Owner: -
@@ -14843,12 +15765,16 @@ CREATE TRIGGER lead_tarjetas_after_write AFTER INSERT OR UPDATE ON public.lead_t
 
 CREATE TRIGGER lead_tarjetas_auto_precalificado AFTER INSERT OR UPDATE OF contacto_id, etapa_id, tablero_id ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_auto_precalificado();
 
+ALTER TABLE public.lead_tarjetas DISABLE TRIGGER lead_tarjetas_auto_precalificado;
+
 
 --
 -- Name: lead_tarjetas lead_tarjetas_before_write; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER lead_tarjetas_before_write BEFORE INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_before_write();
+
+ALTER TABLE public.lead_tarjetas DISABLE TRIGGER lead_tarjetas_before_write;
 
 
 --
@@ -15106,11 +16032,91 @@ ALTER TABLE ONLY auth.sso_domains
 
 
 --
+-- Name: actividades actividades_asignado_a_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_asignado_a_usuario_id_fkey FOREIGN KEY (asignado_a_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: actividades actividades_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: actividades actividades_creado_por_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_creado_por_usuario_id_fkey FOREIGN KEY (creado_por_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: actividades actividades_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: actividades actividades_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
+
+
+--
+-- Name: actividades actividades_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividades
+    ADD CONSTRAINT actividades_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: archivos archivos_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.archivos
+    ADD CONSTRAINT archivos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: archivos archivos_subido_por_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.archivos
+    ADD CONSTRAINT archivos_subido_por_usuario_id_fkey FOREIGN KEY (subido_por_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
 -- Name: adjuntos attachments_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.adjuntos
     ADD CONSTRAINT attachments_message_id_fkey FOREIGN KEY (mensaje_id) REFERENCES public.mensajes(id) ON DELETE CASCADE;
+
+
+--
+-- Name: audit_logs audit_logs_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: audit_logs audit_logs_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
 
 
 --
@@ -15178,6 +16184,14 @@ ALTER TABLE ONLY public.llamadas
 
 
 --
+-- Name: campanas campanas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.campanas
+    ADD CONSTRAINT campanas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: catalog_item_prices catalog_item_prices_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15226,6 +16240,14 @@ ALTER TABLE ONLY public.cliente_documentos
 
 
 --
+-- Name: cliente_documentos cliente_documentos_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_documentos
+    ADD CONSTRAINT cliente_documentos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: cliente_documentos cliente_documentos_validado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15258,6 +16280,14 @@ ALTER TABLE ONLY public.cliente_responsables
 
 
 --
+-- Name: cliente_responsables cliente_responsables_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_responsables
+    ADD CONSTRAINT cliente_responsables_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: clientes clientes_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15282,11 +16312,43 @@ ALTER TABLE ONLY public.clientes
 
 
 --
+-- Name: clientes clientes_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clientes
+    ADD CONSTRAINT clientes_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
+
+
+--
+-- Name: clientes clientes_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clientes
+    ADD CONSTRAINT clientes_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: clientes clientes_tablero_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.clientes
     ADD CONSTRAINT clientes_tablero_id_fkey FOREIGN KEY (tablero_id) REFERENCES public.lead_tableros(id) ON DELETE SET NULL;
+
+
+--
+-- Name: contactos contactos_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contactos
+    ADD CONSTRAINT contactos_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: contactos contactos_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contactos
+    ADD CONSTRAINT contactos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -15338,6 +16400,78 @@ ALTER TABLE ONLY public.conversaciones
 
 
 --
+-- Name: cotizacion_items cotizacion_items_cotizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizacion_items
+    ADD CONSTRAINT cotizacion_items_cotizacion_id_fkey FOREIGN KEY (cotizacion_id) REFERENCES public.cotizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cotizacion_items cotizacion_items_producto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizacion_items
+    ADD CONSTRAINT cotizacion_items_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cotizaciones cotizaciones_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizaciones
+    ADD CONSTRAINT cotizaciones_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cotizaciones cotizaciones_creada_por_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizaciones
+    ADD CONSTRAINT cotizaciones_creada_por_usuario_id_fkey FOREIGN KEY (creada_por_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cotizaciones cotizaciones_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizaciones
+    ADD CONSTRAINT cotizaciones_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cotizaciones cotizaciones_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizaciones
+    ADD CONSTRAINT cotizaciones_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cotizaciones cotizaciones_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cotizaciones
+    ADD CONSTRAINT cotizaciones_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuentas cuentas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuentas
+    ADD CONSTRAINT cuentas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cuentas cuentas_propietario_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cuentas
+    ADD CONSTRAINT cuentas_propietario_usuario_id_fkey FOREIGN KEY (propietario_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
 -- Name: custom_fields custom_fields_agente_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15386,6 +16520,14 @@ ALTER TABLE ONLY public.empleados
 
 
 --
+-- Name: etapas_pipeline etapas_pipeline_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.etapas_pipeline
+    ADD CONSTRAINT etapas_pipeline_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: eventos_entrega eventos_entrega_mensaje_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15418,11 +16560,27 @@ ALTER TABLE ONLY public.lead_cotizacion_items
 
 
 --
+-- Name: lead_cotizacion_items lead_cotizacion_items_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_cotizacion_items
+    ADD CONSTRAINT lead_cotizacion_items_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_cotizaciones lead_cotizaciones_enviada_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.lead_cotizaciones
     ADD CONSTRAINT lead_cotizaciones_enviada_por_fkey FOREIGN KEY (enviada_por) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_cotizaciones lead_cotizaciones_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_cotizaciones
+    ADD CONSTRAINT lead_cotizaciones_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -15434,11 +16592,27 @@ ALTER TABLE ONLY public.lead_cotizaciones
 
 
 --
+-- Name: lead_etapas lead_etapas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_etapas
+    ADD CONSTRAINT lead_etapas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_etapas lead_etapas_tablero_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.lead_etapas
     ADD CONSTRAINT lead_etapas_tablero_id_fkey FOREIGN KEY (tablero_id) REFERENCES public.lead_tableros(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lead_eventos lead_eventos_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_eventos
+    ADD CONSTRAINT lead_eventos_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id) ON DELETE CASCADE;
 
 
 --
@@ -15466,6 +16640,14 @@ ALTER TABLE ONLY public.lead_movimientos
 
 
 --
+-- Name: lead_movimientos lead_movimientos_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_movimientos
+    ADD CONSTRAINT lead_movimientos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_movimientos lead_movimientos_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15482,6 +16664,14 @@ ALTER TABLE ONLY public.lead_recordatorios
 
 
 --
+-- Name: lead_recordatorios lead_recordatorios_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_recordatorios
+    ADD CONSTRAINT lead_recordatorios_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_recordatorios lead_recordatorios_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15495,6 +16685,14 @@ ALTER TABLE ONLY public.lead_recordatorios
 
 ALTER TABLE ONLY public.lead_tableros
     ADD CONSTRAINT lead_tableros_departamento_id_fkey FOREIGN KEY (departamento_id) REFERENCES public.departamentos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lead_tableros lead_tableros_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tableros
+    ADD CONSTRAINT lead_tableros_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -15562,6 +16760,14 @@ ALTER TABLE ONLY public.lead_tarjetas
 
 
 --
+-- Name: lead_tarjetas lead_tarjetas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lead_tarjetas
+    ADD CONSTRAINT lead_tarjetas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: lead_tarjetas lead_tarjetas_propietario_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15578,6 +16784,54 @@ ALTER TABLE ONLY public.lead_tarjetas
 
 
 --
+-- Name: leads leads_campana_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_campana_id_fkey FOREIGN KEY (campana_id) REFERENCES public.campanas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: leads leads_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: leads leads_convertido_a_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_convertido_a_contacto_id_fkey FOREIGN KEY (convertido_a_contacto_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: leads leads_convertido_a_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_convertido_a_cuenta_id_fkey FOREIGN KEY (convertido_a_cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: leads leads_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: leads leads_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.leads
+    ADD CONSTRAINT leads_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: logos logos_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15591,6 +16845,118 @@ ALTER TABLE ONLY public.logos
 
 ALTER TABLE ONLY public.mensajes
     ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notas notas_creado_por_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas
+    ADD CONSTRAINT notas_creado_por_usuario_id_fkey FOREIGN KEY (creado_por_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: notas notas_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas
+    ADD CONSTRAINT notas_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_etapas_historial_cambiado_por_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidad_etapas_historial
+    ADD CONSTRAINT oportunidad_etapas_historial_cambiado_por_usuario_id_fkey FOREIGN KEY (cambiado_por_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_etapas_historial_etapa_destino_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidad_etapas_historial
+    ADD CONSTRAINT oportunidad_etapas_historial_etapa_destino_id_fkey FOREIGN KEY (etapa_destino_id) REFERENCES public.etapas_pipeline(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_etapas_historial_etapa_origen_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidad_etapas_historial
+    ADD CONSTRAINT oportunidad_etapas_historial_etapa_origen_id_fkey FOREIGN KEY (etapa_origen_id) REFERENCES public.etapas_pipeline(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_etapas_historial_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidad_etapas_historial
+    ADD CONSTRAINT oportunidad_etapas_historial_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_etapas_historial_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidad_etapas_historial
+    ADD CONSTRAINT oportunidad_etapas_historial_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oportunidades oportunidades_asignado_a_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_asignado_a_usuario_id_fkey FOREIGN KEY (asignado_a_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oportunidades oportunidades_contacto_principal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_contacto_principal_id_fkey FOREIGN KEY (contacto_principal_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oportunidades oportunidades_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: oportunidades oportunidades_etapa_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_etapa_id_fkey FOREIGN KEY (etapa_id) REFERENCES public.etapas_pipeline(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: oportunidades oportunidades_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: oportunidades oportunidades_propietario_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oportunidades
+    ADD CONSTRAINT oportunidades_propietario_usuario_id_fkey FOREIGN KEY (propietario_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: productos productos_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.productos
+    ADD CONSTRAINT productos_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -15666,6 +17032,14 @@ ALTER TABLE ONLY public.roles_permisos
 
 
 --
+-- Name: roles roles_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.roles
+    ADD CONSTRAINT roles_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: secretos secretos_actualizado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15679,6 +17053,94 @@ ALTER TABLE ONLY public.secretos
 
 ALTER TABLE ONLY public.secretos
     ADD CONSTRAINT secretos_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuarios(id);
+
+
+--
+-- Name: taggings taggings_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.taggings
+    ADD CONSTRAINT taggings_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: taggings taggings_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.taggings
+    ADD CONSTRAINT taggings_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tags(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tags tags_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tags
+    ADD CONSTRAINT tags_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ticket_comentarios ticket_comentarios_autor_cliente_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_comentarios
+    ADD CONSTRAINT ticket_comentarios_autor_cliente_id_fkey FOREIGN KEY (autor_cliente_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: ticket_comentarios ticket_comentarios_autor_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_comentarios
+    ADD CONSTRAINT ticket_comentarios_autor_usuario_id_fkey FOREIGN KEY (autor_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: ticket_comentarios ticket_comentarios_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_comentarios
+    ADD CONSTRAINT ticket_comentarios_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ticket_comentarios ticket_comentarios_ticket_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_comentarios
+    ADD CONSTRAINT ticket_comentarios_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES public.tickets(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tickets tickets_asignado_a_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_asignado_a_usuario_id_fkey FOREIGN KEY (asignado_a_usuario_id) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+
+--
+-- Name: tickets tickets_contacto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_contacto_id_fkey FOREIGN KEY (contacto_id) REFERENCES public.contactos(id) ON DELETE SET NULL;
+
+
+--
+-- Name: tickets tickets_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: tickets tickets_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets
+    ADD CONSTRAINT tickets_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -15703,6 +17165,22 @@ ALTER TABLE ONLY public.usuarios_roles
 
 ALTER TABLE ONLY public.usuarios
     ADD CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: usuarios usuarios_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuarios
+    ADD CONSTRAINT usuarios_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: usuarios_roles usuarios_roles_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuarios_roles
+    ADD CONSTRAINT usuarios_roles_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
 
 
 --
@@ -15866,6 +17344,26 @@ ALTER TABLE auth.sso_providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: actividades; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.actividades ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: actividades actividades_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY actividades_admin_all ON public.actividades TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: actividades actividades_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY actividades_member_org ON public.actividades TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: adjuntos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15910,6 +17408,46 @@ ALTER TABLE public.agentes ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY agentes_select_authenticated ON public.agentes FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: archivos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.archivos ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: archivos archivos_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY archivos_admin_all ON public.archivos TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: archivos archivos_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY archivos_member_org ON public.archivos TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: audit_logs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: audit_logs audit_logs_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY audit_logs_admin_all ON public.audit_logs TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: audit_logs audit_logs_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY audit_logs_member_org ON public.audit_logs FOR SELECT TO authenticated USING ((public.es_admin(auth.uid()) OR (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
 
 
 --
@@ -15981,6 +17519,26 @@ ALTER TABLE public.calendar_slot_holds ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY calendar_slot_holds_select_authenticated ON public.calendar_slot_holds FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: campanas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.campanas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: campanas campanas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY campanas_admin_all ON public.campanas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: campanas campanas_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY campanas_member_org ON public.campanas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16109,6 +17667,20 @@ CREATE POLICY cliente_documentos_access ON public.cliente_documentos TO authenti
 
 
 --
+-- Name: cliente_documentos cliente_documentos_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cliente_documentos_admin_all ON public.cliente_documentos TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cliente_documentos cliente_documentos_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cliente_documentos_member_org ON public.cliente_documentos TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: cliente_portal_tokens; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -16154,6 +17726,20 @@ CREATE POLICY cliente_responsables_access ON public.cliente_responsables TO auth
 
 
 --
+-- Name: cliente_responsables cliente_responsables_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cliente_responsables_admin_all ON public.cliente_responsables TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cliente_responsables cliente_responsables_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cliente_responsables_member_org ON public.cliente_responsables TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: clientes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -16164,6 +17750,20 @@ ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY clientes_access ON public.clientes TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR ((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id)))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR ((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id))));
+
+
+--
+-- Name: clientes clientes_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY clientes_admin_all ON public.clientes TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: clientes clientes_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY clientes_member_org ON public.clientes TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16258,6 +17858,70 @@ CREATE POLICY conversaciones_miembro_update ON public.conversaciones FOR UPDATE 
 
 
 --
+-- Name: cotizacion_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cotizacion_items ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cotizacion_items cotizacion_items_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cotizacion_items_admin_all ON public.cotizacion_items TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cotizacion_items cotizacion_items_member_quote; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cotizacion_items_member_quote ON public.cotizacion_items TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.cotizaciones c
+  WHERE ((c.id = cotizacion_items.cotizacion_id) AND (c.organizacion_id = public.usuario_organizacion_id(auth.uid())))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.cotizaciones c
+  WHERE ((c.id = cotizacion_items.cotizacion_id) AND (c.organizacion_id = public.usuario_organizacion_id(auth.uid()))))));
+
+
+--
+-- Name: cotizaciones; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cotizaciones ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cotizaciones cotizaciones_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cotizaciones_admin_all ON public.cotizaciones TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cotizaciones cotizaciones_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cotizaciones_member_org ON public.cotizaciones TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: cuentas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cuentas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cuentas cuentas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cuentas_admin_all ON public.cuentas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: cuentas cuentas_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY cuentas_member_org ON public.cuentas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: custom_fields; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -16328,6 +17992,26 @@ CREATE POLICY empleados_select_authenticated ON public.empleados FOR SELECT TO a
 --
 
 CREATE POLICY empleados_update_admin ON public.empleados FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: etapas_pipeline; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.etapas_pipeline ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: etapas_pipeline etapas_pipeline_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY etapas_pipeline_admin_all ON public.etapas_pipeline TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: etapas_pipeline etapas_pipeline_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY etapas_pipeline_member_org ON public.etapas_pipeline TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16418,6 +18102,20 @@ CREATE POLICY identidades_canal_admin ON public.identidades_canal TO authenticat
 ALTER TABLE public.lead_cotizacion_items ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: lead_cotizacion_items lead_cotizacion_items_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_cotizacion_items_admin_all ON public.lead_cotizacion_items TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_cotizacion_items lead_cotizacion_items_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_cotizacion_items_member_org ON public.lead_cotizacion_items TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: lead_cotizacion_items lead_cotizacion_items_select; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -16440,31 +18138,17 @@ CREATE POLICY lead_cotizacion_items_write_admin ON public.lead_cotizacion_items 
 ALTER TABLE public.lead_cotizaciones ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_cotizaciones lead_cotizaciones_delete_admin; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_cotizaciones lead_cotizaciones_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_cotizaciones_delete_admin ON public.lead_cotizaciones FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
-
-
---
--- Name: lead_cotizaciones lead_cotizaciones_insert_admin; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_cotizaciones_insert_admin ON public.lead_cotizaciones FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+CREATE POLICY lead_cotizaciones_admin_all ON public.lead_cotizaciones TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
 
 
 --
--- Name: lead_cotizaciones lead_cotizaciones_select; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_cotizaciones lead_cotizaciones_member_org; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_cotizaciones_select ON public.lead_cotizaciones FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id)));
-
-
---
--- Name: lead_cotizaciones lead_cotizaciones_update_admin; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_cotizaciones_update_admin ON public.lead_cotizaciones FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+CREATE POLICY lead_cotizaciones_member_org ON public.lead_cotizaciones TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16474,10 +18158,10 @@ CREATE POLICY lead_cotizaciones_update_admin ON public.lead_cotizaciones FOR UPD
 ALTER TABLE public.lead_etapas ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_etapas lead_etapas_access; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_etapas lead_etapas_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_etapas_access ON public.lead_etapas TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(tablero_id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(tablero_id)));
+CREATE POLICY lead_etapas_admin_all ON public.lead_etapas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
 
 
 --
@@ -16488,37 +18172,54 @@ CREATE POLICY lead_etapas_member_all ON public.lead_etapas TO authenticated USIN
 
 
 --
+-- Name: lead_etapas lead_etapas_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_etapas_member_org ON public.lead_etapas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: lead_eventos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lead_eventos ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lead_eventos lead_eventos_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_eventos_admin_all ON public.lead_eventos TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_eventos lead_eventos_member_lead; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_eventos_member_lead ON public.lead_eventos TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.leads l
+  WHERE ((l.id = lead_eventos.lead_id) AND (l.organizacion_id = public.usuario_organizacion_id(auth.uid())))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.leads l
+  WHERE ((l.id = lead_eventos.lead_id) AND (l.organizacion_id = public.usuario_organizacion_id(auth.uid()))))));
+
+
+--
 -- Name: lead_movimientos; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.lead_movimientos ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_movimientos lead_movimientos_delete_admin; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_movimientos lead_movimientos_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_movimientos_delete_admin ON public.lead_movimientos FOR DELETE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid)));
-
-
---
--- Name: lead_movimientos lead_movimientos_insert_admin; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_movimientos_insert_admin ON public.lead_movimientos FOR INSERT TO authenticated WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+CREATE POLICY lead_movimientos_admin_all ON public.lead_movimientos TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
 
 
 --
--- Name: lead_movimientos lead_movimientos_select; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_movimientos lead_movimientos_member_org; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_movimientos_select ON public.lead_movimientos FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id)));
-
-
---
--- Name: lead_movimientos lead_movimientos_update_admin; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_movimientos_update_admin ON public.lead_movimientos FOR UPDATE TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+CREATE POLICY lead_movimientos_member_org ON public.lead_movimientos TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16528,10 +18229,17 @@ CREATE POLICY lead_movimientos_update_admin ON public.lead_movimientos FOR UPDAT
 ALTER TABLE public.lead_recordatorios ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_recordatorios lead_recordatorios_access; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_recordatorios lead_recordatorios_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_recordatorios_access ON public.lead_recordatorios TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(tarjeta_id)));
+CREATE POLICY lead_recordatorios_admin_all ON public.lead_recordatorios TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: lead_recordatorios lead_recordatorios_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_recordatorios_member_org ON public.lead_recordatorios TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16541,10 +18249,10 @@ CREATE POLICY lead_recordatorios_access ON public.lead_recordatorios TO authenti
 ALTER TABLE public.lead_tableros ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_tableros lead_tableros_access; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tableros lead_tableros_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tableros_access ON public.lead_tableros TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(id))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_tablero(id)));
+CREATE POLICY lead_tableros_admin_all ON public.lead_tableros TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
 
 
 --
@@ -16552,6 +18260,13 @@ CREATE POLICY lead_tableros_access ON public.lead_tableros TO authenticated USIN
 --
 
 CREATE POLICY lead_tableros_member_all ON public.lead_tableros TO authenticated USING (public.puede_ver_tablero(id)) WITH CHECK (public.puede_ver_tablero(id));
+
+
+--
+-- Name: lead_tableros lead_tableros_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lead_tableros_member_org ON public.lead_tableros TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16581,19 +18296,10 @@ CREATE POLICY lead_tarjeta_items_write_admin ON public.lead_tarjeta_items TO aut
 ALTER TABLE public.lead_tarjetas ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lead_tarjetas lead_tarjetas_delete; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tarjetas lead_tarjetas_admin_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_delete ON public.lead_tarjetas FOR DELETE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(id)));
-
-
---
--- Name: lead_tarjetas lead_tarjetas_insert; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY lead_tarjetas_insert ON public.lead_tarjetas FOR INSERT TO authenticated WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (( SELECT auth.uid() AS uid) = propietario_usuario_id) OR (( SELECT auth.uid() AS uid) = asignado_a_usuario_id) OR (EXISTS ( SELECT 1
-   FROM public.contactos ct
-  WHERE ((ct.id = lead_tarjetas.contacto_id) AND (ct.propietario_usuario_id = ( SELECT auth.uid() AS uid)))))));
+CREATE POLICY lead_tarjetas_admin_all ON public.lead_tarjetas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
 
 
 --
@@ -16604,17 +18310,30 @@ CREATE POLICY lead_tarjetas_member_all ON public.lead_tarjetas TO authenticated 
 
 
 --
--- Name: lead_tarjetas lead_tarjetas_select; Type: POLICY; Schema: public; Owner: -
+-- Name: lead_tarjetas lead_tarjetas_member_org; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_select ON public.lead_tarjetas FOR SELECT TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(id)));
+CREATE POLICY lead_tarjetas_member_org ON public.lead_tarjetas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
--- Name: lead_tarjetas lead_tarjetas_update; Type: POLICY; Schema: public; Owner: -
+-- Name: leads; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
-CREATE POLICY lead_tarjetas_update ON public.lead_tarjetas FOR UPDATE TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR public.puede_ver_lead(id))) WITH CHECK ((public.puede_ver_lead(id) OR public.es_admin(( SELECT auth.uid() AS uid))));
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: leads leads_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY leads_admin_all ON public.leads TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: leads leads_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY leads_member_org ON public.leads TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16699,6 +18418,66 @@ CREATE POLICY mensajes_update ON public.mensajes FOR UPDATE TO authenticated USI
 
 
 --
+-- Name: notas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.notas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: notas notas_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY notas_admin_all ON public.notas TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: notas notas_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY notas_member_org ON public.notas TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: oportunidad_etapas_historial; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oportunidad_etapas_historial ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_historial_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY oportunidad_historial_admin_all ON public.oportunidad_etapas_historial TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: oportunidad_etapas_historial oportunidad_historial_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY oportunidad_historial_member_org ON public.oportunidad_etapas_historial TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: oportunidades; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.oportunidades ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: oportunidades oportunidades_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY oportunidades_admin_all ON public.oportunidades TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: oportunidades oportunidades_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY oportunidades_member_org ON public.oportunidades TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
 -- Name: busquedas p_insert_busquedas; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -16763,6 +18542,26 @@ ALTER TABLE public.permisos ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY permisos_admin ON public.permisos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: productos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: productos productos_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY productos_admin_all ON public.productos TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: productos productos_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY productos_member_org ON public.productos TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -16887,6 +18686,86 @@ ALTER TABLE public.secretos ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY secretos_admin ON public.secretos TO authenticated USING (public.es_admin(( SELECT auth.uid() AS uid))) WITH CHECK (public.es_admin(( SELECT auth.uid() AS uid)));
+
+
+--
+-- Name: taggings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.taggings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: taggings taggings_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY taggings_admin_all ON public.taggings TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: taggings taggings_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY taggings_member_org ON public.taggings TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: tags; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: tags tags_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tags_admin_all ON public.tags TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: tags tags_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tags_member_org ON public.tags TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: ticket_comentarios; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ticket_comentarios ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ticket_comentarios ticket_comentarios_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY ticket_comentarios_admin_all ON public.ticket_comentarios TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: ticket_comentarios ticket_comentarios_member_ticket; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY ticket_comentarios_member_ticket ON public.ticket_comentarios TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
+
+--
+-- Name: tickets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: tickets tickets_admin_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tickets_admin_all ON public.tickets TO authenticated USING (public.es_admin(auth.uid())) WITH CHECK (public.es_admin(auth.uid()));
+
+
+--
+-- Name: tickets tickets_member_org; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tickets_member_org ON public.tickets TO authenticated USING ((organizacion_id = public.usuario_organizacion_id(auth.uid()))) WITH CHECK ((organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 
 --
@@ -17112,5 +18991,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ZXHepbDW0emvQQQZmShivw8XsE7ze8hQbRtngfChKUqwSry9ZcCOHU37ONKQ4yx
+\unrestrict r9eLKZ2rEH1AeTbBIrphxzn24VGuDefGtnwLeFhI60QUueNDszoA3iqJTwhQYEe
 

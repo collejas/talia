@@ -74,17 +74,7 @@ sudo systemctl restart talia-api.service
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
 
-codex resume 019ab2b4-d94c-7110-a42f-dcf92fdb26dd
 
-codex resume 019aada7-615d-7ab3-ae66-6db224d77e7d
-
-codex resume 019aac47-3a8d-7d60-8b22-190acf5cca02
-
-codex resume 019aa6e2-3fc7-7471-9c1a-207613e173ee
-
-codex resume 019aa455-2b70-7870-894c-0200ed5e72c5
-
-codex resume 019a9e40-eeac-7ca3-8a1e-082035d9a1ce
 
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
@@ -461,3 +451,72 @@ hola@talia.mx
   - Residuos de fallback: mientras src/lib/inbox/messages-server.ts:98-176 siga recurriendo al panel si falla /crm/inbox/
     messages, no podremos borrar panel.py. Una vez que las rutas nuevas estén estables hay que retirar ese buildBackendTargets/
     fallback (y cualquier dependencia de getPanelApiBaseUrl fuera de /crm/*).
+
+
+
+
+
+# FALTANTES:
+
+• Paso 2 · Flujos del embudo y cotizaciones
+
+  - backend/app/api/routes/crm.py:4021-4272 sigue trabajando con lead_tarjetas/lead_cotizaciones (endpoints /crm/leads/{id}/
+    {cliente|convertir|quotes|quotes/send} y /crm/quotes/{id}/mark). Hay que reescribirlos para operar sobre oportunidades,
+    cotizaciones y cotizacion_items, removiendo la dependencia de los RPC panel_lead_*.
+  - backend/app/repositories/crm.py:681-874 mantiene helpers legacy (list_lead_quotes, fetch_lead_for_quote,
+    create_lead_quote, mark_lead_quote, move_lead_to_stage, etc.) que llaman REST/RPC Legacy (/rest/v1/lead_cotizaciones, /
+    rest/v1/lead_tarjetas, /rest/v1/rpc/panel_lead_*). Se necesita un bloque nuevo que use las tablas CRM (cotizaciones,
+    cotizacion_items, oportunidades, oportunidad_etapas_historial) y elimine esas llamadas.
+  - Los server actions y componentes del embudo continúan usando tarjetaId y los endpoints legacy:
+      - Endpoints Next.js en frontend/panel/src/app/api/embudo/leads/[tarjetaId]/* (history, cliente, convertir, quotes,
+        quotes/send) invocan los endpoints anteriores.
+      - Server actions frontend/panel/src/lib/embudo/actions.ts y helpers (helpers.ts, data.ts) leen/escriben payloads con
+        tarjeta, tarjetaId y esperan respuestas de /crm/leads/*, no de /crm/oportunidades/*.
+      - Componentes React (frontend/panel/src/components/embudo/board-client.tsx, lead-drawer.tsx, lead-onboarding.tsx, stage-
+        column.tsx, etc.) muestran/mutan tarjetaId y llaman a los endpoints anteriores cuando crean, mueven etapas, generan
+        cotizaciones o ejecutan onboarding.
+  - Automatizaciones y servicios que aún empujan a lead_tarjetas:
+      - backend/app/services/storage.py:887-1073 (ensure_lead_tarjeta, capture_lead_if_ready, promote_opportunity_stage) deben
+        migrar a crear/actualizar oportunidades nativas en lugar de usar lead_tarjetas + RPC panel_lead_move.
+      - Canales/assistants (backend/app/channels/webchat/service.py:646-2163, backend/app/channels/whatsapp/service.py:82-249,
+        backend/app/assistants/tools/lead.py:44-282) invocan esas funciones legacy; tras mover storage al nuevo modelo hay que
+        ajustar los call-sites.
+  - Supabase conserva las funciones panel_lead_* usadas por el backend (ver backups/postgres_20251123_232745/
+    postgres_20251123_232745_schema.sql:2861-3750 y :7803-8011). Para completar el corte se debe reemplazar esos RPC por lógica
+    FastAPI/Supabase REST sobre oportunidades y luego retirar las funciones.
+  - Frontend de agenda, portal y visitas aún envía tarjeta_id en algunos DTOs (frontend/panel/src/lib/agenda/data.ts:23-284,
+    frontend/panel/src/lib/agenda/data.ts:218). Validar y sustituir por oportunidad_id antes de retirar columnas legacy.
+
+  Paso 3 · Clientes/portal y limpieza de referencias legacy
+
+  - El modelo de clientes continúa anclado a lead_tarjeta_id:
+      - Select central _cliente_select_clause en backend/app/api/routes/crm.py:454-464 y _CLIENTE_SELECT en backend/app/
+        repositories/crm.py:74-85 exponen lead_tarjeta_id, tablero_id, etapa_id. Ajustar el esquema para que clientes
+        referencie cuenta_id/oportunidad_id reales y poblar esos campos con la migración de datos.
+      - Las consultas portal (get_cliente_por_lead, convert_lead_en_cliente, list_lead_events, etc.) en backend/app/
+        repositories/crm.py:2664-2765 dependen del ID legacy; deben pasar a usar las tablas CRM.
+  - Portal de clientes:
+      - Endpoints /crm/portal/* en backend/app/api/routes/crm.py:4421-4635 cargan el cliente a través de cliente_portal_tokens
+        → clientes (que hoy contiene lead_tarjeta_id). El flujo de emisión/validación (create_portal_token, get_portal_token,
+        touch_portal_token en backend/app/repositories/crm.py:2893-2961) seguirá rompiendo si se elimina la columna legacy. Se
+        debe actualizar el schema de tokens y las vistas que muestran documentos/responsables para usar los nuevos IDs.
+      - Frontend del portal y de clientes (frontend/panel/src/lib/portal/data.ts:6-33, frontend/panel/src/lib/clientes/
+        data.ts:74-173, frontend/panel/src/types/clientes.ts:45) todavía incluyen lead_tarjeta_id; requieren refactor para
+        consumir los campos CRM.
+  - Base de datos:
+      - Los triggers y funciones que sincronizan lead_tarjetas con clientes siguen activos (backups/postgres_20251123_232745/
+        postgres_20251123_232745_schema.sql:15676-15704, 7545-8023). Tras mover clientes/portal a CRM hay que deshabilitarlos o
+        reescribirlos para las nuevas tablas.
+      - Políticas RLS y vistas legacy (lead_tarjetas_member_* en backups/...schema.sql:6954-6955) permanecen habilitadas.
+        Desactivarlas sólo será seguro cuando ningún flujo (portal, reportes, exports) dependa de lead_tarjetas.
+  - Tipos y DTOs compartidos:
+      - frontend/panel/src/lib/clientes/data.ts, frontend/panel/src/types/clientes.ts, y cualquier export a CSV/reportes
+        siguen esperando lead_tarjeta_id, tablero_id, etapa_id. Actualizar los contratos para nuevos campos (cuenta_id,
+        oportunidad_id, estado_onboarding homogéneo) y realizar la doble escritura temporal si se necesita compatibilidad.
+  - Documentación/infra:
+      - Actualizar supabase/migrations/20251122_230000_migrate_legacy_to_crm.sql para que además de copiar datos, rellene
+        clientes.oportunidad_id/cuenta_id y elimine lead_tarjeta_id.
+      - Una vez que portal/cliente consumes los nuevos campos, retirar las rutas estáticas legacy (backend/app/public/panel/*)
+        y el montaje /panel en backend/app/main.py:53-90 para evitar accesos que continúen creando tarjetas legacy.
+
+  Con estos pendientes cubiertos se cierra la dependencia del método anterior y se completa la migración funcional del CRM.

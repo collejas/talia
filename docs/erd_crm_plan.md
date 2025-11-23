@@ -249,3 +249,29 @@ Con estas definiciones, el plan queda completo respecto a la lista recomendada; 
 2. **Alertas:** integrar paneles de métricas (Prometheus/Grafana o Supabase logs) que avisen si fallan las migraciones o si RLS bloquea tráfico legítimo.
 3. **Documentación:** actualizar `README.md`, `docs/` y la wiki interna con diagramas ERD, contratos de API y guías de onboarding multi-tenant.
 4. **Handoff:** capacitar al equipo de soporte y ventas sobre los nuevos conceptos (`cuentas` vs `clientes`, `oportunidades`, `actividades`) y actualizar scripts de adopción.
+
+### Plan de ejecución · Punto 2 (Embudo/Oportunidades/Cotizaciones)
+1. **Backend API**
+   - [ ] Reemplazar los endpoints `/crm/leads/{id}/{cliente|convertir|quotes|quotes/send}` y `/crm/quotes/{id}/mark` por rutas equivalentes sobre `oportunidades/{id}` y `cotizaciones/{id}`. Actualizar esquemas Pydantic para usar IDs de oportunidad y cuenta en lugar de `tarjeta_id`.
+   - [ ] Extender `CRMRepository` con métodos nativos (`list_quotes`, `create_quote`, `mark_quote`, `get_opportunity_with_contact`) que lean/escriban `cotizaciones`, `cotizacion_items`, `oportunidades` y `oportunidad_etapas_historial`. Eliminar el bloque legacy que llama `/rest/v1/lead_*` y los RPC `panel_lead_*`.
+   - [ ] Migrar `storage.ensure_lead_tarjeta`, `capture_lead_if_ready` y `promote_opportunity_stage` para que creen/actualicen oportunidades CRM directamente (sin `lead_tarjetas`). Ajustar los consumidores de `storage` en `channels/webchat`, `channels/whatsapp`, `assistants/tools/lead`.
+   - [ ] Preparar migraciones SQL que eliminen la dependencia de `panel_lead_*` (drop de RPCs/funciones y triggers legacy) una vez que las nuevas rutas estén en producción.
+2. **Frontend embudo**
+   - [ ] Actualizar los server actions `/api/embudo/leads/[tarjetaId]/*` para que consuman los nuevos endpoints (`/crm/oportunidades/*`, `/crm/cotizaciones/*`) y renombrar parámetros a `oportunidadId`.
+   - [ ] Refactorizar `frontend/panel/src/lib/embudo/{data,actions,helpers}.ts` y componentes (`board-client`, `lead-drawer`, `lead-onboarding`, etc.) para usar la forma nueva de las tarjetas (IDs de oportunidad, campos `titulo/monto/estado`) y los DTOs de cotizaciones CRM.
+   - [ ] Revisar las vistas relacionadas (agenda, visitas, analytics) que aún leen `tarjeta_id` y reemplazarlas por `oportunidad_id`, asegurando compatibilidad con los loaders de nuevas APIs.
+   - [ ] Añadir pruebas de regresión (unitarias y de integración end-to-end del embudo) que validen creación, movimiento de etapas, generación/envío/marcado de cotizaciones y conversión a cliente usando el pipeline CRM.
+
+### Plan de ejecución · Punto 3 (Clientes y Portal)
+1. **Modelo de datos**
+   - [ ] Extender `clientes` para almacenar `cuenta_id` y `oportunidad_id` reales; rellenar esos campos con una migración que mapee los IDs legacy y documente la relación (`legacy_lead_id` sólo para auditoría). Ajustar PK/FK de `cliente_portal_tokens`, `cliente_documentos`, `cliente_responsables` para que dependan de los nuevos IDs.
+   - [ ] Actualizar `_cliente_select_clause` (backend) y los tipos compartidos (`frontend/panel/src/types/clientes.ts`) para remover `lead_tarjeta_id` y exponer los nuevos campos.
+2. **APIs de clientes/portal**
+   - [ ] Refactorizar `CRMRepository` (`get_cliente_por_lead`, `convert_lead_en_cliente`, `create_portal_token`, etc.) para usar `cuentas`/`oportunidades` y las rutas CRM nativas; eliminar la resolución por `lead_id`.
+   - [ ] Ajustar las rutas `/crm/clientes/*` y `/crm/portal/*` para operar con los nuevos identificadores y payloads (incluyendo documentos y responsables).
+3. **Frontend panel + portal público**
+   - [ ] Actualizar `frontend/panel/src/lib/clientes/data.ts` y las vistas de clientes para consumir `cuentas` y `clientes` CRM sin referencias a `lead_tarjeta_id`. Revisar formularios (actualización fiscal, documentos, responsables) para que envíen los payloads nuevos.
+   - [ ] Modificar los SDK/API del portal (`frontend/panel/src/lib/portal/data.ts` y `/api/portal/*`) para alinearlos con los cambios en el backend y validar expiración de tokens usando los campos actualizados.
+4. **Limpieza final**
+   - [ ] Retirar triggers/vistas/policies relacionadas a `lead_tarjetas` en Supabase, desmontar los bundles estáticos legacy en `backend/app/public/panel` y cerrar el endpoint `/panel/env.js` cuando no quede consumo.
+   - [ ] Documentar en `docs/erd_crm_plan.md` y en la wiki el nuevo flujo end-to-end (creación de oportunidad → cotización → conversión a cliente → portal) y actualizar los runbooks operativos.
