@@ -1176,6 +1176,54 @@ class CRMRepository:
             "openai_conversation_id": row.get("conversacion_openai_id"),
         }
 
+    async def register_whatsapp_message(
+        self,
+        *,
+        direction: Literal["entrante", "saliente"],
+        wa_id: str | None,
+        phone_e164: str | None,
+        body: str | None,
+        message_sid: str | None,
+        profile_name: str | None = None,
+        conversation_id: str | None = None,
+        contact_id: str | None = None,
+        response_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        inactivity_hours: int | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+        webhook_payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "p_direction": direction,
+            "p_whatsapp_id": wa_id,
+            "p_phone_e164": phone_e164,
+            "p_body": body,
+            "p_metadata": metadata or {},
+            "p_message_sid": message_sid,
+            "p_profile_name": profile_name,
+            "p_conversation_id": conversation_id,
+            "p_contact_id": contact_id,
+            "p_response_id": response_id,
+        }
+        if inactivity_hours is not None:
+            payload["p_inactivity_hours"] = inactivity_hours
+        if attachments:
+            payload["p_attachments"] = attachments
+        if webhook_payload is not None:
+            payload["p_webhook_payload"] = webhook_payload
+        data = await self._rpc("registrar_mensaje_whatsapp", payload)
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_whatsapp: {data!r}")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida registrar_mensaje_whatsapp: {row!r}")
+        return {
+            "conversation_id": row.get("conversacion_id"),
+            "message_id": row.get("mensaje_id"),
+            "contact_id": row.get("contacto_id"),
+            "openai_conversation_id": row.get("conversacion_openai_id"),
+        }
+
     async def _get_default_stage_id(self, *, organizacion_id: UUID) -> UUID:
         cache_key = str(organizacion_id)
         cached = self._stage_cache.get(cache_key)

@@ -99,35 +99,25 @@ async def register_whatsapp_message(
     webhook_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Invoca registrar_mensaje_whatsapp para almacenar interacciones del canal y ligar el webhook."""
-    payload: dict[str, Any] = {
-        "p_direction": direction,
-        "p_whatsapp_id": wa_id,
-        "p_phone_e164": phone_e164,
-        "p_body": body,
-        "p_metadata": metadata or {},
-        "p_message_sid": message_sid,
-        "p_profile_name": profile_name,
-        "p_conversation_id": conversation_id,
-        "p_contact_id": contact_id,
-        "p_response_id": response_id,
-    }
-    if inactivity_hours is not None:
-        payload["p_inactivity_hours"] = inactivity_hours
-    if attachments:
-        payload["p_attachments"] = attachments
-    if webhook_payload is not None:
-        payload["p_webhook_payload"] = webhook_payload
-
-    rows = await _call_supabase_rpc("registrar_mensaje_whatsapp", payload)
-    if not isinstance(rows, list) or not rows:
-        raise StorageError(f"Respuesta inesperada registrar_mensaje_whatsapp: {rows!r}")
-    row = rows[0]
-    return {
-        "conversation_id": row.get("conversacion_id"),
-        "message_id": row.get("mensaje_id"),
-        "contact_id": row.get("contacto_id"),
-        "openai_conversation_id": row.get("conversacion_openai_id"),
-    }
+    repo = CRMRepository()
+    try:
+        return await repo.register_whatsapp_message(
+            direction=direction,
+            wa_id=wa_id,
+            phone_e164=phone_e164,
+            body=body,
+            message_sid=message_sid,
+            profile_name=profile_name,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            response_id=response_id,
+            metadata=metadata,
+            inactivity_hours=inactivity_hours,
+            attachments=attachments,
+            webhook_payload=webhook_payload,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
@@ -1802,44 +1792,3 @@ async def ensure_lead_tarjeta(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     return str(oportunidad_id)
-
-
-async def _call_supabase_rpc(function_name: str, payload: dict[str, Any]) -> Any:
-    """Invoca una función RPC en Supabase usando el service role."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/{function_name}"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al llamar {function_name}: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            f"Supabase respondió error en {function_name}"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    if response.status_code == 204:
-        return {}
-
-    try:
-        return response.json()
-    except ValueError as exc:
-        msg = f"Respuesta inválida de {function_name}: {exc}"
-        logger.error(msg)
-        raise StorageError(msg) from exc
