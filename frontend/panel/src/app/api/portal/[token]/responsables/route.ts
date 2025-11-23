@@ -30,7 +30,7 @@ export async function POST(
     const message = error instanceof Error ? error.message : "backend_not_configured";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-  const response = await fetch(`${baseUrl}/portal/clientes/${token}/responsables`, {
+  const response = await fetch(`${baseUrl}/crm/portal/clientes/${token}/responsables`, {
     method: "POST",
     headers: {
       Accept: "application/json",

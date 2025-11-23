@@ -400,3 +400,22 @@ hola@talia.mx
 
   Si te parece bien, hago un primer diseño mezclando los cinco elementos y ajustamos después. Sólo confirma que quieres la versión
   “full combo” y que puedo tocar el componente del drawer (probablemente frontend/panel/src/components/embudo/...).
+
+
+
+
+# FALTA:
+- Clientes/portal: todo lo relacionado con /clientes, documentos del cliente, responsables, enlaces de portal y carga de
+    archivos (/clientes/*, /portal/*), que aún dependen de lead_tarjetas y llamadas directas a Supabase.
+  - Leads/legacy: aunque el embudo ya usa /crm, todavía hay endpoints legacy (/leads, panel_lead_*, conversión a cliente,
+    eliminación de leads) que operan sobre lead_tarjetas, lead_movimientos, etc.
+  - Agenda (parcial): la UI ya usa /crm/agenda/*, pero las rutas originales en panel.py siguen ahí. Hay que decidir si se
+    remueven o quedan como compatibilidad.
+  - Prospección DENUE/Google: las nuevas rutas viven en /crm/prospeccion/*, pero panel.py aún tiene las versiones antiguas (/
+    prospeccion/...). Falta eliminarlas y asegurarse de que no haya otro código llamándolas.
+  - Inbox/email/webchat auxiliares: siguen existiendo acciones como /conversaciones/*, subida de archivos, manual overrides,
+    etc., que interactúan con Supabase e infra legacy.
+  - RRHH/Configuración: secciones de personal, roles, departamentos, puestos (/config/*) con _sb_get/_sb_post.
+  - Analytics/reportes: endpoints de mapas, conversiones, reportes CSV, etc., que consultan vistas legacy directamente.
+  - Servicios compartidos: app/services/storage.py, calendar.py, quotes.py, etc., tienen muchas llamadas directas a Supabase
+    (storage, documentos, leads) que deben encapsularse en repositorios CRM o servicios propios.

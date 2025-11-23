@@ -30,7 +30,7 @@ export async function PATCH(
     const message = error instanceof Error ? error.message : "backend_not_configured";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-  const response = await fetch(`${baseUrl}/portal/clientes/${token}/responsables/${responsableId}`, {
+  const response = await fetch(`${baseUrl}/crm/portal/clientes/${token}/responsables/${responsableId}`, {
     method: "PATCH",
     headers: {
       Accept: "application/json",

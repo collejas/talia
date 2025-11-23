@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import secrets
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum
 from typing import Annotated, Any, Literal, Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.channels.webchat import service as webchat_service
@@ -18,15 +33,19 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import (
     DenueClient,
     DenueError,
+    EmailSendError,
     GooglePlacesClient,
     GooglePlacesError,
     normalize_denue_place,
     normalize_place_for_result,
+    send_email,
+    storage,
 )
 from app.services import (
     calendar as calendar_service,
 )
 from app.services.calendar import CalendarError
+from app.services.storage import StorageError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
@@ -35,6 +54,7 @@ DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
 DEFAULT_REMINDER_SLUG = "default"
 DEFAULT_CONTACTS_LIMIT = 200
+DEFAULT_PORTAL_TOKEN_DAYS = 14
 
 
 class CRMAccount(BaseModel):
@@ -81,6 +101,115 @@ class CRMAccountsResponse(BaseModel):
     items: list[CRMAccount]
     limit: int
     offset: int
+
+
+class ClienteOnboardingEstado(str, Enum):
+    PENDIENTE = "pendiente"
+    EN_PROGRESO = "en_progreso"
+    COMPLETADO = "completado"
+
+
+class ClienteDocumentoTipo(str, Enum):
+    CONSTANCIA_FISCAL = "constancia_fiscal"
+    COMPROBANTE_DOMICILIO = "comprobante_domicilio"
+    IDENTIFICACION_OFICIAL = "identificacion_oficial"
+    CONTRATO_SERVICIO = "contrato_servicio"
+    NDA = "nda"
+    OTRO = "otro"
+
+
+class ClienteDocumentoEstado(str, Enum):
+    PENDIENTE = "pendiente"
+    RECIBIDO = "recibido"
+    VALIDADO = "validado"
+    RECHAZADO = "rechazado"
+
+
+class ClienteFiscalUpdatePayload(BaseModel):
+    estado_onboarding: ClienteOnboardingEstado | None = Field(default=None)
+    rfc: str | None = Field(default=None, max_length=18)
+    razon_social: str | None = Field(default=None, max_length=255)
+    domicilio_fiscal: str | None = Field(default=None, max_length=500)
+    domicilio_fisico: str | None = Field(default=None, max_length=500)
+    regimen_fiscal: str | None = Field(default=None, max_length=120)
+    datos_facturacion: dict[str, Any] | None = Field(default=None)
+
+
+class ClienteDocumentoPayload(BaseModel):
+    cliente_id: UUID | None = Field(default=None)
+    tipo: ClienteDocumentoTipo
+    estado: ClienteDocumentoEstado | None = Field(default=None)
+    descripcion: str | None = Field(default=None, max_length=500)
+    storage_url: str | None = Field(default=None, max_length=2048)
+    storage_path: str | None = Field(default=None, max_length=2048)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+
+class ClienteDocumentoUpdatePayload(BaseModel):
+    descripcion: str | None = Field(default=None, max_length=500)
+    estado: ClienteDocumentoEstado | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+
+class ClienteResponsablePayload(BaseModel):
+    nombre: str = Field(..., max_length=255)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono_e164: str | None = Field(default=None, max_length=32)
+    rol: str | None = Field(default=None, max_length=120)
+    es_responsable_principal: bool = False
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+
+class ClienteResponsableUpdatePayload(BaseModel):
+    nombre: str | None = Field(default=None, max_length=255)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono_e164: str | None = Field(default=None, max_length=32)
+    rol: str | None = Field(default=None, max_length=120)
+    es_responsable_principal: bool | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+
+class ClientePortalLinkPayload(BaseModel):
+    nota: str | None = Field(default=None, max_length=500)
+    correo_destinatarios: list[str] | None = Field(default=None)
+    correo_asunto: str | None = Field(default=None, max_length=255)
+    correo_mensaje: str | None = Field(default=None)
+    metadatos: dict[str, Any] | None = Field(default=None)
+    expira_en: datetime | None = Field(default=None)
+    enviar_correo: bool = True
+
+
+class LeadConversionPayload(BaseModel):
+    forzar: bool = Field(default=False)
+
+
+PORTAL_DOCUMENT_REQUIREMENTS: list[dict[str, str]] = [
+    {
+        "tipo": ClienteDocumentoTipo.CONSTANCIA_FISCAL.value,
+        "titulo": "Constancia fiscal (SAT)",
+        "descripcion": "Documento emitido por el SAT que contiene el RFC y el domicilio fiscal.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.COMPROBANTE_DOMICILIO.value,
+        "titulo": "Comprobante de domicilio",
+        "descripcion": "Puede ser recibo de luz, teléfono o agua con antigüedad menor a 3 meses.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.IDENTIFICACION_OFICIAL.value,
+        "titulo": "Identificación oficial",
+        "descripcion": "INE o pasaporte vigente del representante legal.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.CONTRATO_SERVICIO.value,
+        "titulo": "Contrato de servicio",
+        "descripcion": "Contrato firmado para formalizar el inicio del servicio.",
+    },
+    {
+        "tipo": ClienteDocumentoTipo.NDA.value,
+        "titulo": "Acuerdo de confidencialidad (NDA)",
+        "descripcion": "Documento opcional para proteger información sensible.",
+    },
+]
 
 
 class AgendaReschedulePayload(BaseModel):
@@ -272,6 +401,238 @@ def require_user_token(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="authorization_invalid",
     )
+
+
+def _single_related(value: Any) -> Any:
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+def _cliente_select_clause() -> str:
+    return (
+        "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
+        "razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,"
+        "fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
+        "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
+        "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
+        "storage_path,metadatos,creado_en,actualizado_en),"
+        "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
+        "es_responsable_principal,metadatos,creado_en,actualizado_en)"
+    )
+
+
+def _portal_token_select_clause(include_relations: bool = True) -> str:
+    base = (
+        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
+        "ultimo_acceso_ip,creado_en,actualizado_en"
+    )
+    if include_relations:
+        base += (
+            f",cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_cliente_select_clause()})"
+        )
+    else:
+        base += ",cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
+    return base
+
+
+def _sanitize_portal_session(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    allowed = {
+        "id",
+        "cliente_id",
+        "expira_en",
+        "revocado",
+        "usos",
+        "nota",
+        "metadata",
+        "ultimo_acceso_en",
+        "ultimo_acceso_ip",
+        "creado_en",
+        "actualizado_en",
+    }
+    return {key: row.get(key) for key in allowed}
+
+
+def _ensure_portal_token_active(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        raise HTTPException(status_code=404, detail="portal_token_not_found")
+    if row.get("revocado"):
+        raise HTTPException(status_code=410, detail="portal_token_revoked")
+    expira = _parse_iso_datetime(row.get("expira_en"))
+    if expira and expira < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="portal_token_expired")
+    return row
+
+
+def _portal_default_expiration() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=DEFAULT_PORTAL_TOKEN_DAYS)
+
+
+def _serialize_datetime(value: datetime | None) -> str | None:
+    if not value:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
+def _request_ip(request: Request | None) -> str | None:
+    if not request:
+        return None
+    forwarded = request.headers.get("x-forwarded-for") if request.headers else None
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = request.client
+    return client.host if client else None
+
+
+def _build_portal_link(token: str) -> str:
+    base = settings.cliente_portal_base_url
+    if not base:
+        raise HTTPException(status_code=500, detail="cliente_portal_base_url_missing")
+    return f"{base.rstrip('/')}/{token}"
+
+
+def _normalize_email_list(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        candidate = (raw or "").strip()
+        if not candidate:
+            continue
+        lowered = candidate.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        normalized.append(candidate)
+    return normalized
+
+
+def _cliente_contact_email(cliente: dict[str, Any] | None) -> str | None:
+    if not cliente:
+        return None
+    contact = cliente.get("contacto")
+    if isinstance(contact, dict):
+        correo = (contact.get("correo") or "").strip()
+        return correo or None
+    return None
+
+
+def _portal_email_subject(cliente: dict[str, Any] | None) -> str:
+    nombre = (
+        (cliente or {}).get("razon_social")
+        or ((cliente or {}).get("contacto") or {}).get("nombre_completo")
+        or ""
+    )
+    if nombre:
+        return f"{nombre}, completa tu onboarding con Tal-IA"
+    return "Completa tu onboarding con Tal-IA"
+
+
+def _portal_email_body(
+    cliente: dict[str, Any] | None,
+    link: str,
+    mensaje: str | None,
+) -> str:
+    nombre = (
+        (cliente or {}).get("razon_social")
+        or ((cliente or {}).get("contacto") or {}).get("nombre_completo")
+        or "cliente"
+    )
+    body_lines = [
+        f"Hola {nombre},",
+        "",
+        "Preparamos un enlace para que completes tu onboarding y compartas la información necesaria.",
+        "",
+        link,
+    ]
+    if mensaje:
+        body_lines.extend(["", mensaje])
+    body_lines.extend(
+        [
+            "",
+            "Si tienes dudas, responde a este correo para ayudarte.",
+            "",
+            "Equipo Tal-IA",
+        ]
+    )
+    return "\n".join(body_lines)
+
+
+def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
+    if not jwt_token:
+        return None
+    try:
+        import base64
+        import hashlib
+        import hmac
+
+        secret = getattr(settings, "supabase_jwt_secret", None) or getattr(
+            settings, "supabase_legacy_jwt_secret", None
+        )
+        if not secret:
+            return None
+        header_b64, payload_b64, signature_b64 = jwt_token.split(".")
+
+        def b64url_decode(value: str) -> bytes:
+            rem = len(value) % 4
+            if rem:
+                value += "=" * (4 - rem)
+            return base64.urlsafe_b64decode(value.encode())
+
+        signing_input = f"{header_b64}.{payload_b64}".encode()
+        expected = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+        provided = b64url_decode(signature_b64)
+        if not hmac.compare_digest(expected, provided):
+            return None
+
+        payload = json.loads(b64url_decode(payload_b64).decode("utf-8"))
+        sub = payload.get("sub")
+        return str(sub) if sub else None
+    except Exception:
+        return None
+
+
+def _resolve_portal_email_recipients(
+    payload: ClientePortalLinkPayload,
+    cliente: dict[str, Any] | None,
+) -> list[str]:
+    recipients = _normalize_email_list(payload.correo_destinatarios or [])
+    contact_email = _cliente_contact_email(cliente)
+    if contact_email:
+        lowered = contact_email.lower()
+        if lowered not in {item.lower() for item in recipients}:
+            recipients.append(contact_email)
+    return recipients
+
+
+async def _resolve_portal_session(
+    *,
+    repo: CRMRepository,
+    portal_token: str,
+    request: Request | None = None,
+    include_relations: bool = False,
+) -> dict[str, Any]:
+    row = await repo.get_portal_token(
+        portal_token=portal_token,
+        include_relations=include_relations,
+    )
+    row = _ensure_portal_token_active(row)
+    token_id = row.get("id")
+    if token_id:
+        await repo.touch_portal_token(
+            token_id=UUID(str(token_id)),
+            usos=int(row.get("usos") or 0) + 1,
+            ip=_request_ip(request),
+        )
+    cliente = row.get("cliente")
+    if cliente is not None:
+        row["cliente"] = _single_related(cliente)
+    return row
 
 
 DATE_RANGE_PRESETS: dict[str, timedelta] = {
@@ -2387,6 +2748,400 @@ async def cancel_agenda_booking(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"ok": True, "booking": booking}
+
+
+@router.get("/leads/{lead_id}/cliente")
+async def obtener_cliente_de_lead(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    lead_id: UUID,
+) -> dict[str, Any]:
+    cliente = await repo.get_cliente_por_lead(usuario_token=user_token, lead_id=lead_id)
+    return {"ok": True, "cliente": cliente}
+
+
+@router.post("/leads/{lead_id}/convertir")
+async def convertir_lead_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    lead_id: UUID,
+    payload: LeadConversionPayload,
+) -> dict[str, Any]:
+    await repo.convert_lead_en_cliente(
+        usuario_token=user_token,
+        lead_id=lead_id,
+        forzar=payload.forzar,
+    )
+    cliente = await repo.get_cliente_por_lead(usuario_token=user_token, lead_id=lead_id)
+    return {"ok": True, "cliente": cliente}
+
+
+@router.patch("/clientes/{cliente_id}")
+async def actualizar_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    payload: ClienteFiscalUpdatePayload,
+) -> dict[str, Any]:
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "cliente": None}
+    cliente = await repo.update_cliente(
+        cliente_id=cliente_id,
+        payload=updates,
+        usuario_token=user_token,
+    )
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    return {"ok": True, "cliente": cliente}
+
+
+@router.post("/clientes/{cliente_id}/documentos")
+async def registrar_documento_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    payload: ClienteDocumentoPayload,
+) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True)
+    body["cliente_id"] = str(cliente_id)
+    body.setdefault("estado", ClienteDocumentoEstado.PENDIENTE.value)
+    user_id = _jwt_verify_and_sub(user_token)
+    if user_id:
+        body.setdefault("cargado_por", user_id)
+    documento = await repo.create_cliente_document(
+        payload=body,
+        usuario_token=user_token,
+    )
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/clientes/{cliente_id}/documentos/upload")
+async def subir_documento_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    tipo: ClienteDocumentoTipo = Form(...),
+    descripcion: str | None = Form(default=None),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    try:
+        upload = await storage.upload_cliente_document(
+            file=file,
+            cliente_id=str(cliente_id),
+            document_type=tipo.value,
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="document_upload_failed") from exc
+
+    user_id = _jwt_verify_and_sub(user_token)
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "tipo": tipo.value,
+        "estado": ClienteDocumentoEstado.RECIBIDO.value,
+        "descripcion": descripcion,
+        "storage_path": upload.get("path"),
+        "storage_url": upload.get("url"),
+        "metadatos": {
+            "nombre": upload.get("name"),
+            "mime": upload.get("mime"),
+            "size": upload.get("size"),
+        },
+    }
+    if user_id:
+        body["cargado_por"] = user_id
+
+    documento = await repo.create_cliente_document(
+        payload=body,
+        usuario_token=user_token,
+    )
+    return {"ok": True, "documento": documento}
+
+
+@router.patch("/clientes/{cliente_id}/documentos/{documento_id}")
+async def actualizar_documento_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    documento_id: UUID,
+    payload: ClienteDocumentoUpdatePayload,
+) -> dict[str, Any]:
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "documento": None}
+    user_id = _jwt_verify_and_sub(user_token)
+    if updates.get("estado") == ClienteDocumentoEstado.VALIDADO.value and user_id:
+        updates.setdefault("validado_por", user_id)
+        updates.setdefault("validado_en", datetime.now(timezone.utc).isoformat())
+    documento = await repo.update_cliente_document(
+        cliente_id=cliente_id,
+        documento_id=documento_id,
+        payload=updates,
+        usuario_token=user_token,
+    )
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/clientes/{cliente_id}/responsables")
+async def crear_responsable_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    payload: ClienteResponsablePayload,
+) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True)
+    body["cliente_id"] = str(cliente_id)
+    responsable = await repo.create_cliente_responsable(
+        payload=body,
+        usuario_token=user_token,
+    )
+    return {"ok": True, "responsable": responsable}
+
+
+@router.patch("/clientes/{cliente_id}/responsables/{responsable_id}")
+async def actualizar_responsable_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    responsable_id: UUID,
+    payload: ClienteResponsableUpdatePayload,
+) -> dict[str, Any]:
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "responsable": None}
+    responsable = await repo.update_cliente_responsable(
+        cliente_id=cliente_id,
+        responsable_id=responsable_id,
+        payload=updates,
+        usuario_token=user_token,
+    )
+    return {"ok": True, "responsable": responsable}
+
+
+@router.post("/clientes/{cliente_id}/portal-links")
+async def crear_link_portal_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    cliente_id: UUID,
+    payload: ClientePortalLinkPayload,
+) -> dict[str, Any]:
+    cliente_data = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    portal_token = secrets.token_urlsafe(32)
+    expira = payload.expira_en or _portal_default_expiration()
+    user_id = _jwt_verify_and_sub(user_token)
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "token": portal_token,
+        "expira_en": _serialize_datetime(expira),
+        "nota": payload.nota,
+        "metadata": payload.metadatos or {},
+    }
+    if user_id:
+        body["creado_por"] = user_id
+
+    registro = await repo.create_portal_token(
+        usuario_token=user_token,
+        payload=body,
+    )
+    link = _build_portal_link(portal_token)
+    email_summary: dict[str, Any] = {
+        "attempted": payload.enviar_correo,
+        "sent": False,
+        "recipients": [],
+    }
+    if payload.enviar_correo:
+        recipients = _resolve_portal_email_recipients(payload, cliente_data)
+        if recipients:
+            subject = payload.correo_asunto or _portal_email_subject(cliente_data)
+            body_text = _portal_email_body(cliente_data, link, payload.correo_mensaje)
+            try:
+                await asyncio.to_thread(
+                    send_email,
+                    subject=subject,
+                    body_text=body_text,
+                    recipients=recipients,
+                )
+                email_summary.update({"sent": True, "recipients": recipients, "subject": subject})
+            except EmailSendError as exc:
+                raise HTTPException(status_code=502, detail="portal_email_send_failed") from exc
+        else:
+            email_summary["reason"] = "missing_recipient"
+
+    return {
+        "ok": True,
+        "link": link,
+        "token": portal_token,
+        "registro": _sanitize_portal_session(registro),
+        "email": email_summary,
+    }
+
+
+@router.get("/portal/clientes/{portal_token}")
+async def portal_cliente_estado(
+    portal_token: str,
+    request: Request,
+    repo: CRMRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    session = await _resolve_portal_session(
+        repo=repo,
+        portal_token=portal_token,
+        request=request,
+        include_relations=True,
+    )
+    cliente = session.get("cliente")
+    if not cliente:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    return {
+        "ok": True,
+        "portal": _sanitize_portal_session(session),
+        "cliente": cliente,
+        "documentos_requeridos": PORTAL_DOCUMENT_REQUIREMENTS,
+    }
+
+
+@router.patch("/portal/clientes/{portal_token}/fiscales")
+async def portal_actualizar_cliente(
+    portal_token: str,
+    payload: ClienteFiscalUpdatePayload,
+    request: Request,
+    repo: CRMRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    session = await _resolve_portal_session(
+        repo=repo,
+        portal_token=portal_token,
+        request=request,
+        include_relations=False,
+    )
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    updates = payload.model_dump(exclude_none=True)
+    if updates:
+        await repo.update_cliente(
+            cliente_id=UUID(str(cliente_id)),
+            payload=updates,
+            usuario_token=None,
+        )
+    refreshed = await repo.get_cliente_por_id_service(cliente_id=UUID(str(cliente_id)))
+    return {"ok": True, "cliente": refreshed}
+
+
+@router.post("/portal/clientes/{portal_token}/documentos/upload")
+async def portal_subir_documento_cliente(
+    portal_token: str,
+    request: Request,
+    repo: CRMRepository = Depends(get_repository),
+    tipo: ClienteDocumentoTipo = Form(...),
+    descripcion: str | None = Form(default=None),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    session = await _resolve_portal_session(
+        repo=repo,
+        portal_token=portal_token,
+        request=request,
+        include_relations=False,
+    )
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    try:
+        upload = await storage.upload_cliente_document(
+            file=file,
+            cliente_id=str(cliente_id),
+            document_type=tipo.value,
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="document_upload_failed") from exc
+
+    body: dict[str, Any] = {
+        "cliente_id": str(cliente_id),
+        "tipo": tipo.value,
+        "estado": ClienteDocumentoEstado.RECIBIDO.value,
+        "descripcion": descripcion,
+        "storage_path": upload.get("path"),
+        "storage_url": upload.get("url"),
+        "metadatos": {
+            "nombre": upload.get("name"),
+            "mime": upload.get("mime"),
+            "size": upload.get("size"),
+            "fuente": "portal_cliente",
+            "portal_token_id": session.get("id"),
+        },
+    }
+    documento = await repo.create_cliente_document(
+        payload=body,
+        usuario_token=None,
+    )
+    return {"ok": True, "documento": documento}
+
+
+@router.post("/portal/clientes/{portal_token}/responsables")
+async def portal_agregar_responsable(
+    portal_token: str,
+    payload: ClienteResponsablePayload,
+    request: Request,
+    repo: CRMRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    session = await _resolve_portal_session(
+        repo=repo,
+        portal_token=portal_token,
+        request=request,
+        include_relations=False,
+    )
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    body = payload.model_dump(exclude_none=True)
+    body["cliente_id"] = str(cliente_id)
+    body.setdefault("metadatos", {})
+    body["metadatos"]["fuente"] = "portal_cliente"
+    responsable = await repo.create_cliente_responsable(
+        payload=body,
+        usuario_token=None,
+    )
+    return {"ok": True, "responsable": responsable}
+
+
+@router.patch("/portal/clientes/{portal_token}/responsables/{responsable_id}")
+async def portal_actualizar_responsable(
+    portal_token: str,
+    responsable_id: UUID,
+    payload: ClienteResponsableUpdatePayload,
+    request: Request,
+    repo: CRMRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    session = await _resolve_portal_session(
+        repo=repo,
+        portal_token=portal_token,
+        request=request,
+        include_relations=False,
+    )
+    cliente_ref = session.get("cliente") or {}
+    cliente_id = cliente_ref.get("id")
+    if not cliente_id:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return {"ok": True, "responsable": None}
+    responsable = await repo.update_cliente_responsable(
+        cliente_id=UUID(str(cliente_id)),
+        responsable_id=responsable_id,
+        payload=updates,
+        usuario_token=None,
+    )
+    return {"ok": True, "responsable": responsable}
 
 
 @router.post("/prospeccion/google/busquedas")

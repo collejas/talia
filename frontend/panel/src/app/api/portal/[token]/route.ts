@@ -29,7 +29,7 @@ export async function GET(
     const message = error instanceof Error ? error.message : "backend_not_configured";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-  const response = await fetch(`${baseUrl}/portal/clientes/${token}`, {
+    const response = await fetch(`${baseUrl}/crm/portal/clientes/${token}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import UUID
 
@@ -45,6 +45,29 @@ class CRMRepository:
             "contacto:contactos!oportunidades_contacto_principal_id_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado)",
             "cuenta:cuentas!oportunidades_cuenta_id_fkey(id,nombre,telefono,correo)",
         ]
+    )
+
+    _CLIENTE_SELECT = (
+        "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
+        "razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,"
+        "fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
+        "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
+        "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
+        "storage_path,metadatos,creado_en,actualizado_en),"
+        "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
+        "es_responsable_principal,metadatos,creado_en,actualizado_en)"
+    )
+
+    _PORTAL_TOKEN_SELECT = (
+        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
+        "ultimo_acceso_ip,creado_en,actualizado_en,"
+        f"cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_CLIENTE_SELECT})"
+    )
+
+    _PORTAL_TOKEN_MIN_SELECT = (
+        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
+        "ultimo_acceso_ip,creado_en,actualizado_en,"
+        "cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
     )
 
     _HISTORY_SELECT = ",".join(
@@ -1571,11 +1594,7 @@ class CRMRepository:
             "rol.codigo": f"eq.{role_code}",
             "limit": "1",
         }
-        resp = await self._request(
-            "GET",
-            "/rest/v1/usuarios_roles",
-            params=params,
-        )
+        resp = await self._request("GET", "/rest/v1/usuarios_roles", params=params)
         data = resp.json() or []
         if isinstance(data, list):
             for row in data:
@@ -1587,6 +1606,300 @@ class CRMRepository:
             if isinstance(role, dict) and role.get("codigo") == role_code:
                 return True
         return False
+
+    async def get_cliente_por_lead(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "lead_tarjeta_id": f"eq.{lead_id}",
+            "select": self._CLIENTE_SELECT,
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/clientes",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        return row if isinstance(row, dict) else None
+
+    async def get_cliente_por_id(
+        self,
+        *,
+        usuario_token: str,
+        cliente_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{cliente_id}",
+            "select": self._CLIENTE_SELECT,
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/clientes",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        return row if isinstance(row, dict) else None
+
+    async def get_cliente_por_id_service(
+        self,
+        *,
+        cliente_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{cliente_id}",
+            "select": self._CLIENTE_SELECT,
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/clientes", params=params)
+        data = resp.json() or []
+        row = self._first_row(data)
+        return row if isinstance(row, dict) else None
+
+    async def update_cliente(
+        self,
+        *,
+        cliente_id: UUID,
+        payload: dict[str, Any],
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        params = {"id": f"eq.{cliente_id}"}
+        request = (
+            self._request_with_user(
+                "PATCH",
+                "/rest/v1/clientes",
+                token=usuario_token,
+                params=params,
+                json=payload,
+                prefer="return=representation",
+            )
+            if usuario_token
+            else self._request(
+                "PATCH",
+                "/rest/v1/clientes",
+                params=params,
+                json=payload,
+                prefer="return=representation",
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        return row if isinstance(row, dict) else None
+
+    async def convert_lead_en_cliente(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+        forzar: bool = False,
+    ) -> Any:
+        body = {"p_tarjeta_id": str(lead_id), "p_forzar": forzar}
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/convertir_lead_en_cliente",
+            token=usuario_token,
+            json=body,
+        )
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise CRMRepositoryError("convertir_lead_response_invalid") from exc
+
+    async def create_cliente_document(
+        self,
+        *,
+        payload: dict[str, Any],
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        request = (
+            self._request_with_user(
+                "POST",
+                "/rest/v1/cliente_documentos",
+                token=usuario_token,
+                json=payload,
+                prefer="return=representation",
+            )
+            if usuario_token
+            else self._request(
+                "POST",
+                "/rest/v1/cliente_documentos",
+                json=payload,
+                prefer="return=representation",
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("documento_not_created")
+        return row
+
+    async def update_cliente_document(
+        self,
+        *,
+        cliente_id: UUID,
+        documento_id: UUID,
+        payload: dict[str, Any],
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{documento_id}", "cliente_id": f"eq.{cliente_id}"}
+        request = (
+            self._request_with_user(
+                "PATCH",
+                "/rest/v1/cliente_documentos",
+                token=usuario_token,
+                params=params,
+                json=payload,
+                prefer="return=representation",
+            )
+            if usuario_token
+            else self._request(
+                "PATCH",
+                "/rest/v1/cliente_documentos",
+                params=params,
+                json=payload,
+                prefer="return=representation",
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("documento_not_found")
+        return row
+
+    async def create_cliente_responsable(
+        self,
+        *,
+        payload: dict[str, Any],
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        request = (
+            self._request_with_user(
+                "POST",
+                "/rest/v1/cliente_responsables",
+                token=usuario_token,
+                json=payload,
+                prefer="return=representation",
+            )
+            if usuario_token
+            else self._request(
+                "POST",
+                "/rest/v1/cliente_responsables",
+                json=payload,
+                prefer="return=representation",
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("responsable_not_created")
+        return row
+
+    async def update_cliente_responsable(
+        self,
+        *,
+        cliente_id: UUID,
+        responsable_id: UUID,
+        payload: dict[str, Any],
+        usuario_token: str | None = None,
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{responsable_id}", "cliente_id": f"eq.{cliente_id}"}
+        request = (
+            self._request_with_user(
+                "PATCH",
+                "/rest/v1/cliente_responsables",
+                token=usuario_token,
+                params=params,
+                json=payload,
+                prefer="return=representation",
+            )
+            if usuario_token
+            else self._request(
+                "PATCH",
+                "/rest/v1/cliente_responsables",
+                params=params,
+                json=payload,
+                prefer="return=representation",
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("responsable_not_found")
+        return row
+
+    async def create_portal_token(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/cliente_portal_tokens",
+            token=usuario_token,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("portal_token_create_failed")
+        return row
+
+    async def get_portal_token(
+        self,
+        *,
+        portal_token: str,
+        include_relations: bool = True,
+    ) -> dict[str, Any] | None:
+        params = {
+            "token": f"eq.{portal_token}",
+            "select": self._PORTAL_TOKEN_SELECT
+            if include_relations
+            else self._PORTAL_TOKEN_MIN_SELECT,
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/cliente_portal_tokens",
+            params=params,
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        return row if isinstance(row, dict) else None
+
+    async def touch_portal_token(
+        self,
+        *,
+        token_id: UUID,
+        usos: int,
+        ip: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "usos": usos,
+            "ultimo_acceso_en": datetime.now(timezone.utc).isoformat(),
+        }
+        if ip:
+            payload["ultimo_acceso_ip"] = ip
+        await self._request(
+            "PATCH",
+            "/rest/v1/cliente_portal_tokens",
+            params={"id": f"eq.{token_id}"},
+            json=payload,
+        )
 
     async def create_prospeccion_busqueda(
         self,
@@ -1862,6 +2175,12 @@ class CRMRepository:
         except ValueError:
             return None
         return total_value if total_value >= 0 else None
+
+    @staticmethod
+    def _first_row(data: Any) -> Any:
+        if isinstance(data, list):
+            return data[0] if data else None
+        return data
 
     async def _request(
         self,

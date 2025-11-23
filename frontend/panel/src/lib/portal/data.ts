@@ -5,7 +5,7 @@ import type { PortalEstadoResponse } from "@/types/clientes";
 
 export async function loadPortalEstado(token: string): Promise<PortalEstadoResponse> {
   const baseUrl = getPanelApiBaseUrl();
-  const response = await fetch(`${baseUrl}/portal/clientes/${token}`, {
+  const response = await fetch(`${baseUrl}/crm/portal/clientes/${token}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
