@@ -260,159 +260,43 @@ async def upsert_conversation_insights(
     siguiente_accion: str | None = None,
 ) -> None:
     """Actualiza o inserta insights de conversación."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/conversaciones_insights"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates",
-    }
-    payload: dict[str, Any] = {"conversacion_id": conversation_id}
-    if resumen is not None:
-        payload["resumen"] = resumen
-    if intencion is not None:
-        payload["intencion"] = intencion
-    if siguiente_accion is not None:
-        payload["siguiente_accion"] = siguiente_accion
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al guardar insights de conversación: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al guardar insights de conversación"
-            f" (status={response.status_code}, body={response.text!r})"
+        await repo.upsert_conversation_insights(
+            conversation_id=conversation_id,
+            resumen=resumen,
+            intencion=intencion,
+            siguiente_accion=siguiente_accion,
         )
-        logger.error(msg)
-        raise StorageError(msg)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def get_manual_override(conversation_id: str) -> bool:
     """Indica si la conversación está en modo manual (sin asistente)."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/conversaciones_controles"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    params = {
-        "select": "manual_override",
-        "conversacion_id": f"eq.{conversation_id}",
-        "limit": "1",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar controles de conversación: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar controles de conversación"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json() or []
-    if not isinstance(data, list) or not data:
-        return False
-    row = data[0]
-    return bool(row.get("manual_override"))
+        return await repo.get_manual_override(conversation_id=conversation_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_manual_overrides(conversation_ids: list[str]) -> dict[str, bool]:
     """Obtiene flags manual_override para un conjunto de conversaciones."""
-    if not conversation_ids:
-        return {}
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/conversaciones_controles"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    ids = ",".join(str(cid) for cid in conversation_ids)
-    params = {
-        "select": "conversacion_id,manual_override",
-        "conversacion_id": f"in.({ids})",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar controles de conversación: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar controles de conversación"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json() or []
-    if not isinstance(data, list):
-        return {}
-    result: dict[str, bool] = {}
-    for row in data:
-        cid = row.get("conversacion_id")
-        if cid:
-            result[str(cid)] = bool(row.get("manual_override"))
-    return result
+        return await repo.fetch_manual_overrides(conversation_ids=conversation_ids)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def set_manual_override(conversation_id: str, manual: bool) -> None:
     """Activa o desactiva el modo manual para una conversación."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/conversaciones_controles"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation,resolution=merge-duplicates",
-    }
-    payload = {
-        "conversacion_id": conversation_id,
-        "manual_override": manual,
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al actualizar controles de conversación: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al actualizar controles de conversación"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
+        await repo.set_manual_override(conversation_id=conversation_id, manual=manual)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list[dict[str, Any]]:
@@ -420,39 +304,11 @@ async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list
 
     Retorna elementos con claves: direccion (entrante/saliente), texto, creado_en, datos.
     """
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/mensajes"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-    }
-    params = {
-        "select": "id,direccion,texto,creado_en,datos,attachments:adjuntos(id,url,mime,tamano_bytes,size_bytes,proveedor_id,nombre,path)",
-        "conversacion_id": f"eq.{conversation_id}",
-        "order": "creado_en.asc",
-        "limit": str(limit),
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:  # pragma: no cover
-        msg = f"Error de red al consultar mensajes: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al obtener mensajes"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-    data = response.json() or []
-    if not isinstance(data, list):
-        return []
-    return data  # type: ignore[return-value]
+        return await repo.fetch_recent_messages(conversation_id=conversation_id, limit=limit)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def upload_webchat_attachment(
@@ -462,9 +318,6 @@ async def upload_webchat_attachment(
     conversation_id: str | None,
 ) -> dict[str, Any]:
     """Sube un adjunto al bucket `webchat` y devuelve metadatos normalizados."""
-
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
 
     content = await file.read()
     if not content:
@@ -476,43 +329,18 @@ async def upload_webchat_attachment(
     prefix = conversation_id or session_id or "general"
     key = f"{prefix}/{uuid4().hex}{extension}"
 
-    base_url = settings.supabase_url.rstrip("/")
-    upload_url = f"{base_url}/storage/v1/object/webchat/{key}"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": file.content_type or "application/octet-stream",
-    }
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                upload_url,
-                headers=headers,
-                content=content,
-                params={"upsert": "true"},
-            )
-    except httpx.RequestError as exc:  # pragma: no cover - errores de red reales
-        msg = f"Error de red al subir adjunto: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al guardar adjunto"
-            f" (status={response.status_code}, body={response.text!r})"
+        public_path = await repo.upload_webchat_object(
+            object_key=key,
+            content=content,
+            content_type=file.content_type,
         )
-        logger.error(msg)
-        raise StorageError(msg)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
-    public_path = (
-        response.json().get("Key")
-        if response.headers.get("content-type") == "application/json"
-        else None
-    )
-    if not public_path:
-        public_path = f"webchat/{key}" if not str(key).startswith("webchat/") else key
-    public_url = f"{base_url}/storage/v1/object/public/{public_path}"
+    base_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
+    public_url = f"{base_url}/storage/v1/object/public/{public_path}" if base_url else public_path
 
     return {
         "url": public_url,

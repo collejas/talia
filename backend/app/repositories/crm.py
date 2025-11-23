@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 from uuid import UUID
 
 import httpx
@@ -1320,6 +1320,144 @@ class CRMRepository:
         if not isinstance(row, dict):
             return None
         return row
+
+    async def upsert_conversation_insights(
+        self,
+        *,
+        conversation_id: str,
+        resumen: str | None = None,
+        intencion: str | None = None,
+        siguiente_accion: str | None = None,
+    ) -> None:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+        payload: dict[str, Any] = {"conversacion_id": conversation_key}
+        if resumen is not None:
+            payload["resumen"] = resumen
+        if intencion is not None:
+            payload["intencion"] = intencion
+        if siguiente_accion is not None:
+            payload["siguiente_accion"] = siguiente_accion
+        await self._request(
+            "POST",
+            "/rest/v1/conversaciones_insights",
+            json=payload,
+            prefer="resolution=merge-duplicates",
+        )
+
+    async def get_manual_override(self, *, conversation_id: str) -> bool:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            return False
+        params = {
+            "select": "manual_override",
+            "conversacion_id": f"eq.{conversation_key}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones_controles", params=params)
+        data = resp.json() or []
+        row: Any
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return False
+        return bool(row.get("manual_override"))
+
+    async def fetch_manual_overrides(self, *, conversation_ids: Sequence[str]) -> dict[str, bool]:
+        cleaned = [cid.strip() for cid in conversation_ids if cid and cid.strip()]
+        if not cleaned:
+            return {}
+        params = {
+            "select": "conversacion_id,manual_override",
+            "conversacion_id": f"in.({','.join(cleaned)})",
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones_controles", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            return {}
+        result: dict[str, bool] = {}
+        for row in data:
+            if isinstance(row, dict):
+                cid = row.get("conversacion_id")
+                if cid:
+                    result[str(cid)] = bool(row.get("manual_override"))
+        return result
+
+    async def set_manual_override(self, *, conversation_id: str, manual: bool) -> None:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+        payload = {"conversacion_id": conversation_key, "manual_override": manual}
+        await self._request(
+            "POST",
+            "/rest/v1/conversaciones_controles",
+            json=payload,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+
+    async def fetch_recent_messages(
+        self, *, conversation_id: str, limit: int = 8
+    ) -> list[dict[str, Any]]:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            return []
+        params = {
+            "select": "id,direccion,texto,creado_en,datos,"
+            "attachments:adjuntos(id,url,mime,tamano_bytes,size_bytes,proveedor_id,nombre,path)",
+            "conversacion_id": f"eq.{conversation_key}",
+            "order": "creado_en.asc",
+            "limit": str(max(1, limit)),
+        }
+        resp = await self._request("GET", "/rest/v1/mensajes", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            return []
+        return data  # type: ignore[return-value]
+
+    async def upload_webchat_object(
+        self,
+        *,
+        object_key: str,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> str:
+        key = object_key.lstrip("/")
+        if not key:
+            raise CRMRepositoryError("object_key_required")
+        url = f"{self._base_url}/storage/v1/object/webchat/{key}"
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+            "Content-Type": content_type or "application/octet-stream",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(
+                    url, headers=headers, content=content, params={"upsert": "true"}
+                )
+        except httpx.RequestError as exc:
+            raise CRMRepositoryError(f"Error de red al subir adjunto webchat: {exc}") from exc
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} al subir adjunto webchat: {resp.text}"
+            )
+        public_path: str | None = None
+        content_type_header = (resp.headers.get("content-type") or "").lower()
+        if "application/json" in content_type_header:
+            try:
+                payload = resp.json()
+            except ValueError:
+                payload = {}
+            if isinstance(payload, dict):
+                public_path = payload.get("Key")
+        if not public_path:
+            public_path = f"webchat/{key}" if not key.startswith("webchat/") else key
+        return public_path
 
     async def record_webchat_session_closure(self, *, session_id: str) -> None:
         session_key = session_id.strip()

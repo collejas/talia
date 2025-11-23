@@ -70,6 +70,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
 
@@ -90,7 +91,10 @@ npm run dev
 http://127.0.0.1:3000/dashboard
 http://127.0.0.1:3000/auth/login
 
+# Test
 poetry run pytest
+
+poetry run ruff check . (backend)
 
 
 # Bse de datos
