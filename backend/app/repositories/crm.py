@@ -1006,6 +1006,44 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al actualizar contacto: {row!r}")
         return row
 
+    async def create_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/contactos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el contacto creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear contacto: {row!r}")
+        return row
+
+    async def delete_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+    ) -> None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{contacto_id}",
+        }
+        await self._request(
+            "DELETE",
+            "/rest/v1/contactos",
+            params=params,
+            prefer="return=representation",
+        )
+
     @staticmethod
     def _extract_total_count(content_range: str | None) -> int | None:
         if not content_range or "/" not in content_range:

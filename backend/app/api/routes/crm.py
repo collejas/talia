@@ -185,8 +185,22 @@ class CRMContact(BaseModel):
     notes: str | None = None
     necesidad_proposito: str | None = None
     estado: str | None = None
+    origen: str | None = None
     metadata: dict[str, Any] | None = None
     actualizado_en: datetime | None = None
+
+
+class CRMContactCreate(BaseModel):
+    nombre_completo: str | None = Field(default=None, max_length=160)
+    correo: str | None = Field(default=None, max_length=255)
+    telefono_e164: str | None = Field(default=None, max_length=32)
+    company_name: str | None = Field(default=None, max_length=160)
+    notes: str | None = Field(default=None, max_length=2000)
+    necesidad_proposito: str | None = Field(default=None, max_length=2000)
+    estado: str | None = Field(default=None, max_length=80)
+    propietario_usuario_id: UUID | None = None
+    origen: str | None = Field(default=None, max_length=80)
+    metadata: dict[str, Any] | None = None
 
 
 class CRMContactUpdate(BaseModel):
@@ -950,6 +964,24 @@ async def search_contacts(
     return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
 
 
+@router.post("/contacts", response_model=CRMContact, status_code=status.HTTP_201_CREATED)
+async def create_contact(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMContactCreate,
+) -> CRMContact:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.create_contact(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMContact.model_validate(row)
+
+
 @router.patch(
     "/contacts/{contacto_id}",
     response_model=CRMContact,
@@ -973,6 +1005,27 @@ async def update_contact(
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMContact.model_validate(row)
+
+
+@router.delete(
+    "/contacts/{contacto_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_contact(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    contacto_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/actividades", response_model=CRMActivitiesResponse)

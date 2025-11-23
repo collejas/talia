@@ -9,7 +9,6 @@ import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
 import { callCrmApi } from "@/lib/api/crm";
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { callSupabaseRest } from "@/lib/leads/supabase";
 import type {
   EmbudoCard,
   EmbudoStage,
@@ -83,10 +82,6 @@ export type ScheduleLeadDemoInput = {
 export type ScheduleLeadDemoResult =
   | { ok: true; booking: CalendarBookingResponseRow }
   | { ok: false; error: string };
-
-type ContactInsertRow = {
-  id: string;
-};
 
 export type ContactSearchResult = {
   id: string;
@@ -315,47 +310,32 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
     logDebug("build-contact-payload", { insertKeys: Object.keys(contactInsertPayload) });
 
-    let contactResult;
-    try {
-      contactResult = await callSupabaseRest<ContactInsertRow[]>("contactos", {
-        method: "POST",
-        headers: { Prefer: "return=representation" },
-        body: contactInsertPayload,
-      });
-    } catch (error) {
-      console.error(`${LOG_PREFIX} contactos-insert-error`, {
-        error: error instanceof Error ? error.message : String(error),
-        payload: contactInsertPayload,
-      });
-      throw error;
-    }
+    const contactResult = await callCrmApi<CrmContact>("/crm/contacts", {
+      method: "POST",
+      body: contactInsertPayload,
+    });
 
     if (!contactResult.ok) {
       console.error(`${LOG_PREFIX} contactos-insert-failed`, {
         error: contactResult.error,
         payload: contactInsertPayload,
       });
-      return { ok: false, error: contactResult.error };
+      return { ok: false, error: contactResult.error || "No se pudo crear el contacto del lead." };
     }
-
-    const contactRow = Array.isArray(contactResult.data)
-      ? (contactResult.data[0] as ContactInsertRow | undefined)
-      : undefined;
-    if (!contactRow?.id) {
+    if (!contactResult.data?.id) {
       console.error(`${LOG_PREFIX} contactos-insert-missing-id`, { payload: contactInsertPayload });
       return { ok: false, error: "No se pudo crear el contacto del lead." };
     }
-    contactId = contactRow.id;
-    createdContactId = contactRow.id;
+
+    contactId = contactResult.data.id;
+    createdContactId = contactResult.data.id;
     logDebug("contact-created", { contactId });
   }
 
   if (Object.keys(contactUpdatePayload).length) {
     logDebug("contact-update", { contactId, fields: Object.keys(contactUpdatePayload) });
-    const updateResult = await callSupabaseRest("contactos", {
+    const updateResult = await callCrmApi<CrmContact>(`/crm/contacts/${contactId}`, {
       method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      query: { id: `eq.${contactId}` },
       body: contactUpdatePayload,
     });
     if (!updateResult.ok) {
@@ -367,6 +347,8 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
       return { ok: false, error: updateResult.error };
     }
   }
+
+  removeUndefined(contactUpdatePayload);
 
   const cardPayload = input.tarjeta ?? {};
   const baseMetadata = normalizeMetadata(cardPayload.metadata);
@@ -407,10 +389,8 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   if (!response.ok) {
     console.error(`${LOG_PREFIX} opportunity-create-failed`, { error: response.error, opportunityPayload });
     if (createdContactId) {
-      await callSupabaseRest("contactos", {
+      await callCrmApi(`/crm/contacts/${createdContactId}`, {
         method: "DELETE",
-        headers: { Prefer: "return=minimal" },
-        query: { id: `eq.${createdContactId}` },
       }).catch(() => undefined);
     }
     return { ok: false, error: response.error };
