@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { callSupabaseRest } from "@/lib/leads/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 
-const TABLE_PATH = "panel_email_templates";
 const DEFAULT_SLUG = "default";
 
 export type EmailTemplateResource = {
@@ -142,23 +141,19 @@ function normalizeSettings(record: Record<string, unknown> | null | undefined): 
 }
 
 export async function fetchEmailTemplateSettings(): Promise<EmailTemplateSettings> {
-  const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
-    query: {
-      slug: `eq.${DEFAULT_SLUG}`,
-      limit: 1,
-      select:
-        "slug,intro,highlights,resources,closing,use_summary,use_highlights,use_resources,signature_salutation,signature,updated_at",
-    },
-  });
+  const response = await callCrmApi<Record<string, unknown>>("/crm/settings/email-template");
 
   if (!response.ok) {
     console.warn("[settings] fetch email template failed:", response.error);
     return cloneDefaultSettings();
   }
 
-  const rows = Array.isArray(response.data) ? response.data : [];
-  const record = (rows[0] as Record<string, unknown> | undefined) ?? null;
-  return normalizeSettings(record);
+  if (!response.data) {
+    console.warn("[settings] fetch email template failed: respuesta vacía");
+    return cloneDefaultSettings();
+  }
+
+  return normalizeSettings(response.data);
 }
 
 export async function saveEmailTemplateSettings(
@@ -186,22 +181,19 @@ export async function saveEmailTemplateSettings(
       input.signature.trim().length > 0 ? input.signature.trim() : DEFAULT_SETTINGS.signature,
   };
 
-  const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
-    method: "POST",
-    headers: {
-      Prefer: "return=representation,resolution=merge-duplicates",
-    },
+  const response = await callCrmApi<Record<string, unknown>>("/crm/settings/email-template", {
+    method: "PUT",
     body: payload,
   });
 
   if (!response.ok) {
-    throw new Error(response.error);
+    throw new Error(response.error || "No se pudo guardar la plantilla.");
   }
-
-  const rows = Array.isArray(response.data) ? response.data : [];
-  const record = (rows[0] as Record<string, unknown> | undefined) ?? payload;
+  if (!response.data) {
+    throw new Error("No se pudo guardar la plantilla.");
+  }
 
   revalidatePath("/settings/email");
 
-  return normalizeSettings(record);
+  return normalizeSettings(response.data);
 }

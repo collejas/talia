@@ -1136,6 +1136,150 @@ class CRMRepository:
             payload={k: v for k, v in payload.items() if v is not None},
         )
 
+    async def get_email_template(
+        self,
+        *,
+        slug: str,
+    ) -> dict[str, Any] | None:
+        params = {
+            "slug": f"eq.{slug}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/panel_email_templates",
+            params=params,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener template de correo: {row!r}")
+        return row
+
+    async def upsert_email_template(
+        self,
+        *,
+        slug: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"slug": slug, **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/panel_email_templates",
+            params={"on_conflict": "slug"},
+            json=body,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el template de correo actualizado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar template de correo: {row!r}"
+            )
+        return row
+
+    async def get_quote_template(
+        self,
+        *,
+        slug: str,
+    ) -> dict[str, Any] | None:
+        params = {
+            "slug": f"eq.{slug}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/quote_templates",
+            params=params,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener template de cotización: {row!r}"
+            )
+        return row
+
+    async def upsert_quote_template(
+        self,
+        *,
+        slug: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"slug": slug, **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/quote_templates",
+            params={"on_conflict": "slug"},
+            json=body,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el template de cotización actualizado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar template de cotización: {row!r}"
+            )
+        return row
+
+    async def get_calendar_settings(
+        self,
+        *,
+        slug: str,
+    ) -> dict[str, Any] | None:
+        params = {
+            "slug": f"eq.{slug}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/panel_calendar_settings",
+            params=params,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener settings del calendario: {row!r}"
+            )
+        return row
+
+    async def upsert_calendar_settings(
+        self,
+        *,
+        slug: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"slug": slug, **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/panel_calendar_settings",
+            params={"on_conflict": "slug"},
+            json=body,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError(
+                "Supabase no devolvió los settings del calendario actualizados"
+            )
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar settings del calendario: {row!r}"
+            )
+        return row
+
     @staticmethod
     def _extract_total_count(content_range: str | None) -> int | None:
         if not content_range or "/" not in content_range:

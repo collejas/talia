@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { callSupabaseRest } from "@/lib/leads/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 
-const TABLE_PATH = "panel_calendar_settings";
 const DEFAULT_SLUG = "default";
 const MIN_OFFSET = 15;
 const MAX_OFFSET = 720;
@@ -48,22 +47,18 @@ function normalizeRecord(record: Record<string, unknown> | null | undefined): Re
 }
 
 export async function fetchReminderSettings(): Promise<ReminderSettings> {
-  const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
-    query: {
-      slug: `eq.${DEFAULT_SLUG}`,
-      limit: 1,
-      select: "slug,reminder_enabled,reminder_offset_minutes,updated_at",
-    },
-  });
+  const response = await callCrmApi<Record<string, unknown>>("/crm/settings/reminders");
 
   if (!response.ok) {
     console.warn("[settings] fetch reminder settings failed:", response.error);
     return DEFAULT_SETTINGS;
   }
+  if (!response.data) {
+    console.warn("[settings] fetch reminder settings failed: respuesta vacía");
+    return DEFAULT_SETTINGS;
+  }
 
-  const rows = Array.isArray(response.data) ? response.data : [];
-  const record = (rows[0] as Record<string, unknown> | undefined) ?? null;
-  return normalizeRecord(record);
+  return normalizeRecord(response.data);
 }
 
 export async function saveReminderSettings(
@@ -75,21 +70,19 @@ export async function saveReminderSettings(
     reminder_offset_minutes: normalizeOffset(input.reminderOffsetMinutes),
   };
 
-  const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
-    method: "POST",
-    headers: {
-      Prefer: "return=representation,resolution=merge-duplicates",
-    },
+  const response = await callCrmApi<Record<string, unknown>>("/crm/settings/reminders", {
+    method: "PUT",
     body: payload,
   });
 
   if (!response.ok) {
-    throw new Error(response.error);
+    throw new Error(response.error || "No se pudieron guardar los recordatorios.");
+  }
+  if (!response.data) {
+    throw new Error("No se pudieron guardar los recordatorios.");
   }
 
-  const rows = Array.isArray(response.data) ? response.data : [];
-  const record = (rows[0] as Record<string, unknown> | undefined) ?? null;
-  const normalized = normalizeRecord(record);
+  const normalized = normalizeRecord(response.data);
   revalidatePath("/settings/reminders");
   return normalized;
 }

@@ -1,8 +1,8 @@
-"use server"
+"use server";
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath } from "next/cache";
 
-import { callSupabaseRest } from "@/lib/leads/supabase"
+import { callCrmApi } from "@/lib/api/crm";
 import {
   DEFAULT_TEMPLATE_CONFIG,
   QUOTE_TEMPLATE_DEFAULTS,
@@ -13,7 +13,6 @@ import {
   type QuoteTemplateSettingsInput,
 } from "./template-schema"
 
-const TABLE_PATH = "quote_templates"
 const DEFAULT_SLUG = "default"
 
 function normalizeHighlights(value: unknown): string[] {
@@ -104,22 +103,18 @@ function normalizeSettings(record: Record<string, unknown> | null | undefined): 
 }
 
 export async function fetchQuoteTemplateSettings(): Promise<QuoteTemplateSettings> {
-  const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
-    query: {
-      slug: `eq.${DEFAULT_SLUG}`,
-      limit: 1,
-      select: "slug,nombre,descripcion,html,css,variables,config,version,is_active,updated_at",
-    },
-  })
+  const response = await callCrmApi<Record<string, unknown>>("/crm/settings/quote-template")
 
   if (!response.ok) {
     console.warn("[settings] fetch quote template failed:", response.error)
     return cloneQuoteTemplateDefaults()
   }
+  if (!response.data) {
+    console.warn("[settings] fetch quote template failed: respuesta vacía")
+    return cloneQuoteTemplateDefaults()
+  }
 
-  const rows = Array.isArray(response.data) ? response.data : []
-  const record = (rows[0] as Record<string, unknown> | undefined) ?? null
-  return normalizeSettings(record)
+  return normalizeSettings(response.data)
 }
 
 function sanitizeConfig(input: QuoteTemplateConfig): QuoteTemplateConfig {
@@ -160,25 +155,19 @@ export async function saveQuoteTemplateSettings(
     is_active: true,
   }
 
-  const response = await callSupabaseRest<unknown[]>(TABLE_PATH, {
-    method: "POST",
-    headers: {
-      Prefer: "return=representation,resolution=merge-duplicates",
-    },
-    query: {
-      on_conflict: "slug",
-    },
+  const response = await callCrmApi<Record<string, unknown>>("/crm/settings/quote-template", {
+    method: "PUT",
     body: payload,
   })
 
   if (!response.ok) {
-    throw new Error(response.error)
+    throw new Error(response.error || "No se pudo guardar el formato.")
   }
-
-  const rows = Array.isArray(response.data) ? response.data : []
-  const record = (rows[0] as Record<string, unknown> | undefined) ?? payload
+  if (!response.data) {
+    throw new Error("No se pudo guardar el formato.")
+  }
 
   revalidatePath("/settings/formato-cotizacion")
 
-  return normalizeSettings(record)
+  return normalizeSettings(response.data)
 }

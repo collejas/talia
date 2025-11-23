@@ -16,6 +16,10 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
 
+DEFAULT_TEMPLATE_SLUG = "default"
+DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
+DEFAULT_REMINDER_SLUG = "default"
+
 
 class CRMAccount(BaseModel):
     """Representación pública de una cuenta."""
@@ -225,6 +229,73 @@ class CRMContactSearchResponse(BaseModel):
     items: list[CRMContactSearchItem]
     limit: int
     offset: int
+
+
+class EmailTemplateResource(BaseModel):
+    label: str
+    url: str
+
+
+class CRMEmailTemplate(BaseModel):
+    slug: str
+    intro: str
+    closing: str
+    highlights: list[str]
+    resources: list[EmailTemplateResource]
+    use_summary: bool = True
+    use_highlights: bool = True
+    use_resources: bool = True
+    signature_salutation: str
+    signature: str
+    updated_at: datetime | None = None
+
+
+class CRMEmailTemplateUpdate(BaseModel):
+    intro: str
+    closing: str
+    highlights: list[str]
+    resources: list[EmailTemplateResource]
+    use_summary: bool = True
+    use_highlights: bool = True
+    use_resources: bool = True
+    signature_salutation: str
+    signature: str
+
+
+class CRMQuoteTemplate(BaseModel):
+    slug: str
+    nombre: str
+    descripcion: str
+    html: str
+    css: str
+    variables: list[str]
+    config: dict[str, Any]
+    version: int = 1
+    is_active: bool = True
+    updated_at: datetime | None = None
+
+
+class CRMQuoteTemplateUpdate(BaseModel):
+    nombre: str
+    descripcion: str
+    html: str
+    css: str
+    variables: list[str]
+    config: dict[str, Any]
+    version: int = 1
+    is_active: bool = True
+
+
+class CRMReminderSettings(BaseModel):
+    slug: str
+    reminder_enabled: bool
+    reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
+    updated_at: datetime | None = None
+
+
+class CRMReminderSettingsUpdate(BaseModel):
+    reminder_enabled: bool
+    reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
 
 
 class CRMPipelineHistoryItem(BaseModel):
@@ -1125,6 +1196,102 @@ async def delete_contact(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/settings/email-template", response_model=CRMEmailTemplate)
+async def get_email_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    slug: str = DEFAULT_TEMPLATE_SLUG,
+) -> CRMEmailTemplate:
+    try:
+        row = await repo.get_email_template(slug=slug)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="email_template_not_found")
+    return CRMEmailTemplate.model_validate(row)
+
+
+@router.put("/settings/email-template", response_model=CRMEmailTemplate)
+async def update_email_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    payload: CRMEmailTemplateUpdate,
+    slug: str = DEFAULT_TEMPLATE_SLUG,
+) -> CRMEmailTemplate:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.upsert_email_template(slug=slug, payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMEmailTemplate.model_validate(row)
+
+
+@router.get("/settings/quote-template", response_model=CRMQuoteTemplate)
+async def get_quote_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
+) -> CRMQuoteTemplate:
+    try:
+        row = await repo.get_quote_template(slug=slug)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="quote_template_not_found")
+    return CRMQuoteTemplate.model_validate(row)
+
+
+@router.put("/settings/quote-template", response_model=CRMQuoteTemplate)
+async def update_quote_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    payload: CRMQuoteTemplateUpdate,
+    slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
+) -> CRMQuoteTemplate:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.upsert_quote_template(slug=slug, payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMQuoteTemplate.model_validate(row)
+
+
+@router.get("/settings/reminders", response_model=CRMReminderSettings)
+async def get_reminder_settings(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    slug: str = DEFAULT_REMINDER_SLUG,
+) -> CRMReminderSettings:
+    try:
+        row = await repo.get_calendar_settings(slug=slug)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="reminder_settings_not_found")
+    return CRMReminderSettings.model_validate(row)
+
+
+@router.put("/settings/reminders", response_model=CRMReminderSettings)
+async def update_reminder_settings(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    payload: CRMReminderSettingsUpdate,
+    slug: str = DEFAULT_REMINDER_SLUG,
+) -> CRMReminderSettings:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.upsert_calendar_settings(slug=slug, payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMReminderSettings.model_validate(row)
 
 
 @router.get("/actividades", response_model=CRMActivitiesResponse)
