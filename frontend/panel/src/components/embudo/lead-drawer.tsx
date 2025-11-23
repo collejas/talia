@@ -49,6 +49,7 @@ import {
   IconMail,
   IconMessageCircle,
   IconPlus,
+  IconRobot,
   IconSearch,
   IconTargetArrow,
   IconTrash,
@@ -1737,6 +1738,22 @@ export function LeadDrawer({
           </TabsList>
 
           <TabsContent value="resumen" className="flex flex-1 min-h-0 flex-col overflow-hidden parent-scroll">
+            {autoStageSummary && !isCreateMode ? (
+              <div className="mx-4 mb-3 flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/5 p-3">
+                <div className="rounded-full bg-primary/20 p-2 text-primary">
+                  <IconRobot className="size-4" />
+                </div>
+                <div className="text-xs text-primary-900/80 dark:text-primary-100/80">
+                  <p className="font-semibold text-primary-800 dark:text-primary-100">
+                    Tal-IA movió este lead automáticamente.
+                  </p>
+                  <p className="text-[11px] leading-snug">
+                    Etapa actual: {autoStageSummary.stageLabel}. Canal: {autoStageSummary.channel}.
+                    {autoStageSummary.at ? ` · ${autoStageSummary.at}` : null}
+                  </p>
+                </div>
+              </div>
+            ) : null}
             <form
               onSubmit={handleSubmit(onSubmitForm)}
               className="flex flex-1 min-h-0 flex-col gap-4 overflow-y-auto px-4 pb-4"
@@ -3605,3 +3622,25 @@ function formatIsoDateForInput(value: string | null): string | null {
     return null;
   }
 }
+  const autoStageSummary = useMemo(() => {
+    if (!card?.autoStage) {
+      return null;
+    }
+    const formattedAt = card.autoStage.at
+      ? (() => {
+          try {
+            return new Intl.DateTimeFormat("es-MX", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(new Date(card.autoStage.at));
+          } catch {
+            return card.autoStage.at;
+          }
+        })()
+      : null;
+    return {
+      stageLabel: currentStage?.nombre ?? card.etapaNombre ?? card.autoStage.stageCode,
+      channel: card.autoStage.channel ?? "asistente",
+      at: formattedAt,
+    };
+  }, [card?.autoStage, card?.etapaNombre, currentStage?.nombre]);
