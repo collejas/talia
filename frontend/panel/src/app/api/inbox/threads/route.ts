@@ -1,19 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { callSupabaseRpc } from "@/lib/inbox/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 import { mapThreads } from "@/lib/inbox/threads";
 import type { InboxThreadRow } from "@/lib/inbox/types";
-
-type SupabaseThreadsResponse =
-  | {
-      ok: false;
-      status?: number;
-      error: string;
-    }
-  | {
-      ok: true;
-      data: InboxThreadRow[] | null;
-    };
 
 function parseNumber(value: string | null, fallback: number, options: { min: number; max: number }): number {
   if (!value) return fallback;
@@ -27,17 +16,21 @@ export async function GET(request: Request) {
   const limit = parseNumber(searchParams.get("limit"), 25, { min: 1, max: 100 });
   const messageLimit = parseNumber(searchParams.get("message_limit"), 20, { min: 1, max: 100 });
 
-  const rpcResponse = (await callSupabaseRpc<InboxThreadRow[]>("panel_inbox_threads", {
-    body: { p_limit: limit, p_message_limit: messageLimit },
-  })) as SupabaseThreadsResponse;
+  const response = await callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
+    withUserToken: true,
+    searchParams: {
+      limit: String(limit),
+      message_limit: String(messageLimit),
+    },
+  });
 
-  if (!rpcResponse.ok) {
-    const status = rpcResponse.status ?? 500;
-    const error = rpcResponse.error || "No se pudieron consultar las conversaciones";
+  if (!response.ok) {
+    const status = response.status ?? 500;
+    const error = response.error || "No se pudieron consultar las conversaciones";
     return NextResponse.json({ error }, { status });
   }
 
-  const threads = mapThreads(rpcResponse.data);
+  const threads = mapThreads(response.data);
   return NextResponse.json({
     ok: true,
     threads,

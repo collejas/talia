@@ -1,6 +1,6 @@
 "use server";
 
-import { callSupabaseRest, callSupabaseRpc } from "@/lib/visitas/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 import { inferPhoneLocation } from "@/lib/visitas/phone-location";
 
 type DashboardKpisResponse = {
@@ -22,9 +22,7 @@ type VisitantesEstadosResponse = {
   }>;
 };
 
-type VisitantesCounterRow = {
-  total: number | string | null | undefined;
-};
+type VisitantesCounterResponse = { total?: number | string | null } | number | string | null;
 
 type WhatsappConversationRow = {
   id: string;
@@ -125,28 +123,19 @@ export type VisitsPayload = {
 
 export async function loadVisitsData(): Promise<VisitsPayload> {
   const [kpisResult, estadosResult, detalleResult, whatsappVisitResult, whatsappDetailResult] = await Promise.all([
-    callSupabaseRpc<DashboardKpisResponse>("dashboard_kpis"),
-    callSupabaseRpc<VisitantesEstadosResponse>("panel_visitantes_sin_chat_estados"),
-    callSupabaseRpc<VisitDetailRaw[]>("panel_webchat_visitas_detalle", {
-      body: {
-        p_limit: 200,
-        p_offset: 0,
-        p_order_by: "primera",
-        p_order_dir: "asc",
+    callCrmApi<DashboardKpisResponse>("/crm/visitas/kpis", { withUserToken: true }),
+    callCrmApi<VisitantesEstadosResponse>("/crm/visitas/estados", { withUserToken: true }),
+    callCrmApi<VisitDetailRaw[]>("/crm/visitas/detalle", {
+      withUserToken: true,
+      searchParams: {
+        limit: 200,
+        offset: 0,
+        order_by: "primera",
+        order_dir: "asc",
       },
     }),
-    callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>("embudo_visitantes_whatsapp", {
-      body: { p_from: null, p_to: null },
-    }),
-    callSupabaseRest<WhatsappConversationRow[]>("conversaciones", {
-      query: {
-        select:
-          "id,canal,iniciada_en,ultimo_mensaje_en,contacto:contactos(nombre_completo,correo,telefono_e164)",
-        canal: "eq.whatsapp",
-        order: "iniciada_en.desc",
-        limit: "200",
-      },
-    }),
+    callCrmApi<VisitantesCounterResponse>("/crm/visitas/whatsapp/total", { withUserToken: true }),
+    callCrmApi<WhatsappConversationRow[]>("/crm/visitas/whatsapp/conversaciones", { withUserToken: true }),
   ]);
 
   const errors: string[] = [];
@@ -308,13 +297,15 @@ function toNumber(value: unknown): number {
 }
 
 function extractTotal(
-  result: Awaited<ReturnType<typeof callSupabaseRpc<VisitantesCounterRow[] | VisitantesCounterRow>>>,
+  result: Awaited<ReturnType<typeof callCrmApi<VisitantesCounterResponse>>>,
   fallbackCount: number,
 ) {
   if (!result || !result.ok) return fallbackCount;
   const payload = result.data;
-  const row = Array.isArray(payload) ? payload[0] : payload;
-  const value = row?.total;
+  const value =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as { total?: number | string | null }).total
+      : payload;
   const parsed = toNumber(value);
   return parsed || fallbackCount;
 }

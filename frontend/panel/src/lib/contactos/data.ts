@@ -1,8 +1,8 @@
 "use server";
 
-import { callSupabaseRpc } from "@/lib/contactos/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 
-type ContactosResumenResponse = {
+type CrmContactSummary = {
   total?: number;
   completos?: number;
   incompletos?: number;
@@ -13,14 +13,14 @@ type ContactosResumenResponse = {
   ultimo?: string | null;
 };
 
-type ContactosTimelineRow = {
+type CrmContactTimelineRow = {
   bucket_date: string;
   nuevos: number;
   completos: number;
   webchat: number;
 };
 
-type ContactosListRow = {
+type CrmContactListRow = {
   contacto_id: string;
   nombre: string | null;
   correo: string | null;
@@ -81,14 +81,11 @@ const DEFAULT_LIMIT = 200;
 
 export async function loadContactosData(): Promise<ContactosPayload> {
   const [resumen, timeline, listado] = await Promise.all([
-    callSupabaseRpc<ContactosResumenResponse>("panel_contactos_resumen"),
-    callSupabaseRpc<ContactosTimelineRow[]>("panel_contactos_timeline"),
-    callSupabaseRpc<ContactosListRow[]>("panel_contactos_list", {
-      body: {
-        p_limit: DEFAULT_LIMIT,
-        p_offset: 0,
-        p_order_by: "creado_en",
-        p_order_dir: "desc",
+    callCrmApi<CrmContactSummary>("/crm/contacts/summary"),
+    callCrmApi<CrmContactTimelineRow[]>("/crm/contacts/timeline"),
+    callCrmApi<CrmContactListRow[]>("/crm/contacts/list", {
+      searchParams: {
+        limit: String(DEFAULT_LIMIT),
       },
     }),
   ]);
@@ -115,7 +112,7 @@ export async function loadContactosData(): Promise<ContactosPayload> {
   };
 }
 
-function mapCards(payload?: ContactosResumenResponse): ContactCards {
+function mapCards(payload?: CrmContactSummary): ContactCards {
   return {
     total: payload?.total ?? 0,
     completos: payload?.completos ?? 0,
@@ -128,7 +125,7 @@ function mapCards(payload?: ContactosResumenResponse): ContactCards {
   };
 }
 
-function mapChart(payload?: ContactosTimelineRow[] | null): ContactChartPoint[] {
+function mapChart(payload?: CrmContactTimelineRow[] | null): ContactChartPoint[] {
   if (!payload || !payload.length) return [];
   return payload.map((row) => ({
     date: row.bucket_date,
@@ -138,7 +135,7 @@ function mapChart(payload?: ContactosTimelineRow[] | null): ContactChartPoint[] 
   }));
 }
 
-function mapTable(payload?: ContactosListRow[] | null): ContactTableRow[] {
+function mapTable(payload?: CrmContactListRow[] | null): ContactTableRow[] {
   if (!payload || !payload.length) return [];
   return payload.map((row, index) => {
     const captureDone = (row.captura_estado || "").toLowerCase() === "completo";

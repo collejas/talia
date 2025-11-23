@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
 DEFAULT_REMINDER_SLUG = "default"
+DEFAULT_CONTACTS_LIMIT = 200
 
 
 class CRMAccount(BaseModel):
@@ -74,6 +75,9 @@ def get_repository() -> CRMRepository:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+# Helpers -----------------------------------------------------------------------
+
+
 def require_organizacion_id(
     x_organizacion_id: Annotated[str, Header(alias="X-Organizacion-Id")],
 ) -> UUID:
@@ -98,6 +102,24 @@ def optional_usuario_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Encabezado X-Usuario-Id inválido",
         ) from exc
+
+
+def require_user_token(
+    x_user_token: Annotated[str | None, Header(alias="X-User-Token")] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> str:
+    if x_user_token:
+        token = x_user_token.strip()
+        if token:
+            return token
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            return token
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="authorization_invalid",
+    )
 
 
 class CRMPipelineStage(BaseModel):
@@ -296,6 +318,154 @@ class CRMReminderSettings(BaseModel):
 class CRMReminderSettingsUpdate(BaseModel):
     reminder_enabled: bool
     reminder_offset_minutes: Annotated[int, Field(ge=15, le=720)]
+
+
+class CRMCatalogItem(BaseModel):
+    id: UUID
+    slug: str | None = None
+    nombre: str
+    tipo: str
+    descripcion_corta: str | None = None
+    descripcion_larga: str | None = None
+    unidad: str
+    precio_base: float | None = None
+    moneda: str
+    impuestos: list[dict[str, Any]] | None = None
+    activo: bool
+    requiere_factura: bool
+    clave_sat: str | None = None
+    unidad_sat: str | None = None
+    metadatos: dict[str, Any] | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    model_config = {"populate_by_name": True}
+
+
+class CRMCatalogItemCreate(BaseModel):
+    slug: str | None = Field(default=None, max_length=140)
+    nombre: str = Field(..., max_length=255)
+    tipo: str = Field(default="servicio")
+    descripcion_corta: str | None = Field(default=None, max_length=400)
+    descripcion_larga: str | None = Field(default=None, max_length=4000)
+    unidad: str = Field(default="unidad", max_length=80)
+    precio_base: float | None = Field(default=None, ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    impuestos: list[dict[str, Any]] | None = Field(default_factory=list)
+    activo: bool = True
+    requiere_factura: bool = False
+    clave_sat: str | None = Field(default=None, max_length=100)
+    unidad_sat: str | None = Field(default=None, max_length=100)
+    metadatos: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class CRMCatalogItemUpdate(BaseModel):
+    slug: str | None = Field(default=None, max_length=140)
+    nombre: str | None = Field(default=None, max_length=255)
+    tipo: str | None = Field(default=None)
+    descripcion_corta: str | None = Field(default=None, max_length=400)
+    descripcion_larga: str | None = Field(default=None, max_length=4000)
+    unidad: str | None = Field(default=None, max_length=80)
+    precio_base: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    impuestos: list[dict[str, Any]] | None = None
+    activo: bool | None = None
+    requiere_factura: bool | None = None
+    clave_sat: str | None = Field(default=None, max_length=100)
+    unidad_sat: str | None = Field(default=None, max_length=100)
+    metadatos: dict[str, Any] | None = None
+
+
+class CRMCatalogDeleteResponse(BaseModel):
+    item: CRMCatalogItem | None = None
+    hard_deleted: bool = False
+
+
+class CRMContactSummary(BaseModel):
+    total: int | None = 0
+    completos: int | None = 0
+    incompletos: int | None = 0
+    activos: int | None = 0
+    leads: int | None = 0
+    webchat: int | None = 0
+    propietarios: int | None = 0
+    ultimo: str | None = None
+
+
+class CRMContactTimelineEntry(BaseModel):
+    bucket_date: str
+    nuevos: int
+    completos: int
+    webchat: int
+
+
+class CRMContactListRow(BaseModel):
+    contacto_id: UUID
+    nombre: str | None = None
+    correo: str | None = None
+    telefono: str | None = None
+    estado: str | None = None
+    captura_estado: str | None = None
+    origen: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime | None = None
+    company_name: str | None = None
+    propietario_id: UUID | None = None
+    propietario_nombre: str | None = None
+    ultimo_contacto_en: datetime | None = None
+    conversaciones: int | None = None
+    notes: str | None = None
+    metadata: dict[str, Any] | None = None
+    total_rows: int | None = None
+
+
+class CRMInboxFolder(BaseModel):
+    id: str
+    label: str | None = None
+    count: int = 0
+
+
+class CRMInboxSummary(BaseModel):
+    total: int = 0
+    unread: int = 0
+    awaiting: int = 0
+    folders: list[CRMInboxFolder] = Field(default_factory=list)
+
+
+class CRMInboxThread(BaseModel):
+    conversacion_id: UUID
+    contacto_id: UUID | None = None
+    contacto_nombre: str | None = None
+    contacto_correo: str | None = None
+    contacto_telefono: str | None = None
+    canal: str | None = None
+    estado: str | None = None
+    prioridad: int | None = None
+    iniciada_en: datetime | None = None
+    ultimo_mensaje_en: datetime | None = None
+    no_leidos: int | None = None
+    asignado_id: UUID | None = None
+    asignado_nombre: str | None = None
+    tags: list[str] | None = None
+    manual_override: bool | None = None
+    last_message_preview: str | None = None
+    last_message_at: datetime | None = None
+    messages: list[dict[str, Any]] | None = None
+    total_rows: int | None = None
+
+
+class CRMInboxMessage(BaseModel):
+    message_id: UUID
+    conversacion_id: UUID
+    author: str | None = None
+    role: str | None = None
+    body: list[str] | None = None
+    tipo_contenido: str | None = None
+    datos: dict[str, Any] | None = None
+    creado_en: datetime
+    attachments: list[dict[str, Any]] | None = None
 
 
 class CRMPipelineHistoryItem(BaseModel):
@@ -1102,6 +1272,96 @@ async def pipeline_append_history_note(
     return _history_item_from_row(row)
 
 
+@router.get("/catalog/items", response_model=list[CRMCatalogItem])
+async def list_catalog_items(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    include_inactive: bool = Query(default=False),
+    tipo: Literal["producto", "servicio", "paquete"] | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=200),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMCatalogItem]:
+    try:
+        rows = await repo.list_catalog_items(
+            include_inactive=include_inactive,
+            tipo=tipo,
+            search=search,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMCatalogItem.model_validate(row) for row in rows]
+
+
+@router.post("/catalog/items", response_model=CRMCatalogItem, status_code=status.HTTP_201_CREATED)
+async def create_catalog_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    payload: CRMCatalogItemCreate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMCatalogItem:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if usuario_id:
+        body.setdefault("created_by", str(usuario_id))
+        body.setdefault("updated_by", str(usuario_id))
+    try:
+        row = await repo.create_catalog_item(payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMCatalogItem.model_validate(row)
+
+
+@router.patch("/catalog/items/{item_id}", response_model=CRMCatalogItem)
+async def update_catalog_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    item_id: UUID,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMCatalogItemUpdate,
+) -> CRMCatalogItem:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    if usuario_id:
+        body["updated_by"] = str(usuario_id)
+    try:
+        row = await repo.update_catalog_item(item_id=item_id, payload=body)
+    except CRMRepositoryError as exc:
+        detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "catalog_item_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMCatalogItem.model_validate(row)
+
+
+@router.delete("/catalog/items/{item_id}", response_model=CRMCatalogDeleteResponse)
+async def delete_catalog_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    item_id: UUID,
+    hard: bool = Query(default=False),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMCatalogDeleteResponse:
+    try:
+        if hard:
+            row = await repo.delete_catalog_item(item_id=item_id)
+            return CRMCatalogDeleteResponse(
+                item=CRMCatalogItem.model_validate(row),
+                hard_deleted=True,
+            )
+        body: dict[str, Any] = {"activo": False}
+        if usuario_id:
+            body["updated_by"] = str(usuario_id)
+        row = await repo.soft_delete_catalog_item(item_id=item_id, payload=body)
+        return CRMCatalogDeleteResponse(
+            item=CRMCatalogItem.model_validate(row),
+            hard_deleted=False,
+        )
+    except CRMRepositoryError as exc:
+        detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "catalog_item_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
 @router.get("/contacts/search", response_model=CRMContactSearchResponse)
 async def search_contacts(
     *,
@@ -1292,6 +1552,194 @@ async def update_reminder_settings(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMReminderSettings.model_validate(row)
+
+
+@router.get("/contacts/summary", response_model=CRMContactSummary)
+async def get_contacts_summary(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> CRMContactSummary:
+    try:
+        row = await repo.contactos_resumen(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMContactSummary.model_validate(row)
+
+
+@router.get("/contacts/timeline", response_model=list[CRMContactTimelineEntry])
+async def get_contacts_timeline(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> list[CRMContactTimelineEntry]:
+    try:
+        rows = await repo.contactos_timeline(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMContactTimelineEntry.model_validate(row) for row in rows]
+
+
+@router.get("/contacts/list", response_model=list[CRMContactListRow])
+async def get_contacts_list(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
+) -> list[CRMContactListRow]:
+    try:
+        rows = await repo.contactos_list(usuario_token=user_token, limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMContactListRow.model_validate(row) for row in rows]
+
+
+@router.get("/inbox/summary", response_model=CRMInboxSummary)
+async def get_inbox_summary(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> CRMInboxSummary:
+    row = await repo.inbox_summary(usuario_token=user_token)
+    folders_payload = row.get("folders") if isinstance(row, dict) else None
+    folders: list[CRMInboxFolder] = []
+    if isinstance(folders_payload, list):
+        for entry in folders_payload:
+            if isinstance(entry, dict) and entry.get("id"):
+                folders.append(
+                    CRMInboxFolder(
+                        id=str(entry.get("id")),
+                        label=entry.get("label"),
+                        count=int(entry.get("count") or 0),
+                    )
+                )
+    return CRMInboxSummary(
+        total=int(row.get("total") or 0),
+        unread=int(row.get("unread") or 0),
+        awaiting=int(row.get("awaiting") or 0),
+        folders=folders,
+    )
+
+
+@router.get("/inbox/threads", response_model=list[CRMInboxThread])
+async def get_inbox_threads(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    estado: str | None = Query(default=None, max_length=50),
+    asignado_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    message_limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> list[CRMInboxThread]:
+    rows = await repo.inbox_threads(
+        usuario_token=user_token,
+        estado=estado,
+        asignado_id=asignado_id,
+        limit=limit,
+        offset=offset,
+        message_limit=message_limit,
+    )
+    return [CRMInboxThread.model_validate(row) for row in rows]
+
+
+@router.get("/inbox/messages/{conversacion_id}", response_model=list[CRMInboxMessage])
+async def get_inbox_messages(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    conversacion_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    before: str | None = Query(default=None, max_length=64),
+) -> list[CRMInboxMessage]:
+    rows = await repo.inbox_messages(
+        usuario_token=user_token,
+        conversacion_id=conversacion_id,
+        limit=limit,
+        before=before,
+    )
+    return [CRMInboxMessage.model_validate(row) for row in rows]
+
+
+@router.get("/visitas/kpis")
+async def get_visits_kpis(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    try:
+        data = await repo.visitas_dashboard_kpis(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return data
+
+
+@router.get("/visitas/estados")
+async def get_visits_states(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    try:
+        data = await repo.visitas_estados(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return data
+
+
+@router.get("/visitas/detalle")
+async def get_visits_detail(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    order_by: str = Query(default="primera"),
+    order_dir: Literal["asc", "desc"] = Query(default="asc"),
+) -> list[dict[str, Any]]:
+    if order_dir not in {"asc", "desc"}:
+        raise HTTPException(status_code=400, detail="order_dir_invalid")
+    try:
+        rows = await repo.visitas_detalle(
+            usuario_token=user_token,
+            limit=limit,
+            offset=offset,
+            order_by=order_by or "primera",
+            order_dir=order_dir,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return rows
+
+
+@router.get("/visitas/whatsapp/total")
+async def get_visits_whatsapp_total(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, int]:
+    try:
+        total = await repo.visitas_whatsapp_total(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"total": total}
+
+
+@router.get("/visitas/whatsapp/conversaciones")
+async def get_visits_whatsapp_conversations(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[dict[str, Any]]:
+    try:
+        rows = await repo.visitas_whatsapp_conversaciones(
+            usuario_token=user_token,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return rows
 
 
 @router.get("/actividades", response_model=CRMActivitiesResponse)

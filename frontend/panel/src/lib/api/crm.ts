@@ -14,6 +14,7 @@ type CrmFetchOptions = {
   headers?: Record<string, string | undefined>;
   organizacionId?: string;
   usuarioId?: string | null;
+  withUserToken?: boolean;
 };
 
 export type CrmResult<T> =
@@ -38,9 +39,13 @@ export async function callCrmApi<T = unknown>(
 ): Promise<CrmResult<T>> {
   let baseUrl: string;
   let token: string;
+  let userAccessToken: string | null = null;
   try {
     baseUrl = getPanelApiBaseUrl();
     token = await resolvePanelApiToken();
+    if (options.withUserToken) {
+      userAccessToken = await resolveCurrentAccessToken();
+    }
   } catch (error) {
     return {
       ok: false,
@@ -69,6 +74,9 @@ export async function callCrmApi<T = unknown>(
   };
   if (usuarioId) {
     headers["X-Usuario-Id"] = usuarioId;
+  }
+  if (options.withUserToken && userAccessToken) {
+    headers["X-User-Token"] = userAccessToken;
   }
 
   let body: BodyInit | undefined;
@@ -142,6 +150,19 @@ async function resolveCurrentUsuarioId(): Promise<string | null> {
       store.get("sb-access-token")?.value ||
       store.get("access_token")?.value;
     return decodeJwtUserId(token);
+  } catch {
+    return null;
+  }
+}
+
+async function resolveCurrentAccessToken(): Promise<string | null> {
+  try {
+    const store = await cookies();
+    const token =
+      store.get(ACCESS_TOKEN_COOKIE)?.value ||
+      store.get("sb-access-token")?.value ||
+      store.get("access_token")?.value;
+    return token ?? null;
   } catch {
     return null;
   }

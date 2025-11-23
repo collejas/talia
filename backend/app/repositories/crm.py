@@ -1136,6 +1136,387 @@ class CRMRepository:
             payload={k: v for k, v in payload.items() if v is not None},
         )
 
+    async def list_catalog_items(
+        self,
+        *,
+        include_inactive: bool = False,
+        tipo: str | None = None,
+        search: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if tipo:
+            params["tipo"] = f"eq.{tipo}"
+        if search:
+            pattern = search.strip()
+            if pattern:
+                sanitized = pattern.replace("%", "").replace("*", "")
+                params["or"] = (
+                    f"(nombre.ilike.*{sanitized}*,slug.ilike.*{sanitized}*,"
+                    f"descripcion_corta.ilike.*{sanitized}*)"
+                )
+        resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar catálogo: {data!r}")
+        return data
+
+    async def create_catalog_item(
+        self,
+        *,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "POST",
+            "/rest/v1/catalog_items",
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el catálogo creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear catálogo: {row!r}")
+        return row
+
+    async def update_catalog_item(
+        self,
+        *,
+        item_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{item_id}"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/catalog_items",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("catalog_item_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar catálogo: {row!r}")
+        return row
+
+    async def delete_catalog_item(
+        self,
+        *,
+        item_id: UUID,
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{item_id}"}
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/catalog_items",
+            params=params,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("catalog_item_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar catálogo: {row!r}")
+        return row
+
+    async def soft_delete_catalog_item(
+        self,
+        *,
+        item_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{item_id}"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/catalog_items",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("catalog_item_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al archivar catálogo: {row!r}")
+        return row
+
+    async def contactos_resumen(
+        self,
+        *,
+        usuario_token: str,
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_contactos_resumen",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list) and data:
+            first = data[0]
+            if isinstance(first, dict):
+                return first
+        raise CRMRepositoryError(f"Respuesta inesperada en contactos_resumen: {data!r}")
+
+    async def contactos_timeline(
+        self,
+        *,
+        usuario_token: str,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_contactos_timeline",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en contactos_timeline: {data!r}")
+        return data
+
+    async def contactos_list(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        body = {
+            "p_limit": max(1, min(limit, 500)),
+            "p_offset": 0,
+            "p_order_by": "creado_en",
+            "p_order_dir": "desc",
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_contactos_list",
+            token=usuario_token,
+            json=body,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en contactos_list: {data!r}")
+        return data
+
+    async def inbox_summary(
+        self,
+        *,
+        usuario_token: str,
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_inbox_resumen",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_resumen: {data!r}")
+
+    async def inbox_threads(
+        self,
+        *,
+        usuario_token: str,
+        estado: str | None = None,
+        asignado_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        message_limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        body = {
+            "p_estado": estado,
+            "p_asignado": str(asignado_id) if asignado_id else None,
+            "p_limit": max(1, min(limit, 200)),
+            "p_offset": max(0, offset),
+            "p_message_limit": max(1, min(message_limit, 50)),
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_inbox_threads",
+            token=usuario_token,
+            json=body,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_threads: {data!r}")
+        return data
+
+    async def inbox_messages(
+        self,
+        *,
+        usuario_token: str,
+        conversacion_id: UUID,
+        limit: int = 100,
+        before: str | None = None,
+    ) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {
+            "p_conversacion_id": str(conversacion_id),
+            "p_limit": max(1, min(limit, 500)),
+        }
+        if before:
+            body["p_before"] = before
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_inbox_messages",
+            token=usuario_token,
+            json=body,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_messages: {data!r}")
+        return data
+
+    async def visitas_dashboard_kpis(
+        self,
+        *,
+        usuario_token: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {}
+        if date_from:
+            body["p_from"] = date_from.isoformat()
+        if date_to:
+            body["p_to"] = date_to.isoformat()
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/dashboard_kpis",
+            token=usuario_token,
+            json=body or None,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list) and data:
+            first = data[0]
+            if isinstance(first, dict):
+                return first
+        raise CRMRepositoryError(f"Respuesta inesperada en dashboard_kpis: {data!r}")
+
+    async def visitas_estados(
+        self,
+        *,
+        usuario_token: str,
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_visitantes_sin_chat_estados",
+            token=usuario_token,
+            json={},
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_visitantes_sin_chat_estados: {data!r}"
+        )
+
+    async def visitas_detalle(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        order_by: str = "primera",
+        order_dir: Literal["asc", "desc"] = "asc",
+    ) -> list[dict[str, Any]]:
+        body = {
+            "p_limit": max(1, min(limit, 500)),
+            "p_offset": max(0, offset),
+            "p_order_by": order_by,
+            "p_order_dir": order_dir,
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_webchat_visitas_detalle",
+            token=usuario_token,
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}"
+            )
+        return data
+
+    async def visitas_whatsapp_total(
+        self,
+        *,
+        usuario_token: str,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> int:
+        body: dict[str, Any] = {}
+        if date_from:
+            body["p_from"] = date_from.isoformat()
+        if date_to:
+            body["p_to"] = date_to.isoformat()
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/embudo_visitantes_whatsapp",
+            token=usuario_token,
+            json=body or None,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if isinstance(data, list) and data:
+            first = data[0]
+            if isinstance(first, dict) and "total" in first:
+                try:
+                    return int(first["total"] or 0)
+                except (TypeError, ValueError):
+                    pass
+            if isinstance(first, (int, float)):
+                return int(first)
+        if isinstance(data, dict) and "total" in data:
+            try:
+                return int(data["total"] or 0)
+            except (TypeError, ValueError):
+                pass
+        if isinstance(data, (int, float)):
+            return int(data)
+        raise CRMRepositoryError(f"Respuesta inesperada en embudo_visitantes_whatsapp: {data!r}")
+
+    async def visitas_whatsapp_conversaciones(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "select": (
+                "id,canal,iniciada_en,ultimo_mensaje_en,"
+                "contacto:contactos(nombre_completo,correo,telefono_e164)"
+            ),
+            "canal": "eq.whatsapp",
+            "order": "iniciada_en.desc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/conversaciones",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
+        return data
+
     async def get_email_template(
         self,
         *,
@@ -1313,6 +1694,37 @@ class CRMRepository:
                 resp = await client.request(method, url, params=params, json=json, headers=headers)
         except httpx.RequestError as exc:  # pragma: no cover - red de terceros
             raise CRMRepositoryError(f"Error de red al llamar Supabase: {exc}") from exc
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"
+            )
+        return resp
+
+    async def _request_with_user(
+        self,
+        method: Literal["GET", "POST", "PATCH", "DELETE"],
+        path: str,
+        *,
+        token: str,
+        params: dict[str, Any] | None = None,
+        json: Any = None,
+        prefer: str | None = None,
+    ) -> httpx.Response:
+        if not settings.supabase_url or not settings.supabase_anon:
+            raise CRMRepositoryError("Supabase no está configurado (anon key)")
+        url = f"{settings.supabase_url.rstrip('/')}{path}"
+        headers = {
+            "Accept": "application/json",
+            "apikey": settings.supabase_anon,
+            "Authorization": f"Bearer {token}",
+        }
+        if prefer:
+            headers["Prefer"] = prefer
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.request(method, url, params=params, json=json, headers=headers)
+        except httpx.RequestError as exc:
+            raise CRMRepositoryError(f"Error de red al llamar Supabase (user): {exc}") from exc
         if resp.status_code >= 400:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"

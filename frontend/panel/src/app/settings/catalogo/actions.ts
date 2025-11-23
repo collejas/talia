@@ -1,60 +1,86 @@
-"use server"
+"use server";
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath } from "next/cache";
 
-import { getPanelApiBaseUrl } from "@/lib/api/panel"
-import { resolvePanelApiToken } from "@/lib/auth/panel-token"
+import { callCrmApi } from "@/lib/api/crm";
 
-const SETTINGS_PATH = "/settings/catalogo"
-const DEFAULT_MONEDA = "MXN"
-const DEFAULT_UNIDAD = "unidad"
-const DEFAULT_TIPO = "servicio"
+const SETTINGS_PATH = "/settings/catalogo";
+const DEFAULT_MONEDA = "MXN";
+const DEFAULT_UNIDAD = "unidad";
+const DEFAULT_TIPO = "servicio";
 
 export type CatalogItem = {
-  id: string
-  slug: string | null
-  nombre: string
-  tipo: "producto" | "servicio" | "paquete"
-  descripcionCorta: string | null
-  descripcionLarga: string | null
-  unidad: string | null
-  precioBase: number | null
-  moneda: string
-  impuestos: Record<string, unknown>[]
-  activo: boolean
-  requiereFactura: boolean
-  claveSat: string | null
-  unidadSat: string | null
-  metadatos: Record<string, unknown>
-  createdBy: string | null
-  updatedBy: string | null
-  creadoEn: string | null
-  actualizadoEn: string | null
-}
+  id: string;
+  slug: string | null;
+  nombre: string;
+  tipo: "producto" | "servicio" | "paquete";
+  descripcionCorta: string | null;
+  descripcionLarga: string | null;
+  unidad: string | null;
+  precioBase: number | null;
+  moneda: string;
+  impuestos: Record<string, unknown>[];
+  activo: boolean;
+  requiereFactura: boolean;
+  claveSat: string | null;
+  unidadSat: string | null;
+  metadatos: Record<string, unknown>;
+  createdBy: string | null;
+  updatedBy: string | null;
+  creadoEn: string | null;
+  actualizadoEn: string | null;
+};
 
 export type CatalogItemInput = {
-  nombre: string
-  slug?: string | null
-  tipo?: "producto" | "servicio" | "paquete"
-  descripcionCorta?: string | null
-  descripcionLarga?: string | null
-  unidad?: string | null
-  precioBase?: number | null
-  moneda?: string | null
-  impuestos?: Record<string, unknown>[] | null
-  activo?: boolean
-  requiereFactura?: boolean
-  claveSat?: string | null
-  unidadSat?: string | null
-  metadatos?: Record<string, unknown> | null
-}
+  nombre: string;
+  slug?: string | null;
+  tipo?: "producto" | "servicio" | "paquete";
+  descripcionCorta?: string | null;
+  descripcionLarga?: string | null;
+  unidad?: string | null;
+  precioBase?: number | null;
+  moneda?: string | null;
+  impuestos?: Record<string, unknown>[] | null;
+  activo?: boolean;
+  requiereFactura?: boolean;
+  claveSat?: string | null;
+  unidadSat?: string | null;
+  metadatos?: Record<string, unknown> | null;
+};
 
 type FetchOptions = {
-  includeInactive?: boolean
-  search?: string | null
-  tipo?: "producto" | "servicio" | "paquete" | null
-  limit?: number
-}
+  includeInactive?: boolean;
+  search?: string | null;
+  tipo?: "producto" | "servicio" | "paquete" | null;
+  limit?: number;
+};
+
+type CrmCatalogItem = {
+  id: string;
+  slug: string | null;
+  nombre: string;
+  tipo: string;
+  descripcion_corta: string | null;
+  descripcion_larga: string | null;
+  unidad: string;
+  precio_base: number | null;
+  moneda: string;
+  impuestos: Record<string, unknown>[] | null;
+  activo: boolean;
+  requiere_factura: boolean;
+  clave_sat: string | null;
+  unidad_sat: string | null;
+  metadatos: Record<string, unknown> | null;
+  created_by: string | null;
+  updated_by: string | null;
+  creado_en: string | null;
+  actualizado_en: string | null;
+};
+
+type CrmCatalogDeleteResponse = {
+  item: CrmCatalogItem | null;
+  hard_deleted: boolean;
+};
 
 function normalizeString(value: unknown): string | null {
   if (typeof value === "string") {
@@ -182,120 +208,67 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
   return payload
 }
 
-async function authenticatedFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = await resolvePanelApiToken()
-  const baseUrl = getPanelApiBaseUrl()
-  const headers = new Headers(init.headers)
-  headers.set("Accept", "application/json")
-  headers.set("Authorization", `Bearer ${token}`)
-  if (init.body && !(init.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json")
-  }
-  return fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  })
-}
-
-async function parseJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json()
-  } catch {
-    return null
-  }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (value && typeof value === "object") {
-    return value as Record<string, unknown>
-  }
-  return null
-}
-
-function extractError(payload: unknown, fallback: string): string {
-  const record = asRecord(payload)
-  if (record) {
-    return (
-      (typeof record.error === "string" && record.error) ||
-      (typeof record.detail === "string" && record.detail) ||
-      (typeof record.message === "string" && record.message) ||
-      fallback
-    )
-  }
-  if (typeof payload === "string" && payload.trim().length) {
-    return payload
-  }
-  return fallback
-}
-
 export async function fetchCatalogItems(options?: FetchOptions): Promise<CatalogItem[]> {
-  const params = new URLSearchParams({ limit: String(options?.limit ?? 500) })
-  if (options?.includeInactive) params.set("include_inactive", "true")
-  if (options?.tipo) params.set("tipo", options.tipo)
-  if (options?.search) params.set("search", options.search)
+  const response = await callCrmApi<CrmCatalogItem[]>("/crm/catalog/items", {
+    searchParams: {
+      limit: String(options?.limit ?? 500),
+      include_inactive: options?.includeInactive ? "true" : undefined,
+      tipo: options?.tipo ?? undefined,
+      search: options?.search ?? undefined,
+    },
+  });
 
-  try {
-    const response = await authenticatedFetch(`/catalog/items?${params.toString()}`)
-    const payload = await parseJson(response)
-    if (!response.ok) {
-      throw new Error(extractError(payload, "No se pudo cargar el catálogo."))
-    }
-    const payloadRecord = asRecord(payload)
-    const itemsValue = payloadRecord?.items
-    const rows = Array.isArray(itemsValue) ? itemsValue : []
-    return rows.map((row) => normalizeCatalogItem(row))
-  } catch (error) {
-    console.warn("[catalog] fetchCatalogItems failed", error)
-    return []
+  if (!response.ok) {
+    console.warn("[catalog] fetchCatalogItems failed", response.error);
+    return [];
   }
+  if (!Array.isArray(response.data)) {
+    console.warn("[catalog] fetchCatalogItems failed: respuesta vacía");
+    return [];
+  }
+
+  return response.data.map((row) => normalizeCatalogItem(row));
 }
 
 export async function createCatalogItem(input: CatalogItemInput): Promise<CatalogItem> {
   if (!input.nombre?.trim()) {
-    throw new Error("El nombre es obligatorio.")
+    throw new Error("El nombre es obligatorio.");
   }
-  const body = buildPayload(input)
-  const response = await authenticatedFetch("/catalog/items", {
+  const body = buildPayload(input);
+  const response = await callCrmApi<CrmCatalogItem>("/crm/catalog/items", {
     method: "POST",
-    body: JSON.stringify(body),
-  })
-  const payload = await parseJson(response)
+    body,
+  });
   if (!response.ok) {
-    throw new Error(extractError(payload, "No se pudo crear el producto."))
+    throw new Error(response.error || "No se pudo crear el producto.");
   }
-  const payloadRecord = asRecord(payload)
-  const item = payloadRecord?.item
-  if (!item || typeof item !== "object") {
-    throw new Error("La respuesta del servidor es inválida.")
+  if (!response.data) {
+    throw new Error("No se pudo crear el producto.");
   }
-  revalidatePath(SETTINGS_PATH)
-  return normalizeCatalogItem(item as Record<string, unknown>)
+  revalidatePath(SETTINGS_PATH);
+  return normalizeCatalogItem(response.data);
 }
 
 export async function updateCatalogItem(id: string, input: CatalogItemInput): Promise<CatalogItem> {
   if (!id) {
-    throw new Error("Falta el identificador del producto.")
+    throw new Error("Falta el identificador del producto.");
   }
   if (!input.nombre?.trim()) {
-    throw new Error("El nombre es obligatorio.")
+    throw new Error("El nombre es obligatorio.");
   }
-  const body = buildPayload(input)
-  const response = await authenticatedFetch(`/catalog/items/${id}`, {
+  const body = buildPayload(input);
+  const response = await callCrmApi<CrmCatalogItem>(`/crm/catalog/items/${id}`, {
     method: "PATCH",
-    body: JSON.stringify(body),
-  })
-  const payload = await parseJson(response)
+    body,
+  });
   if (!response.ok) {
-    throw new Error(extractError(payload, "No se pudo actualizar el producto."))
+    throw new Error(response.error || "No se pudo actualizar el producto.");
   }
-  const payloadRecord = asRecord(payload)
-  const item = payloadRecord?.item
-  if (!item || typeof item !== "object") {
-    throw new Error("La respuesta del servidor es inválida.")
+  if (!response.data) {
+    throw new Error("No se pudo actualizar el producto.");
   }
-  revalidatePath(SETTINGS_PATH)
-  return normalizeCatalogItem(item as Record<string, unknown>)
+  revalidatePath(SETTINGS_PATH);
+  return normalizeCatalogItem(response.data);
 }
 
 export async function deleteCatalogItem(
@@ -303,21 +276,23 @@ export async function deleteCatalogItem(
   options?: { hard?: boolean },
 ): Promise<CatalogItem | null> {
   if (!id) {
-    throw new Error("Falta el identificador del producto.")
+    throw new Error("Falta el identificador del producto.");
   }
-  const hard = options?.hard ? "true" : "false"
-  const response = await authenticatedFetch(`/catalog/items/${id}?hard=${hard}`, {
+  const response = await callCrmApi<CrmCatalogDeleteResponse>(`/crm/catalog/items/${id}`, {
     method: "DELETE",
-  })
-  const payload = await parseJson(response)
+    searchParams: {
+      hard: options?.hard ? "true" : "false",
+    },
+  });
   if (!response.ok) {
-    throw new Error(extractError(payload, "No se pudo eliminar el producto."))
+    throw new Error(response.error || "No se pudo eliminar el producto.");
   }
-  const payloadRecord = asRecord(payload)
-  const item = payloadRecord?.item
-  revalidatePath(SETTINGS_PATH)
-  if (!item || typeof item !== "object") {
-    return null
+  if (!response.data) {
+    throw new Error("No se pudo eliminar el producto.");
   }
-  return normalizeCatalogItem(item as Record<string, unknown>)
+  revalidatePath(SETTINGS_PATH);
+  if (!response.data.item) {
+    return null;
+  }
+  return normalizeCatalogItem(response.data.item);
 }

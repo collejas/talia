@@ -1,6 +1,6 @@
 "use server";
 
-import { callSupabaseRpc } from "@/lib/inbox/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 import { mapThreads } from "@/lib/inbox/threads";
 import type { InboxSummary, InboxPayload, InboxThreadRow } from "@/lib/inbox/types";
 
@@ -8,11 +8,9 @@ type InboxResumenResponse = {
   total?: number;
   unread?: number;
   awaiting?: number;
-  open?: number;
-  closed?: number;
-  assigned?: number;
   folders?: Array<{
     id?: string;
+    label?: string | null;
     count?: number;
   }>;
 };
@@ -29,9 +27,10 @@ const FOLDER_LABELS: Record<string, string> = {
 
 export async function loadInboxData(): Promise<InboxPayload> {
   const [resumen, threads] = await Promise.all([
-    callSupabaseRpc<InboxResumenResponse>("panel_inbox_resumen"),
-    callSupabaseRpc<InboxThreadRow[]>("panel_inbox_threads", {
-      body: { p_limit: 25, p_message_limit: 20 },
+    callCrmApi<InboxResumenResponse>("/crm/inbox/summary", { withUserToken: true }),
+    callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
+      withUserToken: true,
+      searchParams: { limit: "25", message_limit: "20" },
     }),
   ]);
 
@@ -60,7 +59,7 @@ function mapSummary(payload?: InboxResumenResponse): InboxSummary {
     return [
       {
         id: folder.id,
-        label: FOLDER_LABELS[folder.id] ?? folder.id,
+        label: folder.label ?? FOLDER_LABELS[folder.id] ?? folder.id,
         count: folder.count ?? 0,
       },
     ];

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { buildBackendTargets } from "@/lib/inbox/backend";
-import { callSupabaseRpc } from "@/lib/inbox/supabase";
+import { callCrmApi } from "@/lib/api/crm";
 import { mapMessageRows } from "@/lib/inbox/transform";
 import type { InboxAttachment, InboxMessage, InboxMessageRow } from "@/lib/inbox/types";
 
@@ -43,28 +43,40 @@ export async function fetchLatestMessages(options: FetchMessagesOptions): Promis
     rpcBody.p_before = before;
   }
 
-  const rpc = await callSupabaseRpc<InboxMessageRow[]>("panel_inbox_messages", {
-    body: rpcBody,
-  });
+  const crmResponse = await callCrmApi<InboxMessageRow[]>(
+    `/crm/inbox/messages/${conversationId}`,
+    {
+      withUserToken: true,
+      searchParams: {
+        limit: String(limit),
+        ...(before ? { before } : {}),
+      },
+    },
+  );
 
-  if (rpc.ok) {
-    const messages = sortMessagesChronologically(mapMessageRows(rpc.data));
+  if (crmResponse.ok && Array.isArray(crmResponse.data)) {
+    const messages = sortMessagesChronologically(mapMessageRows(crmResponse.data));
     return { ok: true, messages };
   }
 
-  console.error("[inbox] panel_inbox_messages RPC failed", {
-    conversationId,
-    status: rpc.status,
-    error: rpc.error,
-  });
+  let crmStatus = 500;
+  let crmError = "messages_fetch_failed";
+  if (!crmResponse.ok) {
+    crmStatus = crmResponse.status ?? 500;
+    crmError = crmResponse.error || crmError;
+    console.error("[inbox] crm inbox messages failed", {
+      conversationId,
+      error: crmResponse.error,
+    });
+  }
 
   const fallback = await fetchMessagesFromBackend({ conversationId, limit, before });
   if (fallback.ok) {
     return { ok: true, messages: sortMessagesChronologically(fallback.messages) };
   }
 
-  const status = fallback.status ?? rpc.status ?? 500;
-  const error = fallback.error || rpc.error || "messages_fetch_failed";
+  const status = fallback.status ?? crmStatus;
+  const error = fallback.error || crmError;
   if (status >= 500) {
     return { ok: false, status, error };
   }
