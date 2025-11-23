@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from fastapi import UploadFile
 
 from app.core.config import settings
-from app.core.logging import get_logger
+from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 logger = get_logger(__name__)
@@ -936,6 +936,11 @@ async def promote_opportunity_stage(
         raise StorageError("opportunity_stage_invalid_id") from exc
 
     repo = CRMRepository()
+    log_context = {
+        "oportunidad_id": str(opp_uuid),
+        "organizacion_id": str(org_uuid),
+        "stage_code": normalized_code,
+    }
     try:
         stage = await repo.get_stage_by_code(
             organizacion_id=org_uuid,
@@ -945,6 +950,7 @@ async def promote_opportunity_stage(
         raise StorageError(str(exc)) from exc
 
     if not stage:
+        log_event(logger, "promote_stage.stage_not_found", **log_context)
         return False
 
     stage_id = stage.get("id")
@@ -963,6 +969,7 @@ async def promote_opportunity_stage(
         raise StorageError(str(exc)) from exc
 
     if not opportunity:
+        log_event(logger, "promote_stage.opportunity_missing", **log_context)
         return False
 
     current_stage_value = opportunity.get("etapa_id")
@@ -972,12 +979,20 @@ async def promote_opportunity_stage(
         current_stage_uuid = None
 
     if current_stage_uuid == stage_id:
+        log_event(logger, "promote_stage.already_in_stage", **log_context)
         return False
 
     current_stage_order = (opportunity.get("etapa") or {}).get("orden")
     target_order = stage.get("orden")
     if isinstance(current_stage_order, (int, float)) and isinstance(target_order, (int, float)):
         if current_stage_order >= target_order:
+            log_event(
+                logger,
+                "promote_stage.skipped_order",
+                current_stage_order=current_stage_order,
+                target_order=target_order,
+                **log_context,
+            )
             return False
 
     try:
@@ -988,6 +1003,7 @@ async def promote_opportunity_stage(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    log_event(logger, "promote_stage.success", **log_context)
     return True
 
 
@@ -998,6 +1014,13 @@ async def capture_lead_if_ready(
     channel: str | None = None,
 ) -> bool:
     """Crea/promueve la oportunidad cuando el contacto ya tiene al menos un dato válido."""
+    capture_channel = channel or "assistant"
+    log_context = {
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "channel": capture_channel,
+    }
+
     try:
         contact = await fetch_contact(contact_id)
     except StorageError as exc:
@@ -1005,14 +1028,20 @@ async def capture_lead_if_ready(
             "storage.capture_lead.contact_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
+        log_event(
+            logger,
+            "capture_lead.contact_lookup_failed",
+            error=str(exc),
+            **log_context,
+        )
         return False
 
     correo = str(contact.get("correo") or "").strip()
     telefono = str(contact.get("telefono_e164") or "").strip()
     if not correo and not telefono:
+        log_event(logger, "capture_lead.skipped_no_contact_data", **log_context)
         return False
 
-    capture_channel = channel or "assistant"
     try:
         oportunidad_id = await ensure_lead_tarjeta(
             tarjeta_id=None,
@@ -1029,10 +1058,22 @@ async def capture_lead_if_ready(
                 "error": str(exc),
             },
         )
+        log_event(
+            logger,
+            "capture_lead.ensure_failed",
+            error=str(exc),
+            **log_context,
+        )
         return False
 
     organizacion_id = contact.get("organizacion_id")
     if not organizacion_id:
+        log_event(
+            logger,
+            "capture_lead.no_org_context",
+            opportunity_id=oportunidad_id,
+            **log_context,
+        )
         return True
 
     try:
@@ -1050,4 +1091,20 @@ async def capture_lead_if_ready(
                 "error": str(exc),
             },
         )
+        log_event(
+            logger,
+            "capture_lead.promote_failed",
+            opportunity_id=oportunidad_id,
+            error=str(exc),
+            **log_context,
+        )
+        return True
+
+    log_event(
+        logger,
+        "capture_lead.promoted",
+        opportunity_id=oportunidad_id,
+        stage_code="captado",
+        **log_context,
+    )
     return True
