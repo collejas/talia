@@ -122,44 +122,11 @@ async def register_whatsapp_message(
 
 async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
     """Recupera metadatos de una conversación incluyendo control manual."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/conversaciones"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    params = {
-        "id": f"eq.{conversation_id}",
-        "select": (
-            "id,contacto_id,canal,conversacion_openai_id,last_response_id,"
-            "conversaciones_controles(manual_override)"
-        ),
-        "limit": "1",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar conversación webchat: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar conversación webchat"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json() or []
-    if not isinstance(data, list) or not data:
-        raise StorageError(f"Conversación {conversation_id} no encontrada")
-    row = data[0]
+        row = await repo.get_conversation_with_controls(conversation_id=conversation_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
     ctrl = row.get("conversaciones_controles")
     manual_override = _normalize_manual_override(ctrl)
     return {
@@ -179,85 +146,20 @@ async def fetch_webchat_conversation(conversation_id: str) -> dict[str, Any]:
 
 async def get_webchat_contact_id(session_id: str) -> str | None:
     """Devuelve el contacto asociado a un session_id para el canal webchat."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-
-    idents_url = f"{base_url}/rest/v1/identidades_canal"
-    ident_params = {
-        "select": "contacto_id",
-        "canal": "eq.webchat",
-        "id_externo": f"eq.{session_id}",
-        "limit": "1",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            ident_resp = await client.get(idents_url, headers=headers, params=ident_params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al resolver contacto webchat: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if ident_resp.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar identidades de canal"
-            f" (status={ident_resp.status_code}, body={ident_resp.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    ident_data = ident_resp.json() or []
-    if not isinstance(ident_data, list) or not ident_data:
-        return None
-    contact_id = ident_data[0].get("contacto_id")
-    return str(contact_id) if contact_id else None
+        return await repo.get_webchat_contact_id_by_session(session_id=session_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_webchat_session_id(contact_id: str) -> str | None:
     """Obtiene el session_id asociado al contacto para el canal webchat."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/identidades_canal"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    params = {
-        "select": "id_externo",
-        "contacto_id": f"eq.{contact_id}",
-        "canal": "eq.webchat",
-        "limit": "1",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar session_id de contacto: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar session_id de contacto "
-            f"(status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json() or []
-    if not isinstance(data, list) or not data:
-        return None
-    session_id = data[0].get("id_externo")
-    return str(session_id) if session_id else None
+        return await repo.get_webchat_session_by_contact(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def resolve_webchat_conversation_from_session(
