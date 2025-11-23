@@ -3268,7 +3268,7 @@ class CRMRepository:
         return public_path
 
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
-        url = f"{self._base_url}/rpc/{function_name}"
+        url = f"{self._base_url}/rest/v1/rpc/{function_name}"
         headers = {
             "Accept": "application/json",
             "apikey": self._service_role,
