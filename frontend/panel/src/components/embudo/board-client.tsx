@@ -353,9 +353,7 @@ export function EmbudoBoardClient({
       mergeMetadata: payload.mergeMetadata ?? true,
     });
 
-    if (result.ok) {
-      applyLeadResult(result);
-    }
+    applyLeadResult(result);
 
     return result;
   }

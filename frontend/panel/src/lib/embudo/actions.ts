@@ -471,6 +471,18 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
       body: opportunityPayload,
     });
     if (!response.ok) {
+      if (response.status === 409) {
+        const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+        if (latest.ok) {
+          const mapped = mapPipelineCardResponse(latest.data);
+          return {
+            ok: false,
+            error: response.error || "El lead cambió de etapa en otra sesión. Actualizamos la información.",
+            latestStage: mapped.stage,
+            latestCard: mapped.card,
+          };
+        }
+      }
       return { ok: false, error: response.error };
     }
     cardResponse = response.data;
