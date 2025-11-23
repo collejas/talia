@@ -916,3 +916,76 @@ async def ensure_lead_tarjeta(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     return str(oportunidad_id)
+
+
+async def promote_opportunity_stage(
+    *,
+    oportunidad_id: str,
+    organizacion_id: str,
+    stage_code: str,
+) -> bool:
+    """Promueve una oportunidad a la etapa indicada (por código) si aún no ha llegado ahí."""
+    normalized_code = (stage_code or "").strip().lower()
+    if not normalized_code:
+        return False
+
+    try:
+        org_uuid = UUID(str(organizacion_id))
+        opp_uuid = UUID(str(oportunidad_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("opportunity_stage_invalid_id") from exc
+
+    repo = CRMRepository()
+    try:
+        stage = await repo.get_stage_by_code(
+            organizacion_id=org_uuid,
+            codigo=normalized_code,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    if not stage:
+        return False
+
+    stage_id = stage.get("id")
+    if not isinstance(stage_id, UUID):
+        try:
+            stage_id = UUID(str(stage_id))
+        except (TypeError, ValueError) as exc:
+            raise StorageError("opportunity_stage_invalid_target") from exc
+
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    if not opportunity:
+        return False
+
+    current_stage_value = opportunity.get("etapa_id")
+    try:
+        current_stage_uuid = UUID(str(current_stage_value)) if current_stage_value else None
+    except (TypeError, ValueError):
+        current_stage_uuid = None
+
+    if current_stage_uuid == stage_id:
+        return False
+
+    current_stage_order = (opportunity.get("etapa") or {}).get("orden")
+    target_order = stage.get("orden")
+    if isinstance(current_stage_order, (int, float)) and isinstance(target_order, (int, float)):
+        if current_stage_order >= target_order:
+            return False
+
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload={"etapa_id": str(stage_id)},
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    return True

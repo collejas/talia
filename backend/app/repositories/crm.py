@@ -72,6 +72,7 @@ class CRMRepository:
     )
 
     _stage_cache: dict[str, UUID] = {}
+    _stage_code_cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     _CLIENTE_SELECT = (
         "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
@@ -1514,6 +1515,45 @@ class CRMRepository:
         stage_id = _coerce_uuid(data[0].get("id"), field="etapa_id")
         self._stage_cache[cache_key] = stage_id
         return stage_id
+
+    async def get_stage_by_code(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+    ) -> dict[str, Any] | None:
+        normalized = (codigo or "").strip().lower()
+        if not normalized:
+            return None
+        cache_key = (str(organizacion_id), normalized)
+        cached = self._stage_code_cache.get(cache_key)
+        if cached:
+            return cached
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,codigo,nombre,orden,categoria,metadata",
+            "order": "orden.asc",
+            "limit": "1",
+            "or": f"(codigo.eq.{normalized},metadata->>legacy_codigo.eq.{normalized})",
+        }
+        resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        stage_id = _coerce_uuid(row.get("id"), field="etapa_id")
+        stage_payload = {
+            "id": stage_id,
+            "codigo": row.get("codigo"),
+            "nombre": row.get("nombre"),
+            "orden": row.get("orden"),
+            "categoria": row.get("categoria"),
+            "metadata": row.get("metadata"),
+        }
+        self._stage_code_cache[cache_key] = stage_payload
+        return stage_payload
 
     async def create_lead_event(
         self,
