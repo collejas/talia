@@ -1,8 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
-
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
+import { callCrmApi } from "@/lib/api/crm";
 
 export type DemografiaLeadsRow = {
   level: string;
@@ -133,69 +131,41 @@ export type DemografiaData = {
   map: DemografiaMapResponse;
 };
 
-async function resolveAuthToken(): Promise<string> {
-  const store = await cookies();
-  const cookieToken =
-    store.get("talia.access_token")?.value ||
-    store.get("sb-access-token")?.value ||
-    store.get("access_token")?.value;
-  if (cookieToken && cookieToken.trim().length) {
-    return cookieToken;
-  }
-  const serviceRole =
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_SERVICE_API_KEY;
-  if (!serviceRole) {
-    throw new Error("No se encontró token para consultar el backend del panel.");
-  }
-  return serviceRole;
-}
+type DemografiaQueryParams = Record<string, string | number | boolean | null | undefined>;
 
 async function callDemografiaEndpoint<T>(
   endpoint: string,
-  params: URLSearchParams,
+  params: DemografiaQueryParams,
 ): Promise<T> {
-  const baseUrl = getPanelApiBaseUrl();
-  const token = await resolveAuthToken();
-  const url = `${baseUrl}/kpis/demografia/${endpoint}?${params.toString()}`;
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-    cache: "no-store",
+  const response = await callCrmApi<T>(`/crm/demografia/${endpoint}`, {
+    searchParams: params,
+    withUserToken: true,
   });
-
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Backend respondió ${response.status} (${endpoint}): ${text}`);
+    throw new Error(response.error || `CRM respondió error (${endpoint}).`);
   }
-
-  return (await response.json()) as T;
+  return response.data;
 }
 
 export async function loadDemografiaData(
   nivel: "pais" | "estado" | "municipio" = "estado",
   options: { estado?: string | null; canales?: string[]; etapas?: string[] } = {},
 ): Promise<DemografiaData> {
-  const resumenParams = new URLSearchParams({ nivel });
-  const mapaParams = new URLSearchParams({ nivel });
+  const resumenParams: DemografiaQueryParams = { nivel };
+  const mapaParams: DemografiaQueryParams = { nivel };
 
   if (options.canales?.length) {
     const joined = options.canales.join(",");
-    resumenParams.set("canales", joined);
-    mapaParams.set("canales", joined);
+    resumenParams.canales = joined;
+    mapaParams.canales = joined;
   }
   if (options.etapas?.length) {
     const joinedStages = options.etapas.join(",");
-    resumenParams.set("etapas", joinedStages);
-    mapaParams.set("etapas", joinedStages);
+    resumenParams.etapas = joinedStages;
+    mapaParams.etapas = joinedStages;
   }
   if (nivel === "municipio" && options.estado) {
-    mapaParams.set("estado", options.estado);
+    mapaParams.estado = options.estado;
   }
 
   const [summary, map] = await Promise.all([

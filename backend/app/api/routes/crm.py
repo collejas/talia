@@ -28,6 +28,7 @@ from fastapi import (
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -38,6 +39,8 @@ from app.services import (
     EmailSendError,
     GooglePlacesClient,
     GooglePlacesError,
+    demografia_service,
+    leads_geo,
     normalize_denue_place,
     normalize_place_for_result,
     send_email,
@@ -47,6 +50,7 @@ from app.services import (
     calendar as calendar_service,
 )
 from app.services.calendar import CalendarError
+from app.services.demografia_service import DemografiaServiceError
 from app.services.storage import StorageError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
@@ -349,6 +353,35 @@ class DenueBusquedaPayload(BaseModel):
         if not trimmed:
             raise ValueError("query_required")
         return trimmed
+
+
+class ManualOverridePayload(BaseModel):
+    """Payload para activar/desactivar modo manual."""
+
+    manual: bool = Field(..., description="True para pausar al asistente")
+
+
+class ConversationReplyPayload(BaseModel):
+    """Payload para enviar mensajes desde el panel y recibir respuesta del asistente."""
+
+    content: str | None = Field(default=None, max_length=4000)
+    locale: str | None = Field(
+        default=None,
+        description="Locale del panel (ej. es-MX) para informar al asistente.",
+    )
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos opcionales que se adjuntarán al mensaje entrante.",
+    )
+    client_message_id: str | None = Field(
+        default=None,
+        max_length=120,
+        description="Identificador generado en el cliente para evitar duplicados.",
+    )
+    attachments: list[webchat_schemas.AttachmentPayload] | None = Field(
+        default=None,
+        description="Archivos adjuntos previamente cargados.",
+    )
 
 
 def get_repository() -> CRMRepository:
@@ -741,6 +774,47 @@ def _parse_datetime_input(value: str | None, *, field: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _parse_channels_param(canales: str | None) -> list[str]:
+    if not canales:
+        return []
+    values: list[str] = []
+    for chunk in canales.split(","):
+        val = chunk.strip().lower()
+        if val:
+            values.append(val)
+    return values
+
+
+def _parse_stages_param(etapas: str | None) -> list[str]:
+    if not etapas:
+        return []
+    values: list[str] = []
+    for chunk in etapas.split(","):
+        val = chunk.strip().lower()
+        if val:
+            values.append(val)
+    return values
+
+
+def _build_range_payload(
+    rango: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> dict[str, str | None]:
+    return {
+        "preset": (rango or "").strip().lower() or None,
+        "from": _format_utc(date_from) if date_from else None,
+        "to": _format_utc(date_to) if date_to else None,
+    }
+
+
+def _ensure_state_code(value: str) -> str:
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if not digits:
+        raise HTTPException(status_code=400, detail="estado_invalid")
+    return digits.zfill(2)
 
 
 def _ilike_param(value: str) -> str:
@@ -4330,6 +4404,190 @@ async def dashboard_kpis(
             "to": _format_utc(date_to) if date_to else None,
         },
     }
+
+
+@router.get("/demografia/resumen")
+async def demografia_resumen(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    user_token: str = Depends(require_user_token),
+    nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
+    canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    channel_values = _parse_channels_param(canales)
+    stage_values = _parse_stages_param(etapas)
+
+    try:
+        leads_payload = await demografia_service.fetch_leads_resumen(
+            nivel=nivel_normalizado,
+            channels=channel_values,
+            stages=stage_values,
+            date_from=date_from,
+            date_to=date_to,
+            jwt=user_token,
+        )
+        visitantes_payload = await demografia_service.fetch_visitantes_resumen(
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except DemografiaServiceError as exc:
+        logger.exception("crm.demografia.resumen_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando demografía"
+        ) from exc
+
+    return {
+        "ok": True,
+        "nivel": nivel_normalizado,
+        "canales": channel_values,
+        "etapas": stage_values,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "leads": leads_payload,
+        "visitantes": visitantes_payload,
+    }
+
+
+@router.get("/demografia/mapa")
+async def demografia_mapa(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    user_token: str = Depends(require_user_token),
+    nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
+    estado: str | None = Query(default=None),
+    canales: str | None = Query(default=None),
+    etapas: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    nivel_normalizado = (nivel or "estado").strip().lower() or "estado"
+    state_code: str | None = None
+    if nivel_normalizado == "municipio":
+        if not estado:
+            raise HTTPException(status_code=400, detail="estado_required")
+        state_code = _ensure_state_code(estado)
+
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    channel_values = _parse_channels_param(canales)
+    stage_values = _parse_stages_param(etapas)
+
+    try:
+        leads_payload = await demografia_service.fetch_leads_resumen(
+            nivel=nivel_normalizado,
+            channels=channel_values,
+            stages=stage_values,
+            date_from=date_from,
+            date_to=date_to,
+            jwt=user_token,
+        )
+        fallback_leads_payload = None
+        if nivel_normalizado == "municipio":
+            fallback_leads_payload = await demografia_service.fetch_leads_resumen(
+                nivel="estado",
+                channels=channel_values,
+                stages=stage_values,
+                date_from=date_from,
+                date_to=date_to,
+                jwt=user_token,
+            )
+        visitantes_payload = await demografia_service.fetch_visitantes_resumen(
+            nivel=nivel_normalizado,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        dataset = demografia_service.build_map_dataset(
+            nivel=nivel_normalizado,
+            leads_payload=leads_payload,
+            visitantes_payload=visitantes_payload,
+            state_filter=state_code,
+            fallback_leads_payload=fallback_leads_payload,
+        )
+    except DemografiaServiceError as exc:
+        logger.exception("crm.demografia.mapa_failed")
+        raise HTTPException(
+            status_code=502, detail=str(exc) or "Error consultando demografía"
+        ) from exc
+
+    try:
+        if nivel_normalizado == "pais":
+            geojson = leads_geo.load_world_countries_geojson()
+        elif nivel_normalizado == "estado":
+            geojson = leads_geo.load_full_states_geojson()
+        else:
+            geojson = leads_geo.load_state_municipalities_geojson(state_code or "00")
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        logger.exception("crm.demografia.geo_missing")
+        raise HTTPException(status_code=500, detail="geojson_missing") from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="estado_not_found") from exc
+
+    return {
+        "ok": True,
+        "nivel": nivel_normalizado,
+        "estado": state_code,
+        "canales": channel_values,
+        "etapas": stage_values,
+        "range": _build_range_payload(rango, date_from, date_to),
+        "totales_leads": (leads_payload.get("totals") if isinstance(leads_payload, dict) else {}),
+        "totales_visitantes": (
+            visitantes_payload.get("totals") if isinstance(visitantes_payload, dict) else {}
+        ),
+        "totales_leads_por_canal": (
+            leads_payload.get("totals_by_channel") if isinstance(leads_payload, dict) else {}
+        ),
+        "captado_orden": (
+            leads_payload.get("captado_orden") if isinstance(leads_payload, dict) else None
+        ),
+        "dataset": dataset,
+        "geojson": geojson,
+    }
+
+
+@router.get("/demografia/geo/estados")
+async def demografia_geo_estados(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+) -> dict[str, Any]:
+    try:
+        geojson = leads_geo.load_states_geojson()
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        logger.exception("crm.demografia.geo.states_missing")
+        raise HTTPException(status_code=500, detail="geojson_missing") from exc
+    return {"ok": True, "geojson": geojson}
+
+
+@router.get("/demografia/geo/municipios/{estado}")
+async def demografia_geo_municipios(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    estado: str,
+) -> dict[str, Any]:
+    code = _ensure_state_code(estado)
+    try:
+        geojson = leads_geo.load_state_municipalities_geojson(code)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="estado_not_found") from exc
+    return {"ok": True, "geojson": geojson}
+
+
+@router.get("/demografia/geo/paises")
+async def demografia_geo_paises(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+) -> dict[str, Any]:
+    try:
+        geojson = leads_geo.load_world_countries_geojson()
+    except FileNotFoundError as exc:  # pragma: no cover - depende del despliegue
+        logger.exception("crm.demografia.geo.world_missing")
+        raise HTTPException(status_code=500, detail="geojson_missing") from exc
+    return {"ok": True, "geojson": geojson}
 
 
 def _build_pipeline_overview(
