@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import json
 import secrets
 from collections import Counter
@@ -3591,6 +3593,7 @@ async def get_visits_detail(
     offset: Annotated[int, Query(ge=0)] = 0,
     order_by: str = Query(default="primera"),
     order_dir: Literal["asc", "desc"] = Query(default="asc"),
+    with_contacts_only: bool = Query(default=False),
 ) -> list[dict[str, Any]]:
     if order_dir not in {"asc", "desc"}:
         raise HTTPException(status_code=400, detail="order_dir_invalid")
@@ -3601,6 +3604,7 @@ async def get_visits_detail(
             offset=offset,
             order_by=order_by or "primera",
             order_dir=order_dir,
+            with_contacts_only=with_contacts_only,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -4271,6 +4275,63 @@ async def analytics_catalog_pipeline(
     return {"ok": True, "rows": rows}
 
 
+@router.get("/analytics/catalog/ventas/export")
+async def analytics_catalog_sales_export(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    mes_desde: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    mes_hasta: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
+    moneda: Annotated[str | None, Query(min_length=3, max_length=3)] = None,
+) -> Response:
+    try:
+        rows = await repo.analytics_catalog_sales(
+            usuario_token=user_token,
+            mes_desde=mes_desde,
+            mes_hasta=mes_hasta,
+            moneda=moneda,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    csv_content = _render_catalog_sales_csv(rows)
+    filename = _catalog_sales_filename(mes_desde, mes_hasta, moneda)
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/dashboard/kpis")
+async def dashboard_kpis(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> dict[str, Any]:
+    date_from, date_to = _resolve_date_range(rango, desde, hasta)
+    try:
+        payload = await repo.visitas_dashboard_kpis(
+            usuario_token=user_token,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "kpis": payload,
+        "range": {
+            "preset": (rango or "").strip().lower() or None,
+            "from": _format_utc(date_from) if date_from else None,
+            "to": _format_utc(date_to) if date_to else None,
+        },
+    }
+
+
 def _build_pipeline_overview(
     rows: list[dict[str, Any]],
     total_rows: int,
@@ -4297,6 +4358,43 @@ def _extract_visitas_sin_chat(payload: dict[str, Any] | None) -> int:
         if isinstance(value, (int, float)):
             return int(value)
     return 0
+
+
+def _render_catalog_sales_csv(rows: Sequence[dict[str, Any]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["mes", "producto", "moneda", "total_vendido", "unidades_vendidas", "leads_ganados"]
+    )
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        writer.writerow(
+            [
+                row.get("mes") or "",
+                row.get("item_nombre") or "",
+                (row.get("moneda") or "MXN").upper(),
+                row.get("total_vendido") or 0,
+                row.get("unidades_vendidas") or 0,
+                row.get("leads_ganados") or 0,
+            ]
+        )
+    return output.getvalue()
+
+
+def _catalog_sales_filename(
+    mes_desde: str | None, mes_hasta: str | None, moneda: str | None
+) -> str:
+    parts = ["ventas-productos"]
+    if mes_desde and mes_hasta:
+        parts.append(f"{mes_desde}_a_{mes_hasta}")
+    elif mes_desde:
+        parts.append(f"desde_{mes_desde}")
+    elif mes_hasta:
+        parts.append(f"hasta_{mes_hasta}")
+    if moneda:
+        parts.append(moneda.lower())
+    return "-".join(parts) + ".csv"
 
 
 def _build_pipeline_cards(rows: list[dict[str, Any]]) -> CRMPipelineCards:

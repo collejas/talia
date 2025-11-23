@@ -1485,12 +1485,14 @@ class CRMRepository:
         offset: int = 0,
         order_by: str = "primera",
         order_dir: Literal["asc", "desc"] = "asc",
+        with_contacts_only: bool = False,
     ) -> list[dict[str, Any]]:
         body = {
             "p_limit": max(1, min(limit, 500)),
             "p_offset": max(0, offset),
             "p_order_by": order_by,
             "p_order_dir": order_dir,
+            "p_con_contacto": with_contacts_only,
         }
         resp = await self._request_with_user(
             "POST",
