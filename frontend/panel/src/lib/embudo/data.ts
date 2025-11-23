@@ -104,6 +104,7 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
     searchParams: {
       limit: String(DEFAULT_LIMIT),
     },
+    withUserToken: true,
   });
 
   const errors: string[] = [];

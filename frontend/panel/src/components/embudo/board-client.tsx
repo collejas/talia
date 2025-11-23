@@ -290,8 +290,9 @@ export function EmbudoBoardClient({
   };
 
   function applyLeadResult(result: LeadActionResult) {
-    if (!result.ok) return;
-    const { stage, card } = result;
+    const stage = result.ok ? result.stage : result.latestStage;
+    const card = result.ok ? result.card : result.latestCard;
+    if (!stage || !card) return;
     setStages((prev) => {
       const updated = prev.map((item) => {
         if (item.id === stage.id) {
@@ -393,6 +394,7 @@ export function EmbudoBoardClient({
     });
     setMovePending(false);
     if (!result.ok) {
+      applyLeadResult(result);
       return { ok: false as const, error: result.error || "No se pudo avanzar el lead." };
     }
     applyLeadResult(result);
@@ -543,6 +545,7 @@ export function EmbudoBoardClient({
     setMovePending(false);
 
     if (!result.ok) {
+      applyLeadResult(result);
       setDragMessage(result.error || "No se pudo mover el lead.");
       handleDragCancel();
       return;

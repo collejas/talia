@@ -50,7 +50,7 @@ export type DeleteLeadInput = {
 
 export type LeadActionResult =
   | { ok: true; stage: EmbudoStage; card: EmbudoCard }
-  | { ok: false; error: string };
+  | { ok: false; error: string; latestStage?: EmbudoStage; latestCard?: EmbudoCard };
 
 export type LeadDeleteResult = { ok: true; tarjetaId: string; contactoId: string } | { ok: false; error: string };
 
@@ -512,6 +512,18 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
   });
 
   if (!response.ok) {
+    if (response.status === 409) {
+      const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+      if (latest.ok) {
+        const mapped = mapPipelineCardResponse(latest.data);
+        return {
+          ok: false,
+          error: response.error || "El lead cambió de etapa en otra sesión. Actualizamos la información.",
+          latestStage: mapped.stage,
+          latestCard: mapped.card,
+        };
+      }
+    }
     return { ok: false, error: response.error };
   }
 

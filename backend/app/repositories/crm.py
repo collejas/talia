@@ -787,32 +787,6 @@ class CRMRepository:
                 f"Supabase respondió error {resp.status_code} al eliminar oportunidad: {resp.text}"
             )
 
-    async def count_pipeline_visitors(
-        self,
-        *,
-        closed_after: datetime | None = None,
-        closed_before: datetime | None = None,
-    ) -> int:
-        body = {
-            "p_closed_after": closed_after.isoformat() if closed_after else None,
-            "p_closed_before": closed_before.isoformat() if closed_before else None,
-        }
-        resp = await self._request(
-            "POST",
-            "/rest/v1/rpc/embudo_visitantes_contador",
-            json=body,
-        )
-        data = resp.json()
-        if isinstance(data, list) and data:
-            entry = data[0]
-            if isinstance(entry, dict) and isinstance(entry.get("total"), (int, float)):
-                return int(entry["total"])
-        if isinstance(data, dict) and isinstance(data.get("total"), (int, float)):
-            return int(data["total"])
-        if isinstance(data, (int, float)):
-            return int(data)
-        raise CRMRepositoryError(f"Respuesta inesperada al contar visitantes: {data!r}")
-
     async def create_lead_event(
         self,
         *,

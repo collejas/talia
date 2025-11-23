@@ -4204,6 +4204,7 @@ async def pipeline_board(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=50, le=1000)] = 400,
 ) -> CRMPipelineBoard:
     try:
@@ -4212,11 +4213,16 @@ async def pipeline_board(
             organizacion_id=organizacion_id,
             limit=limit,
         )
-        visitors = await repo.count_pipeline_visitors(
-            closed_after=datetime.now(timezone.utc) - timedelta(days=30)
-        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    visitors = 0
+    try:
+        kpis_payload = await repo.visitas_dashboard_kpis(usuario_token=user_token)
+        visitors = _extract_visitas_sin_chat(kpis_payload)
+    except CRMRepositoryError:
+        visitors = 0
+
     board = _build_pipeline_board(stages, rows)
     return CRMPipelineBoard(
         stages=board.stages,
@@ -4235,6 +4241,22 @@ def _build_pipeline_overview(
     chart = _build_pipeline_chart(rows, days_range)
     table = _build_pipeline_table(rows, table_limit)
     return CRMPipelineOverview(cards=cards, chart=chart, table=table, total_rows=total_rows)
+
+
+def _extract_visitas_sin_chat(payload: dict[str, Any] | None) -> int:
+    if not isinstance(payload, dict):
+        return 0
+    webchat = payload.get("webchat")
+    if isinstance(webchat, dict):
+        for key in ("visitas_sin_chat", "visitantes_sin_chat", "sin_chat", "sin_conversacion"):
+            value = webchat.get(key)
+            if isinstance(value, (int, float)):
+                return int(value)
+    for key in ("visitantes", "visitantes_sin_chat", "visitas_sin_chat", "total"):
+        value = payload.get(key)
+        if isinstance(value, (int, float)):
+            return int(value)
+    return 0
 
 
 def _build_pipeline_cards(rows: list[dict[str, Any]]) -> CRMPipelineCards:
