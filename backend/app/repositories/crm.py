@@ -1564,6 +1564,150 @@ class CRMRepository:
             raise CRMRepositoryError("booking_not_found")
         return row
 
+    async def user_has_role(self, *, usuario_id: UUID, role_code: str) -> bool:
+        params = {
+            "select": "rol:roles(codigo)",
+            "usuario_id": f"eq.{usuario_id}",
+            "rol.codigo": f"eq.{role_code}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/usuarios_roles",
+            params=params,
+        )
+        data = resp.json() or []
+        if isinstance(data, list):
+            for row in data:
+                role = row.get("rol") if isinstance(row, dict) else None
+                if isinstance(role, dict) and role.get("codigo") == role_code:
+                    return True
+        if isinstance(data, dict):
+            role = data.get("rol")
+            if isinstance(role, dict) and role.get("codigo") == role_code:
+                return True
+        return False
+
+    async def create_prospeccion_busqueda(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/crear_busqueda",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            return resp.json()
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("crear_busqueda_response_invalid") from exc
+
+    async def upsert_prospeccion_resultados(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> Any:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/upsert_resultados_lote",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            return resp.json()
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("upsert_resultados_invalid_response") from exc
+
+    async def list_prospeccion_busquedas(
+        self,
+        *,
+        usuario_token: str,
+        params: dict[str, str],
+    ) -> tuple[list[dict[str, Any]], int | None]:
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/busquedas",
+            token=usuario_token,
+            params=params,
+            prefer="count=planned",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar búsquedas: {data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range"))
+        return data, total
+
+    async def delete_prospeccion_busqueda(
+        self,
+        *,
+        busqueda_id: UUID,
+        fuente: str,
+    ) -> int:
+        params = {
+            "id": f"eq.{busqueda_id}",
+            "fuente": f"eq.{fuente}",
+        }
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/busquedas",
+            params=params,
+            prefer="return=representation",
+        )
+        if resp.status_code == 204:
+            return 0
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al eliminar búsqueda: {data!r}")
+        return len(data)
+
+    async def list_prospeccion_resultados(
+        self,
+        *,
+        usuario_token: str,
+        path: str,
+        params: dict[str, str],
+    ) -> tuple[list[dict[str, Any]], int | None]:
+        resp = await self._request_with_user(
+            "GET",
+            path,
+            token=usuario_token,
+            params=params,
+            prefer="count=planned",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar resultados: {data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range"))
+        return data, total
+
+    async def delete_prospeccion_resultados(
+        self,
+        *,
+        ids: list[UUID],
+        fuente: str,
+    ) -> int:
+        ids_param = ",".join(str(value) for value in ids)
+        params = {
+            "id": f"in.({ids_param})",
+            "fuente": f"eq.{fuente}",
+        }
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/resultados",
+            params=params,
+            prefer="return=representation",
+        )
+        if resp.status_code == 204:
+            return 0
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al eliminar resultados: {data!r}")
+        return len(data)
+
     async def get_email_template(
         self,
         *,

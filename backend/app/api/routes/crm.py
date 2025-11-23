@@ -9,13 +9,23 @@ from typing import Annotated, Any, Literal, Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import calendar as calendar_service
+from app.services import (
+    DenueClient,
+    DenueError,
+    GooglePlacesClient,
+    GooglePlacesError,
+    normalize_denue_place,
+    normalize_place_for_result,
+)
+from app.services import (
+    calendar as calendar_service,
+)
 from app.services.calendar import CalendarError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
@@ -84,6 +94,130 @@ class AgendaCancelPayload(BaseModel):
     """Payload para cancelar citas."""
 
     reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
+
+
+class DeleteResultadosPayload(BaseModel):
+    """IDs de resultados a eliminar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[UUID] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="IDs de resultados (uuid) a eliminar.",
+    )
+
+    @field_validator("ids")
+    @classmethod
+    def _dedupe_ids(cls, value: list[UUID]) -> list[UUID]:
+        seen: set[UUID] = set()
+        deduped: list[UUID] = []
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            deduped.append(item)
+        return deduped
+
+
+class GoogleProspeccionBusquedaPayload(BaseModel):
+    """Parámetros para lanzar una captura desde Google Places."""
+
+    query: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Texto de búsqueda libre (obligatorio en estrategia text).",
+    )
+    lat: float = Field(..., description="Latitud del centro de búsqueda.")
+    lng: float = Field(..., description="Longitud del centro de búsqueda.")
+    radio_m: int = Field(
+        default=1000,
+        ge=50,
+        le=50000,
+        description="Radio en metros para limitar la búsqueda.",
+    )
+    included_types: list[str] | None = Field(
+        default=None,
+        description="Clasificaciones soportadas por Google Places (obligatorias en estrategia nearby).",
+    )
+    strategy: Literal["nearby", "text"] = Field(
+        default="nearby",
+        description="Define si se usa searchNearby (por tipo) o searchText (por texto).",
+    )
+    language_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=10,
+        description="Sobrescribe el código de idioma enviado a Google Places.",
+    )
+    region_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=10,
+        description="Sobrescribe el código de región enviado a Google Places.",
+    )
+    meta: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos adicionales para guardar en public.busquedas.meta.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("included_types")
+    @classmethod
+    def _validate_types(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned = [part.strip() for part in value if part and part.strip()]
+        return cleaned or None
+
+    @field_validator("query")
+    @classmethod
+    def _strip_query(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @model_validator(mode="after")
+    def validate_strategy(self) -> GoogleProspeccionBusquedaPayload:
+        if self.strategy == "nearby" and not self.included_types:
+            raise ValueError("included_types_required")
+        if self.strategy == "text":
+            query = (self.query or "").strip()
+            if not query:
+                raise ValueError("query_required")
+            self.query = query
+        return self
+
+
+class DenueBusquedaPayload(BaseModel):
+    """Parámetros para lanzar una captura desde DENUE."""
+
+    query: str = Field(..., min_length=2, max_length=200)
+    lat: float = Field(..., description="Latitud del centro de búsqueda.")
+    lng: float = Field(..., description="Longitud del centro de búsqueda.")
+    radio_m: int = Field(
+        default=1000,
+        ge=100,
+        le=20000,
+        description="Radio en metros; se ajustará a los valores aceptados por DENUE (250-5000).",
+    )
+    meta: dict[str, Any] | None = Field(
+        default=None,
+        description="Metadatos adicionales para guardar en public.busquedas.meta.",
+    )
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("query_required")
+        return trimmed
 
 
 def get_repository() -> CRMRepository:
@@ -244,6 +378,61 @@ def _parse_datetime_input(value: str | None, *, field: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _ilike_param(value: str) -> str:
+    sanitized = value.replace("*", "").replace("%", "")
+    return f"ilike.*{sanitized}*"
+
+
+def _result_preview(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "external_id": item.get("external_id"),
+        "name": item.get("name"),
+        "actividad": item.get("actividad"),
+        "phone": item.get("phone"),
+        "website": item.get("website"),
+        "address": item.get("address"),
+        "rating": item.get("rating"),
+        "reviews": item.get("reviews"),
+        "maps_url": item.get("maps_url"),
+    }
+
+
+def _rpc_field(data: Any, *keys: str) -> Any:
+    row: Any
+    if isinstance(data, list):
+        row = data[0] if data else None
+    else:
+        row = data
+    if isinstance(row, dict):
+        for key in keys:
+            if key in row:
+                return row[key]
+        if row:
+            return next(iter(row.values()))
+    if isinstance(row, (str, int, float)):
+        return row
+    if isinstance(data, dict):
+        for key in keys:
+            if key in data:
+                return data[key]
+        if data:
+            return next(iter(data.values()))
+    return None
+
+
+async def require_admin_user(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> UUID:
+    if not usuario_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    has_role = await repo.user_has_role(usuario_id=usuario_id, role_code="admin")
+    if not has_role:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    return usuario_id
 
 
 def _coerce_metadata(value: Any) -> dict[str, Any] | None:
@@ -2198,6 +2387,418 @@ async def cancel_agenda_booking(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"ok": True, "booking": booking}
+
+
+@router.post("/prospeccion/google/busquedas")
+async def crear_busqueda_google(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: GoogleProspeccionBusquedaPayload,
+) -> dict[str, Any]:
+    client = GooglePlacesClient()
+    query_value = payload.query or ", ".join(payload.included_types or []) or "google_places"
+    try:
+        places = await client.search_places(
+            query=payload.query,
+            latitude=payload.lat,
+            longitude=payload.lng,
+            radius_m=payload.radio_m,
+            included_types=payload.included_types,
+            strategy=payload.strategy,
+            language_code=payload.language_code,
+            region_code=payload.region_code,
+            enrich_details=True,
+        )
+    except GooglePlacesError as exc:
+        detail = str(exc) or "google_places_error"
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    normalized_items = [normalize_place_for_result(place) for place in places]
+    meta_payload: dict[str, Any] = {
+        "strategy": payload.strategy,
+        "included_types": payload.included_types,
+    }
+    if payload.meta:
+        meta_payload.update(payload.meta)
+    if payload.language_code:
+        meta_payload["language_code"] = payload.language_code
+    if payload.region_code:
+        meta_payload["region_code"] = payload.region_code
+
+    crear_body = {
+        "p_fuente": "google_places",
+        "p_query": query_value,
+        "p_radio_m": payload.radio_m,
+        "p_lat": payload.lat,
+        "p_lng": payload.lng,
+        "p_total": len(normalized_items),
+        "p_meta": meta_payload,
+    }
+    try:
+        crear_data = await repo.create_prospeccion_busqueda(
+            usuario_token=user_token,
+            payload=crear_body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    busqueda_value = _rpc_field(crear_data, "crear_busqueda", "id")
+    try:
+        busqueda_uuid = UUID(str(busqueda_value))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="busqueda_id_invalid") from exc
+
+    upserted = 0
+    if normalized_items:
+        try:
+            upsert_data = await repo.upsert_prospeccion_resultados(
+                usuario_token=user_token,
+                payload={
+                    "p_busqueda_id": str(busqueda_uuid),
+                    "p_fuente": "google_places",
+                    "p_items": normalized_items,
+                },
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        upsert_value = _rpc_field(upsert_data, "upsert_resultados_lote", "upserted", "total")
+        try:
+            upserted = int(upsert_value or 0)
+        except (TypeError, ValueError):
+            upserted = len(normalized_items)
+
+    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    return {
+        "ok": True,
+        "busqueda_id": str(busqueda_uuid),
+        "google_results": len(normalized_items),
+        "upserted": upserted,
+        "preview": preview,
+    }
+
+
+@router.post("/prospeccion/denue/busquedas")
+async def crear_busqueda_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: DenueBusquedaPayload,
+) -> dict[str, Any]:
+    client = DenueClient()
+    try:
+        records = await client.search(
+            query=payload.query,
+            latitude=payload.lat,
+            longitude=payload.lng,
+            radius_m=payload.radio_m,
+        )
+    except DenueError as exc:
+        detail = str(exc) or "denue_error"
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    normalized_items = [normalize_denue_place(item) for item in records]
+    meta_payload: dict[str, Any] = {"query": payload.query}
+    if payload.meta:
+        meta_payload.update(payload.meta)
+
+    crear_body = {
+        "p_fuente": "denue",
+        "p_query": payload.query,
+        "p_radio_m": payload.radio_m,
+        "p_lat": payload.lat,
+        "p_lng": payload.lng,
+        "p_total": len(normalized_items),
+        "p_meta": meta_payload,
+    }
+    try:
+        crear_data = await repo.create_prospeccion_busqueda(
+            usuario_token=user_token,
+            payload=crear_body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    busqueda_value = _rpc_field(crear_data, "crear_busqueda", "id")
+    try:
+        busqueda_uuid = UUID(str(busqueda_value))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="busqueda_id_invalid") from exc
+
+    upserted = 0
+    if normalized_items:
+        try:
+            upsert_data = await repo.upsert_prospeccion_resultados(
+                usuario_token=user_token,
+                payload={
+                    "p_busqueda_id": str(busqueda_uuid),
+                    "p_fuente": "denue",
+                    "p_items": normalized_items,
+                },
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if isinstance(upsert_data, dict):
+            upserted = (
+                upsert_data.get("upserted") or upsert_data.get("total") or len(normalized_items)
+            )
+        else:
+            try:
+                upserted = int(upsert_data or 0)
+            except (TypeError, ValueError):
+                upserted = len(normalized_items)
+
+    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    return {
+        "ok": True,
+        "busqueda_id": str(busqueda_uuid),
+        "denue_results": len(normalized_items),
+        "upserted": upserted,
+        "preview": preview,
+    }
+
+
+@router.get("/prospeccion/google/busquedas")
+async def listar_busquedas_google(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str | None = Query(default=None),
+) -> dict[str, Any]:
+    params: dict[str, str] = {
+        "select": "id,fuente,query,radio_m,lat,lng,meta,total_encontrados,creado_en",
+        "order": "creado_en.desc",
+        "limit": str(limit),
+        "offset": str(offset),
+        "fuente": "eq.google_places",
+    }
+    if search:
+        params["query"] = _ilike_param(search)
+    try:
+        rows, total = await repo.list_prospeccion_busquedas(
+            usuario_token=user_token,
+            params=params,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.get("/prospeccion/denue/busquedas")
+async def listar_busquedas_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    search: str | None = Query(default=None),
+) -> dict[str, Any]:
+    params: dict[str, str] = {
+        "select": "id,fuente,query,radio_m,lat,lng,meta,total_encontrados,creado_en",
+        "order": "creado_en.desc",
+        "limit": str(limit),
+        "offset": str(offset),
+        "fuente": "eq.denue",
+    }
+    if search:
+        params["query"] = _ilike_param(search)
+    try:
+        rows, total = await repo.list_prospeccion_busquedas(
+            usuario_token=user_token,
+            params=params,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.delete("/prospeccion/google/busquedas/{busqueda_id}")
+async def eliminar_busqueda_google(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    busqueda_id: UUID,
+) -> dict[str, Any]:
+    try:
+        deleted = await repo.delete_prospeccion_busqueda(
+            busqueda_id=busqueda_id,
+            fuente="google_places",
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
+
+
+@router.delete("/prospeccion/denue/busquedas/{busqueda_id}")
+async def eliminar_busqueda_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    busqueda_id: UUID,
+) -> dict[str, Any]:
+    try:
+        deleted = await repo.delete_prospeccion_busqueda(
+            busqueda_id=busqueda_id,
+            fuente="denue",
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
+
+
+@router.get("/prospeccion/google/resultados")
+async def listar_resultados_google(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID | None = Query(default=None),
+    q: str | None = Query(default=None),
+    tipo: str | None = Query(default=None),
+    max_distancia_m: Annotated[int | None, Query(ge=1, le=50000)] = None,
+    min_rating: Annotated[float | None, Query(ge=0, le=5)] = None,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 250,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    order: Literal["recientes", "rating", "distancia"] = Query(default="recientes"),
+) -> dict[str, Any]:
+    order_map = {
+        "recientes": "resultado_creado_en.desc",
+        "rating": "rating.desc.nullslast",
+        "distancia": "distancia_m.asc.nullslast",
+    }
+    params: dict[str, str] = {
+        "select": "*",
+        "order": order_map.get(order, "resultado_creado_en.desc"),
+    }
+    if busqueda_id:
+        params["busqueda_id"] = f"eq.{busqueda_id}"
+    if tipo:
+        params["google_primary_type"] = f"eq.{tipo}"
+    if max_distancia_m:
+        params["distancia_m"] = f"lte.{max_distancia_m}"
+    if min_rating is not None:
+        params["rating"] = f"gte.{min_rating}"
+    if q:
+        sanitized = q.replace("*", "").replace("%", "")
+        params["or"] = (
+            f"(display_name.ilike.*{sanitized}*,"
+            f"actividad.ilike.*{sanitized}*,"
+            f"address.ilike.*{sanitized}*)"
+        )
+    effective_limit = min(limit, 500)
+    params["limit"] = str(effective_limit)
+    params["offset"] = str(offset)
+    try:
+        rows, total = await repo.list_prospeccion_resultados(
+            usuario_token=user_token,
+            path="/rest/v1/v_google_places_contactables",
+            params=params,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": effective_limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.get("/prospeccion/denue/resultados")
+async def listar_resultados_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID | None = Query(default=None),
+    q: str | None = Query(default=None),
+    estrato: str | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=5000)] = 250,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    order: Literal["recientes", "distancia"] = Query(default="recientes"),
+) -> dict[str, Any]:
+    order_map = {
+        "recientes": "resultado_creado_en.desc",
+        "distancia": "distancia_m.asc.nullslast",
+    }
+    params: dict[str, str] = {
+        "select": "*",
+        "order": order_map.get(order, "resultado_creado_en.desc"),
+    }
+    if busqueda_id:
+        params["busqueda_id"] = f"eq.{busqueda_id}"
+    if estrato:
+        params["estrato"] = f"eq.{estrato}"
+    if q:
+        sanitized = q.replace("*", "").replace("%", "")
+        params["or"] = (
+            f"(display_name.ilike.*{sanitized}*,"
+            f"actividad.ilike.*{sanitized}*,"
+            f"address.ilike.*{sanitized}*)"
+        )
+    effective_limit = min(limit, 500)
+    params["limit"] = str(effective_limit)
+    params["offset"] = str(offset)
+    try:
+        rows, total = await repo.list_prospeccion_resultados(
+            usuario_token=user_token,
+            path="/rest/v1/v_denue_contactables",
+            params=params,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "limit": effective_limit,
+        "offset": offset,
+        "total": total or len(rows),
+    }
+
+
+@router.delete("/prospeccion/google/resultados")
+async def eliminar_resultados_google(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    payload: DeleteResultadosPayload,
+) -> dict[str, Any]:
+    try:
+        deleted = await repo.delete_prospeccion_resultados(
+            ids=payload.ids,
+            fuente="google_places",
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
+
+
+@router.delete("/prospeccion/denue/resultados")
+async def eliminar_resultados_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    payload: DeleteResultadosPayload,
+) -> dict[str, Any]:
+    try:
+        deleted = await repo.delete_prospeccion_resultados(
+            ids=payload.ids,
+            fuente="denue",
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
 
 
 @router.get("/visitas/kpis")

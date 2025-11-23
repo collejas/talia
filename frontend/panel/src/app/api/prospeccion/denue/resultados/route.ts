@@ -19,7 +19,7 @@ async function resolveAccessToken(): Promise<string | null> {
 
 function buildBackendUrl(request: Request): URL {
   const backendBase = getPanelApiBaseUrl();
-  const target = new URL(`${backendBase}/prospeccion/denue/resultados`);
+  const target = new URL(`${backendBase}/crm/prospeccion/denue/resultados`);
   const source = new URL(request.url);
   source.searchParams.forEach((value, key) => {
     target.searchParams.append(key, value);

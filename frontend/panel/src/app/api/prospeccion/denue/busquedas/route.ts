@@ -35,7 +35,7 @@ async function proxyRequest(request: Request, init: { method: "GET" | "POST" | "
 
   let targetUrl: URL;
   try {
-    targetUrl = buildBackendUrl(request, "/prospeccion/denue/busquedas");
+    targetUrl = buildBackendUrl(request, "/crm/prospeccion/denue/busquedas");
     const deleteId = targetUrl.searchParams.get("delete_id");
     if (init.method === "DELETE") {
       if (!deleteId) {
