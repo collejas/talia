@@ -1264,6 +1264,20 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear contacto: {row!r}")
         return row
 
+    async def fetch_user_profile(self, usuario_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{usuario_id}",
+            "select": "id,nombre_completo,correo",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        data = resp.json()
+        if isinstance(data, list) and data:
+            row = data[0]
+            if isinstance(row, dict):
+                return row
+        return None
+
     async def delete_contact(
         self,
         *,

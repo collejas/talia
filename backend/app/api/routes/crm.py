@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from typing import Annotated, Any, Literal, Sequence
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
@@ -1147,6 +1147,211 @@ def _resolve_whatsapp_number(contact: dict[str, Any] | None, override: str | Non
         return candidate
     contact_phone = _clean_text((contact or {}).get("telefono_e164"))
     return contact_phone
+
+
+def _extract_agent_name(metadata: dict[str, Any] | None) -> str | None:
+    if not metadata:
+        return None
+    candidates: list[Any] = [
+        metadata.get("manual_author"),
+        metadata.get("manualAuthor"),
+        metadata.get("agent_name"),
+        metadata.get("agentName"),
+        metadata.get("author_name"),
+        metadata.get("authorName"),
+    ]
+    user = metadata.get("user")
+    if isinstance(user, dict):
+        candidates.extend(
+            [
+                user.get("name"),
+                user.get("full_name"),
+                user.get("fullName"),
+                user.get("display_name"),
+                user.get("displayName"),
+            ]
+        )
+    agent = metadata.get("agent")
+    if isinstance(agent, dict):
+        candidates.extend(
+            [
+                agent.get("name"),
+                agent.get("full_name"),
+                agent.get("fullName"),
+                agent.get("display_name"),
+                agent.get("displayName"),
+            ]
+        )
+    extra = metadata.get("extra")
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except json.JSONDecodeError:
+            extra = None
+    if isinstance(extra, dict):
+        candidates.extend(
+            [
+                extra.get("manual_author"),
+                extra.get("manualAuthor"),
+                extra.get("agent_name"),
+                extra.get("agentName"),
+                extra.get("author_name"),
+                extra.get("authorName"),
+            ]
+        )
+        user_extra = extra.get("user")
+        if isinstance(user_extra, dict):
+            candidates.extend(
+                [
+                    user_extra.get("name"),
+                    user_extra.get("full_name"),
+                    user_extra.get("fullName"),
+                    user_extra.get("display_name"),
+                    user_extra.get("displayName"),
+                ]
+            )
+        agent_extra = extra.get("agent")
+        if isinstance(agent_extra, dict):
+            candidates.extend(
+                [
+                    agent_extra.get("name"),
+                    agent_extra.get("full_name"),
+                    agent_extra.get("fullName"),
+                    agent_extra.get("display_name"),
+                    agent_extra.get("displayName"),
+                ]
+            )
+        author_extra = extra.get("author") or extra.get("author_name") or extra.get("authorName")
+        if isinstance(author_extra, str) and author_extra.strip():
+            candidates.append(author_extra.strip())
+    for candidate in candidates:
+        if isinstance(candidate, str):
+            trimmed = candidate.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _extract_agent_email(metadata: dict[str, Any] | None) -> str | None:
+    if not metadata:
+        return None
+    email_keys = ("manual_email", "manualEmail", "agent_email", "agentEmail", "email")
+    for key in email_keys:
+        candidate = metadata.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    user = metadata.get("user")
+    if isinstance(user, dict):
+        for key in ("email", "correo", "mail"):
+            candidate = user.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    agent = metadata.get("agent")
+    if isinstance(agent, dict):
+        for key in ("email", "correo"):
+            candidate = agent.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    extra = metadata.get("extra")
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except json.JSONDecodeError:
+            extra = None
+    if isinstance(extra, dict):
+        for key in email_keys:
+            candidate = extra.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        user_extra = extra.get("user")
+        if isinstance(user_extra, dict):
+            for key in ("email", "correo", "mail"):
+                candidate = user_extra.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+        agent_extra = extra.get("agent")
+        if isinstance(agent_extra, dict):
+            for key in ("email", "correo"):
+                candidate = agent_extra.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+    return None
+
+
+def _extract_session_id_from_contact(contact_data: Any) -> str | None:
+    if not isinstance(contact_data, dict):
+        return None
+    candidates: list[Any] = [
+        contact_data.get("session_id"),
+        contact_data.get("SessionId"),
+    ]
+    trazabilidad = contact_data.get("trazabilidad")
+    if isinstance(trazabilidad, dict):
+        candidates.extend(
+            [
+                trazabilidad.get("session_id"),
+                trazabilidad.get("SessionId"),
+            ]
+        )
+    metadata = contact_data.get("metadata")
+    if isinstance(metadata, dict):
+        candidates.extend(
+            [
+                metadata.get("session_id"),
+                metadata.get("SessionId"),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, str):
+            stripped = candidate.strip()
+            if stripped:
+                return stripped
+    return None
+
+
+async def _resolve_webchat_session_id(contact_id: str) -> str | None:
+    try:
+        contact = await storage.fetch_contact(contact_id)
+    except storage.StorageError as exc:
+        logger.exception(
+            "panel.inbox.fetch_contact_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        contact = None
+
+    if contact:
+        session_id = _extract_session_id_from_contact(contact.get("contacto_datos"))
+        if session_id:
+            return session_id
+
+    try:
+        return await storage.fetch_webchat_session_id(contact_id)
+    except storage.StorageError as exc:
+        logger.exception(
+            "panel.inbox.fetch_session_id_failed",
+            extra={"contact_id": contact_id, "error": str(exc)},
+        )
+        return None
+
+
+async def _fetch_panel_user_profile(
+    repo: CRMRepository, user_id: str | None
+) -> dict[str, Any] | None:
+    if not user_id:
+        return None
+    try:
+        user_uuid = UUID(str(user_id))
+    except ValueError:
+        return None
+    try:
+        profile = await repo.fetch_user_profile(usuario_id=user_uuid)
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "panel.inbox.manual_user_lookup_failed",
+            extra={"user_id": user_id, "error": str(exc)},
+        )
+        return None
+    return profile
 
 
 def _quote_mark_extra(extra: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -3181,6 +3386,354 @@ async def get_inbox_messages(
         before=before,
     )
     return [CRMInboxMessage.model_validate(row) for row in rows]
+
+
+@router.post("/inbox/conversations/{conversacion_id}/manual")
+async def set_inbox_manual_mode(
+    *,
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    conversacion_id: UUID,
+    payload: ManualOverridePayload,
+) -> dict[str, Any]:
+    try:
+        await storage.set_manual_override(str(conversacion_id), payload.manual)
+    except StorageError as exc:
+        detail = str(exc) or "No se pudo actualizar el modo manual"
+        lowered = detail.lower()
+        status_code = 502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return {"ok": True, "manual": payload.manual}
+
+
+@router.post("/inbox/conversations/{conversacion_id}/reply")
+async def reply_inbox_conversation(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    conversacion_id: UUID,
+    payload: ConversationReplyPayload,
+) -> dict[str, Any]:
+    content = (payload.content or "").strip()
+    attachments_payload = [
+        attachment.model_dump(mode="json") for attachment in (payload.attachments or [])
+    ]
+    if not content and not attachments_payload:
+        raise HTTPException(status_code=422, detail="message_required")
+
+    try:
+        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+    except StorageError as exc:
+        message = str(exc)
+        lowered = message.lower()
+        log_extra = {"conversation_id": str(conversacion_id), "error": message}
+        if "no encontrada" in lowered or "not found" in lowered:
+            logger.warning("panel.inbox.conversation_not_found", extra=log_extra)
+            raise HTTPException(status_code=404, detail="conversation_not_found") from exc
+        logger.exception("panel.inbox.fetch_conversation_failed", extra=log_extra)
+        raise HTTPException(status_code=502, detail="No se pudo recuperar la conversación") from exc
+
+    channel = (conversation_meta.get("channel") or "").lower()
+    if channel != "webchat":
+        raise HTTPException(status_code=400, detail="unsupported_channel")
+
+    contact_id = conversation_meta.get("contact_id")
+    if not contact_id:
+        raise HTTPException(status_code=500, detail="conversation_contact_missing")
+
+    session_id = await _resolve_webchat_session_id(str(contact_id))
+    if not session_id:
+        raise HTTPException(status_code=409, detail="session_id_not_found")
+
+    client_message_id = payload.client_message_id or uuid4().hex
+    message_payload = webchat_schemas.MessageRequest(
+        session_id=session_id,
+        author="user",
+        content=content,
+        client_message_id=client_message_id,
+        locale=payload.locale,
+        metadata=payload.metadata,
+        attachments=payload.attachments,
+    )
+
+    manual_override = bool(conversation_meta.get("manual_override"))
+    if not manual_override:
+        try:
+            manual_override = await storage.get_manual_override(str(conversacion_id))
+        except StorageError as exc:
+            logger.exception(
+                "panel.inbox.manual_check_failed",
+                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            )
+
+    logger.info(
+        "panel.inbox.manual_state",
+        extra={
+            "conversation_id": str(conversacion_id),
+            "manual_override": manual_override,
+        },
+    )
+
+    if manual_override:
+        extra_metadata: dict[str, Any] = {
+            "conversation_id": str(conversacion_id),
+            "client_message_id": client_message_id,
+            "manual_override": True,
+            "manual_mode": True,
+            "origin": "panel_manual",
+            "sender_type": "human",
+            "author_type": "human",
+        }
+        if payload.locale:
+            extra_metadata["locale"] = payload.locale
+        manual_user_id = _jwt_verify_and_sub(user_token)
+        manual_user_id = manual_user_id.strip() if isinstance(manual_user_id, str) else None
+
+        agent_payload: dict[str, Any] = {}
+        if payload.metadata and isinstance(payload.metadata, dict):
+            agent_payload.update(payload.metadata)
+
+        manual_name = _extract_agent_name(agent_payload) if agent_payload else None
+        if manual_name and manual_name.strip().lower() in {"agent", "agente"}:
+            manual_name = None
+        manual_email = _extract_agent_email(agent_payload) if agent_payload else None
+
+        if manual_user_id:
+            for key in (
+                "user_id",
+                "userId",
+                "manual_user_id",
+                "manualUserId",
+                "agent_id",
+                "agentId",
+            ):
+                agent_payload.setdefault(key, manual_user_id)
+
+        profile = await _fetch_panel_user_profile(repo, manual_user_id)
+
+        if profile:
+            if manual_name is None:
+                profile_name = _clean_text(profile.get("nombre_completo")) or _clean_text(
+                    profile.get("correo")
+                )
+                if profile_name:
+                    manual_name = profile_name
+            if manual_email is None:
+                profile_email = _clean_text(profile.get("correo"))
+                if profile_email:
+                    manual_email = profile_email
+
+        if manual_name is None and manual_email:
+            local_part = manual_email.split("@")[0]
+            fallback_name = local_part.strip() or manual_email
+            manual_name = fallback_name
+
+        if manual_name:
+            for key in ("manual_author", "manualAuthor", "agent_name", "agentName"):
+                agent_payload.setdefault(key, manual_name)
+        if manual_email:
+            for key in ("manual_email", "manualEmail", "agent_email", "agentEmail"):
+                agent_payload.setdefault(key, manual_email)
+
+        if manual_user_id or manual_name or manual_email:
+            user_section = agent_payload.get("user")
+            if isinstance(user_section, dict):
+                user_payload = dict(user_section)
+            else:
+                user_payload = {}
+            if manual_user_id and "id" not in user_payload:
+                user_payload["id"] = manual_user_id
+            if manual_name and "name" not in user_payload:
+                user_payload["name"] = manual_name
+            if manual_email and "email" not in user_payload:
+                user_payload["email"] = manual_email
+            if user_payload:
+                user_payload.setdefault("type", "human")
+                agent_payload["user"] = user_payload
+
+        if agent_payload:
+            agent_payload.setdefault("origin", agent_payload.get("origin") or "panel_manual")
+            agent_payload.setdefault("source", agent_payload.get("source") or "panel_manual")
+            agent_payload.setdefault("sender_type", agent_payload.get("sender_type") or "human")
+            agent_payload.setdefault("senderType", agent_payload.get("senderType") or "human")
+            agent_payload.setdefault("author_type", agent_payload.get("author_type") or "human")
+            agent_payload.setdefault("authorType", agent_payload.get("authorType") or "human")
+
+            for key, value in agent_payload.items():
+                if key not in extra_metadata and key != "attachments":
+                    extra_metadata[key] = value
+            extra_metadata["extra"] = agent_payload
+            resolved_name = manual_name or _extract_agent_name(agent_payload)
+            if resolved_name:
+                extra_metadata.setdefault("manual_author", resolved_name)
+                extra_metadata.setdefault("agent_name", resolved_name)
+            else:
+                agent_name = agent_payload.get("agent_name") or agent_payload.get("agentName")
+                if isinstance(agent_name, str) and agent_name.strip():
+                    extra_metadata.setdefault("agent_name", agent_name.strip())
+            resolved_email = manual_email or _extract_agent_email(agent_payload)
+            if resolved_email:
+                extra_metadata.setdefault("manual_email", resolved_email)
+                extra_metadata.setdefault("agent_email", resolved_email)
+        try:
+            await storage.register_webchat_message(
+                session_id=session_id,
+                author="agent",
+                content=content,
+                inactivity_hours=settings.webchat_inactivity_hours,
+                metadata=extra_metadata,
+                attachments=attachments_payload,
+            )
+        except StorageError as exc:
+            logger.exception(
+                "panel.inbox.manual_register_failed",
+                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            )
+            raise HTTPException(status_code=502, detail="No se pudo registrar el mensaje") from exc
+
+        try:
+            await webchat_service.append_manual_agent_context(
+                conversation_meta=conversation_meta,
+                session_id=session_id,
+                content=content,
+                locale=payload.locale,
+            )
+        except Exception as exc:  # pragma: no cover - logging defensivo
+            logger.exception(
+                "panel.inbox.manual_context_append_failed",
+                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            )
+
+        logger.info(
+            "panel.inbox.manual_message_recorded",
+            extra={
+                "conversation_id": str(conversacion_id),
+                "session_id": session_id,
+                "client_message_id": client_message_id,
+            },
+        )
+
+        metadata: dict[str, Any] = {
+            "conversation_id": str(conversacion_id),
+            "client_message_id": client_message_id,
+            "manual_mode": True,
+            "session_id": session_id,
+            "contact_id": str(contact_id),
+            "sender_type": "human",
+            "author_type": "human",
+        }
+        if attachments_payload:
+            metadata["attachments"] = attachments_payload
+        if agent_payload:
+            metadata["extra"] = agent_payload
+            manual_name_resp = agent_payload.get("manual_author") or agent_payload.get(
+                "manualAuthor"
+            )
+            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get("agentName")
+            manual_email_resp = (
+                agent_payload.get("manual_email")
+                or agent_payload.get("manualEmail")
+                or agent_payload.get("agent_email")
+                or agent_payload.get("agentEmail")
+            )
+            if isinstance(agent_name_resp, str) and agent_name_resp.strip():
+                metadata["agent_name"] = agent_name_resp.strip()
+            elif isinstance(manual_name_resp, str) and manual_name_resp.strip():
+                metadata["agent_name"] = manual_name_resp.strip()
+            if isinstance(manual_name_resp, str) and manual_name_resp.strip():
+                metadata["manual_author"] = manual_name_resp.strip()
+            if isinstance(manual_email_resp, str) and manual_email_resp.strip():
+                cleaned_email = manual_email_resp.strip()
+                metadata["manual_email"] = cleaned_email
+                metadata.setdefault("agent_email", cleaned_email)
+        return {
+            "ok": True,
+            "reply": None,
+            "metadata": metadata,
+        }
+
+    try:
+        logger.info(
+            "panel.inbox.manual_state_auto_reply",
+            extra={
+                "conversation_id": str(conversacion_id),
+                "manual_override": manual_override,
+                "client_message_id": client_message_id,
+            },
+        )
+        assistant_response = await webchat_service.handle_message(
+            message_payload,
+            request=None,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - logging y error genérico
+        logger.exception(
+            "panel.inbox.assistant_failed",
+            extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="Error al invocar al asistente") from exc
+
+    metadata_model = assistant_response.metadata
+    metadata = (
+        metadata_model.model_dump(exclude_none=True)
+        if isinstance(metadata_model, BaseModel)
+        else {}
+    )
+    metadata.setdefault("conversation_id", str(conversacion_id))
+    metadata.setdefault("client_message_id", client_message_id)
+    metadata.setdefault(
+        "manual_mode",
+        (
+            bool(metadata_model.manual_mode)
+            if isinstance(metadata_model, webchat_schemas.MessageMetadata)
+            else False
+        ),
+    )
+    metadata.setdefault("session_id", session_id)
+    metadata.setdefault("contact_id", str(contact_id))
+
+    return {
+        "ok": True,
+        "reply": assistant_response.reply,
+        "metadata": metadata,
+    }
+
+
+@router.post("/inbox/conversations/{conversacion_id}/attachments")
+async def upload_inbox_attachment(
+    *,
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    conversacion_id: UUID,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    try:
+        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+    except StorageError as exc:
+        logger.exception(
+            "panel.inbox.fetch_conversation_failed",
+            extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="conversation_lookup_failed") from exc
+
+    channel = (conversation_meta.get("channel") or "").lower()
+    if channel != "webchat":
+        raise HTTPException(status_code=400, detail="unsupported_channel")
+
+    contact_id = conversation_meta.get("contact_id")
+    session_id = None
+    if contact_id:
+        session_id = await _resolve_webchat_session_id(str(contact_id))
+
+    try:
+        uploaded = await storage.upload_webchat_attachment(
+            file=file,
+            session_id=session_id,
+            conversation_id=str(conversacion_id),
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="upload_failed") from exc
+
+    return {"ok": True, "attachment": uploaded}
 
 
 @router.get("/agenda/bookings")
