@@ -14,6 +14,7 @@ export function parseMetadatos(input: Record<string, unknown> | null | undefined
 
 export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const metadata = parseMetadatos(card.metadata);
+  const etapaCodigo = typeof card.etapa_codigo === "string" ? card.etapa_codigo : null;
   return {
     tarjetaId: card.tarjeta_id,
     contactoId: card.contacto_id ?? "",
@@ -28,6 +29,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     estado: card.estado,
     etapaId: card.etapa_id,
     etapaNombre: card.etapa_nombre,
+    etapaCodigo,
     monto: card.monto,
     moneda: card.moneda,
     probabilidad: card.probabilidad,
@@ -39,6 +41,34 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     actualizadoEn: typeof card.actualizado_en === "string" ? card.actualizado_en : null,
     etiquetas: Array.isArray(card.etiquetas) ? card.etiquetas : [],
     metadata,
+    autoStage: resolveAutoStage(metadata, etapaCodigo),
+  };
+}
+
+function resolveAutoStage(
+  metadata: Record<string, unknown>,
+  etapaCodigo: string | null,
+): EmbudoCard["autoStage"] {
+  if (!metadata) return null;
+  const autoStageRaw = metadata["auto_stage"];
+  if (!autoStageRaw || typeof autoStageRaw !== "object" || Array.isArray(autoStageRaw)) {
+    return null;
+  }
+  const code = etapaCodigo?.toLowerCase();
+  if (!code) return null;
+  const entry = (autoStageRaw as Record<string, unknown>)[code];
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const entryObj = entry as Record<string, unknown>;
+  const source = typeof entryObj.source === "string" ? entryObj.source : undefined;
+  const channel = typeof entryObj.channel === "string" ? entryObj.channel : undefined;
+  const at = typeof entryObj.at === "string" ? entryObj.at : undefined;
+  return {
+    stageCode: code,
+    source,
+    channel,
+    at,
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { type HTMLAttributes, useMemo } from "react"
-import { IconMessageCircle, IconUser } from "@tabler/icons-react"
+import { IconMessageCircle, IconRobot, IconUser } from "@tabler/icons-react"
 import type { DraggableSyntheticListeners } from "@dnd-kit/core"
 
 import type { EmbudoCard } from "@/lib/embudo/data"
@@ -61,12 +61,23 @@ export function EmbudoCardItem({
             <h4 className="font-semibold leading-tight">{card.nombre}</h4>
             <p className="text-xs text-muted-foreground">{card.correo || card.telefono || "Sin contacto"}</p>
           </div>
-          {card.asignadoNombre ? (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <IconUser className="size-3" />
-              <span>{card.asignadoNombre}</span>
-            </div>
-          ) : null}
+          <div className="flex items-center gap-1">
+            {card.autoStage ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                title={buildAutoStageTooltip(card)}
+              >
+                <IconRobot className="size-3" />
+                Tal-IA
+              </span>
+            ) : null}
+            {card.asignadoNombre ? (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <IconUser className="size-3" />
+                <span>{card.asignadoNombre}</span>
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded bg-muted px-2 py-0.5 uppercase">{card.canal || "Sin canal"}</span>
@@ -108,4 +119,21 @@ function formatMessageCount(value: unknown): string {
     if (typeof count === "number") return count.toString()
   }
   return "—"
+}
+
+function buildAutoStageTooltip(card: EmbudoCard): string {
+  if (!card.autoStage) return "Movido automáticamente";
+  const parts: string[] = ["Movido automáticamente por Tal-IA"];
+  if (card.autoStage.channel) {
+    parts.push(`Canal: ${card.autoStage.channel}`);
+  }
+  if (card.autoStage.at) {
+    try {
+      const formatted = new Date(card.autoStage.at).toLocaleString("es-MX");
+      parts.push(`Fecha: ${formatted}`);
+    } catch {
+      parts.push(`Fecha: ${card.autoStage.at}`);
+    }
+  }
+  return parts.join(" · ");
 }

@@ -30,6 +30,7 @@ export type EmbudoCard = {
   estado: string | null;
   etapaId: string;
   etapaNombre: string;
+  etapaCodigo: string | null;
   monto: number | null;
   moneda: string | null;
   probabilidad: number | null;
@@ -41,6 +42,7 @@ export type EmbudoCard = {
   actualizadoEn: string | null;
   etiquetas: string[];
   metadata: Record<string, unknown>;
+  autoStage: AutoStageInfo | null;
 };
 
 export type EmbudoData = {
@@ -63,6 +65,7 @@ export type PipelineBoardCard = {
   canal: string | null;
   estado: string | null;
   etapa_id: string;
+  etapa_codigo: string | null;
   etapa_nombre: string;
   monto: number | null;
   moneda: string | null;
@@ -86,6 +89,13 @@ export type PipelineBoardStage = {
   tablero_id: string | null;
   metadatos: Record<string, unknown> | null;
   tarjetas: PipelineBoardCard[];
+};
+
+export type AutoStageInfo = {
+  stageCode: string;
+  source?: string;
+  channel?: string;
+  at?: string;
 };
 
 export type PipelineBoardResponse = {

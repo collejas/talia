@@ -2501,6 +2501,7 @@ class CRMPipelineBoardCard(BaseModel):
     estado: str | None = None
     etapa_id: UUID
     etapa_nombre: str
+    etapa_codigo: str | None = None
     monto: float | None = None
     moneda: str | None = None
     probabilidad: float | None = None
@@ -6456,6 +6457,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         estado=contacto.get("estado") or contacto.get("captura_estado"),
         etapa_id=etapa_id,
         etapa_nombre=(row.get("etapa") or {}).get("nombre") or "Sin etapa",
+        etapa_codigo=(row.get("etapa") or {}).get("codigo"),
         monto=row.get("monto_estimado"),
         moneda=row.get("moneda"),
         probabilidad=row.get("probabilidad"),

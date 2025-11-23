@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -20,6 +20,19 @@ logger = get_logger(__name__)
 
 class StorageError(RuntimeError):
     """Errores de persistencia para servicios externos."""
+
+
+def _ensure_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return dict(parsed)
+        except json.JSONDecodeError:
+            return {}
+    return {}
 
 
 def _normalize_manual_override(raw: Any) -> bool:
@@ -923,6 +936,8 @@ async def promote_opportunity_stage(
     oportunidad_id: str,
     organizacion_id: str,
     stage_code: str,
+    source: str | None = None,
+    channel: str | None = None,
 ) -> bool:
     """Promueve una oportunidad a la etapa indicada (por código) si aún no ha llegado ahí."""
     normalized_code = (stage_code or "").strip().lower()
@@ -940,6 +955,8 @@ async def promote_opportunity_stage(
         "oportunidad_id": str(opp_uuid),
         "organizacion_id": str(org_uuid),
         "stage_code": normalized_code,
+        "source": source or "system",
+        "channel": channel,
     }
     try:
         stage = await repo.get_stage_by_code(
@@ -995,11 +1012,21 @@ async def promote_opportunity_stage(
             )
             return False
 
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    auto_stage = _ensure_dict(metadata.get("auto_stage"))
+    auto_stage[normalized_code] = {
+        "stage_code": normalized_code,
+        "source": source or "system",
+        "channel": channel,
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    metadata["auto_stage"] = auto_stage
+
     try:
         await repo.update_opportunity(
             organizacion_id=org_uuid,
             oportunidad_id=opp_uuid,
-            payload={"etapa_id": str(stage_id)},
+            payload={"etapa_id": str(stage_id), "metadata": metadata},
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
@@ -1081,6 +1108,8 @@ async def capture_lead_if_ready(
             oportunidad_id=oportunidad_id,
             organizacion_id=str(organizacion_id),
             stage_code="captado",
+            source="capture_lead",
+            channel=capture_channel,
         )
     except StorageError as exc:
         logger.warning(
