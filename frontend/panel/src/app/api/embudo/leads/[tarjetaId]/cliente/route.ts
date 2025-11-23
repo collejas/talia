@@ -2,17 +2,7 @@
 
 import { NextResponse } from "next/server";
 
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { resolvePanelApiToken } from "@/lib/auth/panel-token";
-
-function safeJson(payload: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(payload);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
+import { callCrmApi } from "@/lib/api/crm";
 
 export async function GET(
   _request: Request,
@@ -23,40 +13,16 @@ export async function GET(
     return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
   }
 
-  let token: string;
-  try {
-    token = await resolvePanelApiToken();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "No se encontró token del panel.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
-  let baseUrl: string;
-  try {
-    baseUrl = getPanelApiBaseUrl();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "backend_not_configured";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-  const response = await fetch(`${baseUrl}/leads/${tarjetaId}/cliente`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
+  const response = await callCrmApi(`/crm/leads/${tarjetaId}/cliente`, {
+    withUserToken: true,
   });
 
-  const text = await response.text();
   if (!response.ok) {
-    const parsed = text ? safeJson(text) : null;
-    const error =
-      (parsed && typeof parsed.detail === "string" && parsed.detail) ||
-      (parsed && typeof parsed.error === "string" && parsed.error) ||
-      (text && !text.startsWith("<") ? text : null) ||
-      "No se pudo recuperar el cliente.";
-    return NextResponse.json({ error }, { status: response.status });
+    return NextResponse.json(
+      { error: response.error || "No se pudo recuperar el cliente." },
+      { status: response.status ?? 500 },
+    );
   }
 
-  const payload = text ? safeJson(text) : null;
-  return NextResponse.json(payload ?? { cliente: null });
+  return NextResponse.json(response.data ?? { cliente: null });
 }

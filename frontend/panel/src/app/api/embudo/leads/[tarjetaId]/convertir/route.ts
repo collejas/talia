@@ -2,17 +2,7 @@
 
 import { NextResponse } from "next/server";
 
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { resolvePanelApiToken } from "@/lib/auth/panel-token";
-
-function safeJson(payload: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(payload);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
+import { callCrmApi } from "@/lib/api/crm";
 
 export async function POST(
   request: Request,
@@ -23,44 +13,19 @@ export async function POST(
     return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
   }
 
-  let token: string;
-  try {
-    token = await resolvePanelApiToken();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "No se encontró token del panel.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
   const body = await request.json().catch(() => ({}));
-  let baseUrl: string;
-  try {
-    baseUrl = getPanelApiBaseUrl();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "backend_not_configured";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-  const response = await fetch(`${baseUrl}/leads/${tarjetaId}/convertir`, {
+  const response = await callCrmApi(`/crm/leads/${tarjetaId}/convertir`, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ forzar: Boolean(body?.forzar) }),
-    cache: "no-store",
+    withUserToken: true,
+    body: { forzar: Boolean(body?.forzar) },
   });
 
-  const text = await response.text();
   if (!response.ok) {
-    const parsed = text ? safeJson(text) : null;
-    const error =
-      (parsed && typeof parsed.detail === "string" && parsed.detail) ||
-      (parsed && typeof parsed.error === "string" && parsed.error) ||
-      (text && !text.startsWith("<") ? text : null) ||
-      "No se pudo convertir el lead.";
-    return NextResponse.json({ error }, { status: response.status });
+    return NextResponse.json(
+      { error: response.error || "No se pudo convertir el lead." },
+      { status: response.status ?? 500 },
+    );
   }
 
-  const payload = text ? safeJson(text) : null;
-  return NextResponse.json(payload ?? { ok: true });
+  return NextResponse.json(response.data ?? { ok: true });
 }
