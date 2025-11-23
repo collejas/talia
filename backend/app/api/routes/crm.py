@@ -764,6 +764,21 @@ def _ensure_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return _ensure_utc(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            dt = datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return _ensure_utc(dt)
+    return None
+
+
 def _parse_datetime_input(value: str | None, *, field: str) -> datetime:
     if not value:
         raise HTTPException(status_code=400, detail=f"{field}_required")
@@ -820,6 +835,45 @@ def _ensure_state_code(value: str) -> str:
 def _ilike_param(value: str) -> str:
     sanitized = value.replace("*", "").replace("%", "")
     return f"ilike.*{sanitized}*"
+
+
+def _clean_text(value: Any) -> str | None:
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    if value is None:
+        return None
+    trimmed = str(value).strip()
+    return trimmed or None
+
+
+def _build_logo_asset(row: Any) -> CRMLogoAsset | None:
+    if not isinstance(row, dict):
+        return None
+    try:
+        logo_id = UUID(str(row.get("id")))
+    except Exception:  # pragma: no cover - datos inesperados
+        return None
+
+    metadata = _coerce_metadata(row.get("metadata")) or {}
+    created_at = _parse_iso_datetime(row.get("created_at")) or datetime.now(timezone.utc)
+    file_url = _clean_text(row.get("file_url"))
+    file_path = _clean_text(row.get("file_path"))
+    if not file_url or not file_path:
+        return None
+
+    descripcion = _clean_text(row.get("descripcion"))
+    nombre = _clean_text(row.get("nombre")) or "Logo"
+
+    return CRMLogoAsset(
+        id=logo_id,
+        nombre=nombre,
+        descripcion=descripcion,
+        file_url=file_url,
+        file_path=file_path,
+        metadata=metadata,
+        created_at=created_at,
+    )
 
 
 def _result_preview(item: dict[str, Any]) -> dict[str, Any]:
@@ -1812,6 +1866,20 @@ class CRMAuditLog(BaseModel):
     creado_en: datetime
 
 
+class CRMLogoAsset(BaseModel):
+    id: UUID
+    nombre: str
+    descripcion: str | None = None
+    file_url: str
+    file_path: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class CRMLogoAssetList(BaseModel):
+    logos: list[CRMLogoAsset]
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -2340,6 +2408,70 @@ async def delete_contact(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/settings/logos", response_model=CRMLogoAssetList)
+async def list_settings_logos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+) -> CRMLogoAssetList:
+    try:
+        rows = await repo.list_logos()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    logos: list[CRMLogoAsset] = []
+    for row in rows:
+        logo = _build_logo_asset(row)
+        if logo:
+            logos.append(logo)
+    return CRMLogoAssetList(logos=logos)
+
+
+@router.post("/settings/logos", response_model=CRMLogoAsset)
+async def upload_settings_logo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    admin_id: UUID = Depends(require_admin_user),
+    file: UploadFile = File(...),
+    nombre: Annotated[str, Form()],
+    descripcion: Annotated[str | None, Form()] = None,
+) -> CRMLogoAsset:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="logo_file_required")
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="logo_invalid_type")
+
+    try:
+        upload = await storage.upload_logo_asset(file=file)
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="logo_upload_failed") from exc
+
+    resolved_nombre = _clean_text(nombre) or (file.filename or "Logo")
+    resolved_descripcion = _clean_text(descripcion)
+
+    payload = {
+        "nombre": resolved_nombre,
+        "descripcion": resolved_descripcion,
+        "file_path": upload["path"],
+        "file_url": upload["url"],
+        "metadata": {
+            "mime": upload.get("mime"),
+            "original_name": upload.get("name") or file.filename,
+        },
+        "uploaded_by": str(admin_id),
+    }
+
+    try:
+        row = await repo.create_logo(payload=payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    logo = _build_logo_asset(row)
+    if not logo:
+        raise HTTPException(status_code=502, detail="logo_save_unexpected_response")
+    return logo
 
 
 @router.get("/settings/email-template", response_model=CRMEmailTemplate)

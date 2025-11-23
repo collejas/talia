@@ -81,13 +81,23 @@ export async function callCrmApi<T = unknown>(
 
   let body: BodyInit | undefined;
   if (options.body != null && method !== "GET") {
-    if (!headers["Content-Type"]) {
-      headers["Content-Type"] = "application/json";
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    const isBlob = typeof Blob !== "undefined" && options.body instanceof Blob;
+    const isArrayBuffer = options.body instanceof ArrayBuffer;
+    const isUrlParams = options.body instanceof URLSearchParams;
+
+    if (typeof options.body === "string") {
+      headers["Content-Type"] ??= "text/plain;charset=UTF-8";
+      body = options.body;
+    } else if (isFormData || isBlob || isArrayBuffer || isUrlParams) {
+      if (isFormData && headers["Content-Type"]) {
+        delete headers["Content-Type"];
+      }
+      body = options.body as BodyInit;
+    } else {
+      headers["Content-Type"] ??= "application/json";
+      body = JSON.stringify(options.body) as BodyInit;
     }
-    body =
-      typeof options.body === "string"
-        ? options.body
-        : (JSON.stringify(options.body) as BodyInit);
   }
 
   const response = await fetch(url.toString(), {

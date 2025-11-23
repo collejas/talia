@@ -51,6 +51,48 @@ sudo chown -R www-data:www-data /var/www/talia-landing
 # levantar servicio:
 poetry run uvicorn app.main:app --reload --port 8004
 
+
+# NUEVO ARRANQUE CON SYSTEM, EDICION Y ESTATUS
+sudo nano /etc/systemd/system/talia-panel.service
+sudo micro /etc/systemd/system/talia-panel.service
+
+sudo systemctl daemon-reload
+
+sudo systemctl stop talia-panel.service
+sudo systemctl stop talia-api.service
+
+npm run build
+
+npm run lint
+npm run build --webpack
+npm run build --webpack && npm start
+
+sudo systemctl restart talia-panel.service
+sudo systemctl restart talia-api.service
+
+psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
+\pset pager off
+
+codex resume 019aada7-615d-7ab3-ae66-6db224d77e7d
+
+codex resume 019aac47-3a8d-7d60-8b22-190acf5cca02
+
+codex resume 019aa6e2-3fc7-7471-9c1a-207613e173ee
+
+codex resume 019aa455-2b70-7870-894c-0200ed5e72c5
+
+codex resume 019a9e40-eeac-7ca3-8a1e-082035d9a1ce
+
+sudo systemctl status talia-panel.service
+sudo systemctl status talia-api.service
+
+npm run dev
+http://127.0.0.1:3000/dashboard
+http://127.0.0.1:3000/auth/login
+
+poetry run pytest
+
+
 # Bse de datos
 
 ## hacer un respaldo
@@ -94,49 +136,7 @@ pg_restore --clean --if-exists --no-owner --no-acl \
   --dbname "$SUPABASE_DB_URL" \
   supabase/migrations/20251023_131845_full.dump
 
-
-# NUEVO ARRANQUE CON SYSTEM, EDICION Y ESTATUS
-sudo nano /etc/systemd/system/talia-panel.service
-sudo micro /etc/systemd/system/talia-panel.service
-
-sudo systemctl daemon-reload
-
-sudo systemctl stop talia-panel.service
-sudo systemctl stop talia-api.service
-
-npm run build
-
-npm run lint
-npm run build --webpack
-npm run build --webpack && npm start
-
-sudo systemctl restart talia-panel.service
-sudo systemctl restart talia-api.service
-
-psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
-\pset pager off
-
-codex resume 019aada7-615d-7ab3-ae66-6db224d77e7d
-
-codex resume 019aac47-3a8d-7d60-8b22-190acf5cca02
-
-codex resume 019aa6e2-3fc7-7471-9c1a-207613e173ee
-
-codex resume 019aa455-2b70-7870-894c-0200ed5e72c5
-
-codex resume 019a9e40-eeac-7ca3-8a1e-082035d9a1ce
-
-sudo systemctl status talia-panel.service
-sudo systemctl status talia-api.service
-
-npm run dev
-http://127.0.0.1:3000/dashboard
-http://127.0.0.1:3000/auth/login
-
-poetry run pytest
-
-
-# Supabase 
+### Supabase 
 supabase start
 
 export SUPABASE_DB_URL="postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
@@ -421,3 +421,37 @@ hola@talia.mx
   - Analytics/reportes: endpoints de mapas, conversiones, reportes CSV, etc., que consultan vistas legacy directamente.
   - Servicios compartidos: app/services/storage.py, calendar.py, quotes.py, etc., tienen muchas llamadas directas a Supabase
     (storage, documentos, leads) que deben encapsularse en repositorios CRM o servicios propios.
+
+
+
+# FALTANTES
+
+  - Embudo y cotizaciones aún dependen del panel legacy:
+      - Los handlers Next.js siguen pegándole a /leads y /quotes sin el prefijo /crm (frontend/panel/src/app/api/embudo/leads/
+        [tarjetaId]/cliente/route.ts:17-62, convertir/route.ts:17-66, quotes/route.ts:8-58, quotes/send/route.ts:8-56, quotes/
+        [quoteId]/mark/route.ts:8-56).
+      - La UI consume esos endpoints en frontend/panel/src/components/embudo/lead-drawer.tsx:826-937,1490-1555.
+      - El backend equivalente vive sólo en panel.py (backend/app/api/routes/panel.py:2282-3107). Para cerrar ese archivo
+        necesitamos exponer en crm.py lo que falta (listar/enviar/marcar cotizaciones y exponer /crm/leads/{id}/quotes*), mover
+        la lógica de envíos (quotes_service) al router nuevo y actualizar el frontend para usar callCrmApi.
+  - Logos y branding: frontend/panel/src/app/api/settings/logos/route.ts:1-100 y la vista (components/settings/quote-template-
+    form.tsx:111-170) todavía llaman a /settings/logos, que sólo existe en panel.py:2679-2741. Falta crear los endpoints
+    equivalentes en /crm/settings/logos, mover la lógica de subida a CRMRepository y apuntar el frontend a ellos.
+  - Catálogo rápido (para el drawer de cotizaciones) sigue consultando /catalog/items legacy: frontend/panel/src/app/api/
+    catalog/items/route.ts:1-52 y lead-drawer.tsx:887-905. Aunque ya tenemos /crm/catalog/items (ver backend/app/api/routes/
+    crm.py:2159-2220), todavía no se usa. Hay que cambiar ese fetch (o eliminar el proxy y reutilizar las server actions de
+    settings/catalogo) para dejar de depender del panel.
+  - Inbox manual/responder/uploads continúan usando los endpoints históricos /conversaciones/* y /webchat/uploads:
+      - Ver frontend/panel/src/app/api/inbox/[conversationId]/manual/route.ts:78-174, reply/route.ts:180-309, uploads/
+        route.ts:7-66 y el fallback en src/lib/inbox/messages-server.ts:98-176.
+      - El backend correspondiente está en panel.py:3442-3778. Para apagarlo necesitamos exponer en crm.py rutas como /
+        crm/inbox/conversations/{id}/manual, /crm/inbox/conversations/{id}/reply, /crm/inbox/conversations/{id}/uploads
+        (probablemente apoyadas en webchat_service y storage), y después actualizar estos handlers para usar callCrmApi (y
+        eliminar el fallback a buildBackendTargets).
+  - Agenda / demos desde el embudo: scheduleLeadDemo aún golpea /webchat/calendar/bookings (frontend/panel/src/lib/embudo/
+    actions.ts:202-229), que vive en panel.py:2190-2338. En el CRM sólo tenemos reschedule/cancel (backend/app/api/routes/
+    crm.py:2758-2818) pero no la creación, así que tenemos que exponer /crm/agenda/bookings para crear citas y luego apuntar el
+    board a ese endpoint.
+  - Residuos de fallback: mientras src/lib/inbox/messages-server.ts:98-176 siga recurriendo al panel si falla /crm/inbox/
+    messages, no podremos borrar panel.py. Una vez que las rutas nuevas estén estables hay que retirar ese buildBackendTargets/
+    fallback (y cualquier dependencia de getPanelApiBaseUrl fuera de /crm/*).

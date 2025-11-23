@@ -546,6 +546,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear producto: {row!r}")
         return row
 
+    async def list_logos(self) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,nombre,descripcion,file_path,file_url,metadata,uploaded_by,created_at,updated_at",
+            "order": "created_at.desc",
+        }
+        resp = await self._request("GET", "/rest/v1/logos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar logos: {data!r}")
+        return data
+
+    async def create_logo(self, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = await self._request(
+            "POST",
+            "/rest/v1/logos",
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el logo creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear logo: {row!r}")
+        return row
+
     async def list_quotes(
         self,
         *,
