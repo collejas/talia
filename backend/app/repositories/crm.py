@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import UUID
@@ -16,6 +17,26 @@ class CRMRepositoryError(RuntimeError):
 
 
 QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+
+
+def _coerce_uuid(value: Any, *, field: str) -> UUID:
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise CRMRepositoryError(f"{field}_invalid") from exc
+
+
+def _ensure_metadata(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            return {}
+    return {}
 
 
 class CRMRepository:
@@ -49,6 +70,8 @@ class CRMRepository:
             "cuenta:cuentas!oportunidades_cuenta_id_fkey(id,nombre,telefono,correo)",
         ]
     )
+
+    _stage_cache: dict[str, UUID] = {}
 
     _CLIENTE_SELECT = (
         "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
@@ -939,6 +962,112 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar eventos de lead: {data!r}")
         return data
 
+    async def ensure_conversation_opportunity(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        conversation_id: str,
+        canal: str | None = None,
+        contacto_nombre: str | None = None,
+        contacto_empresa: str | None = None,
+    ) -> UUID:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            raise CRMRepositoryError("conversation_id_required")
+
+        base_metadata = {
+            "conversation_id": conversation_key,
+            "channel": canal,
+            "source": "assistant",
+            "origin": "assistant",
+        }
+
+        def _merged_metadata(raw: Any) -> dict[str, Any]:
+            metadata = _ensure_metadata(raw)
+            for key, value in base_metadata.items():
+                if value is None:
+                    continue
+                current = metadata.get(key)
+                if isinstance(current, str) and current.strip():
+                    continue
+                metadata[key] = value
+            return metadata
+
+        async def _patch_metadata(opportunity_id: UUID, metadata: dict[str, Any]) -> UUID:
+            params = {
+                "id": f"eq.{opportunity_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            }
+            await self._request(
+                "PATCH",
+                "/rest/v1/oportunidades",
+                params=params,
+                json={"metadata": metadata},
+                prefer="return=representation",
+            )
+            return opportunity_id
+
+        # Buscar por metadata->>conversation_id
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "metadata->>conversation_id": f"eq.{conversation_key}",
+            "select": "id,metadata",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        rows = resp.json() or []
+        if isinstance(rows, list) and rows:
+            row = rows[0]
+            opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
+            metadata = _merged_metadata(row.get("metadata"))
+            return await _patch_metadata(opportunity_id, metadata)
+
+        # Buscar por contacto principal
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "contacto_principal_id": f"eq.{contacto_id}",
+            "select": "id,metadata",
+            "order": "creado_en.desc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        rows = resp.json() or []
+        if isinstance(rows, list) and rows:
+            row = rows[0]
+            opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
+            metadata = _merged_metadata(row.get("metadata"))
+            return await _patch_metadata(opportunity_id, metadata)
+
+        # Crear oportunidad mínima
+        etapa_id = await self._get_default_stage_id(organizacion_id=organizacion_id)
+        titulo = (
+            (contacto_nombre or "").strip()
+            or (contacto_empresa or "").strip()
+            or f"Conversación {conversation_key[:8]}"
+        )
+        create_body = {
+            "organizacion_id": str(organizacion_id),
+            "contacto_principal_id": str(contacto_id),
+            "etapa_id": str(etapa_id),
+            "titulo": titulo,
+            "moneda": "MXN",
+            "metadata": {k: v for k, v in base_metadata.items() if v is not None},
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/oportunidades",
+            json=create_body,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            return _coerce_uuid(data[0].get("id"), field="opportunity_id")
+        if isinstance(data, dict) and data:
+            return _coerce_uuid(data.get("id"), field="opportunity_id")
+        raise CRMRepositoryError("Respuesta inesperada al crear oportunidad")
+
     async def get_pipeline_opportunity(
         self,
         *,
@@ -1009,6 +1138,25 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} al eliminar oportunidad: {resp.text}"
             )
+
+    async def _get_default_stage_id(self, *, organizacion_id: UUID) -> UUID:
+        cache_key = str(organizacion_id)
+        cached = self._stage_cache.get(cache_key)
+        if cached:
+            return cached
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "orden.asc",
+            "select": "id",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("No se encontraron etapas de pipeline para la organización")
+        stage_id = _coerce_uuid(data[0].get("id"), field="etapa_id")
+        self._stage_cache[cache_key] = stage_id
+        return stage_id
 
     async def create_lead_event(
         self,
