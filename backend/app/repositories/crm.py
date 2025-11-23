@@ -1784,6 +1784,28 @@ class CRMRepository:
         data = resp.json() or []
         return data if isinstance(data, list) else []
 
+    async def update_contact_by_id(
+        self, *, contact_id: str, patch: dict[str, Any]
+    ) -> dict[str, Any]:
+        if not patch:
+            raise CRMRepositoryError("contact_patch_empty")
+        record = await self.get_contact_by_id(contact_id=contact_id)
+        if not record:
+            raise CRMRepositoryError("contact_not_found")
+        org_value = record.get("organizacion_id")
+        if not org_value:
+            raise CRMRepositoryError("contact_missing_org")
+        try:
+            org_uuid = UUID(str(org_value))
+            contact_uuid = UUID(str(record.get("id") or contact_id))
+        except (TypeError, ValueError) as exc:
+            raise CRMRepositoryError("contact_invalid_uuid") from exc
+        return await self.update_contact(
+            organizacion_id=org_uuid,
+            contacto_id=contact_uuid,
+            payload=patch,
+        )
+
     async def create_contact(
         self,
         *,
@@ -2556,6 +2578,24 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError("booking_not_found")
         return row
+
+    async def update_calendar_booking_metadata(
+        self,
+        *,
+        booking_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        booking_key = booking_id.strip()
+        if not booking_key:
+            raise CRMRepositoryError("booking_id_required")
+        params = {"id": f"eq.{booking_key}", "limit": "1"}
+        await self._request(
+            "PATCH",
+            "/rest/v1/calendar_bookings",
+            params=params,
+            json={"metadata": metadata},
+            prefer="return=minimal",
+        )
 
     async def user_has_role(self, *, usuario_id: UUID, role_code: str) -> bool:
         params = {

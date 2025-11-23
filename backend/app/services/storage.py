@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-import httpx
 from fastapi import UploadFile
 
 from app.core.config import settings
@@ -540,43 +539,16 @@ async def update_calendar_booking_metadata(
     """Fusiona y persiste metadata asociada a una reserva del calendario."""
     if not metadata_patch:
         return current_metadata or {}
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
     merged: dict[str, Any] = {}
     if current_metadata:
         merged.update(current_metadata)
     merged.update(metadata_patch)
 
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/calendar_bookings"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-    }
-    params = {
-        "id": f"eq.{booking_id}",
-        "limit": "1",
-    }
-    payload = {"metadata": merged}
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.patch(url, headers=headers, params=params, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al actualizar calendar_bookings.metadata: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al actualizar calendar_bookings"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
+        await repo.update_calendar_booking_metadata(booking_id=booking_id, metadata=merged)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
     return merged
 
@@ -585,47 +557,91 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
     """Recupera el template de correo configurado para envíos manuales."""
     repo = CRMRepository()
     try:
-        return await repo.fetch_email_template(slug=slug)
+        row = await repo.get_email_template(slug=slug)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    if not row:
+        return None
+
+    intro = row.get("intro")
+    intro_text = intro.strip() if isinstance(intro, str) else ""
+
+    closing = row.get("closing")
+    closing_text = closing.strip() if isinstance(closing, str) else ""
+
+    highlights_raw = row.get("highlights")
+    if isinstance(highlights_raw, str):
+        try:
+            highlights_raw = json.loads(highlights_raw)
+        except json.JSONDecodeError:
+            highlights_raw = []
+    if not isinstance(highlights_raw, list):
+        highlights_raw = []
+    highlights = [
+        str(item).strip()
+        for item in highlights_raw
+        if isinstance(item, (str, int, float)) and str(item).strip()
+    ]
+
+    resources_raw = row.get("resources")
+    if isinstance(resources_raw, str):
+        try:
+            resources_raw = json.loads(resources_raw)
+        except json.JSONDecodeError:
+            resources_raw = []
+    if not isinstance(resources_raw, list):
+        resources_raw = []
+    resources: list[dict[str, str]] = []
+    for entry in resources_raw:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label") or "").strip()
+        url = str(entry.get("url") or "").strip()
+        if not label or not url:
+            continue
+        resources.append({"label": label, "url": url})
+
+    use_summary = row.get("use_summary")
+    use_highlights = row.get("use_highlights")
+    use_resources = row.get("use_resources")
+
+    signature_salutation = row.get("signature_salutation")
+    signature_text = row.get("signature")
+
+    return {
+        "intro": intro_text,
+        "highlights": highlights,
+        "resources": resources,
+        "closing": closing_text,
+        "use_summary": (bool(use_summary) if isinstance(use_summary, bool) else use_summary),
+        "use_highlights": (
+            bool(use_highlights) if isinstance(use_highlights, bool) else use_highlights
+        ),
+        "use_resources": (
+            bool(use_resources) if isinstance(use_resources, bool) else use_resources
+        ),
+        "signature_salutation": (
+            signature_salutation.strip()
+            if isinstance(signature_salutation, str)
+            else signature_salutation
+        ),
+        "signature": (
+            signature_text.strip() if isinstance(signature_text, str) else signature_text
+        ),
+        "updated_at": row.get("updated_at"),
+    }
 
 
 async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     """Actualiza campos del contacto indicado y devuelve la fila resultante."""
     if not patch:
         raise StorageError("No se proporcionaron datos para actualizar el contacto")
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/contactos"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
-    params = {"id": f"eq.{contact_id}", "limit": "1"}
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.patch(url, headers=headers, params=params, json=patch)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al actualizar contacto: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
+        row = await repo.update_contact_by_id(contact_id=contact_id, patch=patch)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al actualizar contacto"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    rows = response.json() or []
-    if not rows:
-        raise StorageError("Contacto no encontrado o sin cambios")
-    row = rows[0]
     datos = row.get("contacto_datos")
     if isinstance(datos, str):
         try:
