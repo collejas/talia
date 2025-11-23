@@ -361,47 +361,23 @@ async def upload_quote_document(
 ) -> dict[str, str]:
     """Sube el PDF de una cotización al bucket `quotes`."""
 
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    if not settings.supabase_url:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL)")
 
     safe_name = Path(filename).name or "cotizacion.pdf"
     key = f"{lead_id}/{uuid4().hex}-{safe_name}"
-    base_url = settings.supabase_url.rstrip("/")
-    upload_url = f"{base_url}/storage/v1/object/quotes/{key}"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": content_type,
-    }
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                upload_url,
-                headers=headers,
-                content=content,
-                params={"upsert": "true"},
-            )
-    except httpx.RequestError as exc:
-        msg = f"Error de red al subir cotización: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al guardar cotización"
-            f" (status={response.status_code}, body={response.text!r})"
+        public_path = await repo.upload_storage_object(
+            bucket="quotes",
+            object_key=key,
+            content=content,
+            content_type=content_type,
         )
-        logger.error(msg)
-        raise StorageError(msg)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
-    public_path = (
-        response.json().get("Key")
-        if response.headers.get("content-type") == "application/json"
-        else None
-    )
-    if not public_path:
-        public_path = f"quotes/{key}" if not str(key).startswith("quotes/") else key
+    base_url = settings.supabase_url.rstrip("/")
     public_url = f"{base_url}/storage/v1/object/public/{public_path}"
 
     return {
@@ -414,8 +390,8 @@ async def upload_quote_document(
 async def upload_logo_asset(*, file: UploadFile, folder: str = "general") -> dict[str, str]:
     """Sube un logo general al bucket `logos` y devuelve metadatos básicos."""
 
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    if not settings.supabase_url:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL)")
 
     content = await file.read()
     if not content:
@@ -426,42 +402,18 @@ async def upload_logo_asset(*, file: UploadFile, folder: str = "general") -> dic
     extension = Path(safe_name).suffix or ".png"
     key = f"{folder}/{uuid4().hex}{extension}"
 
-    base_url = settings.supabase_url.rstrip("/")
-    upload_url = f"{base_url}/storage/v1/object/logos/{key}"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": file.content_type or "application/octet-stream",
-    }
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                upload_url,
-                headers=headers,
-                content=content,
-                params={"upsert": "true"},
-            )
-    except httpx.RequestError as exc:
-        msg = f"Error de red al subir logo: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al guardar logo"
-            f" (status={response.status_code}, body={response.text!r})"
+        public_path = await repo.upload_storage_object(
+            bucket="logos",
+            object_key=key,
+            content=content,
+            content_type=file.content_type,
         )
-        logger.error(msg)
-        raise StorageError(msg)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
-    public_path = (
-        response.json().get("Key")
-        if response.headers.get("content-type") == "application/json"
-        else None
-    )
-    if not public_path:
-        public_path = f"logos/{key}" if not str(key).startswith("logos/") else key
+    base_url = settings.supabase_url.rstrip("/")
     public_url = f"{base_url}/storage/v1/object/public/{public_path}"
 
     return {
@@ -477,8 +429,8 @@ async def upload_cliente_document(
 ) -> dict[str, Any]:
     """Sube un documento de cliente al bucket `clientes`."""
 
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+    if not settings.supabase_url:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL)")
 
     content = await file.read()
     if not content:
@@ -489,43 +441,18 @@ async def upload_cliente_document(
     extension = Path(safe_name).suffix
     key = f"{cliente_id}/{document_type}/{uuid4().hex}{extension}"
 
-    base_url = settings.supabase_url.rstrip("/")
-    upload_url = f"{base_url}/storage/v1/object/clientes/{key}"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": file.content_type or "application/octet-stream",
-    }
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                upload_url,
-                headers=headers,
-                content=content,
-                params={"upsert": "true"},
-            )
-    except httpx.RequestError as exc:  # pragma: no cover - errores de red reales
-        msg = f"Error de red al subir documento de cliente: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al guardar documento de cliente"
-            f" (status={response.status_code}, body={response.text!r})"
+        public_path = await repo.upload_storage_object(
+            bucket="clientes",
+            object_key=key,
+            content=content,
+            content_type=file.content_type,
         )
-        logger.error(msg)
-        raise StorageError(msg)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
-    public_path = (
-        response.json().get("Key")
-        if response.headers.get("content-type") == "application/json"
-        else None
-    )
-    if not public_path:
-        public_path = f"clientes/{key}" if not str(key).startswith("clientes/") else key
-
+    base_url = settings.supabase_url.rstrip("/")
     storage_url = f"{base_url}/storage/v1/object/{public_path}"
 
     return {
@@ -539,44 +466,13 @@ async def upload_cliente_document(
 
 async def fetch_contact(contact_id: str) -> dict[str, Any]:
     """Obtiene la representación del contacto indicado."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/contactos"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    params = {
-        "select": (
-            "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
-            "necesidad_proposito,contacto_datos"
-        ),
-        "id": f"eq.{contact_id}",
-        "limit": "1",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar contacto: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al obtener contacto"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    rows = response.json() or []
-    if not rows:
+        row = await repo.get_contact_by_id(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    if not row:
         raise StorageError("Contacto no encontrado")
-    row = rows[0]
     datos = row.get("contacto_datos")
     if isinstance(datos, str):
         try:
@@ -590,38 +486,11 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
 
 async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
     """Recupera identidades de canal asociadas al contacto."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/identidades_canal"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    params = {
-        "select": "canal,id_externo,metadatos",
-        "contacto_id": f"eq.{contact_id}",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar identidades del contacto: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al consultar identidades del contacto "
-            f"(status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json() or []
-    return data if isinstance(data, list) else []
+        return await repo.list_contact_identities(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def record_delivery_event(
@@ -634,122 +503,27 @@ async def record_delivery_event(
     provider_timestamp: str | None = None,
 ) -> None:
     """Inserta un registro en eventos_entrega vinculado a un mensaje."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Content-Type": "application/json",
-    }
-
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            lookup = await client.get(
-                f"{base_url}/rest/v1/mensajes",
-                headers=headers,
-                params={
-                    "select": "id",
-                    "twilio_message_sid": f"eq.{message_sid}",
-                    "limit": "1",
-                },
-            )
-    except httpx.RequestError as exc:
-        msg = f"Error de red al buscar mensaje por SID: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if lookup.status_code >= 400:
-        msg = (
-            "Supabase respondió error al buscar mensaje por SID"
-            f" (status={lookup.status_code}, body={lookup.text!r})"
+        await repo.record_delivery_event(
+            provider=provider,
+            message_sid=message_sid,
+            event=event,
+            raw_payload=raw_payload,
+            error_code=error_code,
+            provider_timestamp=provider_timestamp,
         )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    rows = lookup.json() or []
-    if not rows:
-        logger.warning(
-            "delivery_event.message_not_found",
-            extra={"message_sid": message_sid},
-        )
-        return
-    message_id = rows[0].get("id")
-    if not message_id:
-        logger.warning(
-            "delivery_event.invalid_lookup_response",
-            extra={"message_sid": message_sid, "response": rows[0]},
-        )
-        return
-
-    payload = {
-        "mensaje_id": message_id,
-        "proveedor": provider,
-        "evento": event,
-        "payload_crudo": raw_payload or {},
-    }
-    if error_code:
-        payload["codigo_error"] = error_code
-    if provider_timestamp:
-        payload["proveedor_ts"] = provider_timestamp
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{base_url}/rest/v1/eventos_entrega",
-                headers=headers,
-                json=payload,
-            )
-    except httpx.RequestError as exc:
-        msg = f"Error de red al registrar evento de entrega: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al registrar evento de entrega"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def fetch_calendar_settings() -> dict[str, Any]:
     """Obtiene la configuración de recordatorios del calendario (activación y offset)."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/panel_calendar_settings"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-        "Accept": "application/json",
-    }
-    params = {
-        "slug": "eq.default",
-        "limit": "1",
-        "select": "slug,reminder_enabled,reminder_offset_minutes,updated_at",
-    }
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al consultar configuración de calendario: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al obtener configuración de calendario"
-            f" (status={response.status_code}, body={response.text!r})"
-        )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    rows = response.json() or []
-    record = rows[0] if isinstance(rows, list) and rows else {}
+        record = await repo.get_calendar_settings()
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
     return {
         "reminder_enabled": bool(record.get("reminder_enabled", True)),
         "reminder_offset_minutes": int(record.get("reminder_offset_minutes") or 120),

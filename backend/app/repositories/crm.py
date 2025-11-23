@@ -1426,38 +1426,27 @@ class CRMRepository:
         content: bytes,
         content_type: str | None = None,
     ) -> str:
-        key = object_key.lstrip("/")
-        if not key:
-            raise CRMRepositoryError("object_key_required")
-        url = f"{self._base_url}/storage/v1/object/webchat/{key}"
-        headers = {
-            "apikey": self._service_role,
-            "Authorization": f"Bearer {self._service_role}",
-            "Content-Type": content_type or "application/octet-stream",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.post(
-                    url, headers=headers, content=content, params={"upsert": "true"}
-                )
-        except httpx.RequestError as exc:
-            raise CRMRepositoryError(f"Error de red al subir adjunto webchat: {exc}") from exc
-        if resp.status_code >= 400:
-            raise CRMRepositoryError(
-                f"Supabase respondió error {resp.status_code} al subir adjunto webchat: {resp.text}"
-            )
-        public_path: str | None = None
-        content_type_header = (resp.headers.get("content-type") or "").lower()
-        if "application/json" in content_type_header:
-            try:
-                payload = resp.json()
-            except ValueError:
-                payload = {}
-            if isinstance(payload, dict):
-                public_path = payload.get("Key")
-        if not public_path:
-            public_path = f"webchat/{key}" if not key.startswith("webchat/") else key
-        return public_path
+        return await self.upload_storage_object(
+            bucket="webchat",
+            object_key=object_key,
+            content=content,
+            content_type=content_type,
+        )
+
+    async def upload_storage_object(
+        self,
+        *,
+        bucket: str,
+        object_key: str,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> str:
+        return await self._upload_storage_object(
+            bucket=bucket,
+            object_key=object_key,
+            content=content,
+            content_type=content_type,
+        )
 
     async def record_webchat_session_closure(self, *, session_id: str) -> None:
         session_key = session_id.strip()
@@ -1758,6 +1747,42 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al actualizar contacto: {row!r}")
         return row
+
+    async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
+        contact_key = contact_id.strip()
+        if not contact_key:
+            return None
+        params = {
+            "id": f"eq.{contact_key}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
+                "necesidad_proposito,contacto_datos"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
+    async def list_contact_identities(self, *, contact_id: str) -> list[dict[str, Any]]:
+        contact_key = contact_id.strip()
+        if not contact_key:
+            return []
+        params = {
+            "select": "canal,id_externo,metadatos",
+            "contacto_id": f"eq.{contact_key}",
+        }
+        resp = await self._request("GET", "/rest/v1/identidades_canal", params=params)
+        data = resp.json() or []
+        return data if isinstance(data, list) else []
 
     async def create_contact(
         self,
@@ -2994,6 +3019,53 @@ class CRMRepository:
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"
             )
         return resp
+
+    async def _upload_storage_object(
+        self,
+        *,
+        bucket: str,
+        object_key: str,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> str:
+        bucket_name = bucket.strip().strip("/")
+        if not bucket_name:
+            raise CRMRepositoryError("bucket_required")
+        key = object_key.lstrip("/")
+        if not key:
+            raise CRMRepositoryError("object_key_required")
+        url = f"{self._base_url}/storage/v1/object/{bucket_name}/{key}"
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+            "Content-Type": content_type or "application/octet-stream",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(
+                    url, headers=headers, content=content, params={"upsert": "true"}
+                )
+        except httpx.RequestError as exc:
+            raise CRMRepositoryError(
+                f"Error de red al subir objeto {bucket_name}/{key}: {exc}"
+            ) from exc
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} al subir objeto {bucket_name}/{key}: {resp.text}"
+            )
+        public_path: str | None = None
+        content_type_header = (resp.headers.get("content-type") or "").lower()
+        if "application/json" in content_type_header:
+            try:
+                payload = resp.json()
+            except ValueError:
+                payload = {}
+            if isinstance(payload, dict):
+                public_path = payload.get("Key")
+        if not public_path:
+            prefix = f"{bucket_name}/"
+            public_path = f"{prefix}{key}" if not key.startswith(prefix) else key
+        return public_path
 
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
         url = f"{self._base_url}/rpc/{function_name}"
