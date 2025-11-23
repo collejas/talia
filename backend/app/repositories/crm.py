@@ -1139,6 +1139,43 @@ class CRMRepository:
                 f"Supabase respondió error {resp.status_code} al eliminar oportunidad: {resp.text}"
             )
 
+    async def register_webchat_message(
+        self,
+        *,
+        session_id: str,
+        author: str,
+        content: str,
+        response_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        inactivity_hours: int | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, str | None]:
+        payload: dict[str, Any] = {
+            "p_session_id": session_id,
+            "p_author": author,
+            "p_content": content,
+        }
+        if response_id:
+            payload["p_response_id"] = response_id
+        if metadata:
+            payload["p_metadata"] = metadata
+        if inactivity_hours is not None:
+            payload["p_inactivity_hours"] = inactivity_hours
+        if attachments:
+            payload["p_attachments"] = attachments
+        data = await self._rpc("registrar_mensaje_webchat", payload)
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_webchat: {data!r}")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida registrar_mensaje_webchat: {row!r}")
+        return {
+            "conversation_id": row.get("conversacion_id"),
+            "message_id": row.get("mensaje_id"),
+            "contact_id": row.get("contacto_id"),
+            "openai_conversation_id": row.get("conversacion_openai_id"),
+        }
+
     async def _get_default_stage_id(self, *, organizacion_id: UUID) -> UUID:
         cache_key = str(organizacion_id)
         cached = self._stage_cache.get(cache_key)
@@ -2626,6 +2663,30 @@ class CRMRepository:
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"
             )
         return resp
+
+    async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
+        url = f"{self._base_url}/rpc/{function_name}"
+        headers = {
+            "Accept": "application/json",
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+        except httpx.RequestError as exc:
+            raise CRMRepositoryError(f"Error de red al invocar RPC {function_name}: {exc}") from exc
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(
+                f"Supabase respondió error {resp.status_code} en RPC {function_name}: {resp.text}"
+            )
+        if resp.status_code == 204:
+            return {}
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise CRMRepositoryError(f"Respuesta inválida de RPC {function_name}: {exc}") from exc
 
     async def _request_with_user(
         self,

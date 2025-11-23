@@ -65,54 +65,21 @@ async def register_webchat_message(
     inactivity_hours: int | None = None,
     attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, str | None]:
-    """Invoca la función RPC `registrar_mensaje_webchat` y retorna IDs clave."""
-    if not settings.supabase_url or not settings.supabase_service_role:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
-
-    base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/rpc/registrar_mensaje_webchat"
-    headers = {
-        "apikey": settings.supabase_service_role,
-        "Authorization": f"Bearer {settings.supabase_service_role}",
-    }
-    payload: dict[str, Any] = {
-        "p_session_id": session_id,
-        "p_author": author,
-        "p_content": content,
-        "p_metadata": metadata or {},
-    }
-    if response_id:
-        payload["p_response_id"] = response_id
-    if inactivity_hours is not None:
-        payload["p_inactivity_hours"] = inactivity_hours
-    if attachments:
-        payload["p_attachments"] = attachments
-
+    """Invoca la RPC `registrar_mensaje_webchat` a través del repositorio CRM."""
+    repo = CRMRepository()
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-    except httpx.RequestError as exc:
-        msg = f"Error de red al registrar mensaje webchat: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
-
-    if response.status_code >= 400:
-        msg = (
-            "Supabase respondió error al registrar mensaje webchat"
-            f" (status={response.status_code}, body={response.text!r})"
+        result = await repo.register_webchat_message(
+            session_id=session_id,
+            author=author,
+            content=content,
+            response_id=response_id,
+            metadata=metadata or {},
+            inactivity_hours=inactivity_hours,
+            attachments=attachments or [],
         )
-        logger.error(msg)
-        raise StorageError(msg)
-
-    data = response.json()
-    if not isinstance(data, list) or not data:
-        raise StorageError(f"Respuesta inesperada registrar_mensaje_webchat: {data!r}")
-    row = data[0]
-    return {
-        "conversation_id": row.get("conversacion_id"),
-        "message_id": row.get("mensaje_id"),
-        "openai_conversation_id": row.get("conversacion_openai_id"),
-    }
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    return result
 
 
 async def register_whatsapp_message(
