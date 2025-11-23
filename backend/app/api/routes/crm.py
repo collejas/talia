@@ -9,6 +9,7 @@ import json
 import secrets
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from typing import Annotated, Any, Literal, Sequence
 from uuid import UUID
@@ -49,6 +50,9 @@ from app.services import (
 from app.services import (
     calendar as calendar_service,
 )
+from app.services import (
+    quotes as quotes_service,
+)
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
 from app.services.storage import StorageError
@@ -61,6 +65,9 @@ DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
 DEFAULT_REMINDER_SLUG = "default"
 DEFAULT_CONTACTS_LIMIT = 200
 DEFAULT_PORTAL_TOKEN_DAYS = 14
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
+CURRENCY_QUANTUM = Decimal("0.01")
 
 
 class CRMAccount(BaseModel):
@@ -847,6 +854,404 @@ def _clean_text(value: Any) -> str | None:
     return trimmed or None
 
 
+def _single_related(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, list) and value:
+        first = value[0]
+        if isinstance(first, dict):
+            return first
+    return None
+
+
+def _ensure_concept_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    if not isinstance(items, list):
+        return normalized
+    for idx, raw in enumerate(items, start=1):
+        if isinstance(raw, BaseModel):
+            raw_item = raw.model_dump(exclude_none=True)
+        elif isinstance(raw, dict):
+            raw_item = raw
+        else:
+            continue
+        entry: dict[str, Any] = {}
+        catalog_id = raw_item.get("catalog_item_id")
+        if catalog_id:
+            entry["catalog_item_id"] = str(catalog_id)
+        for key in ("titulo", "descripcion", "unidad"):
+            value = _clean_text(raw_item.get(key))
+            if value:
+                entry[key] = value
+        if isinstance(raw_item.get("metadatos"), dict):
+            entry["metadatos"] = raw_item["metadatos"]
+        for key in ("cantidad", "precio_unitario", "descuento", "subtotal", "impuestos", "total"):
+            number = _decimal_from_value(raw_item.get(key))
+            if number is not None:
+                entry[key] = float(number)
+        currency = _clean_text(raw_item.get("moneda"))
+        if currency and len(currency) == 3:
+            entry["moneda"] = currency.upper()
+        order_value = raw_item.get("orden")
+        if isinstance(order_value, int) and order_value > 0:
+            entry["orden"] = order_value
+        else:
+            entry["orden"] = idx
+        normalized.append(entry)
+    return normalized
+
+
+def _decimal_from_value(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return Decimal(cleaned)
+        except InvalidOperation:
+            return None
+    return None
+
+
+def _round_currency_decimal(value: Decimal) -> Decimal:
+    return value.quantize(CURRENCY_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _quote_totals_from_items(items: list[dict[str, Any]]) -> dict[str, float] | None:
+    subtotals: list[Decimal] = []
+    for item in items:
+        total_value = _decimal_from_value(item.get("total"))
+        if total_value is None:
+            qty = _decimal_from_value(item.get("cantidad"))
+            price = _decimal_from_value(item.get("precio_unitario"))
+            discount = _decimal_from_value(item.get("descuento")) or Decimal("0")
+            if qty is not None and price is not None:
+                total_value = qty * price - discount
+        if total_value is None or total_value <= 0:
+            continue
+        subtotals.append(total_value)
+    if not subtotals:
+        return None
+    subtotal_sum = sum(subtotals)
+    subtotal_amount = _round_currency_decimal(subtotal_sum)
+    impuestos_amount = _round_currency_decimal(subtotal_sum * QUOTE_DEFAULT_TAX_RATE)
+    total_amount = _round_currency_decimal(subtotal_amount + impuestos_amount)
+    return {
+        "subtotal": float(subtotal_amount),
+        "impuestos": float(impuestos_amount),
+        "total": float(total_amount),
+    }
+
+
+def _concepts_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    concepts: list[dict[str, Any]] = []
+    for item in items:
+        title = item.get("titulo")
+        desc = item.get("descripcion")
+        total = item.get("total") or item.get("subtotal")
+        if total is None:
+            qty = item.get("cantidad")
+            price = item.get("precio_unitario")
+            discount = item.get("descuento") or 0
+            if qty is not None and price is not None:
+                total = max(qty * price - discount, 0)
+        concept = {"titulo": title, "descripcion": desc}
+        if total is not None:
+            concept["total"] = total
+        if any(value for value in concept.values()):
+            concepts.append(concept)
+    return concepts
+
+
+def _parse_date(value: Any) -> date | None:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return date.fromisoformat(cleaned.split("T")[0])
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return _ensure_utc(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            dt = datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return _ensure_utc(dt)
+    return None
+
+
+def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
+    items: list[LeadQuoteItem] = []
+    if not isinstance(value, list):
+        return items
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        catalog = entry.get("catalog_item")
+        catalog_item = CRMCatalogItem.model_validate(catalog) if isinstance(catalog, dict) else None
+        items.append(
+            LeadQuoteItem(
+                id=entry.get("id"),
+                cotizacion_id=entry.get("cotizacion_id"),
+                catalog_item_id=entry.get("catalog_item_id"),
+                catalog_item=catalog_item,
+                titulo=entry.get("titulo"),
+                descripcion=entry.get("descripcion"),
+                unidad=entry.get("unidad"),
+                cantidad=entry.get("cantidad"),
+                precio_unitario=entry.get("precio_unitario"),
+                descuento=entry.get("descuento"),
+                subtotal=entry.get("subtotal"),
+                impuestos=entry.get("impuestos"),
+                total=entry.get("total"),
+                moneda=entry.get("moneda"),
+                orden=entry.get("orden"),
+                metadatos=entry.get("metadatos")
+                if isinstance(entry.get("metadatos"), dict)
+                else None,
+                creado_en=_parse_timestamp(entry.get("creado_en")),
+                actualizado_en=_parse_timestamp(entry.get("actualizado_en")),
+            )
+        )
+    return items
+
+
+def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
+    return LeadQuote(
+        id=row.get("id"),
+        tarjeta_id=row.get("tarjeta_id"),
+        version=row.get("version") or 1,
+        titulo=row.get("titulo"),
+        descripcion=row.get("descripcion"),
+        conceptos=_ensure_concept_list(row.get("conceptos")),
+        subtotal=row.get("subtotal"),
+        impuestos=row.get("impuestos"),
+        total=row.get("total"),
+        moneda=_clean_text(row.get("moneda")),
+        valido_hasta=_parse_date(row.get("valido_hasta")),
+        estado=row.get("estado") or "borrador",
+        canal_envio=row.get("canal_envio"),
+        enviada_por=row.get("enviada_por"),
+        enviada_en=_parse_timestamp(row.get("enviada_en")),
+        aprobada_en=_parse_timestamp(row.get("aprobada_en")),
+        rechazada_en=_parse_timestamp(row.get("rechazada_en")),
+        pdf_path=row.get("pdf_path"),
+        pdf_url=row.get("pdf_url"),
+        metadatos=(row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None),
+        creado_en=_parse_timestamp(row.get("creado_en")),
+        actualizado_en=_parse_timestamp(row.get("actualizado_en")),
+        items=_parse_quote_items(row.get("items")),
+    )
+
+
+def _quote_payload_from_body(payload: LeadQuoteCreatePayload) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True)
+    if "items" in body:
+        items = _normalize_quote_items(body.get("items"))
+        if items:
+            body["items"] = items
+            totals = _quote_totals_from_items(items)
+            if totals:
+                body.update(totals)
+        else:
+            body.pop("items", None)
+    if "conceptos" in body:
+        body["conceptos"] = _ensure_concept_list(body.get("conceptos"))
+    if not body.get("conceptos") and body.get("items"):
+        body["conceptos"] = _concepts_from_items(body.get("items") or [])
+    if "moneda" in body:
+        body["moneda"] = (_clean_text(body["moneda"]) or "MXN").upper()
+    if "valido_hasta" in body and isinstance(body["valido_hasta"], date):
+        body["valido_hasta"] = body["valido_hasta"].isoformat()
+    return body
+
+
+def _quote_extra_payload(payload: LeadQuoteMarkPayload) -> dict[str, Any]:
+    extra = dict(payload.metadata or {})
+    value = payload.proposal_sent_at
+    if value:
+        if isinstance(value, datetime):
+            extra["proposal_sent_at"] = _ensure_utc(value).isoformat()
+        elif isinstance(value, date):
+            extra["proposal_sent_at"] = value.isoformat()
+    return extra
+
+
+def _resolve_lead_label(lead_row: dict[str, Any]) -> str:
+    contact = _single_related(lead_row.get("contacto")) or {}
+    candidates = [
+        lead_row.get("proyecto_nombre"),
+        contact.get("company_name"),
+        contact.get("nombre_completo"),
+    ]
+    for value in candidates:
+        cleaned = _clean_text(value)
+        if cleaned:
+            return cleaned
+    return "Lead sin nombre"
+
+
+def _resolve_email_recipients(
+    contact: dict[str, Any] | None, overrides: list[str] | None
+) -> list[str]:
+    recipients: list[str] = []
+    seen: set[str] = set()
+    for value in overrides or []:
+        if not isinstance(value, str):
+            continue
+        email = value.strip().lower()
+        if email and email not in seen:
+            recipients.append(email)
+            seen.add(email)
+    contact_email = _clean_text((contact or {}).get("correo"))
+    if contact_email:
+        lowered = contact_email.lower()
+        if lowered not in seen:
+            recipients.append(contact_email)
+            seen.add(lowered)
+    return recipients
+
+
+def _resolve_whatsapp_number(contact: dict[str, Any] | None, override: str | None) -> str | None:
+    candidate = _clean_text(override)
+    if candidate:
+        return candidate
+    contact_phone = _clean_text((contact or {}).get("telefono_e164"))
+    return contact_phone
+
+
+def _quote_mark_extra(extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = dict(extra or {})
+    payload.setdefault("proposal_sent_at", datetime.now(timezone.utc).isoformat())
+    return payload
+
+
+async def _ensure_won_stage_metadata(
+    *,
+    repo: CRMRepository,
+    usuario_token: str,
+    lead_id: UUID,
+    lead_row: dict[str, Any],
+    quote: LeadQuote | None = None,
+) -> None:
+    metadata = lead_row.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    stage_prep = metadata.get("stage_prep")
+    if not isinstance(stage_prep, dict):
+        stage_prep = {}
+    closed_prep = stage_prep.get("cerrado_ganado")
+    if not isinstance(closed_prep, dict):
+        closed_prep = {}
+    changed = False
+    today = datetime.now(timezone.utc).date().isoformat()
+    existing_close = _clean_text(closed_prep.get("close_date"))
+    if not existing_close:
+        closed_prep["close_date"] = today
+        changed = True
+    if quote and quote.total is not None and "contract_value" not in closed_prep:
+        closed_prep["contract_value"] = float(quote.total)
+        changed = True
+    elif "contract_value" not in closed_prep:
+        monto = lead_row.get("monto_estimado")
+        if isinstance(monto, (int, float)):
+            closed_prep["contract_value"] = float(monto)
+            changed = True
+    if not changed:
+        return
+    stage_prep["cerrado_ganado"] = closed_prep
+    metadata["stage_prep"] = stage_prep
+    try:
+        await repo.update_lead_metadata(
+            usuario_token=usuario_token,
+            lead_id=lead_id,
+            metadata=metadata,
+        )
+    except CRMRepositoryError:
+        logger.warning("quotes.auto_fill_won_failed", extra={"lead_id": str(lead_id)})
+
+
+async def _auto_move_lead_to_won(
+    *,
+    repo: CRMRepository,
+    usuario_token: str,
+    lead_id: UUID,
+    lead_row: dict[str, Any] | None = None,
+    quote: LeadQuote | None = None,
+) -> None:
+    try:
+        current_row = lead_row or await repo.fetch_lead_for_quote(
+            usuario_token=usuario_token,
+            lead_id=lead_id,
+        )
+    except CRMRepositoryError:
+        return
+    stage_info = _single_related(current_row.get("etapa")) or {}
+    stage_code = (_clean_text(stage_info.get("codigo")) or "").lower()
+    stage_category = (_clean_text(stage_info.get("categoria")) or "").lower()
+    await _ensure_won_stage_metadata(
+        repo=repo,
+        usuario_token=usuario_token,
+        lead_id=lead_id,
+        lead_row=current_row,
+        quote=quote,
+    )
+    if stage_category == "ganada" or stage_code == "cerrado_ganado":
+        return
+    tablero_id = current_row.get("tablero_id")
+    won_stage_id = await repo.fetch_won_stage_id(tablero_id)
+    if not won_stage_id:
+        return
+    expected_stage = current_row.get("etapa_id")
+    try:
+        await repo.move_lead_to_stage(
+            usuario_token=usuario_token,
+            lead_id=lead_id,
+            stage_id=UUID(str(won_stage_id)),
+            fuente="asistente",
+            motivo="quote_auto_accept",
+            metadata={"source": "quote_auto_accept"},
+            expected_stage=UUID(str(expected_stage)) if expected_stage else None,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "quotes.auto_move_failed",
+            extra={
+                "lead_id": str(lead_id),
+                "error": str(exc),
+            },
+        )
+
+
 def _build_logo_asset(row: Any) -> CRMLogoAsset | None:
     if not isinstance(row, dict):
         return None
@@ -1319,6 +1724,107 @@ class CRMCatalogItemUpdate(BaseModel):
 class CRMCatalogDeleteResponse(BaseModel):
     item: CRMCatalogItem | None = None
     hard_deleted: bool = False
+
+
+class LeadQuoteItemPayload(BaseModel):
+    catalog_item_id: UUID | None = None
+    titulo: str | None = Field(default=None, max_length=200)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    unidad: str | None = Field(default=None, max_length=60)
+    cantidad: float | None = Field(default=None, gt=0)
+    precio_unitario: float | None = Field(default=None, ge=0)
+    descuento: float | None = Field(default=None, ge=0)
+    subtotal: float | None = Field(default=None, ge=0)
+    impuestos: float | None = Field(default=None, ge=0)
+    total: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    orden: int | None = Field(default=None, ge=1)
+    metadatos: dict[str, Any] | None = Field(default=None)
+
+
+class LeadQuoteItem(BaseModel):
+    id: UUID
+    cotizacion_id: UUID
+    catalog_item_id: UUID | None = None
+    catalog_item: CRMCatalogItem | None = None
+    titulo: str | None = None
+    descripcion: str | None = None
+    unidad: str | None = None
+    cantidad: float | None = None
+    precio_unitario: float | None = None
+    descuento: float | None = None
+    subtotal: float | None = None
+    impuestos: float | None = None
+    total: float | None = None
+    moneda: str | None = None
+    orden: int | None = None
+    metadatos: dict[str, Any] | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+
+
+class LeadQuoteCreatePayload(BaseModel):
+    titulo: str | None = Field(default=None, max_length=200)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    conceptos: list[dict[str, Any]] | None = Field(default=None)
+    subtotal: float | None = Field(default=None)
+    impuestos: float | None = Field(default=None)
+    total: float | None = Field(default=None)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    valido_hasta: date | None = Field(default=None)
+    pdf_url: str | None = Field(default=None, max_length=2048)
+    pdf_path: str | None = Field(default=None, max_length=512)
+    metadatos: dict[str, Any] | None = Field(default=None)
+    items: list[LeadQuoteItemPayload] | None = Field(default=None)
+
+
+class LeadQuoteMarkPayload(BaseModel):
+    estado: Literal["enviada", "aceptada", "rechazada", "cancelada"]
+    canal: Literal["email", "whatsapp", "manual", "otro"] | None = Field(default=None)
+    proposal_sent_at: datetime | date | None = Field(default=None)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class LeadQuoteSendPayload(LeadQuoteCreatePayload):
+    channel: Literal["email", "whatsapp"]
+    email_to: list[str] | None = Field(default=None)
+    whatsapp_to: str | None = Field(default=None)
+    subject: str | None = Field(default=None, max_length=200)
+    message: str | None = Field(default=None, max_length=2000)
+
+
+class LeadQuote(BaseModel):
+    id: UUID
+    tarjeta_id: UUID
+    version: int
+    titulo: str | None = None
+    descripcion: str | None = None
+    conceptos: list[dict[str, Any]] = Field(default_factory=list)
+    subtotal: float | None = None
+    impuestos: float | None = None
+    total: float | None = None
+    moneda: str | None = None
+    valido_hasta: date | None = None
+    estado: Literal["borrador", "enviada", "aceptada", "rechazada", "cancelada"]
+    canal_envio: Literal["email", "whatsapp", "manual", "otro"] | None = None
+    enviada_por: UUID | None = None
+    enviada_en: datetime | None = None
+    aprobada_en: datetime | None = None
+    rechazada_en: datetime | None = None
+    pdf_path: str | None = None
+    pdf_url: str | None = None
+    metadatos: dict[str, Any] | None = None
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
+    items: list[LeadQuoteItem] = Field(default_factory=list)
+
+
+class LeadQuoteResponse(BaseModel):
+    quote: LeadQuote
+
+
+class LeadQuoteListResponse(BaseModel):
+    quotes: list[LeadQuote] = Field(default_factory=list)
 
 
 class CRMContactSummary(BaseModel):
@@ -2984,6 +3490,231 @@ async def convertir_lead_cliente(
     )
     cliente = await repo.get_cliente_por_lead(usuario_token=user_token, lead_id=lead_id)
     return {"ok": True, "cliente": cliente}
+
+
+@router.get("/leads/{lead_id}/quotes", response_model=LeadQuoteListResponse)
+async def list_lead_quotes(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    lead_id: UUID,
+    user_token: str = Depends(require_user_token),
+) -> LeadQuoteListResponse:
+    try:
+        rows = await repo.list_lead_quotes(usuario_token=user_token, lead_id=lead_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    quotes = []
+    for row in rows:
+        if isinstance(row, dict):
+            quotes.append(_quote_from_row(row))
+    return LeadQuoteListResponse(quotes=quotes)
+
+
+@router.post(
+    "/leads/{lead_id}/quotes",
+    response_model=LeadQuoteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_lead_quote(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    lead_id: UUID,
+    payload: LeadQuoteCreatePayload,
+    user_token: str = Depends(require_user_token),
+) -> LeadQuoteResponse:
+    body = _quote_payload_from_body(payload)
+    try:
+        created_row = await repo.create_lead_quote(
+            usuario_token=user_token,
+            lead_id=lead_id,
+            payload=body,
+        )
+        quote_id = created_row.get("id")
+        quote_row = await repo.fetch_quote_with_items(
+            usuario_token=user_token,
+            quote_id=UUID(str(quote_id)),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    quote = _quote_from_row(quote_row)
+    return LeadQuoteResponse(quote=quote)
+
+
+@router.post("/leads/{lead_id}/quotes/send", response_model=LeadQuoteResponse)
+async def send_lead_quote(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    lead_id: UUID,
+    payload: LeadQuoteSendPayload,
+    user_token: str = Depends(require_user_token),
+) -> LeadQuoteResponse:
+    try:
+        lead_row = await repo.fetch_lead_for_quote(usuario_token=user_token, lead_id=lead_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    contact = _single_related(lead_row.get("contacto")) or {}
+    currency = payload.moneda or lead_row.get("moneda") or "MXN"
+    base_payload_data = payload.model_dump(
+        include=set(LeadQuoteCreatePayload.model_fields.keys()),
+        exclude_none=True,
+    )
+    base_payload = LeadQuoteCreatePayload(**base_payload_data)
+    normalized_items = _normalize_quote_items(base_payload.items or [])
+    totals = _quote_totals_from_items(normalized_items)
+    if totals:
+        base_payload.subtotal = totals["subtotal"]
+        base_payload.impuestos = totals["impuestos"]
+        base_payload.total = totals["total"]
+    conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
+
+    quote_context = quotes_service.QuoteRenderContext(
+        lead_label=_resolve_lead_label(lead_row),
+        reference=str(lead_id).split("-")[0],
+        issuer_name=settings.mail_username or "Tal-IA",
+        issuer_email=settings.mail_username,
+        contact_name=_clean_text(contact.get("nombre_completo")),
+        contact_company=_clean_text(contact.get("company_name")),
+        contact_email=_clean_text(contact.get("correo")),
+        contact_phone=_clean_text(contact.get("telefono_e164")),
+        conceptos=conceptos_context,
+        subtotal=base_payload.subtotal,
+        impuestos=base_payload.impuestos,
+        total=base_payload.total,
+        moneda=currency,
+        valido_hasta=base_payload.valido_hasta,
+        descripcion=base_payload.descripcion or base_payload.titulo,
+        notes=lead_row.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+        items=normalized_items,
+    )
+
+    pdf_doc = await quotes_service.render_quote_pdf(quote_context)
+    try:
+        upload = await storage.upload_quote_document(
+            content=pdf_doc.content,
+            filename=pdf_doc.filename,
+            lead_id=str(lead_id),
+            content_type="application/pdf",
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="quote_upload_failed") from exc
+
+    create_payload = _quote_payload_from_body(base_payload)
+    create_payload["pdf_url"] = upload["url"]
+    create_payload["pdf_path"] = upload["path"]
+    try:
+        created_row = await repo.create_lead_quote(
+            usuario_token=user_token,
+            lead_id=lead_id,
+            payload=create_payload,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    quote_id_value = created_row.get("id")
+    if not quote_id_value:
+        raise HTTPException(status_code=502, detail="quote_create_missing_id")
+    quote_uuid = UUID(str(quote_id_value))
+
+    channel = payload.channel
+    if channel == "email":
+        recipients = _resolve_email_recipients(contact, payload.email_to)
+        if not recipients:
+            raise HTTPException(status_code=400, detail="quote_email_missing_recipient")
+        subject = payload.subject or quotes_service.compose_email_subject(quote_context)
+        body_text = quotes_service.compose_email_body(quote_context, payload.message)
+        try:
+            await asyncio.to_thread(
+                send_email,
+                subject=subject,
+                body_text=body_text,
+                recipients=recipients,
+                attachments=[
+                    {
+                        "content": pdf_doc.content,
+                        "maintype": "application",
+                        "subtype": "pdf",
+                        "filename": pdf_doc.filename,
+                    }
+                ],
+            )
+        except EmailSendError as exc:
+            raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
+        extra_data = _quote_mark_extra({"email_to": recipients, "subject": subject})
+    else:
+        whatsapp_number = _resolve_whatsapp_number(contact, payload.whatsapp_to)
+        if not whatsapp_number:
+            raise HTTPException(status_code=400, detail="quote_whatsapp_missing_recipient")
+        body_text = quotes_service.compose_whatsapp_body(quote_context, payload.message)
+        try:
+            await quotes_service.send_whatsapp_message(
+                to_number=whatsapp_number,
+                body=body_text,
+                media_url=upload["url"],
+            )
+        except quotes_service.QuoteSendError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        extra_data = _quote_mark_extra({"whatsapp_to": whatsapp_number})
+
+    try:
+        await repo.mark_lead_quote(
+            usuario_token=user_token,
+            quote_id=quote_uuid,
+            estado="enviada",
+            canal=channel,
+            extra=extra_data,
+        )
+        quote_row = await repo.fetch_quote_with_items(
+            usuario_token=user_token,
+            quote_id=quote_uuid,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    quote = _quote_from_row(quote_row)
+    if quote.estado == "aceptada":
+        await _auto_move_lead_to_won(
+            repo=repo,
+            usuario_token=user_token,
+            lead_id=lead_id,
+            lead_row=lead_row,
+            quote=quote,
+        )
+    return LeadQuoteResponse(quote=quote)
+
+
+@router.post("/quotes/{quote_id}/mark", response_model=LeadQuoteResponse)
+async def mark_lead_quote(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    quote_id: UUID,
+    payload: LeadQuoteMarkPayload,
+    user_token: str = Depends(require_user_token),
+) -> LeadQuoteResponse:
+    extra = _quote_extra_payload(payload)
+    try:
+        await repo.mark_lead_quote(
+            usuario_token=user_token,
+            quote_id=quote_id,
+            estado=payload.estado,
+            canal=payload.canal,
+            extra=extra,
+        )
+        quote_row = await repo.fetch_quote_with_items(
+            usuario_token=user_token,
+            quote_id=quote_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    quote = _quote_from_row(quote_row)
+    if quote.estado == "aceptada":
+        await _auto_move_lead_to_won(
+            repo=repo,
+            usuario_token=user_token,
+            lead_id=quote.tarjeta_id,
+            quote=quote,
+        )
+    return LeadQuoteResponse(quote=quote)
 
 
 @router.patch("/clientes/{cliente_id}")

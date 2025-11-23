@@ -15,6 +15,9 @@ class CRMRepositoryError(RuntimeError):
     """Errores al interactuar con Supabase CRM."""
 
 
+QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
+
+
 class CRMRepository:
     """Cliente ligero contra Supabase REST usando service role."""
 
@@ -650,6 +653,200 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al crear item de cotización: {row!r}")
         return row
+
+    async def list_lead_quotes(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "tarjeta_id": f"eq.{lead_id}",
+            "order": "version.desc",
+            "select": QUOTE_WITH_ITEMS_SELECT,
+            "items.order": "orden.asc",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/lead_cotizaciones",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones de lead: {data!r}")
+
+    async def fetch_quote_with_items(
+        self,
+        *,
+        usuario_token: str,
+        quote_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "id": f"eq.{quote_id}",
+            "select": QUOTE_WITH_ITEMS_SELECT,
+            "limit": "1",
+            "items.order": "orden.asc",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/lead_cotizaciones",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json()
+        if isinstance(data, list) and data:
+            row = data[0]
+            if isinstance(row, dict):
+                return row
+        raise CRMRepositoryError("quote_not_found")
+
+    async def fetch_lead_for_quote(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "id": f"eq.{lead_id}",
+            "select": (
+                "id,organizacion_id,tablero_id,etapa_id,monto_estimado,moneda,proyecto_nombre,proyecto_necesidades,metadata,"
+                "etapa:lead_etapas!lead_tarjetas_etapa_id_fkey(codigo,categoria),"
+                "contacto:contactos!lead_tarjetas_contacto_id_fkey("
+                "id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito)"
+            ),
+            "limit": "1",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/lead_tarjetas",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json()
+        if isinstance(data, list) and data:
+            row = data[0]
+            if isinstance(row, dict):
+                return row
+        raise CRMRepositoryError("lead_not_found")
+
+    async def create_lead_quote(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"p_tarjeta_id": str(lead_id), "p_payload": payload}
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_lead_quote_create",
+            token=usuario_token,
+            json=body,
+        )
+        data = resp.json()
+        row = self._first_row(data)
+        if isinstance(row, dict):
+            return row
+        raise CRMRepositoryError(f"Respuesta inesperada al crear cotización: {data!r}")
+
+    async def mark_lead_quote(
+        self,
+        *,
+        usuario_token: str,
+        quote_id: UUID,
+        estado: str,
+        canal: str | None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        body = {
+            "p_quote_id": str(quote_id),
+            "p_estado": estado,
+            "p_canal": canal,
+            "p_extra": extra or {},
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_lead_quote_mark",
+            token=usuario_token,
+            json=body,
+        )
+        data = resp.json()
+        row = self._first_row(data)
+        if isinstance(row, dict):
+            return row
+        raise CRMRepositoryError(f"Respuesta inesperada al marcar cotización: {data!r}")
+
+    async def fetch_won_stage_id(self, tablero_id: Any) -> str | None:
+        tablero = str(tablero_id or "").strip()
+        if not tablero:
+            return None
+        params = {
+            "tablero_id": f"eq.{tablero}",
+            "codigo": "eq.cerrado_ganado",
+            "select": "id",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/lead_etapas", params=params)
+        data = resp.json()
+        if isinstance(data, list) and data:
+            row = data[0]
+            if isinstance(row, dict) and row.get("id"):
+                return str(row["id"])
+        return None
+
+    async def update_lead_metadata(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+        metadata: dict[str, Any],
+    ) -> None:
+        params = {"id": f"eq.{lead_id}"}
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/lead_tarjetas",
+            token=usuario_token,
+            params=params,
+            json={"metadata": metadata},
+            prefer="return=minimal",
+        )
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(
+                f"Error actualizando metadata de lead: {resp.status_code} {resp.text}"
+            )
+
+    async def move_lead_to_stage(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+        stage_id: UUID,
+        fuente: str,
+        motivo: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        expected_stage: UUID | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "p_tarjeta_id": str(lead_id),
+            "p_etapa_destino": str(stage_id),
+            "p_fuente": fuente,
+            "p_motivo": motivo,
+            "p_metadata": metadata or {},
+            "p_expected_etapa": str(expected_stage) if expected_stage else None,
+        }
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/panel_lead_move",
+            token=usuario_token,
+            json=payload,
+        )
+        data = resp.json()
+        row = self._first_row(data)
+        if isinstance(row, dict):
+            return row
+        raise CRMRepositoryError(f"Respuesta inesperada al mover lead: {data!r}")
 
     async def list_campaigns(
         self,

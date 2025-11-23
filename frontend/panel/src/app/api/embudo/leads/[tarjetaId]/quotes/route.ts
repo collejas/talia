@@ -2,8 +2,7 @@
 
 import { NextResponse } from "next/server";
 
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { callCrmApi } from "@/lib/api/crm";
 
 export async function GET(
   request: Request,
@@ -13,55 +12,30 @@ export async function GET(
   if (!tarjetaId) {
     return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
   }
+
   const url = new URL(request.url);
   const statusFilter = url.searchParams.get("status")?.toLowerCase() ?? null;
 
-  let token: string;
-  try {
-    token = await resolvePanelApiToken();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "No se encontró token del panel.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
-  const baseUrl = getPanelApiBaseUrl();
-  const response = await fetch(`${baseUrl}/leads/${tarjetaId}/quotes`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
+  const response = await callCrmApi<{ quotes: unknown[] }>(`/crm/leads/${tarjetaId}/quotes`, {
+    withUserToken: true,
   });
 
-  const text = await response.text();
   if (!response.ok) {
-    const parsed = text ? safeJson(text) : null;
-    const error =
-      (parsed && typeof parsed.error === "string" && parsed.error) ||
-      (parsed && typeof parsed.detail === "string" && parsed.detail) ||
-      (text && !text.startsWith("<") ? text : null) ||
-      "No se pudieron cargar las cotizaciones.";
-    return NextResponse.json({ error }, { status: response.status });
+    return NextResponse.json(
+      { error: response.error || "No se pudieron cargar las cotizaciones." },
+      { status: response.status ?? 500 },
+    );
   }
 
-  const payload = text ? safeJson(text) : null;
-  const quotes = Array.isArray(payload?.quotes) ? (payload!.quotes as unknown[]) : [];
+  const quotes = Array.isArray(response.data?.quotes) ? response.data.quotes : [];
   if (!statusFilter) {
     return NextResponse.json({ quotes });
   }
+
   const filtered = quotes.filter(
     (quote) =>
       typeof (quote as { estado?: unknown }).estado === "string" &&
       ((quote as { estado: string }).estado || "").toLowerCase() === statusFilter,
   );
   return NextResponse.json({ quotes: filtered });
-}
-
-function safeJson(payload: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(payload);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 }

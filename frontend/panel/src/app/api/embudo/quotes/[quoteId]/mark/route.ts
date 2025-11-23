@@ -2,8 +2,7 @@
 
 import { NextResponse } from "next/server";
 
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
-import { resolvePanelApiToken } from "@/lib/auth/panel-token";
+import { callCrmApi } from "@/lib/api/crm";
 
 export async function POST(
   request: Request,
@@ -21,45 +20,18 @@ export async function POST(
     return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
   }
 
-  let token: string;
-  try {
-    token = await resolvePanelApiToken();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "No se encontró token del panel.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-
-  const baseUrl = getPanelApiBaseUrl();
-  const response = await fetch(`${baseUrl}/quotes/${quoteId}/mark`, {
+  const response = await callCrmApi(`/crm/quotes/${quoteId}/mark`, {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
+    body: payload,
+    withUserToken: true,
   });
 
-  const text = await response.text();
   if (!response.ok) {
-    const parsed = text ? safeJson(text) : null;
-    const error =
-      (parsed && typeof parsed.detail === "string" && parsed.detail) ||
-      (parsed && typeof parsed.error === "string" && parsed.error) ||
-      (text && !text.startsWith("<") ? text : null) ||
-      "No se pudo actualizar la cotización.";
-    return NextResponse.json({ error }, { status: response.status });
+    return NextResponse.json(
+      { error: response.error || "No se pudo actualizar la cotización." },
+      { status: response.status ?? 500 },
+    );
   }
 
-  const body = text ? safeJson(text) : null;
-  return NextResponse.json(body ?? {});
-}
-
-function safeJson(payload: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(payload);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
+  return NextResponse.json(response.data ?? { ok: true });
 }
