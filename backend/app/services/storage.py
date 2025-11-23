@@ -968,8 +968,8 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     }
     params = {
         "select": (
-            "id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,"
-            "contacto_datos"
+            "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
+            "necesidad_proposito,contacto_datos"
         ),
         "id": f"eq.{contact_id}",
         "limit": "1",
@@ -1789,6 +1789,9 @@ async def fetch_leads_municipios(
     return data
 
 
+_STAGE_CACHE: dict[str, str] = {}
+
+
 async def ensure_lead_tarjeta(
     *,
     tarjeta_id: str | None,
@@ -1796,185 +1799,236 @@ async def ensure_lead_tarjeta(
     contact_id: str | None,
     channel: str | None = None,
 ) -> str:
-    """Resuelve o crea una tarjeta de lead asociada a la conversación actual."""
+    """Resuelve o crea una oportunidad CRM asociada a la conversación actual.
+
+    Se conserva el nombre legacy `lead_tarjeta` para evitar tocar todos los call-sites.
+    """
     if not settings.supabase_url or not settings.supabase_service_role:
         raise StorageError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
 
+    if not conversation_id:
+        raise StorageError("conversation_id_required")
+
+    if not contact_id:
+        raise StorageError("No fue posible resolver contacto para crear la oportunidad del lead")
+
+    contact = await fetch_contact(contact_id)
+    organizacion_id = contact.get("organizacion_id")
+    if not organizacion_id:
+        raise StorageError("El contacto no tiene organizacion_id asociado")
+
     base_url = settings.supabase_url.rstrip("/")
-    url = f"{base_url}/rest/v1/lead_tarjetas"
+    opportunities_url = f"{base_url}/rest/v1/oportunidades"
+    stages_url = f"{base_url}/rest/v1/etapas_pipeline"
     headers = {
         "apikey": settings.supabase_service_role,
         "Authorization": f"Bearer {settings.supabase_service_role}",
         "Accept": "application/json",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
 
-            async def _fetch(params: dict[str, Any]) -> dict[str, Any] | None:
-                resp = await client.get(url, headers=headers, params=params)
-                if resp.status_code >= 400:
-                    msg = (
-                        "Supabase respondió error al consultar lead_tarjetas"
-                        f" (status={resp.status_code}, body={resp.text!r})"
-                    )
-                    logger.error(msg)
-                    raise StorageError(msg)
-                rows = resp.json() or []
-                if isinstance(rows, list) and rows:
-                    return rows[0]
-                return None
-
-            async def _update_card(card_id: str, patch: dict[str, Any]) -> None:
-                if not patch:
-                    return
-                patch_headers = {
-                    **headers,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal",
-                }
-                params = {"id": f"eq.{card_id}", "limit": "1"}
-                resp = await client.patch(url, headers=patch_headers, params=params, json=patch)
-                if resp.status_code >= 400:
-                    msg = (
-                        "Supabase respondió error al actualizar lead_tarjetas"
-                        f" (status={resp.status_code}, body={resp.text!r})"
-                    )
-                    logger.warning(msg)
-
-            async def _maybe_update_channel(row_id: str, row: dict[str, Any]) -> None:
-                patch: dict[str, Any] = {}
-                if channel and not row.get("canal"):
-                    patch["canal"] = channel
-                if row.get("fuente") == "contacto_auto":
-                    patch["fuente"] = "asistente"
-                if patch:
-                    await _update_card(row_id, patch)
-
-            def _extract_id(row: dict[str, Any]) -> str:
-                resolved_id = row.get("id")
-                if not resolved_id:
-                    raise StorageError("La tarjeta de lead recuperada no contiene id")
-                return str(resolved_id)
-
-            # 1. Validar tarjeta explícita.
-            if tarjeta_id:
-                row = await _fetch(
-                    {
-                        "id": f"eq.{tarjeta_id}",
-                        "select": "id,conversacion_id,contacto_id",
-                        "limit": "1",
-                    }
+        async def _fetch(params: dict[str, Any]) -> dict[str, Any] | None:
+            resp = await client.get(opportunities_url, headers=headers, params=params)
+            if resp.status_code >= 400:
+                msg = (
+                    "Supabase respondió error al consultar oportunidades"
+                    f" (status={resp.status_code}, body={resp.text!r})"
                 )
-                if not row:
-                    logger.warning(
-                        "storage.ensure_lead_tarjeta.id_not_found",
-                        extra={
-                            "tarjeta_id": tarjeta_id,
-                            "conversation_id": conversation_id,
-                        },
-                    )
-                else:
-                    row_id = _extract_id(row)
-                    if conversation_id and not row.get("conversacion_id"):
-                        await _update_card(row_id, {"conversacion_id": conversation_id})
-                    await _maybe_update_channel(row_id, row)
-                    return row_id
+                logger.error(msg)
+                raise StorageError(msg)
+            rows = resp.json() or []
+            if isinstance(rows, list) and rows:
+                return rows[0]
+            return None
 
-            # 2. Buscar por conversación actual.
+        async def _update_opportunity(opportunity_id: str, patch: dict[str, Any]) -> None:
+            if not patch:
+                return
+            patch_headers = {
+                **headers,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            }
+            params = {
+                "id": f"eq.{opportunity_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            }
+            resp = await client.patch(
+                opportunities_url, headers=patch_headers, params=params, json=patch
+            )
+            if resp.status_code >= 400:
+                msg = (
+                    "Supabase respondió error al actualizar oportunidades"
+                    f" (status={resp.status_code}, body={resp.text!r})"
+                )
+                logger.warning(msg)
+
+        async def _resolve_stage_id() -> str:
+            cache_key = str(organizacion_id)
+            if cache_key in _STAGE_CACHE:
+                return _STAGE_CACHE[cache_key]
+            params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "orden.asc",
+                "limit": "1",
+                "select": "id",
+            }
+            resp = await client.get(stages_url, headers=headers, params=params)
+            if resp.status_code >= 400:
+                msg = (
+                    "Supabase respondió error al consultar etapas del pipeline"
+                    f" (status={resp.status_code}, body={resp.text!r})"
+                )
+                logger.error(msg)
+                raise StorageError(msg)
+            data = resp.json() or []
+            if not isinstance(data, list) or not data:
+                raise StorageError("No se encontraron etapas para el pipeline")
+            stage_id = data[0].get("id")
+            if not stage_id:
+                raise StorageError("La etapa del pipeline no contiene id")
+            _STAGE_CACHE[cache_key] = str(stage_id)
+            return _STAGE_CACHE[cache_key]
+
+        def _merge_metadata(row: dict[str, Any]) -> dict[str, Any]:
+            metadata = row.get("metadata")
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except json.JSONDecodeError:
+                    metadata = {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            metadata.setdefault("conversation_id", conversation_id)
+            if channel and not metadata.get("channel"):
+                metadata["channel"] = channel
+            metadata.setdefault("source", "assistant")
+            metadata.setdefault("origin", "assistant")
+            return metadata
+
+        def _extract_id(row: dict[str, Any]) -> str:
+            resolved_id = row.get("id")
+            if not resolved_id:
+                raise StorageError("La oportunidad recuperada no contiene id")
+            return str(resolved_id)
+
+        select_fields = "id,organizacion_id,contacto_principal_id,metadata"
+
+        # 1. Validar oportunidad explícita.
+        if tarjeta_id:
             row = await _fetch(
                 {
-                    "conversacion_id": f"eq.{conversation_id}",
-                    "select": "id,conversacion_id,contacto_id",
+                    "id": f"eq.{tarjeta_id}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "select": select_fields,
                     "limit": "1",
                 }
             )
             if row:
                 row_id = _extract_id(row)
-                await _maybe_update_channel(row_id, row)
+                await _update_opportunity(row_id, {"metadata": _merge_metadata(row)})
                 return row_id
+            logger.warning(
+                "storage.ensure_opportunity.id_not_found",
+                extra={"tarjeta_id": tarjeta_id, "conversation_id": conversation_id},
+            )
 
-            # 3. Buscar por contacto asociado.
-            if contact_id:
-                row = await _fetch(
-                    {
-                        "contacto_id": f"eq.{contact_id}",
-                        "select": "id,conversacion_id,contacto_id",
-                        "order": "creado_en.desc",
-                        "limit": "1",
-                    }
-                )
-                if row:
-                    row_id = _extract_id(row)
-                    if conversation_id and not row.get("conversacion_id"):
-                        await _update_card(row_id, {"conversacion_id": conversation_id})
-                    await _maybe_update_channel(row_id, row)
-                    return row_id
-
-            if not contact_id:
-                raise StorageError(
-                    "No fue posible resolver contacto para crear la tarjeta del lead"
-                )
-
-            # 4. Crear tarjeta mínima enlazada a la conversación.
-            insert_headers = {
-                **headers,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
+        # 2. Buscar por conversación actual.
+        row = await _fetch(
+            {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "metadata->>conversation_id": f"eq.{conversation_id}",
+                "select": select_fields,
+                "limit": "1",
             }
+        )
+        if row:
+            row_id = _extract_id(row)
+            await _update_opportunity(row_id, {"metadata": _merge_metadata(row)})
+            return row_id
 
-            payload = {
-                "contacto_id": contact_id,
-                "conversacion_id": conversation_id,
-                "fuente": "asistente",
+        # 3. Buscar por contacto asociado.
+        row = await _fetch(
+            {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "contacto_principal_id": f"eq.{contact_id}",
+                "select": select_fields,
+                "order": "creado_en.desc",
+                "limit": "1",
             }
-            if channel:
-                payload["canal"] = channel
-            resp = await client.post(url, headers=insert_headers, json=payload)
-            if resp.status_code == 409:
-                row = await _fetch(
-                    {
-                        "contacto_id": f"eq.{contact_id}",
-                        "select": "id,conversacion_id,contacto_id",
-                        "order": "creado_en.desc",
-                        "limit": "1",
-                    }
-                )
-                if row:
-                    row_id = _extract_id(row)
-                    if conversation_id and not row.get("conversacion_id"):
-                        await _update_card(row_id, {"conversacion_id": conversation_id})
-                    await _maybe_update_channel(row_id, row)
-                    return row_id
-                msg = (
-                    "Supabase devolvió conflicto al crear lead_tarjetas pero no se encontró la tarjeta"
-                    f" (contacto_id={contact_id})"
-                )
-                logger.error(msg)
-                raise StorageError(msg)
+        )
+        if row:
+            row_id = _extract_id(row)
+            await _update_opportunity(row_id, {"metadata": _merge_metadata(row)})
+            return row_id
 
-            if resp.status_code >= 400:
-                msg = (
-                    "Supabase respondió error al crear lead_tarjetas"
-                    f" (status={resp.status_code}, body={resp.text!r})"
-                )
-                logger.error(msg)
-                raise StorageError(msg)
+        # 4. Crear oportunidad mínima.
+        stage_id = await _resolve_stage_id()
+        insert_headers = {
+            **headers,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
 
-            data = resp.json() or []
-            if isinstance(data, list) and data:
-                row_id = _extract_id(data[0])
-                await _maybe_update_channel(row_id, data[0])
+        titulo = (
+            contact.get("nombre_completo")
+            or contact.get("company_name")
+            or f"Conversación {conversation_id[:8]}"
+        )
+        metadata = {
+            "conversation_id": conversation_id,
+            "channel": channel,
+            "source": "assistant",
+        }
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "contacto_principal_id": contact_id,
+            "etapa_id": stage_id,
+            "titulo": titulo,
+            "moneda": "MXN",
+            "metadata": metadata,
+        }
+        resp = await client.post(opportunities_url, headers=insert_headers, json=payload)
+        if resp.status_code == 409:
+            # Intentar recuperar la más reciente del contacto (condición de carrera).
+            row = await _fetch(
+                {
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "contacto_principal_id": f"eq.{contact_id}",
+                    "select": select_fields,
+                    "order": "creado_en.desc",
+                    "limit": "1",
+                }
+            )
+            if row:
+                row_id = _extract_id(row)
+                await _update_opportunity(row_id, {"metadata": _merge_metadata(row)})
                 return row_id
-            if isinstance(data, dict) and data:
-                row_id = _extract_id(data)
-                await _maybe_update_channel(row_id, data)
-                return row_id
-            raise StorageError("Respuesta inesperada al crear la tarjeta del lead")
-    except httpx.RequestError as exc:
-        msg = f"Error de red al sincronizar lead_tarjetas: {exc}"
-        logger.exception(msg)
-        raise StorageError(msg) from exc
+            msg = (
+                "Supabase devolvió conflicto al crear oportunidad pero no se encontró la fila"
+                f" (contacto_id={contact_id})"
+            )
+            logger.error(msg)
+            raise StorageError(msg)
+
+        if resp.status_code >= 400:
+            msg = (
+                "Supabase respondió error al crear oportunidad"
+                f" (status={resp.status_code}, body={resp.text!r})"
+            )
+            logger.error(msg)
+            raise StorageError(msg)
+
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row_id = _extract_id(data[0])
+            return row_id
+        if isinstance(data, dict) and data:
+            row_id = _extract_id(data)
+            return row_id
+        raise StorageError("Respuesta inesperada al crear la oportunidad del lead")
 
 
 async def _call_supabase_rpc(function_name: str, payload: dict[str, Any]) -> Any:
