@@ -1048,7 +1048,7 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
 def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
     return LeadQuote(
         id=row.get("id"),
-        tarjeta_id=row.get("tarjeta_id"),
+        oportunidad_id=row.get("tarjeta_id") or row.get("oportunidad_id"),
         version=row.get("version") or 1,
         titulo=row.get("titulo"),
         descripcion=row.get("descripcion"),
@@ -2000,7 +2000,7 @@ class LeadQuoteSendPayload(LeadQuoteCreatePayload):
 
 class LeadQuote(BaseModel):
     id: UUID
-    tarjeta_id: UUID
+    oportunidad_id: UUID
     version: int
     titulo: str | None = None
     descripcion: str | None = None
@@ -4018,43 +4018,55 @@ async def cancel_agenda_booking(
     return {"ok": True, "booking": booking}
 
 
-@router.get("/leads/{lead_id}/cliente")
-async def obtener_cliente_de_lead(
+@router.get("/oportunidades/{oportunidad_id}/cliente")
+async def obtener_cliente_de_oportunidad(
     *,
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
-    lead_id: UUID,
+    oportunidad_id: UUID,
 ) -> dict[str, Any]:
-    cliente = await repo.get_cliente_por_lead(usuario_token=user_token, lead_id=lead_id)
+    cliente = await repo.get_cliente_por_lead(
+        usuario_token=user_token,
+        lead_id=oportunidad_id,
+    )
     return {"ok": True, "cliente": cliente}
 
 
-@router.post("/leads/{lead_id}/convertir")
-async def convertir_lead_cliente(
+@router.post("/oportunidades/{oportunidad_id}/convertir")
+async def convertir_oportunidad_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
-    lead_id: UUID,
+    oportunidad_id: UUID,
     payload: LeadConversionPayload,
 ) -> dict[str, Any]:
     await repo.convert_lead_en_cliente(
         usuario_token=user_token,
-        lead_id=lead_id,
+        lead_id=oportunidad_id,
         forzar=payload.forzar,
     )
-    cliente = await repo.get_cliente_por_lead(usuario_token=user_token, lead_id=lead_id)
+    cliente = await repo.get_cliente_por_lead(
+        usuario_token=user_token,
+        lead_id=oportunidad_id,
+    )
     return {"ok": True, "cliente": cliente}
 
 
-@router.get("/leads/{lead_id}/quotes", response_model=LeadQuoteListResponse)
+@router.get(
+    "/oportunidades/{oportunidad_id}/quotes",
+    response_model=LeadQuoteListResponse,
+)
 async def list_lead_quotes(
     *,
     repo: CRMRepository = Depends(get_repository),
-    lead_id: UUID,
+    oportunidad_id: UUID,
     user_token: str = Depends(require_user_token),
 ) -> LeadQuoteListResponse:
     try:
-        rows = await repo.list_lead_quotes(usuario_token=user_token, lead_id=lead_id)
+        rows = await repo.list_lead_quotes(
+            usuario_token=user_token,
+            lead_id=oportunidad_id,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     quotes = []
@@ -4065,14 +4077,14 @@ async def list_lead_quotes(
 
 
 @router.post(
-    "/leads/{lead_id}/quotes",
+    "/oportunidades/{oportunidad_id}/quotes",
     response_model=LeadQuoteResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
-    lead_id: UUID,
+    oportunidad_id: UUID,
     payload: LeadQuoteCreatePayload,
     user_token: str = Depends(require_user_token),
 ) -> LeadQuoteResponse:
@@ -4080,7 +4092,7 @@ async def create_lead_quote(
     try:
         created_row = await repo.create_lead_quote(
             usuario_token=user_token,
-            lead_id=lead_id,
+            lead_id=oportunidad_id,
             payload=body,
         )
         quote_id = created_row.get("id")
@@ -4094,16 +4106,22 @@ async def create_lead_quote(
     return LeadQuoteResponse(quote=quote)
 
 
-@router.post("/leads/{lead_id}/quotes/send", response_model=LeadQuoteResponse)
+@router.post(
+    "/oportunidades/{oportunidad_id}/quotes/send",
+    response_model=LeadQuoteResponse,
+)
 async def send_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
-    lead_id: UUID,
+    oportunidad_id: UUID,
     payload: LeadQuoteSendPayload,
     user_token: str = Depends(require_user_token),
 ) -> LeadQuoteResponse:
     try:
-        lead_row = await repo.fetch_lead_for_quote(usuario_token=user_token, lead_id=lead_id)
+        lead_row = await repo.fetch_lead_for_quote(
+            usuario_token=user_token,
+            lead_id=oportunidad_id,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -4124,7 +4142,7 @@ async def send_lead_quote(
 
     quote_context = quotes_service.QuoteRenderContext(
         lead_label=_resolve_lead_label(lead_row),
-        reference=str(lead_id).split("-")[0],
+        reference=str(oportunidad_id).split("-")[0],
         issuer_name=settings.mail_username or "Tal-IA",
         issuer_email=settings.mail_username,
         contact_name=_clean_text(contact.get("nombre_completo")),
@@ -4147,7 +4165,7 @@ async def send_lead_quote(
         upload = await storage.upload_quote_document(
             content=pdf_doc.content,
             filename=pdf_doc.filename,
-            lead_id=str(lead_id),
+            lead_id=str(oportunidad_id),
             content_type="application/pdf",
         )
     except StorageError as exc:
@@ -4159,7 +4177,7 @@ async def send_lead_quote(
     try:
         created_row = await repo.create_lead_quote(
             usuario_token=user_token,
-            lead_id=lead_id,
+            lead_id=oportunidad_id,
             payload=create_payload,
         )
     except CRMRepositoryError as exc:
@@ -4230,18 +4248,18 @@ async def send_lead_quote(
         await _auto_move_lead_to_won(
             repo=repo,
             usuario_token=user_token,
-            lead_id=lead_id,
+            lead_id=oportunidad_id,
             lead_row=lead_row,
             quote=quote,
         )
     return LeadQuoteResponse(quote=quote)
 
 
-@router.post("/quotes/{quote_id}/mark", response_model=LeadQuoteResponse)
+@router.post("/cotizaciones/{cotizacion_id}/mark", response_model=LeadQuoteResponse)
 async def mark_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
-    quote_id: UUID,
+    cotizacion_id: UUID,
     payload: LeadQuoteMarkPayload,
     user_token: str = Depends(require_user_token),
 ) -> LeadQuoteResponse:
@@ -4249,14 +4267,14 @@ async def mark_lead_quote(
     try:
         await repo.mark_lead_quote(
             usuario_token=user_token,
-            quote_id=quote_id,
+            quote_id=cotizacion_id,
             estado=payload.estado,
             canal=payload.canal,
             extra=extra,
         )
         quote_row = await repo.fetch_quote_with_items(
             usuario_token=user_token,
-            quote_id=quote_id,
+            quote_id=cotizacion_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -4265,7 +4283,7 @@ async def mark_lead_quote(
         await _auto_move_lead_to_won(
             repo=repo,
             usuario_token=user_token,
-            lead_id=quote.tarjeta_id,
+            lead_id=quote.oportunidad_id,
             quote=quote,
         )
     return LeadQuoteResponse(quote=quote)
