@@ -2653,18 +2653,6 @@ class CRMRepository:
         row = self._first_row(data)
         return row if isinstance(row, dict) else None
 
-    async def get_cliente_por_lead(
-        self,
-        *,
-        usuario_token: str,
-        lead_id: UUID,
-    ) -> dict[str, Any] | None:
-        """Compatibilidad temporal con firmas legacy."""
-        return await self.get_cliente_por_oportunidad(
-            usuario_token=usuario_token,
-            oportunidad_id=lead_id,
-        )
-
     async def get_cliente_por_id(
         self,
         *,
@@ -2732,14 +2720,14 @@ class CRMRepository:
         row = self._first_row(data)
         return row if isinstance(row, dict) else None
 
-    async def convert_lead_en_cliente(
+    async def convert_oportunidad_en_cliente(
         self,
         *,
         usuario_token: str,
-        lead_id: UUID,
+        oportunidad_id: UUID,
         forzar: bool = False,
     ) -> Any:
-        body = {"p_tarjeta_id": str(lead_id), "p_forzar": forzar}
+        body = {"p_tarjeta_id": str(oportunidad_id), "p_forzar": forzar}
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/rpc/convertir_lead_en_cliente",

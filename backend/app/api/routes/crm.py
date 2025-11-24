@@ -478,12 +478,39 @@ def _portal_token_select_clause(include_relations: bool = True) -> str:
     return base
 
 
+def _cliente_context(cliente: dict[str, Any] | None) -> dict[str, Any]:
+    if not cliente:
+        return {}
+    context: dict[str, Any] = {}
+    for key in ("organizacion_id", "cuenta_id", "oportunidad_id"):
+        value = cliente.get(key)
+        if value:
+            context[key] = str(value)
+    return context
+
+
+def _portal_session_context(session: dict[str, Any] | None) -> dict[str, Any]:
+    if not session:
+        return {}
+    cliente_data = session.get("cliente")
+    context = _cliente_context(cliente_data) if isinstance(cliente_data, dict) else {}
+    for key in ("organizacion_id", "cuenta_id", "oportunidad_id"):
+        if key not in context:
+            value = session.get(key)
+            if value:
+                context[key] = str(value)
+    return context
+
+
 def _sanitize_portal_session(row: dict[str, Any] | None) -> dict[str, Any] | None:
     if not row:
         return None
     allowed = {
         "id",
         "cliente_id",
+        "organizacion_id",
+        "cuenta_id",
+        "oportunidad_id",
         "expira_en",
         "revocado",
         "usos",
@@ -4141,9 +4168,9 @@ async def convertir_oportunidad_cliente(
     oportunidad_id: UUID,
     payload: LeadConversionPayload,
 ) -> dict[str, Any]:
-    await repo.convert_lead_en_cliente(
+    await repo.convert_oportunidad_en_cliente(
         usuario_token=user_token,
-        lead_id=oportunidad_id,
+        oportunidad_id=oportunidad_id,
         forzar=payload.forzar,
     )
     cliente = await repo.get_cliente_por_oportunidad(
@@ -4454,12 +4481,16 @@ async def registrar_documento_cliente(
     cliente_id: UUID,
     payload: ClienteDocumentoPayload,
 ) -> dict[str, Any]:
+    cliente = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
     body = payload.model_dump(exclude_none=True)
     body["cliente_id"] = str(cliente_id)
     body.setdefault("estado", ClienteDocumentoEstado.PENDIENTE.value)
     user_id = _jwt_verify_and_sub(user_token)
     if user_id:
         body.setdefault("cargado_por", user_id)
+    body.update(_cliente_context(cliente))
     documento = await repo.create_cliente_document(
         payload=body,
         usuario_token=user_token,
@@ -4477,6 +4508,9 @@ async def subir_documento_cliente(
     descripcion: str | None = Form(default=None),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
+    cliente = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
     try:
         upload = await storage.upload_cliente_document(
             file=file,
@@ -4502,6 +4536,7 @@ async def subir_documento_cliente(
     }
     if user_id:
         body["cargado_por"] = user_id
+    body.update(_cliente_context(cliente))
 
     documento = await repo.create_cliente_document(
         payload=body,
@@ -4582,6 +4617,8 @@ async def crear_link_portal_cliente(
     payload: ClientePortalLinkPayload,
 ) -> dict[str, Any]:
     cliente_data = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    if cliente_data is None:
+        raise HTTPException(status_code=404, detail="cliente_not_found")
     portal_token = secrets.token_urlsafe(32)
     expira = payload.expira_en or _portal_default_expiration()
     user_id = _jwt_verify_and_sub(user_token)
@@ -4594,6 +4631,7 @@ async def crear_link_portal_cliente(
     }
     if user_id:
         body["creado_por"] = user_id
+    body.update(_cliente_context(cliente_data))
 
     registro = await repo.create_portal_token(
         usuario_token=user_token,
@@ -4726,6 +4764,7 @@ async def portal_subir_documento_cliente(
             "portal_token_id": session.get("id"),
         },
     }
+    body.update(_portal_session_context(session))
     documento = await repo.create_cliente_document(
         payload=body,
         usuario_token=None,
@@ -4754,6 +4793,7 @@ async def portal_agregar_responsable(
     body["cliente_id"] = str(cliente_id)
     body.setdefault("metadatos", {})
     body["metadatos"]["fuente"] = "portal_cliente"
+    body.update(_portal_session_context(session))
     responsable = await repo.create_cliente_responsable(
         payload=body,
         usuario_token=None,

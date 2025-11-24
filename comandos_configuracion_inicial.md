@@ -493,8 +493,8 @@ hola@talia.mx
       - Select central _cliente_select_clause en backend/app/api/routes/crm.py:454-464 y _CLIENTE_SELECT en backend/app/
         repositories/crm.py:74-85 exponen lead_tarjeta_id, tablero_id, etapa_id. Ajustar el esquema para que clientes
         referencie cuenta_id/oportunidad_id reales y poblar esos campos con la migración de datos.
-      - Las consultas portal (get_cliente_por_lead, convert_lead_en_cliente, list_lead_events, etc.) en backend/app/
-        repositories/crm.py:2664-2765 dependen del ID legacy; deben pasar a usar las tablas CRM.
+      - Las consultas portal (get_cliente_por_oportunidad, convert_oportunidad_en_cliente, list_lead_events, etc.) en backend/app/
+        repositories/crm.py:2656-2760 dependen del ID legacy; deben pasar a usar las tablas CRM.
   - Portal de clientes:
       - Endpoints /crm/portal/* en backend/app/api/routes/crm.py:4421-4635 cargan el cliente a través de cliente_portal_tokens
         → clientes (que hoy contiene lead_tarjeta_id). El flujo de emisión/validación (create_portal_token, get_portal_token,

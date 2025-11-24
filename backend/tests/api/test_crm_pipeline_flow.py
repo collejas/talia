@@ -293,20 +293,21 @@ class InMemoryPipelineRepository(CRMRepository):
         normalized = (codigo or "").strip().lower()
         return self.stage_catalog.get(normalized)
 
-    async def convert_lead_en_cliente(
+    async def convert_oportunidad_en_cliente(
         self,
         *,
         usuario_token: str,
-        lead_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
         forzar: bool,
     ) -> dict[str, Any]:
         record = {
             "id": str(uuid.uuid4()),
-            "lead_id": str(lead_id),
+            "oportunidad_id": str(oportunidad_id),
+            "legacy_lead_id": str(oportunidad_id),
             "estado_onboarding": "pendiente",
             "razon_social": "Cliente Demo",
         }
-        self.clients[str(lead_id)] = record
+        self.clients[str(oportunidad_id)] = record
         return record
 
     async def get_cliente_por_oportunidad(
@@ -316,17 +317,6 @@ class InMemoryPipelineRepository(CRMRepository):
         oportunidad_id: uuid.UUID,
     ) -> dict[str, Any] | None:
         return self.clients.get(str(oportunidad_id))
-
-    async def get_cliente_por_lead(
-        self,
-        *,
-        usuario_token: str,
-        lead_id: uuid.UUID,
-    ) -> dict[str, Any] | None:
-        return await self.get_cliente_por_oportunidad(
-            usuario_token=usuario_token,
-            oportunidad_id=lead_id,
-        )
 
 
 @pytest.fixture()
@@ -451,7 +441,9 @@ async def test_crm_pipeline_end_to_end(
         json={"forzar": True},
     )
     assert convert_resp.status_code == 200
-    assert convert_resp.json()["cliente"]["lead_id"] == oportunidad_id
+    cliente_payload = convert_resp.json()["cliente"]
+    assert cliente_payload["oportunidad_id"] == str(oportunidad_id)
+    assert cliente_payload["legacy_lead_id"] == str(oportunidad_id)
 
     cliente_resp = await pipeline_client.get(
         f"/crm/oportunidades/{oportunidad_id}/cliente",
