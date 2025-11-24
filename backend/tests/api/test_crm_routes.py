@@ -363,6 +363,96 @@ class DummyCRMRepository(CRMRepository):
             "cantidad": kwargs["payload"].get("cantidad", 1),
         }
 
+    async def list_quote_entries(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_quote_entries", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "oportunidad_id": str(kwargs["oportunidad_id"]),
+                "estatus": "borrador",
+                "total": 1160.0,
+                "moneda": "MXN",
+                "valida_hasta": "2024-01-31",
+                "metadata": {"titulo": "Propuesta"},
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+                "items": [],
+            }
+        ]
+
+    async def get_quote_entry(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("get_quote_entry", kwargs))
+        return {
+            "id": str(kwargs["quote_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "oportunidad_id": str(uuid.uuid4()),
+            "estatus": "borrador",
+            "total": 1160.0,
+            "moneda": "MXN",
+            "valida_hasta": "2024-01-31",
+            "metadata": {"titulo": "Propuesta"},
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+            "items": [],
+        }
+
+    async def create_quote_entry(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create_quote_entry", kwargs))
+        return {
+            "id": str(uuid.uuid4()),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "oportunidad_id": str(kwargs["oportunidad_id"]),
+            "estatus": kwargs["estatus"],
+            "total": kwargs.get("total"),
+            "moneda": kwargs.get("moneda"),
+            "valida_hasta": kwargs.get("valida_hasta"),
+            "metadata": kwargs.get("metadata") or {},
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+            "items": kwargs.get("items") or [],
+        }
+
+    async def mark_quote_entry(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("mark_quote_entry", kwargs))
+        merged_metadata = kwargs.get("metadata_patch") or {}
+        return {
+            "id": str(kwargs["quote_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "oportunidad_id": str(uuid.uuid4()),
+            "estatus": kwargs.get("estatus") or "enviada",
+            "total": 1160.0,
+            "moneda": "MXN",
+            "valida_hasta": "2024-01-31",
+            "metadata": merged_metadata,
+            "creado_en": "2024-01-01T00:00:00Z",
+            "actualizado_en": "2024-01-01T00:00:00Z",
+            "items": [],
+        }
+
+    async def get_opportunity_with_contact(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_opportunity_with_contact", kwargs))
+        return {
+            "id": str(kwargs["oportunidad_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            "cuenta_id": str(uuid.uuid4()),
+            "contacto_principal_id": str(uuid.uuid4()),
+            "etapa_id": str(uuid.uuid4()),
+            "monto_estimado": 1000.0,
+            "moneda": "MXN",
+            "metadata": {"tablero_id": str(uuid.uuid4())},
+            "etapa": {"codigo": "demo", "categoria": "abierta"},
+            "contacto": {
+                "id": str(uuid.uuid4()),
+                "nombre_completo": "Cliente Demo",
+                "correo": "demo@example.com",
+                "telefono_e164": "+5215555555555",
+                "company_name": "Empresa Demo",
+                "notes": "",
+                "necesidad_proposito": "",
+            },
+        }
+
     async def list_campaigns(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_campaigns", kwargs))
         return [

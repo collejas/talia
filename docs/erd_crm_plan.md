@@ -253,7 +253,7 @@ Con estas definiciones, el plan queda completo respecto a la lista recomendada; 
 ### Plan de ejecución · Punto 2 (Embudo/Oportunidades/Cotizaciones)
 1. **Backend API**
    - [x] Reemplazar los endpoints `/crm/leads/{id}/{cliente|convertir|quotes|quotes/send}` y `/crm/quotes/{id}/mark` por rutas equivalentes sobre `oportunidades/{id}` y `cotizaciones/{id}`. Actualizar esquemas Pydantic para usar IDs de oportunidad y cuenta en lugar de `tarjeta_id`.
-   - [ ] Extender `CRMRepository` con métodos nativos (`list_quotes`, `create_quote`, `mark_quote`, `get_opportunity_with_contact`) que lean/escriban `cotizaciones`, `cotizacion_items`, `oportunidades` y `oportunidad_etapas_historial`. Eliminar el bloque legacy que llama `/rest/v1/lead_*` y los RPC `panel_lead_*`.
+   - [x] Extender `CRMRepository` con métodos nativos (`list_quotes`, `create_quote`, `mark_quote`, `get_opportunity_with_contact`) que lean/escriban `cotizaciones`, `cotizacion_items`, `oportunidades` y `oportunidad_etapas_historial`. Eliminar el bloque legacy que llama `/rest/v1/lead_*` y los RPC `panel_lead_*`.
    - [ ] Migrar `storage.ensure_lead_tarjeta`, `capture_lead_if_ready` y `promote_opportunity_stage` para que creen/actualicen oportunidades CRM directamente (sin `lead_tarjetas`). Ajustar los consumidores de `storage` en `channels/webchat`, `channels/whatsapp`, `assistants/tools/lead`.
    - [ ] Preparar migraciones SQL que eliminen la dependencia de `panel_lead_*` (drop de RPCs/funciones y triggers legacy) una vez que las nuevas rutas estén en producción.
 2. **Frontend embudo**

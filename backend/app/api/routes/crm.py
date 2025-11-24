@@ -1018,26 +1018,28 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
             continue
         catalog = entry.get("catalog_item")
         catalog_item = CRMCatalogItem.model_validate(catalog) if isinstance(catalog, dict) else None
+        metadata = entry.get("metadata")
+        metadata_dict = metadata if isinstance(metadata, dict) else {}
         items.append(
             LeadQuoteItem(
                 id=entry.get("id"),
                 cotizacion_id=entry.get("cotizacion_id"),
-                catalog_item_id=entry.get("catalog_item_id"),
+                catalog_item_id=entry.get("producto_id") or entry.get("catalog_item_id"),
                 catalog_item=catalog_item,
-                titulo=entry.get("titulo"),
-                descripcion=entry.get("descripcion"),
-                unidad=entry.get("unidad"),
-                cantidad=entry.get("cantidad"),
-                precio_unitario=entry.get("precio_unitario"),
-                descuento=entry.get("descuento"),
-                subtotal=entry.get("subtotal"),
-                impuestos=entry.get("impuestos"),
-                total=entry.get("total"),
-                moneda=entry.get("moneda"),
-                orden=entry.get("orden"),
-                metadatos=entry.get("metadatos")
-                if isinstance(entry.get("metadatos"), dict)
-                else None,
+                titulo=metadata_dict.get("titulo")
+                or entry.get("titulo")
+                or entry.get("descripcion"),
+                descripcion=metadata_dict.get("descripcion") or entry.get("descripcion"),
+                unidad=metadata_dict.get("unidad") or entry.get("unidad"),
+                cantidad=_as_number(entry.get("cantidad")),
+                precio_unitario=_as_number(entry.get("precio_unitario")),
+                descuento=_as_number(metadata_dict.get("descuento") or entry.get("descuento")),
+                subtotal=_as_number(entry.get("subtotal")),
+                impuestos=_as_number(metadata_dict.get("impuestos") or entry.get("impuestos")),
+                total=_as_number(metadata_dict.get("total") or entry.get("total")),
+                moneda=metadata_dict.get("moneda") or entry.get("moneda"),
+                orden=metadata_dict.get("orden") or entry.get("orden"),
+                metadatos=metadata_dict if metadata_dict else None,
                 creado_en=_parse_timestamp(entry.get("creado_en")),
                 actualizado_en=_parse_timestamp(entry.get("actualizado_en")),
             )
@@ -1046,27 +1048,30 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
 
 
 def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    estado = row.get("estatus") or row.get("estado") or metadata.get("estado") or "borrador"
+    oportunidad_id = row.get("oportunidad_id") or metadata.get("oportunidad_id")
     return LeadQuote(
         id=row.get("id"),
-        oportunidad_id=row.get("tarjeta_id") or row.get("oportunidad_id"),
-        version=row.get("version") or 1,
-        titulo=row.get("titulo"),
-        descripcion=row.get("descripcion"),
-        conceptos=_ensure_concept_list(row.get("conceptos")),
-        subtotal=row.get("subtotal"),
-        impuestos=row.get("impuestos"),
-        total=row.get("total"),
-        moneda=_clean_text(row.get("moneda")),
-        valido_hasta=_parse_date(row.get("valido_hasta")),
-        estado=row.get("estado") or "borrador",
-        canal_envio=row.get("canal_envio"),
-        enviada_por=row.get("enviada_por"),
-        enviada_en=_parse_timestamp(row.get("enviada_en")),
-        aprobada_en=_parse_timestamp(row.get("aprobada_en")),
-        rechazada_en=_parse_timestamp(row.get("rechazada_en")),
-        pdf_path=row.get("pdf_path"),
-        pdf_url=row.get("pdf_url"),
-        metadatos=(row.get("metadatos") if isinstance(row.get("metadatos"), dict) else None),
+        oportunidad_id=oportunidad_id,
+        version=metadata.get("version") or row.get("version") or 1,
+        titulo=metadata.get("titulo") or row.get("titulo"),
+        descripcion=metadata.get("descripcion") or row.get("descripcion"),
+        conceptos=_ensure_concept_list(metadata.get("conceptos") or row.get("conceptos")),
+        subtotal=metadata.get("subtotal") or row.get("subtotal"),
+        impuestos=metadata.get("impuestos") or row.get("impuestos"),
+        total=_as_number(row.get("total")) or _as_number(metadata.get("total")),
+        moneda=_clean_text(row.get("moneda") or metadata.get("moneda")),
+        valido_hasta=_parse_date(row.get("valida_hasta") or metadata.get("valido_hasta")),
+        estado=estado,
+        canal_envio=metadata.get("canal_envio") or row.get("canal_envio"),
+        enviada_por=metadata.get("enviada_por") or row.get("enviada_por"),
+        enviada_en=_parse_timestamp(metadata.get("enviada_en") or row.get("enviada_en")),
+        aprobada_en=_parse_timestamp(metadata.get("aprobada_en") or row.get("aprobada_en")),
+        rechazada_en=_parse_timestamp(metadata.get("rechazada_en") or row.get("rechazada_en")),
+        pdf_path=metadata.get("pdf_path") or row.get("pdf_path"),
+        pdf_url=metadata.get("pdf_url") or row.get("pdf_url"),
+        metadatos=metadata,
         creado_en=_parse_timestamp(row.get("creado_en")),
         actualizado_en=_parse_timestamp(row.get("actualizado_en")),
         items=_parse_quote_items(row.get("items")),
@@ -1093,6 +1098,73 @@ def _quote_payload_from_body(payload: LeadQuoteCreatePayload) -> dict[str, Any]:
     if "valido_hasta" in body and isinstance(body["valido_hasta"], date):
         body["valido_hasta"] = body["valido_hasta"].isoformat()
     return body
+
+
+def _quote_metadata_from_payload(body: dict[str, Any]) -> dict[str, Any]:
+    metadata = _ensure_dict(body.pop("metadatos", {}), default={})
+    for key in (
+        "titulo",
+        "descripcion",
+        "conceptos",
+        "subtotal",
+        "impuestos",
+        "pdf_url",
+        "pdf_path",
+        "canal_envio",
+    ):
+        value = body.pop(key, None)
+        if value is not None:
+            metadata[key] = value
+    metadata.setdefault("version", metadata.get("version") or 1)
+    return metadata
+
+
+def _quote_items_to_repository_payload(items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    repository_items: list[dict[str, Any]] = []
+    if not items:
+        return repository_items
+    for index, item in enumerate(items, start=1):
+        metadata = {
+            "titulo": item.get("titulo"),
+            "descripcion": item.get("descripcion"),
+            "unidad": item.get("unidad"),
+            "descuento": item.get("descuento"),
+            "impuestos": item.get("impuestos"),
+            "total": item.get("total"),
+            "moneda": item.get("moneda"),
+            "orden": item.get("orden") or index,
+        }
+        repository_items.append(
+            {
+                "producto_id": item.get("catalog_item_id"),
+                "descripcion": item.get("titulo") or item.get("descripcion") or "Concepto",
+                "cantidad": _as_number(item.get("cantidad")) or 1,
+                "precio_unitario": _as_number(item.get("precio_unitario")),
+                "descuento_porcentaje": None,
+                "subtotal": _as_number(item.get("subtotal")) or _as_number(item.get("total")),
+                "metadata": metadata,
+            }
+        )
+    return repository_items
+
+
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _to_iso_date(value: Any) -> str | None:
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    return None
 
 
 def _quote_extra_payload(payload: LeadQuoteMarkPayload) -> dict[str, Any]:
@@ -1363,20 +1435,14 @@ def _quote_mark_extra(extra: dict[str, Any] | None = None) -> dict[str, Any]:
 async def _ensure_won_stage_metadata(
     *,
     repo: CRMRepository,
-    usuario_token: str,
-    lead_id: UUID,
-    lead_row: dict[str, Any],
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    oportunidad_row: dict[str, Any],
     quote: LeadQuote | None = None,
-) -> None:
-    metadata = lead_row.get("metadata")
-    if not isinstance(metadata, dict):
-        metadata = {}
-    stage_prep = metadata.get("stage_prep")
-    if not isinstance(stage_prep, dict):
-        stage_prep = {}
-    closed_prep = stage_prep.get("cerrado_ganado")
-    if not isinstance(closed_prep, dict):
-        closed_prep = {}
+) -> dict[str, Any]:
+    metadata = _ensure_dict(oportunidad_row.get("metadata"), default={})
+    stage_prep = _ensure_dict(metadata.get("stage_prep"), default={})
+    closed_prep = _ensure_dict(stage_prep.get("cerrado_ganado"), default={})
     changed = False
     today = datetime.now(timezone.utc).date().isoformat()
     existing_close = _clean_text(closed_prep.get("close_date"))
@@ -1387,71 +1453,84 @@ async def _ensure_won_stage_metadata(
         closed_prep["contract_value"] = float(quote.total)
         changed = True
     elif "contract_value" not in closed_prep:
-        monto = lead_row.get("monto_estimado")
+        monto = oportunidad_row.get("monto_estimado")
         if isinstance(monto, (int, float)):
             closed_prep["contract_value"] = float(monto)
             changed = True
-    if not changed:
-        return
-    stage_prep["cerrado_ganado"] = closed_prep
-    metadata["stage_prep"] = stage_prep
-    try:
-        await repo.update_lead_metadata(
-            usuario_token=usuario_token,
-            lead_id=lead_id,
-            metadata=metadata,
-        )
-    except CRMRepositoryError:
-        logger.warning("quotes.auto_fill_won_failed", extra={"lead_id": str(lead_id)})
+    if changed:
+        stage_prep["cerrado_ganado"] = closed_prep
+        metadata["stage_prep"] = stage_prep
+        try:
+            await repo.update_opportunity(
+                organizacion_id=organizacion_id,
+                oportunidad_id=oportunidad_id,
+                payload={"metadata": metadata},
+            )
+        except CRMRepositoryError:
+            logger.warning(
+                "quotes.auto_fill_won_failed",
+                extra={"opportunity_id": str(oportunidad_id)},
+            )
+    return metadata
 
 
-async def _auto_move_lead_to_won(
+async def _auto_move_opportunity_to_won(
     *,
     repo: CRMRepository,
-    usuario_token: str,
-    lead_id: UUID,
-    lead_row: dict[str, Any] | None = None,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    oportunidad_row: dict[str, Any] | None = None,
     quote: LeadQuote | None = None,
 ) -> None:
-    try:
-        current_row = lead_row or await repo.fetch_lead_for_quote(
-            usuario_token=usuario_token,
-            lead_id=lead_id,
-        )
-    except CRMRepositoryError:
+    current_row = oportunidad_row or await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if current_row is None:
         return
     stage_info = _single_related(current_row.get("etapa")) or {}
     stage_code = (_clean_text(stage_info.get("codigo")) or "").lower()
     stage_category = (_clean_text(stage_info.get("categoria")) or "").lower()
     await _ensure_won_stage_metadata(
         repo=repo,
-        usuario_token=usuario_token,
-        lead_id=lead_id,
-        lead_row=current_row,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        oportunidad_row=current_row,
         quote=quote,
     )
     if stage_category == "ganada" or stage_code == "cerrado_ganado":
         return
-    tablero_id = current_row.get("tablero_id")
-    won_stage_id = await repo.fetch_won_stage_id(tablero_id)
-    if not won_stage_id:
+    won_stage = await repo.get_stage_by_code(
+        organizacion_id=organizacion_id,
+        codigo="cerrado_ganado",
+    )
+    if not won_stage or not won_stage.get("id"):
         return
-    expected_stage = current_row.get("etapa_id")
+    history_payload = {
+        "oportunidad_id": str(oportunidad_id),
+        "etapa_origen_id": str(current_row.get("etapa_id"))
+        if current_row.get("etapa_id")
+        else None,
+        "etapa_destino_id": str(won_stage["id"]),
+        "fuente": "quote_auto_accept",
+        "motivo": "quote_auto_accept",
+        "metadata": {"source": "quote_auto_accept"},
+    }
     try:
-        await repo.move_lead_to_stage(
-            usuario_token=usuario_token,
-            lead_id=lead_id,
-            stage_id=UUID(str(won_stage_id)),
-            fuente="asistente",
-            motivo="quote_auto_accept",
-            metadata={"source": "quote_auto_accept"},
-            expected_stage=UUID(str(expected_stage)) if expected_stage else None,
+        await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            payload={"etapa_id": str(won_stage["id"])},
+        )
+        await repo.append_stage_history(
+            organizacion_id=organizacion_id,
+            payload={k: v for k, v in history_payload.items() if v is not None},
         )
     except CRMRepositoryError as exc:
         logger.warning(
             "quotes.auto_move_failed",
             extra={
-                "lead_id": str(lead_id),
+                "opportunity_id": str(oportunidad_id),
                 "error": str(exc),
             },
         )
@@ -4059,13 +4138,13 @@ async def convertir_oportunidad_cliente(
 async def list_lead_quotes(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     oportunidad_id: UUID,
-    user_token: str = Depends(require_user_token),
 ) -> LeadQuoteListResponse:
     try:
-        rows = await repo.list_lead_quotes(
-            usuario_token=user_token,
-            lead_id=oportunidad_id,
+        rows = await repo.list_quote_entries(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -4084,25 +4163,37 @@ async def list_lead_quotes(
 async def create_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     oportunidad_id: UUID,
     payload: LeadQuoteCreatePayload,
-    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> LeadQuoteResponse:
+    opportunity = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
     body = _quote_payload_from_body(payload)
+    metadata = _quote_metadata_from_payload(body)
+    repo_items = _quote_items_to_repository_payload(body.pop("items", None))
     try:
-        created_row = await repo.create_lead_quote(
-            usuario_token=user_token,
-            lead_id=oportunidad_id,
-            payload=body,
-        )
-        quote_id = created_row.get("id")
-        quote_row = await repo.fetch_quote_with_items(
-            usuario_token=user_token,
-            quote_id=UUID(str(quote_id)),
+        created_row = await repo.create_quote_entry(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
+            contacto_id=_safe_uuid(opportunity.get("contacto_principal_id")),
+            estatus=body.pop("estado", None) or body.pop("estatus", None) or "borrador",
+            total=_as_number(body.get("total")),
+            moneda=(body.get("moneda") or "MXN").upper(),
+            valida_hasta=_to_iso_date(body.get("valido_hasta")),
+            metadata=metadata,
+            items=repo_items,
+            usuario_id=usuario_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    quote = _quote_from_row(quote_row)
+    quote = _quote_from_row(created_row)
     return LeadQuoteResponse(quote=quote)
 
 
@@ -4113,20 +4204,28 @@ async def create_lead_quote(
 async def send_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     oportunidad_id: UUID,
     payload: LeadQuoteSendPayload,
-    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> LeadQuoteResponse:
-    try:
-        lead_row = await repo.fetch_lead_for_quote(
-            usuario_token=user_token,
-            lead_id=oportunidad_id,
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    oportunidad_row = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if oportunidad_row is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
 
-    contact = _single_related(lead_row.get("contacto")) or {}
-    currency = payload.moneda or lead_row.get("moneda") or "MXN"
+    contact = _single_related(oportunidad_row.get("contacto")) or {}
+    cuenta = _single_related(oportunidad_row.get("cuenta")) or {}
+    oportunidad_metadata = _ensure_dict(oportunidad_row.get("metadata"), default={})
+    lead_label = (
+        oportunidad_row.get("titulo")
+        or contact.get("nombre_completo")
+        or cuenta.get("nombre")
+        or "Oportunidad sin nombre"
+    )
+    currency = payload.moneda or oportunidad_row.get("moneda") or "MXN"
     base_payload_data = payload.model_dump(
         include=set(LeadQuoteCreatePayload.model_fields.keys()),
         exclude_none=True,
@@ -4141,7 +4240,7 @@ async def send_lead_quote(
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
 
     quote_context = quotes_service.QuoteRenderContext(
-        lead_label=_resolve_lead_label(lead_row),
+        lead_label=lead_label,
         reference=str(oportunidad_id).split("-")[0],
         issuer_name=settings.mail_username or "Tal-IA",
         issuer_email=settings.mail_username,
@@ -4156,7 +4255,8 @@ async def send_lead_quote(
         moneda=currency,
         valido_hasta=base_payload.valido_hasta,
         descripcion=base_payload.descripcion or base_payload.titulo,
-        notes=lead_row.get("proyecto_necesidades") or contact.get("necesidad_proposito"),
+        notes=oportunidad_metadata.get("proyecto_necesidades")
+        or contact.get("necesidad_proposito"),
         items=normalized_items,
     )
 
@@ -4174,11 +4274,23 @@ async def send_lead_quote(
     create_payload = _quote_payload_from_body(base_payload)
     create_payload["pdf_url"] = upload["url"]
     create_payload["pdf_path"] = upload["path"]
+    metadata = _quote_metadata_from_payload(create_payload)
+    repo_items = _quote_items_to_repository_payload(create_payload.pop("items", None))
     try:
-        created_row = await repo.create_lead_quote(
-            usuario_token=user_token,
-            lead_id=oportunidad_id,
-            payload=create_payload,
+        created_row = await repo.create_quote_entry(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            cuenta_id=_safe_uuid(oportunidad_row.get("cuenta_id")),
+            contacto_id=_safe_uuid(oportunidad_row.get("contacto_principal_id")),
+            estatus=create_payload.pop("estado", None)
+            or create_payload.pop("estatus", None)
+            or "borrador",
+            total=_as_number(create_payload.get("total")),
+            moneda=(create_payload.get("moneda") or currency).upper(),
+            valida_hasta=_to_iso_date(create_payload.get("valido_hasta")),
+            metadata=metadata,
+            items=repo_items,
+            usuario_id=usuario_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -4228,28 +4340,28 @@ async def send_lead_quote(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         extra_data = _quote_mark_extra({"whatsapp_to": whatsapp_number})
 
+    metadata_patch = dict(extra_data)
+    metadata_patch["canal_envio"] = channel
+    metadata_patch["enviada_en"] = datetime.now(timezone.utc).isoformat()
+    if usuario_id:
+        metadata_patch["enviada_por"] = str(usuario_id)
     try:
-        await repo.mark_lead_quote(
-            usuario_token=user_token,
+        quote_row = await repo.mark_quote_entry(
+            organizacion_id=organizacion_id,
             quote_id=quote_uuid,
-            estado="enviada",
-            canal=channel,
-            extra=extra_data,
-        )
-        quote_row = await repo.fetch_quote_with_items(
-            usuario_token=user_token,
-            quote_id=quote_uuid,
+            estatus="enviada",
+            metadata_patch=metadata_patch,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     quote = _quote_from_row(quote_row)
     if quote.estado == "aceptada":
-        await _auto_move_lead_to_won(
+        await _auto_move_opportunity_to_won(
             repo=repo,
-            usuario_token=user_token,
-            lead_id=oportunidad_id,
-            lead_row=lead_row,
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            oportunidad_row=oportunidad_row,
             quote=quote,
         )
     return LeadQuoteResponse(quote=quote)
@@ -4259,33 +4371,35 @@ async def send_lead_quote(
 async def mark_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     cotizacion_id: UUID,
     payload: LeadQuoteMarkPayload,
-    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> LeadQuoteResponse:
     extra = _quote_extra_payload(payload)
+    extra["canal_envio"] = payload.canal
+    extra["marcada_en"] = datetime.now(timezone.utc).isoformat()
+    if usuario_id:
+        extra["marcada_por"] = str(usuario_id)
     try:
-        await repo.mark_lead_quote(
-            usuario_token=user_token,
+        quote_row = await repo.mark_quote_entry(
+            organizacion_id=organizacion_id,
             quote_id=cotizacion_id,
-            estado=payload.estado,
-            canal=payload.canal,
-            extra=extra,
-        )
-        quote_row = await repo.fetch_quote_with_items(
-            usuario_token=user_token,
-            quote_id=cotizacion_id,
+            estatus=payload.estado,
+            metadata_patch=extra,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     quote = _quote_from_row(quote_row)
     if quote.estado == "aceptada":
-        await _auto_move_lead_to_won(
-            repo=repo,
-            usuario_token=user_token,
-            lead_id=quote.oportunidad_id,
-            quote=quote,
-        )
+        oportunidad_id = quote.oportunidad_id
+        if oportunidad_id:
+            await _auto_move_opportunity_to_won(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                oportunidad_id=UUID(str(oportunidad_id)),
+                quote=quote,
+            )
     return LeadQuoteResponse(quote=quote)
 
 
