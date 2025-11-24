@@ -29,7 +29,7 @@ export async function GET(
     const message = error instanceof Error ? error.message : "backend_not_configured";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-    const response = await fetch(`${baseUrl}/crm/portal/clientes/${token}`, {
+  const response = await fetch(`${baseUrl}/crm/portal/clientes/${token}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   });
@@ -37,9 +37,11 @@ export async function GET(
   const text = await response.text();
   if (!response.ok) {
     const parsed = text ? safeJson(text) : null;
-    const error =
+    const detail =
       (parsed && typeof parsed.detail === "string" && parsed.detail) ||
-      (parsed && typeof parsed.error === "string" && parsed.error) ||
+      (parsed && typeof parsed.error === "string" && parsed.error);
+    const error =
+      mapPortalError(detail) ||
       (text && !text.startsWith("<") ? text : null) ||
       "No se pudo cargar el portal.";
     return NextResponse.json({ error }, { status: response.status });
@@ -47,4 +49,15 @@ export async function GET(
 
   const payload = text ? safeJson(text) : null;
   return NextResponse.json(payload ?? { ok: true });
+}
+
+function mapPortalError(detail: string | null | undefined): string | null {
+  if (!detail) return null;
+  if (detail === "portal_token_revoked") {
+    return "Este enlace fue revocado por el equipo.";
+  }
+  if (detail === "portal_token_expired") {
+    return "Este enlace ya expiró. Solicita uno nuevo a tu ejecutivo.";
+  }
+  return detail;
 }

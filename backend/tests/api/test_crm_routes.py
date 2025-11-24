@@ -37,6 +37,42 @@ class DummyCRMRepository(CRMRepository):
             }
         ]
 
+    async def list_clientes(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_clientes", kwargs))
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "organizacion_id": str(kwargs["organizacion_id"]),
+                "contacto_id": str(uuid.uuid4()),
+                "cuenta_id": str(uuid.uuid4()),
+                "oportunidad_id": str(uuid.uuid4()),
+                "legacy_lead_id": str(uuid.uuid4()),
+                "estado_onboarding": "pendiente",
+                "rfc": "RFC123456789",
+                "razon_social": "Cliente Demo",
+                "domicilio_fiscal": "Fiscal 123",
+                "domicilio_fisico": "Fisico 456",
+                "regimen_fiscal": "General",
+                "datos_facturacion": {},
+                "fuente": "crm",
+                "monto_estimado": 10000.0,
+                "moneda": "MXN",
+                "metadatos": {},
+                "ganado_en": "2024-01-02T00:00:00Z",
+                "creado_en": "2024-01-01T00:00:00Z",
+                "actualizado_en": "2024-01-01T00:00:00Z",
+                "contacto": {
+                    "id": str(uuid.uuid4()),
+                    "nombre_completo": "Contacto Demo",
+                    "correo": "demo@example.com",
+                    "telefono_e164": "+521111111111",
+                    "company_name": "Demo Inc.",
+                },
+                "documentos": [],
+                "responsables": [],
+            }
+        ]
+
     async def create_account(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("create_account", kwargs))
         body = kwargs["payload"].copy()
@@ -669,6 +705,17 @@ async def test_get_account_not_found(client: AsyncClient) -> None:
         headers=headers,
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_clientes(client: AsyncClient, fake_repo: DummyCRMRepository) -> None:
+    resp = await client.get("/crm/clientes", headers=_headers())
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["items"]
+    assert payload["limit"] == 50
+    assert payload["offset"] == 0
+    assert fake_repo.calls[-1][0] == "list_clientes"
 
 
 @pytest.mark.asyncio

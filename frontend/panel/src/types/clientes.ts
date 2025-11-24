@@ -68,6 +68,10 @@ export type ClienteRecord = {
 export type ClientePortalSession = {
   id: string;
   cliente_id: string;
+  token: string;
+  organizacion_id: string | null;
+  cuenta_id: string | null;
+  oportunidad_id: string | null;
   expira_en: string | null;
   revocado: boolean;
   usos: number;

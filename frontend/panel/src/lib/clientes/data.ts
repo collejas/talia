@@ -7,26 +7,8 @@ import type { ClienteRecord, ClienteResponsable } from "@/types/clientes";
 
 const DEFAULT_LIMIT = 200;
 
-type CRMAccount = {
-  id: string;
-  organizacion_id: string;
-  nombre: string;
-  alias: string | null;
-  tipo: string | null;
-  industria: string | null;
-  tamano: string | null;
-  sitio_web: string | null;
-  telefono: string | null;
-  correo: string | null;
-  direccion: Record<string, unknown> | null;
-  propietario_usuario_id: string | null;
-  metadata: Record<string, unknown> | null;
-  creado_en: string;
-  actualizado_en: string;
-};
-
-type CRMAccountsResponse = {
-  items: CRMAccount[];
+type CRMClientesResponse = {
+  items: ClienteRecord[];
   limit: number;
   offset: number;
 };
@@ -42,11 +24,12 @@ export type ClientesPayload = {
 export async function loadClientesData(): Promise<ClientesPayload> {
   const errors: string[] = [];
 
-  const response = await callCrmApi<CRMAccountsResponse>("/crm/cuentas", {
+  const response = await callCrmApi<CRMClientesResponse>("/crm/clientes", {
     searchParams: {
       limit: String(DEFAULT_LIMIT),
       offset: "0",
     },
+    withUserToken: true,
   });
 
   if (!response.ok) {
@@ -55,7 +38,7 @@ export async function loadClientesData(): Promise<ClientesPayload> {
 
   const rows: ClienteRecord[] =
     response.ok && Array.isArray(response.data.items)
-      ? response.data.items.map(adaptAccountToClienteRecord)
+      ? response.data.items.map(sanitizeClienteRecord)
       : [];
 
   const cards = mapCards(rows);
@@ -72,41 +55,21 @@ export async function loadClientesData(): Promise<ClientesPayload> {
 }
 
 function adaptAccountToClienteRecord(account: CRMAccount): ClienteRecord {
-  const metadata = isPlainObject(account.metadata) ? account.metadata : {};
-  const estado = resolveEstadoOnboarding(metadata.estado_onboarding);
-
+function sanitizeClienteRecord(record: ClienteRecord): ClienteRecord {
+  const datosFacturacion = isPlainObject(record.datos_facturacion)
+    ? record.datos_facturacion
+    : null;
+  const metadatos = isPlainObject(record.metadatos) ? record.metadatos : null;
+  const documentos = Array.isArray(record.documentos) ? record.documentos : [];
+  const responsables = Array.isArray(record.responsables) ? record.responsables : [];
+  const estado = resolveEstadoOnboarding(record.estado_onboarding);
   return {
-    id: account.id,
-    organizacion_id: account.organizacion_id,
-    contacto_id: typeof metadata.contacto_id === "string" && metadata.contacto_id.length
-      ? metadata.contacto_id
-      : account.id,
-    cuenta_id: account.id,
-    oportunidad_id:
-      typeof metadata.oportunidad_id === "string" && metadata.oportunidad_id.length
-        ? metadata.oportunidad_id
-        : null,
-    legacy_lead_id:
-      typeof metadata.legacy_lead_id === "string" && metadata.legacy_lead_id.length
-        ? metadata.legacy_lead_id
-        : null,
+    ...record,
+    datos_facturacion: datosFacturacion,
+    metadatos,
+    documentos,
+    responsables,
     estado_onboarding: estado,
-    rfc: toNullableString(metadata.rfc),
-    razon_social: account.nombre || account.alias || toNullableString(metadata.razon_social),
-    domicilio_fiscal: toNullableString(metadata.domicilio_fiscal),
-    domicilio_fisico: toNullableString(metadata.domicilio_fisico),
-    regimen_fiscal: toNullableString(metadata.regimen_fiscal),
-    datos_facturacion: isPlainObject(metadata.datos_facturacion) ? metadata.datos_facturacion : null,
-    fuente: toNullableString(metadata.fuente) ?? account.tipo,
-    monto_estimado: typeof metadata.monto_estimado === "number" ? metadata.monto_estimado : null,
-    moneda: toNullableString(metadata.moneda),
-    metadatos: metadata,
-    ganado_en: toNullableString(metadata.ganado_en),
-    creado_en: account.creado_en,
-    actualizado_en: account.actualizado_en,
-    contacto: extractContacto(metadata, account),
-    documentos: [],
-    responsables: [],
   };
 }
 
@@ -228,31 +191,6 @@ function resolveEstadoOnboarding(
   return "completado";
 }
 
-function toNullableString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function extractContacto(
-  metadata: Record<string, unknown>,
-  account: CRMAccount,
-): ClienteRecord["contacto"] {
-  const raw = metadata.contacto;
-  if (!isPlainObject(raw)) return null;
-
-  return {
-    id: typeof raw.id === "string" && raw.id.length ? raw.id : account.id,
-    nombre_completo:
-      toNullableString(raw.nombre_completo) ??
-      toNullableString(raw.nombre) ??
-      account.nombre,
-    correo: toNullableString(raw.correo),
-    telefono_e164: toNullableString(raw.telefono_e164 ?? raw.telefono),
-    company_name: toNullableString(raw.company_name ?? raw.empresa),
-  };
 }

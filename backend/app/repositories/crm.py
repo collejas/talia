@@ -2632,6 +2632,26 @@ class CRMRepository:
                 return True
         return False
 
+    async def list_clientes(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": self._CLIENTE_SELECT,
+            "order": "creado_en.desc",
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        resp = await self._request("GET", "/rest/v1/clientes", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar clientes: {data!r}")
+        return data
+
     async def get_cliente_por_oportunidad(
         self,
         *,

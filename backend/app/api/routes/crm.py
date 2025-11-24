@@ -192,6 +192,74 @@ class ClientePortalLinkPayload(BaseModel):
     enviar_correo: bool = True
 
 
+class ClienteContactoRecord(BaseModel):
+    id: UUID
+    nombre_completo: str | None = None
+    correo: str | None = None
+    telefono_e164: str | None = None
+    company_name: str | None = None
+
+
+class ClienteDocumentoRecord(BaseModel):
+    id: UUID
+    tipo: ClienteDocumentoTipo
+    estado: ClienteDocumentoEstado
+    descripcion: str | None = None
+    storage_url: str | None = None
+    storage_path: str | None = None
+    metadatos: dict[str, Any] | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    cuenta_id: UUID | None = None
+    oportunidad_id: UUID | None = None
+
+
+class ClienteResponsableRecord(BaseModel):
+    id: UUID
+    nombre: str
+    correo: str | None = None
+    telefono_e164: str | None = None
+    rol: str | None = None
+    es_responsable_principal: bool = False
+    metadatos: dict[str, Any] | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    cuenta_id: UUID | None = None
+    oportunidad_id: UUID | None = None
+
+
+class ClienteRecord(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    contacto_id: UUID
+    cuenta_id: UUID
+    oportunidad_id: UUID | None = None
+    legacy_lead_id: UUID | None = None
+    estado_onboarding: ClienteOnboardingEstado
+    rfc: str | None = None
+    razon_social: str | None = None
+    domicilio_fiscal: str | None = None
+    domicilio_fisico: str | None = None
+    regimen_fiscal: str | None = None
+    datos_facturacion: dict[str, Any] | None = None
+    fuente: str | None = None
+    monto_estimado: float | None = None
+    moneda: str | None = None
+    metadatos: dict[str, Any] | None = None
+    ganado_en: datetime | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    contacto: ClienteContactoRecord | None = None
+    documentos: list[ClienteDocumentoRecord] = Field(default_factory=list)
+    responsables: list[ClienteResponsableRecord] = Field(default_factory=list)
+
+
+class ClienteListResponse(BaseModel):
+    items: list[ClienteRecord]
+    limit: int
+    offset: int
+
+
 class LeadConversionPayload(BaseModel):
     forzar: bool = Field(default=False)
 
@@ -2771,6 +2839,26 @@ async def get_account(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="cuenta_no_encontrada")
     return CRMAccount.model_validate(row)
+
+
+@router.get("/clientes", response_model=ClienteListResponse)
+async def list_clientes(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ClienteListResponse:
+    try:
+        rows = await repo.list_clientes(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    items = [ClienteRecord.model_validate(row) for row in rows]
+    return ClienteListResponse(items=items, limit=limit, offset=offset)
 
 
 @router.get("/etapas", response_model=list[CRMPipelineStage])

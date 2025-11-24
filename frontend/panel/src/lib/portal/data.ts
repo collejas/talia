@@ -29,5 +29,15 @@ export async function loadPortalEstado(token: string): Promise<PortalEstadoRespo
   }
 
   const payload = (await response.json()) as PortalEstadoResponse;
+  const portal = payload.portal;
+  if (portal.revocado) {
+    throw new Error("Este enlace fue revocado por el equipo de Tal-IA.");
+  }
+  if (portal.expira_en) {
+    const expiration = Date.parse(portal.expira_en);
+    if (!Number.isNaN(expiration) && expiration < Date.now()) {
+      throw new Error("El enlace del portal ha expirado. Solicita uno nuevo a tu ejecutivo.");
+    }
+  }
   return payload;
 }
