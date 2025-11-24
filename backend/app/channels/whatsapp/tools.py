@@ -65,7 +65,7 @@ async def execute_tool(
     if func == "set_email":
         email = _require(arguments, "email").lower()
         await storage.update_contact(context.contact_id, {"correo": email})
-        await storage.capture_lead_if_ready(
+        await storage.capture_opportunity_if_ready(
             conversation_id=context.conversation_id,
             contact_id=context.contact_id,
             channel=context.channel or "whatsapp",
@@ -75,7 +75,7 @@ async def execute_tool(
     if func == "set_phone_number":
         phone = _require(arguments, "phone_number")
         await storage.update_contact(context.contact_id, {"telefono_e164": phone})
-        await storage.capture_lead_if_ready(
+        await storage.capture_opportunity_if_ready(
             conversation_id=context.conversation_id,
             contact_id=context.contact_id,
             channel=context.channel or "whatsapp",
@@ -246,15 +246,14 @@ async def _handle_close_lead(
     siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
     tarjeta_id = None
     try:
-        tarjeta_id = await storage.ensure_lead_tarjeta(
-            tarjeta_id=None,
+        tarjeta_id = await storage.ensure_conversation_opportunity(
             conversation_id=context.conversation_id,
             contact_id=context.contact_id,
             channel=context.channel or "whatsapp",
         )
     except StorageError as exc:
         logger.warning(
-            "whatsapp.close_lead.ensure_tarjeta_failed",
+            "whatsapp.close_lead.ensure_opportunity_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
     await storage.update_contact(

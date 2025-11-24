@@ -476,7 +476,7 @@ hola@talia.mx
         column.tsx, etc.) muestran/mutan tarjetaId y llaman a los endpoints anteriores cuando crean, mueven etapas, generan
         cotizaciones o ejecutan onboarding.
   - Automatizaciones y servicios que aún empujan a lead_tarjetas:
-      - backend/app/services/storage.py:887-1073 (ensure_lead_tarjeta, capture_lead_if_ready, promote_opportunity_stage) deben
+      - backend/app/services/storage.py:887-1073 (`ensure_conversation_opportunity`, antes `ensure_lead_tarjeta`, `capture_opportunity_if_ready`, `promote_opportunity_stage`) deben
         migrar a crear/actualizar oportunidades nativas en lugar de usar lead_tarjetas + RPC panel_lead_move.
       - Canales/assistants (backend/app/channels/webchat/service.py:646-2163, backend/app/channels/whatsapp/service.py:82-249,
         backend/app/assistants/tools/lead.py:44-282) invocan esas funciones legacy; tras mover storage al nuevo modelo hay que

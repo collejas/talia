@@ -79,15 +79,14 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
         return
 
     try:
-        await storage.ensure_lead_tarjeta(
-            tarjeta_id=None,
+        await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel="whatsapp",
         )
     except StorageError as exc:
         logger.warning(
-            "whatsapp.ensure_lead_tarjeta_failed",
+            "whatsapp.ensure_opportunity_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 

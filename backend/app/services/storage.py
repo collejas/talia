@@ -884,22 +884,16 @@ async def fetch_leads_municipios(
         raise StorageError(str(exc)) from exc
 
 
-async def ensure_lead_tarjeta(
+async def ensure_conversation_opportunity(
     *,
-    tarjeta_id: str | None,
     conversation_id: str,
     contact_id: str | None,
     channel: str | None = None,
 ) -> str:
-    """Resuelve o crea una oportunidad CRM asociada a la conversación actual.
-
-    Se conserva el nombre legacy `lead_tarjeta` para evitar tocar todos los call-sites.
-    """
-    # Conservamos `tarjeta_id` por compatibilidad con call-sites legacy.
-    _ = tarjeta_id
+    """Resuelve o crea una oportunidad CRM asociada a la conversación actual."""
 
     if not contact_id:
-        raise StorageError("No fue posible resolver contacto para crear la oportunidad del lead")
+        raise StorageError("No fue posible resolver contacto para crear la oportunidad")
 
     contact = await fetch_contact(contact_id)
     organizacion_value = contact.get("organizacion_id")
@@ -929,6 +923,22 @@ async def ensure_lead_tarjeta(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
     return str(oportunidad_id)
+
+
+async def ensure_lead_tarjeta(
+    *,
+    tarjeta_id: str | None,
+    conversation_id: str,
+    contact_id: str | None,
+    channel: str | None = None,
+) -> str:
+    """Compatibilidad: delega a ensure_conversation_opportunity."""
+
+    return await ensure_conversation_opportunity(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        channel=channel,
+    )
 
 
 async def promote_opportunity_stage(
@@ -1034,7 +1044,7 @@ async def promote_opportunity_stage(
     return True
 
 
-async def capture_lead_if_ready(
+async def capture_opportunity_if_ready(
     *,
     conversation_id: str,
     contact_id: str,
@@ -1052,12 +1062,12 @@ async def capture_lead_if_ready(
         contact = await fetch_contact(contact_id)
     except StorageError as exc:
         logger.warning(
-            "storage.capture_lead.contact_failed",
+            "storage.capture_opportunity.contact_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
         log_event(
             logger,
-            "capture_lead.contact_lookup_failed",
+            "capture_opportunity.contact_lookup_failed",
             error=str(exc),
             **log_context,
         )
@@ -1066,19 +1076,18 @@ async def capture_lead_if_ready(
     correo = str(contact.get("correo") or "").strip()
     telefono = str(contact.get("telefono_e164") or "").strip()
     if not correo and not telefono:
-        log_event(logger, "capture_lead.skipped_no_contact_data", **log_context)
+        log_event(logger, "capture_opportunity.skipped_no_contact_data", **log_context)
         return False
 
     try:
-        oportunidad_id = await ensure_lead_tarjeta(
-            tarjeta_id=None,
+        oportunidad_id = await ensure_conversation_opportunity(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel=capture_channel,
         )
     except StorageError as exc:
         logger.warning(
-            "storage.capture_lead.ensure_failed",
+            "storage.capture_opportunity.ensure_failed",
             extra={
                 "conversation_id": conversation_id,
                 "contact_id": contact_id,
@@ -1087,7 +1096,7 @@ async def capture_lead_if_ready(
         )
         log_event(
             logger,
-            "capture_lead.ensure_failed",
+            "capture_opportunity.ensure_failed",
             error=str(exc),
             **log_context,
         )
@@ -1097,7 +1106,7 @@ async def capture_lead_if_ready(
     if not organizacion_id:
         log_event(
             logger,
-            "capture_lead.no_org_context",
+            "capture_opportunity.no_org_context",
             opportunity_id=oportunidad_id,
             **log_context,
         )
@@ -1108,12 +1117,12 @@ async def capture_lead_if_ready(
             oportunidad_id=oportunidad_id,
             organizacion_id=str(organizacion_id),
             stage_code="captado",
-            source="capture_lead",
+            source="capture_opportunity",
             channel=capture_channel,
         )
     except StorageError as exc:
         logger.warning(
-            "storage.capture_lead.promote_failed",
+            "storage.capture_opportunity.promote_failed",
             extra={
                 "conversation_id": conversation_id,
                 "contact_id": contact_id,
@@ -1122,7 +1131,7 @@ async def capture_lead_if_ready(
         )
         log_event(
             logger,
-            "capture_lead.promote_failed",
+            "capture_opportunity.promote_failed",
             opportunity_id=oportunidad_id,
             error=str(exc),
             **log_context,
@@ -1131,9 +1140,24 @@ async def capture_lead_if_ready(
 
     log_event(
         logger,
-        "capture_lead.promoted",
+        "capture_opportunity.promoted",
         opportunity_id=oportunidad_id,
         stage_code="captado",
         **log_context,
     )
     return True
+
+
+async def capture_lead_if_ready(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    channel: str | None = None,
+) -> bool:
+    """Compatibilidad: delega a capture_opportunity_if_ready."""
+
+    return await capture_opportunity_if_ready(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        channel=channel,
+    )
