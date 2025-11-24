@@ -38,6 +38,7 @@ type WhatsappConversationRow = {
 
 export type VisitDetailRaw = {
   session_id: string | null;
+  oportunidad_id: string | null;
   canal?: string | null;
   ip: string | null;
   registrado_en: string | null;

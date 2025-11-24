@@ -205,6 +205,43 @@ class DummyCRMRepository(CRMRepository):
             }
         ]
 
+    async def list_agenda_bookings(self, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
+        self.calls.append(("list_agenda_bookings", kwargs))
+        card_id = str(uuid.uuid4())
+        return (
+            [
+                {
+                    "id": str(uuid.uuid4()),
+                    "resource_id": str(uuid.uuid4()),
+                    "hold_id": None,
+                    "tarjeta_id": card_id,
+                    "contacto_id": str(uuid.uuid4()),
+                    "contacto_nombre": "Contacto Demo",
+                    "status": "confirmed",
+                    "start_at": "2024-01-01T10:00:00Z",
+                    "end_at": "2024-01-01T10:30:00Z",
+                    "timezone": "UTC",
+                    "notes": None,
+                    "metadata": {"estado": "confirmada"},
+                    "tarjeta_canal": "webchat",
+                    "tarjeta_lead_score": 50,
+                }
+            ],
+            1,
+        )
+
+    async def visitas_detalle(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("visitas_detalle", kwargs))
+        return [
+            {
+                "session_id": "session-1",
+                "tarjeta_id": str(uuid.uuid4()),
+                "canal": "webchat",
+                "metadata": {"foo": "bar"},
+                "registrado_en": "2024-01-01T00:00:00Z",
+            }
+        ]
+
     async def create_ticket_comment(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("create_ticket_comment", kwargs))
         return {
@@ -597,8 +634,11 @@ async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
         yield session
 
 
-def _headers() -> dict[str, str]:
-    return {"X-Organizacion-Id": str(uuid.uuid4()), "X-Usuario-Id": str(uuid.uuid4())}
+def _headers(*, include_user_token: bool = False) -> dict[str, str]:
+    headers = {"X-Organizacion-Id": str(uuid.uuid4()), "X-Usuario-Id": str(uuid.uuid4())}
+    if include_user_token:
+        headers["X-User-Token"] = "test-token"
+    return headers
 
 
 @pytest.mark.asyncio
@@ -635,6 +675,30 @@ async def test_get_account_not_found(client: AsyncClient) -> None:
 async def test_missing_org_header_returns_400(client: AsyncClient) -> None:
     resp = await client.get("/crm/cuentas")
     assert resp.status_code == 422  # FastAPI validation error for header
+
+
+@pytest.mark.asyncio
+async def test_list_agenda_bookings_returns_oportunidad_id(client: AsyncClient) -> None:
+    resp = await client.get(
+        "/crm/agenda/bookings",
+        headers=_headers(include_user_token=True),
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["items"]
+    assert payload["items"][0]["oportunidad_id"]
+
+
+@pytest.mark.asyncio
+async def test_visits_detail_maps_oportunidad_id(client: AsyncClient) -> None:
+    resp = await client.get(
+        "/crm/visitas/detalle",
+        headers=_headers(include_user_token=True),
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert isinstance(payload, list)
+    assert payload[0]["oportunidad_id"]
 
 
 @pytest.mark.asyncio

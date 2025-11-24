@@ -259,8 +259,8 @@ Con estas definiciones, el plan queda completo respecto a la lista recomendada; 
 2. **Frontend embudo**
    - [x] Actualizar los server actions `/api/embudo/leads/[oportunidadId]/*` para que consuman los nuevos endpoints (`/crm/oportunidades/*`, `/crm/cotizaciones/*`) y renombrar parámetros a `oportunidadId`.
    - [x] Refactorizar `frontend/panel/src/lib/embudo/{data,actions,helpers}.ts` y componentes (`board-client`, `lead-drawer`, `lead-onboarding`, etc.) para usar la forma nueva de las tarjetas (IDs de oportunidad, campos `titulo/monto/estado`) y los DTOs de cotizaciones CRM.
-   - [ ] Revisar las vistas relacionadas (agenda, visitas, analytics) que aún leen `tarjeta_id` y reemplazarlas por `oportunidad_id`, asegurando compatibilidad con los loaders de nuevas APIs.
-   - [ ] Añadir pruebas de regresión (unitarias y de integración end-to-end del embudo) que validen creación, movimiento de etapas, generación/envío/marcado de cotizaciones y conversión a cliente usando el pipeline CRM.
+   - [x] Revisar las vistas relacionadas (agenda, visitas, analytics) que aún leen `tarjeta_id` y reemplazarlas por `oportunidad_id`, asegurando compatibilidad con los loaders de nuevas APIs.
+   - [x] Añadir pruebas de regresión (unitarias y de integración end-to-end del embudo) que validen creación, movimiento de etapas, generación/envío/marcado de cotizaciones y conversión a cliente usando el pipeline CRM.
 
 ### Plan de ejecución · Punto 3 (Clientes y Portal)
 1. **Modelo de datos**

@@ -1674,6 +1674,9 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
         metadata_parsed = metadata_raw
     metadata: dict[str, Any] = dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
     estado = _normalize_agenda_estado(row.get("status") or metadata.get("estado"))
+    oportunidad_id = (
+        row.get("oportunidad_id") or metadata.get("oportunidad_id") or row.get("tarjeta_id")
+    )
 
     contacto_payload = {
         "id": row.get("contacto_id") or row.get("contact_id"),
@@ -1700,6 +1703,7 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
         "id": row.get("id"),
         "resource_id": row.get("resource_id"),
         "hold_id": row.get("hold_id"),
+        "oportunidad_id": oportunidad_id,
         "tarjeta_id": row.get("tarjeta_id"),
         "contacto_id": contacto_payload["id"],
         "conversacion_id": row.get("conversacion_id"),
@@ -1721,6 +1725,24 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
+
+
+def _map_visit_detail_row(row: dict[str, Any]) -> dict[str, Any]:
+    mapped = dict(row)
+    metadata = _coerce_metadata(mapped.get("metadata"))
+    if metadata is not None:
+        mapped["metadata"] = metadata
+    else:
+        metadata = mapped.get("metadata") if isinstance(mapped.get("metadata"), dict) else None
+    opportunity_id = (
+        mapped.get("oportunidad_id")
+        or (metadata.get("oportunidad_id") if isinstance(metadata, dict) else None)
+        or mapped.get("tarjeta_id")
+        or mapped.get("lead_tarjeta_id")
+    )
+    if opportunity_id:
+        mapped["oportunidad_id"] = opportunity_id
+    return mapped
 
 
 def _compute_agenda_metrics(items: Sequence[dict[str, Any]]) -> dict[str, int]:
@@ -5232,7 +5254,7 @@ async def get_visits_detail(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return rows
+    return [_map_visit_detail_row(row) if isinstance(row, dict) else row for row in rows]
 
 
 @router.get("/visitas/whatsapp/total")
