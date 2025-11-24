@@ -264,8 +264,10 @@ Con estas definiciones, el plan queda completo respecto a la lista recomendada; 
 
 ### Plan de ejecución · Punto 3 (Clientes y Portal)
 1. **Modelo de datos**
-   - [ ] Extender `clientes` para almacenar `cuenta_id` y `oportunidad_id` reales; rellenar esos campos con una migración que mapee los IDs legacy y documente la relación (`legacy_lead_id` sólo para auditoría). Ajustar PK/FK de `cliente_portal_tokens`, `cliente_documentos`, `cliente_responsables` para que dependan de los nuevos IDs.
-   - [ ] Actualizar `_cliente_select_clause` (backend) y los tipos compartidos (`frontend/panel/src/types/clientes.ts`) para remover `lead_tarjeta_id` y exponer los nuevos campos.
+- [x] Extender `clientes` para almacenar `cuenta_id` y `oportunidad_id` reales; rellenar esos campos con una migración que mapee los IDs legacy y documente la relación (`legacy_lead_id` sólo para auditoría). Ajustar PK/FK de `cliente_portal_tokens`, `cliente_documentos`, `cliente_responsables` para que dependan de los nuevos IDs.
+- [x] Actualizar `_cliente_select_clause` (backend) y los tipos compartidos (`frontend/panel/src/types/clientes.ts`) para remover `lead_tarjeta_id` y exponer los nuevos campos.
+
+El archivo `supabase/migrations/20260705_110000_clientes_crm_ids.sql` renombra `lead_tarjeta_id` → `legacy_lead_id`, rellena `cuenta_id`/`oportunidad_id` en `clientes` y propaga esos IDs (junto con `organizacion_id`) hacia `cliente_documentos`, `cliente_responsables` y `cliente_portal_tokens`, además de reescribir las policies RLS para basarse en `organizacion_id`. Con esto FastAPI puede leer `cuenta_id`/`oportunidad_id` directo desde `_cliente_select_clause` sin depender del helper legacy.
 2. **APIs de clientes/portal**
    - [ ] Refactorizar `CRMRepository` (`get_cliente_por_lead`, `convert_lead_en_cliente`, `create_portal_token`, etc.) para usar `cuentas`/`oportunidades` y las rutas CRM nativas; eliminar la resolución por `lead_id`.
    - [ ] Ajustar las rutas `/crm/clientes/*` y `/crm/portal/*` para operar con los nuevos identificadores y payloads (incluyendo documentos y responsables).

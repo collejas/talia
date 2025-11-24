@@ -453,21 +453,21 @@ def _single_related(value: Any) -> Any:
 
 def _cliente_select_clause() -> str:
     return (
-        "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
-        "razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,"
-        "fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
+        "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
+        "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
+        "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
         "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
         "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
-        "storage_path,metadatos,creado_en,actualizado_en),"
+        "storage_path,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id),"
         "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
-        "es_responsable_principal,metadatos,creado_en,actualizado_en)"
+        "es_responsable_principal,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id)"
     )
 
 
 def _portal_token_select_clause(include_relations: bool = True) -> str:
     base = (
-        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
-        "ultimo_acceso_ip,creado_en,actualizado_en"
+        "id,cliente_id,organizacion_id,cuenta_id,oportunidad_id,token,expira_en,revocado,"
+        "usos,nota,metadata,ultimo_acceso_en,ultimo_acceso_ip,creado_en,actualizado_en"
     )
     if include_relations:
         base += (
@@ -1738,7 +1738,7 @@ def _map_visit_detail_row(row: dict[str, Any]) -> dict[str, Any]:
         mapped.get("oportunidad_id")
         or (metadata.get("oportunidad_id") if isinstance(metadata, dict) else None)
         or mapped.get("tarjeta_id")
-        or mapped.get("lead_tarjeta_id")
+        or mapped.get("legacy_lead_id")
     )
     if opportunity_id:
         mapped["oportunidad_id"] = opportunity_id
@@ -4126,9 +4126,9 @@ async def obtener_cliente_de_oportunidad(
     user_token: str = Depends(require_user_token),
     oportunidad_id: UUID,
 ) -> dict[str, Any]:
-    cliente = await repo.get_cliente_por_lead(
+    cliente = await repo.get_cliente_por_oportunidad(
         usuario_token=user_token,
-        lead_id=oportunidad_id,
+        oportunidad_id=oportunidad_id,
     )
     return {"ok": True, "cliente": cliente}
 
@@ -4146,9 +4146,9 @@ async def convertir_oportunidad_cliente(
         lead_id=oportunidad_id,
         forzar=payload.forzar,
     )
-    cliente = await repo.get_cliente_por_lead(
+    cliente = await repo.get_cliente_por_oportunidad(
         usuario_token=user_token,
-        lead_id=oportunidad_id,
+        oportunidad_id=oportunidad_id,
     )
     return {"ok": True, "cliente": cliente}
 

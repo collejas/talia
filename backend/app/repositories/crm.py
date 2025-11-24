@@ -75,24 +75,24 @@ class CRMRepository:
     _stage_code_cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     _CLIENTE_SELECT = (
-        "id,contacto_id,lead_tarjeta_id,tablero_id,etapa_id,estado_onboarding,rfc,"
-        "razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,datos_facturacion,"
-        "fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
+        "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
+        "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
+        "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
         "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
         "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
-        "storage_path,metadatos,creado_en,actualizado_en),"
+        "storage_path,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id),"
         "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
-        "es_responsable_principal,metadatos,creado_en,actualizado_en)"
+        "es_responsable_principal,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id)"
     )
 
     _PORTAL_TOKEN_SELECT = (
-        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
+        "id,cliente_id,organizacion_id,cuenta_id,oportunidad_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
         "ultimo_acceso_ip,creado_en,actualizado_en,"
         f"cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_CLIENTE_SELECT})"
     )
 
     _PORTAL_TOKEN_MIN_SELECT = (
-        "id,cliente_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
+        "id,cliente_id,organizacion_id,cuenta_id,oportunidad_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
         "ultimo_acceso_ip,creado_en,actualizado_en,"
         "cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
     )
@@ -2632,14 +2632,14 @@ class CRMRepository:
                 return True
         return False
 
-    async def get_cliente_por_lead(
+    async def get_cliente_por_oportunidad(
         self,
         *,
         usuario_token: str,
-        lead_id: UUID,
+        oportunidad_id: UUID,
     ) -> dict[str, Any] | None:
         params = {
-            "lead_tarjeta_id": f"eq.{lead_id}",
+            "oportunidad_id": f"eq.{oportunidad_id}",
             "select": self._CLIENTE_SELECT,
             "limit": "1",
         }
@@ -2652,6 +2652,18 @@ class CRMRepository:
         data = resp.json() or []
         row = self._first_row(data)
         return row if isinstance(row, dict) else None
+
+    async def get_cliente_por_lead(
+        self,
+        *,
+        usuario_token: str,
+        lead_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Compatibilidad temporal con firmas legacy."""
+        return await self.get_cliente_por_oportunidad(
+            usuario_token=usuario_token,
+            oportunidad_id=lead_id,
+        )
 
     async def get_cliente_por_id(
         self,

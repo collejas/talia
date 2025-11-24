@@ -41,10 +41,11 @@ export type ClienteContacto = {
 
 export type ClienteRecord = {
   id: string;
+  organizacion_id: string;
   contacto_id: string;
-  lead_tarjeta_id: string | null;
-  tablero_id: string | null;
-  etapa_id: string | null;
+  cuenta_id: string;
+  oportunidad_id: string | null;
+  legacy_lead_id: string | null;
   estado_onboarding: "pendiente" | "en_progreso" | "completado";
   rfc: string | null;
   razon_social: string | null;

@@ -309,13 +309,24 @@ class InMemoryPipelineRepository(CRMRepository):
         self.clients[str(lead_id)] = record
         return record
 
+    async def get_cliente_por_oportunidad(
+        self,
+        *,
+        usuario_token: str,
+        oportunidad_id: uuid.UUID,
+    ) -> dict[str, Any] | None:
+        return self.clients.get(str(oportunidad_id))
+
     async def get_cliente_por_lead(
         self,
         *,
         usuario_token: str,
         lead_id: uuid.UUID,
     ) -> dict[str, Any] | None:
-        return self.clients.get(str(lead_id))
+        return await self.get_cliente_por_oportunidad(
+            usuario_token=usuario_token,
+            oportunidad_id=lead_id,
+        )
 
 
 @pytest.fixture()

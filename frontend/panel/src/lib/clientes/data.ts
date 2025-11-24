@@ -77,12 +77,19 @@ function adaptAccountToClienteRecord(account: CRMAccount): ClienteRecord {
 
   return {
     id: account.id,
+    organizacion_id: account.organizacion_id,
     contacto_id: typeof metadata.contacto_id === "string" && metadata.contacto_id.length
       ? metadata.contacto_id
       : account.id,
-    lead_tarjeta_id: null,
-    tablero_id: null,
-    etapa_id: null,
+    cuenta_id: account.id,
+    oportunidad_id:
+      typeof metadata.oportunidad_id === "string" && metadata.oportunidad_id.length
+        ? metadata.oportunidad_id
+        : null,
+    legacy_lead_id:
+      typeof metadata.legacy_lead_id === "string" && metadata.legacy_lead_id.length
+        ? metadata.legacy_lead_id
+        : null,
     estado_onboarding: estado,
     rfc: toNullableString(metadata.rfc),
     razon_social: account.nombre || account.alias || toNullableString(metadata.razon_social),
