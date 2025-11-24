@@ -21,6 +21,7 @@ export type EmbudoCard = {
   contactoId: string;
   conversacionId: string | null;
   titulo: string;
+  nombre: string | null;
   correo: string | null;
   telefono: string | null;
   empresa: string | null;
@@ -81,7 +82,6 @@ export type PipelineBoardCard = {
   actualizado_en: string | null;
   etiquetas: string[] | null;
   metadata: Record<string, unknown> | null;
-  estado?: string | null;
 };
 
 export type PipelineBoardStage = {

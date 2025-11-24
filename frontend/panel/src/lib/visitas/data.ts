@@ -317,6 +317,7 @@ function mapWhatsappRows(rows?: WhatsappConversationRow[] | null): VisitDetailRa
     const location = inferPhoneLocation(row.contacto?.telefono_e164 || null);
     return {
       session_id: `whatsapp-${row.id}`,
+      oportunidad_id: null,
       canal: "whatsapp",
       ip: null,
       registrado_en: row.iniciada_en,
