@@ -119,11 +119,11 @@ export function EmbudoBoardClient({
 
   const ensureLeadHasAcceptedQuote = useCallback(
     async (
-      tarjetaId: string,
+      oportunidadId: string,
     ): Promise<{ ok: boolean; accepted: boolean; error?: string }> => {
       try {
         const response = await fetch(
-          `/api/embudo/leads/${tarjetaId}/quotes?status=aceptada`,
+          `/api/embudo/leads/${oportunidadId}/quotes?status=aceptada`,
           { cache: "no-store" },
         );
         const body = await response.json().catch(() => ({}));
@@ -249,9 +249,9 @@ export function EmbudoBoardClient({
 
     const stagePrep = buildUpdatedDemoStagePrep(scheduleContext.card, isoValue, bookingResult.booking.booking_id);
     const updateResult = await updateLeadCard({
-      tarjetaId: scheduleContext.card.tarjetaId,
+      oportunidadId: scheduleContext.card.oportunidadId,
       contactoId: scheduleContext.card.contactoId,
-      tarjeta: {
+      oportunidad: {
         metadata: {
           stage_prep: stagePrep,
         },
@@ -298,7 +298,7 @@ export function EmbudoBoardClient({
     setStages((prev) => {
       const updated = prev.map((item) => {
         if (item.id === stage.id) {
-          const filtered = (item.tarjetas ?? []).filter((existing) => existing.tarjetaId !== card.tarjetaId);
+          const filtered = (item.tarjetas ?? []).filter((existing) => existing.oportunidadId !== card.oportunidadId);
           return {
             ...item,
             tableroId: stage.tableroId || item.tableroId,
@@ -310,10 +310,10 @@ export function EmbudoBoardClient({
             tarjetas: sortCards([...filtered, card]),
           };
         }
-        if ((item.tarjetas ?? []).some((existing) => existing.tarjetaId === card.tarjetaId)) {
+        if ((item.tarjetas ?? []).some((existing) => existing.oportunidadId === card.oportunidadId)) {
           return {
             ...item,
-            tarjetas: item.tarjetas.filter((existing) => existing.tarjetaId !== card.tarjetaId),
+            tarjetas: item.tarjetas.filter((existing) => existing.oportunidadId !== card.oportunidadId),
           };
         }
         return item;
@@ -347,8 +347,8 @@ export function EmbudoBoardClient({
       return;
     }
     const stageLabel = result.latestStage.nombre || "otra etapa";
-    const cardLabel = result.latestCard?.nombre || "El lead";
-    toast.info(`${cardLabel} cambió a ${stageLabel} en otra sesión. Actualizamos la tarjeta.`, {
+    const cardLabel = result.latestCard?.titulo || "La oportunidad";
+    toast.info(`${cardLabel} cambió a ${stageLabel} en otra sesión. Actualizamos la oportunidad.`, {
       duration: 6000,
     });
   }
@@ -359,10 +359,10 @@ export function EmbudoBoardClient({
     }
 
     const result = await updateLeadCard({
-      tarjetaId: selectedCard.tarjetaId,
+      oportunidadId: selectedCard.oportunidadId,
       contactoId: selectedCard.contactoId,
       contacto: payload.contacto,
-      tarjeta: payload.tarjeta,
+      oportunidad: payload.oportunidad,
       mergeMetadata: payload.mergeMetadata ?? true,
     });
 
@@ -385,7 +385,7 @@ export function EmbudoBoardClient({
     }
     const nextStageCode = normalizeStageCode(nextStage);
     if (nextStageCode === "cerrado_ganado") {
-      const acceptedCheck = await ensureLeadHasAcceptedQuote(selectedCard.tarjetaId);
+      const acceptedCheck = await ensureLeadHasAcceptedQuote(selectedCard.oportunidadId);
       if (!acceptedCheck.ok) {
         return { ok: false as const, error: acceptedCheck.error || "No se pudo verificar las cotizaciones." };
       }
@@ -398,7 +398,7 @@ export function EmbudoBoardClient({
     }
     setMovePending(true);
     const result = await moveLeadCard({
-      tarjetaId: selectedCard.tarjetaId,
+      oportunidadId: selectedCard.oportunidadId,
       etapaDestino: nextStage.id,
       fuente: "humano",
       expectedEtapa: selectedCard.etapaId,
@@ -417,13 +417,13 @@ export function EmbudoBoardClient({
       return { ok: false, error: "No se encontró el lead seleccionado." };
     }
 
-    const result = await deleteLeadCard({ tarjetaId: selectedCard.tarjetaId, contactoId: selectedCard.contactoId });
+    const result = await deleteLeadCard({ oportunidadId: selectedCard.oportunidadId, contactoId: selectedCard.contactoId });
     if (result.ok) {
       setStages((prev) =>
         sortStages(
           prev.map((stage) => ({
             ...stage,
-            tarjetas: stage.tarjetas.filter((card) => card.tarjetaId !== selectedCard.tarjetaId),
+            tarjetas: stage.tarjetas.filter((card) => card.oportunidadId !== selectedCard.oportunidadId),
           })),
         ),
       );
@@ -445,7 +445,7 @@ export function EmbudoBoardClient({
 
   const findCardById = (cardId: string): StageCardPair | null => {
     for (const stage of stages) {
-      const card = stage.tarjetas.find((item) => item.tarjetaId === cardId);
+      const card = stage.tarjetas.find((item) => item.oportunidadId === cardId);
       if (card) {
         return { stage, card };
       }
@@ -521,7 +521,7 @@ export function EmbudoBoardClient({
 
     const destinationCode = normalizeStageCode(destinationStage);
     if (destinationCode === "cerrado_ganado") {
-      const acceptedCheck = await ensureLeadHasAcceptedQuote(activeDragCard.tarjetaId);
+      const acceptedCheck = await ensureLeadHasAcceptedQuote(activeDragCard.oportunidadId);
       if (!acceptedCheck.ok) {
         setDragMessage(acceptedCheck.error ?? "No se pudo verificar las cotizaciones del lead.");
         handleDragCancel();
@@ -548,7 +548,7 @@ export function EmbudoBoardClient({
 
     setMovePending(true);
     const result = await moveLeadCard({
-      tarjetaId: activeDragCard.tarjetaId,
+      oportunidadId: activeDragCard.oportunidadId,
       etapaDestino: destinationStage.id,
       fuente: "humano",
       expectedEtapa: activeDragStage.id,
@@ -613,7 +613,7 @@ export function EmbudoBoardClient({
                   dropDisabled={(stage.orden ?? Number.MAX_SAFE_INTEGER) < 2}
                   renderCard={(card) => (
                     <DraggableCard
-                      key={card.tarjetaId}
+                      key={card.oportunidadId}
                       card={card}
                       onClick={() => handleCardClick(stage, card)}
                       stageId={stage.id}
@@ -658,7 +658,7 @@ export function EmbudoBoardClient({
             <SheetTitle>Agendar demo</SheetTitle>
             <SheetDescription>
               {scheduleContext
-                ? `Define la fecha y hora antes de mover “${scheduleContext.card.nombre}” a “${scheduleContext.destinationStage.nombre}”.`
+                ? `Define la fecha y hora antes de mover “${scheduleContext.card.titulo}” a “${scheduleContext.destinationStage.nombre}”.`
                 : "Define la fecha y hora de la demo."}
             </SheetDescription>
           </SheetHeader>
@@ -737,7 +737,7 @@ type UseDraggableCardArgs = {
 
 function useDraggableCard({ card, stageId, dragDisabled }: UseDraggableCardArgs) {
   const result = useDraggable({
-    id: card.tarjetaId,
+    id: card.oportunidadId,
     data: {
       stageId,
     },

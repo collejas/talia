@@ -102,7 +102,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 export type LeadDrawerSubmitPayload = {
   contacto: Record<string, unknown>;
-  tarjeta: Record<string, unknown>;
+  oportunidad: Record<string, unknown>;
   mergeMetadata?: boolean;
 };
 
@@ -110,7 +110,7 @@ export type LeadDrawerCreatePayload = {
   stageId: string;
   tableroId: string;
   contacto: Record<string, unknown>;
-  tarjeta: Record<string, unknown>;
+  oportunidad: Record<string, unknown>;
   contactId?: string | null;
 };
 
@@ -502,7 +502,7 @@ const FIELD_OPTION_FALLBACKS: Record<string, DrawerPrepOption[]> = {
 
 type LeadHistoryEntry = {
   movimiento_id: string;
-  tarjeta_id: string;
+  oportunidad_id: string;
   tipo: string | null;
   cambiado_por: string | null;
   cambiado_nombre: string | null;
@@ -661,6 +661,28 @@ export function LeadDrawer({
     () => computeStageLocks(upcomingStageGroups, stagePrep),
     [upcomingStageGroups, stagePrep],
   );
+  const autoStageSummary = useMemo(() => {
+    if (!card?.autoStage) {
+      return null;
+    }
+    const formattedAt = card.autoStage.at
+      ? (() => {
+          try {
+            return new Intl.DateTimeFormat("es-MX", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(new Date(card.autoStage.at));
+          } catch {
+            return card.autoStage.at;
+          }
+        })()
+      : null;
+    return {
+      stageLabel: currentStage?.nombre ?? card.etapaNombre ?? card.autoStage.stageCode,
+      channel: card.autoStage.channel ?? "asistente",
+      at: formattedAt,
+    };
+  }, [card?.autoStage, card?.etapaNombre, currentStage?.nombre]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -725,18 +747,18 @@ export function LeadDrawer({
     setHistoryState({ status: "idle", data: [] });
     setNoteText("");
     setNoteError(null);
-  }, [card?.tarjetaId]);
+  }, [card?.oportunidadId]);
 
   useEffect(() => {
     setQuotesState({ status: "idle", data: [] });
     setQuoteDialogOpen(false);
     setQuoteSuccess(null);
-  }, [card?.tarjetaId]);
+  }, [card?.oportunidadId]);
 
   useEffect(() => {
     setQuoteItems([createQuoteItemForm({ moneda: card?.moneda ?? "MXN" })]);
     setCatalogSearch("");
-  }, [card?.tarjetaId, card?.moneda]);
+  }, [card?.oportunidadId, card?.moneda]);
 
   useEffect(() => {
     if (!computedQuoteTotals) return;
@@ -824,7 +846,7 @@ export function LeadDrawer({
 
     try {
       const response = await fetch(
-        `/api/embudo/leads/${card.tarjetaId}/history?limit=${HISTORY_FETCH_LIMIT}`,
+        `/api/embudo/leads/${card.oportunidadId}/history?limit=${HISTORY_FETCH_LIMIT}`,
       );
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -858,7 +880,7 @@ export function LeadDrawer({
       return { status: "loading", data: prev.data };
     });
     try {
-      const response = await fetch(`/api/embudo/leads/${card.tarjetaId}/quotes`);
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes`);
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message =
@@ -917,20 +939,20 @@ export function LeadDrawer({
   }, []);
 
   useEffect(() => {
-    if (!open || !card?.tarjetaId) return;
+    if (!open || !card?.oportunidadId) return;
     if (activeTab === "notas" || activeTab === "historial") {
       if (historyState.status === "idle") {
         void fetchHistory();
       }
     }
-  }, [open, card?.tarjetaId, activeTab, historyState.status, fetchHistory]);
+  }, [open, card?.oportunidadId, activeTab, historyState.status, fetchHistory]);
 
   useEffect(() => {
-    if (!open || !card?.tarjetaId) return;
+    if (!open || !card?.oportunidadId) return;
     if (quotesState.status === "idle") {
       void fetchQuotes();
     }
-  }, [open, card?.tarjetaId, quotesState.status, fetchQuotes]);
+  }, [open, card?.oportunidadId, quotesState.status, fetchQuotes]);
 
   useEffect(() => {
     if (quoteDialogOpen && catalogState.status === "idle") {
@@ -975,7 +997,7 @@ export function LeadDrawer({
     setNoteError(null);
 
     try {
-      const response = await fetch(`/api/embudo/leads/${card.tarjetaId}/history`, {
+      const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texto: trimmed }),
@@ -1044,9 +1066,9 @@ export function LeadDrawer({
         correo: correoRaw.length ? correoRaw : null,
         telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       };
-    if (empresaRaw.length) {
-      contactoPayload.company_name = empresaRaw;
-    }
+      if (empresaRaw.length) {
+        contactoPayload.company_name = empresaRaw;
+      }
       if (notasRaw.length) {
         contactoPayload.notes = notasRaw;
       }
@@ -1054,21 +1076,21 @@ export function LeadDrawer({
         contactoPayload.necesidad_proposito = necesidadPropositoRaw;
       }
 
-      const tarjetaPayload: Record<string, unknown> = {};
+      const oportunidadPayload: Record<string, unknown> = {};
       if (montoRaw.length) {
-        tarjetaPayload.monto_estimado = Number(montoRaw);
+        oportunidadPayload.monto_estimado = Number(montoRaw);
       }
       if (monedaRaw.length) {
-        tarjetaPayload.moneda = monedaRaw;
+        oportunidadPayload.moneda = monedaRaw;
       }
       if (probRaw.length) {
-        tarjetaPayload.probabilidad_override = Number(probRaw);
+        oportunidadPayload.probabilidad = Number(probRaw);
       }
       if (proyectoNombreRaw.length) {
-        tarjetaPayload.proyecto_nombre = proyectoNombreRaw;
+        oportunidadPayload.titulo = proyectoNombreRaw;
       }
       if (proyectoNecesidadesRaw.length) {
-        tarjetaPayload.proyecto_necesidades = proyectoNecesidadesRaw;
+        oportunidadPayload.descripcion = proyectoNecesidadesRaw;
       }
 
       const metadata: Record<string, unknown> = {
@@ -1079,14 +1101,17 @@ export function LeadDrawer({
       if (Object.keys(normalizedStagePrep).length) {
         metadata.stage_prep = normalizedStagePrep;
       }
-      tarjetaPayload.metadata = metadata;
+      if (proyectoNecesidadesRaw.length) {
+        metadata.proyecto_necesidades = proyectoNecesidadesRaw;
+      }
+      oportunidadPayload.metadata = metadata;
 
       setPending(true);
       const result = await onCreate({
         stageId: currentStage.id,
         tableroId: currentStage.tableroId,
         contacto: contactoPayload,
-        tarjeta: tarjetaPayload,
+        oportunidad: oportunidadPayload,
         contactId: selectedContactId,
       });
       setPending(false);
@@ -1102,7 +1127,7 @@ export function LeadDrawer({
     }
 
     if (!card) {
-      setError("No se encontró la tarjeta seleccionada.");
+      setError("No se encontró la oportunidad seleccionada.");
       return;
     }
 
@@ -1135,36 +1160,44 @@ export function LeadDrawer({
       contactoUpdates.necesidad_proposito = necesidadPropositoRaw.length ? necesidadPropositoRaw : null;
     }
 
-    const tarjetaUpdates: Record<string, unknown> = {};
+    const oportunidadUpdates: Record<string, unknown> = {};
     if (montoRaw !== (defaultFormValues.monto ?? "").trim()) {
-      tarjetaUpdates.monto_estimado = montoRaw.length ? Number(montoRaw) : null;
+      oportunidadUpdates.monto_estimado = montoRaw.length ? Number(montoRaw) : null;
     }
 
     const defaultMoneda = (defaultFormValues.moneda ?? "").trim().toUpperCase();
     if (monedaRaw !== defaultMoneda) {
-      tarjetaUpdates.moneda = monedaRaw.length ? monedaRaw : null;
+      oportunidadUpdates.moneda = monedaRaw.length ? monedaRaw : null;
     }
 
     if (probRaw !== (defaultFormValues.probabilidad ?? "").trim()) {
-      tarjetaUpdates.probabilidad_override = probRaw.length ? Number(probRaw) : null;
+      oportunidadUpdates.probabilidad = probRaw.length ? Number(probRaw) : null;
     }
     const defaultProyectoNombre = (defaultFormValues.proyectoNombre ?? "").trim();
     if (proyectoNombreRaw !== defaultProyectoNombre) {
-      tarjetaUpdates.proyecto_nombre = proyectoNombreRaw.length ? proyectoNombreRaw : null;
+      oportunidadUpdates.titulo = proyectoNombreRaw.length ? proyectoNombreRaw : null;
     }
     const defaultProyectoNecesidades = (defaultFormValues.proyectoNecesidades ?? "").trim();
     if (proyectoNecesidadesRaw !== defaultProyectoNecesidades) {
-      tarjetaUpdates.proyecto_necesidades = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
+      oportunidadUpdates.descripcion = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
     }
 
     const stagePrepChanged = !areStagePrepsEqual(normalizedStagePrep, initialStagePrepPayload);
+    const metadataUpdates: Record<string, unknown> = {};
     if (stagePrepChanged) {
-      tarjetaUpdates.metadata = {
-        stage_prep: normalizedStagePrep,
+      metadataUpdates.stage_prep = normalizedStagePrep;
+    }
+    if (proyectoNecesidadesRaw !== defaultProyectoNecesidades) {
+      metadataUpdates.proyecto_necesidades = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
+    }
+    if (Object.keys(metadataUpdates).length) {
+      oportunidadUpdates.metadata = {
+        ...(isRecord(card.metadata) ? card.metadata : {}),
+        ...metadataUpdates,
       };
     }
 
-    if (!Object.keys(contactoUpdates).length && !Object.keys(tarjetaUpdates).length) {
+    if (!Object.keys(contactoUpdates).length && !Object.keys(oportunidadUpdates).length) {
       setError("No hay cambios por guardar.");
       return;
     }
@@ -1172,7 +1205,7 @@ export function LeadDrawer({
     setPending(true);
     const result = await onSubmit({
       contacto: contactoUpdates,
-      tarjeta: tarjetaUpdates,
+      oportunidad: oportunidadUpdates,
       mergeMetadata: true,
     });
     setPending(false);
@@ -1346,25 +1379,25 @@ export function LeadDrawer({
   );
 
   useEffect(() => {
-    if (!card?.tarjetaId) return;
+    if (!card?.oportunidadId) return;
     if (quotesState.status !== "loaded") return;
     const acceptedQuote = quotesState.data.find((quote) => quote.status === "aceptada");
     if (!acceptedQuote) return;
     updateWonStagePrep(acceptedQuote.total ?? null);
-  }, [card?.tarjetaId, quotesState.status, quotesState.data, updateWonStagePrep]);
+  }, [card?.oportunidadId, quotesState.status, quotesState.data, updateWonStagePrep]);
 
   const openQuoteDialog = useCallback(
     (channel: QuoteChannel) => {
       if (!card) return;
       const latestQuote = quotesState.data[0];
       const fallbackTitle =
-        card.proyectoNombre?.trim() || (card.nombre ? `Propuesta ${card.nombre}` : "Cotización Tal-IA");
+        card.proyectoNombre?.trim() || (card.titulo ? `Propuesta ${card.titulo}` : "Cotización Tal-IA");
       const fallbackDescription =
         card.proyectoNecesidades?.trim() || card.necesidadProposito?.trim() || "";
       const defaultTitle = latestQuote?.title?.trim() || fallbackTitle;
       const defaultDescription = latestQuote?.description?.trim() || fallbackDescription;
       const defaultSubject =
-        `Cotización Tal-IA · ${card.empresa ?? card.nombre ?? ""}`.trim() || "Cotización Tal-IA";
+        `Cotización Tal-IA · ${card.empresa ?? card.titulo ?? ""}`.trim() || "Cotización Tal-IA";
       const defaultMessage =
         channel === "email"
           ? "Adjunto encontrarás la cotización actualizada. Quedo al pendiente de tus comentarios."
@@ -1501,7 +1534,7 @@ export function LeadDrawer({
           message: quoteMessage.trim() || null,
         };
 
-        const response = await fetch(`/api/embudo/leads/${card.tarjetaId}/quotes/send`, {
+        const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -1711,7 +1744,7 @@ export function LeadDrawer({
           <DrawerDescription className="flex flex-col gap-1 text-left">
             <span>{isCreateMode ? `Creando en etapa: ${stageName}` : `Etapa: ${stageName}`}</span>
             {!isCreateMode ? (
-              <span className="text-xs text-muted-foreground">ID: {card?.tarjetaId ?? "—"}</span>
+              <span className="text-xs text-muted-foreground">ID: {card?.oportunidadId ?? "—"}</span>
             ) : null}
           </DrawerDescription>
         </DrawerHeader>
@@ -2434,7 +2467,7 @@ export function LeadDrawer({
             <DialogHeader>
               <DialogTitle>Enviar cotización</DialogTitle>
               <DialogDescription>
-                Genera y envía una cotización en PDF para {card.nombre ?? "el lead seleccionado"}.
+                Genera y envía una cotización en PDF para {card.titulo ?? "la oportunidad seleccionada"}.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 space-y-4">
@@ -3622,25 +3655,3 @@ function formatIsoDateForInput(value: string | null): string | null {
     return null;
   }
 }
-  const autoStageSummary = useMemo(() => {
-    if (!card?.autoStage) {
-      return null;
-    }
-    const formattedAt = card.autoStage.at
-      ? (() => {
-          try {
-            return new Intl.DateTimeFormat("es-MX", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }).format(new Date(card.autoStage.at));
-          } catch {
-            return card.autoStage.at;
-          }
-        })()
-      : null;
-    return {
-      stageLabel: currentStage?.nombre ?? card.etapaNombre ?? card.autoStage.stageCode,
-      channel: card.autoStage.channel ?? "asistente",
-      at: formattedAt,
-    };
-  }, [card?.autoStage, card?.etapaNombre, currentStage?.nombre]);

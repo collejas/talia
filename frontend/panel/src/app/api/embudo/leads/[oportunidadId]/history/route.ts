@@ -6,7 +6,7 @@ import { callCrmApi } from "@/lib/api/crm";
 
 type LeadHistoryRow = {
   movimiento_id: string;
-  tarjeta_id: string;
+  oportunidad_id: string;
   tipo: string | null;
   cambiado_por: string | null;
   cambiado_nombre: string | null;
@@ -52,18 +52,18 @@ function parseInteger(value: string | null, fallback: number): number {
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ tarjetaId: string }> },
+  { params }: { params: Promise<{ oportunidadId: string }> },
 ) {
-  const { tarjetaId } = await params;
-  if (!tarjetaId) {
-    return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
+  const { oportunidadId } = await params;
+  if (!oportunidadId) {
+    return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
   }
   const url = new URL(request.url);
   const limit = parseInteger(url.searchParams.get("limit"), 50);
   const offset = parseInteger(url.searchParams.get("offset"), 0);
 
   const response = await callCrmApi<CrmHistoryResponse>(
-    `/crm/pipeline/opportunities/${tarjetaId}/history`,
+    `/crm/pipeline/opportunities/${oportunidadId}/history`,
     {
       searchParams: {
         limit: String(limit),
@@ -85,11 +85,11 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ tarjetaId: string }> },
+  { params }: { params: Promise<{ oportunidadId: string }> },
 ) {
-  const { tarjetaId } = await params;
-  if (!tarjetaId) {
-    return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
+  const { oportunidadId } = await params;
+  if (!oportunidadId) {
+    return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
   }
 
   let payload: unknown;
@@ -108,7 +108,7 @@ export async function POST(
       ? (metadataCandidate as Record<string, unknown>)
       : {};
 
-  const response = await callCrmApi<CrmHistoryItem>(`/crm/pipeline/opportunities/${tarjetaId}/history`, {
+  const response = await callCrmApi<CrmHistoryItem>(`/crm/pipeline/opportunities/${oportunidadId}/history`, {
     method: "POST",
     body: {
       texto,
@@ -129,7 +129,7 @@ export async function POST(
 function mapCrmHistoryToLeadHistory(entry: CrmHistoryItem): LeadHistoryRow {
   return {
     movimiento_id: entry.id,
-    tarjeta_id: entry.oportunidad_id,
+    oportunidad_id: entry.oportunidad_id,
     tipo: entry.tipo ?? "movimiento",
     cambiado_por: entry.cambiado_por_id,
     cambiado_nombre: entry.cambiado_por_nombre,

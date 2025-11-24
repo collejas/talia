@@ -6,11 +6,11 @@ import { callCrmApi } from "@/lib/api/crm";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ tarjetaId: string }> },
+  { params }: { params: Promise<{ oportunidadId: string }> },
 ) {
-  const { tarjetaId } = await params;
-  if (!tarjetaId) {
-    return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
+  const { oportunidadId } = await params;
+  if (!oportunidadId) {
+    return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
   }
 
   let payload: unknown;
@@ -20,7 +20,7 @@ export async function POST(
     return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
   }
 
-  const response = await callCrmApi(`/crm/leads/${tarjetaId}/quotes/send`, {
+  const response = await callCrmApi(`/crm/oportunidades/${oportunidadId}/quotes/send`, {
     method: "POST",
     body: payload,
     withUserToken: true,

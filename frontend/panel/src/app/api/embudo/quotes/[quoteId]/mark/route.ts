@@ -20,7 +20,7 @@ export async function POST(
     return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
   }
 
-  const response = await callCrmApi(`/crm/quotes/${quoteId}/mark`, {
+  const response = await callCrmApi(`/crm/cotizaciones/${quoteId}/mark`, {
     method: "POST",
     body: payload,
     withUserToken: true,

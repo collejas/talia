@@ -424,7 +424,7 @@ hola@talia.mx
 
   - Embudo y cotizaciones aún dependen del panel legacy:
       - Los handlers Next.js siguen pegándole a /leads y /quotes sin el prefijo /crm (frontend/panel/src/app/api/embudo/leads/
-        [tarjetaId]/cliente/route.ts:17-62, convertir/route.ts:17-66, quotes/route.ts:8-58, quotes/send/route.ts:8-56, quotes/
+        [oportunidadId]/cliente/route.ts:17-62, convertir/route.ts:17-66, quotes/route.ts:8-58, quotes/send/route.ts:8-56, quotes/
         [quoteId]/mark/route.ts:8-56).
       - La UI consume esos endpoints en frontend/panel/src/components/embudo/lead-drawer.tsx:826-937,1490-1555.
       - El backend equivalente vive sólo en panel.py (backend/app/api/routes/panel.py:2282-3107). Para cerrar ese archivo
@@ -467,14 +467,14 @@ hola@talia.mx
     create_lead_quote, mark_lead_quote, move_lead_to_stage, etc.) que llaman REST/RPC Legacy (/rest/v1/lead_cotizaciones, /
     rest/v1/lead_tarjetas, /rest/v1/rpc/panel_lead_*). Se necesita un bloque nuevo que use las tablas CRM (cotizaciones,
     cotizacion_items, oportunidades, oportunidad_etapas_historial) y elimine esas llamadas.
-  - Los server actions y componentes del embudo continúan usando tarjetaId y los endpoints legacy:
-      - Endpoints Next.js en frontend/panel/src/app/api/embudo/leads/[tarjetaId]/* (history, cliente, convertir, quotes,
-        quotes/send) invocan los endpoints anteriores.
-      - Server actions frontend/panel/src/lib/embudo/actions.ts y helpers (helpers.ts, data.ts) leen/escriben payloads con
-        tarjeta, tarjetaId y esperan respuestas de /crm/leads/*, no de /crm/oportunidades/*.
+  - Los server actions y componentes del embudo ya operan con `oportunidadId` y consumen las rutas CRM:
+      - Endpoints Next.js en frontend/panel/src/app/api/embudo/leads/[oportunidadId]/* (history, cliente, convertir, quotes,
+        quotes/send) proxyan a `/crm/oportunidades/*` y `/crm/cotizaciones/*`.
+      - Server actions frontend/panel/src/lib/embudo/actions.ts y helpers (helpers.ts, data.ts) leen/escriben payloads de
+        oportunidades (campos `titulo`, `monto_estimado`, `estado`, metadata `stage_prep`) y sincronizan con `/crm/pipeline/*`.
       - Componentes React (frontend/panel/src/components/embudo/board-client.tsx, lead-drawer.tsx, lead-onboarding.tsx, stage-
-        column.tsx, etc.) muestran/mutan tarjetaId y llaman a los endpoints anteriores cuando crean, mueven etapas, generan
-        cotizaciones o ejecutan onboarding.
+        column.tsx, etc.) muestran y mutan `oportunidadId`, `titulo` y los DTOs nuevos al crear/mover etapas, generar
+        cotizaciones o ejecutar onboarding.
   - Automatizaciones y servicios que aún empujan a lead_tarjetas:
       - backend/app/services/storage.py:887-1073 (`ensure_conversation_opportunity`, antes `ensure_lead_tarjeta`, `capture_opportunity_if_ready`, `promote_opportunity_stage`) deben
         migrar a crear/actualizar oportunidades nativas en lugar de usar lead_tarjetas + RPC panel_lead_move.

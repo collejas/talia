@@ -18,10 +18,10 @@ import type {
 import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 
 export type UpdateLeadInput = {
-  tarjetaId: string;
+  oportunidadId: string;
   contactoId?: string | null;
   contacto?: Record<string, unknown>;
-  tarjeta?: Record<string, unknown>;
+  oportunidad?: Record<string, unknown>;
   mergeMetadata?: boolean;
 };
 
@@ -29,12 +29,12 @@ export type CreateLeadInput = {
   stageId: string;
   tableroId: string;
   contacto: Record<string, unknown>;
-  tarjeta: Record<string, unknown>;
+  oportunidad: Record<string, unknown>;
   contactId?: string | null;
 };
 
 export type MoveLeadInput = {
-  tarjetaId: string;
+  oportunidadId: string;
   etapaDestino: string;
   motivo?: string | null;
   metadata?: Record<string, unknown>;
@@ -43,7 +43,7 @@ export type MoveLeadInput = {
 };
 
 export type DeleteLeadInput = {
-  tarjetaId: string;
+  oportunidadId: string;
   contactoId?: string | null;
   motivo?: string | null;
 };
@@ -52,7 +52,7 @@ export type LeadActionResult =
   | { ok: true; stage: EmbudoStage; card: EmbudoCard }
   | { ok: false; error: string; latestStage?: EmbudoStage; latestCard?: EmbudoCard };
 
-export type LeadDeleteResult = { ok: true; tarjetaId: string; contactoId: string } | { ok: false; error: string };
+export type LeadDeleteResult = { ok: true; oportunidadId: string; contactoId: string } | { ok: false; error: string };
 
 type PipelineCardResponse = {
   stage: PipelineBoardStage;
@@ -350,8 +350,8 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   removeUndefined(contactUpdatePayload);
 
-  const cardPayload = input.tarjeta ?? {};
-  const baseMetadata = normalizeMetadata(cardPayload.metadata);
+  const opportunityInput = input.oportunidad ?? {};
+  const baseMetadata = normalizeMetadata(opportunityInput.metadata);
   if (!("created_via" in baseMetadata)) {
     baseMetadata.created_via = "embudo_manual";
   }
@@ -363,20 +363,26 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     etapa_id: input.stageId,
     contacto_principal_id: contactId,
     titulo:
-      sanitizeNullableString(cardPayload.proyecto_nombre) ??
+      sanitizeNullableString(opportunityInput.titulo) ??
+      sanitizeNullableString(opportunityInput.proyecto_nombre) ??
       nombreValue ??
       companyValue ??
       "Lead sin nombre",
-    descripcion: sanitizeNullableString(cardPayload.proyecto_necesidades),
-    monto_estimado: cardPayload.monto_estimado ?? null,
-    moneda: sanitizeNullableString(cardPayload.moneda)?.toUpperCase() ?? "MXN",
-    probabilidad: cardPayload.probabilidad_override ?? null,
+    descripcion:
+      sanitizeNullableString(opportunityInput.descripcion) ??
+      sanitizeNullableString(opportunityInput.proyecto_necesidades),
+    monto_estimado:
+      typeof opportunityInput.monto_estimado === "number"
+        ? opportunityInput.monto_estimado
+        : opportunityInput.monto ?? null,
+    moneda: sanitizeNullableString(opportunityInput.moneda)?.toUpperCase() ?? "MXN",
+    probabilidad: opportunityInput.probabilidad_override ?? opportunityInput.probabilidad ?? null,
     propietario_usuario_id: userId,
     asignado_a_usuario_id: userId,
     metadata: {
       ...baseMetadata,
-      canal: cardPayload.canal ?? baseMetadata.canal,
-      lead_score: cardPayload.lead_score ?? baseMetadata.lead_score,
+      canal: opportunityInput.canal ?? baseMetadata.canal,
+      lead_score: opportunityInput.lead_score ?? baseMetadata.lead_score,
     },
   };
   removeUndefined(opportunityPayload);
@@ -408,28 +414,34 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
 export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadActionResult> {
   const contactoPayload = isRecord(input.contacto) ? removeUndefined({ ...input.contacto }) : {};
-  const tarjetaPayload = isRecord(input.tarjeta) ? { ...input.tarjeta } : {};
+  const oportunidadPayload = isRecord(input.oportunidad) ? { ...input.oportunidad } : {};
 
   const opportunityPayload: Record<string, unknown> = {};
 
-  if ("monto_estimado" in tarjetaPayload) {
-    opportunityPayload.monto_estimado = tarjetaPayload.monto_estimado ?? null;
+  if ("monto_estimado" in oportunidadPayload || "monto" in oportunidadPayload) {
+    opportunityPayload.monto_estimado =
+      oportunidadPayload.monto_estimado ?? oportunidadPayload.monto ?? null;
   }
-  if ("moneda" in tarjetaPayload) {
-    const monedaValue = sanitizeNullableString(tarjetaPayload.moneda);
+  if ("moneda" in oportunidadPayload) {
+    const monedaValue = sanitizeNullableString(oportunidadPayload.moneda);
     opportunityPayload.moneda = monedaValue ? monedaValue.toUpperCase() : null;
   }
-  if ("probabilidad_override" in tarjetaPayload) {
-    opportunityPayload.probabilidad = tarjetaPayload.probabilidad_override ?? null;
+  if ("probabilidad_override" in oportunidadPayload || "probabilidad" in oportunidadPayload) {
+    opportunityPayload.probabilidad =
+      oportunidadPayload.probabilidad_override ?? oportunidadPayload.probabilidad ?? null;
   }
-  if ("proyecto_nombre" in tarjetaPayload) {
-    opportunityPayload.titulo = sanitizeNullableString(tarjetaPayload.proyecto_nombre);
+  if ("titulo" in oportunidadPayload || "proyecto_nombre" in oportunidadPayload) {
+    opportunityPayload.titulo =
+      sanitizeNullableString(oportunidadPayload.titulo) ??
+      sanitizeNullableString(oportunidadPayload.proyecto_nombre);
   }
-  if ("proyecto_necesidades" in tarjetaPayload) {
-    opportunityPayload.descripcion = sanitizeNullableString(tarjetaPayload.proyecto_necesidades);
+  if ("descripcion" in oportunidadPayload || "proyecto_necesidades" in oportunidadPayload) {
+    opportunityPayload.descripcion =
+      sanitizeNullableString(oportunidadPayload.descripcion) ??
+      sanitizeNullableString(oportunidadPayload.proyecto_necesidades);
   }
-  if ("metadata" in tarjetaPayload) {
-    const metadata = normalizeMetadata(tarjetaPayload.metadata);
+  if ("metadata" in oportunidadPayload) {
+    const metadata = normalizeMetadata(oportunidadPayload.metadata);
     if (Object.keys(metadata).length) {
       opportunityPayload.metadata = metadata;
     }
@@ -443,7 +455,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 
   if (needsContactUpdate) {
     if (!contactId) {
-      const currentCard = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+      const currentCard = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
       if (!currentCard.ok) {
         return { ok: false, error: currentCard.error };
       }
@@ -466,13 +478,13 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 
   let cardResponse: PipelineCardResponse | null = null;
   if (hasOpportunityUpdates) {
-    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.tarjetaId}`, {
+    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {
       method: "PATCH",
       body: opportunityPayload,
     });
     if (!response.ok) {
       if (response.status === 409) {
-        const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+        const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
         if (latest.ok) {
           const mapped = mapPipelineCardResponse(latest.data);
           return {
@@ -487,7 +499,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     }
     cardResponse = response.data;
   } else {
-    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
     if (!response.ok) {
       return { ok: false, error: response.error };
     }
@@ -518,14 +530,14 @@ export async function moveLeadCard(input: MoveLeadInput): Promise<LeadActionResu
     }
   }
 
-  const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.tarjetaId}`, {
+  const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {
     method: "PATCH",
     body: payload,
   });
 
   if (!response.ok) {
     if (response.status === 409) {
-      const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+      const latest = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
       if (latest.ok) {
         const mapped = mapPipelineCardResponse(latest.data);
         return {
@@ -549,14 +561,14 @@ export async function deleteLeadCard(input: DeleteLeadInput): Promise<LeadDelete
     typeof input.contactoId === "string" && input.contactoId.trim().length ? input.contactoId.trim() : null;
 
   if (!contactoId) {
-    const cardResponse = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.tarjetaId}`);
+    const cardResponse = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
     if (!cardResponse.ok) {
       return { ok: false, error: cardResponse.error };
     }
     contactoId = cardResponse.data.card.contacto_id ?? null;
   }
 
-  const response = await callCrmApi<unknown>(`/crm/pipeline/opportunities/${input.tarjetaId}`, {
+  const response = await callCrmApi<unknown>(`/crm/pipeline/opportunities/${input.oportunidadId}`, {
     method: "DELETE",
   });
 
@@ -565,5 +577,5 @@ export async function deleteLeadCard(input: DeleteLeadInput): Promise<LeadDelete
   }
 
   updateTag("embudo");
-  return { ok: true, tarjetaId: input.tarjetaId, contactoId: contactoId ?? "" };
+  return { ok: true, oportunidadId: input.oportunidadId, contactoId: contactoId ?? "" };
 }

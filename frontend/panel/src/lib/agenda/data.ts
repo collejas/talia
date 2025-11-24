@@ -20,7 +20,7 @@ export type AgendaApiItem = {
   id: string;
   resource_id: string | null;
   hold_id: string | null;
-  tarjeta_id: string | null;
+  oportunidad_id: string | null;
   contacto_id: string | null;
   conversacion_id: string | null;
   start_at: string;
@@ -99,7 +99,7 @@ export type AgendaActionResponse = {
 
 export type AgendaItem = {
   id: string;
-  tarjetaId: string | null;
+  oportunidadId: string | null;
   contactoId: string | null;
   conversacionId: string | null;
   startAt: string;
@@ -215,7 +215,7 @@ function mapAgenda(rows: AgendaApiItem[]): AgendaItem[] {
     const provider = row.provider?.trim() || "calendar";
     return {
       id: row.id,
-      tarjetaId: row.tarjeta_id,
+      oportunidadId: row.oportunidad_id ?? row.tarjeta_id ?? null,
       contactoId: row.contacto_id,
       conversacionId: row.conversacion_id,
       startAt: row.start_at,

@@ -58,7 +58,7 @@ export function EmbudoCardItem({
       >
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h4 className="font-semibold leading-tight">{card.nombre}</h4>
+            <h4 className="font-semibold leading-tight">{card.titulo}</h4>
             <p className="text-xs text-muted-foreground">{card.correo || card.telefono || "Sin contacto"}</p>
           </div>
           <div className="flex items-center gap-1">

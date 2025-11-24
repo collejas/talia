@@ -6,17 +6,17 @@ import { callCrmApi } from "@/lib/api/crm";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ tarjetaId: string }> },
+  { params }: { params: Promise<{ oportunidadId: string }> },
 ) {
-  const { tarjetaId } = await params;
-  if (!tarjetaId) {
-    return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
+  const { oportunidadId } = await params;
+  if (!oportunidadId) {
+    return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
   }
 
   const url = new URL(request.url);
   const statusFilter = url.searchParams.get("status")?.toLowerCase() ?? null;
 
-  const response = await callCrmApi<{ quotes: unknown[] }>(`/crm/leads/${tarjetaId}/quotes`, {
+  const response = await callCrmApi<{ quotes: unknown[] }>(`/crm/oportunidades/${oportunidadId}/quotes`, {
     withUserToken: true,
   });
 

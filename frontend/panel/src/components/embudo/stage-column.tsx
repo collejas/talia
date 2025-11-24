@@ -96,7 +96,7 @@ export function EmbudoStageColumn({
                 renderCard(card, index)
               ) : (
                 <EmbudoCardItem
-                  key={card.tarjetaId}
+                  key={card.oportunidadId}
                   card={card}
                   onClick={onCardClick ? () => onCardClick(card) : undefined}
                 />

@@ -100,7 +100,7 @@ export function LeadOnboardingPanel({
   isCreateMode,
   active,
 }: LeadOnboardingPanelProps) {
-  const tarjetaId = card?.tarjetaId ?? null;
+  const oportunidadId = card?.oportunidadId ?? null;
   const [cliente, setCliente] = useState<ClienteRecord | null>(null);
   const [clienteError, setClienteError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -110,14 +110,14 @@ export function LeadOnboardingPanel({
   const [portalLink, setPortalLink] = useState<string | null>(null);
   const [formState, setFormState] = useState<ClienteFormState>(EMPTY_FORM);
 
-  const shouldLoad = active && isOpen && !isCreateMode && Boolean(tarjetaId);
+  const shouldLoad = active && isOpen && !isCreateMode && Boolean(oportunidadId);
 
   const loadCliente = useCallback(async () => {
-    if (!tarjetaId) return;
+    if (!oportunidadId) return;
     setLoading(true);
     setClienteError(null);
     try {
-      const response = await fetch(`/api/embudo/leads/${tarjetaId}/cliente`, {
+      const response = await fetch(`/api/embudo/leads/${oportunidadId}/cliente`, {
         cache: "no-store",
       });
       const payload = await response.json().catch(() => ({}));
@@ -136,7 +136,7 @@ export function LeadOnboardingPanel({
     } finally {
       setLoading(false);
     }
-  }, [tarjetaId]);
+  }, [oportunidadId]);
 
   useEffect(() => {
     if (shouldLoad) {
@@ -170,10 +170,10 @@ export function LeadOnboardingPanel({
   const canConvert = currentStage?.categoria === "ganada";
 
   const handleConvert = async () => {
-    if (!tarjetaId) return;
+    if (!oportunidadId) return;
     setConverting(true);
     try {
-      const response = await fetch(`/api/embudo/leads/${tarjetaId}/convertir`, {
+      const response = await fetch(`/api/embudo/leads/${oportunidadId}/convertir`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ forzar: !canConvert }),
@@ -306,7 +306,7 @@ export function LeadOnboardingPanel({
                 : "Convierte el lead a cliente para iniciar el onboarding."}
             </p>
           </div>
-          <Button onClick={handleConvert} disabled={converting || !tarjetaId} variant={canConvert ? "default" : "outline"}>
+          <Button onClick={handleConvert} disabled={converting || !oportunidadId} variant={canConvert ? "default" : "outline"}>
             {converting ? "Convirtiendo..." : canConvert ? "Convertir a cliente" : "Forzar conversión"}
           </Button>
         </div>

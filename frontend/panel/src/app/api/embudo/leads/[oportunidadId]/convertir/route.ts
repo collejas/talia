@@ -6,15 +6,15 @@ import { callCrmApi } from "@/lib/api/crm";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ tarjetaId: string }> },
+  { params }: { params: Promise<{ oportunidadId: string }> },
 ) {
-  const { tarjetaId } = await params;
-  if (!tarjetaId) {
-    return NextResponse.json({ error: "Falta tarjetaId." }, { status: 400 });
+  const { oportunidadId } = await params;
+  if (!oportunidadId) {
+    return NextResponse.json({ error: "Falta oportunidadId." }, { status: 400 });
   }
 
   const body = await request.json().catch(() => ({}));
-  const response = await callCrmApi(`/crm/leads/${tarjetaId}/convertir`, {
+  const response = await callCrmApi(`/crm/oportunidades/${oportunidadId}/convertir`, {
     method: "POST",
     withUserToken: true,
     body: { forzar: Boolean(body?.forzar) },
@@ -22,7 +22,7 @@ export async function POST(
 
   if (!response.ok) {
     return NextResponse.json(
-      { error: response.error || "No se pudo convertir el lead." },
+      { error: response.error || "No se pudo convertir la oportunidad." },
       { status: response.status ?? 500 },
     );
   }

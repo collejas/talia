@@ -17,10 +17,10 @@ export type EmbudoStage = {
 };
 
 export type EmbudoCard = {
-  tarjetaId: string;
+  oportunidadId: string;
   contactoId: string;
   conversacionId: string | null;
-  nombre: string;
+  titulo: string;
   correo: string | null;
   telefono: string | null;
   empresa: string | null;
@@ -53,10 +53,12 @@ export type EmbudoData = {
 };
 
 export type PipelineBoardCard = {
-  tarjeta_id: string;
+  tarjeta_id?: string | null;
+  oportunidad_id?: string | null;
   contacto_id: string | null;
   conversacion_id: string | null;
-  nombre: string;
+  titulo?: string | null;
+  nombre?: string | null;
   correo: string | null;
   telefono: string | null;
   empresa: string | null;
@@ -68,6 +70,7 @@ export type PipelineBoardCard = {
   etapa_codigo: string | null;
   etapa_nombre: string;
   monto: number | null;
+  monto_estimado?: number | null;
   moneda: string | null;
   probabilidad: number | null;
   proyecto_nombre: string | null;
@@ -78,6 +81,7 @@ export type PipelineBoardCard = {
   actualizado_en: string | null;
   etiquetas: string[] | null;
   metadata: Record<string, unknown> | null;
+  estado?: string | null;
 };
 
 export type PipelineBoardStage = {

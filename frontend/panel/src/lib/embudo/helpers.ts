@@ -15,25 +15,37 @@ export function parseMetadatos(input: Record<string, unknown> | null | undefined
 export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const metadata = parseMetadatos(card.metadata);
   const etapaCodigo = typeof card.etapa_codigo === "string" ? card.etapa_codigo : null;
+  const oportunidadId = card.oportunidad_id ?? card.tarjeta_id ?? "";
+  const resolvedTitulo = resolveTitulo(card);
+  const resolvedMonto =
+    typeof card.monto_estimado === "number" && Number.isFinite(card.monto_estimado)
+      ? card.monto_estimado
+      : card.monto ?? null;
+  const resolvedEstado =
+    typeof card.estado === "string" && card.estado.trim().length
+      ? card.estado
+      : typeof metadata.estado === "string"
+        ? metadata.estado
+        : null;
   return {
-    tarjetaId: card.tarjeta_id,
+    oportunidadId,
     contactoId: card.contacto_id ?? "",
     conversacionId: card.conversacion_id ?? null,
-    nombre: card.nombre || "Lead sin nombre",
+    titulo: resolvedTitulo,
     correo: card.correo,
     telefono: card.telefono,
     empresa: card.empresa,
     notas: card.notas,
     necesidadProposito: card.necesidad_proposito ?? null,
     canal: card.canal,
-    estado: card.estado,
+    estado: resolvedEstado,
     etapaId: card.etapa_id,
     etapaNombre: card.etapa_nombre,
     etapaCodigo,
-    monto: card.monto,
+    monto: resolvedMonto,
     moneda: card.moneda,
     probabilidad: card.probabilidad,
-    proyectoNombre: card.proyecto_nombre ?? null,
+    proyectoNombre: card.proyecto_nombre ?? resolvedTitulo ?? null,
     proyectoNecesidades: card.proyecto_necesidades ?? null,
     asignadoId: card.asignado_id,
     asignadoNombre: card.asignado_nombre,
@@ -43,6 +55,16 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     metadata,
     autoStage: resolveAutoStage(metadata, etapaCodigo),
   };
+}
+
+function resolveTitulo(card: PipelineBoardCard): string {
+  const candidates = [card.titulo, card.nombre, card.proyecto_nombre, "Oportunidad sin nombre"];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim().length) {
+      return value.trim();
+    }
+  }
+  return "Oportunidad sin nombre";
 }
 
 function resolveAutoStage(
