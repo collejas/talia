@@ -2912,9 +2912,9 @@ class CRMRepository:
     ) -> dict[str, Any] | None:
         params = {
             "token": f"eq.{portal_token}",
-            "select": self._PORTAL_TOKEN_SELECT
-            if include_relations
-            else self._PORTAL_TOKEN_MIN_SELECT,
+            "select": (
+                self._PORTAL_TOKEN_SELECT if include_relations else self._PORTAL_TOKEN_MIN_SELECT
+            ),
             "limit": "1",
         }
         resp = await self._request(
@@ -3065,6 +3065,133 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al eliminar resultados: {data!r}")
         return len(data)
+
+    async def list_contactables_by_ids(
+        self,
+        *,
+        usuario_token: str,
+        fuente: str,
+        resultado_ids: list[UUID],
+    ) -> list[dict[str, Any]]:
+        """Obtiene filas de vistas contactables filtradas por resultado_id."""
+
+        if not resultado_ids:
+            return []
+        ids_param = ",".join(str(value) for value in resultado_ids)
+        path_map = {
+            "google_places": "/rest/v1/v_google_places_contactables",
+            "denue": "/rest/v1/v_denue_contactables",
+        }
+        path = path_map.get(fuente)
+        if not path:
+            raise CRMRepositoryError(f"fuente_contactable_desconocida:{fuente}")
+        params = {
+            "select": "*",
+            "resultado_id": f"in.({ids_param})",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            path,
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar contactables: {data!r}")
+        return data
+
+    async def upsert_prospeccion_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Inserta o actualiza prospectos seleccionados desde resultados."""
+
+        if not items:
+            return []
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params={"on_conflict": "resultado_id"},
+            json=items,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
+        return data
+
+    async def list_prospectos_by_ids(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_ids: list[UUID],
+    ) -> list[dict[str, Any]]:
+        """Obtiene prospectos filtrando por su identificador."""
+
+        if not prospecto_ids:
+            return []
+        ids_param = ",".join(str(value) for value in prospecto_ids)
+        params = {"id": f"in.({ids_param})"}
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
+        return data
+
+    async def update_prospecto(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Aplica actualizaciones parciales a un prospecto."""
+
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params={"id": f"eq.{prospecto_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("prospecto_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"prospecto_update_invalid:{row!r}")
+        return row
+
+    async def insert_prospecto_logs(
+        self,
+        *,
+        usuario_token: str,
+        entries: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Registra eventos de contacto ejecutados sobre prospectos."""
+
+        if not entries:
+            return []
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contactos_log",
+            token=usuario_token,
+            json=entries,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inválida al registrar contactos: {data!r}")
+        return data
 
     async def get_email_template(
         self,
