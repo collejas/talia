@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Globe,
   ListChecks,
-  Mail,
   MapPin,
   Phone,
   RefreshCw,
@@ -31,6 +30,7 @@ import {
   type GoogleResultadoItem,
   type GoogleSearchStrategy,
 } from "@/lib/prospeccion/google-client";
+import { guardarProspectos } from "@/lib/prospeccion/prospectos-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -73,12 +73,6 @@ const LIST_PAGE_SIZE = 250;
 const MAP_RESULTS_LIMIT = 5000;
 
 type ContactFilterValue = "any" | "with" | "without";
-
-const ACTIONS = [
-  { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },
-  { key: "whatsapp", label: "WhatsApp", icon: <Phone className="h-4 w-4" /> },
-  { key: "letter", label: "Carta", icon: <ListChecks className="h-4 w-4" /> },
-] as const;
 
 type FormValues = {
   strategy: GoogleSearchStrategy;
@@ -125,6 +119,7 @@ export function GoogleBusquedaView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
+  const [isSavingProspects, setIsSavingProspects] = useState(false);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -599,22 +594,30 @@ export function GoogleBusquedaView() {
     }
   }, [formValues, loadBusquedas, loadResultadosForBusqueda]);
 
-  const handleAction = useCallback(
-    (action: (typeof ACTIONS)[number]["key"]) => {
-      if (!selectedIds.size) {
-        setFeedback({ type: "info", message: "Selecciona al menos un prospecto para ejecutar una acción." });
-        return;
-      }
-      const message =
-        action === "email"
-          ? "Próximamente podrás lanzar una campaña de correo directamente desde aquí."
-          : action === "whatsapp"
-            ? "La integración con WhatsApp se añadirá en la siguiente iteración."
-            : "La generación de cartas físicas se configurará después de definir la plantilla.";
-      setFeedback({ type: "info", message });
-    },
-    [selectedIds.size],
-  );
+  const handleGuardarProspectos = useCallback(async () => {
+    if (!selectedIds.size) {
+      setFeedback({ type: "info", message: "Selecciona al menos un resultado para guardarlo." });
+      return;
+    }
+    setIsSavingProspects(true);
+    try {
+      const response = await guardarProspectos({
+        fuente: "google_places",
+        resultado_ids: Array.from(selectedIds),
+      });
+      setFeedback({
+        type: "success",
+        message: `Se guardaron ${response.total} prospectos. Consulta la pestaña Prospectos para verificarlos.`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No fue posible guardar los prospectos.",
+      });
+    } finally {
+      setIsSavingProspects(false);
+    }
+  }, [selectedIds]);
 
   return (
     <div className="space-y-6">
@@ -1015,6 +1018,16 @@ export function GoogleBusquedaView() {
               <Button
                 type="button"
                 size="sm"
+                onClick={handleGuardarProspectos}
+                disabled={!selectedIds.size || isSavingProspects}
+                className="flex items-center gap-2"
+              >
+                {isSavingProspects ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
+                Guardar como prospectos
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant="destructive"
                 onClick={handleDeleteSelectedResultados}
                 disabled={!selectedIds.size || isDeletingResultados}
@@ -1027,19 +1040,6 @@ export function GoogleBusquedaView() {
                 )}
                 Eliminar seleccionados
               </Button>
-              {ACTIONS.map((action) => (
-                <Button
-                  key={action.key}
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleAction(action.key)}
-                  disabled={!selectedIds.size}
-                  className="flex items-center gap-2"
-                >
-                  {action.icon}
-                  {action.label}
-                </Button>
-              ))}
             </div>
             <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
               {!filteredResults.length ? (
