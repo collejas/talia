@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict uYqGTaBOnRwlIGdt9CQaaUBoqY3GpfflqEdyVZBelPfgOlqoz4ZlcPLt6u9duqZ
+\restrict n2TUa5oNxkodLWur2EcQSgH4evtZactziOV4eX122BGCCZMpzQpQewRzLQ9Aa0Z
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6 (Ubuntu 17.6-1.pgdg24.04+1)
@@ -1214,6 +1214,39 @@ $$;
 COMMENT ON FUNCTION public._lead_tarjeta_auto_precalificar(p_tarjeta_id uuid) IS 'Promueve automáticamente la tarjeta a la etapa "precalificado" cuando el contacto tiene nombre, correo, teléfono y empresa.';
 
 
+--
+-- Name: check_missing_pipeline_stages(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_missing_pipeline_stages() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+    missing jsonb;
+BEGIN
+    SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
+    INTO missing
+    FROM public.organizaciones_missing_etapas_pipeline t;
+
+    IF jsonb_array_length(missing) = 0 THEN
+        RETURN;
+    END IF;
+
+    RAISE EXCEPTION USING
+        MESSAGE = 'missing_pipeline_stages',
+        DETAIL = missing::text;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION check_missing_pipeline_stages(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.check_missing_pipeline_stages() IS 'Lanza una excepción si algún tenant no tiene las etapas canónicas; úsala en jobs/cron (SELECT check_missing_pipeline_stages()).';
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -1225,7 +1258,7 @@ SET default_table_access_method = heap;
 CREATE TABLE public.clientes (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     contacto_id uuid NOT NULL,
-    lead_tarjeta_id uuid,
+    legacy_lead_id uuid,
     tablero_id uuid,
     etapa_id uuid,
     estado_onboarding public.cliente_onboarding_estado DEFAULT 'pendiente'::public.cliente_onboarding_estado NOT NULL,
@@ -1243,6 +1276,8 @@ CREATE TABLE public.clientes (
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
     organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+    oportunidad_id uuid,
+    cuenta_id uuid NOT NULL,
     CONSTRAINT clientes_moneda_check CHECK ((char_length(moneda) = 3)),
     CONSTRAINT clientes_monto_check CHECK (((monto_estimado IS NULL) OR (monto_estimado >= (0)::numeric)))
 );
@@ -1265,10 +1300,10 @@ COMMENT ON COLUMN public.clientes.contacto_id IS 'Referencia 1:1 con el contacto
 
 
 --
--- Name: COLUMN clientes.lead_tarjeta_id; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN clientes.legacy_lead_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.clientes.lead_tarjeta_id IS 'Lead que originó al cliente.';
+COMMENT ON COLUMN public.clientes.legacy_lead_id IS 'ID legacy en lead_tarjetas (solo auditoría).';
 
 
 --
@@ -1318,6 +1353,20 @@ COMMENT ON COLUMN public.clientes.regimen_fiscal IS 'Régimen fiscal declarado p
 --
 
 COMMENT ON COLUMN public.clientes.datos_facturacion IS 'Metadatos adicionales de facturación (uso CFDI, forma de pago, etc.).';
+
+
+--
+-- Name: COLUMN clientes.oportunidad_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.clientes.oportunidad_id IS 'Oportunidad CRM que originó el cliente.';
+
+
+--
+-- Name: COLUMN clientes.cuenta_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.clientes.cuenta_id IS 'Cuenta CRM asociada al cliente.';
 
 
 --
@@ -3441,1077 +3490,6 @@ LEFT JOIN messages_by_thread messages ON messages.conversacion_id = a.conversaci
 ORDER BY a.sort_key DESC
 LIMIT COALESCE(NULLIF(p_limit, 0), 50)
 OFFSET GREATEST(p_offset, 0);
-$$;
-
-
---
--- Name: panel_lead_add_nota(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_add_nota(p_tarjeta_id uuid, p_texto text, p_metadata jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(movimiento_id uuid, tarjeta_id uuid, tipo text, cambiado_por uuid, cambiado_nombre text, cambiado_en timestamp with time zone, fuente text, etapa_origen_id uuid, etapa_origen_nombre text, etapa_destino_id uuid, etapa_destino_nombre text, motivo text, nota text, metadata jsonb)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_trimmed text := btrim(COALESCE(p_texto, ''));
-    v_lead public.lead_tarjetas%ROWTYPE;
-    v_now timestamptz := now();
-    v_actor uuid := auth.uid();
-    v_inserted public.lead_movimientos%ROWTYPE;
-BEGIN
-    IF v_trimmed = '' THEN
-        RAISE EXCEPTION 'note_empty' USING ERRCODE = '22023', MESSAGE = 'La nota no puede estar vacía.';
-    END IF;
-
-    SELECT *
-    INTO v_lead
-    FROM public.lead_tarjetas
-    WHERE id = p_tarjeta_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    IF NOT public.puede_ver_lead(v_lead.id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    INSERT INTO public.lead_movimientos (
-        tarjeta_id,
-        etapa_origen_id,
-        etapa_destino_id,
-        cambiado_por,
-        cambiado_en,
-        motivo,
-        fuente,
-        metadata
-    )
-    VALUES (
-        v_lead.id,
-        v_lead.etapa_id,
-        v_lead.etapa_id,
-        v_actor,
-        v_now,
-        NULL,
-        'humano',
-        jsonb_build_object(
-            'tipo', 'nota',
-            'nota', v_trimmed
-        ) || COALESCE(p_metadata, '{}'::jsonb)
-    )
-    RETURNING *
-    INTO v_inserted;
-
-    RETURN QUERY
-    SELECT
-        lm.id AS movimiento_id,
-        lm.tarjeta_id,
-        COALESCE(NULLIF(lm.metadata ->> 'tipo', ''), 'movimiento') AS tipo,
-        lm.cambiado_por,
-        u.nombre_completo AS cambiado_nombre,
-        lm.cambiado_en,
-        lm.fuente,
-        lm.etapa_origen_id,
-        origen.nombre AS etapa_origen_nombre,
-        lm.etapa_destino_id,
-        destino.nombre AS etapa_destino_nombre,
-        lm.motivo,
-        NULLIF(lm.metadata ->> 'nota', '') AS nota,
-        lm.metadata
-    FROM public.lead_movimientos lm
-    LEFT JOIN public.lead_etapas origen ON origen.id = lm.etapa_origen_id
-    LEFT JOIN public.lead_etapas destino ON destino.id = lm.etapa_destino_id
-    LEFT JOIN public.usuarios u ON u.id = lm.cambiado_por
-    WHERE lm.id = v_inserted.id;
-END;
-$$;
-
-
---
--- Name: panel_lead_delete(uuid, text); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_delete(p_tarjeta_id uuid, p_motivo text DEFAULT NULL::text) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, tablero_id uuid, etapa_id uuid, etapa_codigo text, eliminado_en timestamp with time zone)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_snapshot RECORD;
-BEGIN
-    SELECT
-        lt.id AS tarjeta_id,
-        lt.contacto_id,
-        ct.nombre_completo AS contacto_nombre,
-        ct.correo AS contacto_correo,
-        ct.telefono_e164 AS contacto_telefono,
-        lt.tablero_id,
-        lt.etapa_id,
-        le.codigo AS etapa_codigo
-    INTO v_snapshot
-    FROM public.lead_tarjetas AS lt
-    JOIN public.contactos AS ct ON ct.id = lt.contacto_id
-    JOIN public.lead_etapas AS le ON le.id = lt.etapa_id
-    WHERE lt.id = p_tarjeta_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    IF NOT public.puede_ver_lead(v_snapshot.tarjeta_id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    DELETE FROM public.lead_tarjetas AS lt
-    WHERE lt.id = v_snapshot.tarjeta_id;
-
-    RETURN QUERY
-    SELECT
-        v_snapshot.tarjeta_id,
-        v_snapshot.contacto_id,
-        v_snapshot.contacto_nombre,
-        v_snapshot.contacto_correo,
-        v_snapshot.contacto_telefono,
-        v_snapshot.tablero_id,
-        v_snapshot.etapa_id,
-        v_snapshot.etapa_codigo,
-        now() AS eliminado_en;
-END;
-$$;
-
-
---
--- Name: panel_lead_move(uuid, uuid, uuid, text, text, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_move(p_tarjeta_id uuid, p_etapa_destino uuid, p_cambiado_por uuid DEFAULT NULL::uuid, p_fuente text DEFAULT 'humano'::text, p_motivo text DEFAULT NULL::text, p_metadata jsonb DEFAULT '{}'::jsonb, p_expected_etapa uuid DEFAULT NULL::uuid) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_necesidad text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, proyecto_nombre text, proyecto_necesidades text, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_lead public.lead_tarjetas%ROWTYPE;
-    v_dest public.lead_etapas%ROWTYPE;
-    v_origin public.lead_etapas%ROWTYPE;
-    v_user uuid;
-    v_now timestamptz := now();
-    v_new_motivo text;
-    v_new_cerrado timestamptz;
-    v_metadata jsonb := COALESCE(p_metadata, '{}'::jsonb);
-BEGIN
-    IF p_fuente NOT IN ('humano', 'asistente', 'api') THEN
-        RAISE EXCEPTION 'invalid_source' USING ERRCODE = '22023';
-    END IF;
-
-    SELECT lt.*
-    INTO v_lead
-    FROM public.lead_tarjetas lt
-    WHERE lt.id = p_tarjeta_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    IF NOT public.puede_ver_lead(v_lead.id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    IF p_expected_etapa IS NOT NULL AND v_lead.etapa_id <> p_expected_etapa THEN
-        RAISE EXCEPTION 'concurrency_conflict' USING ERRCODE = '40001';
-    END IF;
-
-    SELECT *
-    INTO v_dest
-    FROM public.lead_etapas
-    WHERE id = p_etapa_destino;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'dest_stage_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    IF v_lead.etapa_id = v_dest.id THEN
-        RETURN QUERY
-        SELECT
-            ls.tarjeta_id,
-            ls.contacto_id,
-            ls.contacto_nombre,
-            ls.contacto_correo,
-            ls.contacto_telefono,
-            ls.contacto_empresa,
-            ls.contacto_notas,
-            ls.contacto_necesidad,
-            ls.contacto_estado,
-            ls.canal,
-            ls.etapa_id,
-            ls.etapa_nombre,
-            ls.etapa_codigo,
-            ls.etapa_metadatos,
-            ls.etapa_orden,
-            ls.categoria,
-            ls.creado_en,
-            ls.actualizado_en,
-            ls.cerrado_en,
-            ls.monto_estimado,
-            ls.moneda,
-            ls.probabilidad,
-            ls.proyecto_nombre,
-            ls.proyecto_necesidades,
-            ls.lead_score,
-            ls.asignado_id,
-            ls.asignado_nombre,
-            ls.propietario_id,
-            ls.propietario_nombre,
-            ls.conversacion_id,
-            ls.ultimo_mensaje_en,
-            ls.motivo_cierre,
-            ls.tags,
-            ls.metadata,
-            ls.total_rows
-        FROM public.panel_leads_list(
-            p_tablero => v_lead.tablero_id,
-            p_etapa => NULL,
-            p_categoria => NULL,
-            p_asignado => NULL,
-            p_from => NULL,
-            p_to => NULL,
-            p_search => NULL,
-            p_order_by => 'actualizado_en',
-            p_order_dir => 'desc',
-            p_limit => 1,
-            p_offset => 0
-        ) AS ls
-        WHERE ls.tarjeta_id = p_tarjeta_id;
-        RETURN;
-    END IF;
-
-    SELECT *
-    INTO v_origin
-    FROM public.lead_etapas
-    WHERE id = v_lead.etapa_id;
-
-    v_user := COALESCE(auth.uid(), p_cambiado_por, v_lead.asignado_a_usuario_id, v_lead.propietario_usuario_id);
-
-    IF v_dest.categoria = 'ganada' THEN
-        v_new_cerrado := COALESCE(v_lead.cerrado_en, v_now);
-        v_new_motivo := COALESCE(NULLIF(p_motivo, ''), v_lead.motivo_cierre);
-    ELSIF v_dest.categoria = 'perdida' THEN
-        v_new_cerrado := COALESCE(v_lead.cerrado_en, v_now);
-        v_new_motivo := COALESCE(NULLIF(p_motivo, ''), v_lead.motivo_cierre);
-    ELSE
-        v_new_cerrado := NULL;
-        v_new_motivo := NULLIF(p_motivo, '');
-    END IF;
-
-    UPDATE public.lead_tarjetas
-    SET
-        etapa_id = v_dest.id,
-        actualizado_en = v_now,
-        cerrado_en = v_new_cerrado,
-        motivo_cierre = v_new_motivo
-    WHERE id = p_tarjeta_id
-    RETURNING * INTO v_lead;
-
-    INSERT INTO public.lead_movimientos (
-        tarjeta_id,
-        etapa_origen_id,
-        etapa_destino_id,
-        cambiado_por,
-        cambiado_en,
-        motivo,
-        fuente,
-        metadata
-    )
-    VALUES (
-        p_tarjeta_id,
-        v_origin.id,
-        v_dest.id,
-        v_user,
-        v_now,
-        NULLIF(p_motivo, ''),
-        p_fuente,
-        v_metadata
-    );
-
-    RETURN QUERY
-    SELECT
-        ls.tarjeta_id,
-        ls.contacto_id,
-        ls.contacto_nombre,
-        ls.contacto_correo,
-        ls.contacto_telefono,
-        ls.contacto_empresa,
-        ls.contacto_notas,
-        ls.contacto_necesidad,
-        ls.contacto_estado,
-        ls.canal,
-        ls.etapa_id,
-        ls.etapa_nombre,
-        ls.etapa_codigo,
-        ls.etapa_metadatos,
-        ls.etapa_orden,
-        ls.categoria,
-        ls.creado_en,
-        ls.actualizado_en,
-        ls.cerrado_en,
-        ls.monto_estimado,
-        ls.moneda,
-        ls.probabilidad,
-        ls.proyecto_nombre,
-        ls.proyecto_necesidades,
-        ls.lead_score,
-        ls.asignado_id,
-        ls.asignado_nombre,
-        ls.propietario_id,
-        ls.propietario_nombre,
-        ls.conversacion_id,
-        ls.ultimo_mensaje_en,
-        ls.motivo_cierre,
-        ls.tags,
-        ls.metadata,
-        ls.total_rows
-    FROM public.panel_leads_list(
-        p_tablero => v_lead.tablero_id,
-        p_etapa => NULL,
-        p_categoria => NULL,
-        p_asignado => NULL,
-        p_from => NULL,
-        p_to => NULL,
-        p_search => NULL,
-        p_order_by => 'actualizado_en',
-        p_order_dir => 'desc',
-        p_limit => 1,
-        p_offset => 0
-    ) AS ls
-    WHERE ls.tarjeta_id = p_tarjeta_id;
-END;
-$$;
-
-
---
--- Name: panel_lead_movimientos(uuid, integer, integer); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_movimientos(p_tarjeta_id uuid, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0) RETURNS TABLE(movimiento_id uuid, tarjeta_id uuid, tipo text, cambiado_por uuid, cambiado_nombre text, cambiado_en timestamp with time zone, fuente text, etapa_origen_id uuid, etapa_origen_nombre text, etapa_destino_id uuid, etapa_destino_nombre text, motivo text, nota text, metadata jsonb)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_limit integer := COALESCE(NULLIF(p_limit, 0), 50);
-    v_offset integer := GREATEST(p_offset, 0);
-BEGIN
-    IF NOT public.puede_ver_lead(p_tarjeta_id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    RETURN QUERY
-    SELECT
-        lm.id AS movimiento_id,
-        lm.tarjeta_id,
-        COALESCE(NULLIF(lm.metadata ->> 'tipo', ''), 'movimiento') AS tipo,
-        lm.cambiado_por,
-        u.nombre_completo AS cambiado_nombre,
-        lm.cambiado_en,
-        lm.fuente,
-        lm.etapa_origen_id,
-        origen.nombre AS etapa_origen_nombre,
-        lm.etapa_destino_id,
-        destino.nombre AS etapa_destino_nombre,
-        lm.motivo,
-        NULLIF(lm.metadata ->> 'nota', '') AS nota,
-        lm.metadata
-    FROM public.lead_movimientos lm
-    LEFT JOIN public.lead_etapas origen ON origen.id = lm.etapa_origen_id
-    LEFT JOIN public.lead_etapas destino ON destino.id = lm.etapa_destino_id
-    LEFT JOIN public.usuarios u ON u.id = lm.cambiado_por
-    WHERE lm.tarjeta_id = p_tarjeta_id
-    ORDER BY lm.cambiado_en DESC, lm.id DESC
-    LIMIT v_limit
-    OFFSET v_offset;
-END;
-$$;
-
-
---
--- Name: panel_lead_quote_create(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_quote_create(p_tarjeta_id uuid, p_payload jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(id uuid, tarjeta_id uuid, version integer, titulo text, descripcion text, conceptos jsonb, subtotal numeric, impuestos numeric, total numeric, moneda character, valido_hasta date, estado public.lead_cotizacion_estado, canal_envio text, enviada_por uuid, enviada_en timestamp with time zone, aprobada_en timestamp with time zone, rechazada_en timestamp with time zone, pdf_path text, pdf_url text, metadatos jsonb, creado_en timestamp with time zone, actualizado_en timestamp with time zone)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_lead public.lead_tarjetas%ROWTYPE;
-    v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
-    v_conceptos jsonb := '[]'::jsonb;
-    v_items jsonb := '[]'::jsonb;
-    v_subtotal numeric;
-    v_impuestos numeric;
-    v_total numeric;
-    v_moneda char(3);
-    v_valido date;
-    v_titulo text;
-    v_descripcion text;
-    v_pdf_path text;
-    v_pdf_url text;
-    v_metadatos jsonb := '{}'::jsonb;
-    v_prev_version integer;
-    v_created public.lead_cotizaciones%ROWTYPE;
-BEGIN
-    SELECT *
-    INTO v_lead
-    FROM public.lead_tarjetas t
-    WHERE t.id = p_tarjeta_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    IF NOT public.puede_ver_lead(v_lead.id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    SELECT c.version
-    INTO v_prev_version
-    FROM public.lead_cotizaciones c
-    WHERE c.tarjeta_id = p_tarjeta_id
-    ORDER BY c.version DESC
-    LIMIT 1
-    FOR UPDATE;
-
-    IF v_payload ? 'conceptos' THEN
-        IF jsonb_typeof(v_payload->'conceptos') = 'array' THEN
-            v_conceptos := COALESCE(v_payload->'conceptos', '[]'::jsonb);
-        ELSIF jsonb_typeof(v_payload->'conceptos') = 'null' THEN
-            v_conceptos := '[]'::jsonb;
-        ELSE
-            RAISE EXCEPTION 'invalid_concepts_payload' USING ERRCODE = '22023';
-        END IF;
-    END IF;
-
-    IF v_payload ? 'items' THEN
-        IF jsonb_typeof(v_payload->'items') = 'array' THEN
-            v_items := COALESCE(v_payload->'items', '[]'::jsonb);
-        ELSIF jsonb_typeof(v_payload->'items') = 'null' THEN
-            v_items := '[]'::jsonb;
-        ELSE
-            RAISE EXCEPTION 'invalid_items_payload' USING ERRCODE = '22023';
-        END IF;
-    END IF;
-
-    IF v_payload ? 'subtotal' THEN
-        CASE jsonb_typeof(v_payload->'subtotal')
-            WHEN 'number' THEN
-                v_subtotal := (v_payload->>'subtotal')::numeric;
-            WHEN 'string' THEN
-                v_subtotal := NULLIF(v_payload->>'subtotal', '')::numeric;
-            WHEN 'null' THEN
-                v_subtotal := NULL;
-            ELSE
-                RAISE EXCEPTION 'invalid_subtotal_value' USING ERRCODE = '22023';
-        END CASE;
-    END IF;
-
-    IF v_payload ? 'impuestos' THEN
-        CASE jsonb_typeof(v_payload->'impuestos')
-            WHEN 'number' THEN
-                v_impuestos := (v_payload->>'impuestos')::numeric;
-            WHEN 'string' THEN
-                v_impuestos := NULLIF(v_payload->>'impuestos', '')::numeric;
-            WHEN 'null' THEN
-                v_impuestos := NULL;
-            ELSE
-                RAISE EXCEPTION 'invalid_tax_value' USING ERRCODE = '22023';
-        END CASE;
-    END IF;
-
-    IF v_payload ? 'total' THEN
-        CASE jsonb_typeof(v_payload->'total')
-            WHEN 'number' THEN
-                v_total := (v_payload->>'total')::numeric;
-            WHEN 'string' THEN
-                v_total := NULLIF(v_payload->>'total', '')::numeric;
-            WHEN 'null' THEN
-                v_total := NULL;
-            ELSE
-                RAISE EXCEPTION 'invalid_total_value' USING ERRCODE = '22023';
-        END CASE;
-    END IF;
-
-    v_moneda := upper(COALESCE(NULLIF(v_payload->>'moneda', ''), v_lead.moneda, 'MXN'));
-    v_moneda := SUBSTRING(v_moneda FROM 1 FOR 3);
-    IF char_length(v_moneda) <> 3 THEN
-        v_moneda := 'MXN';
-    END IF;
-
-    IF v_payload ? 'valido_hasta' THEN
-        CASE jsonb_typeof(v_payload->'valido_hasta')
-            WHEN 'string' THEN
-                v_valido := NULLIF(v_payload->>'valido_hasta', '')::date;
-            WHEN 'null' THEN
-                v_valido := NULL;
-            ELSE
-                RAISE EXCEPTION 'invalid_valido_hasta' USING ERRCODE = '22023';
-        END CASE;
-    END IF;
-
-    v_titulo := NULLIF(v_payload->>'titulo', '');
-    v_descripcion := NULLIF(v_payload->>'descripcion', '');
-    v_pdf_path := NULLIF(v_payload->>'pdf_path', '');
-    v_pdf_url := NULLIF(v_payload->>'pdf_url', '');
-
-    IF v_payload ? 'metadatos' THEN
-        IF jsonb_typeof(v_payload->'metadatos') = 'object' THEN
-            v_metadatos := v_payload->'metadatos';
-        ELSIF jsonb_typeof(v_payload->'metadatos') = 'null' THEN
-            v_metadatos := '{}'::jsonb;
-        ELSE
-            RAISE EXCEPTION 'invalid_metadatos_payload' USING ERRCODE = '22023';
-        END IF;
-    END IF;
-
-    IF jsonb_typeof(v_items) <> 'array' THEN
-        v_items := '[]'::jsonb;
-    END IF;
-
-    IF jsonb_array_length(v_items) = 0 AND jsonb_array_length(v_conceptos) > 0 THEN
-        SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
-            'titulo', NULLIF(elem.value->>'titulo', ''),
-            'descripcion', NULLIF(elem.value->>'descripcion', ''),
-            'total', CASE WHEN jsonb_typeof(elem.value->'total') = 'number' THEN (elem.value->>'total')::numeric ELSE NULL END,
-            'orden', elem.ordinality
-        ))), '[]'::jsonb)
-        INTO v_items
-        FROM jsonb_array_elements(v_conceptos) WITH ORDINALITY AS elem(value, ordinality);
-    END IF;
-
-    INSERT INTO public.lead_cotizaciones (
-        tarjeta_id,
-        version,
-        titulo,
-        descripcion,
-        conceptos,
-        subtotal,
-        impuestos,
-        total,
-        moneda,
-        valido_hasta,
-        estado,
-        pdf_path,
-        pdf_url,
-        metadatos
-    )
-    VALUES (
-        p_tarjeta_id,
-        COALESCE(v_prev_version, 0) + 1,
-        v_titulo,
-        v_descripcion,
-        v_conceptos,
-        v_subtotal,
-        v_impuestos,
-        v_total,
-        v_moneda,
-        v_valido,
-        'borrador',
-        v_pdf_path,
-        v_pdf_url,
-        v_metadatos
-    )
-    RETURNING * INTO v_created;
-
-    PERFORM public._apply_quote_items(v_created.id, v_items, v_moneda);
-
-    RETURN QUERY SELECT
-        v_created.id,
-        v_created.tarjeta_id,
-        v_created.version,
-        v_created.titulo,
-        v_created.descripcion,
-        v_created.conceptos,
-        v_created.subtotal,
-        v_created.impuestos,
-        v_created.total,
-        v_created.moneda,
-        v_created.valido_hasta,
-        v_created.estado,
-        v_created.canal_envio,
-        v_created.enviada_por,
-        v_created.enviada_en,
-        v_created.aprobada_en,
-        v_created.rechazada_en,
-        v_created.pdf_path,
-        v_created.pdf_url,
-        v_created.metadatos,
-        v_created.creado_en,
-        v_created.actualizado_en;
-END;
-$$;
-
-
---
--- Name: panel_lead_quote_mark(uuid, public.lead_cotizacion_estado, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_quote_mark(p_quote_id uuid, p_estado public.lead_cotizacion_estado, p_canal text DEFAULT NULL::text, p_extra jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(id uuid, tarjeta_id uuid, version integer, titulo text, descripcion text, conceptos jsonb, subtotal numeric, impuestos numeric, total numeric, moneda character, valido_hasta date, estado public.lead_cotizacion_estado, canal_envio text, enviada_por uuid, enviada_en timestamp with time zone, aprobada_en timestamp with time zone, rechazada_en timestamp with time zone, pdf_path text, pdf_url text, metadatos jsonb, creado_en timestamp with time zone, actualizado_en timestamp with time zone)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_quote public.lead_cotizaciones%ROWTYPE;
-    v_lead public.lead_tarjetas%ROWTYPE;
-    v_updated public.lead_cotizaciones%ROWTYPE;
-    v_now timestamptz := now();
-    v_canal text;
-    v_extra jsonb := COALESCE(p_extra, '{}'::jsonb);
-    v_event text;
-    v_metadata jsonb;
-    v_stage_prep jsonb;
-    v_negociacion jsonb;
-    v_proposal text;
-    v_actor uuid;
-BEGIN
-    IF p_estado = 'borrador' THEN
-        RAISE EXCEPTION 'invalid_target_state' USING ERRCODE = '22023';
-    END IF;
-
-    SELECT *
-    INTO v_quote
-    FROM public.lead_cotizaciones q
-    WHERE q.id = p_quote_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'quote_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    SELECT *
-    INTO v_lead
-    FROM public.lead_tarjetas t
-    WHERE t.id = v_quote.tarjeta_id
-    FOR UPDATE;
-
-    IF NOT public.puede_ver_lead(v_lead.id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    v_canal := lower(NULLIF(p_canal, ''));
-    IF v_canal IS NOT NULL AND v_canal <> ALL (ARRAY['email','whatsapp','manual','otro']) THEN
-        RAISE EXCEPTION 'invalid_channel';
-    END IF;
-
-    IF p_estado = 'enviada' AND v_canal IS NULL THEN
-        v_canal := COALESCE(v_quote.canal_envio, 'manual');
-    END IF;
-
-    UPDATE public.lead_cotizaciones AS q
-    SET
-        estado = p_estado,
-        canal_envio = COALESCE(v_canal, q.canal_envio),
-        enviada_por = CASE WHEN p_estado = 'enviada' THEN auth.uid() ELSE q.enviada_por END,
-        enviada_en = CASE WHEN p_estado = 'enviada' THEN v_now ELSE q.enviada_en END,
-        aprobada_en = CASE WHEN p_estado = 'aceptada' THEN v_now ELSE q.aprobada_en END,
-        rechazada_en = CASE WHEN p_estado = 'rechazada' THEN v_now ELSE q.rechazada_en END,
-        metadatos = CASE
-            WHEN jsonb_typeof(v_extra) = 'object' AND v_extra <> '{}'::jsonb
-                THEN COALESCE(q.metadatos, '{}'::jsonb) || v_extra
-            ELSE q.metadatos
-        END,
-        actualizado_en = v_now
-    WHERE q.id = p_quote_id
-    RETURNING * INTO v_updated;
-
-    IF p_estado = 'aceptada' THEN
-        DELETE FROM public.lead_tarjeta_items WHERE lead_tarjeta_id = v_lead.id;
-
-        INSERT INTO public.lead_tarjeta_items (
-            lead_tarjeta_id,
-            cotizacion_item_id,
-            catalog_item_id,
-            titulo,
-            descripcion,
-            unidad,
-            cantidad,
-            precio_unitario,
-            descuento,
-            subtotal,
-            impuestos,
-            total,
-            moneda,
-            cerrado_en,
-            metadatos
-        )
-        SELECT
-            v_lead.id,
-            ci.id,
-            ci.catalog_item_id,
-            ci.titulo,
-            ci.descripcion,
-            COALESCE(ci.unidad, 'unidad'),
-            COALESCE(ci.cantidad, 1),
-            ci.precio_unitario,
-            ci.descuento,
-            ci.subtotal,
-            ci.impuestos,
-            ci.total,
-            COALESCE(ci.moneda, v_quote.moneda, 'MXN'),
-            v_now,
-            COALESCE(ci.metadatos, '{}'::jsonb)
-        FROM public.lead_cotizacion_items ci
-        WHERE ci.cotizacion_id = v_quote.id;
-    END IF;
-
-    IF p_estado = 'enviada' THEN
-        v_metadata := COALESCE(v_lead.metadata, '{}'::jsonb);
-        v_stage_prep := COALESCE(v_metadata->'stage_prep', '{}'::jsonb);
-        v_negociacion := COALESCE(v_stage_prep->'negociacion', '{}'::jsonb);
-
-        IF jsonb_typeof(v_extra->'proposal_sent_at') = 'string' THEN
-            v_proposal := NULLIF(v_extra->>'proposal_sent_at', '');
-        END IF;
-
-        IF v_proposal IS NULL THEN
-            v_proposal := to_char(v_updated.enviada_en AT TIME ZONE 'UTC', 'YYYY-MM-DD');
-        END IF;
-
-        v_negociacion :=
-            v_negociacion
-            || jsonb_build_object(
-                'proposal_sent_at', v_proposal,
-                'quote_sent_at', to_char(v_updated.enviada_en AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-                'quote_channel', v_updated.canal_envio,
-                'quote_version', v_updated.version,
-                'quote_total', v_updated.total,
-                'quote_currency', v_updated.moneda,
-                'quote_pdf_url', v_updated.pdf_url
-            );
-
-        v_stage_prep := jsonb_set(v_stage_prep, '{negociacion}', v_negociacion, true);
-        v_metadata := jsonb_set(v_metadata, '{stage_prep}', v_stage_prep, true);
-
-        UPDATE public.lead_tarjetas AS t
-        SET metadata = v_metadata, actualizado_en = v_now
-        WHERE t.id = v_lead.id;
-    END IF;
-
-    v_event := CASE p_estado
-        WHEN 'enviada' THEN 'quote_sent'
-        WHEN 'aceptada' THEN 'quote_accepted'
-        WHEN 'rechazada' THEN 'quote_rejected'
-        WHEN 'cancelada' THEN 'quote_cancelled'
-        ELSE 'quote_updated'
-    END;
-
-    v_actor := COALESCE(auth.uid(), v_lead.asignado_a_usuario_id, v_lead.propietario_usuario_id);
-
-    INSERT INTO public.lead_movimientos (
-        tarjeta_id,
-        etapa_origen_id,
-        etapa_destino_id,
-        cambiado_por,
-        cambiado_en,
-        motivo,
-        fuente,
-        metadata
-    )
-    VALUES (
-        v_lead.id,
-        v_lead.etapa_id,
-        v_lead.etapa_id,
-        v_actor,
-        v_now,
-        NULL,
-        'humano',
-        jsonb_build_object(
-            'event', v_event,
-            'quote_id', v_updated.id,
-            'version', v_updated.version,
-            'estado', v_updated.estado,
-            'canal', v_updated.canal_envio,
-            'total', v_updated.total,
-            'moneda', v_updated.moneda
-        )
-    );
-
-    RETURN QUERY SELECT
-        v_updated.id,
-        v_updated.tarjeta_id,
-        v_updated.version,
-        v_updated.titulo,
-        v_updated.descripcion,
-        v_updated.conceptos,
-        v_updated.subtotal,
-        v_updated.impuestos,
-        v_updated.total,
-        v_updated.moneda,
-        v_updated.valido_hasta,
-        v_updated.estado,
-        v_updated.canal_envio,
-        v_updated.enviada_por,
-        v_updated.enviada_en,
-        v_updated.aprobada_en,
-        v_updated.rechazada_en,
-        v_updated.pdf_path,
-        v_updated.pdf_url,
-        v_updated.metadatos,
-        v_updated.creado_en,
-        v_updated.actualizado_en;
-END;
-$$;
-
-
---
--- Name: panel_lead_update(uuid, jsonb, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.panel_lead_update(p_tarjeta_id uuid, p_contacto jsonb DEFAULT '{}'::jsonb, p_tarjeta jsonb DEFAULT '{}'::jsonb, p_merge_metadata boolean DEFAULT true) RETURNS TABLE(tarjeta_id uuid, contacto_id uuid, contacto_nombre text, contacto_correo text, contacto_telefono text, contacto_empresa text, contacto_notas text, contacto_necesidad text, contacto_estado text, canal text, etapa_id uuid, etapa_nombre text, etapa_codigo text, etapa_metadatos jsonb, etapa_orden smallint, categoria public.lead_categoria, creado_en timestamp with time zone, actualizado_en timestamp with time zone, cerrado_en timestamp with time zone, monto_estimado numeric, moneda text, probabilidad numeric, proyecto_nombre text, proyecto_necesidades text, lead_score integer, asignado_id uuid, asignado_nombre text, propietario_id uuid, propietario_nombre text, conversacion_id uuid, ultimo_mensaje_en timestamp with time zone, motivo_cierre text, tags text[], metadata jsonb, total_rows bigint)
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE
-    v_lead public.lead_tarjetas%ROWTYPE;
-    v_contact public.contactos%ROWTYPE;
-    v_contact_updates jsonb := COALESCE(p_contacto, '{}'::jsonb);
-    v_card_updates jsonb := COALESCE(p_tarjeta, '{}'::jsonb);
-    v_merge boolean := COALESCE(p_merge_metadata, TRUE);
-    v_now timestamptz := now();
-BEGIN
-    SELECT lt.*
-    INTO v_lead
-    FROM public.lead_tarjetas lt
-    WHERE lt.id = p_tarjeta_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'lead_not_found' USING ERRCODE = 'P0002';
-    END IF;
-
-    IF NOT public.puede_ver_lead(v_lead.id) THEN
-        RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = '42501';
-    END IF;
-
-    SELECT *
-    INTO v_contact
-    FROM public.contactos
-    WHERE id = v_lead.contacto_id
-    FOR UPDATE;
-
-    IF jsonb_typeof(v_contact_updates) IS DISTINCT FROM 'object' THEN
-        RAISE EXCEPTION 'invalid_contact_payload' USING ERRCODE = '22023';
-    END IF;
-    IF jsonb_typeof(v_card_updates) IS DISTINCT FROM 'object' THEN
-        RAISE EXCEPTION 'invalid_lead_payload' USING ERRCODE = '22023';
-    END IF;
-
-    IF v_contact_updates <> '{}'::jsonb THEN
-        UPDATE public.contactos c
-        SET
-            nombre_completo = CASE
-                WHEN v_contact_updates ? 'nombre_completo' THEN
-                    CASE jsonb_typeof(v_contact_updates->'nombre_completo')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(btrim(v_contact_updates->>'nombre_completo'), '')
-                    END
-                ELSE c.nombre_completo
-            END,
-            correo = CASE
-                WHEN v_contact_updates ? 'correo' THEN
-                    CASE jsonb_typeof(v_contact_updates->'correo')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(btrim(lower(v_contact_updates->>'correo')), '')
-                    END
-                ELSE c.correo
-            END,
-            telefono_e164 = CASE
-                WHEN v_contact_updates ? 'telefono_e164' THEN
-                    CASE jsonb_typeof(v_contact_updates->'telefono_e164')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(btrim(v_contact_updates->>'telefono_e164'), '')
-                    END
-                ELSE c.telefono_e164
-            END,
-            company_name = CASE
-                WHEN v_contact_updates ? 'company_name' THEN
-                    CASE jsonb_typeof(v_contact_updates->'company_name')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(btrim(v_contact_updates->>'company_name'), '')
-                    END
-                ELSE c.company_name
-            END,
-            notes = CASE
-                WHEN v_contact_updates ? 'notes' THEN
-                    CASE jsonb_typeof(v_contact_updates->'notes')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(v_contact_updates->>'notes', '')
-                    END
-                ELSE c.notes
-            END,
-            necesidad_proposito = CASE
-                WHEN v_contact_updates ? 'necesidad_proposito' THEN
-                    CASE jsonb_typeof(v_contact_updates->'necesidad_proposito')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(v_contact_updates->>'necesidad_proposito', '')
-                    END
-                ELSE c.necesidad_proposito
-            END
-        WHERE c.id = v_contact.id;
-    END IF;
-
-    IF v_card_updates <> '{}'::jsonb THEN
-        UPDATE public.lead_tarjetas lt
-        SET
-            monto_estimado = CASE
-                WHEN v_card_updates ? 'monto_estimado' THEN
-                    CASE jsonb_typeof(v_card_updates->'monto_estimado')
-                        WHEN 'null' THEN NULL
-                        ELSE (v_card_updates->>'monto_estimado')::numeric
-                    END
-                ELSE lt.monto_estimado
-            END,
-            moneda = CASE
-                WHEN v_card_updates ? 'moneda' THEN
-                    CASE jsonb_typeof(v_card_updates->'moneda')
-                        WHEN 'null' THEN lt.moneda
-                        ELSE upper(NULLIF(btrim(v_card_updates->>'moneda'), ''))
-                    END
-                ELSE lt.moneda
-            END,
-            probabilidad_override = CASE
-                WHEN v_card_updates ? 'probabilidad_override' THEN
-                    CASE jsonb_typeof(v_card_updates->'probabilidad_override')
-                        WHEN 'null' THEN NULL
-                        ELSE (v_card_updates->>'probabilidad_override')::numeric
-                    END
-                ELSE lt.probabilidad_override
-            END,
-            proyecto_nombre = CASE
-                WHEN v_card_updates ? 'proyecto_nombre' THEN
-                    CASE jsonb_typeof(v_card_updates->'proyecto_nombre')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(v_card_updates->>'proyecto_nombre', '')
-                    END
-                ELSE lt.proyecto_nombre
-            END,
-            proyecto_necesidades = CASE
-                WHEN v_card_updates ? 'proyecto_necesidades' THEN
-                    CASE jsonb_typeof(v_card_updates->'proyecto_necesidades')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(v_card_updates->>'proyecto_necesidades', '')
-                    END
-                ELSE lt.proyecto_necesidades
-            END,
-            asignado_a_usuario_id = CASE
-                WHEN v_card_updates ? 'asignado_id' THEN
-                    CASE jsonb_typeof(v_card_updates->'asignado_id')
-                        WHEN 'null' THEN NULL
-                        ELSE (v_card_updates->>'asignado_id')::uuid
-                    END
-                ELSE lt.asignado_a_usuario_id
-            END,
-            propietario_usuario_id = CASE
-                WHEN v_card_updates ? 'propietario_id' THEN
-                    CASE jsonb_typeof(v_card_updates->'propietario_id')
-                        WHEN 'null' THEN NULL
-                        ELSE (v_card_updates->>'propietario_id')::uuid
-                    END
-                ELSE lt.propietario_usuario_id
-            END,
-            motivo_cierre = CASE
-                WHEN v_card_updates ? 'motivo_cierre' THEN
-                    CASE jsonb_typeof(v_card_updates->'motivo_cierre')
-                        WHEN 'null' THEN NULL
-                        ELSE NULLIF(v_card_updates->>'motivo_cierre', '')
-                    END
-                ELSE lt.motivo_cierre
-            END,
-            cerrado_en = CASE
-                WHEN v_card_updates ? 'cerrado_en' THEN
-                    CASE jsonb_typeof(v_card_updates->'cerrado_en')
-                        WHEN 'null' THEN NULL
-                        ELSE (v_card_updates->>'cerrado_en')::timestamptz
-                    END
-                ELSE lt.cerrado_en
-            END,
-            tags = CASE
-                WHEN v_card_updates ? 'tags' THEN
-                    CASE jsonb_typeof(v_card_updates->'tags')
-                        WHEN 'null' THEN NULL
-                        WHEN 'array' THEN ARRAY(
-                            SELECT NULLIF(btrim(value), '')
-                            FROM jsonb_array_elements_text(v_card_updates->'tags') AS value
-                        )
-                        ELSE lt.tags
-                    END
-                ELSE lt.tags
-            END,
-            metadata = CASE
-                WHEN v_card_updates ? 'metadata' THEN
-                    CASE
-                        WHEN v_merge THEN COALESCE(lt.metadata, '{}'::jsonb) || COALESCE(v_card_updates->'metadata', '{}'::jsonb)
-                        ELSE COALESCE(v_card_updates->'metadata', '{}'::jsonb)
-                    END
-                ELSE lt.metadata
-            END,
-            actualizado_en = v_now
-        WHERE lt.id = p_tarjeta_id
-        RETURNING * INTO v_lead;
-    ELSE
-        UPDATE public.lead_tarjetas
-        SET actualizado_en = v_now
-        WHERE id = p_tarjeta_id;
-    END IF;
-
-    RETURN QUERY
-    SELECT
-        ls.tarjeta_id,
-        ls.contacto_id,
-        ls.contacto_nombre,
-        ls.contacto_correo,
-        ls.contacto_telefono,
-        ls.contacto_empresa,
-        ls.contacto_notas,
-        ls.contacto_necesidad,
-        ls.contacto_estado,
-        ls.canal,
-        ls.etapa_id,
-        ls.etapa_nombre,
-        ls.etapa_codigo,
-        ls.etapa_metadatos,
-        ls.etapa_orden,
-        ls.categoria,
-        ls.creado_en,
-        ls.actualizado_en,
-        ls.cerrado_en,
-        ls.monto_estimado,
-        ls.moneda,
-        ls.probabilidad,
-        ls.proyecto_nombre,
-        ls.proyecto_necesidades,
-        ls.lead_score,
-        ls.asignado_id,
-        ls.asignado_nombre,
-        ls.propietario_id,
-        ls.propietario_nombre,
-        ls.conversacion_id,
-        ls.ultimo_mensaje_en,
-        ls.motivo_cierre,
-        ls.tags,
-        ls.metadata,
-        ls.total_rows
-    FROM public.panel_leads_list(
-        p_tablero => v_lead.tablero_id,
-        p_etapa => NULL,
-        p_categoria => NULL,
-        p_asignado => NULL,
-        p_from => NULL,
-        p_to => NULL,
-        p_search => NULL,
-        p_order_by => 'actualizado_en',
-        p_order_dir => 'desc',
-        p_limit => 1,
-        p_offset => 0
-    ) AS ls
-    WHERE ls.tarjeta_id = p_tarjeta_id;
-END;
 $$;
 
 
@@ -7761,251 +6739,6 @@ COMMENT ON FUNCTION public.tg_conversaciones_auto_tarjeta() IS 'Crea una tarjeta
 
 
 --
--- Name: tg_lead_tarjeta_sync_cliente(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.tg_lead_tarjeta_sync_cliente() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'public, pg_temp'
-    AS $$
-BEGIN
-    PERFORM public.ensure_cliente_from_lead(NEW.id);
-    RETURN NEW;
-END;
-$$;
-
-
---
--- Name: tg_lead_tarjetas_after_write(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.tg_lead_tarjetas_after_write() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'public, pg_temp'
-    AS $$
-DECLARE
-    v_old_cat public.lead_categoria;
-    v_new_cat public.lead_categoria;
-    v_actor uuid;
-BEGIN
-    v_actor := coalesce(auth.uid(), NEW.asignado_a_usuario_id, NEW.propietario_usuario_id);
-
-    SELECT categoria INTO v_new_cat FROM public.lead_etapas WHERE id = NEW.etapa_id;
-    IF TG_OP = 'UPDATE' THEN
-        SELECT categoria INTO v_old_cat FROM public.lead_etapas WHERE id = OLD.etapa_id;
-    END IF;
-
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.lead_movimientos (tarjeta_id, etapa_destino_id, cambiado_por, fuente, metadata)
-        VALUES (NEW.id, NEW.etapa_id, v_actor, coalesce(NEW.fuente, 'api'), jsonb_build_object('evento', 'create'));
-    ELSIF TG_OP = 'UPDATE' AND NEW.etapa_id IS DISTINCT FROM OLD.etapa_id THEN
-        INSERT INTO public.lead_movimientos (tarjeta_id, etapa_origen_id, etapa_destino_id, cambiado_por, fuente, metadata)
-        VALUES (
-            NEW.id,
-            OLD.etapa_id,
-            NEW.etapa_id,
-            v_actor,
-            coalesce(NEW.fuente, 'humano'),
-            jsonb_build_object('evento', 'move')
-        );
-    END IF;
-
-    IF NEW.contacto_id IS NOT NULL THEN
-        IF v_new_cat = 'ganada' THEN
-            UPDATE public.contactos
-               SET estado = 'activo'
-             WHERE id = NEW.contacto_id;
-        ELSIF v_new_cat = 'perdida' THEN
-            UPDATE public.contactos
-               SET estado = 'lead'
-             WHERE id = NEW.contacto_id;
-        ELSIF TG_OP = 'UPDATE' AND v_old_cat IN ('ganada','perdida') AND v_new_cat = 'abierta' THEN
-            UPDATE public.contactos
-               SET estado = 'lead'
-             WHERE id = NEW.contacto_id;
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-
---
--- Name: FUNCTION tg_lead_tarjetas_after_write(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.tg_lead_tarjetas_after_write() IS 'Registra movimientos y sincroniza estados de contacto tras cambios en la tarjeta.';
-
-
---
--- Name: tg_lead_tarjetas_auto_precalificado(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.tg_lead_tarjetas_auto_precalificado() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'public, pg_temp'
-    AS $$
-BEGIN
-    PERFORM public._lead_tarjeta_auto_precalificar(NEW.id);
-    RETURN NEW;
-END;
-$$;
-
-
---
--- Name: tg_lead_tarjetas_before_write(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.tg_lead_tarjetas_before_write() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'public, pg_temp'
-    AS $$
-DECLARE
-    v_default_tablero uuid;
-    v_categoria public.lead_categoria;
-    v_etapa_id uuid;
-    v_conv_canal text;
-    v_conv_asignado uuid;
-    v_round_robin uuid := NULL;
-BEGIN
-    IF TG_OP = 'UPDATE' THEN
-        NEW.actualizado_en := now();
-    ELSE
-        IF NEW.creado_en IS NULL THEN
-            NEW.creado_en := now();
-        END IF;
-        NEW.actualizado_en := now();
-    END IF;
-
-    IF NEW.tablero_id IS NULL THEN
-        SELECT id INTO v_default_tablero
-          FROM public.lead_tableros
-         WHERE es_default IS TRUE
-         ORDER BY creado_en
-         LIMIT 1;
-
-        IF v_default_tablero IS NULL THEN
-            RAISE EXCEPTION 'No se encontró tablero por defecto para leads';
-        END IF;
-        NEW.tablero_id := v_default_tablero;
-    END IF;
-
-    IF NEW.etapa_id IS NULL THEN
-        SELECT id INTO v_etapa_id
-          FROM public.lead_etapas
-         WHERE tablero_id = NEW.tablero_id
-         ORDER BY orden
-         LIMIT 1;
-        IF v_etapa_id IS NULL THEN
-            RAISE EXCEPTION 'El tablero % no tiene etapas configuradas', NEW.tablero_id;
-        END IF;
-        NEW.etapa_id := v_etapa_id;
-    END IF;
-
-    IF NEW.propietario_usuario_id IS NULL THEN
-        SELECT propietario_usuario_id INTO NEW.propietario_usuario_id
-          FROM public.contactos
-         WHERE id = NEW.contacto_id;
-    END IF;
-
-    IF NEW.metadata IS NULL THEN
-        NEW.metadata := '{}'::jsonb;
-    END IF;
-
-    IF NEW.fuente IS NULL THEN
-        NEW.fuente := 'api';
-    END IF;
-
-    IF NEW.conversacion_id IS NOT NULL THEN
-        SELECT canal, asignado_a_usuario_id
-          INTO v_conv_canal, v_conv_asignado
-          FROM public.conversaciones
-         WHERE id = NEW.conversacion_id;
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'La conversación % no existe', NEW.conversacion_id;
-        END IF;
-        IF NEW.canal IS NULL THEN
-            NEW.canal := v_conv_canal;
-        END IF;
-        IF NEW.asignado_a_usuario_id IS NULL THEN
-            NEW.asignado_a_usuario_id := v_conv_asignado;
-        END IF;
-    END IF;
-
-    IF NEW.canal IS NULL AND NEW.conversacion_id IS NULL THEN
-        IF NEW.metadata ? 'canal' THEN
-            NEW.canal := NEW.metadata ->> 'canal';
-        END IF;
-    END IF;
-
-    IF NEW.lead_score IS NULL AND NEW.conversacion_id IS NOT NULL THEN
-        SELECT lead_score INTO NEW.lead_score
-          FROM public.conversaciones_insights
-         WHERE conversacion_id = NEW.conversacion_id;
-    END IF;
-
-    IF NEW.asignado_a_usuario_id IS NULL THEN
-        SELECT public.next_vendedor_round_robin() INTO v_round_robin;
-        IF v_round_robin IS NOT NULL THEN
-            NEW.asignado_a_usuario_id := v_round_robin;
-        END IF;
-    END IF;
-
-    IF NEW.conversacion_id IS NOT NULL
-       AND NEW.asignado_a_usuario_id IS NOT NULL
-       AND v_conv_asignado IS NULL
-       AND v_round_robin IS NOT NULL THEN
-        UPDATE public.conversaciones
-           SET asignado_a_usuario_id = NEW.asignado_a_usuario_id
-         WHERE id = NEW.conversacion_id
-           AND asignado_a_usuario_id IS NULL;
-    END IF;
-
-    SELECT categoria INTO v_categoria
-      FROM public.lead_etapas
-     WHERE id = NEW.etapa_id;
-
-    IF v_categoria IN ('ganada','perdida') THEN
-        IF NEW.cerrado_en IS NULL THEN
-            NEW.cerrado_en := now();
-        END IF;
-    ELSE
-        NEW.cerrado_en := NULL;
-        NEW.motivo_cierre := NULL;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-
---
--- Name: FUNCTION tg_lead_tarjetas_before_write(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.tg_lead_tarjetas_before_write() IS 'Normaliza campos de tarjetas, asigna tablero/etapa por defecto y resuelve vendedor en round robin cuando falta asignación.';
-
-
---
--- Name: tg_sync_lead_score_from_insights(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.tg_sync_lead_score_from_insights() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO 'public, pg_temp'
-    AS $$
-BEGIN
-    UPDATE public.lead_tarjetas
-       SET lead_score = NEW.lead_score,
-           metadata = metadata || jsonb_build_object('siguiente_accion', NEW.siguiente_accion)
-     WHERE conversacion_id = NEW.conversacion_id;
-    RETURN NEW;
-END;
-$$;
-
-
---
 -- Name: tg_touch_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -10711,7 +9444,9 @@ CREATE TABLE public.cliente_documentos (
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
-    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+    cuenta_id uuid,
+    oportunidad_id uuid
 );
 
 ALTER TABLE ONLY public.cliente_documentos REPLICA IDENTITY FULL;
@@ -10769,7 +9504,10 @@ CREATE TABLE public.cliente_portal_tokens (
     creado_por uuid,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
-    actualizado_en timestamp with time zone DEFAULT now() NOT NULL
+    actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+    cuenta_id uuid,
+    oportunidad_id uuid
 );
 
 ALTER TABLE ONLY public.cliente_portal_tokens REPLICA IDENTITY FULL;
@@ -10818,7 +9556,9 @@ CREATE TABLE public.cliente_responsables (
     metadatos jsonb DEFAULT '{}'::jsonb NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL,
-    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL
+    organizacion_id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+    cuenta_id uuid,
+    oportunidad_id uuid
 );
 
 ALTER TABLE ONLY public.cliente_responsables REPLICA IDENTITY FULL;
@@ -10861,6 +9601,13 @@ CREATE TABLE public.contactos (
     CONSTRAINT contactos_captura_estado_check CHECK ((captura_estado = ANY (ARRAY['incompleto'::text, 'completo'::text]))),
     CONSTRAINT contactos_estado_check CHECK ((estado = ANY (ARRAY['lead'::text, 'activo'::text, 'bloqueado'::text])))
 );
+
+
+--
+-- Name: TABLE contactos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.contactos IS 'Los triggers legacy que sincronizaban lead_tarjetas fueron deshabilitados; la captura se maneja desde el backend CRM.';
 
 
 --
@@ -11112,6 +9859,13 @@ CREATE TABLE public.lead_tarjetas (
 );
 
 ALTER TABLE ONLY public.lead_tarjetas REPLICA IDENTITY FULL;
+
+
+--
+-- Name: TABLE lead_tarjetas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lead_tarjetas IS 'Tabla legacy (solo lectura) - triggers de normalización/auto-precalificación deshabilitados tras migrar a oportunidades.';
 
 
 --
@@ -11409,6 +10163,13 @@ CREATE TABLE public.etapas_pipeline (
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: TABLE etapas_pipeline; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.etapas_pipeline IS 'Incluye seeds automáticos (metadata.seed = default_stage) cuando falta el catálogo básico.';
 
 
 --
@@ -11859,6 +10620,31 @@ COMMENT ON COLUMN public.organizaciones.config IS 'JSONB con banderas/ajustes (p
 --
 
 COMMENT ON COLUMN public.organizaciones.estado_onboarding IS 'pendiente|en_progreso|completado|pausado|cancelado';
+
+
+--
+-- Name: organizaciones_missing_etapas_pipeline; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.organizaciones_missing_etapas_pipeline AS
+ WITH stage_defs AS (
+         SELECT t.codigo
+           FROM ( VALUES ('captado'::text), ('precalificado'::text), ('demo'::text), ('propuesta'::text), ('negociacion'::text), ('cerrado_ganado'::text), ('cerrado_perdido'::text)) t(codigo)
+        )
+ SELECT o.id AS organizacion_id,
+    sd.codigo
+   FROM (public.organizaciones o
+     CROSS JOIN stage_defs sd)
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM public.etapas_pipeline ep
+          WHERE ((ep.organizacion_id = o.id) AND (lower(ep.codigo) = sd.codigo)))));
+
+
+--
+-- Name: VIEW organizaciones_missing_etapas_pipeline; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.organizaciones_missing_etapas_pipeline IS 'Lista cada organización/código de etapa faltante para monitorear seeds y alertar si aparece un tenant sin captado/precalificado/etc.';
 
 
 --
@@ -14631,6 +13417,20 @@ CREATE INDEX cliente_documentos_cliente_idx ON public.cliente_documentos USING b
 
 
 --
+-- Name: cliente_documentos_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_documentos_cuenta_idx ON public.cliente_documentos USING btree (cuenta_id);
+
+
+--
+-- Name: cliente_documentos_oportunidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_documentos_oportunidad_idx ON public.cliente_documentos USING btree (oportunidad_id);
+
+
+--
 -- Name: cliente_documentos_organizacion_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14652,10 +13452,31 @@ CREATE INDEX cliente_portal_tokens_cliente_idx ON public.cliente_portal_tokens U
 
 
 --
+-- Name: cliente_portal_tokens_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_portal_tokens_cuenta_idx ON public.cliente_portal_tokens USING btree (cuenta_id);
+
+
+--
 -- Name: cliente_portal_tokens_expira_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX cliente_portal_tokens_expira_idx ON public.cliente_portal_tokens USING btree (expira_en) WHERE (revocado = false);
+
+
+--
+-- Name: cliente_portal_tokens_oportunidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_portal_tokens_oportunidad_idx ON public.cliente_portal_tokens USING btree (oportunidad_id);
+
+
+--
+-- Name: cliente_portal_tokens_organizacion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_portal_tokens_organizacion_idx ON public.cliente_portal_tokens USING btree (organizacion_id, cliente_id);
 
 
 --
@@ -14673,6 +13494,20 @@ CREATE INDEX cliente_responsables_cliente_idx ON public.cliente_responsables USI
 
 
 --
+-- Name: cliente_responsables_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_responsables_cuenta_idx ON public.cliente_responsables USING btree (cuenta_id);
+
+
+--
+-- Name: cliente_responsables_oportunidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cliente_responsables_oportunidad_idx ON public.cliente_responsables USING btree (oportunidad_id);
+
+
+--
 -- Name: cliente_responsables_organizacion_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -14687,10 +13522,24 @@ CREATE INDEX clientes_contacto_idx ON public.clientes USING btree (contacto_id);
 
 
 --
--- Name: clientes_lead_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: clientes_cuenta_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX clientes_lead_idx ON public.clientes USING btree (lead_tarjeta_id);
+CREATE INDEX clientes_cuenta_idx ON public.clientes USING btree (cuenta_id);
+
+
+--
+-- Name: clientes_legacy_lead_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX clientes_legacy_lead_idx ON public.clientes USING btree (legacy_lead_id);
+
+
+--
+-- Name: clientes_oportunidad_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX clientes_oportunidad_idx ON public.clientes USING btree (oportunidad_id);
 
 
 --
@@ -15574,6 +14423,8 @@ CREATE TRIGGER contactos_auto_asignacion BEFORE INSERT OR UPDATE ON public.conta
 
 CREATE TRIGGER contactos_auto_precalificado AFTER INSERT OR UPDATE OF nombre_completo, correo, telefono_e164, company_name ON public.contactos FOR EACH ROW EXECUTE FUNCTION public.tg_contactos_auto_precalificado();
 
+ALTER TABLE public.contactos DISABLE TRIGGER contactos_auto_precalificado;
+
 
 --
 -- Name: contactos contactos_captura_estado; Type: TRIGGER; Schema: public; Owner: -
@@ -15629,41 +14480,6 @@ CREATE TRIGGER lead_tableros_touch_updated_at BEFORE UPDATE ON public.lead_table
 --
 
 CREATE TRIGGER lead_tarjeta_items_touch_updated_at BEFORE UPDATE ON public.lead_tarjeta_items FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
-
-
---
--- Name: lead_tarjetas lead_tarjetas_after_write; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_tarjetas_after_write AFTER INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_after_write();
-
-
---
--- Name: lead_tarjetas lead_tarjetas_auto_precalificado; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_tarjetas_auto_precalificado AFTER INSERT OR UPDATE OF contacto_id, etapa_id, tablero_id ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_auto_precalificado();
-
-
---
--- Name: lead_tarjetas lead_tarjetas_before_write; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_tarjetas_before_write BEFORE INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjetas_before_write();
-
-
---
--- Name: lead_tarjetas lead_tarjetas_sync_cliente; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_tarjetas_sync_cliente AFTER INSERT OR UPDATE ON public.lead_tarjetas FOR EACH ROW EXECUTE FUNCTION public.tg_lead_tarjeta_sync_cliente();
-
-
---
--- Name: conversaciones_insights lead_tarjetas_sync_from_insights; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER lead_tarjetas_sync_from_insights AFTER INSERT OR UPDATE ON public.conversaciones_insights FOR EACH ROW EXECUTE FUNCTION public.tg_sync_lead_score_from_insights();
 
 
 --
@@ -16115,6 +14931,22 @@ ALTER TABLE ONLY public.cliente_documentos
 
 
 --
+-- Name: cliente_documentos cliente_documentos_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_documentos
+    ADD CONSTRAINT cliente_documentos_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cliente_documentos cliente_documentos_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_documentos
+    ADD CONSTRAINT cliente_documentos_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
+
+
+--
 -- Name: cliente_documentos cliente_documentos_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16147,11 +14979,51 @@ ALTER TABLE ONLY public.cliente_portal_tokens
 
 
 --
+-- Name: cliente_portal_tokens cliente_portal_tokens_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_portal_tokens
+    ADD CONSTRAINT cliente_portal_tokens_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cliente_portal_tokens cliente_portal_tokens_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_portal_tokens
+    ADD CONSTRAINT cliente_portal_tokens_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cliente_portal_tokens cliente_portal_tokens_organizacion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_portal_tokens
+    ADD CONSTRAINT cliente_portal_tokens_organizacion_id_fkey FOREIGN KEY (organizacion_id) REFERENCES public.organizaciones(id) ON DELETE CASCADE;
+
+
+--
 -- Name: cliente_responsables cliente_responsables_cliente_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.cliente_responsables
     ADD CONSTRAINT cliente_responsables_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cliente_responsables cliente_responsables_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_responsables
+    ADD CONSTRAINT cliente_responsables_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cliente_responsables cliente_responsables_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cliente_responsables
+    ADD CONSTRAINT cliente_responsables_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
 
 
 --
@@ -16171,6 +15043,14 @@ ALTER TABLE ONLY public.clientes
 
 
 --
+-- Name: clientes clientes_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clientes
+    ADD CONSTRAINT clientes_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.cuentas(id) ON DELETE CASCADE;
+
+
+--
 -- Name: clientes clientes_etapa_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16179,11 +15059,19 @@ ALTER TABLE ONLY public.clientes
 
 
 --
--- Name: clientes clientes_lead_tarjeta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: clientes clientes_legacy_lead_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.clientes
-    ADD CONSTRAINT clientes_lead_tarjeta_id_fkey FOREIGN KEY (lead_tarjeta_id) REFERENCES public.lead_tarjetas(id) ON DELETE SET NULL;
+    ADD CONSTRAINT clientes_legacy_lead_id_fkey FOREIGN KEY (legacy_lead_id) REFERENCES public.lead_tarjetas(id) ON DELETE SET NULL;
+
+
+--
+-- Name: clientes clientes_oportunidad_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clientes
+    ADD CONSTRAINT clientes_oportunidad_id_fkey FOREIGN KEY (oportunidad_id) REFERENCES public.oportunidades(id) ON DELETE SET NULL;
 
 
 --
@@ -17526,11 +16414,7 @@ ALTER TABLE public.cliente_documentos ENABLE ROW LEVEL SECURITY;
 -- Name: cliente_documentos cliente_documentos_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cliente_documentos_access ON public.cliente_documentos TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_documentos.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id)))))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_documentos.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id))))));
+CREATE POLICY cliente_documentos_access ON public.cliente_documentos TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
 
 
 --
@@ -17554,25 +16438,10 @@ CREATE POLICY cliente_documentos_member_org ON public.cliente_documentos TO auth
 ALTER TABLE public.cliente_portal_tokens ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: cliente_portal_tokens cliente_portal_tokens_access; Type: POLICY; Schema: public; Owner: -
+-- Name: cliente_portal_tokens cliente_portal_tokens_member_org; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cliente_portal_tokens_access ON public.cliente_portal_tokens TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id)))))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id))))));
-
-
---
--- Name: cliente_portal_tokens cliente_portal_tokens_member_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY cliente_portal_tokens_member_all ON public.cliente_portal_tokens TO authenticated USING ((EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_portal_tokens.cliente_id) AND public.puede_ver_lead(c.lead_tarjeta_id)))));
+CREATE POLICY cliente_portal_tokens_member_org ON public.cliente_portal_tokens TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
 
 
 --
@@ -17585,11 +16454,7 @@ ALTER TABLE public.cliente_responsables ENABLE ROW LEVEL SECURITY;
 -- Name: cliente_responsables cliente_responsables_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY cliente_responsables_access ON public.cliente_responsables TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_responsables.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id)))))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
-   FROM public.clientes c
-  WHERE ((c.id = cliente_responsables.cliente_id) AND (c.lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(c.lead_tarjeta_id))))));
+CREATE POLICY cliente_responsables_access ON public.cliente_responsables TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
 
 
 --
@@ -17616,7 +16481,7 @@ ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 -- Name: clientes clientes_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY clientes_access ON public.clientes TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR ((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id)))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR ((lead_tarjeta_id IS NOT NULL) AND public.puede_ver_lead(lead_tarjeta_id))));
+CREATE POLICY clientes_access ON public.clientes TO authenticated USING ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid())))) WITH CHECK ((public.es_admin(( SELECT auth.uid() AS uid)) OR (organizacion_id = public.usuario_organizacion_id(auth.uid()))));
 
 
 --
@@ -18858,5 +17723,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict uYqGTaBOnRwlIGdt9CQaaUBoqY3GpfflqEdyVZBelPfgOlqoz4ZlcPLt6u9duqZ
+\unrestrict n2TUa5oNxkodLWur2EcQSgH4evtZactziOV4eX122BGCCZMpzQpQewRzLQ9Aa0Z
 

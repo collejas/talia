@@ -70,6 +70,8 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+callSupabaseRpc
+
 codex resume 019ab826-6d98-75e0-a14e-b37108504d61
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
@@ -521,3 +523,27 @@ hola@talia.mx
         y el montaje /panel en backend/app/main.py:53-90 para evitar accesos que continúen creando tarjetas legacy.
 
   Con estos pendientes cubiertos se cierra la dependencia del método anterior y se completa la migración funcional del CRM.
+
+
+# Pendientes
+
+• La migración se aplicó correctamente: el bloque DROP TABLE se ejecutó y Postgres confirmó los efectos en cascada (se eliminaron las
+  vistas embudo/ventas_por_producto_mes, las FK de calendar_slot_holds/calendar_bookings hacia lead_tarjetas, y los FKs de clientes que
+  apuntaban a lead_tableros/lead_etapas). Eso significa que todo el stack lead_* salió del esquema.
+
+  Tareas de seguimiento:
+
+  1. Revisar dependencias que quedaron sin FK
+      - calendar_slot_holds y calendar_bookings ya no tienen tarjeta_id. Si esos módulos siguen vigentes deberías reemplazar esa columna
+        por oportunidad_id o eliminarla según el nuevo modelo.
+      - clientes ya no tiene FK a lead_tableros/lead_etapas, lo cual está bien (ahora depende de cuenta_id/oportunidad_id), pero si
+        conservas columnas legacy asegúrate de documentarlo.
+  2. Recrear vistas/reportes si las necesitas
+      - Las vistas embudo y ventas_por_producto_mes se fueron junto con las tablas legacy. Si aún ocupas esos reportes, reescríbelos
+        sobre oportunidades/cotizaciones.
+  3. Respaldos y documentación
+      - Dado que ya tomaste un dump antes del DROP, guarda ese respaldo como histórico.
+      - Actualiza cualquier runbook o script interno para dejar claro que las tablas lead_* ya no existen.
+  4. Pruebas rápidas
+      - Corre tu suite (npm run lint && npm run build, poetry run pytest …) para garantizar que nada en la app intenta consultar las
+        tablas borradas.
