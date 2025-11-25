@@ -41,7 +41,7 @@ export async function GET(
       (parsed && typeof parsed.detail === "string" && parsed.detail) ||
       (parsed && typeof parsed.error === "string" && parsed.error);
     const error =
-      mapPortalError(detail) ||
+      mapPortalError(typeof detail === "string" ? detail : null) ||
       (text && !text.startsWith("<") ? text : null) ||
       "No se pudo cargar el portal.";
     return NextResponse.json({ error }, { status: response.status });

@@ -54,7 +54,6 @@ export async function loadClientesData(): Promise<ClientesPayload> {
   };
 }
 
-function adaptAccountToClienteRecord(account: CRMAccount): ClienteRecord {
 function sanitizeClienteRecord(record: ClienteRecord): ClienteRecord {
   const datosFacturacion = isPlainObject(record.datos_facturacion)
     ? record.datos_facturacion

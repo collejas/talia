@@ -21,8 +21,6 @@ class Settings(BaseSettings):
     )
     request_log_skip_prefixes: tuple[str, ...] = Field(
         default=(
-            "/panel",
-            "/api/panel",
             "/shared",
             "/api/shared",
             "/favicon",

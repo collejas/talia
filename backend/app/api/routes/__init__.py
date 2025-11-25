@@ -1,1 +1,1 @@
-from . import crm, panel  # noqa: F401
+from . import crm  # noqa: F401
