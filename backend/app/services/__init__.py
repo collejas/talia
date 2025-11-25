@@ -7,6 +7,7 @@ from .google_places import (
     GooglePlacesError,
     normalize_place_for_result,
 )
+from .twilio_lookup import TwilioLookupError, lookup_phone_number
 
 __all__ = [
     "EmailSendError",
@@ -17,4 +18,6 @@ __all__ = [
     "normalize_denue_place",
     "normalize_place_for_result",
     "send_email",
+    "lookup_phone_number",
+    "TwilioLookupError",
 ]

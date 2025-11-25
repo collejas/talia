@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
+from app.channels.whatsapp.service import TwilioSendResult, _send_whatsapp_reply
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -40,19 +41,17 @@ from app.services import (
     EmailSendError,
     GooglePlacesClient,
     GooglePlacesError,
+    TwilioLookupError,
     demografia_service,
     leads_geo,
+    lookup_phone_number,
     normalize_denue_place,
     normalize_place_for_result,
     send_email,
     storage,
 )
-from app.services import (
-    calendar as calendar_service,
-)
-from app.services import (
-    quotes as quotes_service,
-)
+from app.services import calendar as calendar_service
+from app.services import quotes as quotes_service
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
 from app.services.storage import StorageError
@@ -297,13 +296,17 @@ class AgendaReschedulePayload(BaseModel):
     """Payload para reprogramar citas."""
 
     start_at: str = Field(..., description="Fecha/hora en ISO 8601 con zona horaria.")
-    notes: str | None = Field(default=None, description="Notas opcionales para la cita.")
+    notes: str | None = Field(
+        default=None, description="Notas opcionales para la cita."
+    )
 
 
 class AgendaCancelPayload(BaseModel):
     """Payload para cancelar citas."""
 
-    reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
+    reason: str | None = Field(
+        default=None, description="Motivo compartido por el cliente."
+    )
 
 
 class DeleteResultadosPayload(BaseModel):
@@ -329,6 +332,86 @@ class DeleteResultadosPayload(BaseModel):
             seen.add(item)
             deduped.append(item)
         return deduped
+
+
+class ProspectoSeleccionPayload(BaseModel):
+    """IDs de resultados a convertir en prospectos."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fuente: Literal["google_places", "denue"]
+    resultado_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=500, description="Resultados a preservar."
+    )
+    segmento: str | None = Field(default=None, max_length=120)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator("resultado_ids")
+    @classmethod
+    def _dedupe_resultado_ids(cls, value: list[UUID]) -> list[UUID]:
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
+
+
+class ProspectoLookupPayload(BaseModel):
+    """Solicita verificación de teléfono con Twilio Lookup."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prospecto_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=200, description="Prospectos a verificar."
+    )
+    country_code: str | None = Field(
+        default="MX", description="Código de país ISO2 para normalizar el número."
+    )
+    reintentar: bool = Field(
+        default=False,
+        description="Si es falso se omiten prospectos ya verificados o sin teléfono.",
+    )
+
+    @field_validator("prospecto_ids")
+    @classmethod
+    def _dedupe_prospecto_ids(cls, value: list[UUID]) -> list[UUID]:
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
+
+
+class ProspectoContactarPayload(BaseModel):
+    """Programa envíos de contacto para prospectos verificados."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prospecto_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=200, description="Prospectos a contactar."
+    )
+    correo_asunto: str | None = Field(default=None, max_length=200)
+    correo_cuerpo: str | None = Field(default=None, max_length=4000)
+    whatsapp_mensaje: str | None = Field(default=None, max_length=2000)
+    llamada_notas: str | None = Field(default=None, max_length=500)
+
+    @field_validator("prospecto_ids")
+    @classmethod
+    def _dedupe_contact_ids(cls, value: list[UUID]) -> list[UUID]:
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
 
 
 class GoogleProspeccionBusquedaPayload(BaseModel):
@@ -538,9 +621,7 @@ def _portal_token_select_clause(include_relations: bool = True) -> str:
         "usos,nota,metadata,ultimo_acceso_en,ultimo_acceso_ip,creado_en,actualizado_en"
     )
     if include_relations:
-        base += (
-            f",cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_cliente_select_clause()})"
-        )
+        base += f",cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_cliente_select_clause()})"
     else:
         base += ",cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
     return base
@@ -834,7 +915,12 @@ def _resolve_date_range(
         start = _ensure_utc(start)
     if end:
         end = _ensure_utc(end)
-        if end.hour == 0 and end.minute == 0 and end.second == 0 and end.microsecond == 0:
+        if (
+            end.hour == 0
+            and end.minute == 0
+            and end.second == 0
+            and end.microsecond == 0
+        ):
             end = end + timedelta(days=1) - timedelta(microseconds=1)
 
     if start and end and start > end:
@@ -986,7 +1072,14 @@ def _normalize_quote_items(items: Any) -> list[dict[str, Any]]:
                 entry[key] = value
         if isinstance(raw_item.get("metadatos"), dict):
             entry["metadatos"] = raw_item["metadatos"]
-        for key in ("cantidad", "precio_unitario", "descuento", "subtotal", "impuestos", "total"):
+        for key in (
+            "cantidad",
+            "precio_unitario",
+            "descuento",
+            "subtotal",
+            "impuestos",
+            "total",
+        ):
             number = _decimal_from_value(raw_item.get(key))
             if number is not None:
                 entry[key] = float(number)
@@ -1112,25 +1205,35 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
         if not isinstance(entry, dict):
             continue
         catalog = entry.get("catalog_item")
-        catalog_item = CRMCatalogItem.model_validate(catalog) if isinstance(catalog, dict) else None
+        catalog_item = (
+            CRMCatalogItem.model_validate(catalog)
+            if isinstance(catalog, dict)
+            else None
+        )
         metadata = entry.get("metadata")
         metadata_dict = metadata if isinstance(metadata, dict) else {}
         items.append(
             LeadQuoteItem(
                 id=entry.get("id"),
                 cotizacion_id=entry.get("cotizacion_id"),
-                catalog_item_id=entry.get("producto_id") or entry.get("catalog_item_id"),
+                catalog_item_id=entry.get("producto_id")
+                or entry.get("catalog_item_id"),
                 catalog_item=catalog_item,
                 titulo=metadata_dict.get("titulo")
                 or entry.get("titulo")
                 or entry.get("descripcion"),
-                descripcion=metadata_dict.get("descripcion") or entry.get("descripcion"),
+                descripcion=metadata_dict.get("descripcion")
+                or entry.get("descripcion"),
                 unidad=metadata_dict.get("unidad") or entry.get("unidad"),
                 cantidad=_as_number(entry.get("cantidad")),
                 precio_unitario=_as_number(entry.get("precio_unitario")),
-                descuento=_as_number(metadata_dict.get("descuento") or entry.get("descuento")),
+                descuento=_as_number(
+                    metadata_dict.get("descuento") or entry.get("descuento")
+                ),
                 subtotal=_as_number(entry.get("subtotal")),
-                impuestos=_as_number(metadata_dict.get("impuestos") or entry.get("impuestos")),
+                impuestos=_as_number(
+                    metadata_dict.get("impuestos") or entry.get("impuestos")
+                ),
                 total=_as_number(metadata_dict.get("total") or entry.get("total")),
                 moneda=metadata_dict.get("moneda") or entry.get("moneda"),
                 orden=metadata_dict.get("orden") or entry.get("orden"),
@@ -1144,7 +1247,9 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
 
 def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
     metadata = _ensure_dict(row.get("metadata"), default={})
-    estado = row.get("estatus") or row.get("estado") or metadata.get("estado") or "borrador"
+    estado = (
+        row.get("estatus") or row.get("estado") or metadata.get("estado") or "borrador"
+    )
     oportunidad_id = row.get("oportunidad_id") or metadata.get("oportunidad_id")
     return LeadQuote(
         id=row.get("id"),
@@ -1152,18 +1257,28 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         version=metadata.get("version") or row.get("version") or 1,
         titulo=metadata.get("titulo") or row.get("titulo"),
         descripcion=metadata.get("descripcion") or row.get("descripcion"),
-        conceptos=_ensure_concept_list(metadata.get("conceptos") or row.get("conceptos")),
+        conceptos=_ensure_concept_list(
+            metadata.get("conceptos") or row.get("conceptos")
+        ),
         subtotal=metadata.get("subtotal") or row.get("subtotal"),
         impuestos=metadata.get("impuestos") or row.get("impuestos"),
         total=_as_number(row.get("total")) or _as_number(metadata.get("total")),
         moneda=_clean_text(row.get("moneda") or metadata.get("moneda")),
-        valido_hasta=_parse_date(row.get("valida_hasta") or metadata.get("valido_hasta")),
+        valido_hasta=_parse_date(
+            row.get("valida_hasta") or metadata.get("valido_hasta")
+        ),
         estado=estado,
         canal_envio=metadata.get("canal_envio") or row.get("canal_envio"),
         enviada_por=metadata.get("enviada_por") or row.get("enviada_por"),
-        enviada_en=_parse_timestamp(metadata.get("enviada_en") or row.get("enviada_en")),
-        aprobada_en=_parse_timestamp(metadata.get("aprobada_en") or row.get("aprobada_en")),
-        rechazada_en=_parse_timestamp(metadata.get("rechazada_en") or row.get("rechazada_en")),
+        enviada_en=_parse_timestamp(
+            metadata.get("enviada_en") or row.get("enviada_en")
+        ),
+        aprobada_en=_parse_timestamp(
+            metadata.get("aprobada_en") or row.get("aprobada_en")
+        ),
+        rechazada_en=_parse_timestamp(
+            metadata.get("rechazada_en") or row.get("rechazada_en")
+        ),
         pdf_path=metadata.get("pdf_path") or row.get("pdf_path"),
         pdf_url=metadata.get("pdf_url") or row.get("pdf_url"),
         metadatos=metadata,
@@ -1214,7 +1329,9 @@ def _quote_metadata_from_payload(body: dict[str, Any]) -> dict[str, Any]:
     return metadata
 
 
-def _quote_items_to_repository_payload(items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _quote_items_to_repository_payload(
+    items: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
     repository_items: list[dict[str, Any]] = []
     if not items:
         return repository_items
@@ -1232,11 +1349,14 @@ def _quote_items_to_repository_payload(items: list[dict[str, Any]] | None) -> li
         repository_items.append(
             {
                 "producto_id": item.get("catalog_item_id"),
-                "descripcion": item.get("titulo") or item.get("descripcion") or "Concepto",
+                "descripcion": item.get("titulo")
+                or item.get("descripcion")
+                or "Concepto",
                 "cantidad": _as_number(item.get("cantidad")) or 1,
                 "precio_unitario": _as_number(item.get("precio_unitario")),
                 "descuento_porcentaje": None,
-                "subtotal": _as_number(item.get("subtotal")) or _as_number(item.get("total")),
+                "subtotal": _as_number(item.get("subtotal"))
+                or _as_number(item.get("total")),
                 "metadata": metadata,
             }
         )
@@ -1308,7 +1428,9 @@ def _resolve_email_recipients(
     return recipients
 
 
-def _resolve_whatsapp_number(contact: dict[str, Any] | None, override: str | None) -> str | None:
+def _resolve_whatsapp_number(
+    contact: dict[str, Any] | None, override: str | None
+) -> str | None:
     candidate = _clean_text(override)
     if candidate:
         return candidate
@@ -1388,7 +1510,9 @@ def _extract_agent_name(metadata: dict[str, Any] | None) -> str | None:
                     agent_extra.get("displayName"),
                 ]
             )
-        author_extra = extra.get("author") or extra.get("author_name") or extra.get("authorName")
+        author_extra = (
+            extra.get("author") or extra.get("author_name") or extra.get("authorName")
+        )
         if isinstance(author_extra, str) and author_extra.strip():
             candidates.append(author_extra.strip())
     for candidate in candidates:
@@ -1603,9 +1727,9 @@ async def _auto_move_opportunity_to_won(
         return
     history_payload = {
         "oportunidad_id": str(oportunidad_id),
-        "etapa_origen_id": str(current_row.get("etapa_id"))
-        if current_row.get("etapa_id")
-        else None,
+        "etapa_origen_id": (
+            str(current_row.get("etapa_id")) if current_row.get("etapa_id") else None
+        ),
         "etapa_destino_id": str(won_stage["id"]),
         "fuente": "quote_auto_accept",
         "motivo": "quote_auto_accept",
@@ -1640,7 +1764,9 @@ def _build_logo_asset(row: Any) -> CRMLogoAsset | None:
         return None
 
     metadata = _coerce_metadata(row.get("metadata")) or {}
-    created_at = _parse_iso_datetime(row.get("created_at")) or datetime.now(timezone.utc)
+    created_at = _parse_iso_datetime(row.get("created_at")) or datetime.now(
+        timezone.utc
+    )
     file_url = _clean_text(row.get("file_url"))
     file_path = _clean_text(row.get("file_path"))
     if not file_url or not file_path:
@@ -1674,6 +1800,94 @@ def _result_preview(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_prospecto_from_contactable(
+    row: dict[str, Any],
+    *,
+    segmento: str | None,
+    extra_metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Normaliza una fila de vista contactable hacia la tabla de prospectos."""
+
+    phone_value = _clean_text(row.get("phone"))
+    base_metadata: dict[str, Any] = {}
+    busqueda_meta = row.get("busqueda_meta")
+    if isinstance(busqueda_meta, dict):
+        base_metadata["busqueda_meta"] = busqueda_meta
+    if extra_metadata:
+        base_metadata.update(extra_metadata)
+
+    payload: dict[str, Any] = {
+        "busqueda_id": row.get("busqueda_id"),
+        "resultado_id": row.get("resultado_id"),
+        "fuente": row.get("fuente_resultado"),
+        "fuente_busqueda": row.get("fuente_busqueda"),
+        "display_name": row.get("display_name") or row.get("name") or "Prospecto",
+        "name": row.get("name"),
+        "razon_social": row.get("razon_social"),
+        "actividad": row.get("actividad"),
+        "estrato": row.get("estrato"),
+        "phone": phone_value,
+        "email": _clean_text(row.get("email")),
+        "website": _clean_text(row.get("website")),
+        "address": _clean_text(row.get("address")),
+        "lat": row.get("lat"),
+        "lng": row.get("lng"),
+        "rating": row.get("rating"),
+        "distancia_m": row.get("distancia_m"),
+        "metadata": base_metadata,
+    }
+    if segmento:
+        payload["segmento"] = segmento
+    return payload
+
+
+def _prospecto_whatsapp_allowed(prospecto: dict[str, Any]) -> bool:
+    """Determina si el prospecto puede contactarse por WhatsApp."""
+
+    if prospecto.get("whatsapp_permitido"):
+        return True
+    carrier_type = _clean_text(prospecto.get("carrier_type")) or ""
+    return carrier_type.lower() == "mobile"
+
+
+def _prospecto_llamada_permitida(prospecto: dict[str, Any]) -> bool:
+    """Evalúa si se puede llamar al prospecto."""
+
+    if prospecto.get("llamada_permitida"):
+        return True
+    carrier_type = _clean_text(prospecto.get("carrier_type")) or ""
+    return carrier_type.lower() in {"mobile", "landline"}
+
+
+async def _send_whatsapp_message(to_number: str, body: str) -> TwilioSendResult:
+    """Wrapper mínimo para enviar mensajes de WhatsApp vía Twilio."""
+
+    if not body:
+        return TwilioSendResult(sid=None, status="skipped", error="empty_body")
+    return await _send_whatsapp_reply(to_number=to_number, body=body)
+
+
+def _build_contact_log_entry(
+    *,
+    prospecto_id: Any,
+    canal: str,
+    estado: str,
+    detalle: dict[str, Any],
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Crea el payload para registrar un intento de contacto."""
+
+    entry: dict[str, Any] = {
+        "prospecto_id": str(prospecto_id),
+        "canal": canal,
+        "estado": estado,
+        "detalle": detalle,
+    }
+    if error:
+        entry["error"] = error
+    return entry
+
+
 def _rpc_field(data: Any, *keys: str) -> Any:
     row: Any
     if isinstance(data, list):
@@ -1703,7 +1917,9 @@ async def require_admin_user(
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> UUID:
     if not usuario_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required"
+        )
     has_role = await repo.user_has_role(usuario_id=usuario_id, role_code="admin")
     if not has_role:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
@@ -1767,10 +1983,14 @@ def _map_agenda_row(row: dict[str, Any]) -> dict[str, Any]:
     metadata_parsed = _coerce_metadata(metadata_raw)
     if metadata_parsed is None and isinstance(metadata_raw, dict):
         metadata_parsed = metadata_raw
-    metadata: dict[str, Any] = dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
+    metadata: dict[str, Any] = (
+        dict(metadata_parsed) if isinstance(metadata_parsed, dict) else {}
+    )
     estado = _normalize_agenda_estado(row.get("status") or metadata.get("estado"))
     oportunidad_id = (
-        row.get("oportunidad_id") or metadata.get("oportunidad_id") or row.get("tarjeta_id")
+        row.get("oportunidad_id")
+        or metadata.get("oportunidad_id")
+        or row.get("tarjeta_id")
     )
 
     contacto_payload = {
@@ -1828,7 +2048,9 @@ def _map_visit_detail_row(row: dict[str, Any]) -> dict[str, Any]:
     if metadata is not None:
         mapped["metadata"] = metadata
     else:
-        metadata = mapped.get("metadata") if isinstance(mapped.get("metadata"), dict) else None
+        metadata = (
+            mapped.get("metadata") if isinstance(mapped.get("metadata"), dict) else None
+        )
     opportunity_id = (
         mapped.get("oportunidad_id")
         or (metadata.get("oportunidad_id") if isinstance(metadata, dict) else None)
@@ -2833,11 +3055,15 @@ async def get_account(
     cuenta_id: UUID,
 ) -> CRMAccount:
     try:
-        row = await repo.get_account(organizacion_id=organizacion_id, account_id=cuenta_id)
+        row = await repo.get_account(
+            organizacion_id=organizacion_id, account_id=cuenta_id
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="cuenta_no_encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="cuenta_no_encontrada"
+        )
     return CRMAccount.model_validate(row)
 
 
@@ -3002,7 +3228,11 @@ async def pipeline_update_opportunity(
     if current is None:
         raise HTTPException(status_code=404, detail="opportunity_not_found")
     current_stage = _safe_uuid(current.get("etapa_id"))
-    if payload.expected_etapa_id and current_stage and payload.expected_etapa_id != current_stage:
+    if (
+        payload.expected_etapa_id
+        and current_stage
+        and payload.expected_etapa_id != current_stage
+    ):
         raise HTTPException(status_code=409, detail="opportunity_stage_conflict")
     update_body = payload.model_dump(
         mode="json",
@@ -3173,7 +3403,9 @@ async def list_catalog_items(
     return [CRMCatalogItem.model_validate(row) for row in rows]
 
 
-@router.post("/catalog/items", response_model=CRMCatalogItem, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/catalog/items", response_model=CRMCatalogItem, status_code=status.HTTP_201_CREATED
+)
 async def create_catalog_item(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -3207,7 +3439,11 @@ async def update_catalog_item(
     try:
         row = await repo.update_catalog_item(item_id=item_id, payload=body)
     except CRMRepositoryError as exc:
-        detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
+        detail = (
+            "catalog_item_not_found"
+            if "catalog_item_not_found" in str(exc)
+            else str(exc)
+        )
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
     return CRMCatalogItem.model_validate(row)
@@ -3237,7 +3473,11 @@ async def delete_catalog_item(
             hard_deleted=False,
         )
     except CRMRepositoryError as exc:
-        detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
+        detail = (
+            "catalog_item_not_found"
+            if "catalog_item_not_found" in str(exc)
+            else str(exc)
+        )
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
@@ -3274,7 +3514,9 @@ async def search_contacts(
     return CRMContactSearchResponse(items=items, limit=limit, offset=offset)
 
 
-@router.post("/contacts", response_model=CRMContact, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/contacts", response_model=CRMContact, status_code=status.HTTP_201_CREATED
+)
 async def create_contact(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -3312,7 +3554,9 @@ async def update_contact(
         )
     except CRMRepositoryError as exc:
         if "contacto_no_encontrado" in str(exc):
-            raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
+            raise HTTPException(
+                status_code=404, detail="contacto_no_encontrado"
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMContact.model_validate(row)
 
@@ -3617,7 +3861,9 @@ async def set_inbox_manual_mode(
     except StorageError as exc:
         detail = str(exc) or "No se pudo actualizar el modo manual"
         lowered = detail.lower()
-        status_code = 502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        status_code = (
+            502 if ("error de red" in lowered or "respondió error" in lowered) else 400
+        )
         raise HTTPException(status_code=status_code, detail=detail) from exc
     return {"ok": True, "manual": payload.manual}
 
@@ -3638,16 +3884,22 @@ async def reply_inbox_conversation(
         raise HTTPException(status_code=422, detail="message_required")
 
     try:
-        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+        conversation_meta = await storage.fetch_webchat_conversation(
+            str(conversacion_id)
+        )
     except StorageError as exc:
         message = str(exc)
         lowered = message.lower()
         log_extra = {"conversation_id": str(conversacion_id), "error": message}
         if "no encontrada" in lowered or "not found" in lowered:
             logger.warning("panel.inbox.conversation_not_found", extra=log_extra)
-            raise HTTPException(status_code=404, detail="conversation_not_found") from exc
+            raise HTTPException(
+                status_code=404, detail="conversation_not_found"
+            ) from exc
         logger.exception("panel.inbox.fetch_conversation_failed", extra=log_extra)
-        raise HTTPException(status_code=502, detail="No se pudo recuperar la conversación") from exc
+        raise HTTPException(
+            status_code=502, detail="No se pudo recuperar la conversación"
+        ) from exc
 
     channel = (conversation_meta.get("channel") or "").lower()
     if channel != "webchat":
@@ -3703,7 +3955,9 @@ async def reply_inbox_conversation(
         if payload.locale:
             extra_metadata["locale"] = payload.locale
         manual_user_id = _jwt_verify_and_sub(user_token)
-        manual_user_id = manual_user_id.strip() if isinstance(manual_user_id, str) else None
+        manual_user_id = (
+            manual_user_id.strip() if isinstance(manual_user_id, str) else None
+        )
 
         agent_payload: dict[str, Any] = {}
         if payload.metadata and isinstance(payload.metadata, dict):
@@ -3729,9 +3983,9 @@ async def reply_inbox_conversation(
 
         if profile:
             if manual_name is None:
-                profile_name = _clean_text(profile.get("nombre_completo")) or _clean_text(
-                    profile.get("correo")
-                )
+                profile_name = _clean_text(
+                    profile.get("nombre_completo")
+                ) or _clean_text(profile.get("correo"))
                 if profile_name:
                     manual_name = profile_name
             if manual_email is None:
@@ -3768,12 +4022,24 @@ async def reply_inbox_conversation(
                 agent_payload["user"] = user_payload
 
         if agent_payload:
-            agent_payload.setdefault("origin", agent_payload.get("origin") or "panel_manual")
-            agent_payload.setdefault("source", agent_payload.get("source") or "panel_manual")
-            agent_payload.setdefault("sender_type", agent_payload.get("sender_type") or "human")
-            agent_payload.setdefault("senderType", agent_payload.get("senderType") or "human")
-            agent_payload.setdefault("author_type", agent_payload.get("author_type") or "human")
-            agent_payload.setdefault("authorType", agent_payload.get("authorType") or "human")
+            agent_payload.setdefault(
+                "origin", agent_payload.get("origin") or "panel_manual"
+            )
+            agent_payload.setdefault(
+                "source", agent_payload.get("source") or "panel_manual"
+            )
+            agent_payload.setdefault(
+                "sender_type", agent_payload.get("sender_type") or "human"
+            )
+            agent_payload.setdefault(
+                "senderType", agent_payload.get("senderType") or "human"
+            )
+            agent_payload.setdefault(
+                "author_type", agent_payload.get("author_type") or "human"
+            )
+            agent_payload.setdefault(
+                "authorType", agent_payload.get("authorType") or "human"
+            )
 
             for key, value in agent_payload.items():
                 if key not in extra_metadata and key != "attachments":
@@ -3784,7 +4050,9 @@ async def reply_inbox_conversation(
                 extra_metadata.setdefault("manual_author", resolved_name)
                 extra_metadata.setdefault("agent_name", resolved_name)
             else:
-                agent_name = agent_payload.get("agent_name") or agent_payload.get("agentName")
+                agent_name = agent_payload.get("agent_name") or agent_payload.get(
+                    "agentName"
+                )
                 if isinstance(agent_name, str) and agent_name.strip():
                     extra_metadata.setdefault("agent_name", agent_name.strip())
             resolved_email = manual_email or _extract_agent_email(agent_payload)
@@ -3805,7 +4073,9 @@ async def reply_inbox_conversation(
                 "panel.inbox.manual_register_failed",
                 extra={"conversation_id": str(conversacion_id), "error": str(exc)},
             )
-            raise HTTPException(status_code=502, detail="No se pudo registrar el mensaje") from exc
+            raise HTTPException(
+                status_code=502, detail="No se pudo registrar el mensaje"
+            ) from exc
 
         try:
             await webchat_service.append_manual_agent_context(
@@ -3845,7 +4115,9 @@ async def reply_inbox_conversation(
             manual_name_resp = agent_payload.get("manual_author") or agent_payload.get(
                 "manualAuthor"
             )
-            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get("agentName")
+            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get(
+                "agentName"
+            )
             manual_email_resp = (
                 agent_payload.get("manual_email")
                 or agent_payload.get("manualEmail")
@@ -3888,7 +4160,9 @@ async def reply_inbox_conversation(
             "panel.inbox.assistant_failed",
             extra={"conversation_id": str(conversacion_id), "error": str(exc)},
         )
-        raise HTTPException(status_code=502, detail="Error al invocar al asistente") from exc
+        raise HTTPException(
+            status_code=502, detail="Error al invocar al asistente"
+        ) from exc
 
     metadata_model = assistant_response.metadata
     metadata = (
@@ -3924,13 +4198,17 @@ async def upload_inbox_attachment(
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
     try:
-        conversation_meta = await storage.fetch_webchat_conversation(str(conversacion_id))
+        conversation_meta = await storage.fetch_webchat_conversation(
+            str(conversacion_id)
+        )
     except StorageError as exc:
         logger.exception(
             "panel.inbox.fetch_conversation_failed",
             extra={"conversation_id": str(conversacion_id), "error": str(exc)},
         )
-        raise HTTPException(status_code=502, detail="conversation_lookup_failed") from exc
+        raise HTTPException(
+            status_code=502, detail="conversation_lookup_failed"
+        ) from exc
 
     channel = (conversation_meta.get("channel") or "").lower()
     if channel != "webchat":
@@ -4030,7 +4308,9 @@ async def list_agenda_bookings(
         if len(assigned_uuid_filters) == 1:
             params["asignado_a_usuario_id"] = f"eq.{next(iter(assigned_uuid_filters))}"
         else:
-            params["asignado_a_usuario_id"] = f"in.({','.join(sorted(assigned_uuid_filters))})"
+            params["asignado_a_usuario_id"] = (
+                f"in.({','.join(sorted(assigned_uuid_filters))})"
+            )
 
     if search:
         cleaned = " ".join(search.strip().split())
@@ -4078,7 +4358,9 @@ async def list_agenda_bookings(
     assigned_name_filters = {
         value.strip().lower()
         for value in (assigned or [])
-        if isinstance(value, str) and not _looks_like_uuid(value.strip()) and value.strip()
+        if isinstance(value, str)
+        and not _looks_like_uuid(value.strip())
+        and value.strip()
     }
 
     for item in items:
@@ -4460,12 +4742,16 @@ async def send_lead_quote(
                 ],
             )
         except EmailSendError as exc:
-            raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
+            raise HTTPException(
+                status_code=502, detail="quote_email_send_failed"
+            ) from exc
         extra_data = _quote_mark_extra({"email_to": recipients, "subject": subject})
     else:
         whatsapp_number = _resolve_whatsapp_number(contact, payload.whatsapp_to)
         if not whatsapp_number:
-            raise HTTPException(status_code=400, detail="quote_whatsapp_missing_recipient")
+            raise HTTPException(
+                status_code=400, detail="quote_whatsapp_missing_recipient"
+            )
         body_text = quotes_service.compose_whatsapp_body(quote_context, payload.message)
         try:
             await quotes_service.send_whatsapp_message(
@@ -4569,7 +4855,9 @@ async def registrar_documento_cliente(
     cliente_id: UUID,
     payload: ClienteDocumentoPayload,
 ) -> dict[str, Any]:
-    cliente = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    cliente = await repo.get_cliente_por_id(
+        usuario_token=user_token, cliente_id=cliente_id
+    )
     if cliente is None:
         raise HTTPException(status_code=404, detail="cliente_not_found")
     body = payload.model_dump(exclude_none=True)
@@ -4596,7 +4884,9 @@ async def subir_documento_cliente(
     descripcion: str | None = Form(default=None),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-    cliente = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    cliente = await repo.get_cliente_por_id(
+        usuario_token=user_token, cliente_id=cliente_id
+    )
     if cliente is None:
         raise HTTPException(status_code=404, detail="cliente_not_found")
     try:
@@ -4704,7 +4994,9 @@ async def crear_link_portal_cliente(
     cliente_id: UUID,
     payload: ClientePortalLinkPayload,
 ) -> dict[str, Any]:
-    cliente_data = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    cliente_data = await repo.get_cliente_por_id(
+        usuario_token=user_token, cliente_id=cliente_id
+    )
     if cliente_data is None:
         raise HTTPException(status_code=404, detail="cliente_not_found")
     portal_token = secrets.token_urlsafe(32)
@@ -4743,9 +5035,13 @@ async def crear_link_portal_cliente(
                     body_text=body_text,
                     recipients=recipients,
                 )
-                email_summary.update({"sent": True, "recipients": recipients, "subject": subject})
+                email_summary.update(
+                    {"sent": True, "recipients": recipients, "subject": subject}
+                )
             except EmailSendError as exc:
-                raise HTTPException(status_code=502, detail="portal_email_send_failed") from exc
+                raise HTTPException(
+                    status_code=502, detail="portal_email_send_failed"
+                ) from exc
         else:
             email_summary["reason"] = "missing_recipient"
 
@@ -4927,7 +5223,9 @@ async def crear_busqueda_google(
     payload: GoogleProspeccionBusquedaPayload,
 ) -> dict[str, Any]:
     client = GooglePlacesClient()
-    query_value = payload.query or ", ".join(payload.included_types or []) or "google_places"
+    query_value = (
+        payload.query or ", ".join(payload.included_types or []) or "google_places"
+    )
     try:
         places = await client.search_places(
             query=payload.query,
@@ -4991,13 +5289,18 @@ async def crear_busqueda_google(
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        upsert_value = _rpc_field(upsert_data, "upsert_resultados_lote", "upserted", "total")
+        upsert_value = _rpc_field(
+            upsert_data, "upsert_resultados_lote", "upserted", "total"
+        )
         try:
             upserted = int(upsert_value or 0)
         except (TypeError, ValueError):
             upserted = len(normalized_items)
 
-    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    preview = [
+        _result_preview(item)
+        for item in normalized_items[: min(10, len(normalized_items))]
+    ]
     return {
         "ok": True,
         "busqueda_id": str(busqueda_uuid),
@@ -5068,7 +5371,9 @@ async def crear_busqueda_denue(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if isinstance(upsert_data, dict):
             upserted = (
-                upsert_data.get("upserted") or upsert_data.get("total") or len(normalized_items)
+                upsert_data.get("upserted")
+                or upsert_data.get("total")
+                or len(normalized_items)
             )
         else:
             try:
@@ -5076,7 +5381,10 @@ async def crear_busqueda_denue(
             except (TypeError, ValueError):
                 upserted = len(normalized_items)
 
-    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    preview = [
+        _result_preview(item)
+        for item in normalized_items[: min(10, len(normalized_items))]
+    ]
     return {
         "ok": True,
         "busqueda_id": str(busqueda_uuid),
@@ -5331,6 +5639,266 @@ async def eliminar_resultados_denue(
     return {"ok": True, "deleted": deleted}
 
 
+@router.post("/prospeccion/prospectos")
+async def guardar_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ProspectoSeleccionPayload,
+) -> dict[str, Any]:
+    """Persiste IDs seleccionados de búsquedas en la tabla de prospectos."""
+
+    try:
+        contactables = await repo.list_contactables_by_ids(
+            usuario_token=user_token,
+            fuente=payload.fuente,
+            resultado_ids=payload.resultado_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not contactables:
+        raise HTTPException(status_code=404, detail="resultados_not_found")
+
+    items = [
+        _build_prospecto_from_contactable(
+            row,
+            segmento=payload.segmento,
+            extra_metadata=payload.metadata,
+        )
+        for row in contactables
+    ]
+    try:
+        prospectos = await repo.upsert_prospeccion_prospectos(
+            usuario_token=user_token,
+            items=items,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "total": len(prospectos),
+        "prospectos": prospectos,
+    }
+
+
+@router.post("/prospeccion/prospectos/verificar-telefonos")
+async def verificar_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ProspectoLookupPayload,
+) -> dict[str, Any]:
+    """Verifica los teléfonos de prospectos con Twilio Lookup."""
+
+    try:
+        prospectos = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=payload.prospecto_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not prospectos:
+        raise HTTPException(status_code=404, detail="prospectos_not_found")
+
+    processed: list[dict[str, Any]] = []
+    for prospecto in prospectos:
+        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
+        if not prospecto_id:
+            continue
+        current_status = _clean_text(prospecto.get("lookup_status")) or ""
+        if not payload.reintentar and current_status in {"verificado", "sin_numero"}:
+            continue
+        base_phone = prospecto.get("phone_e164") or prospecto.get("phone")
+        phone = _clean_text(base_phone)
+        if not phone:
+            updates = {
+                "lookup_status": "sin_numero",
+                "lookup_error": None,
+                "whatsapp_permitido": False,
+                "llamada_permitida": False,
+            }
+        else:
+            try:
+                lookup = await lookup_phone_number(
+                    phone,
+                    country_code=payload.country_code,
+                )
+            except TwilioLookupError as exc:
+                updates = {
+                    "lookup_status": "error",
+                    "lookup_error": str(exc),
+                }
+            else:
+                carrier = lookup.get("carrier") or {}
+                carrier_type = _clean_text(carrier.get("type"))
+                whatsapp_allowed = (carrier_type or "").lower() == "mobile"
+                llamada_permitida = (carrier_type or "").lower() in {
+                    "mobile",
+                    "landline",
+                }
+                updates = {
+                    "phone_e164": lookup.get("phone_number") or phone,
+                    "phone_national": lookup.get("national_format"),
+                    "carrier_name": carrier.get("name"),
+                    "carrier_type": carrier_type,
+                    "lookup_status": "verificado",
+                    "lookup_error": None,
+                    "whatsapp_permitido": whatsapp_allowed,
+                    "llamada_permitida": llamada_permitida,
+                }
+        try:
+            updated = await repo.update_prospecto(
+                usuario_token=user_token,
+                prospecto_id=UUID(str(prospecto_id)),
+                payload=updates,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        processed.append(
+            {
+                "prospecto_id": str(prospecto_id),
+                "lookup_status": updated.get("lookup_status"),
+                "carrier_type": updated.get("carrier_type"),
+                "whatsapp_permitido": updated.get("whatsapp_permitido"),
+            }
+        )
+
+    return {"ok": True, "procesados": len(processed), "detalles": processed}
+
+
+@router.post("/prospeccion/prospectos/contactar")
+async def contactar_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ProspectoContactarPayload,
+) -> dict[str, Any]:
+    """Envía correos, WhatsApps o registra llamadas para prospectos seleccionados."""
+
+    try:
+        prospectos = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=payload.prospecto_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not prospectos:
+        raise HTTPException(status_code=404, detail="prospectos_not_found")
+
+    logs: list[dict[str, Any]] = []
+    resumen: list[dict[str, Any]] = []
+
+    for prospecto in prospectos:
+        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
+        if not prospecto_id:
+            continue
+        telefono = _clean_text(prospecto.get("phone_e164") or prospecto.get("phone"))
+        email_value = _clean_text(prospecto.get("email"))
+        canales: dict[str, Any] = {}
+
+        if payload.correo_asunto and payload.correo_cuerpo:
+            if email_value:
+                try:
+                    await asyncio.to_thread(
+                        send_email,
+                        subject=payload.correo_asunto,
+                        body_text=payload.correo_cuerpo,
+                        recipients=[email_value],
+                    )
+                except EmailSendError as exc:
+                    logs.append(
+                        _build_contact_log_entry(
+                            prospecto_id=prospecto_id,
+                            canal="correo",
+                            estado="error",
+                            detalle={"email": email_value},
+                            error=str(exc),
+                        )
+                    )
+                    canales["correo"] = "error"
+                else:
+                    logs.append(
+                        _build_contact_log_entry(
+                            prospecto_id=prospecto_id,
+                            canal="correo",
+                            estado="enviado",
+                            detalle={"email": email_value},
+                        )
+                    )
+                    canales["correo"] = "enviado"
+            else:
+                logs.append(
+                    _build_contact_log_entry(
+                        prospecto_id=prospecto_id,
+                        canal="correo",
+                        estado="omitido",
+                        detalle={"reason": "sin_correo"},
+                    )
+                )
+                canales["correo"] = "omitido"
+
+        if payload.whatsapp_mensaje:
+            if telefono and _prospecto_whatsapp_allowed(prospecto):
+                wa_result = await _send_whatsapp_message(
+                    to_number=telefono,
+                    body=payload.whatsapp_mensaje,
+                )
+                estado = "enviado" if not wa_result.error else "error"
+                logs.append(
+                    _build_contact_log_entry(
+                        prospecto_id=prospecto_id,
+                        canal="whatsapp",
+                        estado=estado,
+                        detalle={"status": wa_result.status, "sid": wa_result.sid},
+                        error=wa_result.error,
+                    )
+                )
+                canales["whatsapp"] = estado
+            else:
+                logs.append(
+                    _build_contact_log_entry(
+                        prospecto_id=prospecto_id,
+                        canal="whatsapp",
+                        estado="omitido",
+                        detalle={"reason": "whatsapp_no_permitido"},
+                    )
+                )
+                canales["whatsapp"] = "omitido"
+
+        if payload.llamada_notas:
+            if telefono and _prospecto_llamada_permitida(prospecto):
+                logs.append(
+                    _build_contact_log_entry(
+                        prospecto_id=prospecto_id,
+                        canal="llamada",
+                        estado="pendiente",
+                        detalle={"telefono": telefono, "notas": payload.llamada_notas},
+                    )
+                )
+                canales["llamada"] = "pendiente"
+            else:
+                logs.append(
+                    _build_contact_log_entry(
+                        prospecto_id=prospecto_id,
+                        canal="llamada",
+                        estado="omitido",
+                        detalle={"reason": "llamada_no_permitida"},
+                    )
+                )
+                canales["llamada"] = "omitido"
+
+        resumen.append({"prospecto_id": str(prospecto_id), **canales})
+
+    if logs:
+        try:
+            await repo.insert_prospecto_logs(usuario_token=user_token, entries=logs)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "contactos": resumen}
+
+
 @router.get("/visitas/kpis")
 async def get_visits_kpis(
     *,
@@ -5382,7 +5950,9 @@ async def get_visits_detail(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [_map_visit_detail_row(row) if isinstance(row, dict) else row for row in rows]
+    return [
+        _map_visit_detail_row(row) if isinstance(row, dict) else row for row in rows
+    ]
 
 
 @router.get("/visitas/whatsapp/total")
@@ -5441,7 +6011,9 @@ async def list_activities(
     return CRMActivitiesResponse(items=items, limit=limit, offset=offset)
 
 
-@router.post("/actividades", response_model=CRMActivity, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/actividades", response_model=CRMActivity, status_code=status.HTTP_201_CREATED
+)
 async def create_activity(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -5470,11 +6042,15 @@ async def get_activity(
     actividad_id: UUID,
 ) -> CRMActivity:
     try:
-        row = await repo.get_activity(organizacion_id=organizacion_id, activity_id=actividad_id)
+        row = await repo.get_activity(
+            organizacion_id=organizacion_id, activity_id=actividad_id
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="actividad_no_encontrada")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="actividad_no_encontrada"
+        )
     return CRMActivity.model_validate(row)
 
 
@@ -5528,11 +6104,15 @@ async def get_ticket(
     ticket_id: UUID,
 ) -> CRMTicket:
     try:
-        row = await repo.get_ticket(organizacion_id=organizacion_id, ticket_id=ticket_id)
+        row = await repo.get_ticket(
+            organizacion_id=organizacion_id, ticket_id=ticket_id
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ticket_no_encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="ticket_no_encontrado"
+        )
     return CRMTicket.model_validate(row)
 
 
@@ -5656,7 +6236,9 @@ async def create_tag(
     return CRMTag.model_validate(row)
 
 
-@router.post("/taggings", response_model=CRMTagging, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/taggings", response_model=CRMTagging, status_code=status.HTTP_201_CREATED
+)
 async def create_tagging(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -5684,7 +6266,9 @@ async def delete_tagging(
     tagging_id: UUID,
 ) -> Response:
     try:
-        await repo.delete_tagging(organizacion_id=organizacion_id, tagging_id=tagging_id)
+        await repo.delete_tagging(
+            organizacion_id=organizacion_id, tagging_id=tagging_id
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -5698,13 +6282,17 @@ async def list_products(
     activos: bool | None = Query(default=None),
 ) -> list[CRMProduct]:
     try:
-        rows = await repo.list_products(organizacion_id=organizacion_id, activos=activos)
+        rows = await repo.list_products(
+            organizacion_id=organizacion_id, activos=activos
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMProduct.model_validate(row) for row in rows]
 
 
-@router.post("/productos", response_model=CRMProduct, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/productos", response_model=CRMProduct, status_code=status.HTTP_201_CREATED
+)
 async def create_product(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -5738,7 +6326,9 @@ async def list_quotes(
     return [CRMQuote.model_validate(row) for row in rows]
 
 
-@router.post("/cotizaciones", response_model=CRMQuote, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/cotizaciones", response_model=CRMQuote, status_code=status.HTTP_201_CREATED
+)
 async def create_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -5813,7 +6403,9 @@ async def list_campaigns(
     return [CRMCampaign.model_validate(row) for row in rows]
 
 
-@router.post("/campanas", response_model=CRMCampaign, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/campanas", response_model=CRMCampaign, status_code=status.HTTP_201_CREATED
+)
 async def create_campaign(
     *,
     repo: CRMRepository = Depends(get_repository),
@@ -6235,15 +6827,23 @@ async def demografia_mapa(
         "canales": channel_values,
         "etapas": stage_values,
         "range": _build_range_payload(rango, date_from, date_to),
-        "totales_leads": (leads_payload.get("totals") if isinstance(leads_payload, dict) else {}),
+        "totales_leads": (
+            leads_payload.get("totals") if isinstance(leads_payload, dict) else {}
+        ),
         "totales_visitantes": (
-            visitantes_payload.get("totals") if isinstance(visitantes_payload, dict) else {}
+            visitantes_payload.get("totals")
+            if isinstance(visitantes_payload, dict)
+            else {}
         ),
         "totales_leads_por_canal": (
-            leads_payload.get("totals_by_channel") if isinstance(leads_payload, dict) else {}
+            leads_payload.get("totals_by_channel")
+            if isinstance(leads_payload, dict)
+            else {}
         ),
         "captado_orden": (
-            leads_payload.get("captado_orden") if isinstance(leads_payload, dict) else None
+            leads_payload.get("captado_orden")
+            if isinstance(leads_payload, dict)
+            else None
         ),
         "dataset": dataset,
         "geojson": geojson,
@@ -6299,7 +6899,9 @@ def _build_pipeline_overview(
     cards = _build_pipeline_cards(rows)
     chart = _build_pipeline_chart(rows, days_range)
     table = _build_pipeline_table(rows, table_limit)
-    return CRMPipelineOverview(cards=cards, chart=chart, table=table, total_rows=total_rows)
+    return CRMPipelineOverview(
+        cards=cards, chart=chart, table=table, total_rows=total_rows
+    )
 
 
 def _extract_visitas_sin_chat(payload: dict[str, Any] | None) -> int:
@@ -6307,7 +6909,12 @@ def _extract_visitas_sin_chat(payload: dict[str, Any] | None) -> int:
         return 0
     webchat = payload.get("webchat")
     if isinstance(webchat, dict):
-        for key in ("visitas_sin_chat", "visitantes_sin_chat", "sin_chat", "sin_conversacion"):
+        for key in (
+            "visitas_sin_chat",
+            "visitantes_sin_chat",
+            "sin_chat",
+            "sin_conversacion",
+        ):
             value = webchat.get(key)
             if isinstance(value, (int, float)):
                 return int(value)
@@ -6322,7 +6929,14 @@ def _render_catalog_sales_csv(rows: Sequence[dict[str, Any]]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
-        ["mes", "producto", "moneda", "total_vendido", "unidades_vendidas", "leads_ganados"]
+        [
+            "mes",
+            "producto",
+            "moneda",
+            "total_vendido",
+            "unidades_vendidas",
+            "leads_ganados",
+        ]
     )
     for row in rows:
         if not isinstance(row, dict):
@@ -6511,7 +7125,8 @@ def _build_pipeline_table(
                     "contacto_telefono": contacto.get("telefono_e164"),
                     "contacto_empresa": contacto.get("company_name"),
                     "contacto_notas": contacto.get("notes"),
-                    "contacto_estado": contacto.get("estado") or contacto.get("captura_estado"),
+                    "contacto_estado": contacto.get("estado")
+                    or contacto.get("captura_estado"),
                     "motivo_cierre": row.get("motivo_perdida"),
                     "tags": (row.get("metadata") or {}).get("tags"),
                     "metadata": row.get("metadata"),
@@ -6592,7 +7207,8 @@ def _build_pipeline_board(
 
     for stage in stage_map.values():
         stage.tarjetas.sort(
-            key=lambda card: card.actualizado_en or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda card: card.actualizado_en
+            or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
         )
 
@@ -6602,7 +7218,8 @@ def _build_pipeline_board(
     )
 
     sin_conversacion.sort(
-        key=lambda card: card.actualizado_en or datetime.min.replace(tzinfo=timezone.utc),
+        key=lambda card: card.actualizado_en
+        or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
 
