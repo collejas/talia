@@ -43,20 +43,42 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
             "manual_override": True,
         }
 
+    async def fake_fetch_contact(contact_id: str):
+        return {"id": contact_id}
+
+    async def fake_fetch_contact_identities(contact_id: str):
+        return []
+
     called = {"assistant": False}
 
     async def fake_generate(**kwargs):
         called["assistant"] = True
-        return service.AssistantReply(text="ok", openai_conversation_id=None, response_id=None)
+        return service.AssistantReply(
+            text="ok", openai_conversation_id=None, response_id=None
+        )
+
+    async def fake_ensure_conversation_opportunity(*_: object, **__: object) -> None:
+        return None
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(
+        service.storage, "fetch_contact_identities", fake_fetch_contact_identities
+    )
+    monkeypatch.setattr(
+        service.storage,
+        "ensure_conversation_opportunity",
+        fake_ensure_conversation_opportunity,
+    )
     monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
 
     await service.handle_incoming_message(message)
 
     assert called["assistant"] is False
-    assert register_calls and register_calls[0]["webhook_payload"] == message.raw_payload
+    assert (
+        register_calls and register_calls[0]["webhook_payload"] == message.raw_payload
+    )
 
 
 @pytest.mark.asyncio
@@ -71,7 +93,9 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
         return {
             "conversation_id": "conv-1",
             "contact_id": "contact-1",
-            "openai_conversation_id": kwargs.get("metadata", {}).get("openai_conversation_id"),
+            "openai_conversation_id": kwargs.get("metadata", {}).get(
+                "openai_conversation_id"
+            ),
         }
 
     async def fake_fetch_conversation(conversation_id: str):
@@ -83,6 +107,12 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
             "last_response_id": None,
         }
 
+    async def fake_fetch_contact(contact_id: str):
+        return {"id": contact_id}
+
+    async def fake_fetch_contact_identities(contact_id: str):
+        return []
+
     async def fake_generate(**kwargs):
         return service.AssistantReply(
             text="Respuesta automática",
@@ -93,8 +123,20 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     async def fake_send(**kwargs):
         return service.TwilioSendResult(sid="SM-out", status="sent")
 
+    async def fake_ensure_conversation_opportunity(*_: object, **__: object) -> None:
+        return None
+
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(
+        service.storage, "fetch_contact_identities", fake_fetch_contact_identities
+    )
+    monkeypatch.setattr(
+        service.storage,
+        "ensure_conversation_opportunity",
+        fake_ensure_conversation_opportunity,
+    )
     monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
     monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
 
