@@ -384,6 +384,20 @@ class ProspectoLookupPayload(BaseModel):
         return unique
 
 
+class ProspectoListQuery(BaseModel):
+    """Filtros de paginación y búsqueda para prospectos guardados."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    search: str | None = Field(default=None, max_length=120)
+    fuente: Literal["google_places", "denue", ""] | None = Field(default=None)
+    lookup_status: str | None = Field(default=None, max_length=60)
+    segmento: str | None = Field(default=None, max_length=120)
+    order: Literal["creado", "nombre"] | None = Field(default=None)
+
+
 class ProspectoContactarPayload(BaseModel):
     """Programa envíos de contacto para prospectos verificados."""
 
@@ -5505,6 +5519,39 @@ async def eliminar_resultados_denue(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "deleted": deleted}
+
+
+@router.get("/prospeccion/prospectos")
+async def listar_prospectos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    params: ProspectoListQuery = Depends(),
+) -> dict[str, Any]:
+    """Devuelve prospectos guardados con paginación y filtros básicos."""
+
+    order_value = "display_name.asc.nullslast" if params.order == "nombre" else None
+    try:
+        rows, total = await repo.list_prospectos(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            search=params.search,
+            fuente=params.fuente or None,
+            lookup_status=params.lookup_status,
+            segmento=params.segmento,
+            order=order_value,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
 
 
 @router.post("/prospeccion/prospectos")

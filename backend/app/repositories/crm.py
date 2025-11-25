@@ -3146,6 +3146,66 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
         return data
 
+    async def list_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 50,
+        offset: int = 0,
+        search: str | None = None,
+        fuente: str | None = None,
+        lookup_status: str | None = None,
+        segmento: str | None = None,
+        order: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista prospectos con filtros de búsqueda y totalizador."""
+
+        params: dict[str, str] = {
+            "select": "*",
+            "limit": str(limit),
+            "offset": str(offset),
+            "order": order or "creado_en.desc",
+        }
+
+        if fuente:
+            params["fuente"] = f"eq.{fuente}"
+        if lookup_status:
+            params["lookup_status"] = f"eq.{lookup_status}"
+        if segmento:
+            params["segmento"] = f"eq.{segmento}"
+
+        if search:
+            sanitized = search.strip()
+            for char in "(),*":
+                sanitized = sanitized.replace(char, " ")
+            pattern = f"*{sanitized}*"
+            params["or"] = (
+                "("
+                + ",".join(
+                    [
+                        f"display_name.ilike.{pattern}",
+                        f"actividad.ilike.{pattern}",
+                        f"phone.ilike.{pattern}",
+                        f"email.ilike.{pattern}",
+                        f"website.ilike.{pattern}",
+                    ]
+                )
+                + ")"
+            )
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
     async def update_prospecto(
         self,
         *,

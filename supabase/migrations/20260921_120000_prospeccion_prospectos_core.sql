@@ -40,29 +40,82 @@ CREATE INDEX IF NOT EXISTS prospeccion_prospectos_fuente_idx
 
 ALTER TABLE public.prospeccion_prospectos ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS p_select_prospeccion_prospectos
-    ON public.prospeccion_prospectos
-    FOR SELECT
-    TO authenticated
-    USING (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'prospeccion_prospectos'
+          AND policyname = 'p_select_prospeccion_prospectos'
+    ) THEN
+        EXECUTE $policy$
+            CREATE POLICY p_select_prospeccion_prospectos
+                ON public.prospeccion_prospectos
+                FOR SELECT
+                TO authenticated
+                USING (true)
+        $policy$;
+    END IF;
+END
+$$;
 
-CREATE POLICY IF NOT EXISTS p_insert_prospeccion_prospectos
-    ON public.prospeccion_prospectos
-    FOR INSERT
-    TO authenticated
-    WITH CHECK (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'prospeccion_prospectos'
+          AND policyname = 'p_insert_prospeccion_prospectos'
+    ) THEN
+        EXECUTE $policy$
+            CREATE POLICY p_insert_prospeccion_prospectos
+                ON public.prospeccion_prospectos
+                FOR INSERT
+                TO authenticated
+                WITH CHECK (true)
+        $policy$;
+    END IF;
+END
+$$;
 
-CREATE POLICY IF NOT EXISTS p_update_prospeccion_prospectos
-    ON public.prospeccion_prospectos
-    FOR UPDATE
-    TO authenticated
-    USING (true)
-    WITH CHECK (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'prospeccion_prospectos'
+          AND policyname = 'p_update_prospeccion_prospectos'
+    ) THEN
+        EXECUTE $policy$
+            CREATE POLICY p_update_prospeccion_prospectos
+                ON public.prospeccion_prospectos
+                FOR UPDATE
+                TO authenticated
+                USING (true)
+                WITH CHECK (true)
+        $policy$;
+    END IF;
+END
+$$;
 
-CREATE TRIGGER IF NOT EXISTS t_prospeccion_prospectos_touch
-    BEFORE UPDATE ON public.prospeccion_prospectos
-    FOR EACH ROW
-    EXECUTE FUNCTION public.tg_touch_updated_at();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgname = 't_prospeccion_prospectos_touch'
+    ) THEN
+        EXECUTE $trigger$
+            CREATE TRIGGER t_prospeccion_prospectos_touch
+                BEFORE UPDATE ON public.prospeccion_prospectos
+                FOR EACH ROW
+                EXECUTE FUNCTION public.tg_touch_updated_at()
+        $trigger$;
+    END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS public.prospeccion_contactos_log (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,17 +134,45 @@ CREATE INDEX IF NOT EXISTS prospeccion_contactos_log_prospecto_idx
 
 ALTER TABLE public.prospeccion_contactos_log ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS p_select_prospeccion_contactos_log
-    ON public.prospeccion_contactos_log
-    FOR SELECT
-    TO authenticated
-    USING (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'prospeccion_contactos_log'
+          AND policyname = 'p_select_prospeccion_contactos_log'
+    ) THEN
+        EXECUTE $policy$
+            CREATE POLICY p_select_prospeccion_contactos_log
+                ON public.prospeccion_contactos_log
+                FOR SELECT
+                TO authenticated
+                USING (true)
+        $policy$;
+    END IF;
+END
+$$;
 
-CREATE POLICY IF NOT EXISTS p_insert_prospeccion_contactos_log
-    ON public.prospeccion_contactos_log
-    FOR INSERT
-    TO authenticated
-    WITH CHECK (true);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'prospeccion_contactos_log'
+          AND policyname = 'p_insert_prospeccion_contactos_log'
+    ) THEN
+        EXECUTE $policy$
+            CREATE POLICY p_insert_prospeccion_contactos_log
+                ON public.prospeccion_contactos_log
+                FOR INSERT
+                TO authenticated
+                WITH CHECK (true)
+        $policy$;
+    END IF;
+END
+$$;
 
 CREATE OR REPLACE FUNCTION public.crear_busqueda(
     p_fuente public.fuente_resultado,

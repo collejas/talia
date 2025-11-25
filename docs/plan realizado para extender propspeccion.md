@@ -62,11 +62,18 @@ backend/app/api/routes/crm.py
 backend/app/repositories/crm.py
 backend/app/services/__init__.py
 backend/tests/channels/test_whatsapp_service.py
+frontend/panel/src/components/AppSidebar.tsx
 
 # Archivos Crados
 Makefile
 backend/app/services/twilio_lookup.py
+frontend/panel/src/app/api/prospeccion/prospectos/route.ts
+frontend/panel/src/app/api/prospeccion/prospectos/contactar/route.ts
+frontend/panel/src/app/api/prospeccion/prospectos/verificar-telefonos/route.ts
+frontend/panel/src/lib/prospeccion/prospectos-client.ts
 
 # Migracion Nueva
 supabase/migrations/20260605_120000_prospeccion_prospectos.sql
 supabase/migrations/20260921_120000_prospeccion_prospectos_core.sql
+
+
