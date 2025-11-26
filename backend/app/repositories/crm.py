@@ -3300,6 +3300,107 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al registrar contactos: {data!r}")
         return data
 
+    async def create_contact_batch(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Inserta un lote de contacto y devuelve el registro."""
+
+        body = [payload]
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contacto_batch",
+            token=usuario_token,
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_batch_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_batch_invalid:{row!r}")
+        return row
+
+    async def insert_contact_envios(
+        self,
+        *,
+        usuario_token: str,
+        entries: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Inserta envíos asociados a un lote."""
+
+        if not entries:
+            return []
+        created: list[dict[str, Any]] = []
+        chunk_size = 500
+        for start in range(0, len(entries), chunk_size):
+            chunk = entries[start : start + chunk_size]
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/prospeccion_contacto_envio",
+                token=usuario_token,
+                json=chunk,
+                prefer="return=representation",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_envio_insert_invalid:{data!r}")
+            created.extend(data)
+        return created
+
+    async def update_contact_envio(
+        self,
+        *,
+        usuario_token: str,
+        envio_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza un envío individual."""
+
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
+            params={"id": f"eq.{envio_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_envio_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_envio_update_invalid:{row!r}")
+        return row
+
+    async def update_contact_batch(
+        self,
+        *,
+        usuario_token: str,
+        batch_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza metadatos del lote."""
+
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_batch",
+            token=usuario_token,
+            params={"id": f"eq.{batch_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_batch_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_batch_update_invalid:{row!r}")
+        return row
+
     async def get_email_template(
         self,
         *,
