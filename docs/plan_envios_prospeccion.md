@@ -16,18 +16,18 @@
 
 ## Alcance técnico
 
-### 1. Modelado y almacenamiento
-1. Crear tablas nuevas en Supabase:
+### 1. Modelado y almacenamiento ✅
+1. Crear tablas nuevas en Supabase ✅:
    - `prospeccion_contacto_batch` (id, iniciado_por, filtros utilizados, total_prospectos, canales solicitados, estado global, creado_en).
    - `prospeccion_contacto_envio` (id, batch_id, prospecto_id, canal, payload jsonb, estado, intento_actual, max_reintentos, mensaje_id/call_sid, programado_en, procesado_en).
-2. Mantener `prospeccion_contactos_log` como bitácora detallada pero relacionarla vía `envio_id` o `batch_id` (FKs).
-3. Migraciones:
+2. Mantener `prospeccion_contactos_log` como bitácora detallada pero relacionarla vía `envio_id` o `batch_id` (FKs). ✅
+3. Migraciones ✅:
    - Añadir columnas `envio_id uuid` y `batch_id uuid` opcionales al log.
    - Índices por `prospecto_id+canal` y `estado` para facilitar dashboards.
 
 ### 2. Backend (FastAPI + servicios)
-1. **Orquestador de batches**
-   - Extender `POST /crm/prospeccion/prospectos/contactar` para que en lugar de enviar de inmediato, cree un `batch` y registros `prospeccion_contacto_envio` por cada prospecto/canal.
+1. **Orquestador de batches** ✅
+   - Extender `POST /crm/prospeccion/prospectos/contactar` para que en lugar de enviar de inmediato, cree un `batch` y registros `prospeccion_contacto_envio` por cada prospecto/canal. ✅
    - Añadir endpoint `GET /crm/prospeccion/prospectos/contactar/{batch_id}` para consultar progreso (totales por estado) y `POST /crm/prospeccion/prospectos/contactar/{batch_id}/cancelar`.
 2. **Worker/cola de tareas**
    - Implementar un procesador asíncrono (por ejemplo, módulo `app/services/prospeccion_contact_sender.py`) que:
@@ -45,8 +45,8 @@
      - Guardar `template_name` y parámetros en `payload`.
      - Reutilizar `_send_whatsapp_message`, pero moverlo al worker y capturar `sid`/`status`.
      - El webhook existente (`channels/whatsapp/router.py`) debe actualizar `prospeccion_contacto_envio` según callbacks (`delivered`, `read`, `failed`).
-5. **Voz**
-   - Implementar servicio en `app/channels/voice/service.py` capaz de originar llamadas salientes:
+5. **Voz** ✅
+   - Implementar servicio en `app/channels/voice/service.py` capaz de originar llamadas salientes ✅:
      - Nuevo helper `start_outbound_call(prospecto, notas)` que cree una llamada vía Twilio Voice (REST API) usando un número configurado y apunte a un endpoint TwiML (`/voice/outbound/{envio_id}`) que reproduzca un mensaje o conecte con un agente.
      - Guardar `call_sid` en `prospeccion_contacto_envio`.
      - Ampliar `VoiceStatusCallback` para mapear eventos (queued, ringing, in-progress, completed, busy, failed) y actualizar `estado`.
