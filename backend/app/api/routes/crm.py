@@ -507,6 +507,12 @@ class ContactEnvioQuery(BaseModel):
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
 
 
+class ContactTemplateQuery(BaseModel):
+    """Filtros simples para listar plantillas."""
+
+    canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
+
+
 class GoogleProspeccionBusquedaPayload(BaseModel):
     """Parámetros para lanzar una captura desde Google Places."""
 
@@ -6077,6 +6083,25 @@ async def listar_contacto_envios(
         "limit": params.limit,
         "offset": params.offset,
     }
+
+
+@router.get("/prospeccion/contacto/templates")
+async def listar_contacto_templates(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    params: ContactTemplateQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista plantillas disponibles para envíos."""
+
+    try:
+        items = await repo.list_contact_templates(
+            usuario_token=user_token,
+            canal=params.canal or None,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "items": items}
 
 
 @router.get("/prospeccion/prospectos/{prospecto_id}/contactos")

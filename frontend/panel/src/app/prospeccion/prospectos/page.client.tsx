@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
@@ -47,10 +48,12 @@ import {
   eliminarProspecto,
   listProspectos,
   listContactoEnviosPorProspecto,
+  listContactoTemplates,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoContactoResumen,
   type ContactoEnvio,
+  type ContactoTemplate,
   verificarProspectos,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -182,6 +185,9 @@ function ProspectosView() {
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<ContactoTemplate[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -234,6 +240,28 @@ function ProspectosView() {
   }, [contactDialogOpen])
 
   useEffect(() => {
+    if (!contactDialogOpen) {
+      return
+    }
+    let active = true
+    setTemplatesLoading(true)
+    ;(async () => {
+      try {
+        const response = await listContactoTemplates()
+        if (!active) return
+        setTemplates(response.items ?? [])
+      } catch {
+        if (active) setTemplates([])
+      } finally {
+        if (active) setTemplatesLoading(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [contactDialogOpen])
+
+  useEffect(() => {
     if (!formDialogOpen) {
       setFormValues(initialProspectoForm)
       setFormError(null)
@@ -260,6 +288,29 @@ function ProspectosView() {
       setHistoryLoading(false)
     }
   }, [historyDialogOpen])
+
+  const handleTemplateSelect = (canal: "correo" | "whatsapp" | "llamada", slug: string) => {
+    setSelectedTemplates((prev) => ({ ...prev, [canal]: slug }))
+    const template = templates.find((item) => item.slug === slug && item.canal === canal)
+    if (!template) return
+    if (canal === "correo") {
+      setContactForm((prev) => ({
+        ...prev,
+        correoAsunto: template.asunto ?? prev.correoAsunto,
+        correoCuerpo: template.cuerpo_texto ?? prev.correoCuerpo,
+      }))
+    } else if (canal === "whatsapp") {
+      setContactForm((prev) => ({
+        ...prev,
+        whatsappMensaje: template.cuerpo_texto ?? prev.whatsappMensaje,
+      }))
+    } else if (canal === "llamada") {
+      setContactForm((prev) => ({
+        ...prev,
+        llamadaNotas: template.cuerpo_texto ?? prev.llamadaNotas,
+      }))
+    }
+  }
 
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
@@ -970,60 +1021,146 @@ function ProspectosView() {
       </section>
 
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Programar contacto</DialogTitle>
             <DialogDescription>
-              Define los mensajes a enviar por correo o WhatsApp. También puedes dejar notas para llamadas. Solo se
-              enviará cada canal con contenido configurado.
+              Define cada canal usando plantillas predefinidas o personaliza el contenido. Sólo se enviarán aquellos
+              canales con texto configurado.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid gap-4 md:grid-cols-2">
+          <Tabs defaultValue="correo" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="correo">Correo</TabsTrigger>
+              <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+              <TabsTrigger value="llamada">Llamada</TabsTrigger>
+            </TabsList>
+            <TabsContent value="correo" className="space-y-3">
               <div className="space-y-1">
-                <Label>Asunto del correo</Label>
-                <Input
-                  value={contactForm.correoAsunto}
-                  onChange={(event) => setContactForm((prev) => ({ ...prev, correoAsunto: event.target.value }))}
-                />
+                <Label>Plantilla de correo</Label>
+                <Select
+                  value={selectedTemplates.correo ?? ""}
+                  onValueChange={(value) => handleTemplateSelect("correo", value)}
+                  disabled={templatesLoading || !templates.length}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={templatesLoading ? "Cargando..." : "Selecciona una plantilla"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates
+                      .filter((template) => template.canal === "correo")
+                      .map((template) => (
+                        <SelectItem key={template.slug} value={template.slug}>
+                          {template.nombre}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {!templatesLoading && !templates.some((tpl) => tpl.canal === "correo") ? (
+                  <p className="text-xs text-muted-foreground">Aún no has creado plantillas de correo.</p>
+                ) : null}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Asunto</Label>
+                  <Input
+                    value={contactForm.correoAsunto}
+                    onChange={(event) => setContactForm((prev) => ({ ...prev, correoAsunto: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Previsualización</Label>
+                  <Input value={selectedTemplates.correo ?? ""} disabled placeholder="Template seleccionado" />
+                </div>
               </div>
               <div className="space-y-1">
-                <Label>Notas para llamada</Label>
+                <Label>Cuerpo</Label>
+                <Textarea
+                  value={contactForm.correoCuerpo}
+                  onChange={(event) => setContactForm((prev) => ({ ...prev, correoCuerpo: event.target.value }))}
+                  rows={5}
+                  placeholder="Hola {{nombre}}, vimos que..."
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="whatsapp" className="space-y-3">
+              <div className="space-y-1">
+                <Label>Plantilla de WhatsApp</Label>
+                <Select
+                  value={selectedTemplates.whatsapp ?? ""}
+                  onValueChange={(value) => handleTemplateSelect("whatsapp", value)}
+                  disabled={templatesLoading || !templates.length}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={templatesLoading ? "Cargando..." : "Selecciona una plantilla"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates
+                      .filter((template) => template.canal === "whatsapp")
+                      .map((template) => (
+                        <SelectItem key={template.slug} value={template.slug}>
+                          {template.nombre}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {!templatesLoading && !templates.some((tpl) => tpl.canal === "whatsapp") ? (
+                  <p className="text-xs text-muted-foreground">Aún no has creado plantillas de WhatsApp.</p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Label>Mensaje</Label>
+                <Textarea
+                  value={contactForm.whatsappMensaje}
+                  onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappMensaje: event.target.value }))}
+                  rows={4}
+                  placeholder="Hola, soy del equipo Tal-IA..."
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="llamada" className="space-y-3">
+              <div className="space-y-1">
+                <Label>Plantilla de llamada</Label>
+                <Select
+                  value={selectedTemplates.llamada ?? ""}
+                  onValueChange={(value) => handleTemplateSelect("llamada", value)}
+                  disabled={templatesLoading || !templates.length}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={templatesLoading ? "Cargando..." : "Selecciona una plantilla"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates
+                      .filter((template) => template.canal === "llamada")
+                      .map((template) => (
+                        <SelectItem key={template.slug} value={template.slug}>
+                          {template.nombre}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {!templatesLoading && !templates.some((tpl) => tpl.canal === "llamada") ? (
+                  <p className="text-xs text-muted-foreground">Aún no has creado plantillas de llamada.</p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Label>Notas o guion</Label>
                 <Textarea
                   value={contactForm.llamadaNotas}
                   onChange={(event) => setContactForm((prev) => ({ ...prev, llamadaNotas: event.target.value }))}
                   rows={3}
+                  placeholder="Recordatorios o bullets para el equipo de llamadas."
                 />
               </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Cuerpo del correo</Label>
-              <Textarea
-                value={contactForm.correoCuerpo}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, correoCuerpo: event.target.value }))}
-                rows={4}
-                placeholder="Hola {{nombre}}, vimos que..."
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Mensaje de WhatsApp</Label>
-              <Textarea
-                value={contactForm.whatsappMensaje}
-                onChange={(event) => setContactForm((prev) => ({ ...prev, whatsappMensaje: event.target.value }))}
-                rows={4}
-                placeholder="Hola, soy del equipo Tal-IA..."
-              />
-            </div>
-            {contactError ? (
-              <p className="text-sm text-destructive">{contactError}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {selectedCount
-                  ? `${selectedCount} prospectos serán procesados al guardar.`
-                  : "Selecciona prospectos antes de programar contacto."}
-              </p>
-            )}
-          </div>
+            </TabsContent>
+          </Tabs>
+          {contactError ? (
+            <p className="text-sm text-destructive">{contactError}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {selectedCount ? `${selectedCount} prospectos serán procesados al guardar.` : "Selecciona prospectos antes de programar contacto."}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setContactDialogOpen(false)}>
               Cancelar

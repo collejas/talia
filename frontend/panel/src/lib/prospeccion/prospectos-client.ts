@@ -76,6 +76,18 @@ export type ContactoEnvio = {
   procesado_en?: string | null
 }
 
+export type ContactoTemplate = {
+  id: string
+  canal: "correo" | "whatsapp" | "llamada"
+  slug: string
+  nombre: string
+  descripcion?: string | null
+  asunto?: string | null
+  cuerpo_texto?: string | null
+  cuerpo_html?: string | null
+  activo?: boolean
+}
+
 export type ProspectoManualInput = {
   display_name: string
   actividad?: string | null
@@ -247,6 +259,12 @@ export async function listContactoEnviosPorProspecto(
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
   return requestJson(url.toString())
+}
+
+export async function listContactoTemplates(params: { canal?: "correo" | "whatsapp" | "llamada" } = {}) {
+  const url = buildClientUrl("/api/prospeccion/contacto/templates")
+  if (params.canal) url.searchParams.set("canal", params.canal)
+  return requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString())
 }
 
 function extractStringField(payload: unknown, key: string): string | undefined {

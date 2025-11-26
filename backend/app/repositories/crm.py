@@ -3383,6 +3383,29 @@ class CRMRepository:
             created.extend(data)
         return created
 
+    async def list_contact_templates(
+        self,
+        *,
+        usuario_token: str,
+        canal: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Obtiene plantillas de contacto opcionalmente filtradas por canal."""
+
+        params: dict[str, str] = {"select": "*"}
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params=params,
+            prefer="order=nombre.asc",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_templates_invalid:{data!r}")
+        return data
+
     async def list_contact_envios(
         self,
         *,
