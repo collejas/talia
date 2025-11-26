@@ -110,7 +110,7 @@ export default function ContactosPageClient() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Lote</TableHead>
                   <TableHead>Canales</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Estado</TableHead>
@@ -134,12 +134,12 @@ export default function ContactosPageClient() {
                 ) : null}
                 {!batchLoading
                   ? batches.map((batch) => (
-                      <TableRow
+                        <TableRow
                         key={batch.id}
                         className={cn("cursor-pointer", selectedBatchId === batch.id && "bg-muted/50")}
                         onClick={() => setSelectedBatchId(batch.id)}
                       >
-                        <TableCell className="font-mono text-xs">{batch.id}</TableCell>
+                        <TableCell className="font-medium">{batchLabel(batch)}</TableCell>
                         <TableCell className="space-x-1">
                           {batch.canales.map((canal) => (
                             <Badge key={canal} variant="outline">
@@ -204,7 +204,10 @@ export default function ContactosPageClient() {
                   {!envioLoading
                     ? envios.map((envio) => (
                         <TableRow key={envio.id}>
-                          <TableCell className="font-mono text-xs">{envio.prospecto_id}</TableCell>
+                          <TableCell>
+                            <div className="font-medium">{prospectoLabel(envio)}</div>
+                            <p className="text-xs text-muted-foreground">{envio.prospecto_id}</p>
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">{canalLabel[envio.canal] ?? envio.canal}</Badge>
                           </TableCell>
@@ -242,4 +245,19 @@ function formatDate(value?: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date)
+}
+
+function batchLabel(batch: ContactoBatch): string {
+  const canales = batch.canales.map((canal) => canalLabel[canal] ?? canal).join(", ")
+  const created = formatDate(batch.creado_en)
+  return `${canales || "Lote"} · ${created}`
+}
+
+function prospectoLabel(envio: ContactoEnvio): string {
+  const detalle = envio.detalle
+  const displayName = detalle && typeof detalle["display_name"] === "string" ? detalle["display_name"] : null
+  if (displayName) return displayName
+  const email = detalle && typeof detalle["email"] === "string" ? detalle["email"] : null
+  if (email) return email
+  return "Prospecto sin nombre"
 }
