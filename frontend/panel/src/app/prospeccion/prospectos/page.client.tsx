@@ -46,6 +46,7 @@ type Filters = {
   lookupStatus: LookupFilter
   segmento: string
   order: OrderOption
+  carrierType: "" | "mobile" | "landline" | "voip"
 }
 
 type BannerState = {
@@ -59,6 +60,7 @@ const initialFilters: Filters = {
   lookupStatus: "",
   segmento: "",
   order: "creado",
+  carrierType: "",
 }
 
 const initialContactForm = {
@@ -132,6 +134,7 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           lookupStatus: filters.lookupStatus || undefined,
           segmento: filters.segmento || undefined,
+          carrierType: filters.carrierType || undefined,
           order: filters.order,
         })
         const rows = response.items ?? []
@@ -331,7 +334,7 @@ function ProspectosView() {
               Limpiar filtros
             </Button>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-wrap gap-4">
             <div className="space-y-1">
               <Label>Fuente</Label>
               <Select
@@ -377,10 +380,33 @@ function ProspectosView() {
               </Select>
             </div>
             <div className="space-y-1">
+              <Label>Tipo de línea</Label>
+              <Select
+                value={filters.carrierType || "all"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    carrierType: value === "all" ? "" : (value as "mobile" | "landline" | "voip"),
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="mobile">Móvil</SelectItem>
+                  <SelectItem value="landline">Línea fija</SelectItem>
+                  <SelectItem value="voip">VoIP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label>Segmento</Label>
               <Input
                 value={filters.segmento}
                 onChange={(event) => setFilters((prev) => ({ ...prev, segmento: event.target.value }))}
+                className="w-[180px]"
                 placeholder="Ej. Hoteles CDMX"
               />
             </div>
@@ -395,7 +421,7 @@ function ProspectosView() {
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Orden" />
                 </SelectTrigger>
                 <SelectContent>

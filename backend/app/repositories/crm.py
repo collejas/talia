@@ -3156,6 +3156,7 @@ class CRMRepository:
         fuente: str | None = None,
         lookup_status: str | None = None,
         segmento: str | None = None,
+        carrier_type: str | None = None,
         order: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
@@ -3173,6 +3174,8 @@ class CRMRepository:
             params["lookup_status"] = f"eq.{lookup_status}"
         if segmento:
             params["segmento"] = f"eq.{segmento}"
+        if carrier_type:
+            params["carrier_type"] = f"eq.{carrier_type}"
 
         if search:
             sanitized = search.strip()

@@ -99,6 +99,7 @@ export async function listProspectos(params: {
   fuente?: "google_places" | "denue"
   lookupStatus?: string
   segmento?: string
+  carrierType?: "mobile" | "landline" | "voip"
   order?: "creado" | "nombre"
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
@@ -108,6 +109,7 @@ export async function listProspectos(params: {
   if (params.fuente) url.searchParams.set("fuente", params.fuente)
   if (params.lookupStatus?.trim().length) url.searchParams.set("lookup_status", params.lookupStatus.trim())
   if (params.segmento?.trim().length) url.searchParams.set("segmento", params.segmento.trim())
+  if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)
   if (params.order) url.searchParams.set("order", params.order)
   return requestJson<ProspectosResponse>(url.toString())
 }

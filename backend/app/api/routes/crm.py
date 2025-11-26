@@ -395,6 +395,7 @@ class ProspectoListQuery(BaseModel):
     fuente: Literal["google_places", "denue", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
     segmento: str | None = Field(default=None, max_length=120)
+    carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     order: Literal["creado", "nombre"] | None = Field(default=None)
 
 
@@ -5555,6 +5556,7 @@ async def listar_prospectos(
             fuente=params.fuente or None,
             lookup_status=params.lookup_status,
             segmento=params.segmento,
+            carrier_type=params.carrier_type or None,
             order=order_value,
         )
     except CRMRepositoryError as exc:
