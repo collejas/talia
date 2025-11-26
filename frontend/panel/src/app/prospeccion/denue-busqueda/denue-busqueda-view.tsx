@@ -10,6 +10,7 @@ import {
   MapPin,
   Phone,
   RefreshCw,
+  Save,
   Search,
   Target,
   Trash2,
@@ -34,6 +35,7 @@ import {
   type DenueResultadoItem,
 } from "@/lib/prospeccion/denue-client";
 import type { GoogleResultadoItem } from "@/lib/prospeccion/google-client";
+import { guardarProspectos } from "@/lib/prospeccion/prospectos-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -112,6 +114,7 @@ export function DenueBusquedaView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
+  const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -599,6 +602,41 @@ export function DenueBusquedaView() {
     [selectedIds.size],
   );
 
+  const handleGuardarSeleccion = useCallback(async () => {
+    if (!selectedIds.size) {
+      setFeedback({
+        type: "info",
+        message: "Selecciona al menos un resultado para guardarlo como prospecto.",
+      });
+      return;
+    }
+    setIsSavingProspectos(true);
+    try {
+      const response = await guardarProspectos({
+        fuente: "denue",
+        resultado_ids: Array.from(selectedIds),
+        metadata: {
+          busqueda_id: activeBusqueda?.id,
+          busqueda_query: activeBusqueda?.query,
+        },
+      });
+      setFeedback({
+        type: "success",
+        message: `Se guardaron ${response.total} prospectos desde DENUE. Continúa con la verificación en la vista Prospección.`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No fue posible guardar los resultados como prospectos.",
+      });
+    } finally {
+      setIsSavingProspectos(false);
+    }
+  }, [activeBusqueda?.id, activeBusqueda?.query, selectedIds]);
+
   return (
     <div className="space-y-6">
       {feedback ? (
@@ -969,6 +1007,20 @@ export function DenueBusquedaView() {
           </CardHeader>
           <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleGuardarSeleccion}
+                  disabled={!selectedIds.size || isSavingProspectos}
+                  className="flex items-center gap-2"
+                >
+                  {isSavingProspectos ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Guardar como prospectos
+                </Button>
                 <Button
                   type="button"
                   size="sm"

@@ -1042,6 +1042,21 @@ def _clean_text(value: Any) -> str | None:
     return trimmed or None
 
 
+def _normalize_phone_input(value: str) -> str | None:
+    """Elimina caracteres no numéricos manteniendo el prefijo + si existe."""
+    if not value:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    digits = "".join(ch for ch in stripped if ch.isdigit())
+    if not digits:
+        return None
+    if stripped.startswith("+"):
+        return f"+{digits}"
+    return digits
+
+
 def _single_related(value: Any) -> dict[str, Any] | None:
     if isinstance(value, dict):
         return value
@@ -5626,6 +5641,7 @@ async def verificar_prospectos(
             continue
         base_phone = prospecto.get("phone_e164") or prospecto.get("phone")
         phone = _clean_text(base_phone)
+        phone = _normalize_phone_input(phone) if phone else None
         if not phone:
             updates = {
                 "lookup_status": "sin_numero",

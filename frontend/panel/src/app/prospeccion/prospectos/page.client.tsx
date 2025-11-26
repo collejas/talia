@@ -534,8 +534,8 @@ function ProspectosView() {
                       <TableCell>
                         <LookupStatusBadge status={prospecto.lookup_status} />
                         {prospecto.carrier_type ? (
-                          <p className="mt-1 text-xs capitalize text-muted-foreground">
-                            Carrier: {prospecto.carrier_type}
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Línea: {carrierLabel(prospecto.carrier_type)}
                           </p>
                         ) : null}
                       </TableCell>
@@ -715,4 +715,19 @@ function formatDistance(meters?: number | null) {
     return `${(meters / 1000).toFixed(1)} km`
   }
   return `${Math.round(meters)} m`
+}
+
+function carrierLabel(value: string | null | undefined) {
+  if (!value) return ""
+  const normalized = value.toLowerCase()
+  switch (normalized) {
+    case "mobile":
+      return "Móvil"
+    case "landline":
+      return "Línea fija"
+    case "voip":
+      return "VoIP"
+    default:
+      return normalized
+  }
 }

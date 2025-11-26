@@ -10,6 +10,7 @@ import {
   MapPin,
   Phone,
   RefreshCw,
+  Save,
   Search,
   Star,
   Target,
@@ -31,6 +32,7 @@ import {
   type GoogleResultadoItem,
   type GoogleSearchStrategy,
 } from "@/lib/prospeccion/google-client";
+import { guardarProspectos } from "@/lib/prospeccion/prospectos-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -125,6 +127,7 @@ export function GoogleBusquedaView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
+  const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
@@ -616,6 +619,41 @@ export function GoogleBusquedaView() {
     [selectedIds.size],
   );
 
+  const handleGuardarSeleccion = useCallback(async () => {
+    if (!selectedIds.size) {
+      setFeedback({
+        type: "info",
+        message: "Selecciona al menos un resultado para guardarlo como prospecto.",
+      });
+      return;
+    }
+    setIsSavingProspectos(true);
+    try {
+      const response = await guardarProspectos({
+        fuente: "google_places",
+        resultado_ids: Array.from(selectedIds),
+        metadata: {
+          busqueda_id: activeBusqueda?.id,
+          busqueda_query: activeBusqueda?.query,
+        },
+      });
+      setFeedback({
+        type: "success",
+        message: `Se guardaron ${response.total} prospectos. Continúa con la verificación desde la vista Prospección.`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No fue posible guardar los resultados como prospectos.",
+      });
+    } finally {
+      setIsSavingProspectos(false);
+    }
+  }, [activeBusqueda?.id, activeBusqueda?.query, selectedIds]);
+
   return (
     <div className="space-y-6">
       {feedback ? (
@@ -1012,6 +1050,20 @@ export function GoogleBusquedaView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleGuardarSeleccion}
+                disabled={!selectedIds.size || isSavingProspectos}
+                className="flex items-center gap-2"
+              >
+                {isSavingProspectos ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Guardar como prospectos
+              </Button>
               <Button
                 type="button"
                 size="sm"
