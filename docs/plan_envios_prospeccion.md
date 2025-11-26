@@ -62,7 +62,7 @@
 1. **Modal de contacto**
    - Separar canales en tabs con vista previa de la plantilla seleccionada.
    - Permitir elegir plantillas guardadas por canal, editar placeholders y programar fecha/hora futura.
-2. **Seguimiento de batches**
+2. **Seguimiento de batches** ✅
    - Nueva vista `/prospeccion/contactos` con tabla de batches (fecha, creador, canales, totales por estado).
    - En la vista de prospectos, mostrar un drawer “Historial de contacto” consultando `GET /crm/prospeccion/prospectos/{id}/contactos`.
 3. **Notificaciones en tiempo real**
