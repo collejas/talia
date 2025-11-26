@@ -392,7 +392,7 @@ class ProspectoListQuery(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0, le=10_000)
     search: str | None = Field(default=None, max_length=120)
-    fuente: Literal["google_places", "denue", ""] | None = Field(default=None)
+    fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
@@ -421,8 +421,63 @@ class ProspectoContactarPayload(BaseModel):
             if item in seen:
                 continue
             seen.add(item)
-            unique.append(item)
+        unique.append(item)
         return unique
+
+
+class ProspectoManualPayload(BaseModel):
+    """Datos capturados manualmente por un usuario."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(..., min_length=2, max_length=200)
+    actividad: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=60)
+    email: str | None = Field(default=None, max_length=320)
+    website: str | None = Field(default=None, max_length=200)
+    address: str | None = Field(default=None, max_length=400)
+    segmento: str | None = Field(default=None, max_length=120)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator("display_name")
+    @classmethod
+    def _strip_display_name(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("display_name_required")
+        return trimmed
+
+
+class ProspectoUpdatePayload(BaseModel):
+    """Campos editables de un prospecto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, min_length=2, max_length=200)
+    actividad: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=60)
+    email: str | None = Field(default=None, max_length=320)
+    website: str | None = Field(default=None, max_length=200)
+    address: str | None = Field(default=None, max_length=400)
+    segmento: str | None = Field(default=None, max_length=120)
+    metadata: dict[str, Any] | None = Field(default=None)
+
+    @field_validator("display_name")
+    @classmethod
+    def _validate_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("display_name_required")
+        return trimmed
+
+    @model_validator(mode="after")
+    def _ensure_any_field(self) -> ProspectoUpdatePayload:
+        provided = self.model_dump(exclude_unset=True)
+        if not provided:
+            raise ValueError("fields_required")
+        return self
 
 
 class GoogleProspeccionBusquedaPayload(BaseModel):
@@ -1790,6 +1845,102 @@ def _result_preview(item: dict[str, Any]) -> dict[str, Any]:
         "reviews": item.get("reviews"),
         "maps_url": item.get("maps_url"),
     }
+
+
+async def _get_prospecto_or_404(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    prospecto_id: UUID,
+) -> dict[str, Any]:
+    """Obtiene un prospecto y devuelve 404 si no existe."""
+
+    try:
+        rows = await repo.list_prospectos_by_ids(
+            usuario_token=user_token,
+            prospecto_ids=[prospecto_id],
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not rows:
+        raise HTTPException(status_code=404, detail="prospecto_not_found")
+    row = rows[0]
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=502, detail="prospecto_invalid")
+    return row
+
+
+def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str, Any]:
+    """Normaliza el payload manual para enviarlo al repositorio."""
+
+    raw = payload.model_dump(exclude_unset=True)
+    data: dict[str, Any] = {
+        "fuente": "usuario",
+        "fuente_busqueda": "manual",
+        "display_name": payload.display_name.strip(),
+        "name": payload.display_name.strip(),
+        "lookup_error": None,
+        "whatsapp_permitido": False,
+        "llamada_permitida": False,
+    }
+    metadata = raw.get("metadata")
+    if isinstance(metadata, dict):
+        data["metadata"] = metadata
+    for field in ("actividad", "phone", "email", "website", "address", "segmento"):
+        if field not in raw:
+            continue
+        value = raw[field]
+        if isinstance(value, str):
+            data[field] = _clean_text(value)
+        else:
+            data[field] = value
+    phone_value = data.get("phone")
+    data["lookup_status"] = "pendiente" if phone_value else "sin_numero"
+    return data
+
+
+def _build_prospecto_update_payload(
+    *,
+    update_payload: ProspectoUpdatePayload,
+) -> dict[str, Any]:
+    """Determina los cambios permitidos y resetea lookup si se modifica el teléfono."""
+
+    raw = update_payload.model_dump(exclude_unset=True)
+    updates: dict[str, Any] = {}
+    for field in ("display_name", "actividad", "email", "website", "address", "segmento"):
+        if field not in raw:
+            continue
+        value = raw[field]
+        if isinstance(value, str):
+            updates[field] = _clean_text(value)
+        else:
+            updates[field] = value
+    phone_changed = False
+    if "phone" in raw:
+        phone_value = raw["phone"]
+        normalized = _clean_text(phone_value) if isinstance(phone_value, str) else phone_value
+        updates["phone"] = normalized
+        phone_changed = True
+    if "metadata" in raw:
+        metadata_value = raw["metadata"]
+        updates["metadata"] = metadata_value if isinstance(metadata_value, dict) else {}
+    if phone_changed:
+        lookup_state = "pendiente" if updates.get("phone") else "sin_numero"
+        updates.update(
+            {
+                "phone_e164": None,
+                "phone_national": None,
+                "carrier_name": None,
+                "carrier_type": None,
+                "lookup_status": lookup_state,
+                "lookup_error": None,
+                "whatsapp_permitido": False,
+                "llamada_permitida": False,
+            }
+        )
+    if not updates:
+        raise HTTPException(status_code=400, detail="prospecto_update_empty")
+    return updates
 
 
 def _build_prospecto_from_contactable(
@@ -5612,6 +5763,80 @@ async def guardar_prospectos(
         "total": len(prospectos),
         "prospectos": prospectos,
     }
+
+
+@router.post("/prospeccion/prospectos/manual")
+async def crear_prospecto_manual(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ProspectoManualPayload,
+) -> dict[str, Any]:
+    """Crea un prospecto manual etiquetado como fuente usuario."""
+
+    data = _build_manual_prospecto_payload(payload)
+    try:
+        prospecto = await repo.create_prospecto_manual(
+            usuario_token=user_token,
+            payload=data,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "prospecto": prospecto}
+
+
+@router.patch("/prospeccion/prospectos/{prospecto_id}")
+async def actualizar_prospecto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    prospecto_id: UUID,
+    payload: ProspectoUpdatePayload,
+) -> dict[str, Any]:
+    """Actualiza campos básicos de cualquier prospecto."""
+
+    await _get_prospecto_or_404(
+        repo=repo,
+        user_token=user_token,
+        prospecto_id=prospecto_id,
+    )
+    updates = _build_prospecto_update_payload(update_payload=payload)
+    try:
+        updated = await repo.update_prospecto(
+            usuario_token=user_token,
+            prospecto_id=prospecto_id,
+            payload=updates,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "prospecto": updated}
+
+
+@router.delete("/prospeccion/prospectos/{prospecto_id}")
+async def eliminar_prospecto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    prospecto_id: UUID,
+) -> dict[str, Any]:
+    """Elimina un prospecto manual o importado y registra auditoría vía trigger."""
+
+    await _get_prospecto_or_404(
+        repo=repo,
+        user_token=user_token,
+        prospecto_id=prospecto_id,
+    )
+    try:
+        await repo.delete_prospecto(
+            usuario_token=user_token,
+            prospecto_id=prospecto_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "prospecto_id": str(prospecto_id)}
 
 
 @router.post("/prospeccion/prospectos/verificar-telefonos")

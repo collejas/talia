@@ -7,7 +7,7 @@ export type ProspectoItem = {
   email: string | null
   website: string | null
   address: string | null
-  fuente: "google_places" | "denue"
+  fuente: "google_places" | "denue" | "usuario"
   segmento?: string | null
   lookup_status?: string | null
   whatsapp_permitido?: boolean | null
@@ -16,6 +16,7 @@ export type ProspectoItem = {
   rating?: number | null
   distancia_m?: number | null
   creado_en?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 export type ProspectosResponse = {
@@ -42,6 +43,19 @@ export type ProspectoContactarResponse = {
   ok: boolean
   contactos: Array<Record<string, string>>
 }
+
+export type ProspectoManualInput = {
+  display_name: string
+  actividad?: string | null
+  phone?: string | null
+  email?: string | null
+  website?: string | null
+  address?: string | null
+  segmento?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export type ProspectoUpdateInput = Partial<ProspectoManualInput>
 
 /**
  * Build an absolute URL when the code runs on the client, otherwise fall back to env origin.
@@ -96,7 +110,7 @@ export async function listProspectos(params: {
   limit?: number
   offset?: number
   search?: string
-  fuente?: "google_places" | "denue"
+  fuente?: "google_places" | "denue" | "usuario"
   lookupStatus?: string
   segmento?: string
   carrierType?: "mobile" | "landline" | "voip"
@@ -166,4 +180,33 @@ function extractStringField(payload: unknown, key: string): string | undefined {
   const container = payload as Record<string, unknown>
   const value = container[key]
   return typeof value === "string" ? value : undefined
+}
+
+/**
+ * Create a manual prospect tagged with fuente Usuario.
+ */
+export async function crearProspectoManual(payload: ProspectoManualInput) {
+  return requestJson<{ ok: boolean; prospecto: ProspectoItem }>("/api/prospeccion/prospectos/manual", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Patch editable fields for a saved prospect.
+ */
+export async function actualizarProspecto(prospectoId: string, payload: ProspectoUpdateInput) {
+  return requestJson<{ ok: boolean; prospecto: ProspectoItem }>(`/api/prospeccion/prospectos/${prospectoId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Delete a prospect and associated history.
+ */
+export async function eliminarProspecto(prospectoId: string) {
+  return requestJson<{ ok: boolean; prospecto_id: string }>(`/api/prospeccion/prospectos/${prospectoId}`, {
+    method: "DELETE",
+  })
 }

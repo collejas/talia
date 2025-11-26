@@ -4,17 +4,27 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   IconAlertTriangle,
   IconCircleCheck,
+  IconDotsVertical,
   IconLoader,
+  IconPencil,
   IconPhoneCheck,
+  IconPlus,
   IconRefresh,
   IconSearch,
   IconSend2,
+  IconTrash,
 } from "@tabler/icons-react"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -30,13 +40,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
+  actualizarProspecto,
+  crearProspectoManual,
   contactarProspectos,
+  eliminarProspecto,
   listProspectos,
   type ProspectoItem,
+  type ProspectoManualInput,
   verificarProspectos,
 } from "@/lib/prospeccion/prospectos-client"
 
-type FuenteFilter = "" | "google_places" | "denue"
+type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
 type OrderOption = "creado" | "nombre"
 
@@ -70,6 +84,28 @@ const initialContactForm = {
   llamadaNotas: "",
 }
 
+type ProspectoFormState = {
+  displayName: string
+  actividad: string
+  phone: string
+  email: string
+  website: string
+  address: string
+  segmento: string
+  notas: string
+}
+
+const initialProspectoForm: ProspectoFormState = {
+  displayName: "",
+  actividad: "",
+  phone: "",
+  email: "",
+  website: "",
+  address: "",
+  segmento: "",
+  notas: "",
+}
+
 const LOOKUP_STATUS_LABELS: Record<string, string> = {
   pendiente: "Pendiente",
   verificado: "Verificado",
@@ -87,6 +123,7 @@ const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destruct
 const FUENTE_LABELS: Record<string, string> = {
   google_places: "Google Places",
   denue: "DENUE",
+  usuario: "Usuario",
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
@@ -121,6 +158,17 @@ function ProspectosView() {
   const [contactDialogOpen, setContactDialogOpen] = useState(false)
   const [contactForm, setContactForm] = useState(initialContactForm)
   const [contactError, setContactError] = useState<string | null>(null)
+  const [formDialogOpen, setFormDialogOpen] = useState(false)
+  const [formMode, setFormMode] = useState<"create" | "edit">("create")
+  const [formValues, setFormValues] = useState<ProspectoFormState>(initialProspectoForm)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [formSubmitting, setFormSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [metadataBase, setMetadataBase] = useState<Record<string, unknown>>({})
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ProspectoItem | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -171,6 +219,25 @@ function ProspectosView() {
       setContactForm(initialContactForm)
     }
   }, [contactDialogOpen])
+
+  useEffect(() => {
+    if (!formDialogOpen) {
+      setFormValues(initialProspectoForm)
+      setFormError(null)
+      setFormMode("create")
+      setEditingId(null)
+      setMetadataBase({})
+      setFormSubmitting(false)
+    }
+  }, [formDialogOpen])
+
+  useEffect(() => {
+    if (!deleteDialogOpen) {
+      setDeleteTarget(null)
+      setDeleteError(null)
+      setDeleteLoading(false)
+    }
+  }, [deleteDialogOpen])
 
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
@@ -293,6 +360,134 @@ function ProspectosView() {
     }
   }, [contactForm, fetchProspectos, offset, selectedIds])
 
+  const handleOpenCreateDialog = () => {
+    setFormMode("create")
+    setFormValues(initialProspectoForm)
+    setMetadataBase({})
+    setFormDialogOpen(true)
+  }
+
+  const handleOpenEditDialog = (prospecto: ProspectoItem) => {
+    if (!prospecto.id) return
+    const metadataRecord = isRecord(prospecto.metadata) ? { ...prospecto.metadata } : {}
+    setFormMode("edit")
+    setEditingId(prospecto.id)
+    setMetadataBase(metadataRecord)
+    const notaValue = metadataRecord["notas"]
+    setFormValues({
+      displayName: prospecto.display_name ?? "",
+      actividad: prospecto.actividad ?? "",
+      phone: prospecto.phone ?? prospecto.phone_e164 ?? "",
+      email: prospecto.email ?? "",
+      website: prospecto.website ?? "",
+      address: prospecto.address ?? "",
+      segmento: prospecto.segmento ?? "",
+      notas: typeof notaValue === "string" ? notaValue : "",
+    })
+    setFormDialogOpen(true)
+  }
+
+  const handleOpenDeleteDialog = (prospecto: ProspectoItem) => {
+    if (!prospecto.id) return
+    setDeleteTarget(prospecto)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleFormSubmit = useCallback(async () => {
+    const trimmedName = formValues.displayName.trim()
+    if (!trimmedName) {
+      setFormError("El nombre es obligatorio.")
+      return
+    }
+    const payload: Record<string, unknown> = {
+      display_name: trimmedName,
+    }
+    const assignField = (value: string, key: string) => {
+      const trimmed = value.trim()
+      if (trimmed) {
+        payload[key] = trimmed
+      } else if (formMode === "edit") {
+        payload[key] = null
+      }
+    }
+    assignField(formValues.actividad, "actividad")
+    assignField(formValues.phone, "phone")
+    assignField(formValues.email, "email")
+    assignField(formValues.website, "website")
+    assignField(formValues.address, "address")
+    assignField(formValues.segmento, "segmento")
+
+    const notasValue = formValues.notas.trim()
+    if (formMode === "create") {
+      if (notasValue) {
+        payload.metadata = { notas: notasValue }
+      }
+    } else {
+      const baseMetadata: Record<string, unknown> = { ...metadataBase }
+      const previousValue = baseMetadata["notas"]
+      const previousNotas = typeof previousValue === "string" ? previousValue : ""
+      if (notasValue !== previousNotas) {
+        if (notasValue) {
+          baseMetadata["notas"] = notasValue
+        } else if ("notas" in baseMetadata) {
+          delete baseMetadata["notas"]
+        }
+        payload.metadata = baseMetadata
+      }
+    }
+
+    setFormSubmitting(true)
+    setFormError(null)
+    try {
+      if (formMode === "create") {
+        await crearProspectoManual(payload as ProspectoManualInput)
+        setBanner({
+          type: "success",
+          message: "Se creó el prospecto manual.",
+        })
+        await fetchProspectos(0)
+      } else {
+        if (!editingId) {
+          throw new Error("prospecto_missing_id")
+        }
+        await actualizarProspecto(editingId, payload)
+        setBanner({
+          type: "success",
+          message: "Se actualizó el prospecto.",
+        })
+        await fetchProspectos(offset)
+      }
+      setFormDialogOpen(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo guardar el prospecto."
+      setFormError(message)
+    } finally {
+      setFormSubmitting(false)
+    }
+  }, [fetchProspectos, formMode, formValues, metadataBase, editingId, offset])
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget?.id) return
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      await eliminarProspecto(deleteTarget.id)
+      setBanner({
+        type: "success",
+        message: `${deleteTarget.display_name ?? "El prospecto"} fue eliminado.`,
+      })
+      const shouldGoBack = offset >= limit && items.length <= 1
+      const nextOffset = shouldGoBack ? Math.max(0, offset - limit) : offset
+      await fetchProspectos(nextOffset)
+      setDeleteDialogOpen(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo eliminar el prospecto."
+      setDeleteError(message)
+    } finally {
+      setDeleteLoading(false)
+    }
+  }, [deleteTarget, fetchProspectos, items.length, limit, offset])
+
   return (
     <div className="space-y-4">
       {banner ? (
@@ -353,6 +548,7 @@ function ProspectosView() {
                   <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="google_places">Google Places</SelectItem>
                   <SelectItem value="denue">DENUE</SelectItem>
+                  <SelectItem value="usuario">Usuario</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -444,6 +640,10 @@ function ProspectosView() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={handleOpenCreateDialog}>
+              <IconPlus className="mr-1.5 size-4" />
+              Agregar prospecto
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => void fetchProspectos(offset)} disabled={loading}>
               <IconRefresh className={cn("mr-1.5 size-4", loading && "animate-spin")} />
               Actualizar
@@ -495,12 +695,13 @@ function ProspectosView() {
                 <TableHead>Verificación</TableHead>
                 <TableHead>Fuente y contexto</TableHead>
                 <TableHead className="text-right">Creado</TableHead>
+                <TableHead className="w-14 text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                     <IconLoader className="mr-2 inline size-4 animate-spin" />
                     Cargando prospectos...
                   </TableCell>
@@ -508,15 +709,17 @@ function ProspectosView() {
               ) : null}
               {!loading && !items.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                     No hay prospectos con los filtros actuales.
                   </TableCell>
                 </TableRow>
               ) : null}
               {!loading
-                ? items.map((prospecto) => (
-                    <TableRow key={prospecto.id}>
-                      <TableCell>
+                ? items.map((prospecto) => {
+                    const notas = extractProspectoNotes(prospecto.metadata)
+                    return (
+                      <TableRow key={prospecto.id}>
+                        <TableCell>
                         <Checkbox
                           aria-label={`Seleccionar ${prospecto.display_name ?? "prospecto"}`}
                           checked={prospecto.id ? selected.has(prospecto.id) : false}
@@ -526,8 +729,8 @@ function ProspectosView() {
                           }}
                           disabled={!prospecto.id}
                         />
-                      </TableCell>
-                      <TableCell>
+                        </TableCell>
+                        <TableCell>
                         <div className="font-medium">{prospecto.display_name || "Sin nombre"}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           {prospecto.actividad ? <span>{prospecto.actividad}</span> : null}
@@ -540,8 +743,11 @@ function ProspectosView() {
                         {prospecto.address ? (
                           <p className="mt-1 text-xs text-muted-foreground">{prospecto.address}</p>
                         ) : null}
-                      </TableCell>
-                      <TableCell>
+                        {notas ? (
+                          <p className="mt-1 text-xs text-muted-foreground">Notas: {notas}</p>
+                        ) : null}
+                        </TableCell>
+                        <TableCell>
                         <div className="text-sm">{prospecto.phone_e164 || prospecto.phone || "—"}</div>
                         {prospecto.email ? (
                           <div className="text-xs text-muted-foreground">{prospecto.email}</div>
@@ -556,16 +762,16 @@ function ProspectosView() {
                             <Badge variant="outline">Sin llamadas</Badge>
                           ) : null}
                         </div>
-                      </TableCell>
-                      <TableCell>
+                        </TableCell>
+                        <TableCell>
                         <LookupStatusBadge status={prospecto.lookup_status} />
                         {prospecto.carrier_type ? (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Línea: {carrierLabel(prospecto.carrier_type)}
                           </p>
                         ) : null}
-                      </TableCell>
-                      <TableCell>
+                        </TableCell>
+                        <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="outline">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
                           {typeof prospecto.rating === "number" ? (
@@ -580,12 +786,39 @@ function ProspectosView() {
                         {prospecto.website ? (
                           <p className="mt-1 text-xs text-muted-foreground">{prospecto.website}</p>
                         ) : null}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
                         {formatDate(prospecto.creado_en)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="text-right">
+                        {prospecto.id ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="size-8" aria-label="Acciones del prospecto">
+                                <IconDotsVertical className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onClick={() => handleOpenEditDialog(prospecto)}>
+                                <IconPencil className="size-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => handleOpenDeleteDialog(prospecto)}
+                              >
+                                <IconTrash className="size-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 : null}
             </TableBody>
           </Table>
@@ -712,6 +945,152 @@ function ProspectosView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {formMode === "create" ? "Agregar prospecto manual" : "Editar prospecto"}
+            </DialogTitle>
+            <DialogDescription>
+              Completa los campos básicos del prospecto. Todos los registros creados aquí se marcan con la fuente Usuario
+              y quedarán listos para verificación o contacto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Nombre</Label>
+              <Input
+                value={formValues.displayName}
+                onChange={(event) => setFormValues((prev) => ({ ...prev, displayName: event.target.value }))}
+                placeholder="Ej. Hotel Centro Histórico"
+                required
+              />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Actividad</Label>
+                <Input
+                  value={formValues.actividad}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, actividad: event.target.value }))}
+                  placeholder="Restaurante, Hotel, etc."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Segmento</Label>
+                <Input
+                  value={formValues.segmento}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, segmento: event.target.value }))}
+                  placeholder="Ej. Hoteles CDMX"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Teléfono</Label>
+                <Input
+                  value={formValues.phone}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, phone: event.target.value }))}
+                  placeholder="55 1234 5678"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Email</Label>
+                <Input
+                  value={formValues.email}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, email: event.target.value }))}
+                  type="email"
+                  placeholder="contacto@empresa.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Sitio web</Label>
+                <Input
+                  value={formValues.website}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, website: event.target.value }))}
+                  placeholder="https://empresa.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Dirección</Label>
+                <Input
+                  value={formValues.address}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, address: event.target.value }))}
+                  placeholder="Calle, ciudad, estado"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Notas</Label>
+              <Textarea
+                value={formValues.notas}
+                onChange={(event) => setFormValues((prev) => ({ ...prev, notas: event.target.value }))}
+                placeholder="Anota contexto adicional, acuerdos o restricciones."
+                rows={4}
+              />
+            </div>
+            {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setFormDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleFormSubmit()} disabled={formSubmitting}>
+              {formSubmitting ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : formMode === "create" ? (
+                <>
+                  <IconPlus className="mr-2 size-4" />
+                  Crear prospecto
+                </>
+              ) : (
+                <>
+                  <IconPencil className="mr-2 size-4" />
+                  Guardar cambios
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar prospecto</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer. Se eliminará el prospecto seleccionado y todo su historial.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            ¿Deseas eliminar{" "}
+            <span className="font-semibold text-foreground">
+              {deleteTarget?.display_name ?? "este prospecto"}
+            </span>
+            ?
+          </p>
+          {deleteError ? <p className="text-sm text-destructive">{deleteError}</p> : null}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDeleteConfirm()} disabled={deleteLoading}>
+              {deleteLoading ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <IconTrash className="mr-2 size-4" />
+                  Eliminar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -756,4 +1135,20 @@ function carrierLabel(value: string | null | undefined) {
     default:
       return normalized
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function extractProspectoNotes(metadata: unknown): string | null {
+  if (!isRecord(metadata)) {
+    return null
+  }
+  const value = metadata["notas"]
+  if (typeof value !== "string") {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
 }

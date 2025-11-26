@@ -3123,6 +3123,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
         return data
 
+    async def create_prospecto_manual(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Inserta un prospecto manual etiquetado como fuente usuario."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("prospecto_manual_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"prospecto_manual_invalid:{row!r}")
+        return row
+
     async def list_prospectos_by_ids(
         self,
         *,
@@ -3233,6 +3256,27 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"prospecto_update_invalid:{row!r}")
         return row
+
+    async def delete_prospecto(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_id: UUID,
+    ) -> None:
+        """Elimina un prospecto y devuelve error si no existe."""
+
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params={"id": f"eq.{prospecto_id}"},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError("prospecto_delete_failed")
+        if not data:
+            raise CRMRepositoryError("prospecto_not_found")
 
     async def insert_prospecto_logs(
         self,
