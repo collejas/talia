@@ -5,6 +5,7 @@ import {
   IconAlertTriangle,
   IconCircleCheck,
   IconDotsVertical,
+  IconHistory,
   IconLoader,
   IconPencil,
   IconPhoneCheck,
@@ -45,9 +46,11 @@ import {
   contactarProspectos,
   eliminarProspecto,
   listProspectos,
+  listContactoEnviosPorProspecto,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoContactoResumen,
+  type ContactoEnvio,
   verificarProspectos,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -174,6 +177,11 @@ function ProspectosView() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [lastBatchId, setLastBatchId] = useState<string | null>(null)
   const [lastContactResults, setLastContactResults] = useState<ContactResultWithName[]>([])
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
+  const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -243,6 +251,15 @@ function ProspectosView() {
       setDeleteLoading(false)
     }
   }, [deleteDialogOpen])
+
+  useEffect(() => {
+    if (!historyDialogOpen) {
+      setHistoryEntries([])
+      setHistoryProspect(null)
+      setHistoryError(null)
+      setHistoryLoading(false)
+    }
+  }, [historyDialogOpen])
 
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
@@ -406,6 +423,24 @@ function ProspectosView() {
     if (!prospecto.id) return
     setDeleteTarget(prospecto)
     setDeleteDialogOpen(true)
+  }
+
+  const handleOpenHistoryDialog = async (prospecto: ProspectoItem) => {
+    if (!prospecto.id) return
+    setHistoryProspect(prospecto)
+    setHistoryDialogOpen(true)
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const response = await listContactoEnviosPorProspecto(prospecto.id, { limit: 50 })
+      setHistoryEntries(response.items ?? [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar el historial."
+      setHistoryError(message)
+      setHistoryEntries([])
+    } finally {
+      setHistoryLoading(false)
+    }
   }
 
   const handleFormSubmit = useCallback(async () => {
@@ -863,6 +898,10 @@ function ProspectosView() {
                                 <IconPencil className="size-4" />
                                 Editar
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => void handleOpenHistoryDialog(prospecto)}>
+                                <IconHistory className="size-4" />
+                                Historial de contacto
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 variant="destructive"
                                 onClick={() => handleOpenDeleteDialog(prospecto)}
@@ -1151,6 +1190,73 @@ function ProspectosView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Historial de contacto</DialogTitle>
+            <DialogDescription>
+              {historyProspect ? historyProspect.display_name ?? "Prospecto" : "Sin prospecto seleccionado"}
+            </DialogDescription>
+          </DialogHeader>
+          {historyError ? (
+            <p className="text-sm text-destructive">{historyError}</p>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Detalle</TableHead>
+                    <TableHead className="text-right">Procesado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                        <IconLoader className="mr-2 inline size-4 animate-spin" />
+                        Cargando historial...
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {!historyLoading && !historyEntries.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                        No hay envíos registrados para este prospecto.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  {!historyLoading
+                    ? historyEntries.map((envio) => (
+                        <TableRow key={envio.id}>
+                          <TableCell>
+                            <Badge variant="outline">{canalLabel(envio.canal)}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={contactStatusVariant(envio.estado)}>
+                              {contactStatusLabel(envio.estado)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{contactHistoryDetail(envio)}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {formatDate(envio.procesado_en || envio.programado_en)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    : null}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setHistoryDialogOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1256,4 +1362,22 @@ function extractProspectoNotes(metadata: unknown): string | null {
   }
   const trimmed = value.trim()
   return trimmed.length ? trimmed : null
+}
+
+function contactHistoryDetail(envio: ContactoEnvio): string {
+  const detalle = envio.detalle
+  if (!detalle) return "—"
+  if (envio.canal === "correo") {
+    const email = detalle["email"]
+    return typeof email === "string" && email.trim().length ? email : "—"
+  }
+  const phone = detalle["telefono"] || detalle["phone"]
+  if (typeof phone === "string" && phone.trim().length) {
+    return phone
+  }
+  const reason = detalle["reason"]
+  if (typeof reason === "string" && reason.trim().length) {
+    return reason
+  }
+  return "—"
 }

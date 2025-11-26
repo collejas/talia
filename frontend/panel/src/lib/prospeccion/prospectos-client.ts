@@ -239,6 +239,16 @@ export async function listContactoEnvios(params: {
   return requestJson(url.toString())
 }
 
+export async function listContactoEnviosPorProspecto(
+  prospectoId: string,
+  params: { limit?: number; offset?: number } = {}
+): Promise<{ ok: boolean; items: ContactoEnvio[]; total: number; limit: number; offset: number }> {
+  const url = buildClientUrl(`/api/prospeccion/prospectos/${prospectoId}/contactos`)
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  return requestJson(url.toString())
+}
+
 function extractStringField(payload: unknown, key: string): string | undefined {
   if (!payload || typeof payload !== "object") {
     return undefined
