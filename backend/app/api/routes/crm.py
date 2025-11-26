@@ -482,6 +482,31 @@ class ProspectoUpdatePayload(BaseModel):
         return self
 
 
+class ContactBatchQuery(BaseModel):
+    """Filtros de paginación para los lotes de contacto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=25, ge=1, le=200)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    estado: str | None = Field(default=None, max_length=40)
+    order: Literal["reciente", "antiguo"] = Field(default="reciente")
+
+
+class ContactEnvioQuery(BaseModel):
+    """Filtros para listar envíos por lote o prospecto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=50, ge=1, le=500)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    batch_id: UUID | None = Field(default=None)
+    prospecto_id: UUID | None = Field(default=None)
+    canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
+    estado: str | None = Field(default=None, max_length=40)
+    order: Literal["reciente", "antiguo"] = Field(default="reciente")
+
+
 class GoogleProspeccionBusquedaPayload(BaseModel):
     """Parámetros para lanzar una captura desde Google Places."""
 
@@ -5990,6 +6015,97 @@ async def listar_prospectos(
         "total": total,
         "limit": params.limit,
         "offset": params.offset,
+    }
+
+
+@router.get("/prospeccion/contacto/batches")
+async def listar_contacto_batches(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    params: ContactBatchQuery = Depends(),
+) -> dict[str, Any]:
+    """Devuelve lotes de contacto con filtros básicos."""
+
+    order = "creado_en.asc" if params.order == "antiguo" else "creado_en.desc"
+    try:
+        rows, total = await repo.list_contact_batches(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            estado=params.estado,
+            order=order,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
+
+
+@router.get("/prospeccion/contacto/envios")
+async def listar_contacto_envios(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    params: ContactEnvioQuery = Depends(),
+) -> dict[str, Any]:
+    """Lista envíos por lote o prospecto."""
+
+    order = "creado_en.asc" if params.order == "antiguo" else "creado_en.desc"
+    try:
+        rows, total = await repo.list_contact_envios(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            batch_id=params.batch_id,
+            prospecto_id=params.prospecto_id,
+            canal=params.canal or None,
+            estado=params.estado,
+            order=order,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
+
+
+@router.get("/prospeccion/prospectos/{prospecto_id}/contactos")
+async def listar_contactos_por_prospecto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    prospecto_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """Historial de envíos asociados a un prospecto."""
+
+    try:
+        rows, total = await repo.list_contact_envios(
+            usuario_token=user_token,
+            limit=limit,
+            offset=offset,
+            prospecto_id=prospecto_id,
+            order="creado_en.desc",
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 

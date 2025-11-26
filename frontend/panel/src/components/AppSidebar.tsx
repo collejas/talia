@@ -79,6 +79,7 @@ const NAVIGATION = {
         { title: "Prospectos", url: "/prospeccion/prospectos" },
         { title: "Google búsqueda", url: "/prospeccion/google-busqueda" },
         { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda" },
+        { title: "Contactos", url: "/prospeccion/contactos" },
       ],
     },
     {

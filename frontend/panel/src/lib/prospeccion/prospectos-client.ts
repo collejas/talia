@@ -52,6 +52,30 @@ export type ProspectoContactoResumen = {
   llamada?: string
 }
 
+export type ContactoBatch = {
+  id: string
+  iniciado_por?: string | null
+  canales: string[]
+  total_prospectos: number
+  estado: string
+  programado_en?: string | null
+  finalizado_en?: string | null
+  metadata?: Record<string, unknown> | null
+  creado_en?: string | null
+}
+
+export type ContactoEnvio = {
+  id: string
+  batch_id: string
+  prospecto_id: string
+  canal: "correo" | "whatsapp" | "llamada"
+  estado: string
+  detalle?: Record<string, unknown> | null
+  mensaje_id?: string | null
+  programado_en?: string | null
+  procesado_en?: string | null
+}
+
 export type ProspectoManualInput = {
   display_name: string
   actividad?: string | null
@@ -179,6 +203,40 @@ export async function contactarProspectos(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export async function listContactoBatches(params: {
+  limit?: number
+  offset?: number
+  estado?: string
+  order?: "reciente" | "antiguo"
+} = {}): Promise<{ ok: boolean; items: ContactoBatch[]; total: number; limit: number; offset: number }> {
+  const url = buildClientUrl("/api/prospeccion/contacto/batches")
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
+  if (params.order) url.searchParams.set("order", params.order)
+  return requestJson(url.toString())
+}
+
+export async function listContactoEnvios(params: {
+  limit?: number
+  offset?: number
+  batch_id?: string
+  prospecto_id?: string
+  canal?: "correo" | "whatsapp" | "llamada"
+  estado?: string
+  order?: "reciente" | "antiguo"
+} = {}): Promise<{ ok: boolean; items: ContactoEnvio[]; total: number; limit: number; offset: number }> {
+  const url = buildClientUrl("/api/prospeccion/contacto/envios")
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  if (params.batch_id) url.searchParams.set("batch_id", params.batch_id)
+  if (params.prospecto_id) url.searchParams.set("prospecto_id", params.prospecto_id)
+  if (params.canal) url.searchParams.set("canal", params.canal)
+  if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
+  if (params.order) url.searchParams.set("order", params.order)
+  return requestJson(url.toString())
 }
 
 function extractStringField(payload: unknown, key: string): string | undefined {
