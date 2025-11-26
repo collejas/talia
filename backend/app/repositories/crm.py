@@ -3369,9 +3369,10 @@ class CRMRepository:
             prefer="return=representation",
         )
         data = resp.json() or []
-        if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("contact_envio_update_failed")
-        row = data[0]
+        if isinstance(data, list) and data:
+            row = data[0]
+        else:
+            row = {"id": str(envio_id), **payload}
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"contact_envio_update_invalid:{row!r}")
         return row
@@ -3394,9 +3395,10 @@ class CRMRepository:
             prefer="return=representation",
         )
         data = resp.json() or []
-        if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("contact_batch_update_failed")
-        row = data[0]
+        if isinstance(data, list) and data:
+            row = data[0]
+        else:
+            row = {"id": str(batch_id), **payload}
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"contact_batch_update_invalid:{row!r}")
         return row

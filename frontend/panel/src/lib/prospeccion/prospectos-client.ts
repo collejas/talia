@@ -41,7 +41,15 @@ export type ProspectoLookupResponse = {
 
 export type ProspectoContactarResponse = {
   ok: boolean
-  contactos: Array<Record<string, string>>
+  batch_id: string
+  contactos: ProspectoContactoResumen[]
+}
+
+export type ProspectoContactoResumen = {
+  prospecto_id: string
+  correo?: string
+  whatsapp?: string
+  llamada?: string
 }
 
 export type ProspectoManualInput = {

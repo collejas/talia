@@ -47,6 +47,7 @@ import {
   listProspectos,
   type ProspectoItem,
   type ProspectoManualInput,
+  type ProspectoContactoResumen,
   verificarProspectos,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -67,6 +68,8 @@ type BannerState = {
   type: "success" | "error"
   message: string
 }
+
+type ContactResultWithName = ProspectoContactoResumen & { display_name?: string | null }
 
 const initialFilters: Filters = {
   search: "",
@@ -169,6 +172,8 @@ function ProspectosView() {
   const [deleteTarget, setDeleteTarget] = useState<ProspectoItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [lastBatchId, setLastBatchId] = useState<string | null>(null)
+  const [lastContactResults, setLastContactResults] = useState<ContactResultWithName[]>([])
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -346,9 +351,19 @@ function ProspectosView() {
     try {
       const response = await contactarProspectos(payload)
       const totalAcciones = response.contactos?.length ?? payload.prospecto_ids.length
+      const nameMap = new Map(items.map((item) => [item.id, item.display_name]))
+      setLastBatchId(response.batch_id ?? null)
+      setLastContactResults(
+        (response.contactos ?? []).map((resumen) => ({
+          ...resumen,
+          display_name: nameMap.get(resumen.prospecto_id) ?? null,
+        }))
+      )
       setBanner({
         type: "success",
-        message: `Se registraron ${totalAcciones} acciones de contacto.`,
+        message: response.batch_id
+          ? `Se creó el lote ${response.batch_id} con ${totalAcciones} acciones.`
+          : `Se registraron ${totalAcciones} acciones de contacto.`,
       })
       setContactDialogOpen(false)
       await fetchProspectos(offset)
@@ -358,7 +373,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [contactForm, fetchProspectos, offset, selectedIds])
+  }, [contactForm, fetchProspectos, items, offset, selectedIds])
 
   const handleOpenCreateDialog = () => {
     setFormMode("create")
@@ -488,6 +503,11 @@ function ProspectosView() {
     }
   }, [deleteTarget, fetchProspectos, items.length, limit, offset])
 
+  const handleClearContactResults = () => {
+    setLastBatchId(null)
+    setLastContactResults([])
+  }
+
   return (
     <div className="space-y-4">
       {banner ? (
@@ -509,6 +529,46 @@ function ProspectosView() {
             Ocultar
           </Button>
         </div>
+      ) : null}
+
+      {lastContactResults.length ? (
+        <section className="rounded-lg border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Último envío de contacto</p>
+              <p className="text-xs text-muted-foreground">
+                {lastBatchId ? `Lote ${lastBatchId}` : "Ejecución reciente"}
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleClearContactResults}>
+              Ocultar
+            </Button>
+          </div>
+          <div className="mt-4 space-y-3">
+            {lastContactResults.map((resultado) => (
+              <div
+                key={`${resultado.prospecto_id}-${resultado.display_name ?? "anon"}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+              >
+                <div>
+                  <div className="font-medium">{resultado.display_name || "Prospecto"}</div>
+                  <p className="text-xs text-muted-foreground">{resultado.prospecto_id}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {["correo", "whatsapp", "llamada"].map((canal) => {
+                    const estado = resultado[canal as keyof ProspectoContactoResumen] as string | undefined
+                    if (!estado) return null
+                    return (
+                      <Badge key={canal} variant={contactStatusVariant(estado)}>
+                        {canalLabel(canal)}: {contactStatusLabel(estado)}
+                      </Badge>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
@@ -1134,6 +1194,51 @@ function carrierLabel(value: string | null | undefined) {
       return "VoIP"
     default:
       return normalized
+  }
+}
+
+function contactStatusLabel(value: string | undefined) {
+  if (!value) return "Pendiente"
+  const normalized = value.toLowerCase()
+  switch (normalized) {
+    case "enviado":
+      return "Enviado"
+    case "omitido":
+      return "Omitido"
+    case "error":
+      return "Error"
+    case "pendiente":
+      return "Pendiente"
+    default:
+      return normalized
+  }
+}
+
+function contactStatusVariant(value: string | undefined): "default" | "secondary" | "destructive" | "outline" {
+  if (!value) return "secondary"
+  const normalized = value.toLowerCase()
+  switch (normalized) {
+    case "enviado":
+      return "secondary"
+    case "omitido":
+      return "outline"
+    case "error":
+      return "destructive"
+    default:
+      return "default"
+  }
+}
+
+function canalLabel(value: string) {
+  switch (value) {
+    case "correo":
+      return "Correo"
+    case "whatsapp":
+      return "WhatsApp"
+    case "llamada":
+      return "Llamada"
+    default:
+      return value
   }
 }
 

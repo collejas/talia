@@ -2074,12 +2074,13 @@ def _build_contact_batch_payload(
     payload: ProspectoContactarPayload,
     usuario_id: UUID | None,
 ) -> dict[str, Any]:
+    prospecto_ids = [str(value) for value in payload.prospecto_ids]
     return {
         "iniciado_por": str(usuario_id) if usuario_id else None,
         "canales": canales,
         "total_prospectos": total,
         "estado": "pendiente",
-        "filtros": {"prospecto_ids": payload.prospecto_ids},
+        "filtros": {"prospecto_ids": prospecto_ids},
         "metadata": {
             "correo_asunto": payload.correo_asunto,
             "whatsapp_mensaje": payload.whatsapp_mensaje,

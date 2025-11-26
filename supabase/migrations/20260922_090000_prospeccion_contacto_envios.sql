@@ -80,6 +80,16 @@ BEGIN
             TO authenticated
             WITH CHECK (true);
     END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'prospeccion_contacto_batch' AND policyname = 'p_update_prospeccion_contacto_batch'
+    ) THEN
+        CREATE POLICY p_update_prospeccion_contacto_batch
+            ON public.prospeccion_contacto_batch
+            FOR UPDATE
+            TO authenticated
+            USING (true)
+            WITH CHECK (true);
+    END IF;
 
     IF NOT EXISTS (
         SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'prospeccion_contacto_envio' AND policyname = 'p_select_prospeccion_contacto_envio'
@@ -98,6 +108,16 @@ BEGIN
             ON public.prospeccion_contacto_envio
             FOR INSERT
             TO authenticated
+            WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'prospeccion_contacto_envio' AND policyname = 'p_update_prospeccion_contacto_envio'
+    ) THEN
+        CREATE POLICY p_update_prospeccion_contacto_envio
+            ON public.prospeccion_contacto_envio
+            FOR UPDATE
+            TO authenticated
+            USING (true)
             WITH CHECK (true);
     END IF;
 END;
