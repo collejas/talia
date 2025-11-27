@@ -20,6 +20,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import leads_geo, storage
 from app.services import openai as openai_service
 from app.services import twilio as twilio_service
+from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 
 from . import schemas
@@ -257,6 +258,17 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
     }
     try:
         await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
+        batch_id_value = envio.get("batch_id")
+        if batch_id_value:
+            await progress_hub.publish(
+                str(batch_id_value),
+                {
+                    "type": "envio",
+                    "batch_id": batch_id_value,
+                    "envio_id": str(envio_uuid),
+                    "estado": payload["estado"],
+                },
+            )
         await repo.worker_insert_contact_logs(
             [
                 {
@@ -275,9 +287,18 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
                 }
             ]
         )
-        batch_id = envio.get("batch_id")
-        if estado_envio == "fallido" and batch_id:
-            await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
+        batch_state = None
+        if estado_envio == "fallido" and batch_id_value:
+            batch_state = await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id_value)))
+        if batch_state and batch_id_value:
+            await progress_hub.publish(
+                str(batch_id_value),
+                {
+                    "type": "batch",
+                    "batch_id": batch_id_value,
+                    "estado": batch_state,
+                },
+            )
     except CRMRepositoryError as exc:
         log_event(
             logger,

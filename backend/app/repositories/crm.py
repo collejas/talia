@@ -3685,7 +3685,7 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"worker_insert_log_invalid:{data!r}")
 
-    async def worker_sync_batch_status(self, *, batch_id: UUID) -> None:
+    async def worker_sync_batch_status(self, *, batch_id: UUID) -> str | None:
         """Actualiza el estado del lote conforme avanza el procesamiento."""
 
         pending_total = await self._count_batch_envios(
@@ -3699,7 +3699,7 @@ class CRMRepository:
                 params={"id": f"eq.{batch_id}"},
                 json={"estado": "en_proceso"},
             )
-            return
+            return "en_proceso"
 
         error_total = await self._count_batch_envios(
             batch_id=batch_id,
@@ -3716,6 +3716,7 @@ class CRMRepository:
             params={"id": f"eq.{batch_id}"},
             json=payload,
         )
+        return estado_final
 
     async def get_email_template(
         self,

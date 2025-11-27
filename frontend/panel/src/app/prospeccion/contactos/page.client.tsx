@@ -134,16 +134,33 @@ export default function ContactosPageClient() {
   )
 
   useEffect(() => {
-    void fetchEnvios(selectedBatchId)
-    void fetchBatchSummary(selectedBatchId)
     if (!selectedBatchId) {
+      setBatchSummary(null)
+      setEnvios([])
       return
     }
-    const interval = setInterval(() => {
+    void fetchBatchSummary(selectedBatchId)
+    void fetchEnvios(selectedBatchId)
+    const source = new EventSource(`/api/prospeccion/contacto/batches/${selectedBatchId}/stream`)
+    source.onmessage = (event) => {
+      if (!event?.data) return
+      try {
+        const payload = JSON.parse(event.data) as { type?: string }
+        if (payload?.type === "ping" || payload?.type === "connected") {
+          return
+        }
+      } catch {
+        return
+      }
       void fetchBatchSummary(selectedBatchId)
       void fetchEnvios(selectedBatchId)
-    }, 10000)
-    return () => clearInterval(interval)
+    }
+    source.onerror = () => {
+      source.close()
+    }
+    return () => {
+      source.close()
+    }
   }, [fetchBatchSummary, fetchEnvios, selectedBatchId])
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) ?? null, [

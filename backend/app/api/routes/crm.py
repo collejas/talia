@@ -27,6 +27,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
@@ -54,6 +55,7 @@ from app.services import quotes as quotes_service
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
 from app.services.prospeccion_contact_sender import contact_sender
+from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
@@ -2103,6 +2105,10 @@ def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, A
         resumen = resumen_por_prospecto.setdefault(key, {"prospecto_id": key})
         resumen[canal] = estado
     return list(resumen_por_prospecto.values())
+
+
+def _sse_payload(data: dict[str, Any]) -> str:
+    return f"data: {json.dumps(data)}\n\n"
 
 
 def _build_contact_log_entry(
@@ -6265,8 +6271,55 @@ async def reintentar_contacto_envio(
     )
     await repo.insert_prospecto_logs(usuario_token=user_token, entries=[log_entry])
     contact_sender.notify_new_envios()
+    batch_id_value = envio.get("batch_id")
+    if batch_id_value:
+        await progress_hub.publish(
+            str(batch_id_value),
+            {
+                "type": "envio",
+                "batch_id": batch_id_value,
+                "envio_id": str(envio_id),
+                "estado": "pendiente",
+            },
+        )
 
     return {"ok": True, "envio": updated}
+
+
+@router.get("/prospeccion/contacto/batches/{batch_id}/stream")
+async def stream_contacto_batch(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    batch_id: UUID,
+) -> StreamingResponse:
+    """Stream SSE con actualizaciones del lote."""
+
+    batch = await repo.get_contact_batch(usuario_token=user_token, batch_id=batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="contact_batch_not_found")
+
+    queue = await progress_hub.subscribe(str(batch_id))
+
+    async def event_generator() -> Any:
+        try:
+            yield _sse_payload({"type": "connected", "batch_id": str(batch_id)})
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                except asyncio.TimeoutError:
+                    yield _sse_payload({"type": "ping"})
+                    continue
+                yield _sse_payload(event)
+        finally:
+            await progress_hub.unsubscribe(str(batch_id), queue)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
 @router.get("/visitas/kpis")

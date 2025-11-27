@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 
-async function resolveAccessToken(): Promise<string | null> {
+export async function resolveProspeccionAccessToken(): Promise<string | null> {
   const store = await cookies()
   const cookieToken = store.get(ACCESS_TOKEN_COOKIE)?.value
   if (cookieToken && cookieToken.trim().length) {
@@ -35,7 +35,7 @@ export async function proxyProspeccionRequest(
     forwardSearch?: boolean
   }
 ): Promise<NextResponse> {
-  const token = await resolveAccessToken()
+  const token = await resolveProspeccionAccessToken()
   if (!token) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 })
   }
@@ -76,5 +76,33 @@ export async function proxyProspeccionRequest(
     headers: {
       "content-type": contentType,
     },
+  })
+}
+
+export async function proxyProspeccionStreamingRequest(backendPath: string): Promise<NextResponse> {
+  const token = await resolveProspeccionAccessToken()
+  if (!token) {
+    return NextResponse.json({ error: "auth_required" }, { status: 401 })
+  }
+  const backendBase = getPanelApiBaseUrl()
+  const target = new URL(`${backendBase}${backendPath}`)
+  const backendResponse = await fetch(target, {
+    method: "GET",
+    headers: {
+      Accept: "text/event-stream",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  })
+  const headers = new Headers()
+  backendResponse.headers.forEach((value, key) => {
+    headers.set(key, value)
+  })
+  headers.set("Cache-Control", headers.get("cache-control") ?? "no-cache")
+  headers.set("Content-Type", "text/event-stream")
+  headers.set("Connection", "keep-alive")
+  return new NextResponse(backendResponse.body, {
+    status: backendResponse.status,
+    headers,
   })
 }

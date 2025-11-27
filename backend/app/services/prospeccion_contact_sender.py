@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import EmailSendError, send_email
+from app.services.prospeccion_progress import progress_hub
 
 logger = get_logger("prospeccion.contact_sender")
 
@@ -84,6 +85,16 @@ def _build_contact_log_entry(
     if envio_id:
         entry["envio_id"] = str(envio_id)
     return entry
+
+
+async def _broadcast_batch_event(batch_id: Any, payload: dict[str, Any]) -> None:
+    """Envía eventos de actualización a los suscriptores SSE."""
+
+    if not batch_id:
+        return
+    enriched = dict(payload)
+    enriched.setdefault("batch_id", str(batch_id))
+    await progress_hub.publish(str(batch_id), enriched)
 
 
 async def _send_whatsapp_message(to_number: str, body: str) -> TwilioSendResult:
@@ -320,6 +331,15 @@ class ProspeccionContactSender:
         )
         await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
 
+        await _broadcast_batch_event(
+            batch_id=envio.get("batch_id"),
+            payload={
+                "type": "envio",
+                "envio_id": str(envio_id),
+                "estado": update_payload["estado"],
+            },
+        )
+
         log_entry = _build_contact_log_entry(
             prospecto_id=envio.get("prospecto_id"),
             canal=canal,
@@ -332,11 +352,20 @@ class ProspeccionContactSender:
         await repo.worker_insert_contact_logs([log_entry])
 
         batch_id = envio.get("batch_id")
+        batch_state: str | None = None
         if batch_id:
             try:
-                await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
+                batch_state = await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
             except (ValueError, CRMRepositoryError):
                 log_event(logger, "prospeccion.sender_batch_sync_failed", batch_id=batch_id)
+        if batch_state:
+            await _broadcast_batch_event(
+                batch_id=batch_id,
+                payload={
+                    "type": "batch",
+                    "estado": batch_state,
+                },
+            )
 
     def _build_envio_update_payload(
         self,
