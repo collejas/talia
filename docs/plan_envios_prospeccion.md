@@ -72,8 +72,6 @@
    - Botón “Reintentar canal” en la tabla de envíos crea un nuevo intento mediante el endpoint backend y vuelve a despachar el worker.
 5. **KPIs de campañas** ✅
    - La vista `/prospeccion/campanas` ahora muestra la salud por canal (totales y estados) reutilizando el endpoint de métricas; soporte puede ver al instante si correo/WhatsApp/voz presentan fallos.
-5. **Métricas operativas** ✅
-   - El endpoint `/prospeccion/contacto/metrics` expone contadores por canal/estado y el panel muestra una tarjeta “Salud por canal” con esos totales para que soporte monitoree WhatsApp/correo/voz.
 
 ### 4. Infraestructura y configuración
 1. **Credenciales**
@@ -105,3 +103,17 @@
 5. Suite de pruebas + checklist de QA manual.
 
 Con este plan damos continuidad al documento “plan realizado para extender prospeccion” y abordamos lo necesario para que los envíos se ejecuten end-to-end en los tres canales, con trazabilidad y UX acorde.
+
+## Monitorización avanzada (plan futuro)
+1. **Exportar métricas a Prometheus/OpenTelemetry**
+   - Instrumentar la API/worker con `prometheus_client` y exponer `/metrics` para que Grafana pueda graficar tasas por canal y por lote.
+   - Registrar histogramas de latencia por canal (correo, WhatsApp, voz) y contadores de reintentos/fallos.
+2. **Alertas automáticas**
+   - Definir umbrales (ej. >10 fallos consecutivos en WhatsApp en 5 minutos) y enviar notificaciones a Slack/Email.
+   - Integrar logs `prospeccion.contact_sender` con Papertrail/Datadog para gatillar alertas cuando el worker se detenga.
+3. **Dashboards operativos**
+   - Crear en `/prospeccion/campanas` tarjetas históricas (últimas 24h) usando los datos expuestos por Prometheus.
+   - Añadir filtros por canal, periodo y lote para que soporte pueda auditar campañas específicas.
+4. **Checklist de monitoreo**
+   - Documentar en la guía operativa qué pasos seguir cuando un canal presenta fallos (revisar métricas, cancelar lote, reintentar).
+   - Mantener un runbook con acciones rápidas (reiniciar worker, validar credenciales Twilio/SMTP).
