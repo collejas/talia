@@ -296,8 +296,9 @@ class InMemoryPipelineRepository(CRMRepository):
     async def convert_oportunidad_en_cliente(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: uuid.UUID,
         oportunidad_id: uuid.UUID,
+        usuario_token: str | None = None,
         forzar: bool,
     ) -> dict[str, Any]:
         record = {
@@ -313,8 +314,9 @@ class InMemoryPipelineRepository(CRMRepository):
     async def get_cliente_por_oportunidad(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: uuid.UUID,
         oportunidad_id: uuid.UUID,
+        usuario_token: str | None = None,
     ) -> dict[str, Any] | None:
         return self.clients.get(str(oportunidad_id))
 

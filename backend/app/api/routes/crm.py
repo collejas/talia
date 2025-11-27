@@ -1743,6 +1743,64 @@ def _quote_mark_extra(extra: dict[str, Any] | None = None) -> dict[str, Any]:
     return payload
 
 
+async def _ensure_oportunidad_cuenta(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_row: dict[str, Any],
+) -> tuple[UUID, dict[str, Any]]:
+    cuenta_id = _safe_uuid(oportunidad_row.get("cuenta_id"))
+    if cuenta_id:
+        return cuenta_id, oportunidad_row
+    contact = _single_related(oportunidad_row.get("contacto")) or {}
+    name_candidates = [
+        contact.get("company_name"),
+        oportunidad_row.get("titulo"),
+        contact.get("nombre_completo"),
+    ]
+    account_name = None
+    for candidate in name_candidates:
+        cleaned = _clean_text(candidate)
+        if cleaned:
+            account_name = cleaned
+            break
+    account_name = account_name or "Cuenta generada automáticamente"
+    metadata: dict[str, Any] = {
+        "auto_created_from_opportunity": str(oportunidad_row.get("id")),
+    }
+    contact_id_value = contact.get("id")
+    if contact_id_value:
+        metadata["contacto_principal_id"] = str(contact_id_value)
+    account_payload = {
+        "nombre": account_name,
+        "telefono": _clean_text(contact.get("telefono_e164")),
+        "correo": _clean_text(contact.get("correo")),
+        "metadata": {k: v for k, v in metadata.items() if v},
+    }
+    try:
+        account_row = await repo.create_account(
+            organizacion_id=organizacion_id,
+            payload=account_payload,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="cuenta_auto_create_failed") from exc
+    cuenta_id = _safe_uuid(account_row.get("id"))
+    if cuenta_id is None:
+        raise HTTPException(status_code=502, detail="cuenta_auto_create_missing_id")
+    oportunidad_id_value = _safe_uuid(oportunidad_row.get("id"))
+    if oportunidad_id_value is None:
+        raise HTTPException(status_code=502, detail="oportunidad_invalid_id")
+    try:
+        updated_row = await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id_value,
+            payload={"cuenta_id": str(cuenta_id)},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="oportunidad_update_failed") from exc
+    return cuenta_id, updated_row
+
+
 async def _ensure_won_stage_metadata(
     *,
     repo: CRMRepository,
@@ -4710,10 +4768,12 @@ async def cancel_agenda_booking(
 async def obtener_cliente_de_oportunidad(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     oportunidad_id: UUID,
 ) -> dict[str, Any]:
     cliente = await repo.get_cliente_por_oportunidad(
+        organizacion_id=organizacion_id,
         usuario_token=user_token,
         oportunidad_id=oportunidad_id,
     )
@@ -4724,16 +4784,32 @@ async def obtener_cliente_de_oportunidad(
 async def convertir_oportunidad_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     oportunidad_id: UUID,
     payload: LeadConversionPayload,
 ) -> dict[str, Any]:
+    oportunidad_row = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if oportunidad_row is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+    cuenta_id = _safe_uuid(oportunidad_row.get("cuenta_id"))
+    if cuenta_id is None:
+        cuenta_id, oportunidad_row = await _ensure_oportunidad_cuenta(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_row=oportunidad_row,
+        )
     await repo.convert_oportunidad_en_cliente(
+        organizacion_id=organizacion_id,
         usuario_token=user_token,
         oportunidad_id=oportunidad_id,
         forzar=payload.forzar,
     )
     cliente = await repo.get_cliente_por_oportunidad(
+        organizacion_id=organizacion_id,
         usuario_token=user_token,
         oportunidad_id=oportunidad_id,
     )
@@ -5037,11 +5113,16 @@ async def actualizar_cliente(
 async def registrar_documento_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     payload: ClienteDocumentoPayload,
 ) -> dict[str, Any]:
-    cliente = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    cliente = await repo.get_cliente_por_id(
+        organizacion_id=organizacion_id,
+        usuario_token=user_token,
+        cliente_id=cliente_id,
+    )
     if cliente is None:
         raise HTTPException(status_code=404, detail="cliente_not_found")
     body = payload.model_dump(exclude_none=True)
@@ -5062,13 +5143,18 @@ async def registrar_documento_cliente(
 async def subir_documento_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     tipo: ClienteDocumentoTipo = Form(...),
     descripcion: str | None = Form(default=None),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-    cliente = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    cliente = await repo.get_cliente_por_id(
+        organizacion_id=organizacion_id,
+        usuario_token=user_token,
+        cliente_id=cliente_id,
+    )
     if cliente is None:
         raise HTTPException(status_code=404, detail="cliente_not_found")
     try:
@@ -5172,11 +5258,16 @@ async def actualizar_responsable_cliente(
 async def crear_link_portal_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     payload: ClientePortalLinkPayload,
 ) -> dict[str, Any]:
-    cliente_data = await repo.get_cliente_por_id(usuario_token=user_token, cliente_id=cliente_id)
+    cliente_data = await repo.get_cliente_por_id(
+        organizacion_id=organizacion_id,
+        usuario_token=user_token,
+        cliente_id=cliente_id,
+    )
     if cliente_data is None:
         raise HTTPException(status_code=404, detail="cliente_not_found")
     portal_token = secrets.token_urlsafe(32)

@@ -39,6 +39,10 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _is_jwt_expired_error(error: Exception) -> bool:
+    return "JWT expired" in str(error)
+
+
 class CRMRepository:
     """Cliente ligero contra Supabase REST usando service role."""
 
@@ -2656,20 +2660,33 @@ class CRMRepository:
     async def get_cliente_por_oportunidad(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         oportunidad_id: UUID,
+        usuario_token: str | None = None,
     ) -> dict[str, Any] | None:
         params = {
+            "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "select": self._CLIENTE_SELECT,
             "limit": "1",
         }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/clientes",
-            token=usuario_token,
-            params=params,
-        )
+        if usuario_token:
+            try:
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/clientes",
+                    token=usuario_token,
+                    params=params,
+                )
+            except CRMRepositoryError as exc:
+                if not _is_jwt_expired_error(exc):
+                    raise
+            else:
+                data = resp.json() or []
+                row = self._first_row(data)
+                if isinstance(row, dict):
+                    return row
+        resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
         row = self._first_row(data)
         return row if isinstance(row, dict) else None
@@ -2677,20 +2694,33 @@ class CRMRepository:
     async def get_cliente_por_id(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         cliente_id: UUID,
+        usuario_token: str | None = None,
     ) -> dict[str, Any] | None:
         params = {
+            "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{cliente_id}",
             "select": self._CLIENTE_SELECT,
             "limit": "1",
         }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/clientes",
-            token=usuario_token,
-            params=params,
-        )
+        if usuario_token:
+            try:
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/clientes",
+                    token=usuario_token,
+                    params=params,
+                )
+            except CRMRepositoryError as exc:
+                if not _is_jwt_expired_error(exc):
+                    raise
+            else:
+                data = resp.json() or []
+                row = self._first_row(data)
+                if isinstance(row, dict):
+                    return row
+        resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
         row = self._first_row(data)
         return row if isinstance(row, dict) else None
@@ -2744,17 +2774,30 @@ class CRMRepository:
     async def convert_oportunidad_en_cliente(
         self,
         *,
-        usuario_token: str,
+        organizacion_id: UUID,
         oportunidad_id: UUID,
+        usuario_token: str | None = None,
         forzar: bool = False,
     ) -> Any:
         body = {"p_tarjeta_id": str(oportunidad_id), "p_forzar": forzar}
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/rpc/convertir_lead_en_cliente",
-            token=usuario_token,
-            json=body,
-        )
+        resp: httpx.Response | None = None
+        if usuario_token:
+            try:
+                resp = await self._request_with_user(
+                    "POST",
+                    "/rest/v1/rpc/convertir_lead_en_cliente",
+                    token=usuario_token,
+                    json=body,
+                )
+            except CRMRepositoryError as exc:
+                if not _is_jwt_expired_error(exc):
+                    raise
+        if resp is None:
+            resp = await self._request(
+                "POST",
+                "/rest/v1/rpc/convertir_lead_en_cliente",
+                json=body,
+            )
         try:
             return resp.json()
         except ValueError as exc:
