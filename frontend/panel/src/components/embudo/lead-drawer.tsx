@@ -141,6 +141,7 @@ type LeadQuoteEntry = {
   createdAt: string | null;
   title: string | null;
   description: string | null;
+  economicDetailsHtml: string | null;
   concepts: Record<string, unknown>[] | null;
   subtotal: number | null;
   taxes: number | null;
@@ -706,6 +707,7 @@ export function LeadDrawer({
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
   const [quoteDescription, setQuoteDescription] = useState("");
+  const [quoteEconomicDetails, setQuoteEconomicDetails] = useState("");
   const [quoteSubject, setQuoteSubject] = useState("");
   const [quoteMessage, setQuoteMessage] = useState("");
   const [quoteEmailTo, setQuoteEmailTo] = useState("");
@@ -1437,6 +1439,7 @@ export function LeadDrawer({
       setQuoteChannel(channel);
       setQuoteTitle(defaultTitle);
       setQuoteDescription(defaultDescription);
+      setQuoteEconomicDetails(latestQuote?.economicDetailsHtml ?? "");
       setQuoteSubject(defaultSubject);
       setQuoteMessage(defaultMessage);
       setQuoteEmailTo(card.correo ?? "");
@@ -1494,6 +1497,8 @@ export function LeadDrawer({
             const title = typeof item.titulo === "string" ? item.titulo : null;
             const description = typeof item.descripcion === "string" ? item.descripcion : null;
             const total = typeof item.total === "number" ? item.total : null;
+            const unit = typeof item.unidad === "string" ? item.unidad : null;
+            const quantity = typeof item.cantidad === "number" ? item.cantidad : null;
             if (!title && !description && total == null) {
               return null;
             }
@@ -1501,9 +1506,21 @@ export function LeadDrawer({
               titulo: title,
               descripcion: description,
               total,
+              unidad: unit,
+              cantidad: quantity,
             };
           })
-          .filter((concept): concept is { titulo: string | null; descripcion: string | null; total: number | null } => !!concept);
+          .filter(
+            (
+              concept,
+            ): concept is {
+              titulo: string | null;
+              descripcion: string | null;
+              total: number | null;
+              unidad: string | null;
+              cantidad: number | null;
+            } => !!concept,
+          );
 
         const hasItems = itemsPayload.length > 0;
         const hasTotals = subtotalValue != null || totalValue != null;
@@ -1528,6 +1545,7 @@ export function LeadDrawer({
           total: totalValue ?? null,
           moneda: currencyValue,
           valido_hasta: quoteValidoHasta?.trim() || null,
+          detalles_propuesta_html: quoteEconomicDetails.trim() || null,
           email_to: quoteChannel === "email" ? emails : undefined,
           whatsapp_to: quoteChannel === "whatsapp" ? quoteWhatsappTo.trim() || null : undefined,
           subject: quoteChannel === "email" ? quoteSubject.trim() || null : undefined,
@@ -2562,6 +2580,23 @@ export function LeadDrawer({
               />
             </div>
 
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                Detalles de propuesta económica (HTML)
+              </label>
+              <Textarea
+                value={quoteEconomicDetails}
+                onChange={(event) => setQuoteEconomicDetails(event.target.value)}
+                disabled={quotePending}
+                rows={6}
+                placeholder="<p>Incluye alcances, términos y cualquier anotación adicional.</p>"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Puedes usar etiquetas HTML básicas como &lt;p&gt;, &lt;br&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;li&gt; y
+                enlaces (&lt;a&gt;).
+              </p>
+            </div>
+
             <div className="space-y-4 rounded-xl border border-border/70 bg-background/60 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -3294,6 +3329,11 @@ function describeHistoryEntry(entry: LeadHistoryEntry): string {
 
 function mapQuoteEntry(input: unknown): LeadQuoteEntry {
   const row = isRecord(input) ? input : {};
+  const metadataRecord: Record<string, unknown> = isRecord(row.metadatos)
+    ? row.metadatos
+    : isRecord(row.metadata)
+      ? row.metadata
+      : {};
   const totalValue = toNumber(row.total);
   return {
     id: String(row.id ?? `${row.version ?? "quote"}-${Math.random().toString(36).slice(2, 8)}`),
@@ -3307,6 +3347,12 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
     title: typeof row.titulo === "string" ? row.titulo : null,
     description: typeof row.descripcion === "string" ? row.descripcion : null,
+    economicDetailsHtml:
+      typeof row.detalles_propuesta_html === "string"
+        ? row.detalles_propuesta_html
+        : typeof metadataRecord["detalles_propuesta_html"] === "string"
+          ? (metadataRecord["detalles_propuesta_html"] as string)
+          : null,
     concepts: Array.isArray(row.conceptos) ? (row.conceptos as Record<string, unknown>[]) : null,
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),

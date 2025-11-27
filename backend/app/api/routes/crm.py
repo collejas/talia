@@ -1270,7 +1270,12 @@ def _concepts_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             discount = item.get("descuento") or 0
             if qty is not None and price is not None:
                 total = max(qty * price - discount, 0)
-        concept = {"titulo": title, "descripcion": desc}
+        concept = {
+            "titulo": title,
+            "descripcion": desc,
+            "unidad": item.get("unidad") or item.get("unidad_medida"),
+            "cantidad": item.get("cantidad"),
+        }
         if total is not None:
             concept["total"] = total
         if any(value for value in concept.values()):
@@ -1362,6 +1367,8 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         version=metadata.get("version") or row.get("version") or 1,
         titulo=metadata.get("titulo") or row.get("titulo"),
         descripcion=metadata.get("descripcion") or row.get("descripcion"),
+        detalles_propuesta_html=metadata.get("detalles_propuesta_html")
+        or row.get("detalles_propuesta_html"),
         conceptos=_ensure_concept_list(metadata.get("conceptos") or row.get("conceptos")),
         subtotal=metadata.get("subtotal") or row.get("subtotal"),
         impuestos=metadata.get("impuestos") or row.get("impuestos"),
@@ -1410,6 +1417,7 @@ def _quote_metadata_from_payload(body: dict[str, Any]) -> dict[str, Any]:
     for key in (
         "titulo",
         "descripcion",
+        "detalles_propuesta_html",
         "conceptos",
         "subtotal",
         "impuestos",
@@ -2697,6 +2705,7 @@ class LeadQuoteItem(BaseModel):
 class LeadQuoteCreatePayload(BaseModel):
     titulo: str | None = Field(default=None, max_length=200)
     descripcion: str | None = Field(default=None, max_length=2000)
+    detalles_propuesta_html: str | None = Field(default=None, max_length=16000)
     conceptos: list[dict[str, Any]] | None = Field(default=None)
     subtotal: float | None = Field(default=None)
     impuestos: float | None = Field(default=None)
@@ -2730,6 +2739,7 @@ class LeadQuote(BaseModel):
     version: int
     titulo: str | None = None
     descripcion: str | None = None
+    detalles_propuesta_html: str | None = None
     conceptos: list[dict[str, Any]] = Field(default_factory=list)
     subtotal: float | None = None
     impuestos: float | None = None
@@ -4943,6 +4953,7 @@ async def send_lead_quote(
         notes=oportunidad_metadata.get("proyecto_necesidades")
         or contact.get("necesidad_proposito"),
         items=normalized_items,
+        economic_details_html=payload.detalles_propuesta_html,
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)

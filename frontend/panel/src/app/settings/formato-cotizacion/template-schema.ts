@@ -48,6 +48,7 @@ const DEFAULT_VARIABLES = [
   "cotizacion.vigencia",
   "tabla_conceptos",
   "resumen_totales",
+  "detalles_propuesta",
   "ejecutivo.nombre",
   "ejecutivo.correo",
 ]
@@ -125,13 +126,13 @@ export function buildQuoteTemplateAssets(config: QuoteTemplateConfig): { html: s
     </section>
 
     <section>
-      <h2>Detalle de conceptos</h2>
-      {{tabla_conceptos}}
+      <h2>Detalles de propuesta económica</h2>
+      {{detalles_propuesta}}
     </section>
 
     <section>
-      <h2>Resumen económico</h2>
-      {{resumen_totales}}
+      <h2>Propuesta económica</h2>
+      {{tabla_conceptos}}
       <p class="muted">Vigencia estimada: {{cotizacion.vigencia}}</p>
     </section>
 
@@ -154,16 +155,21 @@ export function buildQuoteTemplateAssets(config: QuoteTemplateConfig): { html: s
 </html>`
 
   const css = `
+@page {
+  size: A4;
+  margin: 12mm 10mm;
+}
 :root {
   --quote-primary: ${config.primaryColor || DEFAULT_TEMPLATE_CONFIG.primaryColor};
   --quote-accent: ${config.accentColor || DEFAULT_TEMPLATE_CONFIG.accentColor};
 }
 body {
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  color: #0f172a;
+  color: var(--quote-primary);
   margin: 0;
-  padding: 40px 48px;
+  padding: 24px 28px;
   line-height: 1.5;
+  font-size: 0.95rem;
 }
 header {
   border-bottom: 2px solid var(--quote-accent);
@@ -228,32 +234,69 @@ section {
   width: 100%;
   border-collapse: collapse;
   margin-top: 12px;
+  table-layout: fixed;
 }
 .concept-table th,
 .concept-table td {
-  border: 1px solid #e2e8f0;
-  padding: 10px 12px;
+  border: 1px solid #d7e3f4;
+  padding: 8px 10px;
   vertical-align: top;
+  font-size: 0.92rem;
 }
 .concept-table th {
   background: #f8fafc;
   color: var(--quote-primary);
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .concept-title {
   font-weight: 600;
-  width: 25%;
+  width: 24%;
 }
-.concept-desc {
-  width: 55%;
+.concept-unit,
+.concept-qty {
+  width: 14%;
+  text-align: center;
+  font-size: 0.9rem;
 }
 .concept-amount {
+  width: 20%;
   text-align: right;
   font-weight: 600;
   color: var(--quote-primary);
   white-space: nowrap;
+}
+.concept-table tfoot td {
+  border-top: 2px solid #cfd8ea;
+  font-weight: 600;
+}
+.concept-table .totals-label {
+  text-align: right;
+  padding-right: 14px;
+}
+.proposal-details {
+  margin-top: 16px;
+  border: 1px solid #dbe3f3;
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: #f8fbff;
+}
+.proposal-detail {
+  margin-bottom: 12px;
+}
+.proposal-detail:last-child {
+  margin-bottom: 0;
+}
+.proposal-detail h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+.proposal-detail p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #334155;
+  line-height: 1.5;
 }
 .totals-grid {
   display: grid;
