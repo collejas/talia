@@ -1320,11 +1320,16 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
         catalog_item = CRMCatalogItem.model_validate(catalog) if isinstance(catalog, dict) else None
         metadata = entry.get("metadata")
         metadata_dict = metadata if isinstance(metadata, dict) else {}
+        catalog_item_id = (
+            metadata_dict.get("catalog_item_id")
+            or entry.get("producto_id")
+            or entry.get("catalog_item_id")
+        )
         items.append(
             LeadQuoteItem(
                 id=entry.get("id"),
                 cotizacion_id=entry.get("cotizacion_id"),
-                catalog_item_id=entry.get("producto_id") or entry.get("catalog_item_id"),
+                catalog_item_id=catalog_item_id,
                 catalog_item=catalog_item,
                 titulo=metadata_dict.get("titulo")
                 or entry.get("titulo")
@@ -1426,6 +1431,9 @@ def _quote_items_to_repository_payload(
     if not items:
         return repository_items
     for index, item in enumerate(items, start=1):
+        catalog_item_id = item.get("catalog_item_id")
+        if catalog_item_id:
+            catalog_item_id = str(catalog_item_id)
         metadata = {
             "titulo": item.get("titulo"),
             "descripcion": item.get("descripcion"),
@@ -1436,9 +1444,10 @@ def _quote_items_to_repository_payload(
             "moneda": item.get("moneda"),
             "orden": item.get("orden") or index,
         }
+        if catalog_item_id:
+            metadata["catalog_item_id"] = catalog_item_id
         repository_items.append(
             {
-                "producto_id": item.get("catalog_item_id"),
                 "descripcion": item.get("titulo") or item.get("descripcion") or "Concepto",
                 "cantidad": _as_number(item.get("cantidad")) or 1,
                 "precio_unitario": _as_number(item.get("precio_unitario")),
