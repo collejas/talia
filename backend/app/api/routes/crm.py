@@ -54,6 +54,7 @@ from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
+from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
@@ -6391,6 +6392,18 @@ async def cancelar_contacto_batch(
         "batch": updated_batch,
         "envios_cancelados": len(cancelled_envios),
     }
+
+
+@router.get("/prospeccion/contacto/metrics")
+async def obtener_metrics_contacto() -> dict[str, Any]:
+    """Snapshot simple de envíos por canal y estado."""
+
+    snapshot = contact_metrics.snapshot()
+    transformado = {
+        canal: {"totales": sum(counter.values()), "por_estado": dict(counter)}
+        for canal, counter in snapshot.por_canal.items()
+    }
+    return {"ok": True, "canales": transformado}
 
 
 @router.get("/visitas/kpis")

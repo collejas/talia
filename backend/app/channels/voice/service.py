@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import twilio as twilio_service
+from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 
 from .schemas import VoiceStatusCallback
@@ -80,6 +81,7 @@ async def _sync_envio_status_from_voice(callback: VoiceStatusCallback) -> None:
     }
     try:
         await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
+        metrics.increment("llamada", payload["estado"])
         batch_id_value = envio.get("batch_id")
         if batch_id_value:
             await progress_hub.publish(

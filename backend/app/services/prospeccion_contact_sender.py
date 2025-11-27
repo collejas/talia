@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import EmailSendError, send_email
+from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 
 logger = get_logger("prospeccion.contact_sender")
@@ -339,6 +340,7 @@ class ProspeccionContactSender:
                 "estado": update_payload["estado"],
             },
         )
+        metrics.increment(canal or "desconocido", update_payload["estado"])
 
         log_entry = _build_contact_log_entry(
             prospecto_id=envio.get("prospecto_id"),

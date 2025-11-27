@@ -80,8 +80,8 @@
    - Configurar el número de salida con webhook a `/channels/voice/status` y a la nueva ruta TwiML.
    - Verificar que la cuenta tenga permisos para WhatsApp y llamadas al destino (MX).
 3. **Monitorización**
-   - Añadir métricas (Prometheus/OpenTelemetry) por canal: tasa de éxito, errores, tiempo promedio.
-   - Alertas en logs `prospeccion.contact_sender`.
+   - Añadir métricas (Prometheus/OpenTelemetry) por canal: tasa de éxito, errores, tiempo promedio. ✅ El backend ahora expone contadores sencillos mediante `/prospeccion/contacto/metrics` y registra emisiones por canal/estado.
+   - Alertas en logs `prospeccion.contact_sender` y ampliación futura para exportar a Prometheus/Grafana (pendiente completar la capa de alertas externas).
 
 ### 5. QA y despliegue
 1. **Pruebas unitarias**

@@ -20,6 +20,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import leads_geo, storage
 from app.services import openai as openai_service
 from app.services import twilio as twilio_service
+from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 
@@ -258,6 +259,7 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
     }
     try:
         await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
+        metrics.increment("whatsapp", payload["estado"])
         batch_id_value = envio.get("batch_id")
         if batch_id_value:
             await progress_hub.publish(
