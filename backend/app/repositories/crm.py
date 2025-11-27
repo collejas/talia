@@ -3572,6 +3572,38 @@ class CRMRepository:
             counts[estado] = counts.get(estado, 0) + 1
         return [{"estado": estado, "count": total} for estado, total in counts.items()]
 
+    async def cancel_pending_envios(
+        self,
+        *,
+        usuario_token: str,
+        batch_id: UUID,
+        motivo: str,
+    ) -> list[dict[str, Any]]:
+        """Marca como cancelados los envíos pendientes/procesando de un lote."""
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        params = {
+            "batch_id": f"eq.{batch_id}",
+            "estado": "in.(pendiente,procesando)",
+        }
+        payload = {
+            "estado": "cancelado",
+            "error": motivo,
+            "procesado_en": now_iso,
+        }
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_envio_cancel_invalid:{data!r}")
+        return data
+
     async def worker_list_pending_envios(
         self,
         *,

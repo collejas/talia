@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  cancelarContactoBatch,
   getContactoBatchResumen,
   listContactoBatches,
   listContactoEnvios,
@@ -54,6 +55,8 @@ export default function ContactosPageClient() {
   const [batchSummary, setBatchSummary] = useState<ContactoBatchResumen | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [retryingEnvioId, setRetryingEnvioId] = useState<string | null>(null)
+  const [cancelLoading, setCancelLoading] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   const fetchBatches = useCallback(async () => {
     setBatchLoading(true)
@@ -133,6 +136,23 @@ export default function ContactosPageClient() {
     [fetchBatchSummary, fetchEnvios, selectedBatchId]
   )
 
+  const handleCancelBatch = useCallback(async () => {
+    if (!selectedBatchId) return
+    setCancelLoading(true)
+    setCancelError(null)
+    try {
+      await cancelarContactoBatch(selectedBatchId)
+      await fetchBatchSummary(selectedBatchId)
+      await fetchEnvios(selectedBatchId)
+      await fetchBatches()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cancelar el lote."
+      setCancelError(message)
+    } finally {
+      setCancelLoading(false)
+    }
+  }, [fetchBatchSummary, fetchBatches, fetchEnvios, selectedBatchId])
+
   useEffect(() => {
     if (!selectedBatchId) {
       setBatchSummary(null)
@@ -149,6 +169,9 @@ export default function ContactosPageClient() {
         if (payload?.type === "ping" || payload?.type === "connected") {
           return
         }
+        if (payload?.type === "batch") {
+          void fetchBatches()
+        }
       } catch {
         return
       }
@@ -161,12 +184,14 @@ export default function ContactosPageClient() {
     return () => {
       source.close()
     }
-  }, [fetchBatchSummary, fetchEnvios, selectedBatchId])
+  }, [fetchBatchSummary, fetchEnvios, fetchBatches, selectedBatchId])
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) ?? null, [
     batches,
     selectedBatchId,
   ])
+  const canCancelBatch =
+    selectedBatch && !["completado", "cancelado"].includes(selectedBatch.estado ?? "")
 
   return (
     <div className="space-y-6">
@@ -241,12 +266,30 @@ export default function ContactosPageClient() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base font-semibold">
             {selectedBatch ? `Envíos del lote ${selectedBatch.id}` : "Selecciona un lote"}
           </CardTitle>
+          {selectedBatch && canCancelBatch ? (
+            <Button variant="destructive" size="sm" onClick={() => void handleCancelBatch()} disabled={cancelLoading}>
+              {cancelLoading ? (
+                <>
+                  <IconLoader className="mr-2 size-4 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                "Cancelar lote"
+              )}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent>
+          {cancelError ? (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{cancelError}</span>
+            </div>
+          ) : null}
           {summaryError ? (
             <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <IconAlertTriangle className="size-4" />

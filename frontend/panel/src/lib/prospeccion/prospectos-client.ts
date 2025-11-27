@@ -287,6 +287,15 @@ export async function reintentarContactoEnvio(envioId: string) {
   )
 }
 
+export async function cancelarContactoBatch(batchId: string) {
+  return requestJson<{ ok: boolean; batch: ContactoBatch; envios_cancelados: number }>(
+    `/api/prospeccion/contacto/batches/${batchId}/cancelar`,
+    {
+      method: "POST",
+    }
+  )
+}
+
 function extractStringField(payload: unknown, key: string): string | undefined {
   if (!payload || typeof payload !== "object") {
     return undefined

@@ -6322,6 +6322,77 @@ async def stream_contacto_batch(
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
+@router.post("/prospeccion/contacto/batches/{batch_id}/cancelar")
+async def cancelar_contacto_batch(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    batch_id: UUID,
+) -> dict[str, Any]:
+    """Cancela un lote y los envíos pendientes."""
+
+    batch = await repo.get_contact_batch(usuario_token=user_token, batch_id=batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="contact_batch_not_found")
+    estado_actual = _clean_text(batch.get("estado")) or ""
+    if estado_actual in {"completado", "cancelado"}:
+        raise HTTPException(status_code=400, detail="contact_batch_not_cancellable")
+
+    motivo = "cancelado_manual"
+    cancelled_envios = await repo.cancel_pending_envios(
+        usuario_token=user_token,
+        batch_id=batch_id,
+        motivo=motivo,
+    )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    updated_batch = await repo.update_contact_batch(
+        usuario_token=user_token,
+        batch_id=batch_id,
+        payload={"estado": "cancelado", "finalizado_en": now_iso},
+    )
+
+    if cancelled_envios:
+        logs = [
+            _build_contact_log_entry(
+                prospecto_id=envio.get("prospecto_id"),
+                canal=_clean_text(envio.get("canal")) or "canal",
+                estado="cancelado",
+                detalle={"reason": motivo},
+                error=motivo,
+                batch_id=batch_id,
+                envio_id=envio.get("id"),
+            )
+            for envio in cancelled_envios
+        ]
+        await repo.insert_prospecto_logs(usuario_token=user_token, entries=logs)
+        for envio in cancelled_envios:
+            await progress_hub.publish(
+                str(batch_id),
+                {
+                    "type": "envio",
+                    "batch_id": str(batch_id),
+                    "envio_id": envio.get("id"),
+                    "estado": "cancelado",
+                },
+            )
+
+    await progress_hub.publish(
+        str(batch_id),
+        {
+            "type": "batch",
+            "batch_id": str(batch_id),
+            "estado": "cancelado",
+        },
+    )
+
+    return {
+        "ok": True,
+        "batch": updated_batch,
+        "envios_cancelados": len(cancelled_envios),
+    }
+
+
 @router.get("/visitas/kpis")
 async def get_visits_kpis(
     *,

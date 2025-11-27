@@ -28,7 +28,7 @@
 ### 2. Backend (FastAPI + servicios)
 1. **Orquestador de batches** ✅
    - Extender `POST /crm/prospeccion/prospectos/contactar` para que en lugar de enviar de inmediato, cree un `batch` y registros `prospeccion_contacto_envio` por cada prospecto/canal. ✅
-   - Añadir endpoint `GET /crm/prospeccion/prospectos/contactar/{batch_id}` para consultar progreso (totales por estado) y `POST /crm/prospeccion/prospectos/contactar/{batch_id}/cancelar`.
+   - Añadir endpoint `GET /crm/prospeccion/prospectos/contactar/{batch_id}` para consultar progreso (totales por estado) y `POST /crm/prospeccion/prospectos/contactar/{batch_id}/cancelar`. ✅ `GET /crm/prospeccion/contacto/batches/{id}` expone el resumen; `POST /crm/prospeccion/contacto/batches/{id}/cancelar` marca los envíos como cancelados y actualiza el lote.
 2. **Worker/cola de tareas** ✅
    - Implementar un procesador asíncrono (por ejemplo, módulo `app/services/prospeccion_contact_sender.py`) que:
      - Tome envíos `estado=pending` ordenados por `programado_en`.
