@@ -296,6 +296,21 @@ export async function cancelarContactoBatch(batchId: string) {
   )
 }
 
+export type ContactoMetrics = {
+  ok: boolean
+  canales: Record<
+    string,
+    {
+      totales: number
+      por_estado: Record<string, number>
+    }
+  >
+}
+
+export async function getContactoMetrics() {
+  return requestJson<ContactoMetrics>("/api/prospeccion/contacto/metrics")
+}
+
 function extractStringField(payload: unknown, key: string): string | undefined {
   if (!payload || typeof payload !== "object") {
     return undefined

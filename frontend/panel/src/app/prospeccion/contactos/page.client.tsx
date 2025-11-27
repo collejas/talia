@@ -10,12 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   cancelarContactoBatch,
   getContactoBatchResumen,
+  getContactoMetrics,
   listContactoBatches,
   listContactoEnvios,
   reintentarContactoEnvio,
   type ContactoBatch,
   type ContactoBatchResumen,
   type ContactoEnvio,
+  type ContactoMetrics,
 } from "@/lib/prospeccion/prospectos-client"
 import { cn } from "@/lib/utils"
 
@@ -75,9 +77,8 @@ export default function ContactosPageClient() {
     }
   }, [selectedBatchId])
 
-  useEffect(() => {
-    void fetchBatches()
-  }, [fetchBatches])
+  const [metrics, setMetrics] = useState<ContactoMetrics | null>(null)
+  const [metricsError, setMetricsError] = useState<string | null>(null)
 
   const fetchBatchSummary = useCallback(async (batchId: string | null) => {
     if (!batchId) {
@@ -94,6 +95,22 @@ export default function ContactosPageClient() {
       setSummaryError(message)
     }
   }, [])
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const response = await getContactoMetrics()
+      setMetrics(response)
+      setMetricsError(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar las métricas."
+      setMetricsError(message)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchBatches()
+    void fetchMetrics()
+  }, [fetchBatches, fetchMetrics])
 
   const fetchEnvios = useCallback(
     async (batchId: string | null) => {
@@ -171,6 +188,7 @@ export default function ContactosPageClient() {
         }
         if (payload?.type === "batch") {
           void fetchBatches()
+          void fetchMetrics()
         }
       } catch {
         return
@@ -184,7 +202,7 @@ export default function ContactosPageClient() {
     return () => {
       source.close()
     }
-  }, [fetchBatchSummary, fetchEnvios, fetchBatches, selectedBatchId])
+  }, [fetchBatchSummary, fetchEnvios, fetchBatches, fetchMetrics, selectedBatchId])
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) ?? null, [
     batches,
@@ -192,6 +210,8 @@ export default function ContactosPageClient() {
   ])
   const canCancelBatch =
     selectedBatch && !["completado", "cancelado"].includes(selectedBatch.estado ?? "")
+
+  const metricEntries = metrics?.canales ? Object.entries(metrics.canales) : []
 
   return (
     <div className="space-y-6">
@@ -262,6 +282,39 @@ export default function ContactosPageClient() {
               </TableBody>
             </Table>
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Salud por canal</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {metricsError ? (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{metricsError}</span>
+            </div>
+          ) : null}
+          {metricEntries.length ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {metricEntries.map(([canal, data]) => (
+                <div key={canal} className="rounded-lg border p-4">
+                  <div className="text-sm font-semibold">{canalLabel[canal] ?? canal}</div>
+                  <div className="text-2xl font-bold">{data.totales}</div>
+                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {Object.entries(data.por_estado).map(([estado, count]) => (
+                      <div key={estado} className="flex items-center justify-between">
+                        <span>{estado}</span>
+                        <span>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Aún no hay métricas registradas.</p>
+          )}
         </CardContent>
       </Card>
 

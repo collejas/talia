@@ -54,8 +54,7 @@
 6. **Estados y reintentos** ✅
    - ✅ `contact_sender` aplica `pendiente → procesando/enviado/fallido/omitido` por canal, registra logs y vuelve a `pendiente` con backoff cuando el error es reintentable.
    - ✅ El webhook de WhatsApp y el callback de voz sincronizan `prospeccion_contacto_envio` con los SIDs entregados (`delivered`, `read`, `failed`, `completed`, `busy`, etc.) y disparan la actualización del batch.
-   - ✅ Reintentos manuales disponibles: `POST /prospeccion/contacto/envios/{envio_id}/reintentar` reprograma el envío y despierta al worker; la UI de `/prospeccion/contactos` muestra el progreso del lote (polling) y permite reintentar por canal.
-   - Pendiente exponer métricas/flags detalladas y notificaciones en tiempo real (SSE/websocket) para reemplazar el polling.
+   - ✅ Reintentos manuales disponibles: `POST /prospeccion/contacto/envios/{envio_id}/reintentar` reprograma el envío y despierta al worker; la UI de `/prospeccion/contactos` muestra el progreso del lote (incluye SSE) y permite reintentar por canal o cancelar un lote completo.
 7. **Seguridad y límites**
    - Validar que el usuario tenga permisos para disparar envíos (reutilizar `require_user_token`).
    - Añadir throttling por usuario/organización para evitar spam involuntario (p.ej., máximo 500 WhatsApps por hora).
@@ -71,6 +70,8 @@
    - Se añadió un stream SSE (`/prospeccion/contacto/batches/{id}/stream`) que emite cambios de envíos/lotes; el panel consume esos eventos vía `EventSource`, eliminando el polling.
 4. **Reintentos manuales** ✅
    - Botón “Reintentar canal” en la tabla de envíos crea un nuevo intento mediante el endpoint backend y vuelve a despachar el worker.
+5. **Métricas operativas** ✅
+   - El endpoint `/prospeccion/contacto/metrics` expone contadores por canal/estado y el panel muestra una tarjeta “Salud por canal” con esos totales para que soporte monitoree WhatsApp/correo/voz.
 
 ### 4. Infraestructura y configuración
 1. **Credenciales**
