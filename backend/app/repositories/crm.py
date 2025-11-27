@@ -3554,8 +3554,8 @@ class CRMRepository:
 
         params = {
             "batch_id": f"eq.{batch_id}",
-            "select": "estado,count:count(id)",
-            "group": "estado",
+            "select": "estado",
+            "limit": "2000",
         }
         resp = await self._request_with_user(
             "GET",
@@ -3566,7 +3566,11 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_batch_summary_invalid:{data!r}")
-        return data
+        counts: dict[str, int] = {}
+        for row in data:
+            estado = str(row.get("estado") or "pendiente").strip() or "pendiente"
+            counts[estado] = counts.get(estado, 0) + 1
+        return [{"estado": estado, "count": total} for estado, total in counts.items()]
 
     async def worker_list_pending_envios(
         self,
