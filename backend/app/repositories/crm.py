@@ -2452,7 +2452,6 @@ class CRMRepository:
             "p_offset": max(0, offset),
             "p_order_by": order_by,
             "p_order_dir": order_dir,
-            "p_con_contacto": with_contacts_only,
         }
         resp = await self._request_with_user(
             "POST",
@@ -2466,6 +2465,8 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}"
             )
+        if with_contacts_only:
+            data = [row for row in data if isinstance(row, dict) and row.get("contacto_id")]
         return data
 
     async def visitas_detalle_custom(

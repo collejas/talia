@@ -72,7 +72,7 @@ sudo systemctl restart talia-api.service
 
 callSupabaseRpc
 
-codex resume 019ac56f-c88f-7bb3-8625-d66df5cf6c50
+codex resume 019ac646-8059-76b0-b150-193d1e0f176b
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
