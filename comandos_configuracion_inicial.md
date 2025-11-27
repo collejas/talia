@@ -72,8 +72,7 @@ sudo systemctl restart talia-api.service
 
 callSupabaseRpc
 
-Siguiente paso natural es aprovechar
-  ese endpoint en el panel (tarjetas de salud) o documentar cómo engancharlo a Prometheus/Grafana para alertas.
+codex resume 019ac56f-c88f-7bb3-8625-d66df5cf6c50
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off

@@ -70,6 +70,8 @@
    - Se añadió un stream SSE (`/prospeccion/contacto/batches/{id}/stream`) que emite cambios de envíos/lotes; el panel consume esos eventos vía `EventSource`, eliminando el polling.
 4. **Reintentos manuales** ✅
    - Botón “Reintentar canal” en la tabla de envíos crea un nuevo intento mediante el endpoint backend y vuelve a despachar el worker.
+5. **KPIs de campañas** ✅
+   - La vista `/prospeccion/campanas` ahora muestra la salud por canal (totales y estados) reutilizando el endpoint de métricas; soporte puede ver al instante si correo/WhatsApp/voz presentan fallos.
 5. **Métricas operativas** ✅
    - El endpoint `/prospeccion/contacto/metrics` expone contadores por canal/estado y el panel muestra una tarjeta “Salud por canal” con esos totales para que soporte monitoree WhatsApp/correo/voz.
 
