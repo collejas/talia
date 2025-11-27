@@ -3474,6 +3474,28 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_envio_update_invalid:{row!r}")
         return row
 
+    async def get_contact_envio(
+        self,
+        *,
+        usuario_token: str,
+        envio_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene un envío individual."""
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
+            params={"id": f"eq.{envio_id}", "limit": "1"},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_envio_get_invalid:{row!r}")
+        return row
+
     async def update_contact_batch(
         self,
         *,
@@ -3499,6 +3521,52 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"contact_batch_update_invalid:{row!r}")
         return row
+
+    async def get_contact_batch(
+        self,
+        *,
+        usuario_token: str,
+        batch_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene un lote específico."""
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_batch",
+            token=usuario_token,
+            params={"id": f"eq.{batch_id}", "limit": "1"},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_batch_get_invalid:{row!r}")
+        return row
+
+    async def summarize_contact_batch(
+        self,
+        *,
+        usuario_token: str,
+        batch_id: UUID,
+    ) -> list[dict[str, Any]]:
+        """Regresa el total de envíos agrupados por estado."""
+
+        params = {
+            "batch_id": f"eq.{batch_id}",
+            "select": "estado,count:count(id)",
+            "group": "estado",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_batch_summary_invalid:{data!r}")
+        return data
 
     async def worker_list_pending_envios(
         self,

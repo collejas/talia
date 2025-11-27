@@ -2105,6 +2105,31 @@ def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, A
     return list(resumen_por_prospecto.values())
 
 
+def _build_contact_log_entry(
+    *,
+    prospecto_id: Any,
+    canal: str,
+    estado: str,
+    detalle: dict[str, Any] | None = None,
+    error: str | None = None,
+    batch_id: Any | None = None,
+    envio_id: Any | None = None,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "prospecto_id": str(prospecto_id),
+        "canal": canal,
+        "estado": estado,
+        "detalle": detalle or {},
+    }
+    if error:
+        entry["error"] = error
+    if batch_id:
+        entry["batch_id"] = str(batch_id)
+    if envio_id:
+        entry["envio_id"] = str(envio_id)
+    return entry
+
+
 def _rpc_field(data: Any, *keys: str) -> Any:
     row: Any
     if isinstance(data, list):
@@ -6166,6 +6191,82 @@ async def contactar_prospectos(
     contact_sender.notify_new_envios()
 
     return {"ok": True, "batch_id": str(batch_id), "contactos": resumen}
+
+
+@router.get("/prospeccion/contacto/batches/{batch_id}")
+async def obtener_contacto_batch(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    batch_id: UUID,
+) -> dict[str, Any]:
+    """Devuelve un lote específico con resumen de sus envíos."""
+
+    batch = await repo.get_contact_batch(usuario_token=user_token, batch_id=batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="contact_batch_not_found")
+
+    resumen_rows = await repo.summarize_contact_batch(usuario_token=user_token, batch_id=batch_id)
+    totales: dict[str, int] = {}
+    total_envios = 0
+    for row in resumen_rows:
+        estado_key = _clean_text(row.get("estado")) or "desconocido"
+        count_value = row.get("count") if isinstance(row, dict) else None
+        try:
+            count_int = int(count_value)
+        except (TypeError, ValueError):
+            count_int = 0
+        totales[estado_key] = count_int
+        total_envios += count_int
+
+    return {"ok": True, "batch": batch, "totales": totales, "total_envios": total_envios}
+
+
+@router.post("/prospeccion/contacto/envios/{envio_id}/reintentar")
+async def reintentar_contacto_envio(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    envio_id: UUID,
+) -> dict[str, Any]:
+    """Reprograma un envío fallido/omitido para que el worker lo procese nuevamente."""
+
+    envio = await repo.get_contact_envio(usuario_token=user_token, envio_id=envio_id)
+    if not envio:
+        raise HTTPException(status_code=404, detail="contact_envio_not_found")
+    estado_actual = _clean_text(envio.get("estado")) or ""
+    if estado_actual in {"pendiente", "procesando"}:
+        raise HTTPException(status_code=400, detail="contact_envio_busy")
+
+    reprogramado_en = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "estado": "pendiente",
+        "intento_actual": 0,
+        "error": None,
+        "procesado_en": None,
+        "programado_en": reprogramado_en,
+    }
+    updated = await repo.update_contact_envio(
+        usuario_token=user_token,
+        envio_id=envio_id,
+        payload=payload,
+    )
+
+    log_entry = _build_contact_log_entry(
+        prospecto_id=envio.get("prospecto_id"),
+        canal=str(envio.get("canal")),
+        estado="pendiente",
+        detalle={
+            "action": "manual_retry",
+            "previous_estado": estado_actual,
+        },
+        batch_id=envio.get("batch_id"),
+        envio_id=envio_id,
+    )
+    await repo.insert_prospecto_logs(usuario_token=user_token, entries=[log_entry])
+    contact_sender.notify_new_envios()
+
+    return {"ok": True, "envio": updated}
 
 
 @router.get("/visitas/kpis")

@@ -51,10 +51,11 @@
      - Nuevo helper `start_outbound_call(prospecto, notas)` que cree una llamada vía Twilio Voice (REST API) usando un número configurado y apunte a un endpoint TwiML (`/voice/outbound/{envio_id}`) que reproduzca un mensaje o conecte con un agente.
      - Guardar `call_sid` en `prospeccion_contacto_envio`.
      - Ampliar `VoiceStatusCallback` para mapear eventos (queued, ringing, in-progress, completed, busy, failed) y actualizar `estado`.
-6. **Estados y reintentos** (en progreso)
+6. **Estados y reintentos** ✅
    - ✅ `contact_sender` aplica `pendiente → procesando/enviado/fallido/omitido` por canal, registra logs y vuelve a `pendiente` con backoff cuando el error es reintentable.
-   - El webhook de WhatsApp y el callback de voz ya sincronizan `prospeccion_contacto_envio` con los SIDs entregados (`delivered`, `read`, `failed`, `completed`, `busy`, etc.) y disparan la actualización del batch.
-   - Pendiente habilitar reintentos manuales desde la UI y exponer métricas/flags en frontend.
+   - ✅ El webhook de WhatsApp y el callback de voz sincronizan `prospeccion_contacto_envio` con los SIDs entregados (`delivered`, `read`, `failed`, `completed`, `busy`, etc.) y disparan la actualización del batch.
+   - ✅ Reintentos manuales disponibles: `POST /prospeccion/contacto/envios/{envio_id}/reintentar` reprograma el envío y despierta al worker; la UI de `/prospeccion/contactos` muestra el progreso del lote (polling) y permite reintentar por canal.
+   - Pendiente exponer métricas/flags detalladas y notificaciones en tiempo real (SSE/websocket) para reemplazar el polling.
 7. **Seguridad y límites**
    - Validar que el usuario tenga permisos para disparar envíos (reutilizar `require_user_token`).
    - Añadir throttling por usuario/organización para evitar spam involuntario (p.ej., máximo 500 WhatsApps por hora).
@@ -67,9 +68,9 @@
    - Nueva vista `/prospeccion/contactos` con tabla de batches (fecha, creador, canales, totales por estado).
    - En la vista de prospectos, mostrar un drawer “Historial de contacto” consultando `GET /crm/prospeccion/prospectos/{id}/contactos`. ✅
 3. **Notificaciones en tiempo real**
-   - Usar polling o SSE (simple) para refrescar el estatus tras lanzar un batch; mostrar progreso (ej. 12/50 WhatsApps enviados).
-4. **Reintentos manuales**
-   - Botón “Reintentar canal” por prospecto que cree un nuevo `envio` reutilizando la plantilla previa.
+   - ✅ Polling en `/prospeccion/contactos` refresca totales y estados cada 10 s mientras haya batches activos; pendiente migrar a SSE/websocket para bajar latencia.
+4. **Reintentos manuales** ✅
+   - Botón “Reintentar canal” en la tabla de envíos crea un nuevo intento mediante el endpoint backend y vuelve a despachar el worker.
 
 ### 4. Infraestructura y configuración
 1. **Credenciales**

@@ -1,16 +1,19 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconAlertTriangle, IconLoader, IconRefresh } from "@tabler/icons-react"
+import { IconAlertTriangle, IconLoader, IconRefresh, IconRepeat } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  getContactoBatchResumen,
   listContactoBatches,
   listContactoEnvios,
+  reintentarContactoEnvio,
   type ContactoBatch,
+  type ContactoBatchResumen,
   type ContactoEnvio,
 } from "@/lib/prospeccion/prospectos-client"
 import { cn } from "@/lib/utils"
@@ -28,6 +31,18 @@ const canalLabel: Record<string, string> = {
   llamada: "Llamada",
 }
 
+const envioEstadoVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
+  pendiente: "secondary",
+  procesando: "secondary",
+  enviado: "default",
+  entregado: "default",
+  fallido: "destructive",
+  error: "destructive",
+  omitido: "outline",
+}
+
+const RETRYABLE_ESTADOS = new Set(["error", "fallido", "omitido"])
+
 export default function ContactosPageClient() {
   const [batches, setBatches] = useState<ContactoBatch[]>([])
   const [batchError, setBatchError] = useState<string | null>(null)
@@ -36,6 +51,9 @@ export default function ContactosPageClient() {
   const [envios, setEnvios] = useState<ContactoEnvio[]>([])
   const [envioLoading, setEnvioLoading] = useState(false)
   const [envioError, setEnvioError] = useState<string | null>(null)
+  const [batchSummary, setBatchSummary] = useState<ContactoBatchResumen | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [retryingEnvioId, setRetryingEnvioId] = useState<string | null>(null)
 
   const fetchBatches = useCallback(async () => {
     setBatchLoading(true)
@@ -57,6 +75,22 @@ export default function ContactosPageClient() {
   useEffect(() => {
     void fetchBatches()
   }, [fetchBatches])
+
+  const fetchBatchSummary = useCallback(async (batchId: string | null) => {
+    if (!batchId) {
+      setBatchSummary(null)
+      setSummaryError(null)
+      return
+    }
+    try {
+      const response = await getContactoBatchResumen(batchId)
+      setBatchSummary(response)
+      setSummaryError(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar el resumen del lote."
+      setSummaryError(message)
+    }
+  }, [])
 
   const fetchEnvios = useCallback(
     async (batchId: string | null) => {
@@ -80,9 +114,37 @@ export default function ContactosPageClient() {
     []
   )
 
+  const handleRetryEnvio = useCallback(
+    async (envioId: string) => {
+      if (!selectedBatchId) return
+      setRetryingEnvioId(envioId)
+      setEnvioError(null)
+      try {
+        await reintentarContactoEnvio(envioId)
+        await fetchEnvios(selectedBatchId)
+        await fetchBatchSummary(selectedBatchId)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo reintentar el envío."
+        setEnvioError(message)
+      } finally {
+        setRetryingEnvioId(null)
+      }
+    },
+    [fetchBatchSummary, fetchEnvios, selectedBatchId]
+  )
+
   useEffect(() => {
     void fetchEnvios(selectedBatchId)
-  }, [fetchEnvios, selectedBatchId])
+    void fetchBatchSummary(selectedBatchId)
+    if (!selectedBatchId) {
+      return
+    }
+    const interval = setInterval(() => {
+      void fetchBatchSummary(selectedBatchId)
+      void fetchEnvios(selectedBatchId)
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [fetchBatchSummary, fetchEnvios, selectedBatchId])
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) ?? null, [
     batches,
@@ -168,6 +230,24 @@ export default function ContactosPageClient() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {summaryError ? (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{summaryError}</span>
+            </div>
+          ) : null}
+          {batchSummary ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {Object.entries(batchSummary.totales).map(([estado, count]) => (
+                <Badge key={estado} variant={envioEstadoVariant[estado] ?? "outline"}>
+                  {estado}: {count}
+                </Badge>
+              ))}
+              <span className="text-xs text-muted-foreground">
+                Total envíos: {batchSummary.total_envios}
+              </span>
+            </div>
+          ) : null}
           {envioError ? (
             <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <IconAlertTriangle className="size-4" />
@@ -178,25 +258,26 @@ export default function ContactosPageClient() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Prospecto</TableHead>
-                    <TableHead>Canal</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Detalle</TableHead>
-                    <TableHead className="text-right">Procesado</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableRow>
+                  <TableHead>Prospecto</TableHead>
+                  <TableHead>Canal</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Detalle</TableHead>
+                  <TableHead className="text-right">Procesado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
                 <TableBody>
                   {envioLoading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         <IconLoader className="mr-2 inline size-4 animate-spin" /> Cargando envíos...
                       </TableCell>
                     </TableRow>
                   ) : null}
                   {!envioLoading && !envios.length ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         El lote aún no tiene envíos registrados.
                       </TableCell>
                     </TableRow>
@@ -212,7 +293,7 @@ export default function ContactosPageClient() {
                             <Badge variant="outline">{canalLabel[envio.canal] ?? envio.canal}</Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={estadoVariant[envio.estado] ?? "default"}>{envio.estado}</Badge>
+                            <Badge variant={envioEstadoVariant[envio.estado] ?? "default"}>{envio.estado}</Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {envio.detalle && typeof envio.detalle.reason === "string"
@@ -221,6 +302,21 @@ export default function ContactosPageClient() {
                           </TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">
                             {formatDate(envio.procesado_en || envio.programado_en)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {RETRYABLE_ESTADOS.has(envio.estado) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleRetryEnvio(envio.id)}
+                                disabled={retryingEnvioId === envio.id}
+                              >
+                                <IconRepeat className="mr-1.5 size-4" />
+                                {retryingEnvioId === envio.id ? "Reintentando..." : "Reintentar"}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))

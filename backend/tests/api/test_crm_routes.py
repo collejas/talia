@@ -289,6 +289,49 @@ class DummyCRMRepository(CRMRepository):
             "creado_en": "2024-01-01T00:00:00Z",
         }
 
+    async def get_contact_batch(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_contact_batch", kwargs))
+        batch_id = kwargs["batch_id"]
+        if batch_id == uuid.UUID(int=0):
+            return None
+        return {
+            "id": str(batch_id),
+            "estado": "pendiente",
+            "canales": ["correo", "whatsapp"],
+            "total_prospectos": 2,
+            "creado_en": "2024-01-01T00:00:00Z",
+        }
+
+    async def summarize_contact_batch(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("summarize_contact_batch", kwargs))
+        return [
+            {"estado": "pendiente", "count": 1},
+            {"estado": "enviado", "count": 1},
+        ]
+
+    async def get_contact_envio(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_contact_envio", kwargs))
+        envio_id = kwargs["envio_id"]
+        if envio_id == uuid.UUID(int=0):
+            return None
+        return {
+            "id": str(envio_id),
+            "prospecto_id": str(uuid.uuid4()),
+            "batch_id": str(uuid.uuid4()),
+            "canal": "whatsapp",
+            "estado": "fallido",
+        }
+
+    async def update_contact_envio(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_contact_envio", kwargs))
+        payload = kwargs["payload"].copy()
+        payload["id"] = str(kwargs["envio_id"])
+        return payload
+
+    async def insert_prospecto_logs(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("insert_prospecto_logs", kwargs))
+        return kwargs.get("entries", [])
+
     async def list_files(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_files", kwargs))
         return [
@@ -813,6 +856,52 @@ async def test_create_ticket_comment_mismatch(client: AsyncClient) -> None:
     body = {"ticket_id": str(other_id), "mensaje": "Error"}
     resp = await client.post(f"/crm/tickets/{ticket_id}/comentarios", headers=_headers(), json=body)
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_get_contacto_batch_summary(client: AsyncClient) -> None:
+    batch_id = uuid.uuid4()
+    resp = await client.get(
+        f"/crm/prospeccion/contacto/batches/{batch_id}",
+        headers=_headers(include_user_token=True),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["batch"]["id"] == str(batch_id)
+    assert data["totales"]["pendiente"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_contacto_batch_summary_not_found(client: AsyncClient) -> None:
+    resp = await client.get(
+        f"/crm/prospeccion/contacto/batches/{uuid.UUID(int=0)}",
+        headers=_headers(include_user_token=True),
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reintentar_contacto_envio(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    envio_id = uuid.uuid4()
+    resp = await client.post(
+        f"/crm/prospeccion/contacto/envios/{envio_id}/reintentar",
+        headers=_headers(include_user_token=True),
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["envio"]["estado"] == "pendiente"
+    assert fake_repo.calls[-1][0] == "insert_prospecto_logs"
+
+
+@pytest.mark.asyncio
+async def test_reintentar_contacto_envio_not_found(client: AsyncClient) -> None:
+    resp = await client.post(
+        f"/crm/prospeccion/contacto/envios/{uuid.UUID(int=0)}/reintentar",
+        headers=_headers(include_user_token=True),
+    )
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio

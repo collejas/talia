@@ -76,6 +76,13 @@ export type ContactoEnvio = {
   procesado_en?: string | null
 }
 
+export type ContactoBatchResumen = {
+  ok: boolean
+  batch: ContactoBatch
+  totales: Record<string, number>
+  total_envios: number
+}
+
 export type ContactoTemplate = {
   id: string
   canal: "correo" | "whatsapp" | "llamada"
@@ -265,6 +272,19 @@ export async function listContactoTemplates(params: { canal?: "correo" | "whatsa
   const url = buildClientUrl("/api/prospeccion/contacto/templates")
   if (params.canal) url.searchParams.set("canal", params.canal)
   return requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString())
+}
+
+export async function getContactoBatchResumen(batchId: string) {
+  return requestJson<ContactoBatchResumen>(`/api/prospeccion/contacto/batches/${batchId}`)
+}
+
+export async function reintentarContactoEnvio(envioId: string) {
+  return requestJson<{ ok: boolean; envio: ContactoEnvio }>(
+    `/api/prospeccion/contacto/envios/${envioId}/reintentar`,
+    {
+      method: "POST",
+    }
+  )
 }
 
 function extractStringField(payload: unknown, key: string): string | undefined {
