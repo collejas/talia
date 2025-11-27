@@ -67,8 +67,8 @@
 2. **Seguimiento de batches** ✅
    - Nueva vista `/prospeccion/contactos` con tabla de batches (fecha, creador, canales, totales por estado).
    - En la vista de prospectos, mostrar un drawer “Historial de contacto” consultando `GET /crm/prospeccion/prospectos/{id}/contactos`. ✅
-3. **Notificaciones en tiempo real**
-   - ✅ Polling en `/prospeccion/contactos` refresca totales y estados cada 10 s mientras haya batches activos; pendiente migrar a SSE/websocket para bajar latencia.
+3. **Notificaciones en tiempo real** ✅
+   - Se añadió un stream SSE (`/prospeccion/contacto/batches/{id}/stream`) que emite cambios de envíos/lotes; el panel consume esos eventos vía `EventSource`, eliminando el polling.
 4. **Reintentos manuales** ✅
    - Botón “Reintentar canal” en la tabla de envíos crea un nuevo intento mediante el endpoint backend y vuelve a despachar el worker.
 
