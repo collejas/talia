@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 
@@ -14,6 +16,7 @@ from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
 from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
+from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import leads_geo, storage
 from app.services import openai as openai_service
 from app.services import twilio as twilio_service
@@ -208,6 +211,79 @@ async def handle_status_callback(callback: schemas.WhatsAppStatusCallback) -> No
             "whatsapp.delivery_event_recorded",
             message_sid=callback.message_sid,
             event=event,
+        )
+
+    await _sync_envio_status_from_whatsapp(callback)
+
+
+async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallback) -> None:
+    """Sincroniza el envío en prospección con el estatus de Twilio."""
+
+    estado_envio = _map_status_to_envio_estado(callback.status)
+    if not estado_envio:
+        return
+    try:
+        repo = CRMRepository()
+    except CRMRepositoryError as exc:
+        log_event(logger, "whatsapp.status_envio_repo_error", error=str(exc))
+        return
+    try:
+        envio = await repo.worker_get_envio_by_mensaje(mensaje_id=callback.message_sid)
+    except CRMRepositoryError as exc:
+        log_event(logger, "whatsapp.status_envio_fetch_failed", error=str(exc))
+        return
+    if not envio:
+        return
+    envio_id = envio.get("id")
+    if not envio_id:
+        return
+    try:
+        envio_uuid = UUID(str(envio_id))
+    except (TypeError, ValueError):
+        log_event(logger, "whatsapp.status_envio_invalid_id", envio_id=envio_id)
+        return
+    current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+    merged_detalle = {
+        **current_detalle,
+        "status": callback.status,
+        "timestamp": callback.timestamp,
+        "error_code": callback.error_code,
+    }
+    payload = {
+        "estado": estado_envio,
+        "detalle": merged_detalle,
+        "error": callback.error_code if estado_envio == "fallido" else None,
+        "procesado_en": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
+        await repo.worker_insert_contact_logs(
+            [
+                {
+                    "prospecto_id": (
+                        str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None
+                    ),
+                    "canal": "whatsapp",
+                    "estado": estado_envio,
+                    "detalle": {
+                        "status": callback.status,
+                        "timestamp": callback.timestamp,
+                    },
+                    "error": callback.error_code if estado_envio == "fallido" else None,
+                    "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+                    "envio_id": str(envio_uuid),
+                }
+            ]
+        )
+        batch_id = envio.get("batch_id")
+        if estado_envio == "fallido" and batch_id:
+            await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.status_envio_update_failed",
+            error=str(exc),
+            message_sid=callback.message_sid,
         )
 
 
@@ -473,3 +549,12 @@ def _map_status_to_event(status: str | None) -> str | None:
         "undelivered": "fallido",
     }
     return mapping.get(normalized)
+
+
+def _map_status_to_envio_estado(status: str | None) -> str | None:
+    event = _map_status_to_event(status)
+    if not event:
+        return None
+    if event == "en_cola":
+        return "enviado"
+    return event

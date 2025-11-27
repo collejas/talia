@@ -1,6 +1,7 @@
 """Punto de entrada principal para la aplicación FastAPI."""
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,6 +16,18 @@ from app.channels.whatsapp.router import router as whatsapp_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
+from app.services.prospeccion_contact_sender import contact_sender
+
+
+@asynccontextmanager
+async def app_lifespan(_: FastAPI):
+    """Administra recursos de inicio/cierre sin usar on_event."""
+
+    await contact_sender.start()
+    try:
+        yield
+    finally:
+        await contact_sender.shutdown()
 
 
 def create_app() -> FastAPI:
@@ -36,7 +49,7 @@ def create_app() -> FastAPI:
         per_logger_files=per_logger_files,
     )
 
-    app = FastAPI(title="TalIA API", version="0.1.0", root_path="/api")
+    app = FastAPI(title="TalIA API", version="0.1.0", root_path="/api", lifespan=app_lifespan)
 
     app.add_middleware(
         CORSMiddleware,

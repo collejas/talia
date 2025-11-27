@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import html
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from uuid import UUID
 
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
+from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import twilio as twilio_service
 
 from .schemas import VoiceStatusCallback
@@ -33,6 +36,95 @@ async def handle_voice_status(callback: VoiceStatusCallback) -> None:
         call_status=callback.call_status,
         direction=callback.direction,
     )
+    await _sync_envio_status_from_voice(callback)
+
+
+async def _sync_envio_status_from_voice(callback: VoiceStatusCallback) -> None:
+    """Sincroniza el envío de llamadas con los callbacks de Twilio."""
+
+    estado_envio = _map_voice_status_to_estado(callback.call_status)
+    if not estado_envio:
+        return
+    try:
+        repo = CRMRepository()
+    except CRMRepositoryError as exc:
+        log_event(logger, "voice.status_repo_error", error=str(exc))
+        return
+    try:
+        envio = await repo.worker_get_envio_by_mensaje(mensaje_id=callback.call_sid)
+    except CRMRepositoryError as exc:
+        log_event(logger, "voice.status_envio_fetch_failed", error=str(exc))
+        return
+    if not envio:
+        return
+    envio_id = envio.get("id")
+    if not envio_id:
+        return
+    try:
+        envio_uuid = UUID(str(envio_id))
+    except (TypeError, ValueError):
+        log_event(logger, "voice.status_invalid_envio_id", envio_id=envio_id)
+        return
+    current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
+    merged_detalle = {
+        **current_detalle,
+        "status": callback.call_status,
+        "direction": callback.direction,
+    }
+    payload = {
+        "estado": estado_envio,
+        "detalle": merged_detalle,
+        "error": None if estado_envio != "fallido" else callback.call_status,
+        "procesado_en": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
+        await repo.worker_insert_contact_logs(
+            [
+                {
+                    "prospecto_id": (
+                        str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None
+                    ),
+                    "canal": "llamada",
+                    "estado": estado_envio,
+                    "detalle": {
+                        "status": callback.call_status,
+                        "direction": callback.direction,
+                    },
+                    "error": callback.call_status if estado_envio == "fallido" else None,
+                    "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+                    "envio_id": str(envio_uuid),
+                }
+            ]
+        )
+        if estado_envio == "fallido" and envio.get("batch_id"):
+            await repo.worker_sync_batch_status(batch_id=UUID(str(envio["batch_id"])))
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "voice.status_envio_update_failed",
+            error=str(exc),
+            call_sid=callback.call_sid,
+        )
+
+
+def _map_voice_status_to_estado(status: str | None) -> str | None:
+    if not status:
+        return None
+    normalized = status.strip().lower()
+    mapping = {
+        "queued": "enviado",
+        "ringing": "enviado",
+        "in-progress": "enviado",
+        "answered": "entregado",
+        "completed": "entregado",
+        "completed-with-recording": "entregado",
+        "busy": "fallido",
+        "failed": "fallido",
+        "no-answer": "fallido",
+        "canceled": "fallido",
+    }
+    return mapping.get(normalized)
 
 
 async def start_outbound_call(*, to_number: str, message: str) -> VoiceCallResult:

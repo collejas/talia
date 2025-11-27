@@ -8,7 +8,6 @@ import io
 import json
 import secrets
 from collections import Counter
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
@@ -30,10 +29,8 @@ from fastapi import (
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.channels.voice.service import VoiceCallResult, start_outbound_call
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
-from app.channels.whatsapp.service import TwilioSendResult, _send_whatsapp_reply
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -56,6 +53,7 @@ from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
+from app.services.prospeccion_contact_sender import contact_sender
 from app.services.storage import StorageError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
@@ -2017,69 +2015,6 @@ def _build_prospecto_from_contactable(
     return payload
 
 
-def _prospecto_whatsapp_allowed(prospecto: dict[str, Any]) -> bool:
-    """Determina si el prospecto puede contactarse por WhatsApp."""
-
-    if prospecto.get("whatsapp_permitido"):
-        return True
-    carrier_type = _clean_text(prospecto.get("carrier_type")) or ""
-    return carrier_type.lower() == "mobile"
-
-
-def _prospecto_llamada_permitida(prospecto: dict[str, Any]) -> bool:
-    """Evalúa si se puede llamar al prospecto."""
-
-    if prospecto.get("llamada_permitida"):
-        return True
-    carrier_type = _clean_text(prospecto.get("carrier_type")) or ""
-    return carrier_type.lower() in {"mobile", "landline"}
-
-
-async def _send_whatsapp_message(to_number: str, body: str) -> TwilioSendResult:
-    """Wrapper mínimo para enviar mensajes de WhatsApp vía Twilio."""
-
-    if not body:
-        return TwilioSendResult(sid=None, status="skipped", error="empty_body")
-    return await _send_whatsapp_reply(to_number=to_number, body=body)
-
-
-def _build_contact_log_entry(
-    *,
-    prospecto_id: Any,
-    canal: str,
-    estado: str,
-    detalle: dict[str, Any],
-    error: str | None = None,
-    batch_id: Any | None = None,
-    envio_id: Any | None = None,
-) -> dict[str, Any]:
-    """Crea el payload para registrar un intento de contacto."""
-
-    entry: dict[str, Any] = {
-        "prospecto_id": str(prospecto_id),
-        "canal": canal,
-        "estado": estado,
-        "detalle": detalle,
-    }
-    if error:
-        entry["error"] = error
-    if batch_id:
-        entry["batch_id"] = str(batch_id)
-    if envio_id:
-        entry["envio_id"] = str(envio_id)
-    return entry
-
-
-@dataclass(slots=True)
-class ContactEnvioResult:
-    """Resultado de un envío individual."""
-
-    estado: str
-    detalle: dict[str, Any]
-    error: str | None = None
-    mensaje_id: str | None = None
-
-
 def _resolve_contact_channels(payload: ProspectoContactarPayload) -> dict[str, dict[str, Any]]:
     canales: dict[str, dict[str, Any]] = {}
     asunto = _clean_text(payload.correo_asunto)
@@ -2137,6 +2072,9 @@ def _build_contact_envios_entries(
             "actividad": prospecto.get("actividad"),
             "email": prospecto.get("email"),
             "phone": prospecto.get("phone_e164") or prospecto.get("phone"),
+            "whatsapp_permitido": prospecto.get("whatsapp_permitido"),
+            "llamada_permitida": prospecto.get("llamada_permitida"),
+            "carrier_type": prospecto.get("carrier_type"),
         }
         for canal, canal_payload in canales.items():
             entries.append(
@@ -2151,186 +2089,20 @@ def _build_contact_envios_entries(
     return entries
 
 
-async def _process_contact_envios(
-    *,
-    repo: CRMRepository,
-    user_token: str,
-    batch_id: Any,
-    envios: list[dict[str, Any]],
-    prospectos: list[dict[str, Any]],
-    canales: dict[str, dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Ejecuta los envíos creados y devuelve resumen + logs."""
+def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Agrupa los envíos por prospecto con su estado inicial."""
 
-    ahora = datetime.now(timezone.utc).isoformat()
     resumen_por_prospecto: dict[str, dict[str, Any]] = {}
-    logs: list[dict[str, Any]] = []
-    prospecto_index: dict[str, dict[str, Any]] = {}
-    for prospecto in prospectos:
-        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
-        if prospecto_id:
-            prospecto_index[str(prospecto_id)] = prospecto
-
     for envio in envios:
-        envio_id = envio.get("id")
-        prospecto_id = str(envio.get("prospecto_id"))
-        canal = envio.get("canal")
-        prospecto = prospecto_index.get(prospecto_id, {})
-        payload = envio.get("payload")
-        if not isinstance(payload, dict):
-            payload = canales.get(str(canal), {})
-        if canal == "correo":
-            result = await _run_envio_correo(prospecto=prospecto, canal_payload=payload)
-        elif canal == "whatsapp":
-            result = await _run_envio_whatsapp(prospecto=prospecto, canal_payload=payload)
-        elif canal == "llamada":
-            result = await _run_envio_llamada(prospecto=prospecto, canal_payload=payload)
-        else:
-            result = ContactEnvioResult(
-                estado="omitido",
-                detalle={"reason": "canal_no_soportado"},
-                error="canal_no_soportado",
-            )
-
-        update_payload: dict[str, Any] = {
-            "estado": result.estado,
-            "procesado_en": ahora,
-        }
-        if result.mensaje_id:
-            update_payload["mensaje_id"] = result.mensaje_id
-        if result.detalle:
-            current_detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
-            update_payload["detalle"] = {**current_detalle, **result.detalle}
-        if result.error:
-            update_payload["error"] = result.error
-
-        if envio_id:
-            await repo.update_contact_envio(
-                usuario_token=user_token,
-                envio_id=UUID(str(envio_id)),
-                payload=update_payload,
-            )
-
-        logs.append(
-            _build_contact_log_entry(
-                prospecto_id=prospecto_id,
-                canal=str(canal),
-                estado=result.estado,
-                detalle=result.detalle,
-                error=result.error,
-                batch_id=batch_id,
-                envio_id=envio_id,
-            )
-        )
-        resumen = resumen_por_prospecto.setdefault(prospecto_id, {"prospecto_id": prospecto_id})
-        resumen[str(canal)] = result.estado
-
-    return list(resumen_por_prospecto.values()), logs
-
-
-async def _run_envio_correo(
-    *,
-    prospecto: dict[str, Any],
-    canal_payload: dict[str, Any],
-) -> ContactEnvioResult:
-    email_value = _clean_text(prospecto.get("email"))
-    if not email_value:
-        return ContactEnvioResult(
-            estado="omitido",
-            detalle={"reason": "sin_correo"},
-        )
-    subject = _clean_text(canal_payload.get("subject"))
-    body = canal_payload.get("body")
-    if not subject or not body:
-        return ContactEnvioResult(
-            estado="error",
-            detalle={"reason": "correo_payload_incompleto"},
-            error="correo_payload_incompleto",
-        )
-    try:
-        message_id = await asyncio.to_thread(
-            send_email,
-            subject=subject,
-            body_text=body,
-            recipients=[email_value],
-        )
-    except EmailSendError as exc:
-        return ContactEnvioResult(
-            estado="error",
-            detalle={"email": email_value},
-            error=str(exc),
-        )
-    return ContactEnvioResult(
-        estado="enviado",
-        detalle={"email": email_value},
-        mensaje_id=message_id,
-    )
-
-
-async def _run_envio_whatsapp(
-    *,
-    prospecto: dict[str, Any],
-    canal_payload: dict[str, Any],
-) -> ContactEnvioResult:
-    telefono = _clean_text(prospecto.get("phone_e164") or prospecto.get("phone"))
-    if not telefono or not _prospecto_whatsapp_allowed(prospecto):
-        return ContactEnvioResult(
-            estado="omitido",
-            detalle={"reason": "whatsapp_no_permitido"},
-        )
-    body = _clean_text(canal_payload.get("body"))
-    if not body:
-        return ContactEnvioResult(
-            estado="error",
-            detalle={"reason": "whatsapp_payload_incompleto"},
-            error="whatsapp_payload_incompleto",
-        )
-    wa_result = await _send_whatsapp_message(
-        to_number=telefono,
-        body=body,
-    )
-    estado = "enviado" if not wa_result.error else "error"
-    return ContactEnvioResult(
-        estado=estado,
-        detalle={"status": wa_result.status, "sid": wa_result.sid},
-        error=wa_result.error,
-        mensaje_id=wa_result.sid,
-    )
-
-
-async def _run_envio_llamada(
-    *,
-    prospecto: dict[str, Any],
-    canal_payload: dict[str, Any],
-) -> ContactEnvioResult:
-    telefono = _clean_text(prospecto.get("phone_e164") or prospecto.get("phone"))
-    if not telefono or not _prospecto_llamada_permitida(prospecto):
-        return ContactEnvioResult(
-            estado="omitido",
-            detalle={"reason": "llamada_no_permitida"},
-        )
-    message = _clean_text(canal_payload.get("message")) or "Llamada programada desde Tal IA."
-    call_result: VoiceCallResult = await start_outbound_call(
-        to_number=telefono,
-        message=message,
-    )
-    if call_result.error:
-        return ContactEnvioResult(
-            estado="error",
-            detalle={"status": call_result.status},
-            error=call_result.error,
-        )
-    status_value = (call_result.status or "").lower()
-    estado = (
-        "enviado"
-        if status_value in {"queued", "ringing", "in-progress"}
-        else (call_result.status or "enviado")
-    )
-    return ContactEnvioResult(
-        estado=estado,
-        detalle={"status": call_result.status, "sid": call_result.sid},
-        mensaje_id=call_result.sid,
-    )
+        prospecto_id = envio.get("prospecto_id")
+        if not prospecto_id:
+            continue
+        key = str(prospecto_id)
+        canal = _clean_text(envio.get("canal")) or "canal"
+        estado = _clean_text(envio.get("estado")) or "pendiente"
+        resumen = resumen_por_prospecto.setdefault(key, {"prospecto_id": key})
+        resumen[canal] = estado
+    return list(resumen_por_prospecto.values())
 
 
 def _rpc_field(data: Any, *keys: str) -> Any:
@@ -6390,35 +6162,8 @@ async def contactar_prospectos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    try:
-        resumen, logs = await _process_contact_envios(
-            repo=repo,
-            user_token=user_token,
-            batch_id=batch_id,
-            envios=envios,
-            prospectos=prospectos,
-            canales=canales_config,
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    try:
-        await repo.update_contact_batch(
-            usuario_token=user_token,
-            batch_id=UUID(str(batch_id)),
-            payload={
-                "estado": "completado",
-                "finalizado_en": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    if logs:
-        try:
-            await repo.insert_prospecto_logs(usuario_token=user_token, entries=logs)
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    resumen = _build_contact_resumen(envios)
+    contact_sender.notify_new_envios()
 
     return {"ok": True, "batch_id": str(batch_id), "contactos": resumen}
 

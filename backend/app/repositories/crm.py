@@ -3500,6 +3500,155 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_batch_update_invalid:{row!r}")
         return row
 
+    async def worker_list_pending_envios(
+        self,
+        *,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Obtiene envíos pendientes listos para procesarse (service role)."""
+
+        effective_limit = max(limit, 1)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        params = {
+            "select": "*",
+            "estado": "eq.pendiente",
+            "programado_en": f"lte.{now_iso}",
+            "order": "programado_en.asc",
+            "limit": str(effective_limit),
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_pending_envios_invalid:{data!r}")
+        return data
+
+    async def worker_mark_envio_processing(
+        self,
+        *,
+        envio_id: UUID,
+        attempt: int,
+    ) -> bool:
+        """Intenta marcar un envío como procesando; devuelve False si ya no está pendiente."""
+
+        params = {
+            "id": f"eq.{envio_id}",
+            "estado": "eq.pendiente",
+        }
+        payload = {
+            "estado": "procesando",
+            "intento_actual": attempt,
+        }
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        return isinstance(data, list) and bool(data)
+
+    async def worker_complete_envio(
+        self,
+        *,
+        envio_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza un envío después de procesarlo (service role)."""
+
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_envio",
+            params={"id": f"eq.{envio_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        else:
+            row = {"id": str(envio_id), **payload}
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_complete_envio_invalid:{row!r}")
+        return row
+
+    async def worker_get_envio_by_mensaje(
+        self,
+        *,
+        mensaje_id: str,
+    ) -> dict[str, Any] | None:
+        """Obtiene un envío buscando por su mensaje/call SID."""
+
+        trimmed = mensaje_id.strip() if mensaje_id else ""
+        if not trimmed:
+            return None
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params={
+                "mensaje_id": f"eq.{trimmed}",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
+        return row
+
+    async def worker_insert_contact_logs(self, entries: Sequence[dict[str, Any]]) -> None:
+        """Inserta registros en la bitácora usando service role."""
+
+        if not entries:
+            return
+        resp = await self._request(
+            "POST",
+            "/rest/v1/prospeccion_contactos_log",
+            json=list(entries),
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_insert_log_invalid:{data!r}")
+
+    async def worker_sync_batch_status(self, *, batch_id: UUID) -> None:
+        """Actualiza el estado del lote conforme avanza el procesamiento."""
+
+        pending_total = await self._count_batch_envios(
+            batch_id=batch_id,
+            estados=("pendiente", "procesando"),
+        )
+        if pending_total > 0:
+            await self._request(
+                "PATCH",
+                "/rest/v1/prospeccion_contacto_batch",
+                params={"id": f"eq.{batch_id}"},
+                json={"estado": "en_proceso"},
+            )
+            return
+
+        error_total = await self._count_batch_envios(
+            batch_id=batch_id,
+            estados=("error", "fallido"),
+        )
+        estado_final = "error" if error_total > 0 else "completado"
+        payload = {
+            "estado": estado_final,
+            "finalizado_en": datetime.now(timezone.utc).isoformat(),
+        }
+        await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_batch",
+            params={"id": f"eq.{batch_id}"},
+            json=payload,
+        )
+
     async def get_email_template(
         self,
         *,
@@ -3660,6 +3809,28 @@ class CRMRepository:
         if isinstance(data, list):
             return data[0] if data else None
         return data
+
+    async def _count_batch_envios(
+        self,
+        *,
+        batch_id: UUID,
+        estados: Sequence[str],
+    ) -> int:
+        params: dict[str, str] = {
+            "batch_id": f"eq.{batch_id}",
+            "select": "id",
+            "limit": "1",
+        }
+        if estados:
+            or_filters = ",".join(f"estado.eq.{estado}" for estado in estados)
+            params["or"] = f"({or_filters})"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            params=params,
+            prefer="count=exact",
+        )
+        return self._extract_total_count(resp.headers.get("content-range")) or 0
 
     async def _request(
         self,

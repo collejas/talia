@@ -29,12 +29,13 @@
 1. **Orquestador de batches** ✅
    - Extender `POST /crm/prospeccion/prospectos/contactar` para que en lugar de enviar de inmediato, cree un `batch` y registros `prospeccion_contacto_envio` por cada prospecto/canal. ✅
    - Añadir endpoint `GET /crm/prospeccion/prospectos/contactar/{batch_id}` para consultar progreso (totales por estado) y `POST /crm/prospeccion/prospectos/contactar/{batch_id}/cancelar`.
-2. **Worker/cola de tareas**
+2. **Worker/cola de tareas** ✅
    - Implementar un procesador asíncrono (por ejemplo, módulo `app/services/prospeccion_contact_sender.py`) que:
      - Tome envíos `estado=pending` ordenados por `programado_en`.
      - Ejecute el canal correspondiente y actualice `estado`.
      - Registre en `prospeccion_contactos_log` cada intento.
    - Utilizar `asyncio` + `BackgroundTasks` si corremos un worker dentro del API, o bien integrar una cola dedicada (Redis RQ/Celery) si el volumen lo amerita. Documentar la elección en README.
+   - ✅ `contact_sender` vive dentro del API con `lifespan`, procesa correo/WhatsApp/voz, maneja reintentos con backoff y coordina estados/batch/logs vía métodos service-role del repo.
 3. **Correo**
    - Reutilizar `send_email`, pero mover la construcción del mensaje a “plantillas”:
      - Crear tabla `prospeccion_contacto_templates` (canal, slug, asunto, cuerpo_texto, cuerpo_html opcional).
@@ -50,10 +51,10 @@
      - Nuevo helper `start_outbound_call(prospecto, notas)` que cree una llamada vía Twilio Voice (REST API) usando un número configurado y apunte a un endpoint TwiML (`/voice/outbound/{envio_id}`) que reproduzca un mensaje o conecte con un agente.
      - Guardar `call_sid` en `prospeccion_contacto_envio`.
      - Ampliar `VoiceStatusCallback` para mapear eventos (queued, ringing, in-progress, completed, busy, failed) y actualizar `estado`.
-6. **Estados y reintentos**
-   - Definir máquina de estados por canal (p.ej., `pending -> sending -> sent -> delivered` o `failed`).
-   - Configurar reintentos automáticos (n reintentos con backoff) para errores transitivos (timeout SMTP, rate limit Twilio).
-   - Permitir marcar manualmente como “omitido” cuando falta dato (sin email/teléfono) desde el worker y reflejarlo en el log.
+6. **Estados y reintentos** (en progreso)
+   - ✅ `contact_sender` aplica `pendiente → procesando/enviado/fallido/omitido` por canal, registra logs y vuelve a `pendiente` con backoff cuando el error es reintentable.
+   - El webhook de WhatsApp y el callback de voz ya sincronizan `prospeccion_contacto_envio` con los SIDs entregados (`delivered`, `read`, `failed`, `completed`, `busy`, etc.) y disparan la actualización del batch.
+   - Pendiente habilitar reintentos manuales desde la UI y exponer métricas/flags en frontend.
 7. **Seguridad y límites**
    - Validar que el usuario tenga permisos para disparar envíos (reutilizar `require_user_token`).
    - Añadir throttling por usuario/organización para evitar spam involuntario (p.ej., máximo 500 WhatsApps por hora).
