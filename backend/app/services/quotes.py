@@ -56,22 +56,34 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
     }
 
     .concept-title {
-        width: 24%;
+        width: 28%;
         font-weight: 600;
+    }
+
+    .concept-unit {
+        width: 12%;
+        text-align: center;
+        font-size: 0.9rem;
+    }
+
+    .concept-price {
+        width: 18%;
+        text-align: right;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .concept-qty {
+        width: 12%;
+        text-align: center;
+        font-size: 0.9rem;
     }
 
     .concept-amount {
-        width: 20%;
+        width: 30%;
         text-align: right;
         white-space: nowrap;
         font-weight: 600;
-    }
-
-    .concept-unit,
-    .concept-qty {
-        width: 14%;
-        text-align: center;
-        font-size: 0.9rem;
     }
 
     .concept-table tfoot td {
@@ -236,7 +248,9 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
             title = _clean_concept_title(concept, idx)
             lines.append(f"{idx}. {title}")
             desc = (
-                concept.get("descripcion") or concept.get("description") or concept.get("detalle")
+                concept.get("descripcion")
+                or concept.get("description")
+                or concept.get("detalle")
             )
             if desc:
                 lines.extend([f"   {part}" for part in _wrap_text(str(desc))])
@@ -271,7 +285,11 @@ def _build_concepts_block(context: QuoteRenderContext) -> list[str]:
     for idx, concept in enumerate(concept_rows, start=1):
         title = _clean_concept_title(concept, idx)
         lines.append(f"{idx}. {title}")
-        desc = concept.get("descripcion") or concept.get("description") or concept.get("detalle")
+        desc = (
+            concept.get("descripcion")
+            or concept.get("description")
+            or concept.get("detalle")
+        )
         if desc:
             lines.extend([f"   {part}" for part in _wrap_text(str(desc))])
         monto = _concept_total(concept)
@@ -307,7 +325,9 @@ def _build_replacements(context: QuoteRenderContext) -> dict[str, str]:
         "cliente.telefono": _safe_text(context.contact_phone),
         "lead.nombre": _safe_text(context.lead_label, "Proyecto"),
         "cotizacion.referencia": context.reference,
-        "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d"),
+        "cotizacion.fecha": context.created_at.astimezone(timezone.utc).strftime(
+            "%Y-%m-%d"
+        ),
         "cotizacion.descripcion": _safe_text(context.descripcion),
         "cotizacion.vigencia": vigencia,
         "tabla_conceptos": tabla_html,
@@ -338,11 +358,15 @@ def _safe_text(value: str | None, fallback: str = "—") -> str:
 
 
 def _build_concepts_html(context: QuoteRenderContext) -> str:
+    """Renderiza la tabla de conceptos incluyendo precio unitario."""
+
     concepts = context.conceptos or []
     rows: list[str] = []
     items = context.items or []
     if not concepts:
-        rows.append('<tr><td class="concept-title" colspan="4">Pendiente de definir.</td></tr>')
+        rows.append(
+            '<tr><td class="concept-title" colspan="5">Pendiente de definir.</td></tr>'
+        )
     else:
         for idx, concept in enumerate(concepts, start=1):
             related = items[idx - 1] if idx - 1 < len(items) else {}
@@ -362,13 +386,27 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
             amount_value = _concept_total(concept)
             if amount_value is None:
                 amount_value = _item_total(related)
+
+            quantity_value = _coerce_float(qty_source)
+            price_value = _resolve_unit_price(
+                concept, related, amount_value, quantity_value
+            )
+            if (
+                amount_value is None
+                and price_value is not None
+                and quantity_value is not None
+            ):
+                amount_value = price_value * quantity_value
+
             unit = html_escape(_format_unit(unit_source))
+            price = html_escape(_format_currency(price_value, context.moneda))
             qty = html_escape(_format_quantity(qty_source))
             amount = html_escape(_format_currency(amount_value, context.moneda))
             rows.append(
                 "<tr>"
                 f'<td class="concept-title">{title}</td>'
                 f'<td class="concept-unit">{unit}</td>'
+                f'<td class="concept-price">{price}</td>'
                 f'<td class="concept-qty">{qty}</td>'
                 f'<td class="concept-amount">{amount}</td>'
                 "</tr>"
@@ -381,7 +419,7 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
     ]
     totals_rows = [
         "<tr>"
-        f'<td colspan="3" class="totals-label">{html_escape(label)}</td>'
+        f'<td colspan="4" class="totals-label">{html_escape(label)}</td>'
         f'<td class="concept-amount">{html_escape(value)}</td>'
         "</tr>"
         for label, value in totals
@@ -389,8 +427,8 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
     tfoot_html = f"<tfoot>{''.join(totals_rows)}</tfoot>"
 
     table = (
-        "<table class=\"concept-table\">"
-        "<thead><tr><th>Concepto</th><th>Unidad</th><th>Cantidad</th><th>Importe</th></tr></thead>"
+        '<table class="concept-table">'
+        "<thead><tr><th>Concepto</th><th>Unidad</th><th>Precio unitario</th><th>Cantidad</th><th>Importe</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"{tfoot_html}"
         "</table>"
@@ -416,7 +454,12 @@ def _build_default_proposal_details(context: QuoteRenderContext) -> str:
             or concept.get("descripcion")
         )
         desc = _normalize_detail_text(desc_value)
-        blocks.append('<div class="proposal-detail">' f"<h3>{title}</h3>" f"<p>{desc}</p>" "</div>")
+        blocks.append(
+            '<div class="proposal-detail">'
+            f"<h3>{title}</h3>"
+            f"<p>{desc}</p>"
+            "</div>"
+        )
     return f"<div class=\"proposal-details\">{''.join(blocks)}</div>"
 
 
@@ -477,6 +520,33 @@ def _item_total(record: Any) -> float | None:
     if cantidad is not None and precio is not None:
         descuento = _coerce_float(record.get("descuento")) or 0.0
         return max(cantidad * precio - descuento, 0.0)
+    return None
+
+
+def _resolve_unit_price(
+    concept: dict[str, Any],
+    related: dict[str, Any],
+    amount: float | None,
+    quantity: float | None,
+) -> float | None:
+    """Obtiene el precio unitario declarado o lo calcula a partir del total y la cantidad."""
+
+    price_keys = (
+        "precio_unitario",
+        "precioUnitario",
+        "unitPrice",
+        "unit_price",
+        "precio unitario",
+    )
+    for record in (concept, related):
+        for key in price_keys:
+            price_value = _record_value(record, key)
+            price = _coerce_float(price_value)
+            if price is not None:
+                return price
+    if amount is not None and quantity:
+        if quantity > 0:
+            return amount / quantity
     return None
 
 
@@ -575,9 +645,9 @@ def _is_safe_href(value: str) -> bool:
     lowered = value.strip().lower()
     if not lowered:
         return False
-    return lowered.startswith(("http://", "https://", "mailto:", "tel:", "#")) or value.startswith(
-        "/"
-    )
+    return lowered.startswith(
+        ("http://", "https://", "mailto:", "tel:", "#")
+    ) or value.startswith("/")
 
 
 def _build_totals_html(context: QuoteRenderContext) -> str:
@@ -638,7 +708,9 @@ def compose_email_body(context: QuoteRenderContext, custom_message: str | None) 
             "Puedes responder este correo si necesitas un ajuste."
         )
     lines.append("")
-    lines.append(f"Total estimado: {_format_currency(_resolve_total(context), context.moneda)}")
+    lines.append(
+        f"Total estimado: {_format_currency(_resolve_total(context), context.moneda)}"
+    )
     if context.valido_hasta:
         lines.append(f"Vigente hasta: {context.valido_hasta.isoformat()}")
     lines.append("")
@@ -646,7 +718,9 @@ def compose_email_body(context: QuoteRenderContext, custom_message: str | None) 
     return "\n".join(lines)
 
 
-def compose_whatsapp_body(context: QuoteRenderContext, custom_message: str | None) -> str:
+def compose_whatsapp_body(
+    context: QuoteRenderContext, custom_message: str | None
+) -> str:
     summary = custom_message or (
         "Te comparto la cotización de Tal-IA; cualquier ajuste lo podemos ver por este medio."
     )
@@ -666,7 +740,9 @@ async def send_whatsapp_message(
         raise QuoteSendError("whatsapp_not_configured")
 
     normalized_to = (
-        to_number if to_number.lower().startswith("whatsapp:") else f"whatsapp:{to_number}"
+        to_number
+        if to_number.lower().startswith("whatsapp:")
+        else f"whatsapp:{to_number}"
     )
     normalized_from = (
         settings.twilio_phone_number
@@ -677,7 +753,11 @@ async def send_whatsapp_message(
     client = twilio_service.get_twilio_client()
 
     def _send() -> None:
-        kwargs: dict[str, Any] = {"to": normalized_to, "from_": normalized_from, "body": body}
+        kwargs: dict[str, Any] = {
+            "to": normalized_to,
+            "from_": normalized_from,
+            "body": body,
+        }
         if media_url:
             kwargs["media_url"] = [media_url]
         client.messages.create(**kwargs)
