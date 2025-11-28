@@ -1002,6 +1002,7 @@ class CRMRepository:
         base_metadata = {
             "conversation_id": conversation_key,
             "channel": canal,
+            "canal": canal,
             "source": "assistant",
             "origin": "assistant",
         }
