@@ -978,6 +978,107 @@ async def test_pipeline_board_uses_tablero_column(
 
 
 @pytest.mark.asyncio
+async def test_pipeline_board_auto_selects_dominant_tablero(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    tablero_a = uuid.uuid4()
+    tablero_b = uuid.uuid4()
+    stage_a_id = uuid.uuid4()
+    stage_b1_id = uuid.uuid4()
+    stage_b2_id = uuid.uuid4()
+    fake_repo.pipeline_stages = [
+        {
+            "id": str(stage_a_id),
+            "nombre": "Visitantes",
+            "codigo": "visitantes",
+            "categoria": "abierta",
+            "orden": 1,
+            "metadata": {"tablero_id": str(tablero_a)},
+        },
+        {
+            "id": str(stage_b1_id),
+            "nombre": "Captado",
+            "codigo": "captado",
+            "categoria": "abierta",
+            "orden": 1,
+            "metadata": {"tablero_id": str(tablero_b)},
+        },
+        {
+            "id": str(stage_b2_id),
+            "nombre": "Negociación",
+            "codigo": "negociacion",
+            "categoria": "abierta",
+            "orden": 2,
+            "metadata": {"tablero_id": str(tablero_b)},
+        },
+    ]
+    fake_repo.pipeline_opportunities = [
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_a_id),
+            "titulo": "Lead sin chat",
+            "metadata": {"tablero_id": str(tablero_a)},
+            "etapa": {
+                "id": str(stage_a_id),
+                "nombre": "Visitantes",
+                "codigo": "visitantes",
+                "categoria": "abierta",
+                "orden": 1,
+                "metadata": {"tablero_id": str(tablero_a)},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Ana"},
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_b1_id),
+            "titulo": "Lead captado",
+            "metadata": {"tablero_id": str(tablero_b)},
+            "etapa": {
+                "id": str(stage_b1_id),
+                "nombre": "Captado",
+                "codigo": "captado",
+                "categoria": "abierta",
+                "orden": 1,
+                "metadata": {"tablero_id": str(tablero_b)},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Ben"},
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_b2_id),
+            "titulo": "Lead en negociación",
+            "metadata": {"tablero_id": str(tablero_b)},
+            "etapa": {
+                "id": str(stage_b2_id),
+                "nombre": "Negociación",
+                "codigo": "negociacion",
+                "categoria": "abierta",
+                "orden": 2,
+                "metadata": {"tablero_id": str(tablero_b)},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Cam"},
+        },
+    ]
+
+    resp = await client.get(
+        "/crm/pipeline/board",
+        headers=_headers(include_user_token=True),
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert [stage["id"] for stage in payload["stages"]] == [
+        str(stage_b1_id),
+        str(stage_b2_id),
+    ]
+    assert all(
+        card["metadata"].get("tablero_id") == str(tablero_b)
+        for stage in payload["stages"]
+        for card in stage["tarjetas"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_list_clientes(
     client: AsyncClient, fake_repo: DummyCRMRepository
 ) -> None:

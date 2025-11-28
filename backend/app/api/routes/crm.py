@@ -7962,6 +7962,8 @@ def _build_pipeline_board(
     """Construye el board filtrando etapas y tarjetas por tablero."""
 
     tablero_filter = str(tablero_id) if tablero_id else None
+    if tablero_filter is None:
+        tablero_filter = _infer_tablero_id(stage_rows, opportunity_rows)
     stage_map: dict[UUID, CRMPipelineBoardStage] = {}
     for stage_row in stage_rows:
         stage = _stage_from_row(stage_row)
@@ -8019,6 +8021,53 @@ def _build_pipeline_board(
         sin_conversacion=sin_conversacion,
         visitantes_sin_chat=0,
     )
+
+
+def _infer_tablero_id(
+    stage_rows: list[dict[str, Any]], opportunity_rows: list[dict[str, Any]]
+) -> str | None:
+    """Determina el tablero más representativo cuando no se especifica."""
+
+    stage_order: list[str] = []
+    for row in stage_rows:
+        tablero_from_metadata = _tablero_id_from_metadata(
+            _ensure_dict(row.get("metadata") or row.get("metadatos"), default={})
+        )
+        tablero_from_column = _tablero_id_from_metadata(
+            {"tablero_id": row.get("tablero_id")}
+        )
+        candidate = tablero_from_metadata or tablero_from_column
+        if candidate and candidate not in stage_order:
+            stage_order.append(candidate)
+
+    tablero_counts: dict[str, int] = {}
+    for row in opportunity_rows:
+        candidates = {
+            _tablero_id_from_metadata(_ensure_dict(row.get("metadata"), default={})),
+            _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")}),
+            _tablero_id_from_row(row),
+        }
+        candidates.discard(None)
+        for candidate in candidates:
+            tablero_counts[candidate] = tablero_counts.get(candidate, 0) + 1
+
+    if tablero_counts:
+        best_tablero = max(
+            tablero_counts.items(),
+            key=lambda item: (
+                item[1],
+                (
+                    -stage_order.index(item[0])
+                    if item[0] in stage_order
+                    else -len(stage_order)
+                ),
+            ),
+        )[0]
+        return best_tablero
+
+    if len(stage_order) == 1:
+        return stage_order[0]
+    return None
 
 
 async def _build_pipeline_card_response(
