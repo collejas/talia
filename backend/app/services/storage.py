@@ -91,6 +91,17 @@ async def register_webchat_message(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    conversation_id = result.get("conversation_id")
+    if conversation_id:
+        try:
+            await repo.update_conversation(
+                conversation_id=conversation_id, patch={"canal": "webchat"}
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.webchat_channel_patch_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
     return result
 
 
@@ -113,7 +124,7 @@ async def register_whatsapp_message(
     """Invoca registrar_mensaje_whatsapp para almacenar interacciones del canal y ligar el webhook."""
     repo = CRMRepository()
     try:
-        return await repo.register_whatsapp_message(
+        result = await repo.register_whatsapp_message(
             direction=direction,
             wa_id=wa_id,
             phone_e164=phone_e164,
@@ -130,6 +141,18 @@ async def register_whatsapp_message(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    conversation_id = result.get("conversation_id")
+    if conversation_id:
+        try:
+            await repo.update_conversation(
+                conversation_id=conversation_id, patch={"canal": "whatsapp"}
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.whatsapp_channel_patch_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+    return result
 
 
 async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
@@ -255,11 +278,15 @@ async def record_webchat_visit(
         raise StorageError(str(exc)) from exc
 
 
-async def update_conversation(conversation_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+async def update_conversation(
+    conversation_id: str, patch: dict[str, Any]
+) -> dict[str, Any]:
     """Actualiza campos de una conversación."""
     repo = CRMRepository()
     try:
-        return await repo.update_conversation(conversation_id=conversation_id, patch=patch)
+        return await repo.update_conversation(
+            conversation_id=conversation_id, patch=patch
+        )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
@@ -311,14 +338,18 @@ async def set_manual_override(conversation_id: str, manual: bool) -> None:
         raise StorageError(str(exc)) from exc
 
 
-async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list[dict[str, Any]]:
+async def fetch_recent_messages(
+    *, conversation_id: str, limit: int = 8
+) -> list[dict[str, Any]]:
     """Obtiene los últimos mensajes de una conversación para construir historial.
 
     Retorna elementos con claves: direccion (entrante/saliente), texto, creado_en, datos.
     """
     repo = CRMRepository()
     try:
-        return await repo.fetch_recent_messages(conversation_id=conversation_id, limit=limit)
+        return await repo.fetch_recent_messages(
+            conversation_id=conversation_id, limit=limit
+        )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
@@ -352,7 +383,11 @@ async def upload_webchat_attachment(
         raise StorageError(str(exc)) from exc
 
     base_url = settings.supabase_url.rstrip("/") if settings.supabase_url else ""
-    public_url = f"{base_url}/storage/v1/object/public/{public_path}" if base_url else public_path
+    public_url = (
+        f"{base_url}/storage/v1/object/public/{public_path}"
+        if base_url
+        else public_path
+    )
 
     return {
         "url": public_url,
@@ -399,7 +434,9 @@ async def upload_quote_document(
     }
 
 
-async def upload_logo_asset(*, file: UploadFile, folder: str = "general") -> dict[str, str]:
+async def upload_logo_asset(
+    *, file: UploadFile, folder: str = "general"
+) -> dict[str, str]:
     """Sube un logo general al bucket `logos` y devuelve metadatos básicos."""
 
     if not settings.supabase_url:
@@ -559,7 +596,9 @@ async def update_calendar_booking_metadata(
 
     repo = CRMRepository()
     try:
-        await repo.update_calendar_booking_metadata(booking_id=booking_id, metadata=merged)
+        await repo.update_calendar_booking_metadata(
+            booking_id=booking_id, metadata=merged
+        )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
@@ -626,7 +665,9 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
         "highlights": highlights,
         "resources": resources,
         "closing": closing_text,
-        "use_summary": (bool(use_summary) if isinstance(use_summary, bool) else use_summary),
+        "use_summary": (
+            bool(use_summary) if isinstance(use_summary, bool) else use_summary
+        ),
         "use_highlights": (
             bool(use_highlights) if isinstance(use_highlights, bool) else use_highlights
         ),
@@ -639,7 +680,9 @@ async def fetch_email_template(slug: str = "default") -> dict[str, Any] | None:
             else signature_salutation
         ),
         "signature": (
-            signature_text.strip() if isinstance(signature_text, str) else signature_text
+            signature_text.strip()
+            if isinstance(signature_text, str)
+            else signature_text
         ),
         "updated_at": row.get("updated_at"),
     }
@@ -1001,7 +1044,9 @@ async def promote_opportunity_stage(
 
     current_stage_value = opportunity.get("etapa_id")
     try:
-        current_stage_uuid = UUID(str(current_stage_value)) if current_stage_value else None
+        current_stage_uuid = (
+            UUID(str(current_stage_value)) if current_stage_value else None
+        )
     except (TypeError, ValueError):
         current_stage_uuid = None
 
@@ -1011,7 +1056,9 @@ async def promote_opportunity_stage(
 
     current_stage_order = (opportunity.get("etapa") or {}).get("orden")
     target_order = stage.get("orden")
-    if isinstance(current_stage_order, (int, float)) and isinstance(target_order, (int, float)):
+    if isinstance(current_stage_order, (int, float)) and isinstance(
+        target_order, (int, float)
+    ):
         if current_stage_order >= target_order:
             log_event(
                 logger,
