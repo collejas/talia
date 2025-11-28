@@ -62,6 +62,7 @@ class DummyCRMRepository(CRMRepository):
                 for stage in stages
                 if str(stage.get("metadata", {}).get("tablero_id")) == tablero_filter
                 or str(stage.get("metadatos", {}).get("tablero_id")) == tablero_filter
+                or str(stage.get("tablero_id")) == tablero_filter
             ]
         return stages
 
@@ -83,6 +84,8 @@ class DummyCRMRepository(CRMRepository):
                     (row.get("etapa", {}) or {}).get("metadata", {}).get("tablero_id")
                 )
                 == tablero_filter
+                or str(row.get("tablero_id")) == tablero_filter
+                or str((row.get("etapa", {}) or {}).get("tablero_id")) == tablero_filter
             ]
         return rows[: kwargs.get("limit", len(rows))], len(rows)
 
@@ -890,6 +893,87 @@ async def test_pipeline_board_filters_by_tablero(
     assert all(card["etapa_id"] == str(stage_a_id) for card in stage["tarjetas"])
     assert all(
         card["metadata"]["tablero_id"] == str(tablero_a) for card in stage["tarjetas"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_pipeline_board_uses_tablero_column(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    tablero_a = uuid.uuid4()
+    tablero_b = uuid.uuid4()
+    stage_a_id = uuid.uuid4()
+    stage_b_id = uuid.uuid4()
+    fake_repo.pipeline_stages = [
+        {
+            "id": str(stage_a_id),
+            "nombre": "Prospectos",
+            "codigo": "prospectos",
+            "categoria": "abierta",
+            "orden": 1,
+            "tablero_id": str(tablero_a),
+            "metadata": {},
+        },
+        {
+            "id": str(stage_b_id),
+            "nombre": "Calificados",
+            "codigo": "calificados",
+            "categoria": "abierta",
+            "orden": 1,
+            "tablero_id": str(tablero_b),
+            "metadata": {},
+        },
+    ]
+    fake_repo.pipeline_opportunities = [
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_a_id),
+            "titulo": "Oportunidad A",
+            "tablero_id": str(tablero_a),
+            "metadata": {},
+            "etapa": {
+                "id": str(stage_a_id),
+                "nombre": "Prospectos",
+                "codigo": "prospectos",
+                "categoria": "abierta",
+                "orden": 1,
+                "tablero_id": str(tablero_a),
+                "metadata": {},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Alice"},
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_b_id),
+            "titulo": "Oportunidad B",
+            "tablero_id": str(tablero_b),
+            "metadata": {},
+            "etapa": {
+                "id": str(stage_b_id),
+                "nombre": "Calificados",
+                "codigo": "calificados",
+                "categoria": "abierta",
+                "orden": 1,
+                "tablero_id": str(tablero_b),
+                "metadata": {},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Bob"},
+        },
+    ]
+
+    resp = await client.get(
+        "/crm/pipeline/board",
+        headers=_headers(include_user_token=True),
+        params={"tablero_id": str(tablero_a)},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert [stage["id"] for stage in payload["stages"]] == [str(stage_a_id)]
+    assert payload["stages"][0]["tarjetas"]
+    assert all(
+        card["metadata"] == {} and card["etapa_id"] == str(stage_a_id)
+        for card in payload["stages"][0]["tarjetas"]
     )
 
 

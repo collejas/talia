@@ -8076,14 +8076,18 @@ def _stage_from_row(row: dict[str, Any]) -> CRMPipelineBoardStage | None:
     if not stage_id:
         return None
     metadata = _ensure_dict(row.get("metadata") or row.get("metadatos"), default={})
-    tablero_id = metadata.get("tablero_id")
+    tablero_id = _tablero_id_from_metadata(metadata)
+    tablero_from_column = _tablero_id_from_metadata(
+        {"tablero_id": row.get("tablero_id")}
+    )
+    tablero_value = tablero_id or tablero_from_column
     return CRMPipelineBoardStage(
         id=stage_id,
         nombre=row.get("nombre") or "Sin etapa",
         codigo=row.get("codigo") or "",
         categoria=row.get("categoria") or "abierta",
         orden=int(row.get("orden") or 0),
-        tablero_id=str(tablero_id) if tablero_id else None,
+        tablero_id=tablero_value,
         metadatos=metadata,
         tarjetas=[],
     )
@@ -8094,15 +8098,19 @@ def _stage_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardStage | None
     etapa_id = _safe_uuid(row.get("etapa_id") or etapa.get("id"))
     if not etapa_id:
         return None
-    metadata = _ensure_dict(etapa.get("metadata"), default={})
-    tablero_id = metadata.get("tablero_id")
+    metadata = _ensure_dict(etapa.get("metadata") or etapa.get("metadatos"), default={})
+    tablero_id = _tablero_id_from_metadata(metadata)
+    tablero_from_column = _tablero_id_from_metadata(
+        {"tablero_id": etapa.get("tablero_id")}
+    )
+    tablero_value = tablero_id or tablero_from_column
     return CRMPipelineBoardStage(
         id=etapa_id,
         nombre=etapa.get("nombre") or "Sin etapa",
         codigo=etapa.get("codigo") or "",
         categoria=etapa.get("categoria") or row.get("estado") or "abierta",
         orden=int(etapa.get("orden") or 0),
-        tablero_id=str(tablero_id) if tablero_id else None,
+        tablero_id=tablero_value,
         metadatos=metadata,
         tarjetas=[],
     )
@@ -8193,4 +8201,14 @@ def _tablero_id_from_row(row: dict[str, Any]) -> str | None:
     """Obtiene el tablero_id desde la etapa anidada de una oportunidad."""
 
     etapa = _ensure_dict(row.get("etapa"), default={})
-    return _tablero_id_from_metadata(_ensure_dict(etapa.get("metadata"), default={}))
+    tablero_id = _tablero_id_from_metadata(
+        _ensure_dict(etapa.get("metadata"), default={})
+    )
+    if tablero_id:
+        return tablero_id
+    tablero_from_column = _tablero_id_from_metadata(
+        {"tablero_id": etapa.get("tablero_id")}
+    )
+    if tablero_from_column:
+        return tablero_from_column
+    return _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")})
