@@ -252,16 +252,26 @@ section {
 }
 .concept-title {
   font-weight: 600;
-  width: 24%;
+  width: 28%;
 }
-.concept-unit,
+.concept-unit {
+  width: 12%;
+  text-align: center;
+  font-size: 0.9rem;
+}
+.concept-price {
+  width: 18%;
+  text-align: right;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
 .concept-qty {
-  width: 14%;
+  width: 12%;
   text-align: center;
   font-size: 0.9rem;
 }
 .concept-amount {
-  width: 20%;
+  width: 30%;
   text-align: right;
   font-weight: 600;
   color: var(--quote-primary);
