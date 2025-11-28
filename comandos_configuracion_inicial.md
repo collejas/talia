@@ -71,6 +71,7 @@ sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
 callSupabaseRpc
+codex resume 019ac673-2dad-7cc2-849c-2510e7756c6a
 
 codex resume 019ac646-8059-76b0-b150-193d1e0f176b
 
@@ -547,3 +548,21 @@ hola@talia.mx
   4. Pruebas rápidas
       - Corre tu suite (npm run lint && npm run build, poetry run pytest …) para garantizar que nada en la app intenta consultar las
         tablas borradas.
+
+
+
+
+
+He estado mejorando la creacion de cotizaciones en mi sistema y modifique estos archivos: 
+backend/app/api/routes/crm.py
+backend/app/services/quotes.py
+frontend/panel/src/app/settings/formato-cotizacion/template-schema.ts
+frontend/panel/src/components/embudo/lead-drawer.tsx
+supabase/migrations_tmp/20260420_120000_quote_templates.sql
+
+
+Y cree este:
+supabase/migrations/20251128_162500_quote_template_order.sql
+
+
+Pero lo unico ue me falto es que la seccion de 'Propuesta económica' muestre en su tabla esta otra columna: 'Precio unitario' para que entonces la tabla quede asi: (Concepto, Unidad, Precio unitario, Cantidad, Importe) el precio unitario es el que el usaurio pone en el campo que esta debajo cuando esta en la vista de enviar cotizacion, me ayudas???

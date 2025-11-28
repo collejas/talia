@@ -56,22 +56,34 @@ PDF_STYLE_OVERRIDES = textwrap.dedent(
     }
 
     .concept-title {
-        width: 24%;
+        width: 28%;
         font-weight: 600;
+    }
+
+    .concept-unit {
+        width: 12%;
+        text-align: center;
+        font-size: 0.9rem;
+    }
+
+    .concept-price {
+        width: 18%;
+        text-align: right;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .concept-qty {
+        width: 12%;
+        text-align: center;
+        font-size: 0.9rem;
     }
 
     .concept-amount {
-        width: 20%;
+        width: 30%;
         text-align: right;
         white-space: nowrap;
         font-weight: 600;
-    }
-
-    .concept-unit,
-    .concept-qty {
-        width: 14%;
-        text-align: center;
-        font-size: 0.9rem;
     }
 
     .concept-table tfoot td {
@@ -338,11 +350,13 @@ def _safe_text(value: str | None, fallback: str = "—") -> str:
 
 
 def _build_concepts_html(context: QuoteRenderContext) -> str:
+    """Renderiza la tabla de conceptos incluyendo precio unitario."""
+
     concepts = context.conceptos or []
     rows: list[str] = []
     items = context.items or []
     if not concepts:
-        rows.append('<tr><td class="concept-title" colspan="4">Pendiente de definir.</td></tr>')
+        rows.append('<tr><td class="concept-title" colspan="5">Pendiente de definir.</td></tr>')
     else:
         for idx, concept in enumerate(concepts, start=1):
             related = items[idx - 1] if idx - 1 < len(items) else {}
@@ -362,13 +376,21 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
             amount_value = _concept_total(concept)
             if amount_value is None:
                 amount_value = _item_total(related)
+
+            quantity_value = _coerce_float(qty_source)
+            price_value = _resolve_unit_price(concept, related, amount_value, quantity_value)
+            if amount_value is None and price_value is not None and quantity_value is not None:
+                amount_value = price_value * quantity_value
+
             unit = html_escape(_format_unit(unit_source))
+            price = html_escape(_format_currency(price_value, context.moneda))
             qty = html_escape(_format_quantity(qty_source))
             amount = html_escape(_format_currency(amount_value, context.moneda))
             rows.append(
                 "<tr>"
                 f'<td class="concept-title">{title}</td>'
                 f'<td class="concept-unit">{unit}</td>'
+                f'<td class="concept-price">{price}</td>'
                 f'<td class="concept-qty">{qty}</td>'
                 f'<td class="concept-amount">{amount}</td>'
                 "</tr>"
@@ -381,7 +403,7 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
     ]
     totals_rows = [
         "<tr>"
-        f'<td colspan="3" class="totals-label">{html_escape(label)}</td>'
+        f'<td colspan="4" class="totals-label">{html_escape(label)}</td>'
         f'<td class="concept-amount">{html_escape(value)}</td>'
         "</tr>"
         for label, value in totals
@@ -389,8 +411,8 @@ def _build_concepts_html(context: QuoteRenderContext) -> str:
     tfoot_html = f"<tfoot>{''.join(totals_rows)}</tfoot>"
 
     table = (
-        "<table class=\"concept-table\">"
-        "<thead><tr><th>Concepto</th><th>Unidad</th><th>Cantidad</th><th>Importe</th></tr></thead>"
+        '<table class="concept-table">'
+        "<thead><tr><th>Concepto</th><th>Unidad</th><th>Precio unitario</th><th>Cantidad</th><th>Importe</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"{tfoot_html}"
         "</table>"
@@ -477,6 +499,33 @@ def _item_total(record: Any) -> float | None:
     if cantidad is not None and precio is not None:
         descuento = _coerce_float(record.get("descuento")) or 0.0
         return max(cantidad * precio - descuento, 0.0)
+    return None
+
+
+def _resolve_unit_price(
+    concept: dict[str, Any],
+    related: dict[str, Any],
+    amount: float | None,
+    quantity: float | None,
+) -> float | None:
+    """Obtiene el precio unitario declarado o lo calcula a partir del total y la cantidad."""
+
+    price_keys = (
+        "precio_unitario",
+        "precioUnitario",
+        "unitPrice",
+        "unit_price",
+        "precio unitario",
+    )
+    for record in (concept, related):
+        for key in price_keys:
+            price_value = _record_value(record, key)
+            price = _coerce_float(price_value)
+            if price is not None:
+                return price
+    if amount is not None and quantity:
+        if quantity > 0:
+            return amount / quantity
     return None
 
 
@@ -677,7 +726,11 @@ async def send_whatsapp_message(
     client = twilio_service.get_twilio_client()
 
     def _send() -> None:
-        kwargs: dict[str, Any] = {"to": normalized_to, "from_": normalized_from, "body": body}
+        kwargs: dict[str, Any] = {
+            "to": normalized_to,
+            "from_": normalized_from,
+            "body": body,
+        }
         if media_url:
             kwargs["media_url"] = [media_url]
         client.messages.create(**kwargs)
