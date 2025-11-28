@@ -566,3 +566,6 @@ supabase/migrations/20251128_162500_quote_template_order.sql
 
 
 Pero lo unico ue me falto es que la seccion de 'Propuesta económica' muestre en su tabla esta otra columna: 'Precio unitario' para que entonces la tabla quede asi: (Concepto, Unidad, Precio unitario, Cantidad, Importe) el precio unitario es el que el usaurio pone en el campo que esta debajo cuando esta en la vista de enviar cotizacion, me ayudas???
+
+
+Tengo este problema: En mi vista de embudo, veo duplicados las etapas y las tarjetas de oportunidades se colocan un unas y en otras etapas de manera aleatoria sin sentido esto fue después de realizar estos planes: docs/plan realizado para extender propspeccion.md, docs/plan_envios_prospeccion.md y docs/plan_prospectos_manual.md, puse una copia actualizada de mi base de datos en esta carpeta: backups/postgres_20251128_174004, revisarla así como el backend para que me ayudes a resolver el problema, debemos solo tener un juego unico de etapas y que no se repitan, y que el movimiento automático da cada oportunidad se haga de manera correcta

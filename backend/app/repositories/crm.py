@@ -170,11 +170,22 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
+        tablero_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
-        params = {
+        """Listar etapas de pipeline, opcionalmente filtradas por tablero."""
+
+        params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "orden.asc",
         }
+        if tablero_id:
+            tablero_filter = str(tablero_id)
+            params["or"] = (
+                f"(tablero_id.eq.{tablero_filter},"
+                f"metadata->>tablero_id.eq.{tablero_filter},"
+                f"metadatos->>tablero_id.eq.{tablero_filter})"
+            )
+            params["order"] = "tablero_id.asc,orden.asc"
         resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -1660,7 +1671,10 @@ class CRMRepository:
         organizacion_id: UUID,
         limit: int = 500,
         created_from: datetime | None = None,
+        tablero_id: UUID | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
+        """Listar oportunidades de pipeline con filtros opcionales y conteo total."""
+
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.desc",
@@ -1669,6 +1683,14 @@ class CRMRepository:
         }
         if created_from:
             params["creado_en"] = f"gte.{created_from.isoformat()}"
+        if tablero_id:
+            tablero_filter = str(tablero_id)
+            params["or"] = (
+                f"(tablero_id.eq.{tablero_filter},"
+                f"metadata->>tablero_id.eq.{tablero_filter},"
+                f"etapa.metadata->>tablero_id.eq.{tablero_filter})"
+            )
+            params["order"] = "etapa.orden.asc,creado_en.desc"
         resp = await self._request(
             "GET",
             "/rest/v1/oportunidades",

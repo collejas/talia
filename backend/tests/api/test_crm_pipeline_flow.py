@@ -23,6 +23,21 @@ class InMemoryPipelineRepository(CRMRepository):
         self.quotes: dict[str, dict[str, Any]] = {}
         self.clients: dict[str, dict[str, Any]] = {}
 
+    async def create_account(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        account_id = uuid.uuid4()
+        return {
+            "id": str(account_id),
+            "organizacion_id": str(organizacion_id),
+            **payload,
+            "creado_en": datetime.now(timezone.utc).isoformat(),
+            "actualizado_en": datetime.now(timezone.utc).isoformat(),
+        }
+
     def _stage(self, codigo: str, nombre: str, categoria: str, orden: int) -> dict[str, Any]:
         return {
             "id": uuid.uuid4(),
@@ -81,7 +96,10 @@ class InMemoryPipelineRepository(CRMRepository):
             "metadata": metadata,
             "contacto": contact,
             "cuenta": {"id": payload.get("cuenta_id"), "nombre": "Cuenta Demo"},
-            "asignado": {"nombre_completo": "Owner Demo", "correo": "owner@example.com"},
+            "asignado": {
+                "nombre_completo": "Owner Demo",
+                "correo": "owner@example.com",
+            },
             "creado_en": datetime.now(timezone.utc).isoformat(),
             "actualizado_en": datetime.now(timezone.utc).isoformat(),
         }
@@ -125,7 +143,13 @@ class InMemoryPipelineRepository(CRMRepository):
             metadata = dict(row.get("metadata") or {})
             metadata.update(payload["metadata"])
             row["metadata"] = metadata
-        for key in ("titulo", "descripcion", "monto_estimado", "moneda", "probabilidad"):
+        for key in (
+            "titulo",
+            "descripcion",
+            "monto_estimado",
+            "moneda",
+            "probabilidad",
+        ):
             if key in payload:
                 row[key] = payload[key]
         row["actualizado_en"] = datetime.now(timezone.utc).isoformat()

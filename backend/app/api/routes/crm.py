@@ -2016,7 +2016,14 @@ def _build_prospecto_update_payload(
 
     raw = update_payload.model_dump(exclude_unset=True)
     updates: dict[str, Any] = {}
-    for field in ("display_name", "actividad", "email", "website", "address", "segmento"):
+    for field in (
+        "display_name",
+        "actividad",
+        "email",
+        "website",
+        "address",
+        "segmento",
+    ):
         if field not in raw:
             continue
         value = raw[field]
@@ -2093,7 +2100,9 @@ def _build_prospecto_from_contactable(
     return payload
 
 
-def _resolve_contact_channels(payload: ProspectoContactarPayload) -> dict[str, dict[str, Any]]:
+def _resolve_contact_channels(
+    payload: ProspectoContactarPayload,
+) -> dict[str, dict[str, Any]]:
     canales: dict[str, dict[str, Any]] = {}
     asunto = _clean_text(payload.correo_asunto)
     cuerpo = _clean_text(payload.correo_cuerpo)
@@ -6337,7 +6346,12 @@ async def obtener_contacto_batch(
         totales[estado_key] = count_int
         total_envios += count_int
 
-    return {"ok": True, "batch": batch, "totales": totales, "total_envios": total_envios}
+    return {
+        "ok": True,
+        "batch": batch,
+        "totales": totales,
+        "total_envios": total_envios,
+    }
 
 
 @router.post("/prospeccion/contacto/envios/{envio_id}/reintentar")
@@ -7170,12 +7184,16 @@ async def pipeline_board(
     organizacion_id: UUID = Depends(require_organizacion_id),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=50, le=1000)] = 400,
+    tablero_id: UUID | None = Query(default=None),
 ) -> CRMPipelineBoard:
+    """Construir el board del pipeline filtrando opcionalmente por tablero."""
+
     try:
-        stages = await repo.list_pipelines(organizacion_id=organizacion_id)
+        stages = await repo.list_pipelines(organizacion_id=organizacion_id, tablero_id=tablero_id)
         rows, _ = await repo.list_pipeline_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
+            tablero_id=tablero_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -7187,7 +7205,7 @@ async def pipeline_board(
     except CRMRepositoryError:
         visitors = 0
 
-    board = _build_pipeline_board(stages, rows)
+    board = _build_pipeline_board(stages, rows, tablero_id)
     return CRMPipelineBoard(
         stages=board.stages,
         sin_conversacion=board.sin_conversacion,
@@ -7765,12 +7783,21 @@ def _safe_uuid(value: str | UUID | None) -> UUID | None:
 def _build_pipeline_board(
     stage_rows: list[dict[str, Any]],
     opportunity_rows: list[dict[str, Any]],
+    tablero_id: UUID | None = None,
 ) -> CRMPipelineBoard:
+    """Construye el board filtrando etapas y tarjetas por tablero."""
+
+    tablero_filter = str(tablero_id) if tablero_id else None
+    if tablero_filter is None:
+        tablero_filter = _infer_tablero_id(stage_rows, opportunity_rows)
     stage_map: dict[UUID, CRMPipelineBoardStage] = {}
     for stage_row in stage_rows:
         stage = _stage_from_row(stage_row)
-        if stage:
-            stage_map[stage.id] = stage
+        if not stage:
+            continue
+        if tablero_filter and stage.tablero_id != tablero_filter:
+            continue
+        stage_map[stage.id] = stage
 
     sin_conversacion: list[CRMPipelineBoardCard] = []
 
@@ -7778,10 +7805,19 @@ def _build_pipeline_board(
         card = _card_from_opportunity(row)
         if card is None:
             continue
+        card_tablero_id = _tablero_id_from_metadata(card.metadata)
         stage = stage_map.get(card.etapa_id)
+        stage_tablero_id = stage.tablero_id if stage else _tablero_id_from_row(row)
+        if tablero_filter:
+            if card_tablero_id and card_tablero_id != tablero_filter:
+                continue
+            if stage_tablero_id and stage_tablero_id != tablero_filter:
+                continue
+            if not card_tablero_id and not stage_tablero_id:
+                continue
         if stage is None:
             stage = _stage_from_opportunity(row)
-            if stage:
+            if stage and (not tablero_filter or stage.tablero_id == tablero_filter):
                 stage_map[stage.id] = stage
         if stage:
             stage.tarjetas.append(card)
@@ -7809,6 +7845,47 @@ def _build_pipeline_board(
         sin_conversacion=sin_conversacion,
         visitantes_sin_chat=0,
     )
+
+
+def _infer_tablero_id(
+    stage_rows: list[dict[str, Any]], opportunity_rows: list[dict[str, Any]]
+) -> str | None:
+    """Determina el tablero más representativo cuando no se especifica."""
+
+    stage_order: list[str] = []
+    for row in stage_rows:
+        tablero_from_metadata = _tablero_id_from_metadata(
+            _ensure_dict(row.get("metadata") or row.get("metadatos"), default={})
+        )
+        tablero_from_column = _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")})
+        candidate = tablero_from_metadata or tablero_from_column
+        if candidate and candidate not in stage_order:
+            stage_order.append(candidate)
+
+    tablero_counts: dict[str, int] = {}
+    for row in opportunity_rows:
+        candidates = {
+            _tablero_id_from_metadata(_ensure_dict(row.get("metadata"), default={})),
+            _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")}),
+            _tablero_id_from_row(row),
+        }
+        candidates.discard(None)
+        for candidate in candidates:
+            tablero_counts[candidate] = tablero_counts.get(candidate, 0) + 1
+
+    if tablero_counts:
+        best_tablero = max(
+            tablero_counts.items(),
+            key=lambda item: (
+                item[1],
+                (-stage_order.index(item[0]) if item[0] in stage_order else -len(stage_order)),
+            ),
+        )[0]
+        return best_tablero
+
+    if len(stage_order) == 1:
+        return stage_order[0]
+    return None
 
 
 async def _build_pipeline_card_response(
@@ -7866,14 +7943,16 @@ def _stage_from_row(row: dict[str, Any]) -> CRMPipelineBoardStage | None:
     if not stage_id:
         return None
     metadata = _ensure_dict(row.get("metadata") or row.get("metadatos"), default={})
-    tablero_id = metadata.get("tablero_id")
+    tablero_id = _tablero_id_from_metadata(metadata)
+    tablero_from_column = _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")})
+    tablero_value = tablero_id or tablero_from_column
     return CRMPipelineBoardStage(
         id=stage_id,
         nombre=row.get("nombre") or "Sin etapa",
         codigo=row.get("codigo") or "",
         categoria=row.get("categoria") or "abierta",
         orden=int(row.get("orden") or 0),
-        tablero_id=str(tablero_id) if tablero_id else None,
+        tablero_id=tablero_value,
         metadatos=metadata,
         tarjetas=[],
     )
@@ -7884,15 +7963,17 @@ def _stage_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardStage | None
     etapa_id = _safe_uuid(row.get("etapa_id") or etapa.get("id"))
     if not etapa_id:
         return None
-    metadata = _ensure_dict(etapa.get("metadata"), default={})
-    tablero_id = metadata.get("tablero_id")
+    metadata = _ensure_dict(etapa.get("metadata") or etapa.get("metadatos"), default={})
+    tablero_id = _tablero_id_from_metadata(metadata)
+    tablero_from_column = _tablero_id_from_metadata({"tablero_id": etapa.get("tablero_id")})
+    tablero_value = tablero_id or tablero_from_column
     return CRMPipelineBoardStage(
         id=etapa_id,
         nombre=etapa.get("nombre") or "Sin etapa",
         codigo=etapa.get("codigo") or "",
         categoria=etapa.get("categoria") or row.get("estado") or "abierta",
         orden=int(etapa.get("orden") or 0),
-        tablero_id=str(tablero_id) if tablero_id else None,
+        tablero_id=tablero_value,
         metadatos=metadata,
         tarjetas=[],
     )
@@ -7963,3 +8044,30 @@ def _is_manual_card(metadata: dict[str, Any] | None) -> bool:
         return False
     created_via = metadata.get("created_via")
     return isinstance(created_via, str) and created_via == "embudo_manual"
+
+
+def _tablero_id_from_metadata(metadata: dict[str, Any] | None) -> str | None:
+    """Extrae un tablero_id válido desde un diccionario de metadatos."""
+
+    if not metadata:
+        return None
+    value = metadata.get("tablero_id")
+    candidate = _safe_uuid(value) if value is not None else None
+    if candidate:
+        return str(candidate)
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+def _tablero_id_from_row(row: dict[str, Any]) -> str | None:
+    """Obtiene el tablero_id desde la etapa anidada de una oportunidad."""
+
+    etapa = _ensure_dict(row.get("etapa"), default={})
+    tablero_id = _tablero_id_from_metadata(_ensure_dict(etapa.get("metadata"), default={}))
+    if tablero_id:
+        return tablero_id
+    tablero_from_column = _tablero_id_from_metadata({"tablero_id": etapa.get("tablero_id")})
+    if tablero_from_column:
+        return tablero_from_column
+    return _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")})
