@@ -1065,6 +1065,49 @@ async def test_pipeline_board_auto_selects_dominant_tablero(
 
 
 @pytest.mark.asyncio
+async def test_pipeline_board_includes_channel_from_metadata(
+    client: AsyncClient, fake_repo: DummyCRMRepository
+) -> None:
+    stage_id = uuid.uuid4()
+    fake_repo.pipeline_stages = [
+        {
+            "id": str(stage_id),
+            "nombre": "Prospecto",
+            "codigo": "prospecto",
+            "categoria": "abierta",
+            "orden": 1,
+            "metadata": {},
+        }
+    ]
+    fake_repo.pipeline_opportunities = [
+        {
+            "id": str(uuid.uuid4()),
+            "etapa_id": str(stage_id),
+            "titulo": "Oportunidad con canal",
+            "metadata": {"channel": "whatsapp"},
+            "etapa": {
+                "id": str(stage_id),
+                "nombre": "Prospecto",
+                "codigo": "prospecto",
+                "categoria": "abierta",
+                "orden": 1,
+                "metadata": {},
+            },
+            "contacto": {"id": str(uuid.uuid4()), "nombre_completo": "Alice"},
+        }
+    ]
+
+    resp = await client.get(
+        "/crm/pipeline/board",
+        headers=_headers(include_user_token=True),
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["stages"][0]["tarjetas"][0]["canal"] == "whatsapp"
+
+
+@pytest.mark.asyncio
 async def test_list_clientes(client: AsyncClient, fake_repo: DummyCRMRepository) -> None:
     resp = await client.get("/crm/clientes", headers=_headers())
     assert resp.status_code == 200

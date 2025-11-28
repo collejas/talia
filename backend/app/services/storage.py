@@ -91,6 +91,17 @@ async def register_webchat_message(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    conversation_id = result.get("conversation_id")
+    if conversation_id:
+        try:
+            await repo.update_conversation(
+                conversation_id=conversation_id, patch={"canal": "webchat"}
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.webchat_channel_patch_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
     return result
 
 
@@ -113,7 +124,7 @@ async def register_whatsapp_message(
     """Invoca registrar_mensaje_whatsapp para almacenar interacciones del canal y ligar el webhook."""
     repo = CRMRepository()
     try:
-        return await repo.register_whatsapp_message(
+        result = await repo.register_whatsapp_message(
             direction=direction,
             wa_id=wa_id,
             phone_e164=phone_e164,
@@ -130,6 +141,18 @@ async def register_whatsapp_message(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    conversation_id = result.get("conversation_id")
+    if conversation_id:
+        try:
+            await repo.update_conversation(
+                conversation_id=conversation_id, patch={"canal": "whatsapp"}
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.whatsapp_channel_patch_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+    return result
 
 
 async def fetch_conversation(conversation_id: str) -> dict[str, Any]:

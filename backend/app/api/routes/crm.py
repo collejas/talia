@@ -8004,6 +8004,8 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         else None
     )
     actualizado_en = _parse_datetime(row.get("actualizado_en"))
+    canal = metadata.get("canal") or metadata.get("channel")
+
     return CRMPipelineBoardCard(
         tarjeta_id=oportunidad_id,
         contacto_id=_safe_uuid(contacto.get("id")),
@@ -8014,7 +8016,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         empresa=contacto.get("company_name"),
         notas=contacto.get("notes"),
         necesidad_proposito=contacto.get("necesidad_proposito"),
-        canal=metadata.get("canal"),
+        canal=canal,
         estado=contacto.get("estado") or contacto.get("captura_estado"),
         etapa_id=etapa_id,
         etapa_nombre=(row.get("etapa") or {}).get("nombre") or "Sin etapa",
