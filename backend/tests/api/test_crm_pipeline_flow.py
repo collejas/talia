@@ -15,7 +15,9 @@ class InMemoryPipelineRepository(CRMRepository):
         self.stage_catalog = {
             "captado": self._stage("captado", "Captado", "abierta", 1),
             "demo": self._stage("demo", "Demo agendada", "abierta", 2),
-            "cerrado_ganado": self._stage("cerrado_ganado", "Cerrado ganado", "ganada", 99),
+            "cerrado_ganado": self._stage(
+                "cerrado_ganado", "Cerrado ganado", "ganada", 99
+            ),
         }
         self.opportunities: dict[str, dict[str, Any]] = {}
         self.stage_history: list[dict[str, Any]] = []
@@ -23,7 +25,24 @@ class InMemoryPipelineRepository(CRMRepository):
         self.quotes: dict[str, dict[str, Any]] = {}
         self.clients: dict[str, dict[str, Any]] = {}
 
-    def _stage(self, codigo: str, nombre: str, categoria: str, orden: int) -> dict[str, Any]:
+    async def create_account(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        account_id = uuid.uuid4()
+        return {
+            "id": str(account_id),
+            "organizacion_id": str(organizacion_id),
+            **payload,
+            "creado_en": datetime.now(timezone.utc).isoformat(),
+            "actualizado_en": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _stage(
+        self, codigo: str, nombre: str, categoria: str, orden: int
+    ) -> dict[str, Any]:
         return {
             "id": uuid.uuid4(),
             "nombre": nombre,
@@ -81,7 +100,10 @@ class InMemoryPipelineRepository(CRMRepository):
             "metadata": metadata,
             "contacto": contact,
             "cuenta": {"id": payload.get("cuenta_id"), "nombre": "Cuenta Demo"},
-            "asignado": {"nombre_completo": "Owner Demo", "correo": "owner@example.com"},
+            "asignado": {
+                "nombre_completo": "Owner Demo",
+                "correo": "owner@example.com",
+            },
             "creado_en": datetime.now(timezone.utc).isoformat(),
             "actualizado_en": datetime.now(timezone.utc).isoformat(),
         }
@@ -125,7 +147,13 @@ class InMemoryPipelineRepository(CRMRepository):
             metadata = dict(row.get("metadata") or {})
             metadata.update(payload["metadata"])
             row["metadata"] = metadata
-        for key in ("titulo", "descripcion", "monto_estimado", "moneda", "probabilidad"):
+        for key in (
+            "titulo",
+            "descripcion",
+            "monto_estimado",
+            "moneda",
+            "probabilidad",
+        ):
             if key in payload:
                 row[key] = payload[key]
         row["actualizado_en"] = datetime.now(timezone.utc).isoformat()
@@ -160,7 +188,9 @@ class InMemoryPipelineRepository(CRMRepository):
         offset: int,
     ) -> list[dict[str, Any]]:
         entries = [
-            entry for entry in self.stage_history if entry["oportunidad_id"] == str(oportunidad_id)
+            entry
+            for entry in self.stage_history
+            if entry["oportunidad_id"] == str(oportunidad_id)
         ]
         for (opp_id, _), entry in self.notes.items():
             if opp_id == str(oportunidad_id):
@@ -241,7 +271,9 @@ class InMemoryPipelineRepository(CRMRepository):
             normalized.setdefault("id", str(uuid.uuid4()))
             normalized["cotizacion_id"] = str(quote_id)
             normalized.setdefault("creado_en", datetime.now(timezone.utc).isoformat())
-            normalized.setdefault("actualizado_en", datetime.now(timezone.utc).isoformat())
+            normalized.setdefault(
+                "actualizado_en", datetime.now(timezone.utc).isoformat()
+            )
             normalized_items.append(normalized)
         row = {
             "id": str(quote_id),
@@ -337,7 +369,9 @@ def pipeline_app(pipeline_repo: InMemoryPipelineRepository) -> FastAPI:
 @pytest.fixture()
 async def pipeline_client(pipeline_app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=pipeline_app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as session:
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as session:
         yield session
 
 

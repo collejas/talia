@@ -120,7 +120,9 @@ class CRMRepository:
 
     def __init__(self, *, timeout: float = 10.0) -> None:
         if not settings.supabase_url or not settings.supabase_service_role:
-            raise CRMRepositoryError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
+            raise CRMRepositoryError(
+                "Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)"
+            )
         self._base_url = settings.supabase_url.rstrip("/")
         self._service_role = settings.supabase_service_role
         self._timeout = timeout
@@ -142,7 +144,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/cuentas", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar cuentas: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar cuentas: {data!r}"
+            )
         return data
 
     async def create_account(
@@ -170,11 +174,22 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
+        tablero_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
-        params = {
+        """Listar etapas de pipeline, opcionalmente filtradas por tablero."""
+
+        params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "orden.asc",
         }
+        if tablero_id:
+            tablero_filter = str(tablero_id)
+            params["or"] = (
+                f"(tablero_id.eq.{tablero_filter},"
+                f"metadata->>tablero_id.eq.{tablero_filter},"
+                f"metadatos->>tablero_id.eq.{tablero_filter})"
+            )
+            params["order"] = "tablero_id.asc,orden.asc"
         resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
         data = resp.json()
         if not isinstance(data, list):
@@ -197,7 +212,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar oportunidades: {data!r}"
+            )
         return data
 
     async def create_opportunity(
@@ -218,7 +235,9 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió la oportunidad creada")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al crear oportunidad: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al crear oportunidad: {row!r}"
+            )
         return row
 
     async def get_opportunity(
@@ -238,7 +257,9 @@ class CRMRepository:
             return None
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener oportunidad: {row!r}"
+            )
         return row
 
     async def list_activities(
@@ -266,7 +287,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/actividades", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar actividades: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar actividades: {data!r}"
+            )
         return data
 
     async def create_activity(
@@ -307,7 +330,9 @@ class CRMRepository:
             return None
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al obtener actividad: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener actividad: {row!r}"
+            )
         return row
 
     async def list_tickets(
@@ -332,7 +357,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/tickets", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar tickets: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar tickets: {data!r}"
+            )
         return data
 
     async def create_ticket(
@@ -436,7 +463,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/archivos", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar archivos: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar archivos: {data!r}"
+            )
         return data
 
     async def create_file(
@@ -553,7 +582,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/productos", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar productos: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar productos: {data!r}"
+            )
         return data
 
     async def create_product(
@@ -618,7 +649,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar cotizaciones: {data!r}"
+            )
         return data
 
     async def create_quote(
@@ -676,10 +709,14 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("Supabase no devolvió el item de cotización creado")
+            raise CRMRepositoryError(
+                "Supabase no devolvió el item de cotización creado"
+            )
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al crear item de cotización: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al crear item de cotización: {row!r}"
+            )
         return row
 
     async def list_quote_entries(
@@ -698,7 +735,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar cotizaciones: {data!r}"
+            )
         return data
 
     async def get_quote_entry(
@@ -863,7 +902,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/campanas", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar campañas: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar campañas: {data!r}"
+            )
         return data
 
     async def create_campaign(
@@ -939,7 +980,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/lead_eventos", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar eventos de lead: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar eventos de lead: {data!r}"
+            )
         return data
 
     async def ensure_conversation_opportunity(
@@ -974,7 +1017,9 @@ class CRMRepository:
                 metadata[key] = value
             return metadata
 
-        async def _patch_metadata(opportunity_id: UUID, metadata: dict[str, Any]) -> UUID:
+        async def _patch_metadata(
+            opportunity_id: UUID, metadata: dict[str, Any]
+        ) -> UUID:
             params = {
                 "id": f"eq.{opportunity_id}",
                 "organizacion_id": f"eq.{organizacion_id}",
@@ -1095,7 +1140,9 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió la oportunidad actualizada")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al actualizar oportunidad: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar oportunidad: {row!r}"
+            )
         return row
 
     async def delete_opportunity(
@@ -1145,10 +1192,14 @@ class CRMRepository:
             payload["p_attachments"] = attachments
         data = await self._rpc("registrar_mensaje_webchat", payload)
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_webchat: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada registrar_mensaje_webchat: {data!r}"
+            )
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida registrar_mensaje_webchat: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida registrar_mensaje_webchat: {row!r}"
+            )
         return {
             "conversation_id": row.get("conversacion_id"),
             "message_id": row.get("mensaje_id"),
@@ -1193,10 +1244,14 @@ class CRMRepository:
             payload["p_webhook_payload"] = webhook_payload
         data = await self._rpc("registrar_mensaje_whatsapp", payload)
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_whatsapp: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada registrar_mensaje_whatsapp: {data!r}"
+            )
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida registrar_mensaje_whatsapp: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida registrar_mensaje_whatsapp: {row!r}"
+            )
         return {
             "conversation_id": row.get("conversacion_id"),
             "message_id": row.get("mensaje_id"),
@@ -1204,7 +1259,9 @@ class CRMRepository:
             "openai_conversation_id": row.get("conversacion_openai_id"),
         }
 
-    async def get_conversation_with_controls(self, *, conversation_id: str) -> dict[str, Any]:
+    async def get_conversation_with_controls(
+        self, *, conversation_id: str
+    ) -> dict[str, Any]:
         conversation_key = conversation_id.strip()
         if not conversation_key:
             raise CRMRepositoryError("conversation_id_required")
@@ -1275,7 +1332,9 @@ class CRMRepository:
         session_id = row.get("id_externo")
         return str(session_id) if session_id else None
 
-    async def get_latest_webchat_conversation(self, *, contact_id: str) -> dict[str, Any] | None:
+    async def get_latest_webchat_conversation(
+        self, *, contact_id: str
+    ) -> dict[str, Any] | None:
         contact_key = contact_id.strip()
         if not contact_key:
             return None
@@ -1335,7 +1394,9 @@ class CRMRepository:
             "conversacion_id": f"eq.{conversation_key}",
             "limit": "1",
         }
-        resp = await self._request("GET", "/rest/v1/conversaciones_controles", params=params)
+        resp = await self._request(
+            "GET", "/rest/v1/conversaciones_controles", params=params
+        )
         data = resp.json() or []
         row: Any
         if isinstance(data, list) and data:
@@ -1348,7 +1409,9 @@ class CRMRepository:
             return False
         return bool(row.get("manual_override"))
 
-    async def fetch_manual_overrides(self, *, conversation_ids: Sequence[str]) -> dict[str, bool]:
+    async def fetch_manual_overrides(
+        self, *, conversation_ids: Sequence[str]
+    ) -> dict[str, bool]:
         cleaned = [cid.strip() for cid in conversation_ids if cid and cid.strip()]
         if not cleaned:
             return {}
@@ -1356,7 +1419,9 @@ class CRMRepository:
             "select": "conversacion_id,manual_override",
             "conversacion_id": f"in.({','.join(cleaned)})",
         }
-        resp = await self._request("GET", "/rest/v1/conversaciones_controles", params=params)
+        resp = await self._request(
+            "GET", "/rest/v1/conversaciones_controles", params=params
+        )
         data = resp.json() or []
         if not isinstance(data, list):
             return {}
@@ -1490,7 +1555,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
         data = resp.json() or []
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("No se encontraron etapas de pipeline para la organización")
+            raise CRMRepositoryError(
+                "No se encontraron etapas de pipeline para la organización"
+            )
         stage_id = _coerce_uuid(data[0].get("id"), field="etapa_id")
         self._stage_cache[cache_key] = stage_id
         return stage_id
@@ -1552,7 +1619,9 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió el evento del lead")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al crear evento de lead: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al crear evento de lead: {row!r}"
+            )
         return row
 
     async def list_notes(
@@ -1610,7 +1679,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/audit_logs", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar audit logs: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar audit logs: {data!r}"
+            )
         return data
 
     async def append_stage_history(
@@ -1631,7 +1702,9 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió el historial de etapa")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al registrar historial: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al registrar historial: {row!r}"
+            )
         return row
 
     async def get_account(
@@ -1660,7 +1733,10 @@ class CRMRepository:
         organizacion_id: UUID,
         limit: int = 500,
         created_from: datetime | None = None,
+        tablero_id: UUID | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
+        """Listar oportunidades de pipeline con filtros opcionales y conteo total."""
+
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.desc",
@@ -1669,6 +1745,14 @@ class CRMRepository:
         }
         if created_from:
             params["creado_en"] = f"gte.{created_from.isoformat()}"
+        if tablero_id:
+            tablero_filter = str(tablero_id)
+            params["or"] = (
+                f"(tablero_id.eq.{tablero_filter},"
+                f"metadata->>tablero_id.eq.{tablero_filter},"
+                f"etapa.metadata->>tablero_id.eq.{tablero_filter})"
+            )
+            params["order"] = "etapa.orden.asc,creado_en.desc"
         resp = await self._request(
             "GET",
             "/rest/v1/oportunidades",
@@ -1680,7 +1764,9 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
             )
-        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(
+            data
+        )
         return data, total
 
     async def search_contacts(
@@ -1710,7 +1796,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/contactos", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al buscar contactos: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al buscar contactos: {data!r}"
+            )
         return data
 
     async def get_contact(
@@ -1764,7 +1852,9 @@ class CRMRepository:
             raise CRMRepositoryError("Supabase no devolvió el contacto actualizado")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al actualizar contacto: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar contacto: {row!r}"
+            )
         return row
 
     async def get_contact_by_id(self, *, contact_id: str) -> dict[str, Any] | None:
@@ -1893,7 +1983,9 @@ class CRMRepository:
             "offset": str(offset),
             "select": self._HISTORY_SELECT,
         }
-        resp = await self._request("GET", "/rest/v1/oportunidad_etapas_historial", params=params)
+        resp = await self._request(
+            "GET", "/rest/v1/oportunidad_etapas_historial", params=params
+        )
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(
@@ -1915,13 +2007,17 @@ class CRMRepository:
             "limit": "1",
             "select": self._HISTORY_SELECT,
         }
-        resp = await self._request("GET", "/rest/v1/oportunidad_etapas_historial", params=params)
+        resp = await self._request(
+            "GET", "/rest/v1/oportunidad_etapas_historial", params=params
+        )
         data = resp.json()
         if not isinstance(data, list) or not data:
             return None
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al obtener historial: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener historial: {row!r}"
+            )
         return row
 
     async def append_note_history(
@@ -1979,7 +2075,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar catálogo: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar catálogo: {data!r}"
+            )
         return data
 
     async def create_catalog_item(
@@ -2020,7 +2118,9 @@ class CRMRepository:
             raise CRMRepositoryError("catalog_item_not_found")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al actualizar catálogo: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al actualizar catálogo: {row!r}"
+            )
         return row
 
     async def delete_catalog_item(
@@ -2040,7 +2140,9 @@ class CRMRepository:
             raise CRMRepositoryError("catalog_item_not_found")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al eliminar catálogo: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al eliminar catálogo: {row!r}"
+            )
         return row
 
     async def soft_delete_catalog_item(
@@ -2062,7 +2164,9 @@ class CRMRepository:
             raise CRMRepositoryError("catalog_item_not_found")
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al archivar catálogo: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al archivar catálogo: {row!r}"
+            )
         return row
 
     async def contactos_resumen(
@@ -2098,7 +2202,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en contactos_timeline: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en contactos_timeline: {data!r}"
+            )
         return data
 
     async def contactos_list(
@@ -2121,7 +2227,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en contactos_list: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en contactos_list: {data!r}"
+            )
         return data
 
     async def inbox_summary(
@@ -2138,7 +2246,9 @@ class CRMRepository:
         data = resp.json()
         if isinstance(data, dict):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_resumen: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_inbox_resumen: {data!r}"
+        )
 
     async def inbox_threads(
         self,
@@ -2165,7 +2275,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_threads: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en panel_inbox_threads: {data!r}"
+            )
         return data
 
     async def inbox_messages(
@@ -2190,7 +2302,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_messages: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en panel_inbox_messages: {data!r}"
+            )
         return data
 
     async def visitas_dashboard_kpis(
@@ -2316,7 +2430,9 @@ class CRMRepository:
         data = resp.json()
         if isinstance(data, dict):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en panel_visitantes_world_paises: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_visitantes_world_paises: {data!r}"
+        )
 
     async def leads_estados(
         self,
@@ -2349,7 +2465,9 @@ class CRMRepository:
         data = resp.json()
         if isinstance(data, dict):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en panel_leads_geo_estados: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_leads_geo_estados: {data!r}"
+        )
 
     async def leads_municipios(
         self,
@@ -2383,7 +2501,9 @@ class CRMRepository:
         data = resp.json()
         if isinstance(data, dict):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en panel_leads_geo_municipios: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_leads_geo_municipios: {data!r}"
+        )
 
     async def analytics_catalog_sales(
         self,
@@ -2414,7 +2534,9 @@ class CRMRepository:
         data = resp.json() or []
         if isinstance(data, list):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en ventas_por_producto_mes: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en ventas_por_producto_mes: {data!r}"
+        )
 
     async def analytics_catalog_pipeline(
         self,
@@ -2439,7 +2561,9 @@ class CRMRepository:
         data = resp.json() or []
         if isinstance(data, list):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en embudo_por_producto: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en embudo_por_producto: {data!r}"
+        )
 
     async def visitas_detalle(
         self,
@@ -2470,7 +2594,9 @@ class CRMRepository:
                 f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}"
             )
         if with_contacts_only:
-            data = [row for row in data if isinstance(row, dict) and row.get("contacto_id")]
+            data = [
+                row for row in data if isinstance(row, dict) and row.get("contacto_id")
+            ]
         return data
 
     async def visitas_detalle_custom(
@@ -2486,7 +2612,9 @@ class CRMRepository:
         data = resp.json() or []
         if isinstance(data, list):
             return data
-        raise CRMRepositoryError(f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en panel_webchat_visitas_detalle: {data!r}"
+        )
 
     async def visitas_whatsapp_total(
         self,
@@ -2524,7 +2652,9 @@ class CRMRepository:
                 pass
         if isinstance(data, (int, float)):
             return int(data)
-        raise CRMRepositoryError(f"Respuesta inesperada en embudo_visitantes_whatsapp: {data!r}")
+        raise CRMRepositoryError(
+            f"Respuesta inesperada en embudo_visitantes_whatsapp: {data!r}"
+        )
 
     async def visitas_whatsapp_conversaciones(
         self,
@@ -2549,7 +2679,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en conversaciones: {data!r}"
+            )
         return data
 
     async def list_agenda_bookings(
@@ -2654,7 +2786,9 @@ class CRMRepository:
         resp = await self._request("GET", "/rest/v1/clientes", params=params)
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar clientes: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar clientes: {data!r}"
+            )
         return data
 
     async def get_cliente_por_oportunidad(
@@ -2957,7 +3091,9 @@ class CRMRepository:
         params = {
             "token": f"eq.{portal_token}",
             "select": (
-                self._PORTAL_TOKEN_SELECT if include_relations else self._PORTAL_TOKEN_MIN_SELECT
+                self._PORTAL_TOKEN_SELECT
+                if include_relations
+                else self._PORTAL_TOKEN_MIN_SELECT
             ),
             "limit": "1",
         }
@@ -3039,7 +3175,9 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar búsquedas: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar búsquedas: {data!r}"
+            )
         total = self._extract_total_count(resp.headers.get("content-range"))
         return data, total
 
@@ -3063,7 +3201,9 @@ class CRMRepository:
             return 0
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al eliminar búsqueda: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al eliminar búsqueda: {data!r}"
+            )
         return len(data)
 
     async def list_prospeccion_resultados(
@@ -3082,7 +3222,9 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar resultados: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar resultados: {data!r}"
+            )
         total = self._extract_total_count(resp.headers.get("content-range"))
         return data, total
 
@@ -3107,7 +3249,9 @@ class CRMRepository:
             return 0
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al eliminar resultados: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al eliminar resultados: {data!r}"
+            )
         return len(data)
 
     async def list_contactables_by_ids(
@@ -3141,7 +3285,9 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar contactables: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar contactables: {data!r}"
+            )
         return data
 
     async def upsert_prospeccion_prospectos(
@@ -3164,7 +3310,9 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inválida al upsert prospectos: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al upsert prospectos: {data!r}"
+            )
         return data
 
     async def create_prospecto_manual(
@@ -3210,7 +3358,9 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar prospectos: {data!r}"
+            )
         return data
 
     async def list_prospectos(
@@ -3272,8 +3422,12 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
-        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar prospectos: {data!r}"
+            )
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(
+            data
+        )
         return data, total
 
     async def update_prospecto(
@@ -3341,7 +3495,9 @@ class CRMRepository:
         )
         data = resp.json() or []
         if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inválida al registrar contactos: {data!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al registrar contactos: {data!r}"
+            )
         return data
 
     async def create_contact_batch(
@@ -3397,7 +3553,9 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_batch_list_invalid:{data!r}")
-        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(
+            data
+        )
         return data, total
 
     async def insert_contact_envios(
@@ -3489,7 +3647,9 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_envio_list_invalid:{data!r}")
-        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(
+            data
+        )
         return data, total
 
     async def update_contact_envio(
@@ -3750,7 +3910,9 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_get_envio_invalid:{row!r}")
         return row
 
-    async def worker_insert_contact_logs(self, entries: Sequence[dict[str, Any]]) -> None:
+    async def worker_insert_contact_logs(
+        self, entries: Sequence[dict[str, Any]]
+    ) -> None:
         """Inserta registros en la bitácora usando service role."""
 
         if not entries:
@@ -3817,7 +3979,9 @@ class CRMRepository:
             return None
         row = data[0]
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"Respuesta inválida al obtener template de correo: {row!r}")
+            raise CRMRepositoryError(
+                f"Respuesta inválida al obtener template de correo: {row!r}"
+            )
         return row
 
     async def upsert_email_template(
@@ -3836,7 +4000,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("Supabase no devolvió el template de correo actualizado")
+            raise CRMRepositoryError(
+                "Supabase no devolvió el template de correo actualizado"
+            )
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(
@@ -3884,7 +4050,9 @@ class CRMRepository:
         )
         data = resp.json()
         if not isinstance(data, list) or not data:
-            raise CRMRepositoryError("Supabase no devolvió el template de cotización actualizado")
+            raise CRMRepositoryError(
+                "Supabase no devolvió el template de cotización actualizado"
+            )
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(
@@ -4000,7 +4168,9 @@ class CRMRepository:
             headers["Prefer"] = prefer
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, params=params, json=json, headers=headers)
+                resp = await client.request(
+                    method, url, params=params, json=json, headers=headers
+                )
         except httpx.RequestError as exc:  # pragma: no cover - red de terceros
             raise CRMRepositoryError(f"Error de red al llamar Supabase: {exc}") from exc
         if resp.status_code >= 400:
@@ -4068,7 +4238,9 @@ class CRMRepository:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, json=payload, headers=headers)
         except httpx.RequestError as exc:
-            raise CRMRepositoryError(f"Error de red al invocar RPC {function_name}: {exc}") from exc
+            raise CRMRepositoryError(
+                f"Error de red al invocar RPC {function_name}: {exc}"
+            ) from exc
         if resp.status_code >= 400:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} en RPC {function_name}: {resp.text}"
@@ -4078,7 +4250,9 @@ class CRMRepository:
         try:
             return resp.json()
         except ValueError as exc:
-            raise CRMRepositoryError(f"Respuesta inválida de RPC {function_name}: {exc}") from exc
+            raise CRMRepositoryError(
+                f"Respuesta inválida de RPC {function_name}: {exc}"
+            ) from exc
 
     async def _request_with_user(
         self,
@@ -4102,9 +4276,13 @@ class CRMRepository:
             headers["Prefer"] = prefer
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, params=params, json=json, headers=headers)
+                resp = await client.request(
+                    method, url, params=params, json=json, headers=headers
+                )
         except httpx.RequestError as exc:
-            raise CRMRepositoryError(f"Error de red al llamar Supabase (user): {exc}") from exc
+            raise CRMRepositoryError(
+                f"Error de red al llamar Supabase (user): {exc}"
+            ) from exc
         if resp.status_code >= 400:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"
