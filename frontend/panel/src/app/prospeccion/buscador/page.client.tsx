@@ -1,6 +1,6 @@
 "use client"
 
-import { type ChangeEvent, type FormEvent, useMemo, useState } from "react"
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
@@ -32,7 +32,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  ejecutarBuscador,
+  crearBuscadorJob,
+  obtenerBuscadorJob,
+  obtenerBuscadorResultados,
+  type BuscadorJob,
   type BuscadorResult,
   type BuscadorRunPayload,
   type BuscadorStats,
@@ -79,6 +82,9 @@ function BuscadorView() {
   const [stats, setStats] = useState<BuscadorStats | null>(null)
   const [durationMs, setDurationMs] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [jobInfo, setJobInfo] = useState<BuscadorJob | null>(null)
+  const [isPolling, setIsPolling] = useState(false)
+  const [lastResultsJobId, setLastResultsJobId] = useState<string | null>(null)
 
   const canDownload = results.length > 0
 
@@ -138,14 +144,16 @@ function BuscadorView() {
     event.preventDefault()
     setIsRunning(true)
     setErrorMessage(null)
+    setResults([])
+    setStats(null)
+    setDurationMs(null)
 
     try {
       const payload = buildPayload()
-      const response = await ejecutarBuscador(payload)
-      setResults(response.results)
-      setStats(response.stats)
-      setDurationMs(response.duration_ms)
-      toast.success(`Búsqueda completada con ${response.total} resultados.`)
+      const job = await crearBuscadorJob(payload)
+      setJobInfo(job)
+      setLastResultsJobId(null)
+      toast.success("Búsqueda programada. Te avisaremos cuando termine.")
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo ejecutar el buscador."
       setErrorMessage(message)
@@ -155,12 +163,80 @@ function BuscadorView() {
     }
   }
 
+  useEffect(() => {
+    if (!jobInfo) {
+      setIsPolling(false)
+      return
+    }
+
+    if (jobInfo.status === "failed") {
+      setIsPolling(false)
+      return
+    }
+
+    if (jobInfo.status === "completed") {
+      setIsPolling(false)
+      if (lastResultsJobId === jobInfo.id) {
+        return
+      }
+      ;(async () => {
+        try {
+          const data = await obtenerBuscadorResultados(jobInfo.id)
+          setResults(data.items)
+          setStats(data.stats ?? jobInfo.stats ?? null)
+          setDurationMs(jobInfo.duration_ms ?? null)
+          setLastResultsJobId(jobInfo.id)
+          toast.success(`Búsqueda completada con ${data.total} resultados.`)
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "No se pudo obtener los resultados del buscador."
+          setErrorMessage(message)
+          toast.error(message)
+        }
+      })()
+      return
+    }
+
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    setIsPolling(true)
+
+    const poll = async () => {
+      if (cancelled || !jobInfo) return
+      try {
+        const updated = await obtenerBuscadorJob(jobInfo.id)
+        if (cancelled) return
+        setJobInfo(updated)
+      } catch (error) {
+        if (cancelled) return
+        const message = error instanceof Error ? error.message : "No se pudo actualizar el estado del buscador."
+        setErrorMessage(message)
+        toast.error(message)
+      }
+
+      if (!cancelled) {
+        timeoutId = setTimeout(poll, 5000)
+      }
+    }
+
+    poll()
+
+    return () => {
+      cancelled = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [jobInfo, lastResultsJobId])
+
   const handleReset = () => {
     setFormValues(DEFAULT_FORM_STATE)
     setResults([])
     setStats(null)
     setDurationMs(null)
     setErrorMessage(null)
+    setJobInfo(null)
+    setLastResultsJobId(null)
   }
 
   const handleDownloadJson = () => {
@@ -300,8 +376,8 @@ function BuscadorView() {
             )}
 
             <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={isRunning}>
-                {isRunning ? "Buscando..." : "Ejecutar buscador"}
+              <Button type="submit" disabled={isRunning || isPolling}>
+                {isRunning ? "Programando..." : "Ejecutar buscador"}
               </Button>
               <Button type="button" variant="outline" onClick={handleReset} disabled={isRunning}>
                 Reiniciar formulario
@@ -310,6 +386,34 @@ function BuscadorView() {
           </form>
         </CardContent>
       </Card>
+
+      {jobInfo && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Estado del job</CardTitle>
+            <CardDescription>ID: {jobInfo.id}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm">
+              Estado actual:{" "}
+              <span className="font-medium capitalize">{jobInfo.status}</span>
+              {(jobInfo.status === "pending" || jobInfo.status === "running") && " (procesando)"}
+            </p>
+            {jobInfo.status === "failed" && jobInfo.error && (
+              <p className="text-sm text-destructive">Error: {jobInfo.error}</p>
+            )}
+            {jobInfo.started_at && (
+              <p className="text-xs text-muted-foreground">
+                Inicio: {new Date(jobInfo.started_at).toLocaleString()}
+                {jobInfo.finished_at ? ` · Fin: ${new Date(jobInfo.finished_at).toLocaleString()}` : ""}
+              </p>
+            )}
+            {isPolling && (
+              <p className="text-xs text-muted-foreground">Consultando estado…</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {stats && (
         <Card>

@@ -38,12 +38,37 @@ export type BuscadorStats = {
   top_source_hosts: BuscadorTopSource[]
 }
 
-export type BuscadorRunResponse = {
-  ok: boolean
+export type BuscadorJobStatus = "pending" | "running" | "completed" | "failed"
+
+export type BuscadorJobParams = {
+  sitio: "demo" | "simple" | "domain"
+  url?: string | null
+  mode: "generic" | "government" | "intelligent" | "auto"
+  max_pages: number
+  max_depth: number
+  max_runtime?: number | null
+  max_queue_size?: number | null
+  max_no_new_emails?: number | null
+  max_memory_mb?: number | null
+}
+
+export type BuscadorJob = {
+  id: string
+  status: BuscadorJobStatus
+  created_at: string
+  started_at?: string | null
+  finished_at?: string | null
+  duration_ms?: number | null
+  total?: number | null
+  stats?: BuscadorStats | null
+  error?: string | null
+  params: BuscadorJobParams
+}
+
+export type BuscadorJobResults = {
+  items: BuscadorResult[]
   total: number
-  duration_ms: number
-  stats: BuscadorStats
-  results: BuscadorResult[]
+  stats?: BuscadorStats | null
 }
 
 function extractErrorMessage(data: unknown): string | null {
@@ -59,15 +84,15 @@ function extractErrorMessage(data: unknown): string | null {
   return null
 }
 
-export async function ejecutarBuscador(payload: BuscadorRunPayload): Promise<BuscadorRunResponse> {
-  const response = await fetch("/api/prospeccion/buscador/run", {
-    method: "POST",
+async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
     },
     cache: "no-store",
-    body: JSON.stringify(payload),
   })
 
   const rawText = await response.text()
@@ -87,5 +112,20 @@ export async function ejecutarBuscador(payload: BuscadorRunPayload): Promise<Bus
     throw new Error(message)
   }
 
-  return data as BuscadorRunResponse
+  return data as T
+}
+
+export async function crearBuscadorJob(payload: BuscadorRunPayload): Promise<BuscadorJob> {
+  return requestJson<BuscadorJob>("/api/prospeccion/buscador/run", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function obtenerBuscadorJob(jobId: string): Promise<BuscadorJob> {
+  return requestJson<BuscadorJob>(`/api/prospeccion/buscador/jobs/${jobId}`)
+}
+
+export async function obtenerBuscadorResultados(jobId: string): Promise<BuscadorJobResults> {
+  return requestJson<BuscadorJobResults>(`/api/prospeccion/buscador/jobs/${jobId}/results`)
 }

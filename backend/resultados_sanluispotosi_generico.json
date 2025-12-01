@@ -36,6 +36,15 @@
     "address": "de Desarrollo Económico"
   },
   {
+    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoProveedoresSLP/SIA181015FV1",
+    "email": "luis.sosa@2sindustrial.com",
+    "name": "MELCHOR OCAMPO #1366 71 TEQUISQUIAPAN C.P. 78250",
+    "position": "alternate_email",
+    "phone": "1366 71",
+    "extension": null,
+    "address": null
+  },
+  {
     "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoProveedoresSLP/AEM870319TJ8",
     "email": "patricia.sanchez@aislantesyempaques.com",
     "name": "CUBILETE #1316 B PARQUE FUNDIDORES C.P. 78395",
@@ -234,6 +243,42 @@
     "address": "RIO LERMA #110 ARROYOS CP78426"
   },
   {
+    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/CSM160128QX1",
+    "email": "ventas2@carsomex.com",
+    "name": "Industria aeronáutica",
+    "position": "BERRIOZÁBAL #406 SOLEDAD DE GRACIANO SANCHEZ CP78430",
+    "phone": "4441184896",
+    "extension": null,
+    "address": "BERRIOZÁBAL #406 SOLEDAD DE GRACIANO SANCHEZ CP78430"
+  },
+  {
+    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/CTP230323TX8",
+    "email": "echavez@ctpslp.com.mx",
+    "name": "Industria automotriz",
+    "position": "AV INDUSTRIAS #1750 14A JARDINES DEL SUR CP78399",
+    "phone": "4448496638",
+    "extension": null,
+    "address": "AV INDUSTRIAS #1750 14A JARDINES DEL SUR CP78399"
+  },
+  {
+    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/DIMC630714IZ9",
+    "email": "serincoadmn@gmail.com",
+    "name": null,
+    "position": "FRANCISCO DE URDIÑOLA #100 COL. DEL VALLE CP78200",
+    "phone": "4446578084",
+    "extension": null,
+    "address": "FRANCISCO DE URDIÑOLA #100 COL. DEL VALLE CP78200"
+  },
+  {
+    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/DIU171207NF8",
+    "email": "urbano.slp@gmail.com",
+    "name": null,
+    "position": "CORDILLERA REY LEPOLDO #100 N/A LOMAS 3ERA SECCION CP78216",
+    "phone": "4441939111",
+    "extension": null,
+    "address": "CORDILLERA REY LEPOLDO #100 N/A LOMAS 3ERA SECCION CP78216"
+  },
+  {
     "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/EBI241203PQ3",
     "email": "dcordova@biwo.mx",
     "name": null,
@@ -378,15 +423,6 @@
     "address": "VICENTE SUÁREZ #205 5 COL. NIÑOS HÉROES CP78340"
   },
   {
-    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/IME1401271T5",
-    "email": "miguelangel@soaddi.com",
-    "name": "Desarrollo de proyectos cientioficos y tecnológicos",
-    "position": "JESUS GOYTORTUA #160 3ER PISO TANGAMANGA CP78269",
-    "phone": "4441172391",
-    "extension": null,
-    "address": "JESUS GOYTORTUA #160 3ER PISO TANGAMANGA CP78269"
-  },
-  {
     "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/IME180710SQ2",
     "email": "atencionaclientes@imec-slp.com.mx",
     "name": null,
@@ -529,15 +565,6 @@
     "phone": "4448291058",
     "extension": null,
     "address": "JUAN ANTONIO BERNARDO DE QUIROZ #155 ABASTOS CP78395"
-  },
-  {
-    "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/SIA181015FV1",
-    "email": "luis.sosa@2sindustrial.com",
-    "name": null,
-    "position": "MELCHOR OCAMPO #1366 71 TEQUISQUIAPAN CP78250",
-    "phone": "4441198693",
-    "extension": null,
-    "address": "MELCHOR OCAMPO #1366 71 TEQUISQUIAPAN CP78250"
   },
   {
     "source_url": "https://sitio.sanluis.gob.mx/DesarrolloDeProveedores/CatalogoFeria/SII150821UN6",

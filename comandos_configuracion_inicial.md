@@ -179,11 +179,11 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
 
 poetry run python ../buscador/main.py \
     --sitio=domain \
-    --url="https://sitio.sanluis.gob.mx/SanLuisPotoSi/" \
+    --url="https://www.andresycia.com" \
     --mode=generic \
     --max-pages=2000 \
     --max-depth=50 \
-    --output="resultados_sanluispotosi_generico.json"
+    --output="resultados_andres_generico.json"
 
 # ME GUSTO ESTO:
 

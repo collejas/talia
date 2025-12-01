@@ -27,7 +27,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
@@ -52,13 +52,8 @@ from app.services import (
 )
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
-from app.services.buscador_runner import (
-    BuscadorParams,
-    BuscadorRunnerError,
-)
-from app.services.buscador_runner import (
-    run_buscador as run_buscador_service,
-)
+from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER, BuscadorJob
+from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
@@ -8093,17 +8088,42 @@ class BuscadorRunPayload(BaseModel):
         return self
 
 
-class BuscadorRunResponse(BaseModel):
-    ok: bool = True
-    total: int
-    duration_ms: int
-    stats: BuscadorStats
-    results: list[BuscadorResultItem]
+class BuscadorJobParamsResponse(BaseModel):
+    sitio: Literal["demo", "simple", "domain"]
+    url: HttpUrl | None = None
+    mode: Literal["generic", "government", "intelligent", "auto"]
+    max_pages: int
+    max_depth: int
+    max_runtime: int | None = None
+    max_queue_size: int | None = None
+    max_no_new_emails: int | None = None
+    max_memory_mb: int | None = None
 
 
-@router.post("/prospeccion/buscador/run", response_model=BuscadorRunResponse)
-async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorRunResponse:
-    """Ejecuta el motor Buscador y regresa los resultados crudos."""
+class BuscadorJobResponse(BaseModel):
+    id: UUID
+    status: Literal["pending", "running", "completed", "failed"]
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    duration_ms: int | None = None
+    total: int | None = None
+    stats: BuscadorStats | None = None
+    error: str | None = None
+    params: BuscadorJobParamsResponse
+
+
+class BuscadorJobsListResponse(BaseModel):
+    items: list[BuscadorJobResponse]
+
+
+@router.post(
+    "/prospeccion/buscador/run",
+    response_model=BuscadorJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorJobResponse:
+    """Agenda la ejecución del Buscador y devuelve el identificador del job."""
 
     params = BuscadorParams(
         sitio=payload.sitio,
@@ -8117,18 +8137,57 @@ async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorRunRe
         max_memory_mb=payload.max_memory_mb,
     )
 
-    try:
-        result = await run_buscador_service(params)
-    except BuscadorRunnerError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    job = BUSCADOR_JOB_MANAGER.schedule_job(params)
+    return _job_to_response(job)
 
-    stats = BuscadorStats(**result.stats)
-    items = [BuscadorResultItem(**item) for item in result.results]
-    return BuscadorRunResponse(
-        total=len(items),
-        duration_ms=result.duration_ms,
-        stats=stats,
-        results=items,
+
+@router.get(
+    "/prospeccion/buscador/jobs",
+    response_model=BuscadorJobsListResponse,
+)
+async def prospeccion_buscador_jobs(
+    limit: int = Query(20, ge=1, le=200),
+) -> BuscadorJobsListResponse:
+    jobs = BUSCADOR_JOB_MANAGER.list_jobs(limit)
+    return BuscadorJobsListResponse(items=[_job_to_response(job) for job in jobs])
+
+
+@router.get(
+    "/prospeccion/buscador/jobs/{job_id}",
+    response_model=BuscadorJobResponse,
+)
+async def prospeccion_buscador_job_detail(job_id: UUID) -> BuscadorJobResponse:
+    job = BUSCADOR_JOB_MANAGER.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Buscador job no encontrado"
+        )
+    return _job_to_response(job)
+
+
+@router.get("/prospeccion/buscador/jobs/{job_id}/results")
+async def prospeccion_buscador_job_results(job_id: UUID) -> JSONResponse:
+    job = BUSCADOR_JOB_MANAGER.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Buscador job no encontrado"
+        )
+    if job.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El job aún no ha finalizado",
+        )
+    results = BUSCADOR_JOB_MANAGER.read_results(job)
+    if results is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resultados no disponibles"
+        )
+    return JSONResponse(
+        {
+            "items": results,
+            "total": job.total or len(results),
+            "stats": job.stats,
+        }
     )
 
 
@@ -8136,6 +8195,33 @@ def _ensure_dict(value: Any, default: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return dict(default)
+
+
+def _job_to_response(job: BuscadorJob) -> BuscadorJobResponse:
+    stats = BuscadorStats(**job.stats) if job.stats else None
+    params = BuscadorJobParamsResponse(
+        sitio=job.params.sitio,
+        url=job.params.url,  # type: ignore[arg-type]
+        mode=job.params.mode,
+        max_pages=job.params.max_pages,
+        max_depth=job.params.max_depth,
+        max_runtime=job.params.max_runtime,
+        max_queue_size=job.params.max_queue_size,
+        max_no_new_emails=job.params.max_no_new_emails,
+        max_memory_mb=job.params.max_memory_mb,
+    )
+    return BuscadorJobResponse(
+        id=job.id,
+        status=job.status,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        duration_ms=job.duration_ms,
+        total=job.total,
+        stats=stats,
+        error=job.error,
+        params=params,
+    )
 
 
 def _is_manual_card(metadata: dict[str, Any] | None) -> bool:
