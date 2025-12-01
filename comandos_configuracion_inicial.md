@@ -70,7 +70,8 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
-callSupabaseRpc
+npm install -g npm@11.6.4
+
 codex resume 019ac673-2dad-7cc2-849c-2510e7756c6a
 
 codex resume 019ac646-8059-76b0-b150-193d1e0f176b

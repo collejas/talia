@@ -28,7 +28,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
@@ -52,6 +52,13 @@ from app.services import (
 )
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
+from app.services.buscador_runner import (
+    BuscadorParams,
+    BuscadorRunnerError,
+)
+from app.services.buscador_runner import (
+    run_buscador as run_buscador_service,
+)
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
@@ -8032,6 +8039,96 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         actualizado_en=actualizado_en,
         etiquetas=etiquetas,
         metadata=metadata,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prospección · Buscador web
+# ---------------------------------------------------------------------------
+
+
+class BuscadorTopDomain(BaseModel):
+    domain: str
+    count: int
+
+
+class BuscadorTopSource(BaseModel):
+    host: str
+    count: int
+
+
+class BuscadorStats(BaseModel):
+    emails_total: int
+    unique_email_domains: int
+    unique_source_hosts: int
+    top_email_domains: list[BuscadorTopDomain] = Field(default_factory=list)
+    top_source_hosts: list[BuscadorTopSource] = Field(default_factory=list)
+
+
+class BuscadorResultItem(BaseModel):
+    source_url: str
+    email: str
+    name: str | None = None
+    position: str | None = None
+    phone: str | None = None
+    extension: str | None = None
+    address: str | None = None
+
+
+class BuscadorRunPayload(BaseModel):
+    sitio: Literal["demo", "simple", "domain"] = "domain"
+    url: HttpUrl | None = None
+    mode: Literal["generic", "government", "intelligent", "auto"] = "generic"
+    max_pages: int = Field(default=200, ge=1, le=5000)
+    max_depth: int = Field(default=3, ge=1, le=50)
+    max_runtime: int | None = Field(default=None, ge=10, le=7200)
+    max_queue_size: int | None = Field(default=None, ge=10, le=20000)
+    max_no_new_emails: int | None = Field(default=None, ge=1, le=1000)
+    max_memory_mb: int | None = Field(default=None, ge=64, le=8192)
+
+    @model_validator(mode="after")
+    def validate_url(self) -> BuscadorRunPayload:
+        if self.sitio in {"simple", "domain"} and not self.url:
+            raise ValueError("Debes proporcionar una URL para este tipo de scraper.")
+        return self
+
+
+class BuscadorRunResponse(BaseModel):
+    ok: bool = True
+    total: int
+    duration_ms: int
+    stats: BuscadorStats
+    results: list[BuscadorResultItem]
+
+
+@router.post("/prospeccion/buscador/run", response_model=BuscadorRunResponse)
+async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorRunResponse:
+    """Ejecuta el motor Buscador y regresa los resultados crudos."""
+
+    params = BuscadorParams(
+        sitio=payload.sitio,
+        url=str(payload.url) if payload.url else None,
+        mode=payload.mode,
+        max_pages=payload.max_pages,
+        max_depth=payload.max_depth,
+        max_runtime=payload.max_runtime,
+        max_queue_size=payload.max_queue_size,
+        max_no_new_emails=payload.max_no_new_emails,
+        max_memory_mb=payload.max_memory_mb,
+    )
+
+    try:
+        result = await run_buscador_service(params)
+    except BuscadorRunnerError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    stats = BuscadorStats(**result.stats)
+    items = [BuscadorResultItem(**item) for item in result.results]
+    return BuscadorRunResponse(
+        total=len(items),
+        duration_ms=result.duration_ms,
+        stats=stats,
+        results=items,
     )
 
 
