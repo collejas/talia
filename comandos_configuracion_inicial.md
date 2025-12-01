@@ -175,6 +175,15 @@ sudo grep "Googlebot" /var/log/nginx/access.log | tail
 
 
 
+# Ejectutar buscador:
+
+poetry run python ../buscador/main.py \
+    --sitio=domain \
+    --url="https://sitio.sanluis.gob.mx/SanLuisPotoSi/" \
+    --mode=generic \
+    --max-pages=2000 \
+    --max-depth=50 \
+    --output="resultados_sanluispotosi_generico.json"
 
 # ME GUSTO ESTO:
 
