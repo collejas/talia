@@ -194,7 +194,7 @@ poetry run python ../buscador/main.py \
 
 
 # ALGO QUE HAY QUE HACER 
-  Pasos opcionales a considerar:
+  Pasos opcionales a considerar:    
 
 
   2. Hacer una prueba end-to-end real desde https://talia.mx/inbox para confirmar que, tras el envío, la etiqueta siguiente_accion en
@@ -578,4 +578,78 @@ supabase/migrations/20251128_162500_quote_template_order.sql
 Pero lo unico ue me falto es que la seccion de 'Propuesta económica' muestre en su tabla esta otra columna: 'Precio unitario' para que entonces la tabla quede asi: (Concepto, Unidad, Precio unitario, Cantidad, Importe) el precio unitario es el que el usaurio pone en el campo que esta debajo cuando esta en la vista de enviar cotizacion, me ayudas???
 
 
-Tengo este problema: En mi vista de embudo, veo duplicados las etapas y las tarjetas de oportunidades se colocan un unas y en otras etapas de manera aleatoria sin sentido esto fue después de realizar estos planes: docs/plan realizado para extender propspeccion.md, docs/plan_envios_prospeccion.md y docs/plan_prospectos_manual.md, puse una copia actualizada de mi base de datos en esta carpeta: backups/postgres_20251128_174004, revisarla así como el backend para que me ayudes a resolver el problema, debemos solo tener un juego unico de etapas y que no se repitan, y que el movimiento automático da cada oportunidad se haga de manera correcta
+Tengo este problema: En mi vista de embudo, veo duplicados las etapas y las tarjetas de oportunidades se colocan un unas y en otras etapas de manera aleatoria sin sentido esto fue después de realizar estos planes: (docs/plan realizado para extender propspeccion.md), (docs/plan_envios_prospeccion.md) y (docs/plan_prospectos_manual.md), puse una copia actualizada de mi base de datos en esta carpeta: backups/postgres_20251128_174004, revisarla así como el backend para que me ayudes a resolver este problema: En mi vista de 'inbox' tengo un boton llamdao 'Pausar asistente' lo que hace esto es que el usaurio puede pausar al asitente de IA y entrar en la conversacion con el cliente, pero no esta funcionando, me sale esto en consola: XHRGET
+https://talia.mx/api/inbox/threads?limit=25&message_limit=20
+[HTTP/2 200  282ms]
+
+XHRPOST
+https://talia.mx/api/inbox/4a4cb26e-67ae-4c92-8c8f-ac541ff5c68d/manual
+[HTTP/2 400  123ms]
+
+	
+POST
+	https://talia.mx/api/inbox/4a4cb26e-67ae-4c92-8c8f-ac541ff5c68d/manual
+Estado
+400
+VersiónHTTP/2
+Transferido255 B (tamaño 33 B)
+Política de referenciastrict-origin-when-cross-origin
+Prioridad de la solicitudHighest
+Resolución DNSSistema
+
+	
+content-type
+	application/json
+date
+	Tue, 02 Dec 2025 16:58:54 GMT
+server
+	nginx/1.24.0 (Ubuntu)
+vary
+	rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+X-Firefox-Spdy
+	h2
+	
+Accept
+	*/*
+Accept-Encoding
+	gzip, deflate, br, zstd
+Accept-Language
+	es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3
+Connection
+	keep-alive
+Content-Length
+	15
+Content-Type
+	application/json
+Cookie
+	sidebar_state=true; talia.access_token=eyJhbGciOiJIUzI1NiIsImtpZCI6IlAxcXFsOXVXc3p1RHAyalIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3FuaW15YW10Y3piYndtbHJsZWpjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJiNmNjNjM4NS0zNzQxLTQ3NDItYWU4My1iY2IwZDk5YmM1YzUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY0Njk1OTUzLCJpYXQiOjE3NjQ2OTIzNTMsImVtYWlsIjoiYWRtaW5pc3RyYWNpb25AZ2VvYWN0aXYubXgiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkpvcmdlIFRvcnJlIENvbGxlamFzIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NjQ2OTIzNTN9XSwic2Vzc2lvbl9pZCI6IjFhZGY1ZjQzLTJhMmYtNDNlMC1hMjIxLWJiNWYyNmZmMWYxOCIsImlzX2Fub255bW91cyI6ZmFsc2V9.mwopBv_7REtz-mdOIOZXDAOeZ2KlGDTCk5DK1Bc8-LE; talia.refresh_token=sech4chc6m46; talia.remember=0
+Host
+	talia.mx
+Origin
+	https://talia.mx
+Priority
+	u=0
+Referer
+	https://talia.mx/inbox
+Sec-Fetch-Dest
+	empty
+Sec-Fetch-Mode
+	cors
+Sec-Fetch-Site
+	same-origin
+TE
+	trailers
+User-Agent
+	Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0
+XHRGET
+https://talia.mx/api/inbox/4a4cb26e-67ae-4c92-8c8f-ac541ff5c68d/messages?limit=100
+[HTTP/2 200  242ms]
+
+XHRGET
+https://talia.mx/api/inbox/threads?limit=25&message_limit=20
+[HTTP/2 200  269ms]
+
+
+
+
+ , debemos solo tener un juego unico de etapas y que no se repitan, y que el movimiento automático da cada oportunidad se haga de manera correcta

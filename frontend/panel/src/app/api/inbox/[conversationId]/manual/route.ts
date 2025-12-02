@@ -1,23 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-type ManualRequestBody = {
-  manual?: unknown;
-};
-
-type RouteContext = {
-  params?: {
-    conversationId?: string;
-  };
-};
-
-function parseBody(raw: string): ManualRequestBody {
+function parseBody(raw: string): { manual?: unknown } {
   if (!raw) return {};
   try {
     const data = JSON.parse(raw);
     if (data && typeof data === "object") {
-      return data as ManualRequestBody;
+      return data as { manual?: unknown };
     }
     return {};
   } catch {
@@ -25,10 +15,42 @@ function parseBody(raw: string): ManualRequestBody {
   }
 }
 
-export async function POST(request: Request, context: unknown) {
-  const routeContext = (context as RouteContext | null) ?? {};
-  const conversationId = routeContext.params?.conversationId?.trim();
+async function resolveConversationId(
+  request: NextRequest,
+  context: { params: Promise<{ conversationId: string }> },
+): Promise<string | null> {
+  if (context?.params) {
+    try {
+      const params = await context.params;
+      const value = params?.conversationId;
+      if (typeof value === "string" && value.trim().length) {
+        return value.trim();
+      }
+    } catch {
+      // fall back to parsing URL
+    }
+  }
+  try {
+    const url = new URL(request.url);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const manualIndex = segments.lastIndexOf("manual");
+    if (manualIndex > 0) {
+      const candidate = segments[manualIndex - 1];
+      if (candidate && candidate.length > 20) {
+        return candidate;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ conversationId: string }> },
+) {
+  const conversationId = await resolveConversationId(request, context);
   if (!conversationId) {
     return NextResponse.json({ error: "conversation_required" }, { status: 400 });
   }

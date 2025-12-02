@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { callCrmApi } from "@/lib/api/crm";
 import { fetchLatestMessages } from "@/lib/inbox/messages-server";
@@ -18,12 +18,6 @@ type ReplyRequestBody = {
   metadata?: Record<string, unknown> | null;
   clientMessageId?: string | null;
   attachments?: ReplyRequestAttachment[];
-};
-
-type RouteContext = {
-  params?: {
-    conversationId?: string;
-  };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -84,9 +78,43 @@ function parseBody(raw: string): ReplyRequestBody {
   }
 }
 
-export async function POST(request: Request, context: unknown) {
-  const routeContext = (context as RouteContext | null) ?? {};
-  const conversationId = routeContext.params?.conversationId?.trim();
+type RouteContext = {
+  params: Promise<{ conversationId: string }>;
+};
+
+async function resolveConversationId(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<string | null> {
+  if (context.params) {
+    try {
+      const params = await context.params;
+      const value = params?.conversationId;
+      if (typeof value === "string" && value.trim().length) {
+        return value.trim();
+      }
+    } catch {
+      // fallback below
+    }
+  }
+  try {
+    const url = new URL(request.url);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const replyIndex = segments.lastIndexOf("reply");
+    if (replyIndex > 0) {
+      const candidate = segments[replyIndex - 1];
+      if (candidate && candidate.length > 20) {
+        return candidate;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
+  const conversationId = await resolveConversationId(request, context);
   if (!conversationId) {
     return NextResponse.json({ error: "conversation_required" }, { status: 400 });
   }

@@ -1335,6 +1335,7 @@ class CRMRepository:
             "POST",
             "/rest/v1/conversaciones_insights",
             json=payload,
+            params={"on_conflict": "conversacion_id"},
             prefer="resolution=merge-duplicates",
         )
 
@@ -1384,13 +1385,37 @@ class CRMRepository:
         conversation_key = conversation_id.strip()
         if not conversation_key:
             raise CRMRepositoryError("conversation_id_required")
-        payload = {"conversacion_id": conversation_key, "manual_override": manual}
-        await self._request(
-            "POST",
+        update_params = {"conversacion_id": f"eq.{conversation_key}"}
+        update_payload = {"manual_override": manual}
+        resp = await self._request(
+            "PATCH",
             "/rest/v1/conversaciones_controles",
-            json=payload,
-            prefer="return=representation,resolution=merge-duplicates",
+            params=update_params,
+            json=update_payload,
+            prefer="return=representation",
         )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            return
+        insert_payload = {"conversacion_id": conversation_key, "manual_override": manual}
+        try:
+            await self._request(
+                "POST",
+                "/rest/v1/conversaciones_controles",
+                json=insert_payload,
+                prefer="return=representation",
+            )
+        except CRMRepositoryError as exc:
+            message = str(exc).lower()
+            if "duplicate key" not in message and "duplic" not in message:
+                raise
+            await self._request(
+                "PATCH",
+                "/rest/v1/conversaciones_controles",
+                params=update_params,
+                json=update_payload,
+                prefer="return=representation",
+            )
 
     async def fetch_recent_messages(
         self, *, conversation_id: str, limit: int = 8

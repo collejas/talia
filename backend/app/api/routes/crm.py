@@ -8232,17 +8232,73 @@ def _is_manual_card(metadata: dict[str, Any] | None) -> bool:
 
 
 def _tablero_id_from_metadata(metadata: dict[str, Any] | None) -> str | None:
-    """Extrae un tablero_id válido desde un diccionario de metadatos."""
+    """Extrae un identificador de tablero consistente (UUID o slug normalizado)."""
 
     if not metadata:
         return None
-    value = metadata.get("tablero_id")
-    candidate = _safe_uuid(value) if value is not None else None
+    id_keys = (
+        "tablero_id",
+        "tableroId",
+        "legacy_tablero_id",
+        "legacy_tableroId",
+        "pipeline_id",
+        "pipelineId",
+        "board_id",
+        "boardId",
+    )
+    slug_keys = (
+        "tablero_slug",
+        "tableroSlug",
+        "tablero",
+        "tablero_nombre",
+        "tableroNombre",
+        "pipeline_slug",
+        "pipelineSlug",
+        "pipeline",
+        "board_slug",
+        "boardSlug",
+    )
+    for key in id_keys:
+        candidate = _normalize_tablero_value(metadata.get(key))
+        if candidate:
+            return candidate
+    for key in slug_keys:
+        candidate = _normalize_tablero_value(metadata.get(key))
+        if candidate:
+            return candidate
+    return None
+
+
+def _normalize_tablero_value(raw: Any) -> str | None:
+    """Convierte distintos formatos (UUID, dict, slug) en un identificador estable."""
+
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        candidate = _normalize_tablero_value(raw.get("id"))
+        if candidate:
+            return candidate
+        return _normalize_tablero_slug(raw.get("slug") or raw.get("nombre"))
+    candidate = _safe_uuid(raw) if not isinstance(raw, dict) else None
     if candidate:
         return str(candidate)
-    if isinstance(value, str) and value.strip():
-        return value
+    if isinstance(raw, str):
+        return _normalize_tablero_slug(raw)
     return None
+
+
+def _normalize_tablero_slug(raw: Any) -> str | None:
+    """Normaliza etiquetas o slugs para usarlos como pseudo ID cuando no hay UUID."""
+
+    if not isinstance(raw, str):
+        return None
+    trimmed = raw.strip()
+    if not trimmed:
+        return None
+    lowered = trimmed.lower()
+    if lowered.startswith("slug:"):
+        lowered = lowered[5:]
+    return f"slug:{lowered}"
 
 
 def _tablero_id_from_row(row: dict[str, Any]) -> str | None:
