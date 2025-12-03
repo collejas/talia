@@ -285,6 +285,14 @@ class Settings(BaseSettings):
             "TALIA_MAIL_USE_SSL",
         ),
     )
+    mail_from_name: str | None = Field(
+        default=None,
+        description="Nombre descriptivo que aparecerá como remitente en los correos salientes.",
+        validation_alias=AliasChoices(
+            "MAIL_FROM_NAME",
+            "TALIA_MAIL_FROM_NAME",
+        ),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 

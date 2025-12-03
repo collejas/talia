@@ -5,7 +5,7 @@ from __future__ import annotations
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import make_msgid
+from email.utils import formataddr, make_msgid
 from typing import Iterable, Sequence
 
 from app.core.config import settings
@@ -57,7 +57,11 @@ def send_email(
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = username
+    display_name = (settings.mail_from_name or "").strip()
+    if display_name:
+        message["From"] = formataddr((display_name, username))
+    else:
+        message["From"] = username
     message["To"] = ", ".join(to_recipients)
     msg_id = make_msgid()
     message["Message-ID"] = msg_id

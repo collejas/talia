@@ -354,7 +354,7 @@ async def _send_booking_confirmation_email(
     time_label = start_local.strftime("%H:%M")
 
     contact_name = contact.get("nombre_completo")
-    greeting = f"Hola {contact_name}," if contact_name else "Hola,"
+    greeting = f"Geoactiv - Tal-IA {contact_name}," if contact_name else "Hola,"
     end_label = end_local.strftime("%H:%M")
 
     body_lines = [
