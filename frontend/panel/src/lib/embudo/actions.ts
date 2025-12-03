@@ -415,6 +415,20 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadActionResult> {
   const contactoPayload = isRecord(input.contacto) ? removeUndefined({ ...input.contacto }) : {};
   const oportunidadPayload = isRecord(input.oportunidad) ? { ...input.oportunidad } : {};
+  const shouldMergeMetadata = input.mergeMetadata !== false;
+
+  let cachedCardResponse: PipelineCardResponse | null = null;
+  async function loadCurrentCard(): Promise<{ ok: true; data: PipelineCardResponse } | { ok: false; error: string }> {
+    if (cachedCardResponse) {
+      return { ok: true, data: cachedCardResponse };
+    }
+    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+    if (!response.ok) {
+      return { ok: false, error: response.error || "No se encontró la oportunidad solicitada." };
+    }
+    cachedCardResponse = response.data;
+    return { ok: true, data: cachedCardResponse };
+  }
 
   const opportunityPayload: Record<string, unknown> = {};
 
@@ -447,6 +461,23 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     }
   }
 
+  if (shouldMergeMetadata && "metadata" in opportunityPayload) {
+    const metadata = normalizeMetadata(opportunityPayload.metadata as Record<string, unknown>);
+    if (Object.keys(metadata).length) {
+      const cardResult = await loadCurrentCard();
+      if (!cardResult.ok) {
+        return { ok: false, error: cardResult.error };
+      }
+      const currentMetadata = normalizeMetadata(cardResult.data.card.metadata);
+      opportunityPayload.metadata = {
+        ...currentMetadata,
+        ...metadata,
+      };
+    } else {
+      delete opportunityPayload.metadata;
+    }
+  }
+
   const needsContactUpdate = Object.keys(contactoPayload).length > 0;
   const hasOpportunityUpdates = Object.keys(opportunityPayload).length > 0;
 
@@ -455,7 +486,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
 
   if (needsContactUpdate) {
     if (!contactId) {
-      const currentCard = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+      const currentCard = await loadCurrentCard();
       if (!currentCard.ok) {
         return { ok: false, error: currentCard.error };
       }
@@ -499,11 +530,15 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     }
     cardResponse = response.data;
   } else {
-    const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
-    if (!response.ok) {
-      return { ok: false, error: response.error };
+    if (cachedCardResponse) {
+      cardResponse = cachedCardResponse;
+    } else {
+      const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);
+      if (!response.ok) {
+        return { ok: false, error: response.error };
+      }
+      cardResponse = response.data;
     }
-    cardResponse = response.data;
   }
 
   updateTag("embudo");
