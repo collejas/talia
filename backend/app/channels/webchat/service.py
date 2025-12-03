@@ -78,6 +78,7 @@ REMINDER_MINUTES_DEFAULT = 120
 REMINDER_MINUTES_MIN = 15
 REMINDER_MINUTES_MAX = 720
 REMINDER_SETTINGS_TTL_SECONDS = 300
+DEMO_STAGE_CODE = "demo"
 
 
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
@@ -318,10 +319,11 @@ async def _send_booking_confirmation_email(
     contact_id: str | None,
     conversation_id: str,
     tarjeta_id: str | None,
+    contact: dict[str, Any] | None = None,
 ) -> None:
-    if not contact_id:
+    if not contact_id and contact is None:
         return
-    contact = await _resolve_contact(contact_id)
+    contact = contact or await _resolve_contact(contact_id)
     if not contact:
         return
     email_value = str(contact.get("correo") or "").strip()
@@ -452,6 +454,56 @@ async def _send_booking_confirmation_email(
             "tarjeta_id": tarjeta_id,
         },
     )
+
+
+async def _sync_booking_with_opportunity(
+    *,
+    booking: schemas.CalendarBookingResponse,
+    tarjeta_id: str | None,
+    contact: dict[str, Any] | None,
+    channel: str,
+) -> None:
+    if not tarjeta_id or not contact:
+        return
+    organizacion_value = contact.get("organizacion_id")
+    if not organizacion_value:
+        return
+    organizacion_id = str(organizacion_value)
+
+    try:
+        await storage.promote_opportunity_stage(
+            oportunidad_id=tarjeta_id,
+            organizacion_id=organizacion_id,
+            stage_code=DEMO_STAGE_CODE,
+            source="calendar_booking",
+            channel=channel,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "calendar.stage_promotion_failed",
+            extra={
+                "tarjeta_id": tarjeta_id,
+                "booking_id": booking.booking_id,
+                "error": str(exc),
+            },
+        )
+
+    try:
+        await storage.record_demo_booking_metadata(
+            oportunidad_id=tarjeta_id,
+            organizacion_id=organizacion_id,
+            scheduled_at=booking.start_at,
+            booking_id=booking.booking_id,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "calendar.demo_metadata_update_failed",
+            extra={
+                "tarjeta_id": tarjeta_id,
+                "booking_id": booking.booking_id,
+                "error": str(exc),
+            },
+        )
 
 
 async def _send_booking_cancellation_email(
@@ -690,11 +742,19 @@ async def schedule_calendar_booking(
 
     booking["hold_id"] = hold.get("hold_id")
     booking_response = _build_booking_response(booking)
+    contact = await _resolve_contact(contact_id)
+    await _sync_booking_with_opportunity(
+        booking=booking_response,
+        tarjeta_id=tarjeta_id,
+        contact=contact,
+        channel="webchat",
+    )
     await _send_booking_confirmation_email(
         booking=booking_response,
         contact_id=contact_id,
         conversation_id=conversation_id,
         tarjeta_id=tarjeta_id,
+        contact=contact,
     )
     return booking_response
 
@@ -719,11 +779,19 @@ async def reschedule_calendar_booking(
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
     booking_response = _build_booking_response(booking)
+    contact = await _resolve_contact(contact_id)
+    await _sync_booking_with_opportunity(
+        booking=booking_response,
+        tarjeta_id=booking_response.tarjeta_id,
+        contact=contact,
+        channel="webchat",
+    )
     await _send_booking_confirmation_email(
         booking=booking_response,
         contact_id=contact_id,
         conversation_id=conversation_id,
         tarjeta_id=booking_response.tarjeta_id,
+        contact=contact,
     )
     return booking_response
 
@@ -2195,11 +2263,19 @@ async def _execute_function_call(
 
         booking_response = _build_booking_response(booking)
         booking_response.hold_id = hold.get("hold_id")
+        contact = await _resolve_contact(context.contact_id)
+        await _sync_booking_with_opportunity(
+            booking=booking_response,
+            tarjeta_id=tarjeta_id,
+            contact=contact,
+            channel="webchat",
+        )
         await _send_booking_confirmation_email(
             booking=booking_response,
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             tarjeta_id=tarjeta_id,
+            contact=contact,
         )
 
         booking_payload = {
@@ -2238,11 +2314,19 @@ async def _execute_function_call(
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
         booking_response = _build_booking_response(booking)
+        contact = await _resolve_contact(context.contact_id)
+        await _sync_booking_with_opportunity(
+            booking=booking_response,
+            tarjeta_id=booking_response.tarjeta_id,
+            contact=contact,
+            channel="webchat",
+        )
         await _send_booking_confirmation_email(
             booking=booking_response,
             contact_id=context.contact_id,
             conversation_id=context.conversation_id,
             tarjeta_id=booking_response.tarjeta_id,
+            contact=contact,
         )
         booking_payload = {
             "booking_id": booking_response.booking_id,

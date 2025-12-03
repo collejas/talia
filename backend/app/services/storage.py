@@ -1071,6 +1071,58 @@ async def promote_opportunity_stage(
     return True
 
 
+async def record_demo_booking_metadata(
+    *,
+    oportunidad_id: str,
+    organizacion_id: str,
+    scheduled_at: datetime,
+    booking_id: str | None = None,
+) -> None:
+    """Actualiza stage_prep.demo con la hora agendada y el booking_id."""
+    try:
+        org_uuid = UUID(str(organizacion_id))
+        opp_uuid = UUID(str(oportunidad_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("opportunity_stage_invalid_id") from exc
+
+    repo = CRMRepository()
+    log_context = {
+        "oportunidad_id": str(opp_uuid),
+        "organizacion_id": str(org_uuid),
+        "booking_id": booking_id,
+    }
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    if not opportunity:
+        log_event(logger, "demo_booking.opportunity_missing", **log_context)
+        return
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    stage_prep = _ensure_dict(metadata.get("stage_prep"))
+    demo_prep = _ensure_dict(stage_prep.get("demo"))
+    demo_prep["demo_scheduled_at"] = scheduled_at.astimezone(timezone.utc).isoformat()
+    if booking_id:
+        demo_prep["demo_booking_id"] = booking_id
+    stage_prep["demo"] = demo_prep
+    metadata["stage_prep"] = stage_prep
+
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload={"metadata": metadata},
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    log_event(logger, "demo_booking.metadata_updated", **log_context)
+
+
 async def capture_opportunity_if_ready(
     *,
     conversation_id: str,
