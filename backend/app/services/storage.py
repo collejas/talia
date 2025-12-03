@@ -17,6 +17,8 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 logger = get_logger(__name__)
 
+DEFAULT_CALENDAR_SETTINGS_SLUG = "default"
+
 
 class StorageError(RuntimeError):
     """Errores de persistencia para servicios externos."""
@@ -552,13 +554,15 @@ async def record_delivery_event(
         raise StorageError(str(exc)) from exc
 
 
-async def fetch_calendar_settings() -> dict[str, Any]:
+async def fetch_calendar_settings(slug: str = DEFAULT_CALENDAR_SETTINGS_SLUG) -> dict[str, Any]:
     """Obtiene la configuración de recordatorios del calendario (activación y offset)."""
     repo = CRMRepository()
     try:
-        record = await repo.get_calendar_settings()
+        record = await repo.get_calendar_settings(slug=slug)
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
+    if record is None:
+        record = {}
     return {
         "reminder_enabled": bool(record.get("reminder_enabled", True)),
         "reminder_offset_minutes": int(record.get("reminder_offset_minutes") or 120),
