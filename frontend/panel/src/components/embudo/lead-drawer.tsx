@@ -2850,8 +2850,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseDrawerPrepDefinition(meta: Record<string, unknown>): DrawerPrepDefinition | null {
-  const candidate = meta["drawer_prep"];
-  if (!isRecord(candidate)) return null;
+  const candidate = findDrawerPrepCandidate(meta);
+  if (!candidate) return null;
 
   const sectionsCandidate = candidate.sections;
   if (!Array.isArray(sectionsCandidate)) return null;
@@ -2920,6 +2920,33 @@ function parseDrawerPrepDefinition(meta: Record<string, unknown>): DrawerPrepDef
   };
 }
 
+function findDrawerPrepCandidate(
+  meta: Record<string, unknown>,
+  visited: Set<Record<string, unknown>> = new Set(),
+): Record<string, unknown> | null {
+  if (visited.has(meta)) {
+    return null;
+  }
+  visited.add(meta);
+
+  const direct = meta["drawer_prep"];
+  if (isRecord(direct)) {
+    return direct;
+  }
+
+  for (const key of ["metadatos", "metadata"]) {
+    const nested = meta[key];
+    if (isRecord(nested)) {
+      const nestedCandidate = findDrawerPrepCandidate(nested, visited);
+      if (nestedCandidate) {
+        return nestedCandidate;
+      }
+    }
+  }
+
+  return null;
+}
+
 function buildDrawerDefinitions(stages: EmbudoStage[]): Map<string, DrawerDefinition> {
   const map = new Map<string, DrawerDefinition>();
 
@@ -2930,7 +2957,7 @@ function buildDrawerDefinitions(stages: EmbudoStage[]): Map<string, DrawerDefini
       definition = parseDrawerPrepDefinition(meta);
     }
     if (!definition) {
-      definition = DEFAULT_DRAWER_DEFINITIONS[stage.codigo] ?? null;
+      definition = resolveDrawerDefinitionFallback(stage);
     }
     if (!definition) continue;
 
@@ -2948,6 +2975,73 @@ function buildDrawerDefinitions(stages: EmbudoStage[]): Map<string, DrawerDefini
   }
 
   return map;
+}
+
+function resolveDrawerDefinitionFallback(stage: EmbudoStage): DrawerPrepDefinition | null {
+  const candidateCodes = collectStageDrawerCodes(stage);
+
+  for (const code of candidateCodes) {
+    const normalized = code.toLowerCase();
+    const direct = DEFAULT_DRAWER_DEFINITIONS[normalized];
+    if (direct) {
+      return direct;
+    }
+  }
+
+  for (const code of candidateCodes) {
+    const fallback = findDefaultDrawerDefinitionBySuffix(code);
+    if (fallback) {
+      return fallback;
+    }
+  }
+
+  return null;
+}
+
+function collectStageDrawerCodes(stage: EmbudoStage): string[] {
+  const codes = new Set<string>();
+  if (stage.codigo) {
+    codes.add(stage.codigo.toLowerCase());
+  }
+  const meta = stage.metadatos ?? {};
+  const legacyCode = readStageMetaString(meta, "legacy_codigo");
+  if (legacyCode) {
+    codes.add(legacyCode.toLowerCase());
+  }
+
+  for (const nested of extractNestedStageMetas(meta)) {
+    const nestedLegacy = readStageMetaString(nested, "legacy_codigo");
+    if (nestedLegacy) {
+      codes.add(nestedLegacy.toLowerCase());
+    }
+    const nestedCode = readStageMetaString(nested, "codigo");
+    if (nestedCode) {
+      codes.add(nestedCode.toLowerCase());
+    }
+  }
+
+  return Array.from(codes);
+}
+
+function extractNestedStageMetas(meta: Record<string, unknown>): Record<string, unknown>[] {
+  const nested: Record<string, unknown>[] = [];
+  for (const key of ["metadatos", "metadata"]) {
+    const value = meta[key];
+    if (isRecord(value)) {
+      nested.push(value);
+    }
+  }
+  return nested;
+}
+
+function findDefaultDrawerDefinitionBySuffix(code: string): DrawerPrepDefinition | null {
+  const normalized = code.toLowerCase();
+  for (const [defaultCode, definition] of Object.entries(DEFAULT_DRAWER_DEFINITIONS)) {
+    if (normalized.endsWith(defaultCode)) {
+      return definition;
+    }
+  }
+  return null;
 }
 
 function extractStagePrepFromCard(card: EmbudoCard | null): StagePrepPayload {

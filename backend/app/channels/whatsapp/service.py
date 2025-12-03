@@ -501,6 +501,11 @@ async def _send_whatsapp_reply(*, to_number: str, body: str) -> TwilioSendResult
     return TwilioSendResult(sid=getattr(message, "sid", None), status=status, error=None)
 
 
+async def send_manual_message(*, to_number: str, body: str) -> TwilioSendResult:
+    """Expone el envío de mensajes manuales desde el panel."""
+    return await _send_whatsapp_reply(to_number=to_number, body=body)
+
+
 def _build_openai_input(message: schemas.WhatsAppIncomingMessage) -> list[dict[str, Any]]:
     """Normaliza el contenido del mensaje para Responses API."""
     text_parts: list[str] = []

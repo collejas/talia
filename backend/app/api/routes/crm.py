@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, mod
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
+from app.channels.whatsapp import service as whatsapp_service
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -4201,27 +4202,31 @@ async def reply_inbox_conversation(
         raise HTTPException(status_code=502, detail="No se pudo recuperar la conversación") from exc
 
     channel = (conversation_meta.get("channel") or "").lower()
-    if channel != "webchat":
-        raise HTTPException(status_code=400, detail="unsupported_channel")
 
     contact_id = conversation_meta.get("contact_id")
+    if channel not in {"webchat", "whatsapp"}:
+        raise HTTPException(status_code=400, detail="unsupported_channel")
     if not contact_id:
         raise HTTPException(status_code=500, detail="conversation_contact_missing")
 
-    session_id = await _resolve_webchat_session_id(str(contact_id))
-    if not session_id:
-        raise HTTPException(status_code=409, detail="session_id_not_found")
-
-    client_message_id = payload.client_message_id or uuid4().hex
-    message_payload = webchat_schemas.MessageRequest(
-        session_id=session_id,
-        author="user",
-        content=content,
-        client_message_id=client_message_id,
-        locale=payload.locale,
-        metadata=payload.metadata,
-        attachments=payload.attachments,
-    )
+    session_id: str | None = None
+    message_payload: webchat_schemas.MessageRequest | None = None
+    if channel == "webchat":
+        session_id = await _resolve_webchat_session_id(str(contact_id))
+        if not session_id:
+            raise HTTPException(status_code=409, detail="session_id_not_found")
+        client_message_id = payload.client_message_id or uuid4().hex
+        message_payload = webchat_schemas.MessageRequest(
+            session_id=session_id,
+            author="user",
+            content=content,
+            client_message_id=client_message_id,
+            locale=payload.locale,
+            metadata=payload.metadata,
+            attachments=payload.attachments,
+        )
+    else:
+        client_message_id = payload.client_message_id or uuid4().hex
 
     manual_override = bool(conversation_meta.get("manual_override"))
     if not manual_override:
@@ -4250,6 +4255,7 @@ async def reply_inbox_conversation(
             "origin": "panel_manual",
             "sender_type": "human",
             "author_type": "human",
+            "channel": channel,
         }
         if payload.locale:
             extra_metadata["locale"] = payload.locale
@@ -4318,6 +4324,9 @@ async def reply_inbox_conversation(
                 user_payload.setdefault("type", "human")
                 agent_payload["user"] = user_payload
 
+        if channel == "whatsapp" and attachments_payload:
+            raise HTTPException(status_code=415, detail="attachments_not_supported")
+
         if agent_payload:
             agent_payload.setdefault("origin", agent_payload.get("origin") or "panel_manual")
             agent_payload.setdefault("source", agent_payload.get("source") or "panel_manual")
@@ -4342,82 +4351,103 @@ async def reply_inbox_conversation(
             if resolved_email:
                 extra_metadata.setdefault("manual_email", resolved_email)
                 extra_metadata.setdefault("agent_email", resolved_email)
-        try:
-            await storage.register_webchat_message(
-                session_id=session_id,
-                author="agent",
-                content=content,
-                inactivity_hours=settings.webchat_inactivity_hours,
-                metadata=extra_metadata,
-                attachments=attachments_payload,
-            )
-        except StorageError as exc:
-            logger.exception(
-                "panel.inbox.manual_register_failed",
-                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
-            )
-            raise HTTPException(status_code=502, detail="No se pudo registrar el mensaje") from exc
+        if channel == "webchat":
+            try:
+                await storage.register_webchat_message(
+                    session_id=session_id or "",
+                    author="agent",
+                    content=content,
+                    inactivity_hours=settings.webchat_inactivity_hours,
+                    metadata=extra_metadata,
+                    attachments=attachments_payload,
+                )
+            except StorageError as exc:
+                logger.exception(
+                    "panel.inbox.manual_register_failed",
+                    extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+                )
+                raise HTTPException(
+                    status_code=502, detail="No se pudo registrar el mensaje"
+                ) from exc
 
-        try:
-            await webchat_service.append_manual_agent_context(
-                conversation_meta=conversation_meta,
-                session_id=session_id,
-                content=content,
-                locale=payload.locale,
-            )
-        except Exception as exc:  # pragma: no cover - logging defensivo
-            logger.exception(
-                "panel.inbox.manual_context_append_failed",
-                extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+            try:
+                await webchat_service.append_manual_agent_context(
+                    conversation_meta=conversation_meta,
+                    session_id=session_id or "",
+                    content=content,
+                    locale=payload.locale,
+                )
+            except Exception as exc:  # pragma: no cover - logging defensivo
+                logger.exception(
+                    "panel.inbox.manual_context_append_failed",
+                    extra={"conversation_id": str(conversacion_id), "error": str(exc)},
+                )
+
+            logger.info(
+                "panel.inbox.manual_message_recorded",
+                extra={
+                    "conversation_id": str(conversacion_id),
+                    "session_id": session_id,
+                    "client_message_id": client_message_id,
+                },
             )
 
-        logger.info(
-            "panel.inbox.manual_message_recorded",
-            extra={
+            metadata: dict[str, Any] = {
                 "conversation_id": str(conversacion_id),
-                "session_id": session_id,
                 "client_message_id": client_message_id,
-            },
-        )
+                "manual_mode": True,
+                "session_id": session_id,
+                "contact_id": str(contact_id),
+                "sender_type": "human",
+                "author_type": "human",
+            }
+            if attachments_payload:
+                metadata["attachments"] = attachments_payload
+            if agent_payload:
+                metadata["extra"] = agent_payload
+                manual_name_resp = agent_payload.get("manual_author") or agent_payload.get(
+                    "manualAuthor"
+                )
+                agent_name_resp = agent_payload.get("agent_name") or agent_payload.get("agentName")
+                manual_email_resp = (
+                    agent_payload.get("manual_email")
+                    or agent_payload.get("manualEmail")
+                    or agent_payload.get("agent_email")
+                    or agent_payload.get("agentEmail")
+                )
+                if isinstance(agent_name_resp, str) and agent_name_resp.strip():
+                    metadata["agent_name"] = agent_name_resp.strip()
+                elif isinstance(manual_name_resp, str) and manual_name_resp.strip():
+                    metadata["agent_name"] = manual_name_resp.strip()
+                if isinstance(manual_name_resp, str) and manual_name_resp.strip():
+                    metadata["manual_author"] = manual_name_resp.strip()
+                if isinstance(manual_email_resp, str) and manual_email_resp.strip():
+                    cleaned_email = manual_email_resp.strip()
+                    metadata["manual_email"] = cleaned_email
+                    metadata.setdefault("agent_email", cleaned_email)
+            return {
+                "ok": True,
+                "reply": None,
+                "metadata": metadata,
+            }
 
-        metadata: dict[str, Any] = {
-            "conversation_id": str(conversacion_id),
-            "client_message_id": client_message_id,
-            "manual_mode": True,
-            "session_id": session_id,
-            "contact_id": str(contact_id),
-            "sender_type": "human",
-            "author_type": "human",
-        }
-        if attachments_payload:
-            metadata["attachments"] = attachments_payload
-        if agent_payload:
-            metadata["extra"] = agent_payload
-            manual_name_resp = agent_payload.get("manual_author") or agent_payload.get(
-                "manualAuthor"
+        if channel == "whatsapp":
+            metadata = await _send_manual_whatsapp_message(
+                conversation_id=str(conversacion_id),
+                contact_id=str(contact_id),
+                content=content,
+                metadata=extra_metadata,
             )
-            agent_name_resp = agent_payload.get("agent_name") or agent_payload.get("agentName")
-            manual_email_resp = (
-                agent_payload.get("manual_email")
-                or agent_payload.get("manualEmail")
-                or agent_payload.get("agent_email")
-                or agent_payload.get("agentEmail")
-            )
-            if isinstance(agent_name_resp, str) and agent_name_resp.strip():
-                metadata["agent_name"] = agent_name_resp.strip()
-            elif isinstance(manual_name_resp, str) and manual_name_resp.strip():
-                metadata["agent_name"] = manual_name_resp.strip()
-            if isinstance(manual_name_resp, str) and manual_name_resp.strip():
-                metadata["manual_author"] = manual_name_resp.strip()
-            if isinstance(manual_email_resp, str) and manual_email_resp.strip():
-                cleaned_email = manual_email_resp.strip()
-                metadata["manual_email"] = cleaned_email
-                metadata.setdefault("agent_email", cleaned_email)
-        return {
-            "ok": True,
-            "reply": None,
-            "metadata": metadata,
-        }
+            return {
+                "ok": True,
+                "reply": None,
+                "metadata": metadata,
+            }
+
+        raise HTTPException(status_code=400, detail="unsupported_channel")
+
+    if channel != "webchat":
+        raise HTTPException(status_code=400, detail="unsupported_channel")
 
     try:
         logger.info(
@@ -8222,6 +8252,100 @@ def _job_to_response(job: BuscadorJob) -> BuscadorJobResponse:
         error=job.error,
         params=params,
     )
+
+
+async def _send_manual_whatsapp_message(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    content: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    phone, wa_id = await _resolve_whatsapp_identity(contact_id)
+    if not phone:
+        raise HTTPException(status_code=400, detail="contact_phone_missing")
+
+    send_result = await whatsapp_service.send_manual_message(to_number=phone, body=content)
+    if send_result.error:
+        logger.error(
+            "panel.inbox.whatsapp_manual_send_failed",
+            extra={"conversation_id": conversation_id, "error": send_result.error},
+        )
+        raise HTTPException(status_code=502, detail="No se pudo enviar el mensaje por WhatsApp")
+
+    metadata_payload = dict(metadata or {})
+    metadata_payload.setdefault("manual_mode", True)
+    metadata_payload.setdefault("sender_type", "human")
+    metadata_payload.setdefault("author_type", "human")
+    metadata_payload["channel"] = "whatsapp"
+    metadata_payload["delivery_status"] = send_result.status
+
+    try:
+        await storage.register_whatsapp_message(
+            direction="saliente",
+            wa_id=wa_id,
+            phone_e164=phone,
+            body=content,
+            message_sid=send_result.sid,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            metadata=metadata_payload,
+        )
+    except StorageError as exc:
+        logger.exception(
+            "panel.inbox.manual_whatsapp_register_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        raise HTTPException(status_code=502, detail="No se pudo registrar el mensaje") from exc
+
+    response_metadata = {
+        "conversation_id": conversation_id,
+        "contact_id": contact_id,
+        "manual_mode": True,
+        "channel": "whatsapp",
+        "delivery_status": send_result.status,
+    }
+    for key in ("manual_author", "manual_email", "agent_name", "agent_email", "origin", "source"):
+        value = metadata_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            response_metadata[key] = value
+    return response_metadata
+
+
+async def _resolve_whatsapp_identity(contact_id: str) -> tuple[str | None, str | None]:
+    phone: str | None = None
+    wa_id: str | None = None
+    try:
+        contact = await storage.fetch_contact(contact_id)
+        phone = _clean_phone(contact.get("telefono_e164"))
+    except StorageError:
+        phone = None
+
+    try:
+        identities = await storage.fetch_contact_identities(contact_id)
+    except StorageError:
+        identities = []
+
+    for identity in identities:
+        if (identity.get("canal") or "").lower() != "whatsapp":
+            continue
+        candidate_phone = _clean_phone(identity.get("id_externo"))
+        if candidate_phone and not phone:
+            phone = candidate_phone
+        metadata = _ensure_dict(identity.get("metadatos") or {}, default={})
+        candidate_wa = metadata.get("wa_id") or metadata.get("whatsapp_id")
+        if isinstance(candidate_wa, str) and candidate_wa.strip():
+            wa_id = candidate_wa.strip()
+        if phone and wa_id:
+            break
+    return phone, wa_id
+
+
+def _clean_phone(raw: Any) -> str | None:
+    if isinstance(raw, str):
+        trimmed = raw.strip()
+        return trimmed or None
+    return None
 
 
 def _is_manual_card(metadata: dict[str, Any] | None) -> bool:
