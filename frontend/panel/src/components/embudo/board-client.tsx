@@ -29,8 +29,10 @@ import {
 } from "@/lib/embudo/actions";
 import {
   LeadDrawer,
+  type LeadAdvanceStagePayload,
   type LeadDrawerCreatePayload,
   type LeadDrawerSubmitPayload,
+  type StagePrepState,
 } from "@/components/embudo/lead-drawer";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -379,11 +381,14 @@ export function EmbudoBoardClient({
     return result;
   }
 
-  async function handleAutoAdvanceStage(nextStage: EmbudoStage) {
+  async function handleAutoAdvanceStage(nextStage: EmbudoStage, context?: LeadAdvanceStagePayload) {
     if (!selectedCard) {
       return { ok: false as const, error: "No se encontró el lead seleccionado." };
     }
     const nextStageCode = normalizeStageCode(nextStage);
+    if (nextStageCode === DEMO_STAGE_CODE && context?.stagePrep) {
+      return await handleDrawerDemoAdvance(nextStage, context.stagePrep);
+    }
     if (nextStageCode === "cerrado_ganado") {
       const acceptedCheck = await ensureLeadHasAcceptedQuote(selectedCard.oportunidadId);
       if (!acceptedCheck.ok) {
@@ -410,6 +415,82 @@ export function EmbudoBoardClient({
     }
     applyLeadResult(result);
     return { ok: true as const };
+  }
+
+  async function handleDrawerDemoAdvance(
+    targetStage: EmbudoStage,
+    stagePrepState: StagePrepState,
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (!selectedCard) {
+      return { ok: false as const, error: "No se encontró el lead seleccionado." };
+    }
+    const localValue = readStagePrepValue(stagePrepState, DEMO_STAGE_CODE, "demo_scheduled_at");
+    if (!localValue) {
+      return {
+        ok: false as const,
+        error: "Completa la fecha de la demo en la tarjeta antes de avanzar.",
+      };
+    }
+    const isoValue = fromDateTimeLocalInput(localValue);
+    if (!isoValue) {
+      return { ok: false as const, error: "La fecha de la demo no tiene un formato válido." };
+    }
+    if (!selectedCard.conversacionId) {
+      return {
+        ok: false as const,
+        error: "Este lead no tiene conversación vinculada, no puedo agendar la demo.",
+      };
+    }
+
+    setMovePending(true);
+    try {
+      const bookingResult = await scheduleLeadDemo({
+        conversationId: selectedCard.conversacionId,
+        startAt: isoValue,
+      });
+      if (!bookingResult.ok) {
+        return { ok: false as const, error: bookingResult.error || "No se pudo agendar la demo." };
+      }
+
+      const demoStagePrep = buildUpdatedDemoStagePrep(
+        selectedCard,
+        isoValue,
+        bookingResult.booking.booking_id,
+      );
+      const updateResult = await updateLeadCard({
+        oportunidadId: selectedCard.oportunidadId,
+        contactoId: selectedCard.contactoId,
+        oportunidad: {
+          metadata: {
+            stage_prep: demoStagePrep,
+          },
+        },
+        mergeMetadata: true,
+      });
+
+      if (!updateResult.ok) {
+        return { ok: false as const, error: updateResult.error || "No se pudo guardar la cita." };
+      }
+
+      const destinationStage = stages.find((stage) => stage.id === targetStage.id) ?? targetStage;
+      const updatedCard: EmbudoCard = {
+        ...updateResult.card,
+        etapaId: destinationStage.id,
+        etapaNombre: destinationStage.nombre,
+        metadata: {
+          ...(updateResult.card.metadata ?? {}),
+          stage_prep: demoStagePrep,
+        },
+      };
+      applyLeadResult({
+        ok: true,
+        stage: destinationStage,
+        card: updatedCard,
+      });
+      return { ok: true as const };
+    } finally {
+      setMovePending(false);
+    }
   }
 
   async function handleLeadDelete(): Promise<LeadDeleteResult> {
@@ -810,4 +891,20 @@ function getMissingStageRequirement(stage: EmbudoStage, card: EmbudoCard): strin
     }
   }
   return null;
+}
+
+function readStagePrepValue(
+  state: StagePrepState | undefined,
+  stageCode: string,
+  fieldKey: string,
+): string | null {
+  if (!state) return null;
+  const stageValues = state[stageCode];
+  if (!stageValues) return null;
+  const rawValue = stageValues[fieldKey];
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+  const trimmed = rawValue.trim();
+  return trimmed.length ? trimmed : null;
 }

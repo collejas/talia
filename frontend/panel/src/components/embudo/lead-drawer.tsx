@@ -124,7 +124,10 @@ type LeadDrawerProps = {
   onSubmit?: (payload: LeadDrawerSubmitPayload) => Promise<LeadActionResult>;
   onCreate?: (payload: LeadDrawerCreatePayload) => Promise<LeadActionResult>;
   onDelete?: () => Promise<LeadDeleteResult>;
-  onAdvanceStage?: (stage: EmbudoStage) => Promise<{ ok: boolean; error?: string }>;
+  onAdvanceStage?: (
+    stage: EmbudoStage,
+    context: LeadAdvanceStagePayload,
+  ) => Promise<{ ok: boolean; error?: string }>;
 };
 
 type QuoteChannel = "email" | "whatsapp";
@@ -248,8 +251,11 @@ type DrawerDefinition = {
   fieldMap: Map<string, DrawerPrepFieldDefinition>;
 };
 
-type StagePrepState = Record<string, Record<string, string | boolean>>;
+export type StagePrepState = Record<string, Record<string, string | boolean>>;
 type StagePrepPayload = Record<string, Record<string, unknown>>;
+export type LeadAdvanceStagePayload = {
+  stagePrep: StagePrepState;
+};
 
 type DrawerStageGroup = {
   stage: EmbudoStage;
@@ -1221,7 +1227,7 @@ export function LeadDrawer({
       const targetStage = findAutoAdvanceStage(currentStage, upcomingStageGroups, stagePrep);
       if (targetStage) {
         setPending(true);
-        const advanceResult = await onAdvanceStage(targetStage);
+        const advanceResult = await onAdvanceStage(targetStage, { stagePrep });
         setPending(false);
         if (!advanceResult.ok) {
           setError(advanceResult.error || "No se pudo avanzar el lead automáticamente.");
@@ -3340,6 +3346,10 @@ function findAutoAdvanceStage(
   if (!currentStage) return null;
   let furthest: EmbudoStage | null = null;
   for (const group of groups) {
+    const stageValues = state[group.stage.codigo] ?? {};
+    if (!stageHasAnyValue(stageValues)) {
+      break;
+    }
     if (!areStageSectionsComplete(group.stage.codigo, group.sections, state)) {
       break;
     }
