@@ -51,6 +51,7 @@ sudo chown -R www-data:www-data /var/www/talia-landing
 # levantar servicio:
 poetry run uvicorn app.main:app --reload --port 8004
 
+FUa7NWxedjsEGv5
 
 # NUEVO ARRANQUE CON SYSTEM, EDICION Y ESTATUS
 sudo nano /etc/systemd/system/talia-panel.service

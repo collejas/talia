@@ -80,6 +80,20 @@ export async function callCrmApi<T = unknown>(
   }
 
   let body: BodyInit | undefined;
+  const findHeaderKey = (name: string): string | undefined => {
+    const target = name.toLowerCase();
+    return Object.keys(headers).find((key) => key.toLowerCase() === target);
+  };
+
+  const hasHeader = (name: string): boolean => findHeaderKey(name) !== undefined;
+
+  const removeHeader = (name: string) => {
+    const key = findHeaderKey(name);
+    if (key) {
+      delete headers[key];
+    }
+  };
+
   if (options.body != null && method !== "GET") {
     const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
     const isBlob = typeof Blob !== "undefined" && options.body instanceof Blob;
@@ -87,15 +101,19 @@ export async function callCrmApi<T = unknown>(
     const isUrlParams = options.body instanceof URLSearchParams;
 
     if (typeof options.body === "string") {
-      headers["Content-Type"] ??= "text/plain;charset=UTF-8";
+      if (!hasHeader("Content-Type")) {
+        headers["Content-Type"] = "text/plain;charset=UTF-8";
+      }
       body = options.body;
     } else if (isFormData || isBlob || isArrayBuffer || isUrlParams) {
-      if (isFormData && headers["Content-Type"]) {
-        delete headers["Content-Type"];
+      if (isFormData) {
+        removeHeader("Content-Type");
       }
       body = options.body as BodyInit;
     } else {
-      headers["Content-Type"] ??= "application/json";
+      if (!hasHeader("Content-Type")) {
+        headers["Content-Type"] = "application/json";
+      }
       body = JSON.stringify(options.body) as BodyInit;
     }
   }
