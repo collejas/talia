@@ -3274,6 +3274,7 @@ class CRMPipelineBoardCard(BaseModel):
     tarjeta_id: UUID
     contacto_id: UUID | None = None
     conversacion_id: UUID | None = None
+    titulo: str
     nombre: str
     correo: str | None = None
     telefono: str | None = None
@@ -8260,12 +8261,22 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     contacto = _ensure_dict(row.get("contacto"), default={})
     cuenta = _ensure_dict(row.get("cuenta"), default={})
     asignado = _ensure_dict(row.get("asignado"), default={})
-    nombre = (
-        row.get("titulo")
-        or contacto.get("nombre_completo")
-        or cuenta.get("nombre")
-        or "Oportunidad sin nombre"
-    )
+    stored_project_name = metadata.get("project_name")
+    raw_title = None
+    if isinstance(stored_project_name, str) and stored_project_name.strip():
+        raw_title = stored_project_name.strip()
+    else:
+        title_value = row.get("titulo")
+        if isinstance(title_value, str) and title_value.strip():
+            raw_title = title_value.strip()
+    titulo_value = raw_title or cuenta.get("nombre") or "Oportunidad sin nombre"
+
+    contacto_nombre = contacto.get("nombre_completo")
+    if isinstance(contacto_nombre, str):
+        contacto_nombre = contacto_nombre.strip()
+    else:
+        contacto_nombre = None
+    nombre = contacto_nombre or titulo_value or cuenta.get("nombre") or "Oportunidad sin nombre"
     conversacion_id = _safe_uuid(metadata.get("conversacion_id"))
     asignado_nombre = asignado.get("nombre_completo") or asignado.get("correo")
     prioridad = metadata.get("lead_score")
@@ -8282,6 +8293,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         tarjeta_id=oportunidad_id,
         contacto_id=_safe_uuid(contacto.get("id")),
         conversacion_id=conversacion_id,
+        titulo=titulo_value,
         nombre=nombre,
         correo=contacto.get("correo"),
         telefono=contacto.get("telefono_e164"),

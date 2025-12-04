@@ -481,6 +481,8 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
   let contactId =
     typeof input.contactoId === "string" && input.contactoId.trim().length ? input.contactoId.trim() : null;
 
+  let contactUpdated = false;
+
   if (needsContactUpdate) {
     if (!contactId) {
       const currentCard = await loadCurrentCard();
@@ -502,6 +504,8 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     if (!contactResult.ok) {
       return { ok: false, error: contactResult.error };
     }
+    contactUpdated = true;
+    cachedCardResponse = null;
   }
 
   let cardResponse: PipelineCardResponse | null = null;
@@ -527,7 +531,7 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     }
     cardResponse = response.data;
   } else {
-    if (cachedCardResponse) {
+    if (!contactUpdated && cachedCardResponse) {
       cardResponse = cachedCardResponse;
     } else {
       const response = await callCrmApi<PipelineCardResponse>(`/crm/pipeline/cards/${input.oportunidadId}`);

@@ -421,9 +421,69 @@ export function EmbudoBoardClient({
       mergeMetadata: payload.mergeMetadata ?? true,
     });
 
-    applyLeadResult(result);
+    let patchedResult = result;
+    if (result.ok && result.card) {
+      const patchedCard: EmbudoCard = { ...result.card };
+      const contactPayload = payload.contacto ?? {};
+      const opportunityPayload = payload.oportunidad ?? {};
 
-    return result;
+      if ("nombre_completo" in contactPayload) {
+        const nextName = contactPayload.nombre_completo;
+        patchedCard.nombre = typeof nextName === "string" ? nextName || null : null;
+      }
+      if ("correo" in contactPayload) {
+        const nextEmail = contactPayload.correo;
+        patchedCard.correo = typeof nextEmail === "string" ? nextEmail || null : null;
+      }
+      if ("telefono_e164" in contactPayload) {
+        const nextPhone = contactPayload.telefono_e164;
+        patchedCard.telefono = typeof nextPhone === "string" ? nextPhone || null : null;
+      }
+      if ("company_name" in contactPayload) {
+        const nextCompany = contactPayload.company_name;
+        patchedCard.empresa = typeof nextCompany === "string" ? nextCompany || null : null;
+      }
+
+      if ("titulo" in opportunityPayload) {
+        const nextTitleRaw = opportunityPayload.titulo;
+        const nextTitle =
+          typeof nextTitleRaw === "string" && nextTitleRaw.trim().length
+            ? nextTitleRaw.trim()
+            : null;
+        if (nextTitle !== null) {
+          patchedCard.titulo = nextTitle;
+          patchedCard.proyectoNombre = nextTitle;
+          patchedCard.metadata = {
+            ...(patchedCard.metadata ?? {}),
+            project_name: nextTitle,
+          };
+        } else if (!patchedCard.titulo) {
+          patchedCard.titulo = patchedCard.nombre ?? "Oportunidad sin nombre";
+          if (patchedCard.metadata) {
+            delete patchedCard.metadata.project_name;
+          }
+        }
+      }
+      if ("descripcion" in opportunityPayload) {
+        const nextDescRaw = opportunityPayload.descripcion;
+        const nextDesc =
+          typeof nextDescRaw === "string" && nextDescRaw.trim().length
+            ? nextDescRaw.trim()
+            : null;
+        patchedCard.proyectoNecesidades = nextDesc ?? patchedCard.proyectoNecesidades ?? null;
+      }
+
+      patchedResult = { ...result, card: patchedCard };
+    }
+
+    applyLeadResult(patchedResult);
+    if (patchedResult.ok) {
+      setSelectedCard(patchedResult.card);
+    } else if (patchedResult.latestCard) {
+      setSelectedCard(patchedResult.latestCard);
+    }
+
+    return patchedResult;
   }
 
   async function handleLeadCreate(payload: LeadDrawerCreatePayload) {

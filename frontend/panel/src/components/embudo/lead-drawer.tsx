@@ -1204,6 +1204,9 @@ export function LeadDrawer({
     if (proyectoNecesidadesRaw !== defaultProyectoNecesidades) {
       metadataUpdates.proyecto_necesidades = proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null;
     }
+    if (proyectoNombreRaw !== defaultProyectoNombre) {
+      metadataUpdates.project_name = proyectoNombreRaw.length ? proyectoNombreRaw : null;
+    }
     if (Object.keys(metadataUpdates).length) {
       oportunidadUpdates.metadata = {
         ...(isRecord(card.metadata) ? card.metadata : {}),

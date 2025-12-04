@@ -38,6 +38,16 @@ export function EmbudoCardItem({
     }
   }, [card.actualizadoEn])
 
+  const contactName =
+    card.nombre && card.nombre.trim().length ? card.nombre.trim() : "Sin contacto";
+  const opportunityName =
+    card.titulo && card.titulo.trim().length
+      ? card.titulo.trim()
+      : card.proyectoNombre && card.proyectoNombre.trim().length
+        ? card.proyectoNombre.trim()
+        : "Oportunidad sin nombre";
+  const contactInfo = card.correo || card.telefono || card.empresa || null;
+
   return (
     <button
       type="button"
@@ -57,9 +67,14 @@ export function EmbudoCardItem({
         )}
       >
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <h4 className="font-semibold leading-tight">{card.titulo}</h4>
-            <p className="text-xs text-muted-foreground">{card.correo || card.telefono || "Sin contacto"}</p>
+          <div className="space-y-1">
+            <h4 className="font-semibold leading-tight">{opportunityName}</h4>
+            <p className="text-xs text-muted-foreground">
+              Contacto: {contactName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {contactInfo || "Sin datos de contacto"}
+            </p>
           </div>
           <div className="flex items-center gap-1">
             {card.autoStage ? (
