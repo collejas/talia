@@ -38,6 +38,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { toast } from "sonner";
 
@@ -60,6 +61,11 @@ type ScheduleContext = {
 
 const PRECALIFICADO_STAGE_CODE = "precalificado";
 const DEMO_STAGE_CODE = "demo";
+const DEMO_FORMAT_OPTIONS = [
+  { value: "virtual", label: "Virtual" },
+  { value: "presencial", label: "Presencial" },
+  { value: "hibrida", label: "Híbrida" },
+];
 
 const STAGE_REQUIRED_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
   demo: [
@@ -116,6 +122,8 @@ export function EmbudoBoardClient({
   const [scheduleDateTime, setScheduleDateTime] = useState("");
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [schedulePending, setSchedulePending] = useState(false);
+  const [scheduleFormat, setScheduleFormat] = useState("");
+  const [scheduleLink, setScheduleLink] = useState("");
 
   const scheduleMinValue = useMemo(() => toDateTimeLocalInput(new Date().toISOString()), []);
 
@@ -171,8 +179,17 @@ export function EmbudoBoardClient({
 
   useEffect(() => {
     if (scheduleContext) {
-      const existingValue = readDemoScheduledAt(scheduleContext.card);
+      const preferredCodes = [
+        scheduleContext.destinationStage.codigo,
+        scheduleContext.originStage.codigo,
+        scheduleContext.card.etapaCodigo,
+      ];
+      const existingValue = readDemoScheduledAt(scheduleContext.card, ...preferredCodes);
+      const existingFormat = readDemoPrepValue(scheduleContext.card, "demo_format", ...preferredCodes);
+      const existingLink = readDemoPrepValue(scheduleContext.card, "demo_link", ...preferredCodes);
       setScheduleDateTime(existingValue ? toDateTimeLocalInput(existingValue) : "");
+      setScheduleFormat(existingFormat ?? "");
+      setScheduleLink(existingLink ?? "");
     }
   }, [scheduleContext]);
 
@@ -187,6 +204,8 @@ export function EmbudoBoardClient({
     setScheduleDialogOpen(false);
     setScheduleContext(null);
     setScheduleDateTime("");
+    setScheduleFormat("");
+    setScheduleLink("");
     setScheduleError(null);
     setSchedulePending(false);
   };
@@ -233,6 +252,11 @@ export function EmbudoBoardClient({
       return;
     }
 
+    if (!scheduleFormat.trim()) {
+      setScheduleError("Selecciona la modalidad de la demo.");
+      return;
+    }
+
     const isoValue = fromDateTimeLocalInput(scheduleDateTime);
     if (!isoValue) {
       setScheduleError("La fecha no tiene un formato válido.");
@@ -260,11 +284,17 @@ export function EmbudoBoardClient({
       return;
     }
 
+    const extraFields: Record<string, unknown> = { demo_format: scheduleFormat.trim() };
+    const linkValue = scheduleLink.trim();
+    if (linkValue.length) {
+      extraFields.demo_link = linkValue;
+    }
     const stagePrep = buildUpdatedDemoStagePrep(
       scheduleContext.card,
       isoValue,
       bookingResult.booking.booking_id,
       scheduleContext.destinationStage.codigo,
+      extraFields,
     );
     const updateResult = await updateLeadCard({
       oportunidadId: scheduleContext.card.oportunidadId,
@@ -468,11 +498,20 @@ export function EmbudoBoardClient({
         return { ok: false as const, error: bookingResult.error || "No se pudo agendar la demo." };
       }
 
+      const stagePrepEntry = resolveStagePrepStateEntry(
+        stagePrepState,
+        targetStage.codigo,
+        selectedCard.etapaCodigo,
+        DEMO_STAGE_CODE,
+      );
+      const extraFields = stagePrepStateEntryToMetadata(stagePrepEntry, ["demo_scheduled_at"]);
+
       const demoStagePrep = buildUpdatedDemoStagePrep(
         selectedCard,
         isoValue,
         bookingResult.booking.booking_id,
         targetStage.codigo,
+        extraFields ?? undefined,
       );
       const updateResult = await updateLeadCard({
         oportunidadId: selectedCard.oportunidadId,
@@ -784,6 +823,38 @@ export function EmbudoBoardClient({
               />
               <p className="text-xs text-muted-foreground">Usa tu zona horaria local.</p>
             </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Modalidad *</Label>
+              <Select
+                value={scheduleFormat}
+                onValueChange={setScheduleFormat}
+                disabled={schedulePending}
+              >
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Selecciona la modalidad" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEMO_FORMAT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="schedule-demo-link" className="text-sm font-medium">
+                Enlace o ubicación
+              </Label>
+              <Input
+                id="schedule-demo-link"
+                value={scheduleLink}
+                onChange={(event) => setScheduleLink(event.target.value)}
+                placeholder="https://..."
+                disabled={schedulePending}
+              />
+              <p className="text-xs text-muted-foreground">Ingresa la sala virtual o dirección de la demo.</p>
+            </div>
             {scheduleError ? (
               <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {scheduleError}
@@ -941,12 +1012,21 @@ function extractStagePrep(card: EmbudoCard | null): StagePrepMetadata {
   return normalized;
 }
 
-function readDemoScheduledAt(card: EmbudoCard | null): string | null {
+function readDemoPrepValue(
+  card: EmbudoCard | null,
+  fieldKey: string,
+  ...preferredStageCodes: Array<string | null | undefined>
+): string | null {
+  if (!card) return null;
   const stagePrep = extractStagePrep(card);
-  const entry = resolveStagePrepEntry(stagePrep, DEMO_STAGE_CODE);
+  const entry = resolveStagePrepEntry(stagePrep, ...preferredStageCodes, card.etapaCodigo, DEMO_STAGE_CODE);
   if (!entry) return null;
-  const value = entry.value["demo_scheduled_at"];
+  const value = entry.value[fieldKey];
   return typeof value === "string" ? value : null;
+}
+
+function readDemoScheduledAt(card: EmbudoCard | null, ...preferredStageCodes: Array<string | null | undefined>) {
+  return readDemoPrepValue(card, "demo_scheduled_at", ...preferredStageCodes);
 }
 
 function buildUpdatedDemoStagePrep(
@@ -954,6 +1034,7 @@ function buildUpdatedDemoStagePrep(
   isoValue: string,
   bookingId?: string | null,
   stageCode?: string | null,
+  extraFields?: Record<string, unknown> | null,
 ): StagePrepMetadata {
   const current = extractStagePrep(card);
   const resolvedEntry = resolveStagePrepEntry(current, stageCode, DEMO_STAGE_CODE);
@@ -962,6 +1043,18 @@ function buildUpdatedDemoStagePrep(
   demoPrep["demo_scheduled_at"] = isoValue;
   if (bookingId) {
     demoPrep["demo_booking_id"] = bookingId;
+  }
+  if (extraFields) {
+    for (const [fieldKey, fieldValue] of Object.entries(extraFields)) {
+      if (fieldValue == null) continue;
+      if (typeof fieldValue === "string") {
+        const trimmed = fieldValue.trim();
+        if (!trimmed.length) continue;
+        demoPrep[fieldKey] = trimmed;
+      } else {
+        demoPrep[fieldKey] = fieldValue;
+      }
+    }
   }
   return {
     ...current,
@@ -1004,4 +1097,67 @@ function readStagePrepValue(
   }
   const trimmed = rawValue.trim();
   return trimmed.length ? trimmed : null;
+}
+
+function resolveStagePrepStateEntry(
+  state: StagePrepState | undefined,
+  ...codes: Array<string | null | undefined>
+): Record<string, string | boolean> | null {
+  if (!state) {
+    return null;
+  }
+  const normalizedCodes: string[] = [];
+  const seen = new Set<string>();
+  for (const code of codes) {
+    if (typeof code !== "string") continue;
+    const trimmed = code.trim().toLowerCase();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    normalizedCodes.push(trimmed);
+  }
+  if (!normalizedCodes.length) {
+    return null;
+  }
+  const entries = Object.entries(state);
+  for (const candidate of normalizedCodes) {
+    const direct = entries.find(([key]) => key.toLowerCase() === candidate);
+    if (direct) {
+      return direct[1];
+    }
+  }
+  for (const candidate of normalizedCodes) {
+    const suffix = candidate.split("_").pop();
+    if (!suffix) continue;
+    const normalizedSuffix = suffix.toLowerCase();
+    for (const [key, value] of entries) {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey === normalizedSuffix || normalizedKey.endsWith(`_${normalizedSuffix}`)) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function stagePrepStateEntryToMetadata(
+  entry: Record<string, string | boolean> | null,
+  excludeKeys: string[] = [],
+): Record<string, unknown> | null {
+  if (!entry) return null;
+  const exclude = new Set(excludeKeys.map((key) => key.toLowerCase()));
+  const metadata: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry)) {
+    if (exclude.has(key.toLowerCase())) {
+      continue;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length) {
+        metadata[key] = trimmed;
+      }
+      continue;
+    }
+    metadata[key] = value;
+  }
+  return Object.keys(metadata).length ? metadata : null;
 }
