@@ -209,8 +209,9 @@ def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResp
     start_at = _parse_iso_datetime(data.get("start_at"))
     end_at = _parse_iso_datetime(data.get("end_at"))
     timezone_value = data.get("timezone")
+    booking_status = str(data.get("status") or "confirmed")
     return schemas.CalendarBookingResponse(
-        status="ok",
+        status=booking_status,
         booking_id=str(data.get("booking_id")),
         resource_id=str(data.get("resource_id")),
         start_at=start_at or datetime.now(timezone.utc),
@@ -234,6 +235,7 @@ def _build_booking_response_from_db_row(row: dict[str, Any]) -> schemas.Calendar
         "notes": row.get("notes"),
         "metadata": row.get("metadata") if isinstance(row.get("metadata"), dict) else None,
         "tarjeta_id": row.get("tarjeta_id"),
+        "status": row.get("status"),
     }
     if not payload["resource_id"]:
         payload["resource_id"] = settings.webchat_calendar_resource_id

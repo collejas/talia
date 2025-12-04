@@ -29,6 +29,8 @@ export function AgendaEventDrawer({
   onRequestCancel,
 }: AgendaEventDrawerProps) {
   const timezone = item?.timezone || "UTC"
+  const estadoNormalized = item?.estado?.toLowerCase() ?? ""
+  const isCancelled = estadoNormalized === "cancelada"
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
@@ -70,10 +72,18 @@ export function AgendaEventDrawer({
           </div>
         </div>
         <DrawerFooter className="gap-3 border-t border-border/60 bg-muted/20">
-          <Button disabled={!item} onClick={() => item && onRequestReschedule?.(item)} variant="default">
+          <Button
+            disabled={!item || isCancelled}
+            onClick={() => item && onRequestReschedule?.(item)}
+            variant="default"
+          >
             Reprogramar
           </Button>
-          <Button disabled={!item} onClick={() => item && onRequestCancel?.(item)} variant="destructive">
+          <Button
+            disabled={!item || isCancelled}
+            onClick={() => item && onRequestCancel?.(item)}
+            variant="destructive"
+          >
             Cancelar cita
           </Button>
         </DrawerFooter>

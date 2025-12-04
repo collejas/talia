@@ -204,7 +204,7 @@ class CalendarCancelRequest(BaseModel):
 class CalendarBookingResponse(BaseModel):
     """Respuesta cuando se crea/reprograma/cancela una cita."""
 
-    status: Literal["ok"]
+    status: str
     booking_id: str
     resource_id: str
     start_at: datetime
