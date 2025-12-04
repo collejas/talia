@@ -1083,6 +1083,26 @@ class CRMRepository:
             )
         return row
 
+    async def get_pipeline_opportunity_by_id(
+        self,
+        *,
+        oportunidad_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene una oportunidad del pipeline usando únicamente su ID."""
+        params = {
+            "id": f"eq.{oportunidad_id}",
+            "limit": "1",
+            "select": self._PIPELINE_SELECT,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad por id: {row!r}")
+        return row
+
     async def update_opportunity(
         self,
         *,
@@ -2627,7 +2647,7 @@ class CRMRepository:
     ) -> dict[str, Any]:
         params = {
             "id": f"eq.{booking_id}",
-            "select": "id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+            "select": "id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
             "limit": "1",
         }
         resp = await self._request_with_user(
@@ -2645,6 +2665,29 @@ class CRMRepository:
             row = None
         if not isinstance(row, dict):
             raise CRMRepositoryError("booking_not_found")
+        return row
+
+    async def get_calendar_booking_by_id(
+        self,
+        *,
+        booking_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Recupera una cita del calendario usando service role."""
+        params = {
+            "id": f"eq.{booking_id}",
+            "select": "id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/calendar_bookings", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
         return row
 
     async def update_calendar_booking_metadata(

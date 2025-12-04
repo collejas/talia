@@ -16,6 +16,11 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   const metadata = parseMetadatos(card.metadata);
   const etapaCodigo = typeof card.etapa_codigo === "string" ? card.etapa_codigo : null;
   const oportunidadId = card.oportunidad_id ?? card.tarjeta_id ?? "";
+  const metadataConversationId =
+    typeof metadata.conversation_id === "string" && metadata.conversation_id.trim().length
+      ? metadata.conversation_id.trim()
+      : null;
+  const resolvedConversationId = card.conversacion_id ?? metadataConversationId;
   const resolvedTitulo = resolveTitulo(card);
   const resolvedNombre =
     typeof card.nombre === "string" && card.nombre.trim().length ? card.nombre.trim() : null;
@@ -32,7 +37,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
   return {
     oportunidadId,
     contactoId: card.contacto_id ?? "",
-    conversacionId: card.conversacion_id ?? null,
+    conversacionId: resolvedConversationId,
     titulo: resolvedTitulo,
     nombre: resolvedNombre,
     correo: card.correo,

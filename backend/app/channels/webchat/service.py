@@ -223,6 +223,23 @@ def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResp
     )
 
 
+def _build_booking_response_from_db_row(row: dict[str, Any]) -> schemas.CalendarBookingResponse:
+    payload = {
+        "booking_id": row.get("id"),
+        "resource_id": row.get("resource_id"),
+        "start_at": row.get("start_at"),
+        "end_at": row.get("end_at"),
+        "timezone": row.get("timezone"),
+        "hold_id": row.get("hold_id"),
+        "notes": row.get("notes"),
+        "metadata": row.get("metadata") if isinstance(row.get("metadata"), dict) else None,
+        "tarjeta_id": row.get("tarjeta_id"),
+    }
+    if not payload["resource_id"]:
+        payload["resource_id"] = settings.webchat_calendar_resource_id
+    return _build_booking_response(payload)
+
+
 def _sanitize_ics_text(value: str) -> str:
     text = value.replace("\\", "\\\\")
     text = text.replace("\r\n", "\n")
@@ -324,9 +341,45 @@ async def _send_booking_confirmation_email(
     if not contact_id and contact is None:
         return
     contact = contact or await _resolve_contact(contact_id)
-    if not contact:
-        return
-    email_value = str(contact.get("correo") or "").strip()
+    metadata = booking.metadata if isinstance(booking.metadata, dict) else {}
+    org_hint = _extract_contact_org(contact)
+    if not org_hint and isinstance(metadata, dict):
+        org_value = metadata.get("organizacion_id")
+        if isinstance(org_value, str) and org_value.strip():
+            org_hint = org_value.strip()
+    email_value = _extract_contact_email(contact)
+    needs_fallback = (not email_value or email_value.lower() == "none") or contact is None
+    if needs_fallback and tarjeta_id:
+        try:
+            fallback_contact = await storage.fetch_opportunity_contact(
+                oportunidad_id=tarjeta_id,
+                organizacion_id=str(org_hint) if org_hint else None,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "calendar.opportunity_contact_lookup_failed",
+                extra={
+                    "tarjeta_id": tarjeta_id,
+                    "booking_id": booking.booking_id,
+                    "error": str(exc),
+                },
+            )
+        else:
+            if fallback_contact:
+                fallback_email = _extract_contact_email(fallback_contact)
+                if fallback_email:
+                    contact = fallback_contact
+                    contact_id = str(fallback_contact.get("id") or contact_id)
+                    email_value = fallback_email
+                    org_hint = _extract_contact_org(fallback_contact) or org_hint
+                    logger.info(
+                        "calendar.invite_contact_fallback",
+                        extra={
+                            "booking_id": booking.booking_id,
+                            "tarjeta_id": tarjeta_id,
+                            "contact_id": contact_id,
+                        },
+                    )
     if not email_value:
         await _mark_booking_invite_status(
             booking,
@@ -355,7 +408,7 @@ async def _send_booking_confirmation_email(
     date_label = start_local.strftime("%d/%m/%Y")
     time_label = start_local.strftime("%H:%M")
 
-    contact_name = contact.get("nombre_completo")
+    contact_name = contact.get("nombre_completo") if contact else None
     greeting = f"Geoactiv - Tal-IA {contact_name}," if contact_name else "Hola,"
     end_label = end_local.strftime("%H:%M")
 
@@ -456,6 +509,45 @@ async def _send_booking_confirmation_email(
     )
 
 
+async def ensure_booking_invite_sent_for_opportunity(
+    *,
+    booking_id: str,
+    oportunidad_id: str,
+) -> None:
+    """Intenta enviar el correo de confirmación cuando la cita se registra desde el embudo."""
+    booking_key = (booking_id or "").strip()
+    if not booking_key:
+        return
+    try:
+        booking_row = await storage.fetch_calendar_booking(booking_key)
+    except StorageError as exc:
+        logger.warning(
+            "calendar.booking_lookup_failed",
+            extra={"booking_id": booking_key, "error": str(exc)},
+        )
+        return
+    if not booking_row:
+        logger.warning(
+            "calendar.booking_missing_for_invite",
+            extra={"booking_id": booking_key, "tarjeta_id": oportunidad_id},
+        )
+        return
+    metadata = booking_row.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("invite_status") == "sent":
+        return
+    booking_response = _build_booking_response_from_db_row(booking_row)
+    tarjeta_id = booking_response.tarjeta_id or str(booking_row.get("tarjeta_id") or oportunidad_id)
+    contact_value = booking_row.get("contact_id")
+    conversation_value = booking_row.get("conversacion_id")
+    await _send_booking_confirmation_email(
+        booking=booking_response,
+        contact_id=str(contact_value) if contact_value else None,
+        conversation_id=str(conversation_value or "manual"),
+        tarjeta_id=tarjeta_id,
+        contact=None,
+    )
+
+
 async def _sync_booking_with_opportunity(
     *,
     booking: schemas.CalendarBookingResponse,
@@ -463,9 +555,36 @@ async def _sync_booking_with_opportunity(
     contact: dict[str, Any] | None,
     channel: str,
 ) -> None:
-    if not tarjeta_id or not contact:
+    if not tarjeta_id:
         return
-    organizacion_value = contact.get("organizacion_id")
+    resolved_contact = contact
+    if not resolved_contact or not resolved_contact.get("organizacion_id"):
+        try:
+            fallback_contact = await storage.fetch_opportunity_contact(
+                oportunidad_id=tarjeta_id,
+                organizacion_id=str(resolved_contact.get("organizacion_id"))
+                if resolved_contact and resolved_contact.get("organizacion_id")
+                else None,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "calendar.stage_contact_lookup_failed",
+                extra={
+                    "tarjeta_id": tarjeta_id,
+                    "booking_id": booking.booking_id,
+                    "error": str(exc),
+                },
+            )
+            return
+        if fallback_contact:
+            resolved_contact = fallback_contact
+            logger.info(
+                "calendar.stage_contact_fallback",
+                extra={"tarjeta_id": tarjeta_id, "booking_id": booking.booking_id},
+            )
+    if not resolved_contact:
+        return
+    organizacion_value = resolved_contact.get("organizacion_id")
     if not organizacion_value:
         return
     organizacion_id = str(organizacion_value)
@@ -694,6 +813,8 @@ async def schedule_calendar_booking(
     contact_id = str(contact_value) if contact_value else None
     if not contact_id:
         raise ValueError("No fue posible asociar la cita con el contacto de la conversación.")
+    contact: dict[str, Any] | None = await _resolve_contact(contact_id)
+    organizacion_id = _extract_contact_org(contact)
     try:
         tarjeta_id = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
@@ -711,6 +832,16 @@ async def schedule_calendar_booking(
     slot_identifier = slot_id or _build_slot_identifier(resource_id, start_at)
 
     try:
+        hold_metadata: dict[str, Any] = {
+            "slot_id": slot_identifier,
+            "source": "webchat",
+            "session_id": session_id,
+            "conversation_id": conversation_id,
+            "tarjeta_id": tarjeta_id,
+            "oportunidad_id": tarjeta_id,
+        }
+        if organizacion_id:
+            hold_metadata["organizacion_id"] = organizacion_id
         hold = await calendar_service.hold_slot(
             resource_id=resource_id,
             slot_start=start_at,
@@ -718,31 +849,28 @@ async def schedule_calendar_booking(
             contact_id=contact_id,
             tarjeta_id=tarjeta_id,
             hold_minutes=hold_minutes,
-            metadata={
-                "slot_id": slot_identifier,
-                "source": "webchat",
-                "session_id": session_id,
-                "conversation_id": conversation_id,
-                "tarjeta_id": tarjeta_id,
-                "oportunidad_id": tarjeta_id,
-            },
+            metadata=hold_metadata,
         )
+        booking_metadata: dict[str, Any] = {
+            "conversation_id": conversation_id,
+            "contact_id": contact_id,
+            "session_id": session_id,
+            "tarjeta_id": tarjeta_id,
+        }
+        if organizacion_id:
+            booking_metadata["organizacion_id"] = organizacion_id
         booking = await calendar_service.confirm_slot(
             hold_id=hold.get("hold_id"),
             notes=notes,
-            metadata={
-                "conversation_id": conversation_id,
-                "contact_id": contact_id,
-                "session_id": session_id,
-                "tarjeta_id": tarjeta_id,
-            },
+            metadata=booking_metadata,
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
 
     booking["hold_id"] = hold.get("hold_id")
     booking_response = _build_booking_response(booking)
-    contact = await _resolve_contact(contact_id)
+    if contact is None:
+        contact = await _resolve_contact(contact_id)
     await _sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
@@ -917,6 +1045,29 @@ async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
             extra={"contact_id": contact_id, "error": str(exc)},
         )
         return None
+
+
+def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    value = contact.get("correo")
+    if not isinstance(value, str):
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
+def _extract_contact_org(contact: dict[str, Any] | None) -> str | None:
+    if not contact:
+        return None
+    value = contact.get("organizacion_id")
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+    except Exception:
+        return None
+    return text or None
 
 
 def _guess_extension(name: str | None, url: str | None) -> str:

@@ -176,12 +176,12 @@ export function EmbudoBoardClient({
     }
   }, [scheduleContext]);
 
-  const openScheduleDialog = (context: ScheduleContext) => {
+  const openScheduleDialog = useCallback((context: ScheduleContext) => {
     setScheduleContext(context);
     setScheduleError(null);
     setSchedulePending(false);
     setScheduleDialogOpen(true);
-  };
+  }, []);
 
   const closeScheduleDialog = () => {
     setScheduleDialogOpen(false);
@@ -190,6 +190,17 @@ export function EmbudoBoardClient({
     setScheduleError(null);
     setSchedulePending(false);
   };
+
+  const handleDrawerScheduleDemo = useCallback(
+    (context: { card: EmbudoCard; originStage: EmbudoStage | null; targetStage: EmbudoStage }) => {
+      openScheduleDialog({
+        card: context.card,
+        originStage: context.originStage ?? context.targetStage,
+        destinationStage: context.targetStage,
+      });
+    },
+    [openScheduleDialog],
+  );
 
   const handleScheduleOpenChange = (open: boolean) => {
     if (!open) {
@@ -386,7 +397,7 @@ export function EmbudoBoardClient({
       return { ok: false as const, error: "No se encontró el lead seleccionado." };
     }
     const nextStageCode = normalizeStageCode(nextStage);
-    if (nextStageCode === DEMO_STAGE_CODE && context?.stagePrep) {
+    if (matchesStageCode(nextStageCode, DEMO_STAGE_CODE) && context?.stagePrep) {
       return await handleDrawerDemoAdvance(nextStage, context.stagePrep);
     }
     if (nextStageCode === "cerrado_ganado") {
@@ -615,8 +626,8 @@ export function EmbudoBoardClient({
       }
     }
 
-    const movingFromPrecalificado = normalizeStageCode(activeDragStage) === PRECALIFICADO_STAGE_CODE;
-    const movingToDemo = normalizeStageCode(destinationStage) === DEMO_STAGE_CODE;
+    const movingFromPrecalificado = matchesStageCode(normalizeStageCode(activeDragStage), PRECALIFICADO_STAGE_CODE);
+    const movingToDemo = matchesStageCode(normalizeStageCode(destinationStage), DEMO_STAGE_CODE);
     if (movingFromPrecalificado && movingToDemo) {
       openScheduleDialog({
         card: activeDragCard,
@@ -731,6 +742,11 @@ export function EmbudoBoardClient({
         onCreate={handleLeadCreate}
         onDelete={handleLeadDelete}
         onAdvanceStage={handleAutoAdvanceStage}
+        onScheduleDemo={
+          selectedCard
+            ? (context) => handleDrawerScheduleDemo(context)
+            : undefined
+        }
       />
 
       <Sheet open={scheduleDialogOpen && !!scheduleContext} onOpenChange={handleScheduleOpenChange}>
@@ -833,6 +849,28 @@ function normalizeStageCode(stage: EmbudoStage | null): string {
   return stage?.codigo?.toLowerCase() ?? "";
 }
 
+function matchesStageCode(value: string, expected: string): boolean {
+  if (!value || !expected) {
+    return false;
+  }
+  const normalized = value.toLowerCase();
+  const target = expected.toLowerCase();
+  return normalized === target || normalized.endsWith(`_${target}`);
+}
+
+function resolveStageRequirementKey(stageCode: string): string | null {
+  if (!stageCode) return null;
+  if (STAGE_REQUIRED_FIELDS[stageCode]) {
+    return stageCode;
+  }
+  const parts = stageCode.split("_");
+  const suffix = parts[parts.length - 1];
+  if (suffix && STAGE_REQUIRED_FIELDS[suffix]) {
+    return suffix;
+  }
+  return null;
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -876,12 +914,13 @@ function buildUpdatedDemoStagePrep(card: EmbudoCard, isoValue: string, bookingId
 
 function getMissingStageRequirement(stage: EmbudoStage, card: EmbudoCard): string | null {
   const stageCode = normalizeStageCode(stage);
-  const requirements = STAGE_REQUIRED_FIELDS[stageCode];
+  const requirementKey = resolveStageRequirementKey(stageCode);
+  const requirements = requirementKey ? STAGE_REQUIRED_FIELDS[requirementKey] : undefined;
   if (!requirements || !requirements.length) {
     return null;
   }
   const stagePrep = extractStagePrep(card);
-  const values = stagePrep[stageCode] ?? {};
+  const values = stagePrep[requirementKey ?? stageCode] ?? {};
   for (const requirement of requirements) {
     const rawValue = values[requirement.key];
     const hasValue =

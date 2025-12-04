@@ -75,6 +75,19 @@ QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 
 
+def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:
+    """Obtiene el booking_id registrado en metadata.stage_prep.demo."""
+    stage_prep = _ensure_dict(metadata.get("stage_prep"), default={})
+    raw_demo = stage_prep.get("demo")
+    if not isinstance(raw_demo, dict):
+        return None
+    booking_value = raw_demo.get("demo_booking_id")
+    if isinstance(booking_value, str):
+        trimmed = booking_value.strip()
+        return trimmed or None
+    return None
+
+
 class CRMAccount(BaseModel):
     """Representación pública de una cuenta."""
 
@@ -3561,8 +3574,10 @@ async def pipeline_update_opportunity(
         exclude_none=True,
         exclude={"expected_etapa_id", "motivo", "fuente"},
     )
+    current_metadata = _ensure_dict(current.get("metadata"), default={})
+    previous_booking_id = _extract_demo_booking_id(current_metadata)
+    merged_metadata = current_metadata
     if "metadata" in update_body:
-        current_metadata = _ensure_dict(current.get("metadata"), default={})
         new_metadata = _ensure_dict(update_body.get("metadata"), default={})
         merged_metadata = {**current_metadata, **new_metadata}
         update_body["metadata"] = merged_metadata
@@ -3574,6 +3589,12 @@ async def pipeline_update_opportunity(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    new_booking_id = _extract_demo_booking_id(merged_metadata)
+    if new_booking_id and new_booking_id != previous_booking_id:
+        await webchat_service.ensure_booking_invite_sent_for_opportunity(
+            booking_id=new_booking_id,
+            oportunidad_id=str(oportunidad_id),
+        )
     if payload.etapa_id and current_stage and payload.etapa_id != current_stage:
         history_payload = {
             "oportunidad_id": str(oportunidad_id),

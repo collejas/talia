@@ -2,15 +2,20 @@ TALIA_ENVIRONMENT=development
 TALIA_LOG_LEVEL=debug
 TALIA_REQUEST_LOG_LEVEL=debug
 
-CLIENTE_PORTAL_BASE_URL=https://talia.mx/portal
+NEXT_PUBLIC_PANEL_API_URL=https://talia.mx/api
+NEXT_PUBLIC_ORGANIZACION_ID=00000000-0000-0000-0000-000000000001
+# NEXT_PUBLIC_USUARIO_ID=b6cc6385-3741-4742-ae83-bcb0d99bc5c5
+
+PANEL_API_URL=http://127.0.0.1:8004/api
+
 
 # =========================
 # OPENAI #
 # =========================
-TALIA_OPENAI_API_KEY=xxxxxxxxx
-TALIA_OPENAI_ASSISTANT_ID=xxxxxxx
+TALIA_OPENAI_API_KEY=xxxxx
+TALIA_OPENAI_ASSISTANT_ID=pmpt_69001211f6688194b2e27f3cf50e959f08c8cd898208331e
 TALIA_OPENAI_PROMPT_VERSION=52
-TALIA_OPENAI_PROJECT_ID=xxxxxxx
+TALIA_OPENAI_PROJECT_ID=xxxxx
 
 # =========================
 # OPENAI (Text + Realtime)
@@ -61,10 +66,10 @@ TTS_VOICE_ES=shimmer
 # =========================
 # Twilio
 # =========================
-TWILIO_ACCOUNT_SID=ACxxxxxxxx
-TWILIO_AUTH_TOKEN=xxxxxx
-TWILIO_PHONE_NUMBER=+5214443354450
-TWILIO_PHONE_NUMBER_SID=PNxxxxxxxxx
+TWILIO_ACCOUNT_SID=xxxxx
+TWILIO_AUTH_TOKEN=xxxxxxx
+TWILIO_PHONE_NUMBER=+14422818909
+TWILIO_PHONE_NUMBER_SID=PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_VALIDATE_SIGNATURES=false
 # =========================
 # TWILIO VOICE / STREAM
@@ -79,22 +84,19 @@ DEBUG_ENERGY_EVERY_N=20
 
 # SUPABASE #
 SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
-SUPABASE_DATABASE_URL=postgresql://postgres:xxxxxxxxxxxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
-SUPABASE_SERVICE_ROLE=eyxxxxxxxxxxxxxx
-SUPABASE_ANON_KEY=eyxxxxxxxxxxx
-SUPABASE_LEGACY_JWT_SECRET=xxxxxxxxx
-SUPABASE_ACCES_TOKEN=xxxxxxxx
-DATABASE_URL=postgresql://postgres:xxxxxxxxxxxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
-SUPABASE_DB_PASSWORD=xxxxxxxxxxxxxxxx
+TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:xxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+SUPABASE_SERVICE_ROLE=xxxxx
+SUPABASE_ANON_KEY=xxxx
+TALIA_SUPABASE_LEGACY_JWT_SECRET=xxxxxx
+TALIA_SUPABASE_ACCES_TOKEN=xxxxx
+DATABASE_URL=postgresql://postgres:xxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
+SUPABASE_DB_PASSWORD=xxxxxx
 TALIA_WEBCHAT_INACTIVITY_HOURS=2
 TALIA_WEBCHAT_PERSIST_SESSION=false
-TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
-TALIA_SUPABASE_SERVICE_ROLE=eyxxxxxxxxxxxxxxxxxxxxx
-
 
 # CORREO #
 TALIA_MAIL_USERNAME=hola@talia.mx
-TALIA_MAIL_CONTRASENA=xxxxxxxxxxxxxxxx
+TALIA_MAIL_CONTRASENA=xxxxx
 TALIA_MAIL_INCOMING_SERVER=mail.talia.mx
 TALIA_MAIL_INCOMING_PORT_IMAP=993
 TALIA_MAIL_OUTGOING_SERVER=mail.talia.mx 
@@ -105,7 +107,7 @@ TALIA_MAIL_USE_TLS=false
 # CALENDARIO #
 TALIA_CALENDARIO_DEFAULT_PROVIDER=caldav
 TALIA_CALENDARIO_USERNAME=hola@talia.mx
-TALIA_CALENDARIO_PASSWORD=xxxxxxxxxxxxxxxx
+TALIA_CALENDARIO_PASSWORD=xxxxx
 TALIA_CALENDARIO_SERVER_URL=https://mail.talia.mx:2080
 TALIA_CALENDARIO_SERVER_PORT=2080
 TALIA_CALENDARIO_SERVER_URL_ALTERNATE=https://mail.talia.mx:2080/principals/hola@talia.mx
@@ -113,18 +115,10 @@ TALIA_CALENDARIO_FULL_CALENDAR_URL=https://mail.talia.mx:2080/calendars/hola@tal
 TALIA_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/hola@talia.mx/addressbook    
 
 # CALENDARIO WEBCHAT #
-TALIA_WEBCHAT_CALENDAR_RESOURCE_ID=xxxxxxxxx
+TALIA_WEBCHAT_CALENDAR_RESOURCE_ID=e4ee6bea-b6ff-4b65-b40c-26781d4c4bac
 TALIA_WEBCHAT_CALENDAR_TIMEZONE=America/Mexico_City
 TALIA_WEBCHAT_CALENDAR_DEFAULT_DAYS=21
 TALIA_WEBCHAT_CALENDAR_HOLD_MINUTES=10
-
-# =========================
-# WHATSAPP (OpenAI)
-# =========================
-TALIA_WHATSAPP_PROMPT_ID=pmpt_691bd623c2608196a7dd9646b7d32b340862d6f7999aec71
-TALIA_WHATSAPP_PROMPT_VERSION=4
-TALIA_WHATSAPP_ASSISTANT_ID=
-TALIA_WHATSAPP_INACTIVITY_HOURS=24
 
 # =========================
 # GOOGLE OAUTH
@@ -133,11 +127,11 @@ GOOGLE_CLIENT_ID=551023546216-sm8hcporfdk1upstdhdu1tci8fcjt5va.apps.googleuserco
 GOOGLE_CLIENT_SECRET=xxxxxxxxxx
 GOOGLE_REDIRECT_URI=https://maria.geoactiv.mx/auth/google/callback
 API_NEARBY_SEARCH="https://places.googleapis.com/v1/places:searchNearby"
-GOOGLE_PLACES_API_KEY=xxxxxxxx
+GOOGLE_PLACES_API_KEY=xxxxx
 PLACES_LANGUAGE_CODE=es
 PLACES_REGION_CODE=MX
 
 # =========================
 # DENUE
 # =========================
-DENUE_TOKEN=xxxxxxxx
+DENUE_TOKEN=xxxx

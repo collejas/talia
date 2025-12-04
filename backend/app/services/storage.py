@@ -1123,6 +1123,69 @@ async def record_demo_booking_metadata(
     log_event(logger, "demo_booking.metadata_updated", **log_context)
 
 
+async def fetch_opportunity_contact(
+    *,
+    oportunidad_id: str,
+    organizacion_id: str | None,
+) -> dict[str, Any] | None:
+    """Obtiene el contacto principal ligado a la oportunidad indicada.
+
+    Si no se proporciona organizacion_id, se busca directamente por oportunidad
+    usando credenciales de service role (válido para tareas internas).
+    """
+    org_uuid: UUID | None = None
+    try:
+        opp_uuid = UUID(str(oportunidad_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("opportunity_contact_invalid_id") from exc
+    if organizacion_id:
+        try:
+            org_uuid = UUID(str(organizacion_id))
+        except (TypeError, ValueError) as exc:
+            raise StorageError("opportunity_contact_invalid_org") from exc
+
+    repo = CRMRepository()
+    try:
+        if org_uuid:
+            opportunity = await repo.get_pipeline_opportunity(
+                organizacion_id=org_uuid,
+                oportunidad_id=opp_uuid,
+            )
+        else:
+            opportunity = await repo.get_pipeline_opportunity_by_id(
+                oportunidad_id=opp_uuid,
+            )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    if not opportunity:
+        return None
+    contact = opportunity.get("contacto")
+    if not isinstance(contact, dict):
+        return None
+    result = dict(contact)
+    resolved_org = opportunity.get("organizacion_id") or (str(org_uuid) if org_uuid else None)
+    if resolved_org:
+        result.setdefault("organizacion_id", resolved_org)
+    return result
+
+
+async def fetch_calendar_booking(booking_id: str) -> dict[str, Any] | None:
+    """Obtiene una cita del calendario utilizando credenciales de servicio."""
+    booking_key = str(booking_id or "").strip()
+    if not booking_key:
+        return None
+    try:
+        booking_uuid = UUID(booking_key)
+    except (TypeError, ValueError) as exc:
+        raise StorageError("calendar_booking_invalid_id") from exc
+    repo = CRMRepository()
+    try:
+        return await repo.get_calendar_booking_by_id(booking_id=booking_uuid)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
 async def capture_opportunity_if_ready(
     *,
     conversation_id: str,

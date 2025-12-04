@@ -128,6 +128,11 @@ type LeadDrawerProps = {
     stage: EmbudoStage,
     context: LeadAdvanceStagePayload,
   ) => Promise<{ ok: boolean; error?: string }>;
+  onScheduleDemo?: (context: {
+    card: EmbudoCard;
+    originStage: EmbudoStage | null;
+    targetStage: EmbudoStage;
+  }) => void;
 };
 
 type QuoteChannel = "email" | "whatsapp";
@@ -619,6 +624,7 @@ export function LeadDrawer({
   onCreate,
   onDelete,
   onAdvanceStage,
+  onScheduleDemo,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
   const stageName = currentStage?.nombre ?? "Sin etapa";
@@ -2200,6 +2206,15 @@ export function LeadDrawer({
                       const IconComponent = resolveStageIcon(stage.codigo);
                       const { completed, total } = countStageFields(stage.codigo, sections, stagePrep);
                       const progress = total ? Math.round((completed / total) * 100) : 0;
+                      const stageCode = typeof stage.codigo === "string" ? stage.codigo.toLowerCase() : "";
+                      const showScheduleDemoButton =
+                        !!(
+                          onScheduleDemo &&
+                          card &&
+                          card.conversacionId &&
+                          !isCreateMode &&
+                          isDemoStageCode(stageCode)
+                        );
                       return (
                         <div key={stage.id} className="relative">
                           <span
@@ -2246,20 +2261,42 @@ export function LeadDrawer({
                               ) : null}
                             </div>
                           </div>
-                              {total ? (
-                                <div className="min-w-[140px] flex-1">
-                                  <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                                    <span>Progreso</span>
-                                    <span>{progress}%</span>
+                              <div className="flex min-w-[160px] flex-1 flex-col items-stretch gap-2">
+                                {showScheduleDemoButton ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    className="justify-center gap-1"
+                                    disabled={isBusy || stageLocked}
+                                    onClick={() =>
+                                      card &&
+                                      onScheduleDemo?.({
+                                        card,
+                                        originStage: currentStage,
+                                        targetStage: stage,
+                                      })
+                                    }
+                                  >
+                                    <IconCalendarEvent className="size-4" />
+                                    Agendar demo
+                                  </Button>
+                                ) : null}
+                                {total ? (
+                                  <div className="min-w-[140px]">
+                                    <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                                      <span>Progreso</span>
+                                      <span>{progress}%</span>
+                                    </div>
+                                    <div className="mt-1 h-1.5 rounded-full bg-white/60">
+                                      <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{ width: `${progress}%`, backgroundColor: tokens.accentColor }}
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="mt-1 h-1.5 rounded-full bg-white/60">
-                                    <div
-                                      className="h-full rounded-full transition-all"
-                                      style={{ width: `${progress}%`, backgroundColor: tokens.accentColor }}
-                                    />
-                                  </div>
-                                </div>
-                              ) : null}
+                                ) : null}
+                              </div>
                             </div>
 
                             <div className="mt-4 space-y-4">
@@ -3281,6 +3318,12 @@ function resolveStageTokens(stage: EmbudoStage): StageVisualTokens {
 
 function resolveStageIcon(stageCode: string) {
   return STAGE_ICON_MAP[stageCode] ?? IconMessageCircle;
+}
+
+function isDemoStageCode(stageCode: string): boolean {
+  if (!stageCode) return false;
+  const normalized = stageCode.toLowerCase();
+  return normalized === "demo" || normalized.endsWith("_demo");
 }
 
 function countStageFields(
