@@ -4650,7 +4650,7 @@ def _resolve_conversation_channel(
             trimmed = candidate.strip()
             if trimmed:
                 return trimmed
-    return "webchat"
+    return "manual"
 
 
 async def _persist_opportunity_conversation_metadata(

@@ -356,6 +356,15 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     baseMetadata.created_stage_id = input.stageId;
   }
 
+  const baseCanal =
+    typeof baseMetadata.canal === "string" && baseMetadata.canal.trim().length
+      ? baseMetadata.canal.trim()
+      : null;
+  const resolvedCanal =
+    sanitizeNullableString(opportunityInput.canal) ??
+    baseCanal ??
+    "manual";
+
   const opportunityPayload: Record<string, unknown> = {
     etapa_id: input.stageId,
     contacto_principal_id: contactId,
@@ -378,7 +387,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
     asignado_a_usuario_id: userId,
     metadata: {
       ...baseMetadata,
-      canal: opportunityInput.canal ?? baseMetadata.canal,
+      canal: resolvedCanal,
       lead_score: opportunityInput.lead_score ?? baseMetadata.lead_score,
     },
   };

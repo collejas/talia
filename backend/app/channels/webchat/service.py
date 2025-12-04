@@ -815,13 +815,17 @@ async def schedule_calendar_booking(
     contact_id = str(contact_value) if contact_value else None
     if not contact_id:
         raise ValueError("No fue posible asociar la cita con el contacto de la conversación.")
+    raw_channel = conversation_meta.get("channel")
+    channel_value = raw_channel.strip().lower() if isinstance(raw_channel, str) else ""
+    if not channel_value:
+        channel_value = "webchat"
     contact: dict[str, Any] | None = await _resolve_contact(contact_id)
     organizacion_id = _extract_contact_org(contact)
     try:
         tarjeta_id = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
             contact_id=contact_id,
-            channel="webchat",
+            channel=channel_value,
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -836,7 +840,7 @@ async def schedule_calendar_booking(
     try:
         hold_metadata: dict[str, Any] = {
             "slot_id": slot_identifier,
-            "source": "webchat",
+            "source": channel_value,
             "session_id": session_id,
             "conversation_id": conversation_id,
             "tarjeta_id": tarjeta_id,
@@ -858,6 +862,7 @@ async def schedule_calendar_booking(
             "contact_id": contact_id,
             "session_id": session_id,
             "tarjeta_id": tarjeta_id,
+            "channel": channel_value,
         }
         if organizacion_id:
             booking_metadata["organizacion_id"] = organizacion_id
@@ -877,7 +882,7 @@ async def schedule_calendar_booking(
         booking=booking_response,
         tarjeta_id=tarjeta_id,
         contact=contact,
-        channel="webchat",
+        channel=channel_value,
     )
     await _send_booking_confirmation_email(
         booking=booking_response,
@@ -899,6 +904,10 @@ async def reschedule_calendar_booking(
     conversation_meta = await _resolve_conversation_metadata(conversation_id)
     contact_raw = conversation_meta.get("contact_id") if conversation_meta else None
     contact_id = str(contact_raw) if contact_raw else None
+    raw_channel = conversation_meta.get("channel") if conversation_meta else None
+    channel_value = raw_channel.strip().lower() if isinstance(raw_channel, str) else ""
+    if not channel_value:
+        channel_value = "webchat"
     try:
         booking = await calendar_service.reschedule_booking(
             booking_id=booking_id,
@@ -914,7 +923,7 @@ async def reschedule_calendar_booking(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
         contact=contact,
-        channel="webchat",
+        channel=channel_value,
     )
     await _send_booking_confirmation_email(
         booking=booking_response,
