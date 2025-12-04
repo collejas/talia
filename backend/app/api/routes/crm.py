@@ -324,6 +324,28 @@ class AgendaCancelPayload(BaseModel):
     reason: str | None = Field(default=None, description="Motivo compartido por el cliente.")
 
 
+class AgendaBookingCreatePayload(BaseModel):
+    """Payload para crear citas desde el CRM."""
+
+    start_at: str = Field(..., description="Fecha/hora en ISO 8601 con zona horaria.")
+    notes: str | None = Field(default=None, description="Notas internas para la cita.")
+    session_id: str | None = Field(
+        default=None,
+        description="Session_id opcional para conversaciones webchat.",
+    )
+    conversation_id: UUID | None = Field(
+        default=None, description="Conversación existente vinculada al lead."
+    )
+    contacto_id: UUID | None = Field(
+        default=None, description="Contacto asociado a la oportunidad."
+    )
+    oportunidad_id: UUID | None = Field(default=None, description="Oportunidad asociada a la cita.")
+    canal: str | None = Field(
+        default=None,
+        description="Canal de origen preferido para la conversación (ej. crm, webchat).",
+    )
+
+
 class DeleteResultadosPayload(BaseModel):
     """IDs de resultados a eliminar."""
 
@@ -4555,6 +4577,116 @@ async def upload_inbox_attachment(
     return {"ok": True, "attachment": uploaded}
 
 
+def _stringify_uuid(value: UUID | str | None) -> str | None:
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    return None
+
+
+def _extract_opportunity_contact_id(opportunity: dict[str, Any] | None) -> UUID | None:
+    if not isinstance(opportunity, dict):
+        return None
+    for key in ("contacto_principal_id", "contacto_id"):
+        candidate = _safe_uuid(opportunity.get(key))
+        if candidate:
+            return candidate
+    contact = opportunity.get("contacto")
+    if isinstance(contact, dict):
+        candidate = _safe_uuid(contact.get("id"))
+        if candidate:
+            return candidate
+    return None
+
+
+def _extract_opportunity_conversation_id(opportunity: dict[str, Any] | None) -> str | None:
+    if not isinstance(opportunity, dict):
+        return None
+    metadata = _ensure_dict(opportunity.get("metadata"), default={})
+    for key in ("conversation_id", "conversacion_id"):
+        value = metadata.get(key)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _extract_opportunity_assignment_id(opportunity: dict[str, Any] | None) -> UUID | None:
+    if not isinstance(opportunity, dict):
+        return None
+    for key in ("asignado_a_usuario_id", "propietario_usuario_id"):
+        candidate = _safe_uuid(opportunity.get(key))
+        if candidate:
+            return candidate
+    asignado = opportunity.get("asignado")
+    if isinstance(asignado, dict):
+        candidate = _safe_uuid(asignado.get("id"))
+        if candidate:
+            return candidate
+    propietario = opportunity.get("propietario")
+    if isinstance(propietario, dict):
+        candidate = _safe_uuid(propietario.get("id"))
+        if candidate:
+            return candidate
+    return None
+
+
+def _resolve_conversation_channel(
+    preferred: str | None,
+    opportunity: dict[str, Any] | None,
+) -> str:
+    candidates: list[str | None] = [preferred]
+    if isinstance(opportunity, dict):
+        candidates.append(opportunity.get("canal"))
+        metadata = _ensure_dict(opportunity.get("metadata"), default={})
+        candidates.append(metadata.get("channel"))
+        candidates.append(metadata.get("canal"))
+    for candidate in candidates:
+        if isinstance(candidate, str):
+            trimmed = candidate.strip()
+            if trimmed:
+                return trimmed
+    return "webchat"
+
+
+async def _persist_opportunity_conversation_metadata(
+    *,
+    repo: CRMRepository,
+    opportunity: dict[str, Any] | None,
+    conversation_id: str,
+) -> None:
+    if not isinstance(opportunity, dict):
+        return
+    org_uuid = _safe_uuid(opportunity.get("organizacion_id"))
+    opp_uuid = _safe_uuid(opportunity.get("id"))
+    if not org_uuid or not opp_uuid:
+        return
+    metadata = _ensure_dict(opportunity.get("metadata"), default={})
+    existing = metadata.get("conversation_id")
+    if isinstance(existing, str) and existing.strip() == conversation_id:
+        return
+    metadata["conversation_id"] = conversation_id
+    if "conversacion_id" in metadata:
+        metadata["conversacion_id"] = conversation_id
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload={"metadata": metadata},
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "agenda.booking.metadata_patch_failed",
+            extra={
+                "oportunidad_id": str(opp_uuid),
+                "error": str(exc),
+            },
+        )
+
+
 @router.get("/agenda/bookings")
 async def list_agenda_bookings(
     *,
@@ -4711,6 +4843,93 @@ async def list_agenda_bookings(
         "offset": offset,
         "has_more": computed_total > offset + raw_count,
     }
+
+
+@router.post("/agenda/bookings")
+async def create_agenda_booking(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    payload: AgendaBookingCreatePayload,
+) -> dict[str, Any]:
+    if (
+        payload.conversation_id is None
+        and payload.contacto_id is None
+        and payload.oportunidad_id is None
+    ):
+        raise HTTPException(status_code=400, detail="identificadores_requeridos")
+
+    start_dt = _parse_datetime_input(payload.start_at, field="start_at")
+
+    opportunity_row: dict[str, Any] | None = None
+    if payload.oportunidad_id:
+        try:
+            opportunity_row = await repo.get_pipeline_opportunity_by_id(
+                oportunidad_id=payload.oportunidad_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if opportunity_row is None:
+            raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+
+    conversation_id = _stringify_uuid(payload.conversation_id)
+    contact_uuid = payload.contacto_id
+
+    if opportunity_row:
+        if contact_uuid is None:
+            contact_uuid = _extract_opportunity_contact_id(opportunity_row)
+        if conversation_id is None:
+            conversation_id = _extract_opportunity_conversation_id(opportunity_row)
+
+    if conversation_id is None and contact_uuid is None:
+        raise HTTPException(status_code=400, detail="contacto_id_requerido")
+
+    if conversation_id is None and contact_uuid is not None:
+        try:
+            existing_conversation = await repo.get_latest_conversation_for_contact(
+                contacto_id=contact_uuid,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if existing_conversation:
+            conversation_id = _stringify_uuid(existing_conversation.get("id"))
+
+    if conversation_id is None and contact_uuid is not None:
+        assigned_uuid = _extract_opportunity_assignment_id(opportunity_row)
+        channel_value = _resolve_conversation_channel(payload.canal, opportunity_row)
+        try:
+            created_conversation = await repo.create_conversation(
+                contacto_id=contact_uuid,
+                canal=channel_value,
+                estado="abierta",
+                asignado_a_usuario_id=assigned_uuid,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        conversation_id = _stringify_uuid(created_conversation.get("id"))
+
+    if conversation_id is None:
+        raise HTTPException(status_code=400, detail="conversation_id_requerido")
+
+    if opportunity_row:
+        await _persist_opportunity_conversation_metadata(
+            repo=repo,
+            opportunity=opportunity_row,
+            conversation_id=conversation_id,
+        )
+
+    try:
+        booking = await webchat_service.schedule_calendar_booking(
+            conversation_id=conversation_id,
+            slot_id=None,
+            start_at=start_dt,
+            notes=payload.notes,
+            session_id=payload.session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"ok": True, "booking": booking}
 
 
 @router.get("/agenda/availability")

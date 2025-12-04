@@ -1259,6 +1259,64 @@ class CRMRepository:
             raise CRMRepositoryError("conversation_not_found")
         return row
 
+    async def get_latest_conversation_for_contact(
+        self,
+        *,
+        contacto_id: UUID,
+        canal: str | None = None,
+    ) -> dict[str, Any] | None:
+        params = {
+            "contacto_id": f"eq.{contacto_id}",
+            "order": "iniciada_en.desc",
+            "limit": "1",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
+    async def create_conversation(
+        self,
+        *,
+        contacto_id: UUID,
+        canal: str,
+        estado: str | None = None,
+        asignado_a_usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "contacto_id": str(contacto_id),
+            "canal": canal,
+        }
+        if estado:
+            body["estado"] = estado
+        if asignado_a_usuario_id:
+            body["asignado_a_usuario_id"] = str(asignado_a_usuario_id)
+        resp = await self._request(
+            "POST",
+            "/rest/v1/conversaciones",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("conversation_create_failed")
+        return row
+
     async def get_webchat_contact_id_by_session(self, *, session_id: str) -> str | None:
         session_key = session_id.strip()
         if not session_key:

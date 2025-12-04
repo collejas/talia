@@ -89,12 +89,15 @@ export type AgendaActionResponse = {
   ok: boolean;
   booking: {
     booking_id: string;
+    resource_id: string;
     start_at: string;
     end_at: string | null;
     timezone: string | null;
     status: string;
+    hold_id: string | null;
     notes: string | null;
     metadata: Record<string, unknown> | null;
+    tarjeta_id?: string | null;
   };
 };
 

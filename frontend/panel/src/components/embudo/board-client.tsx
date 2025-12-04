@@ -82,6 +82,12 @@ function sortStages(stages: EmbudoStage[]): EmbudoStage[] {
   });
 }
 
+function sanitizeString(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
 function sortCards(cards: EmbudoCard[]): EmbudoCard[] {
   return [...cards].sort((a, b) => {
     const aTime = a.actualizadoEn ? Date.parse(a.actualizadoEn) : 0;
@@ -262,18 +268,20 @@ export function EmbudoBoardClient({
       return;
     }
 
-    if (!scheduleContext.card.conversacionId) {
-      setScheduleError("Este lead no tiene conversación vinculada, no puedo agendar la demo.");
-      return;
-    }
-
     setScheduleError(null);
     setSchedulePending(true);
     setMovePending(true);
 
-    const bookingResult = await scheduleLeadDemo({
-      conversationId: scheduleContext.card.conversacionId,
+    const bookingPayload = {
+      conversationId: sanitizeString(scheduleContext.card.conversacionId),
+      contactoId: sanitizeString(scheduleContext.card.contactoId),
+      oportunidadId: scheduleContext.card.oportunidadId,
+      canal: sanitizeString(scheduleContext.card.canal),
       startAt: isoValue,
+    };
+
+    const bookingResult = await scheduleLeadDemo({
+      ...bookingPayload,
     });
 
     if (!bookingResult.ok) {
@@ -480,17 +488,13 @@ export function EmbudoBoardClient({
     if (!isoValue) {
       return { ok: false as const, error: "La fecha de la demo no tiene un formato válido." };
     }
-    if (!selectedCard.conversacionId) {
-      return {
-        ok: false as const,
-        error: "Este lead no tiene conversación vinculada, no puedo agendar la demo.",
-      };
-    }
-
     setMovePending(true);
     try {
       const bookingResult = await scheduleLeadDemo({
-        conversationId: selectedCard.conversacionId,
+        conversationId: sanitizeString(selectedCard.conversacionId),
+        contactoId: sanitizeString(selectedCard.contactoId),
+        oportunidadId: selectedCard.oportunidadId,
+        canal: sanitizeString(selectedCard.canal),
         startAt: isoValue,
       });
       if (!bookingResult.ok) {

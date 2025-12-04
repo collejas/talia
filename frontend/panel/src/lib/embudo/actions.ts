@@ -6,9 +6,8 @@ import { cookies } from "next/headers";
 import { updateTag } from "next/cache";
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
-import { resolvePanelApiToken } from "@/lib/auth/panel-token";
 import { callCrmApi } from "@/lib/api/crm";
-import { getPanelApiBaseUrl } from "@/lib/api/panel";
+import { callPanelAgendaEndpoint, type AgendaActionResponse } from "@/lib/agenda/data";
 import type {
   EmbudoCard,
   EmbudoStage,
@@ -60,7 +59,7 @@ type PipelineCardResponse = {
 };
 
 type CalendarBookingResponseRow = {
-  status: "ok";
+  status: string;
   booking_id: string;
   resource_id: string;
   start_at: string;
@@ -69,11 +68,14 @@ type CalendarBookingResponseRow = {
   hold_id?: string | null;
   notes: string | null;
   metadata: Record<string, unknown> | null;
-  tarjeta_id: string | null;
+  tarjeta_id?: string | null;
 };
 
 export type ScheduleLeadDemoInput = {
-  conversationId: string;
+  conversationId?: string | null;
+  contactoId?: string | null;
+  oportunidadId?: string | null;
+  canal?: string | null;
   startAt: string;
   notes?: string | null;
   sessionId?: string | null;
@@ -200,32 +202,27 @@ function logDebug(step: string, payload?: Record<string, unknown>) {
 }
 
 export async function scheduleLeadDemo(input: ScheduleLeadDemoInput): Promise<ScheduleLeadDemoResult> {
+  const payload = removeUndefined({
+    conversation_id: input.conversationId ?? undefined,
+    contacto_id: input.contactoId ?? undefined,
+    oportunidad_id: input.oportunidadId ?? undefined,
+    canal: input.canal ?? undefined,
+    start_at: input.startAt,
+    notes: input.notes ?? undefined,
+    session_id: input.sessionId ?? undefined,
+  });
+
   try {
-    const token = await resolvePanelApiToken();
-    const baseUrl = getPanelApiBaseUrl();
-    const response = await fetch(`${baseUrl}/webchat/calendar/bookings`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    const response = await callPanelAgendaEndpoint<AgendaActionResponse>(
+      "/agenda/bookings",
+      {},
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify({
-        conversation_id: input.conversationId,
-        slot_id: null,
-        start_at: input.startAt,
-        notes: input.notes ?? null,
-        session_id: input.sessionId ?? null,
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      return { ok: false, error: text || "No se pudo agendar la demo." };
-    }
-
-    const booking = (await response.json()) as CalendarBookingResponseRow;
-    return { ok: true, booking };
+    );
+    return { ok: true, booking: response.booking };
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo agendar la demo.";
     return { ok: false, error: message };
