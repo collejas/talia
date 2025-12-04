@@ -38,7 +38,6 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
 import { toast } from "sonner";
 
@@ -824,23 +823,25 @@ export function EmbudoBoardClient({
               <p className="text-xs text-muted-foreground">Usa tu zona horaria local.</p>
             </div>
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Modalidad *</Label>
-              <Select
+              <Label htmlFor="schedule-demo-format" className="text-sm font-medium">
+                Modalidad *
+              </Label>
+              <select
+                id="schedule-demo-format"
                 value={scheduleFormat}
-                onValueChange={setScheduleFormat}
+                onChange={(event) => setScheduleFormat(event.target.value)}
                 disabled={schedulePending}
+                className="bg-background border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Selecciona la modalidad" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEMO_FORMAT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="" disabled>
+                  Selecciona la modalidad
+                </option>
+                {DEMO_FORMAT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="schedule-demo-link" className="text-sm font-medium">
