@@ -260,7 +260,12 @@ export function EmbudoBoardClient({
       return;
     }
 
-    const stagePrep = buildUpdatedDemoStagePrep(scheduleContext.card, isoValue, bookingResult.booking.booking_id);
+    const stagePrep = buildUpdatedDemoStagePrep(
+      scheduleContext.card,
+      isoValue,
+      bookingResult.booking.booking_id,
+      scheduleContext.destinationStage.codigo,
+    );
     const updateResult = await updateLeadCard({
       oportunidadId: scheduleContext.card.oportunidadId,
       contactoId: scheduleContext.card.contactoId,
@@ -467,6 +472,7 @@ export function EmbudoBoardClient({
         selectedCard,
         isoValue,
         bookingResult.booking.booking_id,
+        targetStage.codigo,
       );
       const updateResult = await updateLeadCard({
         oportunidadId: selectedCard.oportunidadId,
@@ -602,7 +608,11 @@ export function EmbudoBoardClient({
       return;
     }
 
-    const missingStageRequirement = getMissingStageRequirement(destinationStage, activeDragCard);
+    const destinationCode = normalizeStageCode(destinationStage);
+    const skipStageRequirementCheck = matchesStageCode(destinationCode, DEMO_STAGE_CODE);
+    const missingStageRequirement = skipStageRequirementCheck
+      ? null
+      : getMissingStageRequirement(destinationStage, activeDragCard);
     if (missingStageRequirement) {
       setDragMessage(
         `Completa el campo “${missingStageRequirement}” en la sección ${destinationStage.nombre} antes de avanzar.`,
@@ -611,7 +621,6 @@ export function EmbudoBoardClient({
       return;
     }
 
-    const destinationCode = normalizeStageCode(destinationStage);
     if (destinationCode === "cerrado_ganado") {
       const acceptedCheck = await ensureLeadHasAcceptedQuote(activeDragCard.oportunidadId);
       if (!acceptedCheck.ok) {
@@ -844,6 +853,7 @@ function useDraggableCard({ card, stageId, dragDisabled }: UseDraggableCardArgs)
 }
 
 type StagePrepMetadata = Record<string, Record<string, unknown>>;
+type StagePrepEntry = { key: string; value: Record<string, unknown> };
 
 function normalizeStageCode(stage: EmbudoStage | null): string {
   return stage?.codigo?.toLowerCase() ?? "";
@@ -856,6 +866,46 @@ function matchesStageCode(value: string, expected: string): boolean {
   const normalized = value.toLowerCase();
   const target = expected.toLowerCase();
   return normalized === target || normalized.endsWith(`_${target}`);
+}
+
+function resolveStagePrepEntry(stagePrep: StagePrepMetadata, ...codes: Array<string | null | undefined>): StagePrepEntry | null {
+  if (!stagePrep) return null;
+  const normalizedCodes: string[] = [];
+  const seen = new Set<string>();
+  for (const code of codes) {
+    if (typeof code !== "string") continue;
+    const trimmed = code.trim().toLowerCase();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    normalizedCodes.push(trimmed);
+  }
+  if (!normalizedCodes.length) {
+    return null;
+  }
+
+  const entries = Object.entries(stagePrep);
+
+  for (const candidate of normalizedCodes) {
+    const direct = entries.find(([key]) => key.toLowerCase() === candidate);
+    if (direct) {
+      const [key, value] = direct;
+      return { key, value };
+    }
+  }
+
+  for (const candidate of normalizedCodes) {
+    const suffix = candidate.split("_").pop();
+    if (!suffix) continue;
+    const normalizedSuffix = suffix.toLowerCase();
+    for (const [key, value] of entries) {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey === normalizedSuffix || normalizedKey.endsWith(`_${normalizedSuffix}`)) {
+        return { key, value };
+      }
+    }
+  }
+
+  return null;
 }
 
 function resolveStageRequirementKey(stageCode: string): string | null {
@@ -893,22 +943,29 @@ function extractStagePrep(card: EmbudoCard | null): StagePrepMetadata {
 
 function readDemoScheduledAt(card: EmbudoCard | null): string | null {
   const stagePrep = extractStagePrep(card);
-  const demoPrep = stagePrep[DEMO_STAGE_CODE];
-  if (!demoPrep) return null;
-  const value = demoPrep["demo_scheduled_at"];
+  const entry = resolveStagePrepEntry(stagePrep, DEMO_STAGE_CODE);
+  if (!entry) return null;
+  const value = entry.value["demo_scheduled_at"];
   return typeof value === "string" ? value : null;
 }
 
-function buildUpdatedDemoStagePrep(card: EmbudoCard, isoValue: string, bookingId?: string | null): StagePrepMetadata {
+function buildUpdatedDemoStagePrep(
+  card: EmbudoCard,
+  isoValue: string,
+  bookingId?: string | null,
+  stageCode?: string | null,
+): StagePrepMetadata {
   const current = extractStagePrep(card);
-  const demoPrep: Record<string, unknown> = { ...(current[DEMO_STAGE_CODE] ?? {}) };
+  const resolvedEntry = resolveStagePrepEntry(current, stageCode, DEMO_STAGE_CODE);
+  const targetKey = resolvedEntry?.key ?? (stageCode?.trim().toLowerCase() || DEMO_STAGE_CODE);
+  const demoPrep: Record<string, unknown> = { ...(resolvedEntry?.value ?? {}) };
   demoPrep["demo_scheduled_at"] = isoValue;
   if (bookingId) {
     demoPrep["demo_booking_id"] = bookingId;
   }
   return {
     ...current,
-    [DEMO_STAGE_CODE]: demoPrep,
+    [targetKey]: demoPrep,
   };
 }
 
@@ -920,7 +977,8 @@ function getMissingStageRequirement(stage: EmbudoStage, card: EmbudoCard): strin
     return null;
   }
   const stagePrep = extractStagePrep(card);
-  const values = stagePrep[requirementKey ?? stageCode] ?? {};
+  const entry = resolveStagePrepEntry(stagePrep, stage.codigo, stageCode, requirementKey);
+  const values = entry?.value ?? {};
   for (const requirement of requirements) {
     const rawValue = values[requirement.key];
     const hasValue =
