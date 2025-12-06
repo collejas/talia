@@ -21,15 +21,16 @@ class AssistantConfig:
 
 def get_landing_assistant() -> AssistantConfig:
     """Retorna el asistente utilizado por la landing conversacional."""
-    if not settings.openai_assistant_id:
+    target_id = settings.openai_webchat_assistant_id or settings.openai_assistant_id
+    if not target_id:
         msg = "OPENAI_ASSISTANT_ID is not configured"
         raise RuntimeError(msg)
-    target_id = settings.openai_assistant_id
+
     if target_id.startswith("pmpt_"):
         return AssistantConfig(
             assistant_id=None,
             prompt_id=target_id,
-            prompt_version=settings.openai_prompt_version,
+            prompt_version=settings.openai_prompt_webchat_version or settings.openai_prompt_version,
             project_id=settings.openai_project_id,
         )
     return AssistantConfig(

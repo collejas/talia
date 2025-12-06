@@ -17,7 +17,8 @@ export async function initialiseTheme({
   bodyEl = document.body,
   metaEl = document.querySelector('meta[name="theme-color"]'),
   storageKey = 'talia-theme-preference-v2',
-  remoteModuleUrl = '/api/panel/assets/js/theme.js',
+  // Sirve el gestor de temas desde los assets estáticos para evitar CORS/MIME issues
+  remoteModuleUrl = '/assets/js/theme.js',
 } = {}) {
   if (!bodyEl) return null;
 

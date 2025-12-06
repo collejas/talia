@@ -60,6 +60,7 @@ libglib2.0-0
 
 # levantar servicio:
 poetry run uvicorn app.main:app --reload --port 8004
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8004 --env-file .env
 
 FUa7NWxedjsEGv5
 
@@ -98,6 +99,9 @@ https://github.com/collejas/buscador.git
 npm run dev
 http://127.0.0.1:3000/dashboard
 http://127.0.0.1:3000/auth/login
+
+# Entarada a Ser
+ssh-copy-id jorge T@67.205.156.148
 
 codex resume 019af039-60a6-77b0-9f5a-fee230b2eb4e
 

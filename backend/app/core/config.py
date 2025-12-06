@@ -33,7 +33,22 @@ class Settings(BaseSettings):
     )
     openai_api_key: str | None = None
     openai_assistant_id: str | None = None
+    # Específico para el webchat (landing). Si no se define, se usa openai_assistant_id.
+    openai_webchat_assistant_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "TALIA_OPENAI_WEBCHAT_ASSISTANT_ID",
+            "OPENAI_WEBCHAT_ASSISTANT_ID",
+        ),
+    )
     openai_prompt_version: str | None = None
+    openai_prompt_webchat_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "TALIA_OPENAI_PROMPT_WEBCHAT_VERSION",
+            "OPENAI_PROMPT_WEBCHAT_VERSION",
+        ),
+    )
     openai_project_id: str | None = None
     twilio_account_sid: str | None = Field(
         default=None,
