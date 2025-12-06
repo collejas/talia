@@ -7,11 +7,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/devuser/talia/backend
-ExecStart=/home/devuser/talia/backend/scripts/run_api.sh
+WorkingDirectory=/var/www/talia/backend
+ExecStart=/var/www/talia/backend/scripts/run_api.sh
+EnvironmentFile=/var/www/talia/backend/.env
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+User=root
 
 [Install]
 WantedBy=multi-user.target
@@ -27,19 +29,30 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/devuser/talia/frontend/panel
+
+# Código del panel
+WorkingDirectory=/var/www/talia/frontend/panel
+
+# Variables de entorno
 Environment=NODE_ENV=production
 Environment=PANEL_API_URL=http://127.0.0.1:8004/api
-Environment=PATH=/home/devuser/.nvm/versions/node/v20.19.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStartPre=/usr/bin/install -o devuser -g devuser -m 0755 -d /home/devuser/talia/logs
-ExecStartPre=/usr/bin/install -o devuser -g devuser -m 0644 /dev/null /home/devuser/talia/logs/panel.log
-ExecStartPre=/usr/bin/install -o devuser -g devuser -m 0644 /dev/null /home/devuser/talia/logs/panel-error.log
-ExecStart=/home/devuser/.nvm/versions/node/v20.19.5/bin/npm run start -- -p 3001
+
+# Crear carpeta de logs (propietario root)
+ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs
+ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel.log
+ExecStartPre=/usr/bin/touch /var/www/talia/logs/panel-error.log
+
+# Usamos npm global (ajusta si `which npm` te da otra ruta)
+ExecStart=/usr/bin/npm run start -- -p 3001
+
 Restart=on-failure
 RestartSec=5
-User=devuser
-StandardOutput=append:/home/devuser/talia/logs/panel.log
-StandardError=append:/home/devuser/talia/logs/panel-error.log
+
+# Lo corremos como root por ahora (luego podemos crear devuser y bajar privilegios)
+User=root
+
+StandardOutput=append:/var/www/talia/logs/panel.log
+StandardError=append:/var/www/talia/logs/panel-error.log
 
 [Install]
 WantedBy=multi-user.target

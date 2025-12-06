@@ -1,6 +1,7 @@
 TALIA_ENVIRONMENT=development
 TALIA_LOG_LEVEL=debug
 TALIA_REQUEST_LOG_LEVEL=debug
+LOG_FILE_PATH=/var/www/talia/logs/api.log
 
 NEXT_PUBLIC_PANEL_API_URL=https://talia.mx/api
 NEXT_PUBLIC_ORGANIZACION_ID=00000000-0000-0000-0000-000000000001
@@ -84,8 +85,10 @@ DEBUG_ENERGY_EVERY_N=20
 
 # SUPABASE #
 SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 TALIA_SUPABASE_DATABASE_URL=postgresql://postgres:xxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require
 SUPABASE_SERVICE_ROLE=xxxxx
+TALIA_SUPABASE_SERVICE_ROLE=xxxxx
 SUPABASE_ANON_KEY=xxxx
 TALIA_SUPABASE_LEGACY_JWT_SECRET=xxxxxx
 TALIA_SUPABASE_ACCES_TOKEN=xxxxx

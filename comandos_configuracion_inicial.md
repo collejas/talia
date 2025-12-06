@@ -1,18 +1,25 @@
 # Crea la carpeta donde Nginx leerá los archivos:
-sudo mkdir -p /var/www/talia-landing
+sudo mkdir -p /var/www/talia
 
 [text](.ruff_cache)# Copia el contenido de tu proyecto (carpeta landing/src/) hacia esa ruta.
-sudo rsync -av --delete /home/devuser/talia/landing/src/ /var/www/talia-landing/
+sudo rsync -av --delete ~/talia/landing/src/ /var/www/talia/
+
+sudo rsync -av --delete ~/talia/landing/src/ /var/www/talia/
+sudo chown -R www-data:www-data /var/www/talia
 
 # Ajusta permisos para que Nginx (usuario www-data en Ubuntu) pueda servir los archivos:
-sudo chown -R www-data:www-data /var/www/talia-landing
+sudo chown -R www-data:www-data /var/www/talia
+
+# Instalar Nginx
+sudo apt update
+sudo apt install nginx -y
 
 # Crear/Editar Nginx
-sudo nano /etc/nginx/sites-available/talia
-sudo micro /etc/nginx/sites-available/talia
+sudo nano /etc/nginx/sites-available/talia.conf
+sudo micro /etc/nginx/sites-available/talia.conf
 
 # Habilita el sitio:
-sudo ln -s /etc/nginx/sites-available/talia /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/talia.conf /etc/nginx/sites-enabled/
 
 # (Opcional) Deshabilita el default si no lo necesitas:
 sudo rm /etc/nginx/sites-enabled/default
@@ -29,40 +36,47 @@ nslookup talia.mx
 curl -I http://talia.mx
 
 
-dig +short tal-ia.mx @8.8.8.8
-dig +short tal-ia.mx @1.1.1.1
-dig tal-ia.mx
-nslookup tal-ia.mx
-curl -I http://tal-ia.mx
-
 # Instalar Cerbot
-  - Instala Certbot y el plugin de Nginx (sudo snap install core && sudo snap refresh core, luego sudo snap install --classic certbot y sudo ln -s /snap/bin/certbot /usr/bin/certbot).
-  - Verifica que tu bloque server HTTP en /etc/nginx/sites-available/talia pase el lint (sudo nginx -t) y recarga (sudo systemctl reload nginx).
-  - Ejecuta Certbot con sudo certbot --nginx -d talia.mx -d www.talia.mx; detectará el bloque existente, solicitará el correo y aceptará los ToS.
-  - Acepta la redirección automática a HTTPS; Certbot añadirá un bloque listen 443 ssl con los certificados en /etc/letsencrypt/live/talia.mx/.
-  - Comprueba el resultado con sudo nginx -t, sudo systemctl reload nginx, curl -I https://talia.mx y revisa el log /var/log/letsencrypt/letsencrypt.log.
-  - Renueva en seco (sudo certbot renew --dry-run); el timer systemd se encargará de reacondicionar el certificado cada ~60 días.
 
+## Abrir puerto 443 en el firewall
+sudo ufw allow 443/tcp
+sudo ufw status
 
-# Sncronizar despues de cambios:
-sudo rsync -av --delete ~/talia/landing/src/ /var/www/talia-landing/
-sudo chown -R www-data:www-data /var/www/talia-landing
+## Instalar Certbot (método recomendado en Ubuntu actual)
+sudo snap install core
+sudo snap refresh core
+sudo snap install --classic certbot
+sudo ln -s /snap/bin/certbot /usr/bin/certbot
+
+## Sacar certificados y que Certbot te configure Nginx
+sudo certbot --nginx \
+  -d talia.mx \
+  -d www.talia.mx
+
+# Instala las dependencias del sistema para WeasyPrint (Ubuntu/Debian):
+sudo apt-get update
+sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 libcairo2 libffi-dev libgdk-pixbuf-2.0-0
+libglib2.0-0
 
 # levantar servicio:
 poetry run uvicorn app.main:app --reload --port 8004
 
 FUa7NWxedjsEGv5
 
-# NUEVO ARRANQUE CON SYSTEM, EDICION Y ESTATUS
+# crear system para talia-panel.service
 sudo nano /etc/systemd/system/talia-panel.service
 sudo micro /etc/systemd/system/talia-panel.service
 
-sudo systemctl daemon-reload
+# crear system para talia-api.service
+sudo nano /etc/systemd/system/talia-api.service
+sudo micro /etc/systemd/system/talia-api.service
+
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8004 --env-file .env
 
 sudo systemctl stop talia-panel.service
 sudo systemctl stop talia-api.service
 
-npm run build
+sudo systemctl daemon-reload
 
 npm run lint
 npm run build --webpack
@@ -71,7 +85,21 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
-codex resume 019ae69f-ce24-77b2-b2d7-1ebefa54b54a
+# Sncronizar despues de cambios:
+sudo chown -R www-data:www-data /var/www/talia
+
+sudo systemctl status talia-panel.service
+sudo systemctl status talia-api.service
+
+git clone <https://github.com/collejas/buscador.git> /var/www/
+        talia/buscador
+https://github.com/collejas/buscador.git
+
+npm run dev
+http://127.0.0.1:3000/dashboard
+http://127.0.0.1:3000/auth/login
+
+codex resume 019af039-60a6-77b0-9f5a-fee230b2eb4e
 
 codex resume 019ae69f-ce24-77b2-b2d7-1ebefa54b54a
 
@@ -81,15 +109,6 @@ codex resume 019ac646-8059-76b0-b150-193d1e0f176b
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
-
-
-
-sudo systemctl status talia-panel.service
-sudo systemctl status talia-api.service
-
-npm run dev
-http://127.0.0.1:3000/dashboard
-http://127.0.0.1:3000/auth/login
 
 # Test
 poetry run pytest
