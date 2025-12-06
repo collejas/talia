@@ -137,4 +137,4 @@ PLACES_REGION_CODE=MX
 # =========================
 # DENUE
 # =========================
-DENUE_TOKEN=xxxx
+DENUE_TOKEN=xxxx/
