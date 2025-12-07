@@ -1,7 +1,17 @@
 """Configuración central basada en variables de entorno."""
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_REQUEST_LOG_SKIP_PREFIXES: tuple[str, ...] = (
+    "/shared",
+    "/api/shared",
+    "/favicon",
+    "/site",
+    "/robots.txt",
+    "/docs",
+    "/openapi",
+)
 
 
 class Settings(BaseSettings):
@@ -20,15 +30,7 @@ class Settings(BaseSettings):
         ),
     )
     request_log_skip_prefixes: tuple[str, ...] = Field(
-        default=(
-            "/shared",
-            "/api/shared",
-            "/favicon",
-            "/site",
-            "/robots.txt",
-            "/docs",
-            "/openapi",
-        ),
+        default=DEFAULT_REQUEST_LOG_SKIP_PREFIXES,
         description="Prefijos de ruta para los que no se registrarán eventos de request.started/completed.",
     )
     openai_api_key: str | None = None
@@ -310,6 +312,19 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
+
+    @field_validator("request_log_skip_prefixes", mode="before")
+    @classmethod
+    def _parse_request_log_skip_prefixes(cls, value):
+        # Permite que una variable vacía use el default y que valores tipo CSV se conviertan en tupla.
+        if value in (None, "", [], ()):
+            return DEFAULT_REQUEST_LOG_SKIP_PREFIXES
+        if isinstance(value, str):
+            parts = [p.strip() for p in value.split(",") if p.strip()]
+            return tuple(parts) if parts else DEFAULT_REQUEST_LOG_SKIP_PREFIXES
+        if isinstance(value, (list, tuple)):
+            return tuple(value)
+        return value
 
 
 settings = Settings()

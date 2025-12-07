@@ -92,6 +92,9 @@ sudo chown -R www-data:www-data /var/www/talia
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
 
+# DUENO:
+sudo chown -R jorge:jorge /var/www/talia
+
 git clone <https://github.com/collejas/buscador.git> /var/www/
         talia/buscador
 https://github.com/collejas/buscador.git
