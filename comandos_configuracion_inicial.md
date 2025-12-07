@@ -92,6 +92,8 @@ sudo chown -R www-data:www-data /var/www/talia
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
 
+sudo journalctl -u talia-api.service -n 60 -l --no-pager
+
 # DUENO:
 sudo chown -R jorge:jorge /var/www/talia
 

@@ -6,14 +6,16 @@
 TALIA_ENVIRONMENT=development
 TALIA_LOG_LEVEL=debug
 TALIA_REQUEST_LOG_LEVEL=debug
-TALIA_REQUEST_LOG_SKIP_PREFIXES=
-TALIA_LOG_FILE_PATH=/var/www/talia/logs/api.log
+TALIA_REQUEST_LOG_SKIP_PREFIXES=["/shared","/api/shared","/favicon","/site","/robots.txt","/docs","/openapi"]
 
 ## =========================
 ## OpenAI
 ## =========================
-TALIA_OPENAI_API_KEY=sk-admin-xxxxxx
-TALIA_OPENAI_PROJECT_ID=sk-proj--xxxxx
+TALIA_OPENAI_API_KEY=sk-admin-xxxxx
+TALIA_OPENAI_PROJECT_ID=sk-proj--xxx
+
+TALIA_OPENAI_ASSISTANT_ID=pmpt_xxxxx
+TALIA_OPENAI_PROMPT_VERSION=52
 
 TALIA_OPENAI_WEBCHAT_ASSISTANT_ID=pmpt_xxxx
 TALIA_OPENAI_PROMPT_WEBCHAT_VERSION=52
@@ -24,7 +26,7 @@ WHATSAPP_PROMPT_VERSION=9
 ## =========================
 ## OPENAI (Text + Realtime)
 ## =========================
-OPENAI_API_KEY=xxxxxx
+OPENAI_API_KEY=sk-admin-xxxxxx
 OPENAI_PROMPT_ID=
 OPENAI_PROMPT_ID_INSIGHTS=
 OPENAI_MODEL=gpt-4o
@@ -70,11 +72,10 @@ TTS_VOICE_ES=shimmer
 ## Twilio
 ## =========================
 
-TWILIO_ACCOUNT_SID=xxxxxx
-TWILIO_AUTH_TOKEN=xxxxxx
+TWILIO_ACCOUNT_SID=ACxxx
+TWILIO_AUTH_TOKEN=xxxx
 TWILIO_PHONE_NUMBER=+5214443354450
 TWILIO_PHONE_NUMBER_SID=
-TWILIO_VALIDATE_SIGNATURES=
 TWILIO_VALIDATE_SIGNATURES=false
 
 ## =========================
@@ -90,12 +91,12 @@ DEBUG_ENERGY_EVERY_N=20
 ## Supabase / DB
 ## =========================
 TALIA_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
-TALIA_SUPABASE_SERVICE_ROLE=xxxxxx
-SUPABASE_ANON_KEY=xxxxxxxx
+TALIA_SUPABASE_SERVICE_ROLE=eyxxxxx
+SUPABASE_ANON_KEY=eyxxxxxx
+SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 TALIA_SUPABASE_JWT_SECRET=
 TALIA_SUPABASE_LEGACY_JWT_SECRET=
-DATABASE_URL=postgresql://postgres:xxxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?
-
+DATABASE_URL=postgresql://postgres:xxxxxx@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?
 
 ## =========================
 ## Portal de clientes
@@ -108,14 +109,14 @@ TALIA_PORTAL_CLIENTE_URL=
 ## =========================
 TALIA_GEOLOCATION_API_URL=
 TALIA_GEOLOCATION_API_TOKEN=
-TALIA_GEOLOCATION_CACHE_TTL_SECONDS=
+TALIA_GEOLOCATION_CACHE_TTL_SECONDS=14400
 
 ## =========================
 ## Google Places
 ## =========================
-GOOGLE_PLACES_API_KEY=
+GOOGLE_PLACES_API_KEY=AIzaSyDpXIG4j8OBI3duh6hTm-rKwMh9iQ6DYPk
 API_NEARBY_SEARCH="https://places.googleapis.com/v1/places:searchNearby"
-GOOGLE_PLACES_NEARBY_URL=
+GOOGLE_PLACES_NEARBY_URL="https://places.googleapis.com/v1/places:searchNearby"
 GOOGLE_PLACES_TEXT_URL=
 GOOGLE_PLACES_DETAILS_URL=
 PLACES_FIELD_MASK=
@@ -126,27 +127,22 @@ PLACES_REGION_CODE=MX
 ## =========================
 ## GOOGLE OAUTH
 ## =========================
-GOOGLE_CLIENT_ID=xxxxx
+GOOGLE_CLIENT_ID=551023546216-xxxxxxxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxxxxxxxxx
 GOOGLE_REDIRECT_URI=https://maria.geoactiv.mx/auth/google/callback
 
 ## =========================
 ## DENUE
 ## =========================
-DENUE_TOKEN=
+DENUE_TOKEN=xxxxxx
 DENUE_BASE_URL=
 
 ## =========================
 ## Webchat / Calendario
 ## =========================
-TALIA_WEBCHAT_INACTIVITY_HOURS=
-TALIA_WEBCHAT_PERSIST_SESSION=
-TALIA_WEBCHAT_CALENDAR_RESOURCE_ID=
-TALIA_WEBCHAT_CALENDAR_TIMEZONE=
-TALIA_WEBCHAT_CALENDAR_DEFAULT_DAYS=
-TALIA_WEBCHAT_CALENDAR_HOLD_MINUTES=
-
-TALIA_WEBCHAT_CALENDAR_RESOURCE_ID=xxxx
+TALIA_WEBCHAT_INACTIVITY_HOURS=0
+TALIA_WEBCHAT_PERSIST_SESSION=true
+TALIA_WEBCHAT_CALENDAR_RESOURCE_ID=e4ee6bea-b6ff-4b65-b40c-26781d4c4bac
 TALIA_WEBCHAT_CALENDAR_TIMEZONE=America/Mexico_City
 TALIA_WEBCHAT_CALENDAR_DEFAULT_DAYS=21
 TALIA_WEBCHAT_CALENDAR_HOLD_MINUTES=10
@@ -163,8 +159,8 @@ TALIA_CALENDARIO_FULL_CONTACT_LIST_URL=https://mail.talia.mx:2080/addressbooks/h
 ## =========================
 ## WhatsApp
 ## =========================
-TALIA_WHATSAPP_INACTIVITY_HOURS=
-WHATSAPP_INACTIVITY_HOURS=
+TALIA_WHATSAPP_INACTIVITY_HOURS=24
+WHATSAPP_INACTIVITY_HOURS=24
 TALIA_WHATSAPP_PROMPT_ID=
 WHATSAPP_PROMPT_ID=
 TALIA_WHATSAPP_PROMPT_VERSION=
@@ -183,7 +179,6 @@ TALIA_MAIL_OUTGOING_SERVER=mail.talia.mx
 TALIA_MAIL_OUTGOING_PORT_SMTP=465
 TALIA_MAIL_USE_SSL=true
 TALIA_MAIL_USE_TLS=false
-
 
 
 # VARIABLES EN: .env.local
@@ -211,7 +206,9 @@ NEXT_PUBLIC_PANEL_ORIGIN=xxxxxx
 ## =========================
 NEXT_PUBLIC_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxxxxx
+SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 SUPABASE_SERVICE_ROLE=xxxxxx
+SUPABASE_ANON_KEY=xxxxxx
 
 ## =========================
 ## Otros
