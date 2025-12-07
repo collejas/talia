@@ -115,12 +115,12 @@ TALIA_GEOLOCATION_CACHE_TTL_SECONDS=14400
 ## Google Places
 ## =========================
 GOOGLE_PLACES_API_KEY=AIzaSyDpXIG4j8OBI3duh6hTm-rKwMh9iQ6DYPk
-API_NEARBY_SEARCH="https://places.googleapis.com/v1/places:searchNearby"
-GOOGLE_PLACES_NEARBY_URL="https://places.googleapis.com/v1/places:searchNearby"
-GOOGLE_PLACES_TEXT_URL=
-GOOGLE_PLACES_DETAILS_URL=
-PLACES_FIELD_MASK=
-PLACES_DETAILS_FIELD_MASK=
+API_NEARBY_SEARCH=https://places.googleapis.com/v1/places:searchNearby
+GOOGLE_PLACES_NEARBY_URL=https://places.googleapis.com/v1/places:searchNearby
+GOOGLE_PLACES_TEXT_URL=https://places.googleapis.com/v1/places:searchText
+GOOGLE_PLACES_DETAILS_URL=https://places.googleapis.com/v1/places
+PLACES_FIELD_MASK=places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.primaryTypeDisplayName,places.types,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.googleMapsUri
+PLACES_DETAILS_FIELD_MASK=id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,types,rating,userRatingCount,nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,businessStatus,regularOpeningHours,utcOffsetMinutes,currentOpeningHours
 PLACES_LANGUAGE_CODE=es
 PLACES_REGION_CODE=MX
 
