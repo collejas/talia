@@ -108,13 +108,7 @@ http://127.0.0.1:3000/auth/login
 # Entarada a Ser
 ssh-copy-id jorge T@67.205.156.148
 
-codex resume 019af039-60a6-77b0-9f5a-fee230b2eb4e
-
-codex resume 019ae69f-ce24-77b2-b2d7-1ebefa54b54a
-
-codex resume 019ac673-2dad-7cc2-849c-2510e7756c6a
-
-codex resume 019ac646-8059-76b0-b150-193d1e0f176b
+codex resume 019af9d1-5c6a-79e2-8ab8-e9fa2bad544c
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"
 \pset pager off
