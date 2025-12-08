@@ -16,6 +16,8 @@ dist/
 build/
 backend/app/public/panel-react/
 coverage/
+.env
+.env.*
 
 # Archivos de Git
 *.orig
