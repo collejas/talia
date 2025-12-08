@@ -121,7 +121,13 @@ poetry run ruff check . (backend)
 
 # Bse de datos
 
-## hacer un respaldo
+## Hacer respaldo sin IPv6 Direct Connection USANDO Pooler (Transaction)
+unset DATABASE_URL
+cd /var/www/talia/backend
+PATH=/usr/lib/postgresql/17/bin:$PATH poetry run python scripts/backup_db.py --output-dir ../backups
+
+
+## hacer un respaldo con IPv6 Direct Connection
 
 Usa el script `backend/scripts/backup_db.py`, que ya carga `backend/.env` o `.env` para recuperar `DATABASE_URL`. Cada corrida crea una carpeta `backups/<prefijo>_<timestamp>/` con los archivos generados.
 
