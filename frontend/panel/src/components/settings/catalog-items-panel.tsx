@@ -515,9 +515,28 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
             onSubmit={handleSubmit}
             className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4"
           >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="catalog-nombre">Nombre</Label>
+                <Input id="catalog-nombre" {...form.register("nombre")} placeholder="Implementación Tal-IA" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="catalog-descripcion-corta">Descripción corta</Label>
+                <Input
+                  id="catalog-descripcion-corta"
+                  {...form.register("descripcionCorta")}
+                  placeholder="Resumen que verás en los listados"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
-              <Label htmlFor="catalog-nombre">Nombre</Label>
-              <Input id="catalog-nombre" {...form.register("nombre")} placeholder="Implementación Tal-IA" />
+              <Label htmlFor="catalog-descripcion-larga">Descripción detallada</Label>
+              <Textarea
+                id="catalog-descripcion-larga"
+                rows={4}
+                {...form.register("descripcionLarga")}
+                placeholder="Incluye usos recomendados, alcances o entregables."
+              />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -575,23 +594,6 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
                 <Label htmlFor="catalog-clave-sat">Clave SAT</Label>
                 <Input id="catalog-clave-sat" {...form.register("claveSat")} placeholder="81112100" />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="catalog-descripcion-corta">Descripción corta</Label>
-              <Input
-                id="catalog-descripcion-corta"
-                {...form.register("descripcionCorta")}
-                placeholder="Resumen que verás en los listados"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="catalog-descripcion-larga">Descripción detallada</Label>
-              <Textarea
-                id="catalog-descripcion-larga"
-                rows={4}
-                {...form.register("descripcionLarga")}
-                placeholder="Incluye usos recomendados, alcances o entregables."
-              />
             </div>
             <Separator />
             <div className="grid gap-4 md:grid-cols-2">
