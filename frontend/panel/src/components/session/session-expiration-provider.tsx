@@ -29,7 +29,9 @@ export function SessionExpirationProvider({ children }: SessionExpirationProvide
           (payload as Record<string, unknown>).detail === SESSION_EXPIRED_DETAIL
         ) {
           notifiedRef.current = true;
-          toast.error("Tu sesión expiró. Vuelve a iniciar sesión.");
+          toast.error(
+            "Tu sesión expiró. Cierra la app y vuelve a iniciar sesión para acceder de nuevo."
+          );
         }
       } catch {
         // Ignore parsing errors.

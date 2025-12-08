@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SessionExpirationProvider } from "@/components/session/session-expiration-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className="antialiased theme-classic">{children}</body>
+      <body className="antialiased theme-classic">
+        <SessionExpirationProvider>{children}</SessionExpirationProvider>
+      </body>
     </html>
   );
 }
