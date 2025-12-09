@@ -1103,6 +1103,34 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad por id: {row!r}")
         return row
 
+    async def get_contact_opportunity(
+        self,
+        *,
+        contact_id: UUID,
+        conversation_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "select": self._PIPELINE_SELECT,
+            "order": "creado_en.desc",
+            "limit": "1",
+        }
+        if conversation_id:
+            params["metadata->>conversation_id"] = f"eq.{conversation_id}"
+        else:
+            params["contacto_principal_id"] = f"eq.{contact_id}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/oportunidades",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        return row
+
     async def update_opportunity(
         self,
         *,

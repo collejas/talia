@@ -685,3 +685,46 @@ https://talia.mx/api/inbox/threads?limit=25&message_limit=20
 
 
  , debemos solo tener un juego unico de etapas y que no se repitan, y que el movimiento automático da cada oportunidad se haga de manera correcta
+
+
+
+
+ Contexto completo para el asistente
+  Para impedir que el prompt siga recibiendo un contexto “vacío” y que el asistente pierda cercanía con el lead, necesitamos que
+  en _generate_assistant_reply ( backend/app/channels/whatsapp/service.py) el backend haga lo siguiente justo después de registrar
+  el mensaje:
+
+  1. Buscar el contacto completo (backend/app/services/storage.py → CRMRepository.get_contact_by_id ya retorna nombre, correo,
+     teléfono, empresa, notes, necesidad_proposito, estado, captura_estado, contacto_datos). Llámalo con el contact_id que devuelve
+     register_whatsapp_message.
+  2. Recuperar la oportunidad más reciente asociada al contacto (CRMRepository.ensure_conversation_opportunity ya busca o crea una
+     oportunidad por contacto_id). Desde esa oportunidad puedes extraer titulo, estado, metadata->>conversation_id, y etapa_id. Usa
+     CRMRepository.get_pipeline_opportunity o una función nueva como fetch_pipeline_opportunity_with_stage para traer además los
+     datos de etapa (etapas_pipeline).
+  3. Montar un bloque de “CRM context” que incluya:
+      - Nombre, correo, teléfono, empresa, notas y necesidad principal del contacto.
+      - Estado del lead (estado, captura_estado) y si ya es cliente.
+      - Título de la oportunidad, etapa (nombre/codigo), estado, comentarios de metadata (por ejemplo metadata->>auto_stage y
+        metadata->>project_name).
+      - El resumen de conversaciones ya generado.
+  4. Inyectar ese bloque como texto adicional en _build_openai_input (antes de llamar al asistente). Por ejemplo:
+
+     Contexto CRM:
+     - Nombre: ...
+     - Correo: ...
+     - Etapa actual: Captado (general_captado)
+     - Oportunidad: Asistente para consultorio Medico (abierta)
+     - Necesidad: Automatizar agenda...
+     - Historial: [resumen existente]
+
+     Así no necesitas declarar variables nuevas en el prompt (lo que provoca los 400) y el LLM recibe fondo rico antes de contestar.
+  5. Considerar la revalidación del número: si llega un mensaje y register_whatsapp_message crea una conversación nueva, igual busca
+     por phone_e164/whatsapp_id para el contacto y lo liga. Ya lo hace, pero asegúrate de que ese contact_id no sea nulo antes de
+     pasar el contexto.
+  6. Opcional: agregar un helper de “contexto CRM resumido” en storage.py (por ejemplo
+     fetch_contact_and_opportunity_summary(contact_id)) que devuelva el contacto + etapa + metadata y usarlo tanto en la generación
+     del resumen como en el prompt. Esto también facilita reutilizarlo en otros canales.
+
+  Una vez que el prompt reciba ese bloque de texto completo, el asistente podrá saludar llamando por nombre, referirse a la
+  necesidad (“automtizar agenda de citas”) y explicar en qué etapa del embudo está el lead, y el resultado será mucho más humano. Si
+  quieres puedo implementarte ese helper y el bloque de texto ahora mismo. ¿Quieres que lo haga?

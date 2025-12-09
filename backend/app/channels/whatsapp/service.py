@@ -19,6 +19,7 @@ from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import conversation_summary, leads_geo, storage
 from app.services import openai as openai_service
+from app.services.context_formatter import build_crm_context_lines
 from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
@@ -418,6 +419,7 @@ async def _generate_assistant_reply(
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
             contact_id=contact_id,
+            context_data=context_payload,
         )
         if summary_record:
             candidate = summary_record.get("resumen")
@@ -436,8 +438,29 @@ async def _generate_assistant_reply(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
+    context_payload: dict[str, Any] | None = None
+    try:
+        context_payload = await storage.fetch_contact_context(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+        )
+    except StorageError as exc:  # pragma: no cover - fallbacks informativos
+        logger.warning(
+            "whatsapp.fetch_contact_context_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+
     request_kwargs: dict[str, Any] = {
-        "input": _build_openai_input(message, summary_text=summary_text, summary_created_en=summary_created_en),
+        "input": _build_openai_input(
+            message,
+            context_data=context_payload,
+            summary_text=summary_text,
+            summary_created_en=summary_created_en,
+        ),
         "store": True,
         "metadata": metadata_payload,
     }
@@ -447,6 +470,7 @@ async def _generate_assistant_reply(
         summary_record = await conversation_summary.ensure_conversation_summary(
             conversation_id=conversation_id,
             contact_id=contact_id,
+            context_data=context_payload,
         )
     except Exception as exc:  # pragma: no cover
         logger.warning(
@@ -546,10 +570,11 @@ async def send_manual_message(*, to_number: str, body: str) -> TwilioSendResult:
 def _build_openai_input(
     message: schemas.WhatsAppIncomingMessage,
     *,
+    context_data: dict[str, Any] | None = None,
     summary_text: str | None = None,
     summary_created_en: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Normaliza el contenido del mensaje para Responses API."""
+    """Normaliza el contenido del mensaje con contexto CRM para la Responses API."""
     text_parts: list[str] = []
     if message.body:
         text_parts.append(message.body)
@@ -561,6 +586,11 @@ def _build_openai_input(
         text_parts.append("El usuario adjuntó archivos:\n" + "\n".join(attachment_lines))
     if not text_parts:
         text_parts.append("(mensaje sin texto)")
+
+    context_lines = build_crm_context_lines(context_data)
+    if context_lines:
+        text_parts.append("")
+        text_parts.extend(context_lines)
 
     if summary_text:
         summary_header = "Resumen previo"

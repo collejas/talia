@@ -566,6 +566,32 @@ async def fetch_contact(contact_id: str) -> dict[str, Any]:
     return row
 
 
+async def fetch_contact_context(*, conversation_id: str, contact_id: str) -> dict[str, Any]:
+    """Obtiene el contacto y la oportunidad más relevante asociada."""
+    repo = CRMRepository()
+    try:
+        contact = await repo.get_contact_by_id(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    if not contact:
+        return {"contact": None, "opportunity": None}
+
+    try:
+        contact_uuid = UUID(str(contact.get("id") or contact_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("contacto_id_invalido") from exc
+
+    try:
+        opportunity = await repo.get_contact_opportunity(
+            contact_id=contact_uuid,
+            conversation_id=conversation_id,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    return {"contact": contact, "opportunity": opportunity}
+
+
 async def fetch_contact_identities(contact_id: str) -> list[dict[str, Any]]:
     """Recupera identidades de canal asociadas al contacto."""
     repo = CRMRepository()

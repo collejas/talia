@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.services import openai as openai_service, storage
+from app.services.context_formatter import build_crm_context_lines
 from app.services.storage import StorageError
 
 logger = get_logger("app.services.conversation_summary")
@@ -69,8 +70,12 @@ def _format_message_line(message: dict[str, Any]) -> str:
     return f"{actor}{timestamp_part}: {' '.join(text_parts)}"
 
 
-def _build_prompt(messages: list[dict[str, Any]]) -> str:
+def _build_prompt(messages: list[dict[str, Any]], context_data: dict[str, Any] | None = None) -> str:
     lines = [_format_message_line(message) for message in messages]
+    context_lines = build_crm_context_lines(context_data)
+    if context_lines:
+        lines.append("")
+        lines.extend(context_lines)
     instruction = (
         "Eres un asistente que resume conversaciones de ventas en español. "
         "Resume lo esencial en máximo tres frases, identifica la necesidad principal, "
@@ -98,10 +103,13 @@ def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     return None
 
 
-async def _summarize_messages(messages: list[dict[str, Any]]) -> str | None:
+async def _summarize_messages(
+    messages: list[dict[str, Any]],
+    context_data: dict[str, Any] | None = None,
+) -> str | None:
     if not messages:
         return None
-    prompt_text = _build_prompt(messages)
+    prompt_text = _build_prompt(messages, context_data=context_data)
     client: AsyncOpenAI = openai_service.get_assistant_client()
     try:
         response = await client.responses.create(
@@ -137,6 +145,7 @@ async def ensure_conversation_summary(
     contact_id: str | None = None,
     organizacion_id: str | None = None,
     tipo: str = "conversation",
+    context_data: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Garantiza que exista un resumen actualizado para la conversación."""
     summary: dict[str, Any] | None
@@ -179,7 +188,7 @@ async def ensure_conversation_summary(
     else:
         metadata = {}
 
-    summary_text = await _summarize_messages(messages)
+    summary_text = await _summarize_messages(messages, context_data=context_data)
     if not summary_text:
         if summary:
             summary["metadatos"] = metadata
