@@ -17,7 +17,7 @@ from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import leads_geo, storage
+from app.services import conversation_summary, leads_geo, storage
 from app.services import openai as openai_service
 from app.services import twilio as twilio_service
 from app.services.metrics import metrics
@@ -417,9 +417,31 @@ async def _generate_assistant_reply(
         "metadata": metadata_payload,
     }
 
+    summary_record: dict[str, Any] | None = None
+    try:
+        summary_record = await conversation_summary.ensure_conversation_summary(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.warning(
+            "whatsapp.conversation_summary_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
     def _build_request_template() -> dict[str, Any]:
         if assistant.is_prompt:
             variables = {"conversacion_id": conversation_id}
+            if summary_record:
+                resumen = summary_record.get("resumen")
+                if isinstance(resumen, str) and resumen.strip():
+                    variables["conversation_summary"] = resumen.strip()
+                created_en = summary_record.get("creado_en")
+                if created_en:
+                    variables["conversation_summary_created_en"] = created_en
+                metadata = summary_record.get("metadatos")
+                if isinstance(metadata, dict) and metadata:
+                    variables["conversation_summary_metadata"] = metadata
             return {
                 "prompt": build_prompt_payload(assistant, variables),
                 "text": {"format": {"type": "text"}},

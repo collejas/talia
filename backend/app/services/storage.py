@@ -348,6 +348,46 @@ async def fetch_recent_messages(*, conversation_id: str, limit: int = 8) -> list
         raise StorageError(str(exc)) from exc
 
 
+async def create_conversation_summary(
+    *,
+    conversation_id: str,
+    resumen: str,
+    contacto_id: str | None = None,
+    organizacion_id: str | None = None,
+    tipo: str | None = None,
+    metadatos: dict[str, Any] | None = None,
+    creado_por_usuario_id: str | None = None,
+) -> dict[str, Any]:
+    """Inserta un resumen de conversación generado por el asistente."""
+    repo = CRMRepository()
+    try:
+        return await repo.create_conversation_summary(
+            conversacion_id=conversation_id,
+            resumen=resumen,
+            contacto_id=contacto_id,
+            organizacion_id=organizacion_id,
+            tipo=tipo,
+            metadatos=metadatos,
+            creado_por_usuario_id=creado_por_usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
+async def fetch_latest_conversation_summary(
+    *, conversation_id: str, tipo: str | None = None
+) -> dict[str, Any] | None:
+    """Recupera el resumen más reciente para una conversación."""
+    repo = CRMRepository()
+    try:
+        return await repo.fetch_latest_conversation_summary(
+            conversation_id=conversation_id,
+            tipo=tipo,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
 async def upload_webchat_attachment(
     *,
     file: UploadFile,

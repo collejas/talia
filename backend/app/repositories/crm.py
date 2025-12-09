@@ -1514,6 +1514,73 @@ class CRMRepository:
             return []
         return data  # type: ignore[return-value]
 
+    async def create_conversation_summary(
+        self,
+        *,
+        conversacion_id: str,
+        resumen: str,
+        contacto_id: str | None = None,
+        organizacion_id: str | None = None,
+        tipo: str | None = None,
+        metadatos: dict[str, Any] | None = None,
+        creado_por_usuario_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "conversacion_id": conversacion_id,
+            "resumen": resumen,
+            "metadatos": metadatos or {},
+        }
+        if contacto_id:
+            payload["contacto_id"] = contacto_id
+        if organizacion_id:
+            payload["organizacion_id"] = organizacion_id
+        if tipo:
+            payload["tipo"] = tipo
+        if creado_por_usuario_id:
+            payload["creado_por_usuario_id"] = creado_por_usuario_id
+        resp = await self._request(
+            "POST",
+            "/rest/v1/conversation_summaries",
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el resumen de conversación creado")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear resumen: {row!r}")
+        return row
+
+    async def fetch_latest_conversation_summary(
+        self,
+        *,
+        conversation_id: str,
+        tipo: str | None = None,
+    ) -> dict[str, Any] | None:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            return None
+        params: dict[str, Any] = {
+            "conversacion_id": f"eq.{conversation_key}",
+            "order": "creado_en.desc",
+            "limit": "1",
+        }
+        if tipo:
+            params["tipo"] = f"eq.{tipo}"
+        resp = await self._request("GET", "/rest/v1/conversation_summaries", params=params)
+        data = resp.json() or []
+        row: dict[str, Any] | None
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
     async def upload_webchat_object(
         self,
         *,

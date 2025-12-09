@@ -235,6 +235,38 @@ class Settings(BaseSettings):
             "TALIA_WHATSAPP_ASSISTANT_ID",
         ),
     )
+    conversation_summary_model: str = Field(
+        default="gpt-4o-mini",
+        description="Modelo que se usa para generar resúmenes de conversaciones antes de invocar al asistente.",
+        validation_alias=AliasChoices(
+            "CONVERSATION_SUMMARY_MODEL",
+            "TALIA_CONVERSATION_SUMMARY_MODEL",
+        ),
+    )
+    conversation_summary_temperature: float = Field(
+        default=0.2,
+        description="Temperatura utilizada al generar resúmenes.",
+        validation_alias=AliasChoices(
+            "CONVERSATION_SUMMARY_TEMPERATURE",
+            "TALIA_CONVERSATION_SUMMARY_TEMPERATURE",
+        ),
+    )
+    conversation_summary_max_output_tokens: int = Field(
+        default=400,
+        description="Máximo de tokens de salida para los resúmenes.",
+        validation_alias=AliasChoices(
+            "CONVERSATION_SUMMARY_MAX_OUTPUT_TOKENS",
+            "TALIA_CONVERSATION_SUMMARY_MAX_OUTPUT_TOKENS",
+        ),
+    )
+    conversation_summary_history_limit: int = Field(
+        default=12,
+        description="Cantidad de mensajes recientes que se consideran al construir el resumen.",
+        validation_alias=AliasChoices(
+            "CONVERSATION_SUMMARY_HISTORY_LIMIT",
+            "TALIA_CONVERSATION_SUMMARY_HISTORY_LIMIT",
+        ),
+    )
 
     mail_username: str | None = Field(
         default=None,
