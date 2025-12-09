@@ -412,6 +412,22 @@ async def _generate_assistant_reply(
         "channel": "whatsapp",
         "message_sid": message.message_sid,
     }
+    context_payload: dict[str, Any] | None = None
+    try:
+        context_payload = await storage.fetch_contact_context(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+        )
+    except StorageError as exc:  # pragma: no cover - fallbacks informativos
+        logger.warning(
+            "whatsapp.fetch_contact_context_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+
     summary_record: dict[str, Any] | None = None
     summary_text: str | None = None
     summary_created_en: str | None = None
@@ -436,22 +452,6 @@ async def _generate_assistant_reply(
         logger.warning(
             "whatsapp.conversation_summary_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-
-    context_payload: dict[str, Any] | None = None
-    try:
-        context_payload = await storage.fetch_contact_context(
-            conversation_id=conversation_id,
-            contact_id=contact_id,
-        )
-    except StorageError as exc:  # pragma: no cover - fallbacks informativos
-        logger.warning(
-            "whatsapp.fetch_contact_context_failed",
-            extra={
-                "conversation_id": conversation_id,
-                "contact_id": contact_id,
-                "error": str(exc),
-            },
         )
 
     request_kwargs: dict[str, Any] = {
