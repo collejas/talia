@@ -206,13 +206,14 @@ class Settings(BaseSettings):
         default=10,
         description="Minutos que se mantiene bloqueado un horario antes de confirmar la cita.",
     )
-    whatsapp_inactivity_hours: int = Field(
-        default=24,
-        description="Horas de inactividad para abrir una nueva conversación de WhatsApp.",
+    whatsapp_inactivity_minutes: int = Field(
+        default=24 * 60,
+        description="Minutos de inactividad para abrir una nueva conversación de WhatsApp.",
         validation_alias=AliasChoices(
-            "WHATSAPP_INACTIVITY_HOURS",
-            "TALIA_WHATSAPP_INACTIVITY_HOURS",
+            "WHATSAPP_INACTIVITY_MINUTES",
+            "TALIA_WHATSAPP_INACTIVITY_MINUTES",
         ),
+        ge=1,
     )
     whatsapp_prompt_id: str | None = Field(
         default=None,

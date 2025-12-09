@@ -119,6 +119,7 @@ async def register_whatsapp_message(
     contact_id: str | None = None,
     response_id: str | None = None,
     metadata: dict[str, Any] | None = None,
+    inactivity_minutes: int | None = None,
     inactivity_hours: int | None = None,
     attachments: list[dict[str, Any]] | None = None,
     webhook_payload: dict[str, Any] | None = None,
@@ -137,7 +138,11 @@ async def register_whatsapp_message(
             contact_id=contact_id,
             response_id=response_id,
             metadata=metadata,
-            inactivity_hours=inactivity_hours,
+            inactivity_minutes=(
+                inactivity_minutes
+                if inactivity_minutes is not None
+                else (inactivity_hours * 60 if inactivity_hours is not None else None)
+            ),
             attachments=attachments,
             webhook_payload=webhook_payload,
         )

@@ -28,6 +28,12 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _ensure_metadata_with_type(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    normalized = _ensure_dict(metadata)
+    normalized.setdefault("type", "summary_text")
+    return normalized
+
+
 def _format_message_line(message: dict[str, Any]) -> str:
     direction = message.get("direccion") or ""
     actor = "Cliente" if direction == "entrante" else "Asistente"
@@ -160,16 +166,16 @@ async def ensure_conversation_summary(
 
     if not messages:
         if summary:
-            summary["metadatos"] = _ensure_dict(summary.get("metadatos"))
+            summary["metadatos"] = _ensure_metadata_with_type(summary.get("metadatos"))
         return summary
 
     last_message = messages[-1]
     last_message_id = str(last_message.get("id") or "").strip()
     if summary:
-        metadata = _ensure_dict(summary.get("metadatos"))
+        metadata = _ensure_metadata_with_type(summary.get("metadatos"))
         if metadata.get("last_message_id") == last_message_id:
             summary["metadatos"] = metadata
-            return summary
+        return summary
     else:
         metadata = {}
 
@@ -184,6 +190,7 @@ async def ensure_conversation_summary(
         "last_message_timestamp": str(last_message.get("creado_en") or ""),
         "messages_count": len(messages),
     }
+    new_metadata = _ensure_metadata_with_type(new_metadata)
     try:
         created = await storage.create_conversation_summary(
             conversation_id=conversation_id,

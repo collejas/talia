@@ -63,7 +63,7 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             body=message.body,
             message_sid=message.message_sid,
             profile_name=message.profile_name,
-            inactivity_hours=settings.whatsapp_inactivity_hours,
+            inactivity_minutes=settings.whatsapp_inactivity_minutes,
             metadata=message.metadata(),
             attachments=message.attachments_as_dict(),
             webhook_payload=message.raw_payload,
@@ -411,8 +411,33 @@ async def _generate_assistant_reply(
         "channel": "whatsapp",
         "message_sid": message.message_sid,
     }
+    summary_record: dict[str, Any] | None = None
+    summary_text: str | None = None
+    summary_created_en: str | None = None
+    try:
+        summary_record = await conversation_summary.ensure_conversation_summary(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+        )
+        if summary_record:
+            candidate = summary_record.get("resumen")
+            if isinstance(candidate, str) and candidate.strip():
+                summary_text = candidate.strip()
+            summary_created_en = summary_record.get("creado_en")
+            metadata = summary_record.get("metadatos")
+            if isinstance(metadata, dict) and metadata:
+                metadata = {k: v for k, v in metadata.items() if k != "type"}
+            else:
+                metadata = {}
+            summary_record["metadatos"] = metadata
+    except Exception as exc:  # pragma: no cover
+        logger.warning(
+            "whatsapp.conversation_summary_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
     request_kwargs: dict[str, Any] = {
-        "input": _build_openai_input(message),
+        "input": _build_openai_input(message, summary_text=summary_text, summary_created_en=summary_created_en),
         "store": True,
         "metadata": metadata_payload,
     }
@@ -432,16 +457,6 @@ async def _generate_assistant_reply(
     def _build_request_template() -> dict[str, Any]:
         if assistant.is_prompt:
             variables = {"conversacion_id": conversation_id}
-            if summary_record:
-                resumen = summary_record.get("resumen")
-                if isinstance(resumen, str) and resumen.strip():
-                    variables["conversation_summary"] = resumen.strip()
-                created_en = summary_record.get("creado_en")
-                if created_en:
-                    variables["conversation_summary_created_en"] = created_en
-                metadata = summary_record.get("metadatos")
-                if isinstance(metadata, dict) and metadata:
-                    variables["conversation_summary_metadata"] = metadata
             return {
                 "prompt": build_prompt_payload(assistant, variables),
                 "text": {"format": {"type": "text"}},
@@ -528,7 +543,12 @@ async def send_manual_message(*, to_number: str, body: str) -> TwilioSendResult:
     return await _send_whatsapp_reply(to_number=to_number, body=body)
 
 
-def _build_openai_input(message: schemas.WhatsAppIncomingMessage) -> list[dict[str, Any]]:
+def _build_openai_input(
+    message: schemas.WhatsAppIncomingMessage,
+    *,
+    summary_text: str | None = None,
+    summary_created_en: str | None = None,
+) -> list[dict[str, Any]]:
     """Normaliza el contenido del mensaje para Responses API."""
     text_parts: list[str] = []
     if message.body:
@@ -541,6 +561,13 @@ def _build_openai_input(message: schemas.WhatsAppIncomingMessage) -> list[dict[s
         text_parts.append("El usuario adjuntó archivos:\n" + "\n".join(attachment_lines))
     if not text_parts:
         text_parts.append("(mensaje sin texto)")
+
+    if summary_text:
+        summary_header = "Resumen previo"
+        if summary_created_en:
+            summary_header += f" ({summary_created_en})"
+        text_parts.append("")
+        text_parts.append(f"{summary_header}: {summary_text}")
 
     return [
         {

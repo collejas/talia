@@ -1201,6 +1201,7 @@ class CRMRepository:
         contact_id: str | None = None,
         response_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        inactivity_minutes: int | None = None,
         inactivity_hours: int | None = None,
         attachments: list[dict[str, Any]] | None = None,
         webhook_payload: dict[str, Any] | None = None,
@@ -1217,8 +1218,13 @@ class CRMRepository:
             "p_contact_id": contact_id,
             "p_response_id": response_id,
         }
-        if inactivity_hours is not None:
-            payload["p_inactivity_hours"] = inactivity_hours
+        minutes = (
+            inactivity_minutes
+            if inactivity_minutes is not None
+            else (inactivity_hours * 60 if inactivity_hours is not None else None)
+        )
+        if minutes is not None:
+            payload["p_inactivity_minutes"] = minutes
         if attachments:
             payload["p_attachments"] = attachments
         if webhook_payload is not None:
@@ -1550,6 +1556,64 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al crear resumen: {row!r}")
+        return row
+
+    async def record_delivery_event(
+        self,
+        *,
+        provider: str,
+        message_sid: str,
+        event: str,
+        raw_payload: dict[str, Any] | None = None,
+        error_code: str | None = None,
+        provider_timestamp: str | None = None,
+    ) -> dict[str, Any]:
+        message_id: str | None = None
+        if message_sid:
+            params = {
+                "select": "id",
+                "twilio_message_sid": f"eq.{message_sid}",
+                "limit": "1",
+            }
+            resp = await self._request("GET", "/rest/v1/mensajes", params=params)
+            data = resp.json() or []
+            row: dict[str, Any] | None
+            if isinstance(data, list) and data:
+                row = data[0]
+            elif isinstance(data, dict):
+                row = data
+            else:
+                row = None
+            if isinstance(row, dict):
+                message_id = row.get("id")
+        payload: dict[str, Any] = {
+            "proveedor": provider,
+            "evento": event,
+            "codigo_error": error_code,
+            "payload_crudo": raw_payload or {},
+        }
+        if message_id:
+            payload["mensaje_id"] = message_id
+        if provider_timestamp:
+            payload["proveedor_ts"] = provider_timestamp
+
+        resp = await self._request(
+            "POST",
+            "/rest/v1/eventos_entrega",
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al registrar evento de entrega: {data!r}"
+            )
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al registrar evento: {row!r}")
         return row
 
     async def fetch_latest_conversation_summary(
