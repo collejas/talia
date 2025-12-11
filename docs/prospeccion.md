@@ -40,11 +40,11 @@
   - [ ] Modo SMTP (configurar `SMTP_*`).  
   - [ ] Modo API (adapter send_email + guardar `messageId`).  
   - [ ] Documentar en `variables.md` y mapear estados Brevo → UI.
-- [ ] Persistir el Buscador en BD:  
-  - [ ] Crear tablas `prospeccion_buscador_jobs` y `prospeccion_buscador_resultados` (migración Supabase + RLS).  
+- [x] Persistir el Buscador en BD:  
+  - [x] Crear tablas `prospeccion_buscador_jobs` y `prospeccion_buscador_resultados` (migración Supabase + RLS).  
   - [ ] Migrar los JSON históricos desde `buscador_jobs/` a tablas nuevas.  
-  - [ ] Actualizar `BuscadorJobManager` para leer/escribir vía `CRMRepository` en vez de archivos.  
-  - [ ] Ajustar endpoints `/prospeccion/buscador/*` para usar datos persistidos (mismo contrato).  
+  - [x] Actualizar `BuscadorJobManager` para leer/escribir vía `CRMRepository` en vez de archivos.  
+  - [x] Ajustar endpoints `/prospeccion/buscador/*` para usar datos persistidos (mismo contrato).  
   - [ ] Exponer “Guardar resultado como prospecto” directamente desde estos registros.
 
 ## 5. Evaluar (Campañas y métricas)
@@ -77,9 +77,9 @@
   - `docs/plan_envios_prospeccion.md`  
   - `docs/plan realizado para extender propspeccion.md`
 - Multi-tenant:  
-  - Todas las tablas (existentes y nuevas) deben tener `organizacion_id uuid` y FK a `public.organizaciones`.  
-  - Políticas RLS por tenant (`organizacion_id = current_setting('request.jwt.claims.organizacion_id')::uuid`).  
-  - El backend debe poblar `organizacion_id` en cada inserción (`CRMRepository` usa claim o contexto del usuario).  
-  - Validar que los procesos históricos (p. ej. migración del Buscador) asignen la organización correcta o la default.
+  - [x] Todas las tablas (existentes y nuevas) deben tener `organizacion_id uuid` y FK a `public.organizaciones`.  
+  - [x] Políticas RLS por tenant (`organizacion_id = public.usuario_organizacion_id(auth.uid())`).  
+  - [x] El backend debe poblar `organizacion_id` en cada inserción (`CRMRepository` usa claim o contexto del usuario / trigger).  
+  - [ ] Validar que los procesos históricos (p. ej. migración del Buscador) asignen la organización correcta o la default.
 
 Mantener este archivo como checklist vivo para coordinar equipo de producto, ingeniería y operaciones al consolidar la sección de prospección.
