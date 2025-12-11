@@ -96,6 +96,10 @@ sudo systemctl status talia-api.service
 
 sudo journalctl -u talia-api.service -n 60 -l --no-pager
 
+# Dejar git GLOBL
+git config --global user.name collejas
+git config --global user.email collejas1@gmail.com
+
 # DUENO:
 sudo chown -R jorge:jorge /var/www/talia
 
