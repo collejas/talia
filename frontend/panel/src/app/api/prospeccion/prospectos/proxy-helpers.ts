@@ -4,11 +4,17 @@ import { NextResponse } from "next/server"
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 
+const ORGANIZACION_ENV_KEYS = ["PANEL_ORGANIZACION_ID", "TALIA_ORGANIZACION_ID", "NEXT_PUBLIC_ORGANIZACION_ID"] as const
+
 export async function resolveProspeccionAccessToken(): Promise<string | null> {
   const store = await cookies()
-  const cookieToken = store.get(ACCESS_TOKEN_COOKIE)?.value
+  const cookieToken =
+    store.get(ACCESS_TOKEN_COOKIE)?.value ||
+    store.get("talia.access_token")?.value ||
+    store.get("sb-access-token")?.value ||
+    store.get("access_token")?.value
   if (cookieToken && cookieToken.trim().length) {
-    return cookieToken
+    return cookieToken.trim()
   }
   const fallback =
     process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_API_KEY
@@ -51,6 +57,7 @@ export async function proxyProspeccionRequest(
   const shouldSendBody = init.method !== "GET"
   const rawBody = shouldSendBody ? await request.text() : null
   const body = rawBody && rawBody.length ? rawBody : undefined
+  const organizacionId = resolveOrganizacionId()
 
   let backendResponse: Response
   try {
@@ -60,6 +67,7 @@ export async function proxyProspeccionRequest(
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
       },
       cache: "no-store",
       body,
@@ -86,11 +94,13 @@ export async function proxyProspeccionStreamingRequest(backendPath: string): Pro
   }
   const backendBase = getPanelApiBaseUrl()
   const target = new URL(`${backendBase}${backendPath}`)
+  const organizacionId = resolveOrganizacionId()
   const backendResponse = await fetch(target, {
     method: "GET",
     headers: {
       Accept: "text/event-stream",
       Authorization: `Bearer ${token}`,
+      ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
     },
     cache: "no-store",
   })
@@ -105,4 +115,14 @@ export async function proxyProspeccionStreamingRequest(backendPath: string): Pro
     status: backendResponse.status,
     headers,
   })
+}
+
+function resolveOrganizacionId(): string | null {
+  for (const key of ORGANIZACION_ENV_KEYS) {
+    const value = process.env[key]
+    if (value && value.trim().length) {
+      return value.trim()
+    }
+  }
+  return null
 }
