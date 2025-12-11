@@ -217,3 +217,11 @@ SUPABASE_ANON_KEY=xxxxxx
 ## Otros
 ## =========================
 NODE_ENV=
+
+
+
+¡Perfecto! Con la navegación por etapas y el checklist listos, podemos avanzar hacia el siguiente
+  bloque del plan: implementar el wizard de campañas (selección de lista/filtros, plantillas,
+  programación) y consolidar la relación con el CRM/pipeline. Si te parece bien, preparo los cambios
+  para el wizard multicanal en /prospeccion/prospectos y la vista de /prospeccion/campanas. ¿Vamos con
+  eso?
