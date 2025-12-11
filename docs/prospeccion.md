@@ -42,10 +42,9 @@
   - [ ] Documentar en `variables.md` y mapear estados Brevo → UI.
 - [x] Persistir el Buscador en BD:  
   - [x] Crear tablas `prospeccion_buscador_jobs` y `prospeccion_buscador_resultados` (migración Supabase + RLS).  
-  - [ ] Migrar los JSON históricos desde `buscador_jobs/` a tablas nuevas.  
   - [x] Actualizar `BuscadorJobManager` para leer/escribir vía `CRMRepository` en vez de archivos.  
   - [x] Ajustar endpoints `/prospeccion/buscador/*` para usar datos persistidos (mismo contrato).  
-  - [ ] Exponer “Guardar resultado como prospecto” directamente desde estos registros.
+  - [x] Exponer “Guardar resultado como prospecto” directamente desde estos registros.
 
 ## 5. Evaluar (Campañas y métricas)
 - [ ] Extender `/prospeccion/contactos` con agrupación por “campaña” (`campana_id` en batch o metadata).
