@@ -11,7 +11,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
-from typing import Annotated, Any, Literal, Sequence
+from typing import Annotated, Any, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -53,7 +53,7 @@ from app.services import (
 )
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
-from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER, BuscadorJob
+from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.demografia_service import DemografiaServiceError
@@ -8404,7 +8404,12 @@ class BuscadorJobsListResponse(BaseModel):
     response_model=BuscadorJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorJobResponse:
+async def prospeccion_buscador_run(
+    payload: BuscadorRunPayload,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> BuscadorJobResponse:
     """Agenda la ejecución del Buscador y devuelve el identificador del job."""
 
     params = BuscadorParams(
@@ -8419,8 +8424,20 @@ async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorJobRe
         max_memory_mb=payload.max_memory_mb,
     )
 
-    job = BUSCADOR_JOB_MANAGER.schedule_job(params)
-    return _job_to_response(job)
+    job_payload: dict[str, Any] = {
+        "status": "pending",
+        "params": _params_to_dict(params),
+    }
+    if usuario_id:
+        job_payload["creado_por"] = str(usuario_id)
+
+    try:
+        job_row = await repo.create_buscador_job(usuario_token=user_token, payload=job_payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    BUSCADOR_JOB_MANAGER.schedule_job(repo=repo, job_row=job_row, params=params)
+    return _job_row_to_response(job_row)
 
 
 @router.get(
@@ -8429,46 +8446,69 @@ async def prospeccion_buscador_run(payload: BuscadorRunPayload) -> BuscadorJobRe
 )
 async def prospeccion_buscador_jobs(
     limit: int = Query(20, ge=1, le=200),
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
 ) -> BuscadorJobsListResponse:
-    jobs = BUSCADOR_JOB_MANAGER.list_jobs(limit)
-    return BuscadorJobsListResponse(items=[_job_to_response(job) for job in jobs])
+    try:
+        rows = await repo.list_buscador_jobs(usuario_token=user_token, limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return BuscadorJobsListResponse(items=[_job_row_to_response(row) for row in rows])
 
 
 @router.get(
     "/prospeccion/buscador/jobs/{job_id}",
     response_model=BuscadorJobResponse,
 )
-async def prospeccion_buscador_job_detail(job_id: UUID) -> BuscadorJobResponse:
-    job = BUSCADOR_JOB_MANAGER.get_job(job_id)
-    if not job:
+async def prospeccion_buscador_job_detail(
+    job_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> BuscadorJobResponse:
+    try:
+        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not job_row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Buscador job no encontrado"
         )
-    return _job_to_response(job)
+    return _job_row_to_response(job_row)
 
 
 @router.get("/prospeccion/buscador/jobs/{job_id}/results")
-async def prospeccion_buscador_job_results(job_id: UUID) -> JSONResponse:
-    job = BUSCADOR_JOB_MANAGER.get_job(job_id)
-    if not job:
+async def prospeccion_buscador_job_results(
+    job_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> JSONResponse:
+    try:
+        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not job_row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Buscador job no encontrado"
         )
-    if job.status != "completed":
+    status_value = str(job_row.get("status") or "pending")
+    if status_value != "completed":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="El job aún no ha finalizado",
         )
-    results = BUSCADOR_JOB_MANAGER.read_results(job)
-    if results is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Resultados no disponibles"
-        )
+    try:
+        rows = await repo.list_buscador_resultados(usuario_token=user_token, job_id=job_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    stats_value = job_row.get("stats")
+    stats = BuscadorStats(**stats_value).model_dump() if isinstance(stats_value, dict) else None
+    items = [_buscador_result_row_to_item(row).model_dump() for row in rows]
+    total = job_row.get("total") or len(items)
     return JSONResponse(
         {
-            "items": results,
-            "total": job.total or len(results),
-            "stats": job.stats,
+            "items": items,
+            "total": total,
+            "stats": stats,
         }
     )
 
@@ -8479,30 +8519,94 @@ def _ensure_dict(value: Any, default: dict[str, Any]) -> dict[str, Any]:
     return dict(default)
 
 
-def _job_to_response(job: BuscadorJob) -> BuscadorJobResponse:
-    stats = BuscadorStats(**job.stats) if job.stats else None
+def _params_to_dict(params: BuscadorParams) -> dict[str, Any]:
+    return {
+        "sitio": params.sitio,
+        "url": params.url,
+        "mode": params.mode,
+        "max_pages": params.max_pages,
+        "max_depth": params.max_depth,
+        "max_runtime": params.max_runtime,
+        "max_queue_size": params.max_queue_size,
+        "max_no_new_emails": params.max_no_new_emails,
+        "max_memory_mb": params.max_memory_mb,
+    }
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        if trimmed.endswith("Z"):
+            trimmed = trimmed[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(trimmed)
+        except ValueError:
+            return None
+    return None
+
+
+def _job_row_to_response(row: Mapping[str, Any]) -> BuscadorJobResponse:
+    try:
+        job_id = UUID(str(row.get("id")))
+    except (TypeError, ValueError) as exc:  # pragma: no cover - datos corruptos
+        raise HTTPException(status_code=500, detail="buscador_job_invalid_id") from exc
+
+    stats_value = row.get("stats")
+    stats = BuscadorStats(**stats_value) if isinstance(stats_value, dict) else None
+
+    params_dict = _ensure_dict(row.get("params"), default={})
     params = BuscadorJobParamsResponse(
-        sitio=job.params.sitio,
-        url=job.params.url,  # type: ignore[arg-type]
-        mode=job.params.mode,
-        max_pages=job.params.max_pages,
-        max_depth=job.params.max_depth,
-        max_runtime=job.params.max_runtime,
-        max_queue_size=job.params.max_queue_size,
-        max_no_new_emails=job.params.max_no_new_emails,
-        max_memory_mb=job.params.max_memory_mb,
+        sitio=params_dict.get("sitio", "domain"),
+        url=params_dict.get("url"),
+        mode=params_dict.get("mode", "generic"),
+        max_pages=int(params_dict.get("max_pages") or 0) or 200,
+        max_depth=int(params_dict.get("max_depth") or 0) or 3,
+        max_runtime=params_dict.get("max_runtime"),
+        max_queue_size=params_dict.get("max_queue_size"),
+        max_no_new_emails=params_dict.get("max_no_new_emails"),
+        max_memory_mb=params_dict.get("max_memory_mb"),
     )
+
     return BuscadorJobResponse(
-        id=job.id,
-        status=job.status,
-        created_at=job.created_at,
-        started_at=job.started_at,
-        finished_at=job.finished_at,
-        duration_ms=job.duration_ms,
-        total=job.total,
+        id=job_id,
+        status=row.get("status") or "pending",
+        created_at=_parse_datetime(row.get("created_at")) or datetime.now(timezone.utc),
+        started_at=_parse_datetime(row.get("started_at")),
+        finished_at=_parse_datetime(row.get("finished_at")),
+        duration_ms=row.get("duration_ms"),
+        total=row.get("total"),
         stats=stats,
-        error=job.error,
+        error=row.get("error"),
         params=params,
+    )
+
+
+def _buscador_result_row_to_item(row: Mapping[str, Any]) -> BuscadorResultItem:
+    contacto = row.get("contacto")
+    contacto_dict = contacto if isinstance(contacto, dict) else {}
+
+    def pick(*keys: str) -> Any:
+        for key in keys:
+            if key in row and row[key]:
+                return row[key]
+            if key in contacto_dict and contacto_dict[key]:
+                return contacto_dict[key]
+        return None
+
+    source_url = pick("url", "source_url") or ""
+    email = pick("correo", "email") or ""
+    return BuscadorResultItem(
+        source_url=source_url,
+        email=email,
+        name=pick("name"),
+        position=pick("position"),
+        phone=pick("telefono", "phone"),
+        extension=pick("extension"),
+        address=pick("address"),
     )
 
 

@@ -4106,6 +4106,147 @@ class CRMRepository:
         )
         return estado_final
 
+    async def create_buscador_job(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = [payload]
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_buscador_jobs",
+            token=usuario_token,
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("buscador_job_create_failed")
+        return row
+
+    async def list_buscador_jobs(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "order": "created_at.desc",
+            "limit": str(max(1, min(limit, 200))),
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_buscador_jobs",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"buscador_job_list_invalid:{data!r}")
+        return data
+
+    async def get_buscador_job(
+        self,
+        *,
+        job_id: UUID,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        params = {"id": f"eq.{job_id}", "limit": "1"}
+        request = (
+            self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_buscador_jobs",
+                token=usuario_token or "",
+                params=params,
+            )
+            if usuario_token
+            else self._request(
+                "GET",
+                "/rest/v1/prospeccion_buscador_jobs",
+                params=params,
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        if row is None:
+            return None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"buscador_job_get_invalid:{row!r}")
+        return row
+
+    async def list_buscador_resultados(
+        self,
+        *,
+        usuario_token: str,
+        job_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "job_id": f"eq.{job_id}",
+            "order": "creado_en.asc",
+            "limit": "2000",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_buscador_resultados",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"buscador_resultados_list_invalid:{data!r}")
+        return data
+
+    async def worker_update_buscador_job(
+        self,
+        *,
+        job_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_buscador_jobs",
+            params={"id": f"eq.{job_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"buscador_job_update_invalid:{data!r}")
+        return row
+
+    async def worker_replace_buscador_results(
+        self,
+        *,
+        job_id: UUID,
+        organizacion_id: UUID | None,
+        items: list[dict[str, Any]],
+    ) -> None:
+        await self._request(
+            "DELETE",
+            "/rest/v1/prospeccion_buscador_resultados",
+            params={"job_id": f"eq.{job_id}"},
+        )
+        if not items:
+            return
+        chunk_size = 500
+        for start in range(0, len(items), chunk_size):
+            chunk = items[start : start + chunk_size]
+            # Asegurar job_id/organizacion_id presentes
+            for row in chunk:
+                row.setdefault("job_id", str(job_id))
+                if organizacion_id:
+                    row.setdefault("organizacion_id", str(organizacion_id))
+            await self._request(
+                "POST",
+                "/rest/v1/prospeccion_buscador_resultados",
+                json=chunk,
+                prefer="return=minimal",
+            )
+
     async def get_email_template(
         self,
         *,
