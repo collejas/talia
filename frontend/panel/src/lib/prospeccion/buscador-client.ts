@@ -11,6 +11,7 @@ export type BuscadorRunPayload = {
 }
 
 export type BuscadorResult = {
+  id?: string | null
   source_url: string
   email: string
   name?: string | null
@@ -128,4 +129,14 @@ export async function obtenerBuscadorJob(jobId: string): Promise<BuscadorJob> {
 
 export async function obtenerBuscadorResultados(jobId: string): Promise<BuscadorJobResults> {
   return requestJson<BuscadorJobResults>(`/api/prospeccion/buscador/jobs/${jobId}/results`)
+}
+
+export async function guardarBuscadorProspectos(
+  jobId: string,
+  params: { result_ids: string[]; segmento?: string | null },
+): Promise<{ ok: boolean; total: number }> {
+  return requestJson<{ ok: boolean; total: number }>(`/api/prospeccion/buscador/jobs/${jobId}/prospectos`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  })
 }

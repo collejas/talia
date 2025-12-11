@@ -8343,6 +8343,7 @@ class BuscadorStats(BaseModel):
 
 
 class BuscadorResultItem(BaseModel):
+    id: UUID | None = None
     source_url: str
     email: str
     name: str | None = None
@@ -8397,6 +8398,11 @@ class BuscadorJobResponse(BaseModel):
 
 class BuscadorJobsListResponse(BaseModel):
     items: list[BuscadorJobResponse]
+
+
+class GuardarBuscadorProspectosPayload(BaseModel):
+    result_ids: list[UUID]
+    segmento: str | None = None
 
 
 @router.post(
@@ -8501,8 +8507,8 @@ async def prospeccion_buscador_job_results(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     stats_value = job_row.get("stats")
-    stats = BuscadorStats(**stats_value).model_dump() if isinstance(stats_value, dict) else None
-    items = [_buscador_result_row_to_item(row).model_dump() for row in rows]
+    stats = BuscadorStats(**stats_value).model_dump(mode="json") if isinstance(stats_value, dict) else None
+    items = [_buscador_result_row_to_item(row).model_dump(mode="json") for row in rows]
     total = job_row.get("total") or len(items)
     return JSONResponse(
         {
@@ -8511,6 +8517,54 @@ async def prospeccion_buscador_job_results(
             "stats": stats,
         }
     )
+
+
+@router.post("/prospeccion/buscador/jobs/{job_id}/prospectos")
+async def prospeccion_buscador_guardar_prospectos(
+    job_id: UUID,
+    payload: GuardarBuscadorProspectosPayload,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    if not payload.result_ids:
+        raise HTTPException(status_code=400, detail="result_ids_required")
+    try:
+        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not job_row:
+        raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+
+    try:
+        rows = await repo.list_buscador_resultados_by_ids(
+            usuario_token=user_token,
+            job_id=job_id,
+            result_ids=payload.result_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not rows:
+        raise HTTPException(status_code=404, detail="buscador_results_not_found")
+
+    prospectos: list[dict[str, Any]] = []
+    for row in rows:
+        prospecto_payload = _buscador_result_to_prospecto(
+            row=row,
+            job_id=job_id,
+            segmento=payload.segmento,
+        )
+        if prospecto_payload:
+            prospectos.append(prospecto_payload)
+
+    if not prospectos:
+        raise HTTPException(status_code=400, detail="prospectos_invalidos")
+
+    try:
+        created = await repo.bulk_insert_prospectos(usuario_token=user_token, items=prospectos)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "prospectos": created, "total": len(created)}
 
 
 def _ensure_dict(value: Any, default: dict[str, Any]) -> dict[str, Any]:
@@ -8600,6 +8654,7 @@ def _buscador_result_row_to_item(row: Mapping[str, Any]) -> BuscadorResultItem:
     source_url = pick("url", "source_url") or ""
     email = pick("correo", "email") or ""
     return BuscadorResultItem(
+        id=str(row.get("id")) if row.get("id") else None,
         source_url=source_url,
         email=email,
         name=pick("name"),
@@ -8608,6 +8663,56 @@ def _buscador_result_row_to_item(row: Mapping[str, Any]) -> BuscadorResultItem:
         extension=pick("extension"),
         address=pick("address"),
     )
+
+
+def _buscador_result_to_prospecto(
+    *,
+    row: Mapping[str, Any],
+    job_id: UUID,
+    segmento: str | None,
+) -> dict[str, Any] | None:
+    contacto = row.get("contacto")
+    contacto_dict = contacto if isinstance(contacto, dict) else {}
+
+    def pick(*keys: str) -> str | None:
+        for key in keys:
+            value = row.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            value = contacto_dict.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
+    email = pick("correo", "email")
+    display_name = pick("name") or email or row.get("dominio") or pick("url", "source_url")
+    if not display_name:
+        display_name = "Contacto web"
+
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    metadata.update(
+        {
+            "buscador_job_id": str(job_id),
+            "buscador_result_id": row.get("id"),
+            "buscador_contacto": contacto_dict,
+            "buscador_url": row.get("url"),
+        }
+    )
+
+    payload: dict[str, Any] = {
+        "fuente": "usuario",
+        "fuente_busqueda": "buscador",
+        "display_name": display_name,
+        "actividad": contacto_dict.get("position"),
+        "phone": pick("telefono", "phone"),
+        "email": email,
+        "website": pick("url", "source_url"),
+        "address": pick("address"),
+        "segmento": segmento,
+        "metadata": metadata,
+        "contacto_datos": contacto_dict,
+    }
+    return payload
 
 
 async def _send_manual_whatsapp_message(

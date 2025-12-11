@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import {
   crearBuscadorJob,
+  guardarBuscadorProspectos,
   obtenerBuscadorJob,
   obtenerBuscadorResultados,
   type BuscadorJob,
@@ -85,6 +87,9 @@ function BuscadorView() {
   const [jobInfo, setJobInfo] = useState<BuscadorJob | null>(null)
   const [isPolling, setIsPolling] = useState(false)
   const [lastResultsJobId, setLastResultsJobId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [segmento, setSegmento] = useState("")
+  const [savingProspectos, setSavingProspectos] = useState(false)
 
   const canDownload = results.length > 0
 
@@ -237,6 +242,69 @@ function BuscadorView() {
     setErrorMessage(null)
     setJobInfo(null)
     setLastResultsJobId(null)
+    setSelectedIds(new Set())
+    setSegmento("")
+  }
+
+  useEffect(() => {
+    if (!results.length) {
+      setSelectedIds(new Set())
+      return
+    }
+    const ids = results
+      .map((result) => result.id?.trim())
+      .filter((value): value is string => Boolean(value))
+    setSelectedIds(new Set(ids))
+  }, [results])
+
+  const toggleSelectAll = (checked: boolean | "indeterminate") => {
+    if (!results.length) return
+    if (checked) {
+      const ids = results
+        .map((result) => result.id?.trim())
+        .filter((value): value is string => Boolean(value))
+      setSelectedIds(new Set(ids))
+    } else {
+      setSelectedIds(new Set())
+    }
+  }
+
+  const toggleSelect = (id: string | undefined | null, checked: boolean | "indeterminate") => {
+    if (!id) return
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(id)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
+  }
+
+  const handleSaveProspectos = async () => {
+    if (!jobInfo) return
+    const ids = (selectedIds.size ? Array.from(selectedIds) : [])
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+    if (!ids.length) {
+      toast.error("Selecciona al menos un contacto para guardarlo como prospecto.")
+      return
+    }
+    setSavingProspectos(true)
+    try {
+      const response = await guardarBuscadorProspectos(jobInfo.id, {
+        result_ids: ids,
+        segmento: segmento.trim() || undefined,
+      })
+      toast.success(`Se guardaron ${response.total} prospectos.`)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudieron guardar los prospectos."
+      toast.error(message)
+    } finally {
+      setSavingProspectos(false)
+    }
   }
 
   const handleDownloadJson = () => {
@@ -458,16 +526,45 @@ function BuscadorView() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {results.length > 0 && (
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="w-full md:w-1/2">
+                <Label htmlFor="segmento">Segmento (opcional)</Label>
+                <Input
+                  id="segmento"
+                  placeholder="Ej. inbound, scraping mayo"
+                  value={segmento}
+                  onChange={(event) => setSegmento(event.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={handleSaveProspectos}
+                disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
+              >
+                {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
+              </Button>
+            </div>
+          )}
           {results.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No hay resultados todavía.
-            </p>
+            <p className="text-sm text-muted-foreground">No hay resultados todavía.</p>
           ) : (
             <ScrollArea className="h-[420px] rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={
+                          selectedIds.size > 0 &&
+                          selectedIds.size ===
+                            results.filter((item) => typeof item.id === "string" && item.id.trim().length).length
+                        }
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Seleccionar todos"
+                      />
+                    </TableHead>
                     <TableHead>Correo</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Puesto</TableHead>
@@ -481,6 +578,14 @@ function BuscadorView() {
                   {results.map((item, index) => (
                     <TableRow key={`${item.email}-${index}`}>
                       <TableCell>
+                        <Checkbox
+                          checked={item.id ? selectedIds.has(item.id) : false}
+                          onCheckedChange={(checked) => toggleSelect(item.id ?? undefined, checked)}
+                          disabled={!item.id}
+                          aria-label="Seleccionar contacto"
+                        />
+                      </TableCell>
+                      <TableCell>
                         <span className="font-medium">{item.email}</span>
                       </TableCell>
                       <TableCell>{item.name || "—"}</TableCell>
@@ -489,12 +594,7 @@ function BuscadorView() {
                       <TableCell>{item.extension || "—"}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{item.address || "—"}</TableCell>
                       <TableCell className="max-w-[240px] truncate">
-                        <a
-                          href={item.source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary underline"
-                        >
+                        <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary underline">
                           {item.source_url}
                         </a>
                       </TableCell>

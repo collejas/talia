@@ -4199,6 +4199,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"buscador_resultados_list_invalid:{data!r}")
         return data
 
+    async def list_buscador_resultados_by_ids(
+        self,
+        *,
+        usuario_token: str,
+        job_id: UUID,
+        result_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        if not result_ids:
+            return []
+        ids_param = ",".join(str(value) for value in result_ids)
+        params = {
+            "job_id": f"eq.{job_id}",
+            "id": f"in.({ids_param})",
+            "limit": str(len(result_ids)),
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_buscador_resultados",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"buscador_resultados_by_ids_invalid:{data!r}")
+        return data
+
     async def worker_update_buscador_job(
         self,
         *,
@@ -4246,6 +4272,31 @@ class CRMRepository:
                 json=chunk,
                 prefer="return=minimal",
             )
+
+    async def bulk_insert_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        items: Sequence[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not items:
+            return []
+        created: list[dict[str, Any]] = []
+        chunk_size = 200
+        for start in range(0, len(items), chunk_size):
+            chunk = list(items[start : start + chunk_size])
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                json=chunk,
+                prefer="return=representation",
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"prospecto_bulk_insert_invalid:{data!r}")
+            created.extend(data)
+        return created
 
     async def get_email_template(
         self,
