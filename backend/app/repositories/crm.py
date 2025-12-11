@@ -4298,6 +4298,38 @@ class CRMRepository:
             created.extend(data)
         return created
 
+    async def get_prospeccion_stage_summary(
+        self,
+        *,
+        usuario_token: str,
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_stage_resumen",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError(f"stage_summary_invalid:{data!r}")
+        return data
+
+    async def get_prospeccion_enriquecimiento_resumen(
+        self,
+        *,
+        usuario_token: str,
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_enriquecimiento_resumen",
+            token=usuario_token,
+            json={},
+        )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError(f"enriquecimiento_resumen_invalid:{data!r}")
+        return data
+
     async def get_email_template(
         self,
         *,

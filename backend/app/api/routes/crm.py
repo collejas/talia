@@ -8567,6 +8567,30 @@ async def prospeccion_buscador_guardar_prospectos(
     return {"ok": True, "prospectos": created, "total": len(created)}
 
 
+@router.get("/prospeccion/stage-resumen")
+async def prospeccion_stage_resumen(
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    try:
+        summary = await repo.get_prospeccion_stage_summary(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"stages": summary}
+
+
+@router.get("/prospeccion/prospectos/checklist")
+async def prospeccion_prospectos_checklist(
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    try:
+        resumen = await repo.get_prospeccion_enriquecimiento_resumen(usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"checklist": resumen}
+
+
 def _ensure_dict(value: Any, default: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value, dict):
         return value

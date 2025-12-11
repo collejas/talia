@@ -3,7 +3,7 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -71,9 +71,9 @@ const DEFAULT_FORM_STATE: FormState = {
 
 export default function BuscadorClientPage() {
   return (
-    <AppViewLayout title="Prospección · Buscador web">
+    <ProspeccionViewLayout title="Prospección · Buscador web">
       <BuscadorView />
-    </AppViewLayout>
+    </ProspeccionViewLayout>
   )
 }
 

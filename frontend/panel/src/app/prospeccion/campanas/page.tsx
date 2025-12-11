@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 
 import { CampanasMetricsClient } from "./page.client"
 
@@ -10,10 +10,8 @@ export const metadata: Metadata = {
 
 export default function CampanasPage() {
   return (
-    <AppViewLayout title="Prospección · Campañas">
-      <div className="px-4 pb-10 pt-4 md:px-6 lg:px-8">
-        <CampanasMetricsClient />
-      </div>
-    </AppViewLayout>
+    <ProspeccionViewLayout title="Prospección · Campañas">
+      <CampanasMetricsClient />
+    </ProspeccionViewLayout>
   )
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+import { useRouter } from "next/navigation"
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -14,11 +15,13 @@ import {
   IconSearch,
   IconSend2,
   IconTrash,
+  IconMail,
 } from "@tabler/icons-react"
 
-import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
@@ -76,6 +79,11 @@ type BannerState = {
 }
 
 type ContactResultWithName = ProspectoContactoResumen & { display_name?: string | null }
+type ChecklistSummary = {
+  telefonos_pendientes: number
+  sin_email: number
+  datos_incompletos: number
+}
 
 const initialFilters: Filters = {
   search: "",
@@ -144,15 +152,14 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
 
 export default function ProspectosClientPage() {
   return (
-    <AppViewLayout title="Prospección · Prospectos">
-      <div className="px-4 pb-10 pt-4 md:px-6 lg:px-8">
-        <ProspectosView />
-      </div>
-    </AppViewLayout>
+    <ProspeccionViewLayout title="Prospección · Prospectos">
+      <ProspectosView />
+    </ProspeccionViewLayout>
   )
 }
 
 function ProspectosView() {
+  const router = useRouter()
   const [filters, setFilters] = useState<Filters>(initialFilters)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
@@ -188,6 +195,8 @@ function ProspectosView() {
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
+  const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
+  const [checklistLoading, setChecklistLoading] = useState(false)
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -232,6 +241,26 @@ function ProspectosView() {
     void fetchProspectos(0)
   }, [fetchProspectos])
 
+  const refreshChecklist = useCallback(async () => {
+    setChecklistLoading(true)
+    try {
+      const response = await fetch("/api/prospeccion/prospectos/checklist", { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error("checklist_error")
+      }
+      const data = (await response.json()) as { checklist?: ChecklistSummary }
+      setChecklist(data?.checklist ?? null)
+    } catch {
+      setChecklist(null)
+    } finally {
+      setChecklistLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshChecklist()
+  }, [refreshChecklist])
+
   useEffect(() => {
     if (!contactDialogOpen) {
       setContactError(null)
@@ -271,6 +300,23 @@ function ProspectosView() {
       setFormSubmitting(false)
     }
   }, [formDialogOpen])
+
+  const handleChecklistLookup = useCallback(() => {
+    setFilters((prev) => ({ ...prev, lookupStatus: "pendiente" }))
+    setOffset(0)
+  }, [])
+
+  const handleChecklistScraper = useCallback(() => {
+    router.push("/prospeccion/buscador")
+  }, [router])
+
+  const handleChecklistManual = useCallback(() => {
+    setFormMode("create")
+    setFormDialogOpen(true)
+    setEditingId(null)
+    setMetadataBase({})
+    setFormValues(initialProspectoForm)
+  }, [])
 
   useEffect(() => {
     if (!deleteDialogOpen) {
@@ -616,6 +662,15 @@ function ProspectosView() {
           </Button>
         </div>
       ) : null}
+
+      <EnrichmentChecklist
+        data={checklist}
+        loading={checklistLoading}
+        onRefresh={refreshChecklist}
+        onVerifyPhones={handleChecklistLookup}
+        onOpenScraper={handleChecklistScraper}
+        onOpenManual={handleChecklistManual}
+      />
 
       {lastContactResults.length ? (
         <section className="rounded-lg border bg-card p-4 shadow-sm">
@@ -1413,6 +1468,94 @@ function formatDate(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return DATE_TIME_FORMATTER.format(date)
+}
+
+type EnrichmentChecklistProps = {
+  data: ChecklistSummary | null
+  loading: boolean
+  onRefresh: () => void
+  onVerifyPhones: () => void
+  onOpenScraper: () => void
+  onOpenManual: () => void
+}
+
+function EnrichmentChecklist({
+  data,
+  loading,
+  onRefresh,
+  onVerifyPhones,
+  onOpenScraper,
+  onOpenManual,
+}: EnrichmentChecklistProps) {
+  const cards = [
+    {
+      key: "telefonos",
+      title: "Verificar teléfonos",
+      description: "Confirma el tipo de línea antes de lanzar WhatsApp o voz.",
+      count: data?.telefonos_pendientes ?? 0,
+      icon: <IconPhoneCheck className="size-4 text-primary" />,
+      actionLabel: "Ver pendientes",
+      onAction: onVerifyPhones,
+    },
+    {
+      key: "correo",
+      title: "Buscar datos adicionales",
+      description: "Prospectos sin correo confirmado aún.",
+      count: data?.sin_email ?? 0,
+      icon: <IconMail className="size-4 text-primary" />,
+      actionLabel: "Ir al buscador",
+      onAction: onOpenScraper,
+    },
+    {
+      key: "captura",
+      title: "Completar fichas",
+      description: "Registra emails, puestos o notas manualmente.",
+      count: data?.datos_incompletos ?? 0,
+      icon: <IconPencil className="size-4 text-primary" />,
+      actionLabel: "Nuevo prospecto",
+      onAction: onOpenManual,
+    },
+  ]
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <CardTitle className="text-base font-semibold">Checklist de enriquecimiento</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Prioriza la verificación de datos antes de lanzar una campaña.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+          <IconRefresh className={cn("mr-2 size-4", loading && "animate-spin")} />
+          Actualizar
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 md:grid-cols-3">
+          {cards.map((card) => (
+            <div key={card.key} className="rounded-xl border bg-muted/40 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                {card.icon}
+                <span>{card.title}</span>
+              </div>
+              <div className="mt-2 text-3xl font-bold">{loading ? "…" : card.count}</div>
+              <p className="mt-2 text-xs text-muted-foreground">{card.description}</p>
+              <Button
+                className="mt-3"
+                variant="secondary"
+                size="sm"
+                onClick={card.onAction}
+                disabled={loading || !card.count}
+              >
+                {card.actionLabel}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 function formatDistance(meters?: number | null) {
