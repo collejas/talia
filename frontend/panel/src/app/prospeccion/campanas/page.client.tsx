@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconAlertTriangle, IconLoader, IconRefresh } from "@tabler/icons-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import {
   getContactoMetrics,
+  getProspeccionCampanas,
   type ContactoMetrics,
+  type ProspeccionCampanaGroup,
 } from "@/lib/prospeccion/prospectos-client"
 
 const canalLabel: Record<string, string> = {
@@ -34,6 +37,9 @@ export function CampanasMetricsClient() {
   const [data, setData] = useState<ContactoMetrics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
+  const [campanasLoading, setCampanasLoading] = useState(false)
+  const [campanasError, setCampanasError] = useState<string | null>(null)
 
   const fetchMetrics = useCallback(async () => {
     setLoading(true)
@@ -55,57 +61,150 @@ export function CampanasMetricsClient() {
 
   const entries = useMemo(() => Object.entries(data?.canales ?? {}), [data])
 
+  const fetchCampanas = useCallback(async () => {
+    setCampanasLoading(true)
+    setCampanasError(null)
+    try {
+      const response = await getProspeccionCampanas(12)
+      setCampanas(response.items ?? [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar las campañas recientes."
+      setCampanasError(message)
+    } finally {
+      setCampanasLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchCampanas()
+  }, [fetchCampanas])
+
   return (
-    <Card>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <CardTitle className="text-base font-semibold">Salud por canal</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Totales acumulados de envíos desde que se reinició el worker.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void fetchMetrics()} disabled={loading}>
-          <IconRefresh className={cn("mr-2 size-4", loading && "animate-spin")} />
-          Actualizar
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {error ? (
-          <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            <IconAlertTriangle className="size-4" />
-            <span>{error}</span>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-semibold">Salud por canal</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Totales acumulados de envíos desde que se reinició el worker.
+            </p>
           </div>
-        ) : null}
-        {!entries.length && !loading ? (
-          <p className="text-sm text-muted-foreground">Aún no hay métricas registradas.</p>
-        ) : null}
-        {entries.length ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            {entries.map(([canal, valores]) => (
-              <div key={canal} className="rounded-lg border p-4">
-                <div className="text-sm font-semibold">
-                  {canalLabel[canal] ?? canal}
+          <Button variant="outline" size="sm" onClick={() => void fetchMetrics()} disabled={loading}>
+            <IconRefresh className={cn("mr-2 size-4", loading && "animate-spin")} />
+            Actualizar
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {error ? (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{error}</span>
+            </div>
+          ) : null}
+          {!entries.length && !loading ? (
+            <p className="text-sm text-muted-foreground">Aún no hay métricas registradas.</p>
+          ) : null}
+          {entries.length ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              {entries.map(([canal, valores]) => (
+                <div key={canal} className="rounded-lg border p-4">
+                  <div className="text-sm font-semibold">{canalLabel[canal] ?? canal}</div>
+                  <div className="text-2xl font-bold">{valores.totales}</div>
+                  <Separator className="my-3" />
+                  <div className="space-y-1 text-sm">
+                    {Object.entries(valores.por_estado).map(([estado, count]) => (
+                      <div key={`${canal}-${estado}`} className="flex items-center justify-between text-muted-foreground">
+                        <span className={estadoPalette[estado] ?? "text-muted-foreground"}>{estado}</span>
+                        <span>{count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-2xl font-bold">{valores.totales}</div>
-                <Separator className="my-3" />
-                <div className="space-y-1 text-sm">
-                  {Object.entries(valores.por_estado).map(([estado, count]) => (
-                    <div key={`${canal}-${estado}`} className="flex items-center justify-between text-muted-foreground">
-                      <span className={estadoPalette[estado] ?? "text-muted-foreground"}>{estado}</span>
-                      <span>{count}</span>
-                    </div>
+              ))}
+            </div>
+          ) : null}
+          {loading ? (
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <IconLoader className="size-4 animate-spin" /> Actualizando métricas...
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-semibold">Campañas recientes</CardTitle>
+            <p className="text-sm text-muted-foreground">Agrupadas por campana y con conteo de estados por lote.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void fetchCampanas()} disabled={campanasLoading}>
+            <IconRefresh className={cn("mr-2 size-4", campanasLoading && "animate-spin")} />
+            Actualizar
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {campanasError ? (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{campanasError}</span>
+            </div>
+          ) : null}
+          {!campanas.length && !campanasLoading ? (
+            <p className="text-sm text-muted-foreground">Aún no tienes campañas registradas.</p>
+          ) : null}
+          {campanas.map((group, index) => (
+            <div key={group.campana_id ?? `sin-${index}`} className="rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{group.campana_nombre ?? "Sin campaña"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {group.batches.length} lote{group.batches.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {Object.entries(group.totales).map(([estado, count]) => (
+                    <Badge key={`${group.campana_id ?? "sin"}-${estado}`} variant="outline">
+                      {estado}: {count}
+                    </Badge>
                   ))}
                 </div>
               </div>
-            ))}
-          </div>
-        ) : null}
-        {loading ? (
-          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <IconLoader className="size-4 animate-spin" /> Actualizando métricas...
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+              <div className="mt-4 space-y-3">
+                {group.batches.map((batch) => (
+                  <div key={batch.id} className="rounded-md border bg-muted/30 p-3 text-sm shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">
+                          {batch.titulo || batch.campana_nombre || `Lote ${batch.id.slice(0, 8)}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos ·{" "}
+                          {(batch.canales ?? []).join(", ") || "Sin canales"}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="capitalize">
+                        {batch.estado ?? "pendiente"}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      {Object.entries(batch.totales).map(([estado, count]) => (
+                        <span key={`${batch.id}-${estado}`} className="rounded bg-background/80 px-2 py-0.5">
+                          {estado}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {campanasLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <IconLoader className="size-4 animate-spin" /> Cargando campañas...
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

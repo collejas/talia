@@ -26,11 +26,11 @@
 ## 3. Preparar (Segmentación y listas inteligentes)
 - [ ] Persistir `metadata.stage` (`discover/enrich/prepare/launch/evaluate`) y mostrar progreso global.
 - [ ] Guardar filtros frecuentes como “listas inteligentes” (`prospeccion_contacto_batch.filtros` plantillas) para reutilizar.
-- [ ] Integrar botón “Convertir a contacto” → crear registro en `public.contactos` y marcar al prospecto como promovido (`metadata.convertido_contacto_id`).
+- [x] Integrar botón “Convertir a contacto” → crear registro en `public.contactos` y marcar al prospecto como promovido (`metadata.convertido_contacto_id`).
 - [ ] Considerar job/trigger que mueva prospectos verificados al pipeline `/prospeccion/pipeline`.
 
 ## 4. Lanzar (Constructor de campañas)
-- [ ] Diseñar wizard en `/prospeccion/prospectos`:
+- [x] Diseñar wizard en `/prospeccion/prospectos`:
   1. Selección de lista/filtros (usa listas inteligentes).  
   2. Selección de canales + plantillas (`prospeccion_contacto_templates`).  
   3. Programación (usar `programado_en` por canal).  
@@ -49,8 +49,8 @@
 ## 5. Evaluar (Campañas y métricas)
 - [ ] Extender `/prospeccion/contactos` con agrupación por “campaña” (`campana_id` en batch o metadata).
 - [ ] `/prospeccion/campanas`:  
-  - [ ] Mostrar secuencias (correo día 1, WhatsApp día 3…).  
-  - [ ] KPI por canal (entregados, fallidos, reintentos) usando `/api/prospeccion/contacto/metrics`.  
+  - [x] Mostrar secuencias (correo día 1, WhatsApp día 3…).  
+  - [x] KPI por canal (entregados, fallidos, reintentos) usando `/api/prospeccion/contacto/metrics`.  
   - [ ] Botón “Duplicar campaña” que clone filtros/plantillas.
 - [ ] Exponer timeline completo (logs, estados Twilio, Brevo SID) desde `prospeccion_contactos_log`.
 - [ ] Documentar runbook en `docs/plan_envios_prospeccion.md` (pausar lote, reintentar, monitoreo).
@@ -60,9 +60,9 @@
 ## Plan de acción detallado
 1. [ ] **Centralizar navegación**: barra/tabs “Descubre · Enriquecer · Preparar · Lanzar · Evaluar” en `/prospeccion`.
 2. [ ] **Checklist de enriquecimiento** en `/prospeccion/prospectos` con acciones automáticas (lookup, scraper, captura).
-3. [ ] **Wizard de campañas** con scheduling básico y soporte multicanal.
+3. [x] **Wizard de campañas** con scheduling básico y soporte multicanal.
 4. [ ] **Integración CRM** (crear contacto/oportunidad directamente desde el prospecto).
-5. [ ] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`.
+5. [ ] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(agrupador listo; falta duplicar campañas)_.
 6. [ ] **Indicadores de progreso** por etapa (basados en `metadata.stage`).
 7. [ ] **Brevo**: definir método elegido, ajustar `send_email`, registrar estados y actualizar documentación.
 

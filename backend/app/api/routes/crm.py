@@ -73,6 +73,7 @@ DEFAULT_PORTAL_TOKEN_DAYS = 14
 QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion_corta))"
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
+MAX_PROSPECCION_BATCH = 500
 
 
 def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:
@@ -438,6 +439,89 @@ class ProspectoListQuery(BaseModel):
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     order: Literal["creado", "nombre"] | None = Field(default=None)
+    stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
+    whatsapp_permitido: bool | None = Field(default=None)
+    llamada_permitida: bool | None = Field(default=None)
+
+
+class ProspectoFiltroPayload(BaseModel):
+    """Subconjunto de filtros reutilizable para listas inteligentes y wizard."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    search: str | None = Field(default=None, max_length=120)
+    fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
+    lookup_status: str | None = Field(default=None, max_length=60)
+    segmento: str | None = Field(default=None, max_length=120)
+    carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
+    stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
+    whatsapp_permitido: bool | None = Field(default=None)
+    llamada_permitida: bool | None = Field(default=None)
+
+
+class ProspeccionCanalConfig(BaseModel):
+    """Configuración avanzada por canal dentro del wizard."""
+
+    canal: Literal["correo", "whatsapp", "llamada"]
+    template_id: UUID | None = None
+    subject: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=4000)
+    message: str | None = Field(default=None, max_length=1000)
+    programado_en: datetime | None = None
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class ProspeccionListaPayload(BaseModel):
+    """Define una lista inteligente guardada."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(..., min_length=3, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
+    filtros: ProspectoFiltroPayload
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class ProspeccionListaUpdatePayload(BaseModel):
+    """Campos editables de una lista inteligente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str | None = Field(default=None, min_length=3, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
+    filtros: ProspectoFiltroPayload | None = None
+    metadata: dict[str, Any] | None = Field(default=None)
+
+
+class ProspeccionListaQuery(BaseModel):
+    """Filtros para listar listas inteligentes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0, le=1000)
+    search: str | None = Field(default=None, max_length=120)
+
+
+class ProspeccionCampanaQuery(BaseModel):
+    """Parámetros del dashboard de campañas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=15, ge=1, le=100)
+
+
+class ProspectoConvertirPayload(BaseModel):
+    """Payload para convertir un prospecto a contacto de CRM."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str | None = Field(default=None, min_length=2, max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=60)
+    company_name: str | None = Field(default=None, max_length=160)
+    notas: str | None = Field(default=None, max_length=1000)
+    stage: Literal["discover", "enrich", "prepare", "launch", "evaluate"] | None = None
 
 
 class ProspectoContactarPayload(BaseModel):
@@ -445,25 +529,38 @@ class ProspectoContactarPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    prospecto_ids: list[UUID] = Field(
-        ..., min_length=1, max_length=200, description="Prospectos a contactar."
+    prospecto_ids: list[UUID] | None = Field(
+        default=None, min_length=1, max_length=200, description="Prospectos seleccionados manualmente."
     )
     correo_asunto: str | None = Field(default=None, max_length=200)
     correo_cuerpo: str | None = Field(default=None, max_length=4000)
     whatsapp_mensaje: str | None = Field(default=None, max_length=2000)
     llamada_notas: str | None = Field(default=None, max_length=500)
+    lista_id: UUID | None = None
+    filtros: ProspectoFiltroPayload | None = None
+    canales: list[ProspeccionCanalConfig] | None = None
+    campana_id: UUID | None = None
+    batch_titulo: str | None = Field(default=None, max_length=160)
 
     @field_validator("prospecto_ids")
     @classmethod
     def _dedupe_contact_ids(cls, value: list[UUID]) -> list[UUID]:
+        if not value:
+            return value
         unique: list[UUID] = []
         seen: set[UUID] = set()
         for item in value:
             if item in seen:
                 continue
             seen.add(item)
-        unique.append(item)
+            unique.append(item)
         return unique
+
+    @model_validator(mode="after")
+    def _ensure_selector(self) -> "ProspectoContactarPayload":
+        if not self.prospecto_ids and not self.lista_id and not self.filtros:
+            raise ValueError("selector_required")
+        return self
 
 
 class ProspectoManualPayload(BaseModel):
@@ -2140,8 +2237,45 @@ def _build_prospecto_from_contactable(
 
 def _resolve_contact_channels(
     payload: ProspectoContactarPayload,
-) -> dict[str, dict[str, Any]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    """Construye la configuración de canales y sus programaciones."""
+
     canales: dict[str, dict[str, Any]] = {}
+    programacion: dict[str, str] = {}
+
+    if payload.canales:
+        for canal_config in payload.canales:
+            canal = canal_config.canal
+            entry: dict[str, Any] = {}
+            if canal_config.template_id:
+                entry["template_id"] = str(canal_config.template_id)
+            if canal_config.metadata:
+                entry["metadata"] = canal_config.metadata
+
+            if canal == "correo":
+                subject = _clean_text(canal_config.subject)
+                body = canal_config.body
+                if not subject or not body:
+                    raise HTTPException(status_code=400, detail="correo_payload_incompleto")
+                entry["subject"] = subject
+                entry["body"] = body
+            elif canal == "whatsapp":
+                message = _clean_text(canal_config.body or canal_config.message)
+                if not message:
+                    raise HTTPException(status_code=400, detail="whatsapp_payload_incompleto")
+                entry["body"] = message
+            elif canal == "llamada":
+                message = _clean_text(canal_config.message or canal_config.body) or "Llamada programada desde Tal IA."
+                entry["message"] = message
+            else:
+                continue
+
+            if canal_config.programado_en:
+                programacion[canal] = canal_config.programado_en.isoformat()
+            canales[canal] = entry
+
+        return canales, programacion
+
     asunto = _clean_text(payload.correo_asunto)
     cuerpo = _clean_text(payload.correo_cuerpo)
     if asunto and cuerpo:
@@ -2155,7 +2289,7 @@ def _resolve_contact_channels(
     llamada_notas = _clean_text(payload.llamada_notas)
     if llamada_notas:
         canales["llamada"] = {"message": llamada_notas}
-    return canales
+    return canales, programacion
 
 
 def _build_contact_batch_payload(
@@ -2164,19 +2298,49 @@ def _build_contact_batch_payload(
     total: int,
     payload: ProspectoContactarPayload,
     usuario_id: UUID | None,
+    filtros: dict[str, Any],
+    programacion: dict[str, str] | None,
+    metadata_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    prospecto_ids = [str(value) for value in payload.prospecto_ids]
-    return {
+    body: dict[str, Any] = {
         "iniciado_por": str(usuario_id) if usuario_id else None,
         "canales": canales,
         "total_prospectos": total,
         "estado": "pendiente",
-        "filtros": {"prospecto_ids": prospecto_ids},
-        "metadata": {
-            "correo_asunto": payload.correo_asunto,
-            "whatsapp_mensaje": payload.whatsapp_mensaje,
-            "llamada_notas": payload.llamada_notas,
-        },
+        "filtros": filtros or {},
+    }
+    if payload.campana_id:
+        body["campana_id"] = str(payload.campana_id)
+    if payload.lista_id:
+        body["lista_id"] = str(payload.lista_id)
+    if payload.batch_titulo:
+        body["titulo"] = payload.batch_titulo
+    if programacion:
+        body["programacion"] = programacion
+
+    metadata = {
+        "correo_asunto": payload.correo_asunto,
+        "whatsapp_mensaje": payload.whatsapp_mensaje,
+        "llamada_notas": payload.llamada_notas,
+    }
+    if metadata_extra:
+        metadata.update(metadata_extra)
+    body["metadata"] = metadata
+    return body
+
+
+def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, Any]:
+    """Convierte filtros del wizard a kwargs entendibles por el repositorio."""
+
+    return {
+        "search": filters.search,
+        "fuente": filters.fuente or None,
+        "lookup_status": filters.lookup_status,
+        "segmento": filters.segmento,
+        "carrier_type": filters.carrier_type or None,
+        "stage": filters.stage or None,
+        "whatsapp_permitido": filters.whatsapp_permitido,
+        "llamada_permitida": filters.llamada_permitida,
     }
 
 
@@ -2185,6 +2349,7 @@ def _build_contact_envios_entries(
     batch_id: Any,
     prospectos: list[dict[str, Any]],
     canales: dict[str, dict[str, Any]],
+    programacion: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     batch_value = str(batch_id)
@@ -2202,15 +2367,16 @@ def _build_contact_envios_entries(
             "carrier_type": prospecto.get("carrier_type"),
         }
         for canal, canal_payload in canales.items():
-            entries.append(
-                {
-                    "batch_id": batch_value,
-                    "prospecto_id": str(prospecto_id),
-                    "canal": canal,
-                    "payload": canal_payload,
-                    "detalle": detalle,
-                }
-            )
+            entry = {
+                "batch_id": batch_value,
+                "prospecto_id": str(prospecto_id),
+                "canal": canal,
+                "payload": canal_payload,
+                "detalle": detalle,
+            }
+            if programacion and programacion.get(canal):
+                entry["programado_en"] = programacion[canal]
+            entries.append(entry)
     return entries
 
 
@@ -6208,6 +6374,9 @@ async def listar_prospectos(
             segmento=params.segmento,
             carrier_type=params.carrier_type or None,
             order=order_value,
+            stage=params.stage or None,
+            whatsapp_permitido=params.whatsapp_permitido,
+            llamada_permitida=params.llamada_permitida,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -6301,6 +6470,184 @@ async def listar_contacto_templates(
     return {"ok": True, "items": items}
 
 
+@router.get("/prospeccion/contacto/listas")
+async def listar_contacto_listas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    params: ProspeccionListaQuery = Depends(),
+) -> dict[str, Any]:
+    """Devuelve listas inteligentes guardadas."""
+
+    try:
+        rows, total = await repo.list_contact_lists(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            search=params.search,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
+
+
+@router.post("/prospeccion/contacto/listas")
+async def crear_contacto_lista(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ProspeccionListaPayload,
+) -> dict[str, Any]:
+    body = payload.model_dump(mode="json", exclude_none=True)
+    try:
+        row = await repo.create_contact_list(usuario_token=user_token, payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "lista": row}
+
+
+@router.patch("/prospeccion/contacto/listas/{lista_id}")
+async def actualizar_contacto_lista(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    lista_id: UUID,
+    payload: ProspeccionListaUpdatePayload,
+) -> dict[str, Any]:
+    body = payload.model_dump(mode="json", exclude_none=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_contact_list(
+            usuario_token=user_token,
+            lista_id=lista_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "contact_list_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="contact_list_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "lista": row}
+
+
+@router.delete("/prospeccion/contacto/listas/{lista_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_contacto_lista(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    lista_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_contact_list(usuario_token=user_token, lista_id=lista_id)
+    except CRMRepositoryError as exc:
+        if "contact_list_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="contact_list_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/prospeccion/campanas")
+async def prospeccion_campanas_dashboard(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    params: ProspeccionCampanaQuery = Depends(),
+) -> dict[str, Any]:
+    """Dashboard compacto de campañas (agrupa lotes por campana)."""
+
+    limit = params.limit
+    try:
+        batches, _ = await repo.list_contact_batches(
+            usuario_token=user_token,
+            limit=limit,
+            offset=0,
+            order="creado_en.desc",
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    batch_ids: list[UUID] = []
+    for row in batches:
+        batch_id = row.get("id")
+        try:
+            if batch_id:
+                batch_ids.append(UUID(str(batch_id)))
+        except (ValueError, TypeError):
+            continue
+
+    try:
+        resumenes = await repo.summarize_envios_por_batches(
+            usuario_token=user_token,
+            batch_ids=batch_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    campana_ids: set[str] = set()
+    for row in batches:
+        campana_id = row.get("campana_id")
+        if campana_id:
+            campana_ids.add(str(campana_id))
+
+    campana_map: dict[str, dict[str, Any]] = {}
+    if campana_ids:
+        try:
+            campanas = await repo.list_campaigns(organizacion_id=organizacion_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        for campana in campanas:
+            campana_id = str(campana.get("id"))
+            if campana_id in campana_ids:
+                campana_map[campana_id] = campana
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in batches:
+        batch_id = str(row.get("id"))
+        if not batch_id:
+            continue
+        campana_id_raw = row.get("campana_id")
+        campana_key = str(campana_id_raw) if campana_id_raw else "sin_campana"
+        campana_info = campana_map.get(str(campana_id_raw)) if campana_id_raw else None
+        campana_nombre = campana_info.get("nombre") if campana_info else None
+        batch_totales = resumenes.get(batch_id, {})
+        batch_item = {
+            "id": batch_id,
+            "campana_id": str(campana_id_raw) if campana_id_raw else None,
+            "campana_nombre": campana_nombre or row.get("titulo") or ("Sin campaña" if not campana_id_raw else None),
+            "titulo": row.get("titulo"),
+            "estado": row.get("estado"),
+            "total_prospectos": row.get("total_prospectos"),
+            "canales": row.get("canales") or [],
+            "programacion": row.get("programacion") or {},
+            "filtros": row.get("filtros") or {},
+            "metadata": row.get("metadata") or {},
+            "lista_id": row.get("lista_id"),
+            "creado_en": row.get("creado_en"),
+            "totales": batch_totales,
+        }
+        group = grouped.setdefault(
+            campana_key,
+            {
+                "campana_id": batch_item["campana_id"],
+                "campana_nombre": campana_nombre or ("Sin campaña" if campana_key == "sin_campana" else None),
+                "batches": [],
+                "totales": {},
+            },
+        )
+        group["batches"].append(batch_item)
+        for estado, count in batch_totales.items():
+            group["totales"][estado] = group["totales"].get(estado, 0) + count
+
+    return {"ok": True, "items": list(grouped.values())}
+
+
 @router.get("/prospeccion/prospectos/{prospecto_id}/contactos")
 async def listar_contactos_por_prospecto(
     *,
@@ -6329,6 +6676,66 @@ async def listar_contactos_por_prospecto(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.post("/prospeccion/prospectos/{prospecto_id}/convertir-contacto")
+async def convertir_prospecto_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    prospecto_id: UUID,
+    payload: ProspectoConvertirPayload,
+) -> dict[str, Any]:
+    """Crea un contacto CRM a partir de un prospecto y actualiza su metadata."""
+
+    prospecto = await _get_prospecto_or_404(
+        repo=repo,
+        user_token=user_token,
+        prospecto_id=prospecto_id,
+    )
+    nombre = _clean_text(payload.nombre) or _clean_text(prospecto.get("display_name"))
+    correo = payload.correo or prospecto.get("email")
+    telefono = payload.telefono or prospecto.get("phone_e164") or prospecto.get("phone")
+    contacto_body = {
+        "nombre_completo": nombre,
+        "correo": correo,
+        "telefono_e164": telefono,
+        "company_name": payload.company_name or prospecto.get("segmento"),
+        "notes": payload.notas or prospecto.get("notas"),
+        "origen": "prospeccion",
+        "metadata": {"prospecto_id": str(prospecto_id)},
+    }
+    contacto_body = {k: v for k, v in contacto_body.items() if v}
+
+    try:
+        contacto = await repo.create_contact(
+            organizacion_id=organizacion_id,
+            payload=contacto_body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    metadata = _ensure_dict(prospecto.get("metadata"), default={})
+    contacto_id = contacto.get("id")
+    if contacto_id:
+        metadata["convertido_contacto_id"] = str(contacto_id)
+    metadata["convertido_en"] = datetime.now(timezone.utc).isoformat()
+    if payload.stage:
+        metadata["stage"] = payload.stage
+    elif not metadata.get("stage"):
+        metadata["stage"] = "evaluate"
+
+    try:
+        updated = await repo.update_prospecto(
+            usuario_token=user_token,
+            prospecto_id=prospecto_id,
+            payload={"metadata": metadata},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "prospecto": updated, "contacto": contacto}
 
 
 @router.post("/prospeccion/prospectos")
@@ -6544,28 +6951,85 @@ async def contactar_prospectos(
 ) -> dict[str, Any]:
     """Envía correos, WhatsApps o llamadas registrando lotes y envíos individuales."""
 
-    canales_config = _resolve_contact_channels(payload)
+    canales_config, programacion = _resolve_contact_channels(payload)
     if not canales_config:
         raise HTTPException(status_code=400, detail="contact_channels_required")
 
-    try:
-        prospectos = await repo.list_prospectos_by_ids(
-            usuario_token=user_token,
-            prospecto_ids=payload.prospecto_ids,
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    if not prospectos:
-        raise HTTPException(status_code=404, detail="prospectos_not_found")
+    selector_filtros: dict[str, Any] = {}
+    metadata_extra: dict[str, Any] = {"canales_config": canales_config}
+    if programacion:
+        metadata_extra["programacion"] = programacion
+
+    filtros_fuente: ProspectoFiltroPayload | None = None
+    lista_nombre: str | None = None
+    if payload.lista_id:
+        try:
+            lista_row = await repo.get_contact_list(usuario_token=user_token, lista_id=payload.lista_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not lista_row:
+            raise HTTPException(status_code=404, detail="contact_list_not_found")
+        filtros_data = _ensure_dict(lista_row.get("filtros"), default={})
+        try:
+            filtros_fuente = ProspectoFiltroPayload.model_validate(filtros_data)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Lista con filtros inválidos %s: %s", payload.lista_id, exc)
+            raise HTTPException(status_code=400, detail="contact_list_invalid_filters") from exc
+        selector_filtros = filtros_data
+        lista_nombre = _clean_text(lista_row.get("nombre"))
+        if lista_nombre:
+            metadata_extra["lista_nombre"] = lista_nombre
+    elif payload.filtros:
+        filtros_fuente = payload.filtros
+        selector_filtros = payload.filtros.model_dump(exclude_none=True)
+
+    prospectos: list[dict[str, Any]] = []
+    total_prospectos = 0
+
+    if payload.prospecto_ids:
+        try:
+            prospectos = await repo.list_prospectos_by_ids(
+                usuario_token=user_token,
+                prospecto_ids=payload.prospecto_ids,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not prospectos:
+            raise HTTPException(status_code=404, detail="prospectos_not_found")
+        total_prospectos = len(prospectos)
+        selector_filtros = selector_filtros or {"prospecto_ids": [str(value) for value in payload.prospecto_ids]}
+    else:
+        if not filtros_fuente:
+            raise HTTPException(status_code=400, detail="prospecto_selector_required")
+        try:
+            repo_kwargs = _prospecto_filters_to_kwargs(filtros_fuente)
+            prospectos, total = await repo.list_prospectos(
+                usuario_token=user_token,
+                limit=MAX_PROSPECCION_BATCH,
+                offset=0,
+                order="creado_en.desc",
+                **repo_kwargs,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if not prospectos:
+            raise HTTPException(status_code=404, detail="prospectos_not_found")
+        if total > MAX_PROSPECCION_BATCH:
+            raise HTTPException(status_code=400, detail="prospecto_batch_limit_exceeded")
+        total_prospectos = total
+        selector_filtros = selector_filtros or filtros_fuente.model_dump(exclude_none=True)
 
     try:
         batch = await repo.create_contact_batch(
             usuario_token=user_token,
             payload=_build_contact_batch_payload(
                 canales=list(canales_config.keys()),
-                total=len(prospectos),
+                total=total_prospectos,
                 payload=payload,
                 usuario_id=usuario_id,
+                filtros=selector_filtros,
+                programacion=programacion,
+                metadata_extra=metadata_extra,
             ),
         )
     except CRMRepositoryError as exc:
@@ -6578,6 +7042,7 @@ async def contactar_prospectos(
         batch_id=batch_id,
         prospectos=prospectos,
         canales=canales_config,
+        programacion=programacion,
     )
     try:
         envios = await repo.insert_contact_envios(

@@ -19,6 +19,59 @@ export type ProspectoItem = {
   metadata?: Record<string, unknown> | null
 }
 
+export type ProspectoFiltroInput = {
+  search?: string | null
+  fuente?: "google_places" | "denue" | "usuario" | ""
+  lookup_status?: string | null
+  segmento?: string | null
+  carrier_type?: "mobile" | "landline" | "voip" | ""
+  stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate" | ""
+  whatsapp_permitido?: boolean | null
+  llamada_permitida?: boolean | null
+}
+
+export type ProspeccionCanalConfigInput = {
+  canal: "correo" | "whatsapp" | "llamada"
+  template_id?: string
+  subject?: string | null
+  body?: string | null
+  message?: string | null
+  programado_en?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export type ProspeccionLista = {
+  id: string
+  nombre: string
+  descripcion?: string | null
+  filtros: Record<string, unknown>
+  metadata?: Record<string, unknown> | null
+  total_estimado?: number | null
+}
+
+export type ProspeccionCampanaBatch = {
+  id: string
+  campana_id?: string | null
+  campana_nombre?: string | null
+  titulo?: string | null
+  estado?: string | null
+  total_prospectos?: number | null
+  canales: string[]
+  programacion: Record<string, unknown>
+  filtros: Record<string, unknown>
+  metadata: Record<string, unknown>
+  lista_id?: string | null
+  creado_en?: string | null
+  totales: Record<string, number>
+}
+
+export type ProspeccionCampanaGroup = {
+  campana_id?: string | null
+  campana_nombre?: string | null
+  totales: Record<string, number>
+  batches: ProspeccionCampanaBatch[]
+}
+
 export type ProspectosResponse = {
   ok: boolean
   items: ProspectoItem[]
@@ -43,6 +96,19 @@ export type ProspectoContactarResponse = {
   ok: boolean
   batch_id: string
   contactos: ProspectoContactoResumen[]
+}
+
+export type ContactarProspectosPayload = {
+  prospecto_ids?: string[]
+  correo_asunto?: string
+  correo_cuerpo?: string
+  whatsapp_mensaje?: string
+  llamada_notas?: string
+  lista_id?: string
+  filtros?: ProspectoFiltroInput
+  canales?: ProspeccionCanalConfigInput[]
+  campana_id?: string
+  batch_titulo?: string
 }
 
 export type ProspectoContactoResumen = {
@@ -166,6 +232,9 @@ export async function listProspectos(params: {
   segmento?: string
   carrierType?: "mobile" | "landline" | "voip"
   order?: "creado" | "nombre"
+  stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+  whatsappPermitido?: boolean
+  llamadaPermitida?: boolean
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -176,6 +245,13 @@ export async function listProspectos(params: {
   if (params.segmento?.trim().length) url.searchParams.set("segmento", params.segmento.trim())
   if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)
   if (params.order) url.searchParams.set("order", params.order)
+  if (params.stage) url.searchParams.set("stage", params.stage)
+  if (typeof params.whatsappPermitido === "boolean") {
+    url.searchParams.set("whatsapp_permitido", params.whatsappPermitido ? "true" : "false")
+  }
+  if (typeof params.llamadaPermitida === "boolean") {
+    url.searchParams.set("llamada_permitida", params.llamadaPermitida ? "true" : "false")
+  }
   return requestJson<ProspectosResponse>(url.toString())
 }
 
@@ -211,17 +287,76 @@ export async function verificarProspectos(payload: {
 /**
  * Schedule outbound contact (correo, WhatsApp o llamada) for the selected prospects.
  */
-export async function contactarProspectos(payload: {
-  prospecto_ids: string[]
-  correo_asunto?: string
-  correo_cuerpo?: string
-  whatsapp_mensaje?: string
-  llamada_notas?: string
-}): Promise<ProspectoContactarResponse> {
+export async function contactarProspectos(payload: ContactarProspectosPayload): Promise<ProspectoContactarResponse> {
   return requestJson<ProspectoContactarResponse>("/api/prospeccion/prospectos/contactar", {
     method: "POST",
     body: JSON.stringify(payload),
   })
+}
+
+export async function listProspeccionListas(params: {
+  limit?: number
+  offset?: number
+  search?: string
+} = {}): Promise<{ ok: boolean; items: ProspeccionLista[]; total: number; limit: number; offset: number }> {
+  const url = buildClientUrl("/api/prospeccion/contacto/listas")
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  if (params.search?.trim().length) url.searchParams.set("search", params.search.trim())
+  return requestJson(url.toString())
+}
+
+export async function createProspeccionLista(payload: {
+  nombre: string
+  descripcion?: string
+  filtros: ProspectoFiltroInput
+  metadata?: Record<string, unknown>
+}): Promise<{ ok: boolean; lista: ProspeccionLista }> {
+  return requestJson("/api/prospeccion/contacto/listas", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateProspeccionLista(
+  listaId: string,
+  payload: Partial<Omit<ProspeccionLista, "id" | "filtros">> & { filtros?: ProspectoFiltroInput }
+): Promise<{ ok: boolean; lista: ProspeccionLista }> {
+  return requestJson(`/api/prospeccion/contacto/listas/${listaId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteProspeccionLista(listaId: string): Promise<void> {
+  await requestJson(`/api/prospeccion/contacto/listas/${listaId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function getProspeccionCampanas(limit?: number) {
+  const url = buildClientUrl("/api/prospeccion/campanas")
+  if (typeof limit === "number") url.searchParams.set("limit", String(limit))
+  return requestJson<{ ok: boolean; items: ProspeccionCampanaGroup[] }>(url.toString())
+}
+
+export type ConvertirProspectoPayload = {
+  nombre?: string
+  correo?: string
+  telefono?: string
+  company_name?: string
+  notas?: string
+  stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+}
+
+export async function convertirProspectoAContacto(prospectoId: string, payload: ConvertirProspectoPayload) {
+  return requestJson<{ ok: boolean; prospecto: ProspectoItem; contacto: Record<string, unknown> }>(
+    `/api/prospeccion/prospectos/${prospectoId}/convertir-contacto`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  )
 }
 
 export async function listContactoBatches(params: {

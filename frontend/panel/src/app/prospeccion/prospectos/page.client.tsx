@@ -16,9 +16,11 @@ import {
   IconSend2,
   IconTrash,
   IconMail,
+  IconTargetArrow,
 } from "@tabler/icons-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
+import { ProspeccionCampaignWizard } from "@/components/prospeccion/prospeccion-campaign-wizard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,6 +51,8 @@ import {
   crearProspectoManual,
   contactarProspectos,
   eliminarProspecto,
+  convertirProspectoAContacto,
+  type ConvertirProspectoPayload,
   listProspectos,
   listContactoEnviosPorProspecto,
   listContactoTemplates,
@@ -197,6 +201,26 @@ function ProspectosView() {
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
+  const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false)
+  const [convertProspect, setConvertProspect] = useState<ProspectoItem | null>(null)
+  const [convertForm, setConvertForm] = useState<{
+    nombre: string
+    correo: string
+    telefono: string
+    company: string
+    notas: string
+    stage: ProspeccionStage
+  }>({
+    nombre: "",
+    correo: "",
+    telefono: "",
+    company: "",
+    notas: "",
+    stage: "evaluate",
+  })
+  const [convertError, setConvertError] = useState<string | null>(null)
+  const [convertSubmitting, setConvertSubmitting] = useState(false)
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -395,6 +419,16 @@ function ProspectosView() {
     })
   }
 
+type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+
+const stageOptions: Array<{ value: ProspeccionStage; label: string }> = [
+  { value: "discover", label: "Discover" },
+  { value: "enrich", label: "Enrich" },
+  { value: "prepare", label: "Prepare" },
+  { value: "launch", label: "Launch" },
+  { value: "evaluate", label: "Evaluate" },
+]
+
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setFilters((prev) => ({ ...prev, search: searchInput.trim() }))
@@ -488,6 +522,76 @@ function ProspectosView() {
       setAction(null)
     }
   }, [contactForm, fetchProspectos, items, offset, selectedIds])
+
+  const handleOpenConvertDialog = (prospecto: ProspectoItem) => {
+    if (!prospecto.id) return
+    const metadataRecord = isRecord(prospecto.metadata) ? prospecto.metadata : {}
+    const rawStage = typeof metadataRecord["stage"] === "string" ? metadataRecord["stage"] : null
+    const stageValue =
+      rawStage && stageOptions.some((option) => option.value === rawStage)
+        ? (rawStage as ProspeccionStage)
+        : "evaluate"
+    setConvertProspect(prospecto)
+    setConvertForm({
+      nombre: prospecto.display_name ?? "",
+      correo: prospecto.email ?? "",
+      telefono: prospecto.phone_e164 ?? prospecto.phone ?? "",
+      company: prospecto.segmento ?? "",
+      notas: "",
+      stage: stageValue,
+    })
+    setConvertError(null)
+    setConvertDialogOpen(true)
+  }
+
+  const handleConvertSubmit = useCallback(async () => {
+    if (!convertProspect?.id) return
+    const payload: ConvertirProspectoPayload = {}
+    const assign = (value: string, key: string) => {
+      const trimmed = value.trim()
+      if (trimmed) {
+        ;(payload as Record<string, string>)[key] = trimmed
+      }
+    }
+    assign(convertForm.nombre, "nombre")
+    assign(convertForm.correo, "correo")
+    assign(convertForm.telefono, "telefono")
+    assign(convertForm.company, "company_name")
+    assign(convertForm.notas, "notas")
+    if (convertForm.stage) {
+      payload.stage = convertForm.stage
+    }
+
+    setConvertSubmitting(true)
+    setConvertError(null)
+    try {
+      await convertirProspectoAContacto(convertProspect.id, payload)
+      setBanner({
+        type: "success",
+        message: `${convertForm.nombre || convertProspect.display_name || "El prospecto"} fue convertido a contacto.`,
+      })
+      setConvertDialogOpen(false)
+      await fetchProspectos(offset)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo convertir el prospecto."
+      setConvertError(message)
+    } finally {
+      setConvertSubmitting(false)
+    }
+  }, [convertForm, convertProspect, fetchProspectos, offset])
+
+  const handleWizardCompleted = useCallback(
+    (result: { batchId?: string | null }) => {
+      setBanner({
+        type: "success",
+        message: result.batchId
+          ? `Campaña programada. Lote ${result.batchId}.`
+          : "Se programó la campaña correctamente.",
+      })
+      void fetchProspectos(offset)
+    },
+    [fetchProspectos, offset]
+  )
 
   const handleOpenCreateDialog = () => {
     setFormMode("create")
@@ -866,6 +970,10 @@ function ProspectosView() {
               <IconSend2 className="mr-1.5 size-4" />
               Programar contacto
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => setCampaignWizardOpen(true)}>
+              <IconTargetArrow className="mr-1.5 size-4" />
+              Lanzar campaña
+            </Button>
           </div>
         </div>
 
@@ -1007,6 +1115,10 @@ function ProspectosView() {
                               <DropdownMenuItem onClick={() => void handleOpenHistoryDialog(prospecto)}>
                                 <IconHistory className="size-4" />
                                 Historial de contacto
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleOpenConvertDialog(prospecto)}>
+                                <IconTargetArrow className="size-4" />
+                                Convertir a CRM
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 variant="destructive"
@@ -1236,6 +1348,96 @@ function ProspectosView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Convertir a contacto del CRM</DialogTitle>
+            <DialogDescription>
+              Crea un contacto oficial y marca el prospecto como convertido para evitar duplicar seguimientos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Nombre</Label>
+              <Input
+                value={convertForm.nombre}
+                onChange={(event) => setConvertForm((prev) => ({ ...prev, nombre: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Correo</Label>
+              <Input
+                type="email"
+                value={convertForm.correo}
+                onChange={(event) => setConvertForm((prev) => ({ ...prev, correo: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Teléfono</Label>
+              <Input
+                value={convertForm.telefono}
+                onChange={(event) => setConvertForm((prev) => ({ ...prev, telefono: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Empresa / Segmento</Label>
+              <Input
+                value={convertForm.company}
+                onChange={(event) => setConvertForm((prev) => ({ ...prev, company: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Stage en prospección</Label>
+              <Select
+                value={convertForm.stage}
+                onValueChange={(value) => setConvertForm((prev) => ({ ...prev, stage: value as ProspeccionStage }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stageOptions.map((stage) => (
+                    <SelectItem key={stage.value} value={stage.value}>
+                      {stage.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label>Notas internas</Label>
+              <Textarea
+                rows={3}
+                value={convertForm.notas}
+                onChange={(event) => setConvertForm((prev) => ({ ...prev, notas: event.target.value }))}
+              />
+            </div>
+          </div>
+          {convertError ? (
+            <p className="text-sm text-destructive">{convertError}</p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertDialogOpen(false)} disabled={convertSubmitting}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleConvertSubmit()} disabled={convertSubmitting}>
+              {convertSubmitting ? "Convirtiendo..." : "Convertir a contacto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ProspeccionCampaignWizard
+        open={campaignWizardOpen}
+        onClose={() => setCampaignWizardOpen(false)}
+        selectedIds={selectedIds}
+        defaultFilters={{
+          fuente: filters.fuente || undefined,
+          segmento: filters.segmento || undefined,
+        }}
+        onCompleted={handleWizardCompleted}
+      />
 
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
         <DialogContent className="sm:max-w-2xl">

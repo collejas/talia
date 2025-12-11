@@ -3533,6 +3533,9 @@ class CRMRepository:
         segmento: str | None = None,
         carrier_type: str | None = None,
         order: str | None = None,
+        stage: str | None = None,
+        whatsapp_permitido: bool | None = None,
+        llamada_permitida: bool | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -3551,6 +3554,12 @@ class CRMRepository:
             params["segmento"] = f"eq.{segmento}"
         if carrier_type:
             params["carrier_type"] = f"eq.{carrier_type}"
+        if stage:
+            params["metadata->>stage"] = f"eq.{stage}"
+        if whatsapp_permitido is not None:
+            params["whatsapp_permitido"] = f"eq.{str(whatsapp_permitido).lower()}"
+        if llamada_permitida is not None:
+            params["llamada_permitida"] = f"eq.{str(llamada_permitida).lower()}"
 
         if search:
             sanitized = search.strip()
@@ -3758,6 +3767,123 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_templates_invalid:{data!r}")
         return data
 
+    async def list_contact_lists(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 50,
+        offset: int = 0,
+        search: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Obtiene listas inteligentes de prospección."""
+
+        params: dict[str, str] = {
+            "select": "*",
+            "limit": str(limit),
+            "offset": str(offset),
+            "order": "creado_en.desc",
+        }
+        if search:
+            sanitized = search.strip()
+            for char in "(),*":
+                sanitized = sanitized.replace(char, " ")
+            pattern = f"*{sanitized}*"
+            params["or"] = f"(nombre.ilike.{pattern},descripcion.ilike.{pattern})"
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_listas",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_lists_invalid:{data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
+    async def get_contact_list(
+        self,
+        *,
+        usuario_token: str,
+        lista_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_listas",
+            token=usuario_token,
+            params={"id": f"eq.{lista_id}", "limit": "1"},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_list_invalid:{row!r}")
+        return row
+
+    async def create_contact_list(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contacto_listas",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_list_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_list_create_invalid:{row!r}")
+        return row
+
+    async def update_contact_list(
+        self,
+        *,
+        usuario_token: str,
+        lista_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_listas",
+            token=usuario_token,
+            params={"id": f"eq.{lista_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_list_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_list_update_invalid:{row!r}")
+        return row
+
+    async def delete_contact_list(
+        self,
+        *,
+        usuario_token: str,
+        lista_id: UUID,
+    ) -> None:
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_contacto_listas",
+            token=usuario_token,
+            params={"id": f"eq.{lista_id}"},
+        )
+        data = resp.json() or []
+        if isinstance(data, dict) and data.get("message") == "No rows deleted":
+            raise CRMRepositoryError("contact_list_not_found")
+        if isinstance(data, list) and not data:
+            return
+
     async def list_contact_envios(
         self,
         *,
@@ -3923,6 +4049,43 @@ class CRMRepository:
             estado = str(row.get("estado") or "pendiente").strip() or "pendiente"
             counts[estado] = counts.get(estado, 0) + 1
         return [{"estado": estado, "count": total} for estado, total in counts.items()]
+
+    async def summarize_envios_por_batches(
+        self,
+        *,
+        usuario_token: str,
+        batch_ids: Sequence[UUID],
+    ) -> dict[str, dict[str, int]]:
+        """Agrupa estados por lote en una sola consulta."""
+
+        if not batch_ids:
+            return {}
+        ids_param = ",".join(str(value) for value in batch_ids)
+        params = {
+            "select": "batch_id,estado,count:count()",
+            "batch_id": f"in.({ids_param})",
+            "group": "batch_id,estado",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_envio",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_envio_group_invalid:{data!r}")
+        resultado: dict[str, dict[str, int]] = {}
+        for row in data:
+            batch_id = str(row.get("batch_id"))
+            estado = str(row.get("estado") or "pendiente").strip() or "pendiente"
+            try:
+                count_value = int(row.get("count"))
+            except (TypeError, ValueError):
+                count_value = 0
+            bucket = resultado.setdefault(batch_id, {})
+            bucket[estado] = bucket.get(estado, 0) + count_value
+        return resultado
 
     async def cancel_pending_envios(
         self,
