@@ -1,3 +1,5 @@
+import type { BuscadorJob } from "./buscador-client"
+
 export type ProspectoItem = {
   id: string
   display_name: string | null
@@ -92,6 +94,10 @@ export type ProspectoLookupResponse = {
   detalles: Array<{ prospecto_id: string; lookup_status?: string | null; carrier_type?: string | null }>
 }
 
+export type ChecklistLookupResponse = ProspectoLookupResponse & {
+  prospecto_ids?: string[]
+}
+
 export type ProspectoContactarResponse = {
   ok: boolean
   batch_id: string
@@ -116,6 +122,20 @@ export type ProspectoContactoResumen = {
   correo?: string
   whatsapp?: string
   llamada?: string
+}
+
+export type ProspectoAuditEntry = {
+  id: string
+  accion: "insert" | "update" | "delete"
+  cambios: Record<string, unknown>
+  realizado_por?: string | null
+  realizado_en: string
+}
+
+export type ChecklistScraperResponse = {
+  ok: boolean
+  programados: number
+  jobs: BuscadorJob[]
 }
 
 export type ContactoBatch = {
@@ -284,6 +304,56 @@ export async function verificarProspectos(payload: {
   })
 }
 
+export async function ejecutarChecklistLookup(payload: {
+  limit?: number
+  reintentar?: boolean
+  countryCode?: string
+} = {}): Promise<ChecklistLookupResponse> {
+  const body: Record<string, unknown> = {}
+  if (typeof payload.limit === "number") {
+    body.limit = payload.limit
+  }
+  if (typeof payload.reintentar === "boolean") {
+    body.reintentar = payload.reintentar
+  }
+  if (payload.countryCode?.trim().length) {
+    body.country_code = payload.countryCode.trim().toUpperCase()
+  }
+  return requestJson<ChecklistLookupResponse>("/api/prospeccion/prospectos/checklist/lookup", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function ejecutarChecklistScraper(payload: {
+  limit?: number
+  mode?: "generic" | "government" | "intelligent" | "auto"
+  maxPages?: number
+  maxDepth?: number
+  maxRuntime?: number
+} = {}): Promise<ChecklistScraperResponse> {
+  const body: Record<string, unknown> = {}
+  if (typeof payload.limit === "number") {
+    body.limit = payload.limit
+  }
+  if (payload.mode) {
+    body.mode = payload.mode
+  }
+  if (typeof payload.maxPages === "number") {
+    body.max_pages = payload.maxPages
+  }
+  if (typeof payload.maxDepth === "number") {
+    body.max_depth = payload.maxDepth
+  }
+  if (typeof payload.maxRuntime === "number") {
+    body.max_runtime = payload.maxRuntime
+  }
+  return requestJson<ChecklistScraperResponse>("/api/prospeccion/prospectos/checklist/scraper", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
 /**
  * Schedule outbound contact (correo, WhatsApp o llamada) for the selected prospects.
  */
@@ -400,6 +470,17 @@ export async function listContactoEnviosPorProspecto(
   const url = buildClientUrl(`/api/prospeccion/prospectos/${prospectoId}/contactos`)
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  return requestJson(url.toString())
+}
+
+export async function listProspectoAudit(
+  prospectoId: string,
+  params: { limit?: number } = {},
+): Promise<{ ok: boolean; items: ProspectoAuditEntry[] }> {
+  const url = buildClientUrl(`/api/prospeccion/prospectos/${prospectoId}/audit`)
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit))
+  }
   return requestJson(url.toString())
 }
 

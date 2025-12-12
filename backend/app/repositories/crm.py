@@ -3593,6 +3593,57 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_lookup_pending_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Obtiene prospectos con verificación pendiente o con error."""
+
+        params = {
+            "select": "id,phone,phone_e164,lookup_status",
+            "order": "creado_en.asc",
+            "limit": str(max(1, min(limit, 200))),
+            "lookup_status": "in.(pendiente,error)",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"lookup_pending_invalid:{data!r}")
+        return data
+
+    async def list_scraper_pending_prospectos(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Regresa prospectos sin correo pero con sitio web para lanzar el scraper."""
+
+        params = {
+            "select": "id,display_name,website,segmento,metadata",
+            "order": "creado_en.asc",
+            "limit": str(max(1, min(limit, 20))),
+            "or": "(email.is.null,email.eq.)",
+            "website": "not.is.null",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"scraper_pending_invalid:{data!r}")
+        return data
+
     async def update_prospecto(
         self,
         *,
@@ -3925,6 +3976,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_envio_list_invalid:{data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
+
+    async def list_prospecto_audit(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_id: UUID,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "prospecto_id": f"eq.{prospecto_id}",
+            "order": "realizado_en.desc",
+            "limit": str(max(1, min(limit, 200))),
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos_audit",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospecto_audit_invalid:{data!r}")
+        return data
 
     async def update_contact_envio(
         self,

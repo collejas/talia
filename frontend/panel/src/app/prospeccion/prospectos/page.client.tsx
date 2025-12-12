@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
-import { useRouter } from "next/navigation"
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -17,6 +16,8 @@ import {
   IconTrash,
   IconMail,
   IconTargetArrow,
+  IconBrandWhatsapp,
+  IconPhone,
 } from "@tabler/icons-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
@@ -56,9 +57,13 @@ import {
   listProspectos,
   listContactoEnviosPorProspecto,
   listContactoTemplates,
+  listProspectoAudit,
+  ejecutarChecklistLookup,
+  ejecutarChecklistScraper,
   type ProspectoItem,
   type ProspectoManualInput,
   type ProspectoContactoResumen,
+  type ProspectoAuditEntry,
   type ContactoEnvio,
   type ContactoTemplate,
   verificarProspectos,
@@ -127,6 +132,23 @@ const initialProspectoForm: ProspectoFormState = {
   notas: "",
 }
 
+type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+
+const STAGE_LABELS: Record<ProspeccionStage, string> = {
+  discover: "Discover",
+  enrich: "Enrich",
+  prepare: "Prepare",
+  launch: "Launch",
+  evaluate: "Evaluate",
+}
+
+const stageOptions: Array<{ value: ProspeccionStage; label: string }> = (Object.entries(
+  STAGE_LABELS
+) as Array<[ProspeccionStage, string]>).map(([value, label]) => ({
+  value,
+  label,
+}))
+
 const LOOKUP_STATUS_LABELS: Record<string, string> = {
   pendiente: "Pendiente",
   verificado: "Verificado",
@@ -163,7 +185,6 @@ export default function ProspectosClientPage() {
 }
 
 function ProspectosView() {
-  const router = useRouter()
   const [filters, setFilters] = useState<Filters>(initialFilters)
   const [searchInput, setSearchInput] = useState(initialFilters.search)
   const [items, setItems] = useState<ProspectoItem[]>([])
@@ -196,11 +217,16 @@ function ProspectosView() {
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [auditEntries, setAuditEntries] = useState<ProspectoAuditEntry[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditError, setAuditError] = useState<string | null>(null)
+  const [historyTab, setHistoryTab] = useState<"contact" | "audit">("contact")
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
+  const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
   const [convertDialogOpen, setConvertDialogOpen] = useState(false)
   const [convertProspect, setConvertProspect] = useState<ProspectoItem | null>(null)
@@ -325,14 +351,65 @@ function ProspectosView() {
     }
   }, [formDialogOpen])
 
-  const handleChecklistLookup = useCallback(() => {
-    setFilters((prev) => ({ ...prev, lookupStatus: "pendiente" }))
-    setOffset(0)
-  }, [])
+  const handleChecklistLookup = useCallback(async () => {
+    setChecklistAction("lookup")
+    setBanner(null)
+    const pending = checklist?.telefonos_pendientes ?? 0
+    const targetLimit = pending > 0 ? Math.min(200, pending) : 200
+    try {
+      const response = await ejecutarChecklistLookup({
+        limit: targetLimit,
+        reintentar: true,
+      })
+      if (!response.procesados) {
+        setBanner({ type: "success", message: "No hay teléfonos pendientes de validar." })
+      } else {
+        setBanner({ type: "success", message: `Se validaron ${response.procesados} prospectos.` })
+        await fetchProspectos(offset)
+      }
+      await refreshChecklist()
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "No se pudo ejecutar la verificación automática de teléfonos."
+      setBanner({ type: "error", message })
+    } finally {
+      setChecklistAction(null)
+    }
+  }, [checklist, fetchProspectos, offset, refreshChecklist])
 
-  const handleChecklistScraper = useCallback(() => {
-    router.push("/prospeccion/buscador")
-  }, [router])
+  const handleChecklistScraper = useCallback(async () => {
+    setChecklistAction("scraper")
+    setBanner(null)
+    const pending = checklist?.sin_email ?? 0
+    if (pending <= 0) {
+      setBanner({ type: "success", message: "No hay prospectos pendientes de correo." })
+      setChecklistAction(null)
+      return
+    }
+    try {
+      const response = await ejecutarChecklistScraper({
+        limit: Math.max(1, Math.min(5, pending)),
+        mode: "auto",
+      })
+      if (!response.programados) {
+        setBanner({
+          type: "error",
+          message: "No encontramos sitios web válidos para lanzar el scraper automático.",
+        })
+      } else {
+        setBanner({
+          type: "success",
+          message: `Se lanzaron ${response.programados} scrapers. Puedes revisar el progreso en el historial del buscador.`,
+        })
+      }
+      await refreshChecklist()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo lanzar el scraper."
+      setBanner({ type: "error", message })
+    } finally {
+      setChecklistAction(null)
+    }
+  }, [checklist, refreshChecklist])
 
   const handleChecklistManual = useCallback(() => {
     setFormMode("create")
@@ -356,6 +433,10 @@ function ProspectosView() {
       setHistoryProspect(null)
       setHistoryError(null)
       setHistoryLoading(false)
+      setAuditEntries([])
+      setAuditError(null)
+      setAuditLoading(false)
+      setHistoryTab("contact")
     }
   }, [historyDialogOpen])
 
@@ -418,17 +499,6 @@ function ProspectosView() {
       return next
     })
   }
-
-type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
-
-const stageOptions: Array<{ value: ProspeccionStage; label: string }> = [
-  { value: "discover", label: "Discover" },
-  { value: "enrich", label: "Enrich" },
-  { value: "prepare", label: "Prepare" },
-  { value: "launch", label: "Launch" },
-  { value: "evaluate", label: "Evaluate" },
-]
-
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setFilters((prev) => ({ ...prev, search: searchInput.trim() }))
@@ -630,18 +700,33 @@ const stageOptions: Array<{ value: ProspeccionStage; label: string }> = [
     if (!prospecto.id) return
     setHistoryProspect(prospecto)
     setHistoryDialogOpen(true)
+    setHistoryTab("contact")
     setHistoryLoading(true)
     setHistoryError(null)
-    try {
-      const response = await listContactoEnviosPorProspecto(prospecto.id, { limit: 50 })
-      setHistoryEntries(response.items ?? [])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo cargar el historial."
+    setAuditLoading(true)
+    setAuditError(null)
+    const [contactResult, auditResult] = await Promise.allSettled([
+      listContactoEnviosPorProspecto(prospecto.id, { limit: 50 }),
+      listProspectoAudit(prospecto.id, { limit: 100 }),
+    ])
+    if (contactResult.status === "fulfilled") {
+      setHistoryEntries(contactResult.value.items ?? [])
+    } else {
+      const reason = contactResult.reason
+      const message = reason instanceof Error ? reason.message : "No se pudo cargar el historial."
       setHistoryError(message)
       setHistoryEntries([])
-    } finally {
-      setHistoryLoading(false)
     }
+    if (auditResult.status === "fulfilled") {
+      setAuditEntries(auditResult.value.items ?? [])
+    } else {
+      const reason = auditResult.reason
+      const message = reason instanceof Error ? reason.message : "No se pudo obtener la bitácora."
+      setAuditError(message)
+      setAuditEntries([])
+    }
+    setHistoryLoading(false)
+    setAuditLoading(false)
   }
 
   const handleFormSubmit = useCallback(async () => {
@@ -770,6 +855,7 @@ const stageOptions: Array<{ value: ProspeccionStage; label: string }> = [
       <EnrichmentChecklist
         data={checklist}
         loading={checklistLoading}
+        actionInProgress={checklistAction}
         onRefresh={refreshChecklist}
         onVerifyPhones={handleChecklistLookup}
         onOpenScraper={handleChecklistScraper}
@@ -1061,16 +1147,7 @@ const stageOptions: Array<{ value: ProspeccionStage; label: string }> = [
                         {prospecto.email ? (
                           <div className="text-xs text-muted-foreground">{prospecto.email}</div>
                         ) : null}
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          {prospecto.whatsapp_permitido ? (
-                            <Badge variant="secondary">WhatsApp permitido</Badge>
-                          ) : (
-                            <span>WhatsApp pendiente</span>
-                          )}
-                          {prospecto.llamada_permitida === false ? (
-                            <Badge variant="outline">Sin llamadas</Badge>
-                          ) : null}
-                        </div>
+                        <ProspectChannelBadges prospecto={prospecto} />
                         </TableCell>
                         <TableCell>
                         <LookupStatusBadge status={prospecto.lookup_status} />
@@ -1588,62 +1665,114 @@ const stageOptions: Array<{ value: ProspeccionStage; label: string }> = [
       <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Historial de contacto</DialogTitle>
+            <DialogTitle>Historial del prospecto</DialogTitle>
             <DialogDescription>
               {historyProspect ? historyProspect.display_name ?? "Prospecto" : "Sin prospecto seleccionado"}
             </DialogDescription>
           </DialogHeader>
-          {historyError ? (
-            <p className="text-sm text-destructive">{historyError}</p>
-          ) : (
-            <div className="max-h-[60vh] overflow-y-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Canal</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Detalle</TableHead>
-                    <TableHead className="text-right">Procesado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historyLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                        <IconLoader className="mr-2 inline size-4 animate-spin" />
-                        Cargando historial...
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                  {!historyLoading && !historyEntries.length ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                        No hay envíos registrados para este prospecto.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                  {!historyLoading
-                    ? historyEntries.map((envio) => (
-                        <TableRow key={envio.id}>
-                          <TableCell>
-                            <Badge variant="outline">{canalLabel(envio.canal)}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={contactStatusVariant(envio.estado)}>
-                              {contactStatusLabel(envio.estado)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{contactHistoryDetail(envio)}</TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {formatDate(envio.procesado_en || envio.programado_en)}
+          <Tabs value={historyTab} onValueChange={(value) => setHistoryTab(value as "contact" | "audit")} className="mt-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="contact">Envíos recientes</TabsTrigger>
+              <TabsTrigger value="audit">Timeline</TabsTrigger>
+            </TabsList>
+            <TabsContent value="contact" className="mt-4">
+              {historyError ? (
+                <p className="text-sm text-destructive">{historyError}</p>
+              ) : (
+                <div className="max-h-[50vh] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Canal</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Detalle</TableHead>
+                        <TableHead className="text-right">Procesado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                            <IconLoader className="mr-2 inline size-4 animate-spin" />
+                            Cargando historial...
                           </TableCell>
                         </TableRow>
-                      ))
+                      ) : null}
+                      {!historyLoading && !historyEntries.length ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                            No hay envíos registrados para este prospecto.
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                      {!historyLoading
+                        ? historyEntries.map((envio) => (
+                            <TableRow key={envio.id}>
+                              <TableCell>
+                                <Badge variant="outline">{canalLabel(envio.canal)}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={contactStatusVariant(envio.estado)}>
+                                  {contactStatusLabel(envio.estado)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {contactHistoryDetail(envio)}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-muted-foreground">
+                                {formatDate(envio.procesado_en || envio.programado_en)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        : null}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="audit" className="mt-4">
+              {auditError ? (
+                <p className="text-sm text-destructive">{auditError}</p>
+              ) : (
+                <div className="max-h-[50vh] space-y-3 overflow-y-auto">
+                  {auditLoading ? (
+                    <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <IconLoader className="size-4 animate-spin" />
+                      Cargando timeline...
+                    </p>
+                  ) : null}
+                  {!auditLoading && !auditEntries.length ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      Aún no hay cambios registrados para este prospecto.
+                    </p>
+                  ) : null}
+                  {!auditLoading
+                    ? auditEntries.map((entry) => {
+                        const changes = extractAuditChanges(entry)
+                        return (
+                          <div key={entry.id} className="rounded-lg border bg-muted/30 p-3 text-sm shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-medium">{auditActionLabel(entry.accion)}</div>
+                              <span className="text-xs text-muted-foreground">{formatDate(entry.realizado_en)}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Actor: {formatAuditActor(entry.realizado_por)}
+                            </p>
+                            {changes.length ? (
+                              <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                                {changes.map((change) => (
+                                  <li key={`${entry.id}-${change}`}>{change}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        )
+                      })
                     : null}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setHistoryDialogOpen(false)}>
               Cerrar
@@ -1665,6 +1794,47 @@ function LookupStatusBadge({ status }: { status?: string | null }) {
   return <Badge variant={variant}>{label}</Badge>
 }
 
+type ProspectChannelBadgesProps = {
+  prospecto: ProspectoItem
+}
+
+function ProspectChannelBadges({ prospecto }: ProspectChannelBadgesProps) {
+  const whatsappState = prospecto.whatsapp_permitido
+  const whatsappAllowed = whatsappState === true
+  const whatsappVariant = whatsappState === false ? "destructive" : whatsappAllowed ? "secondary" : "outline"
+  const whatsappLabel = whatsappAllowed ? "WhatsApp listo" : "WhatsApp pendiente"
+
+  const vozState = prospecto.llamada_permitida
+  const vozPermitida = vozState !== false
+  const vozVariant = vozPermitida ? "secondary" : "destructive"
+  const vozLabel = vozPermitida
+    ? prospecto.carrier_type
+      ? `Voz · ${carrierLabel(prospecto.carrier_type)}`
+      : "Llamada permitida"
+    : "Sin llamadas"
+
+  const emailDisponible = Boolean(prospecto.email && prospecto.email.trim().length)
+  const emailVariant = emailDisponible ? "secondary" : "outline"
+  const emailLabel = emailDisponible ? "Correo listo" : "Sin correo"
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+      <Badge variant={whatsappVariant} className="gap-1 text-[11px]">
+        <IconBrandWhatsapp className="size-3" />
+        {whatsappLabel}
+      </Badge>
+      <Badge variant={vozVariant} className="gap-1 text-[11px]">
+        <IconPhone className="size-3" />
+        {vozLabel}
+      </Badge>
+      <Badge variant={emailVariant} className="gap-1 text-[11px]">
+        <IconMail className="size-3" />
+        {emailLabel}
+      </Badge>
+    </div>
+  )
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—"
   const date = new Date(value)
@@ -1675,6 +1845,7 @@ function formatDate(value?: string | null) {
 type EnrichmentChecklistProps = {
   data: ChecklistSummary | null
   loading: boolean
+  actionInProgress: "lookup" | "scraper" | null
   onRefresh: () => void
   onVerifyPhones: () => void
   onOpenScraper: () => void
@@ -1684,6 +1855,7 @@ type EnrichmentChecklistProps = {
 function EnrichmentChecklist({
   data,
   loading,
+  actionInProgress,
   onRefresh,
   onVerifyPhones,
   onOpenScraper,
@@ -1696,7 +1868,8 @@ function EnrichmentChecklist({
       description: "Confirma el tipo de línea antes de lanzar WhatsApp o voz.",
       count: data?.telefonos_pendientes ?? 0,
       icon: <IconPhoneCheck className="size-4 text-primary" />,
-      actionLabel: "Ver pendientes",
+      actionLabel: "Ejecutar lookup",
+      actionKey: "lookup" as const,
       onAction: onVerifyPhones,
     },
     {
@@ -1705,7 +1878,8 @@ function EnrichmentChecklist({
       description: "Prospectos sin correo confirmado aún.",
       count: data?.sin_email ?? 0,
       icon: <IconMail className="size-4 text-primary" />,
-      actionLabel: "Ir al buscador",
+      actionLabel: "Lanzar scraper",
+      actionKey: "scraper" as const,
       onAction: onOpenScraper,
     },
     {
@@ -1715,6 +1889,7 @@ function EnrichmentChecklist({
       count: data?.datos_incompletos ?? 0,
       icon: <IconPencil className="size-4 text-primary" />,
       actionLabel: "Nuevo prospecto",
+      actionKey: null,
       onAction: onOpenManual,
     },
   ]
@@ -1748,9 +1923,18 @@ function EnrichmentChecklist({
                 variant="secondary"
                 size="sm"
                 onClick={card.onAction}
-                disabled={loading || !card.count}
+                disabled={
+                  loading || !card.count || (card.actionKey ? actionInProgress === card.actionKey : false)
+                }
               >
-                {card.actionLabel}
+                {card.actionKey && actionInProgress === card.actionKey ? (
+                  <>
+                    <IconLoader className="mr-2 size-4 animate-spin" />
+                    Ejecutando...
+                  </>
+                ) : (
+                  card.actionLabel
+                )}
               </Button>
             </div>
           ))}
@@ -1862,4 +2046,122 @@ function contactHistoryDetail(envio: ContactoEnvio): string {
     return reason
   }
   return "—"
+}
+
+function auditActionLabel(action: string): string {
+  switch (action) {
+    case "insert":
+      return "Prospecto creado"
+    case "delete":
+      return "Prospecto eliminado"
+    default:
+      return "Campos actualizados"
+  }
+}
+
+function formatAuditActor(value?: string | null): string {
+  if (!value) {
+    return "Sistema"
+  }
+  return value
+}
+
+function extractAuditChanges(entry: ProspectoAuditEntry): string[] {
+  if (entry.accion !== "update") {
+    return []
+  }
+  const before = isRecord(entry.cambios?.before) ? (entry.cambios.before as Record<string, unknown>) : null
+  const after = isRecord(entry.cambios?.after) ? (entry.cambios.after as Record<string, unknown>) : null
+  if (!before || !after) {
+    return []
+  }
+  const trackedFields: Array<{
+    key: string
+    label: string
+    formatter?: (value: unknown) => string
+  }> = [
+    { key: "display_name", label: "Nombre" },
+    { key: "phone", label: "Teléfono" },
+    { key: "email", label: "Correo" },
+    { key: "segmento", label: "Segmento" },
+    {
+      key: "lookup_status",
+      label: "Estado telefónico",
+      formatter: formatLookupStatusValue,
+    },
+  ]
+  const changes: string[] = []
+  trackedFields.forEach(({ key, label, formatter }) => {
+    const prevValue = formatter ? formatter(before[key]) : formatAuditValue(before[key])
+    const nextValue = formatter ? formatter(after[key]) : formatAuditValue(after[key])
+    if (prevValue !== nextValue) {
+      changes.push(`${label}: ${prevValue} → ${nextValue}`)
+    }
+  })
+  const prevStage = readStageFromRow(before)
+  const nextStage = readStageFromRow(after)
+  if (prevStage !== nextStage) {
+    changes.push(`Etapa: ${formatStageLabel(prevStage)} → ${formatStageLabel(nextStage)}`)
+  }
+  const prevNotas = readNotesFromRow(before)
+  const nextNotas = readNotesFromRow(after)
+  if (prevNotas !== nextNotas) {
+    changes.push(`Notas: ${prevNotas ?? "—"} → ${nextNotas ?? "—"}`)
+  }
+  return changes.slice(0, 5)
+}
+
+function formatAuditValue(value: unknown): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : "—"
+  }
+  if (typeof value === "number") {
+    return value.toString()
+  }
+  if (typeof value === "boolean") {
+    return value ? "Sí" : "No"
+  }
+  if (value === null || value === undefined) {
+    return "—"
+  }
+  return String(value)
+}
+
+function readStageFromRow(row: Record<string, unknown> | null): string | null {
+  if (!row) {
+    return null
+  }
+  const metadata = row["metadata"]
+  if (!isRecord(metadata)) {
+    return null
+  }
+  const stage = metadata["stage"]
+  if (typeof stage === "string" && stage.trim().length) {
+    return stage.trim()
+  }
+  return null
+}
+
+function formatStageLabel(stage: string | null | undefined): string {
+  if (!stage) {
+    return "Sin etapa"
+  }
+  const normalized = stage.toLowerCase() as ProspeccionStage
+  return STAGE_LABELS[normalized] ?? stage
+}
+
+function formatLookupStatusValue(value: unknown): string {
+  if (typeof value !== "string") {
+    return formatAuditValue(value)
+  }
+  const normalized = value.toLowerCase()
+  return LOOKUP_STATUS_LABELS[normalized] ?? value
+}
+
+function readNotesFromRow(row: Record<string, unknown> | null): string | null {
+  if (!row) {
+    return null
+  }
+  return extractProspectoNotes(row["metadata"])
 }

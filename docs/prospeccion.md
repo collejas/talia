@@ -16,12 +16,12 @@
 - [ ] Permitir etiquetar resultados antes de guardar (llenar `segmento` y `metadata -> tags`).
 
 ## 2. Enriquecer (Verificación y scraping)
-- [ ] Tarjetas guía en `/prospeccion/prospectos`:
-  - [ ] **Validar teléfonos** (Twilio Lookup) → actualiza `lookup_status`, `carrier_*`.
-  - [ ] **Scraper** (Google/DENUE) → llena `metadata.contacto`.
-  - [ ] **Captura manual** → fomenta completar email/puesto/notas.
-- [ ] Registrar cada acción en `prospeccion_prospectos_audit` y mostrar timeline por prospecto.
-- [ ] Añadir badge visual de canal permitido (teléfono fijo/móvil, WhatsApp sí/no, correo).
+- [x] Tarjetas guía en `/prospeccion/prospectos`:
+  - [x] **Validar teléfonos** (Twilio Lookup) → actualiza `lookup_status`, `carrier_*`.
+  - [x] **Scraper** (Google/DENUE) → llena `metadata.contacto`.
+  - [x] **Captura manual** → fomenta completar email/puesto/notas.
+- [x] Registrar cada acción en `prospeccion_prospectos_audit` y mostrar timeline por prospecto (tabs de historial en la vista de prospectos).
+- [x] Añadir badge visual de canal permitido (teléfono fijo/móvil, WhatsApp sí/no, correo).
 
 ## 3. Preparar (Segmentación y listas inteligentes)
 - [ ] Persistir `metadata.stage` (`discover/enrich/prepare/launch/evaluate`) y mostrar progreso global.
@@ -61,7 +61,7 @@
 
 ## Plan de acción detallado
 1. [ ] **Centralizar navegación**: barra/tabs “Descubre · Enriquecer · Preparar · Lanzar · Evaluar” en `/prospeccion`.
-2. [ ] **Checklist de enriquecimiento** en `/prospeccion/prospectos` con acciones automáticas (lookup, scraper, captura).
+2. [x] **Checklist de enriquecimiento** en `/prospeccion/prospectos` con acciones automáticas (lookup, scraper, captura).
 3. [x] **Wizard de campañas** con scheduling básico y soporte multicanal.
 4. [ ] **Integración CRM** (crear contacto/oportunidad directamente desde el prospecto).
 5. [ ] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(agrupador listo; falta duplicar campañas)_.

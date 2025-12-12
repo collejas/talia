@@ -13,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from typing import Annotated, Any, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -426,6 +427,31 @@ class ProspectoLookupPayload(BaseModel):
         return unique
 
 
+class ProspectoChecklistLookupPayload(BaseModel):
+    """Configura la acción rápida para validar teléfonos desde el checklist."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=200, ge=1, le=200)
+    country_code: str | None = Field(default="MX", max_length=4)
+    reintentar: bool = Field(
+        default=True,
+        description="Si es falso se omiten prospectos previamente marcados como verificados.",
+    )
+
+
+class ProspectoChecklistScraperPayload(BaseModel):
+    """Parámetros de la acción rápida que lanza el scraper para prospectos sin correo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=3, ge=1, le=20, description="Número de jobs a disparar.")
+    mode: Literal["generic", "government", "intelligent", "auto"] = Field(default="auto")
+    max_pages: int = Field(default=150, ge=10, le=2000)
+    max_depth: int = Field(default=3, ge=1, le=10)
+    max_runtime: int | None = Field(default=900, ge=60, le=3600)
+
+
 class ProspectoListQuery(BaseModel):
     """Filtros de paginación y búsqueda para prospectos guardados."""
 
@@ -647,6 +673,14 @@ class ContactTemplateQuery(BaseModel):
     """Filtros simples para listar plantillas."""
 
     canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
+
+
+class ProspectoAuditEntryResponse(BaseModel):
+    id: UUID
+    accion: Literal["insert", "update", "delete"]
+    cambios: dict[str, Any] = Field(default_factory=dict)
+    realizado_por: UUID | None = None
+    realizado_en: datetime
 
 
 class GoogleProspeccionBusquedaPayload(BaseModel):
@@ -1280,6 +1314,95 @@ def _normalize_phone_input(value: str) -> str | None:
     if stripped.startswith("+"):
         return f"+{digits}"
     return digits
+
+
+async def _run_prospecto_lookup(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    prospectos: Sequence[Mapping[str, Any]],
+    country_code: str | None,
+    reintentar: bool,
+) -> list[dict[str, Any]]:
+    """Ejecuta Twilio Lookup para una colección de prospectos y persiste los resultados."""
+
+    processed: list[dict[str, Any]] = []
+    for prospecto in prospectos:
+        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
+        if not prospecto_id:
+            continue
+        current_status = _clean_text(prospecto.get("lookup_status")) or ""
+        if not reintentar and current_status in {"verificado", "sin_numero"}:
+            continue
+        base_phone = prospecto.get("phone_e164") or prospecto.get("phone")
+        phone = _clean_text(base_phone)
+        phone = _normalize_phone_input(phone) if phone else None
+        if not phone:
+            updates = {
+                "lookup_status": "sin_numero",
+                "lookup_error": None,
+                "whatsapp_permitido": False,
+                "llamada_permitida": False,
+            }
+        else:
+            try:
+                lookup = await lookup_phone_number(
+                    phone,
+                    country_code=country_code,
+                )
+            except TwilioLookupError as exc:
+                updates = {
+                    "lookup_status": "error",
+                    "lookup_error": str(exc),
+                }
+            else:
+                carrier = lookup.get("carrier") or {}
+                carrier_type = _clean_text(carrier.get("type"))
+                whatsapp_allowed = (carrier_type or "").lower() == "mobile"
+                llamada_permitida = (carrier_type or "").lower() in {"mobile", "landline"}
+                updates = {
+                    "phone_e164": lookup.get("phone_number") or phone,
+                    "phone_national": lookup.get("national_format"),
+                    "carrier_name": carrier.get("name"),
+                    "carrier_type": carrier_type,
+                    "lookup_status": "verificado",
+                    "lookup_error": None,
+                    "whatsapp_permitido": whatsapp_allowed,
+                    "llamada_permitida": llamada_permitida,
+                }
+        updated = await repo.update_prospecto(
+            usuario_token=user_token,
+            prospecto_id=UUID(str(prospecto_id)),
+            payload=updates,
+        )
+        processed.append(
+            {
+                "prospecto_id": str(prospecto_id),
+                "lookup_status": updated.get("lookup_status"),
+                "carrier_type": updated.get("carrier_type"),
+                "whatsapp_permitido": updated.get("whatsapp_permitido"),
+            }
+        )
+    return processed
+
+
+def _normalize_scraper_target(value: Any) -> tuple[str, str] | None:
+    """Normaliza una URL de sitio web para lanzar el scraper devolviendo URL base y host."""
+
+    raw = _clean_text(value)
+    if not raw:
+        return None
+    candidate = raw if raw.startswith(("http://", "https://")) else f"https://{raw}"
+    try:
+        parsed = urlparse(candidate)
+    except ValueError:
+        return None
+    host = parsed.netloc or ""
+    if not host:
+        return None
+    scheme = parsed.scheme if parsed.scheme in {"http", "https"} else "https"
+    base_url = f"{scheme}://{host}"
+    return base_url, host.lower()
 
 
 def _single_related(value: Any) -> dict[str, Any] | None:
@@ -6678,6 +6801,49 @@ async def listar_contactos_por_prospecto(
     }
 
 
+@router.get("/prospeccion/prospectos/{prospecto_id}/audit")
+async def listar_audit_por_prospecto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    prospecto_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> dict[str, Any]:
+    try:
+        rows = await repo.list_prospecto_audit(
+            usuario_token=user_token,
+            prospecto_id=prospecto_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    entries: list[ProspectoAuditEntryResponse] = []
+    for row in rows:
+        entry_id = _safe_uuid(row.get("id"))
+        if entry_id is None:
+            continue
+        raw_action = str(row.get("accion") or "").lower()
+        action: Literal["insert", "update", "delete"]
+        if raw_action in {"insert", "delete"}:
+            action = raw_action  # type: ignore[assignment]
+        else:
+            action = "update"
+        cambios_value = row.get("cambios")
+        cambios_dict = cambios_value if isinstance(cambios_value, dict) else {}
+        entries.append(
+            ProspectoAuditEntryResponse(
+                id=entry_id,
+                accion=action,
+                cambios=cambios_dict,
+                realizado_por=_safe_uuid(row.get("realizado_por")),
+                realizado_en=_parse_datetime(row.get("realizado_en")) or datetime.now(timezone.utc),
+            )
+        )
+
+    return {"ok": True, "items": [entry.model_dump(mode="json") for entry in entries]}
+
+
 @router.post("/prospeccion/prospectos/{prospecto_id}/convertir-contacto")
 async def convertir_prospecto_contacto(
     *,
@@ -6874,71 +7040,125 @@ async def verificar_prospectos(
     if not prospectos:
         raise HTTPException(status_code=404, detail="prospectos_not_found")
 
-    processed: list[dict[str, Any]] = []
-    for prospecto in prospectos:
-        prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
-        if not prospecto_id:
-            continue
-        current_status = _clean_text(prospecto.get("lookup_status")) or ""
-        if not payload.reintentar and current_status in {"verificado", "sin_numero"}:
-            continue
-        base_phone = prospecto.get("phone_e164") or prospecto.get("phone")
-        phone = _clean_text(base_phone)
-        phone = _normalize_phone_input(phone) if phone else None
-        if not phone:
-            updates = {
-                "lookup_status": "sin_numero",
-                "lookup_error": None,
-                "whatsapp_permitido": False,
-                "llamada_permitida": False,
-            }
-        else:
-            try:
-                lookup = await lookup_phone_number(
-                    phone,
-                    country_code=payload.country_code,
-                )
-            except TwilioLookupError as exc:
-                updates = {
-                    "lookup_status": "error",
-                    "lookup_error": str(exc),
-                }
-            else:
-                carrier = lookup.get("carrier") or {}
-                carrier_type = _clean_text(carrier.get("type"))
-                whatsapp_allowed = (carrier_type or "").lower() == "mobile"
-                llamada_permitida = (carrier_type or "").lower() in {
-                    "mobile",
-                    "landline",
-                }
-                updates = {
-                    "phone_e164": lookup.get("phone_number") or phone,
-                    "phone_national": lookup.get("national_format"),
-                    "carrier_name": carrier.get("name"),
-                    "carrier_type": carrier_type,
-                    "lookup_status": "verificado",
-                    "lookup_error": None,
-                    "whatsapp_permitido": whatsapp_allowed,
-                    "llamada_permitida": llamada_permitida,
-                }
-        try:
-            updated = await repo.update_prospecto(
-                usuario_token=user_token,
-                prospecto_id=UUID(str(prospecto_id)),
-                payload=updates,
-            )
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        processed.append(
-            {
-                "prospecto_id": str(prospecto_id),
-                "lookup_status": updated.get("lookup_status"),
-                "carrier_type": updated.get("carrier_type"),
-                "whatsapp_permitido": updated.get("whatsapp_permitido"),
-            }
+    try:
+        processed = await _run_prospecto_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            country_code=payload.country_code,
+            reintentar=payload.reintentar,
         )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "procesados": len(processed), "detalles": processed}
+
+
+@router.post("/prospeccion/prospectos/checklist/lookup")
+async def prospeccion_checklist_lookup(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ProspectoChecklistLookupPayload,
+) -> dict[str, Any]:
+    """Acción automática: ejecuta Twilio Lookup sobre los pendientes detectados en el checklist."""
+
+    try:
+        prospectos = await repo.list_lookup_pending_prospectos(
+            usuario_token=user_token,
+            limit=payload.limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not prospectos:
+        return {"ok": True, "procesados": 0, "detalles": [], "prospecto_ids": []}
+
+    try:
+        processed = await _run_prospecto_lookup(
+            repo=repo,
+            user_token=user_token,
+            prospectos=prospectos,
+            country_code=payload.country_code,
+            reintentar=payload.reintentar,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "procesados": len(processed),
+        "detalles": processed,
+        "prospecto_ids": [item["prospecto_id"] for item in processed],
+    }
+
+
+@router.post("/prospeccion/prospectos/checklist/scraper")
+async def prospeccion_checklist_scraper(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: ProspectoChecklistScraperPayload,
+) -> dict[str, Any]:
+    """Dispara jobs del buscador web para prospectos sin correo pero con sitio web."""
+
+    try:
+        candidatos = await repo.list_scraper_pending_prospectos(
+            usuario_token=user_token,
+            limit=max(payload.limit * 3, payload.limit),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    jobs: list[BuscadorJobResponse] = []
+    seen_hosts: set[str] = set()
+
+    for candidato in candidatos:
+        if len(jobs) >= payload.limit:
+            break
+        target = _normalize_scraper_target(candidato.get("website"))
+        if not target:
+            continue
+        url, host = target
+        if host in seen_hosts:
+            continue
+        seen_hosts.add(host)
+
+        params = BuscadorParams(
+            sitio="domain",
+            url=url,
+            mode=payload.mode,
+            max_pages=payload.max_pages,
+            max_depth=payload.max_depth,
+            max_runtime=payload.max_runtime,
+        )
+
+        metadata = {
+            "prospecto_id": str(candidato.get("id")),
+            "fuente": "checklist_scraper",
+        }
+        segmento = _clean_text(candidato.get("segmento"))
+        if segmento:
+            metadata["segmento"] = segmento
+
+        job_payload: dict[str, Any] = {
+            "status": "pending",
+            "params": _params_to_dict(params),
+            "metadata": metadata,
+        }
+        if usuario_id:
+            job_payload["creado_por"] = str(usuario_id)
+
+        try:
+            job_row = await repo.create_buscador_job(usuario_token=user_token, payload=job_payload)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        BUSCADOR_JOB_MANAGER.schedule_job(repo=repo, job_row=job_row, params=params)
+        jobs.append(_job_row_to_response(job_row))
+
+    return {"ok": True, "jobs": jobs, "programados": len(jobs)}
 
 
 @router.post("/prospeccion/prospectos/contactar")
