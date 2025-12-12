@@ -418,6 +418,7 @@ export type ConvertirProspectoPayload = {
   company_name?: string
   notas?: string
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+  canal_origen?: "correo" | "whatsapp" | "llamada" | "otro"
 }
 
 export async function convertirProspectoAContacto(prospectoId: string, payload: ConvertirProspectoPayload) {

@@ -1769,6 +1769,121 @@ class CRMRepository:
         self._stage_cache[cache_key] = stage_id
         return stage_id
 
+    async def get_default_stage_id(self, *, organizacion_id: UUID) -> UUID:
+        """Expone el ID de la primera etapa del pipeline para una organización."""
+
+        return await self._get_default_stage_id(organizacion_id=organizacion_id)
+
+    async def _get_first_stage_row(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "orden.asc",
+            "select": "id,codigo,nombre,orden,categoria,metadata,tablero_id,tablero_slug,tablero_nombre",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        return row
+
+    async def ensure_prospeccion_stage(self, *, organizacion_id: UUID) -> dict[str, Any]:
+        """Garantiza que exista la etapa 'Prospección · Primer contacto'."""
+
+        target_code = "prospeccion_primer_contacto"
+        existing = await self.get_stage_by_code(
+            organizacion_id=organizacion_id,
+            codigo=target_code,
+        )
+        if existing:
+            return existing
+
+        base_stage = await self._get_first_stage_row(organizacion_id=organizacion_id)
+        base_metadata = _ensure_metadata(base_stage.get("metadata")) if base_stage else {}
+        base_metadatos = _ensure_metadata(base_metadata.get("metadatos"))
+
+        tablero_id = (
+            (base_stage.get("tablero_id") if base_stage else None)
+            or base_metadata.get("tablero_id")
+            or base_metadata.get("tableroId")
+        )
+        tablero_nombre = (
+            (base_stage.get("tablero_nombre") if base_stage else None)
+            or base_metadata.get("tablero_nombre")
+        )
+        tablero_slug = (
+            (base_stage.get("tablero_slug") if base_stage else None)
+            or base_metadata.get("tablero_slug")
+        )
+
+        stage_metadatos = dict(base_metadatos)
+        stage_metadatos.update(
+            {
+                "color": stage_metadatos.get("color") or "indigo",
+                "etiqueta": stage_metadatos.get("etiqueta") or "Prospección",
+                "descripcion": stage_metadatos.get("descripcion")
+                or "Primer contacto originado desde búsquedas y campañas de prospección.",
+                "is_counter_only": False,
+            }
+        )
+
+        stage_metadata: dict[str, Any] = {
+            "seed": "prospeccion_stage",
+            "legacy_codigo": target_code,
+            "metadatos": stage_metadatos,
+        }
+        if tablero_id:
+            stage_metadata["tablero_id"] = tablero_id
+        if tablero_nombre:
+            stage_metadata["tablero_nombre"] = tablero_nombre
+        if tablero_slug:
+            stage_metadata["tablero_slug"] = tablero_slug
+
+        base_order_value = base_stage.get("orden") if base_stage else None
+        try:
+            base_order = int(base_order_value) if base_order_value is not None else 10
+        except (TypeError, ValueError):
+            base_order = 10
+        stage_order = max(1, base_order - 5)
+
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "codigo": target_code,
+            "nombre": "Prospección · Primer contacto",
+            "orden": stage_order,
+            "probabilidad": "5.00",
+            "categoria": "abierta",
+            "metadata": stage_metadata,
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/etapas_pipeline",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("prospeccion_stage_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("prospeccion_stage_invalid_response")
+
+        stage_payload = {
+            "id": _coerce_uuid(row.get("id"), field="etapa_id"),
+            "codigo": row.get("codigo"),
+            "nombre": row.get("nombre"),
+            "orden": row.get("orden"),
+            "categoria": row.get("categoria"),
+            "metadata": row.get("metadata"),
+        }
+        cache_key = (str(organizacion_id), target_code)
+        self._stage_code_cache[cache_key] = stage_payload
+        self._stage_cache.pop(str(organizacion_id), None)
+        return stage_payload
+
     async def get_stage_by_code(
         self,
         *,

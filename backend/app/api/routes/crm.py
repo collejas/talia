@@ -548,6 +548,7 @@ class ProspectoConvertirPayload(BaseModel):
     company_name: str | None = Field(default=None, max_length=160)
     notas: str | None = Field(default=None, max_length=1000)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate"] | None = None
+    canal_origen: Literal["correo", "whatsapp", "llamada", "otro"] | None = None
 
 
 class ProspectoContactarPayload(BaseModel):
@@ -1403,6 +1404,22 @@ def _normalize_scraper_target(value: Any) -> tuple[str, str] | None:
     scheme = parsed.scheme if parsed.scheme in {"http", "https"} else "https"
     base_url = f"{scheme}://{host}"
     return base_url, host.lower()
+
+
+def _describe_prospeccion_source(row: Mapping[str, Any]) -> str:
+    """Devuelve una etiqueta legible para el origen del prospecto."""
+
+    fuente_busqueda = _clean_text(row.get("fuente_busqueda"))
+    fuente = _clean_text(row.get("fuente"))
+    if fuente_busqueda == "buscador":
+        return "Prospección – Búsqueda web"
+    if fuente_busqueda == "manual":
+        return "Prospección – Captura manual"
+    if fuente == "google_places":
+        return "Prospección – Búsqueda Google"
+    if fuente == "denue":
+        return "Prospección – DENUE"
+    return "Prospección – Manual"
 
 
 def _single_related(value: Any) -> dict[str, Any] | None:
@@ -6850,6 +6867,7 @@ async def convertir_prospecto_contacto(
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     prospecto_id: UUID,
     payload: ProspectoConvertirPayload,
 ) -> dict[str, Any]:
@@ -6863,6 +6881,15 @@ async def convertir_prospecto_contacto(
     nombre = _clean_text(payload.nombre) or _clean_text(prospecto.get("display_name"))
     correo = payload.correo or prospecto.get("email")
     telefono = payload.telefono or prospecto.get("phone_e164") or prospecto.get("phone")
+    canal_origen = (payload.canal_origen or "otro").lower()
+    source_label = _describe_prospeccion_source(prospecto)
+    contacto_metadata = {
+        "prospecto_id": str(prospecto_id),
+        "prospeccion_fuente": source_label,
+    }
+    if canal_origen != "otro":
+        contacto_metadata["prospeccion_canal"] = canal_origen
+
     contacto_body = {
         "nombre_completo": nombre,
         "correo": correo,
@@ -6870,8 +6897,15 @@ async def convertir_prospecto_contacto(
         "company_name": payload.company_name or prospecto.get("segmento"),
         "notes": payload.notas or prospecto.get("notas"),
         "origen": "prospeccion",
-        "metadata": {"prospecto_id": str(prospecto_id)},
+        "metadata": contacto_metadata,
     }
+    contacto_datos = {
+        "prospecto_id": str(prospecto_id),
+        "prospeccion_fuente": source_label,
+    }
+    if canal_origen != "otro":
+        contacto_datos["prospeccion_canal"] = canal_origen
+    contacto_body["contacto_datos"] = {k: v for k, v in contacto_datos.items() if v}
     contacto_body = {k: v for k, v in contacto_body.items() if v}
 
     try:
@@ -6892,6 +6926,84 @@ async def convertir_prospecto_contacto(
     elif not metadata.get("stage"):
         metadata["stage"] = "evaluate"
 
+    oportunidad = None
+    oportunidad_id: UUID | None = None
+    try:
+        stage_payload = await repo.get_stage_by_code(
+            organizacion_id=organizacion_id,
+            codigo="prospeccion_primer_contacto",
+        )
+        if not stage_payload:
+            stage_payload = await repo.ensure_prospeccion_stage(
+                organizacion_id=organizacion_id,
+            )
+    except CRMRepositoryError as exc:
+        logger.warning("prospeccion.stage_lookup_failed", extra={"error": str(exc)})
+        stage_payload = None
+
+    try:
+        stage_id = (
+            _safe_uuid(stage_payload.get("id")) if stage_payload else None
+        )
+    except Exception:
+        stage_id = None
+
+    if stage_id is None:
+        try:
+            stage_id = await repo.get_default_stage_id(organizacion_id=organizacion_id)
+        except CRMRepositoryError as exc:  # pragma: no cover - fallback improbable
+            logger.warning("prospeccion.stage_default_failed", extra={"error": str(exc)})
+            stage_id = None
+
+    if stage_id and contacto_id:
+        opportunity_title = nombre or prospecto.get("display_name") or "Prospección"
+        opportunity_metadata = {
+            "prospecto_id": str(prospecto_id),
+            "source": source_label,
+        }
+        if canal_origen != "otro":
+            opportunity_metadata["prospeccion_canal"] = canal_origen
+        fuente_busqueda = _clean_text(prospecto.get("fuente_busqueda"))
+        if fuente_busqueda:
+            opportunity_metadata["prospeccion_fuente_codigo"] = fuente_busqueda
+
+        opportunity_payload = {
+            "contacto_principal_id": contacto_id,
+            "etapa_id": str(stage_id),
+            "titulo": opportunity_title[:255],
+            "descripcion": payload.notas or prospecto.get("notas"),
+            "metadata": opportunity_metadata,
+        }
+        try:
+            oportunidad = await repo.create_opportunity(
+                organizacion_id=organizacion_id,
+                payload=opportunity_payload,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning("prospeccion.crear_oportunidad_error", extra={"error": str(exc)})
+            oportunidad = None
+        else:
+            oportunidad_id = _safe_uuid(oportunidad.get("id"))
+            if oportunidad_id:
+                history_payload: dict[str, str] = {
+                    "oportunidad_id": str(oportunidad_id),
+                    "etapa_destino_id": str(stage_id),
+                    "fuente": "prospeccion",
+                }
+                if usuario_id:
+                    history_payload["cambiado_por_usuario_id"] = str(usuario_id)
+                try:
+                    await repo.append_stage_history(
+                        organizacion_id=organizacion_id,
+                        payload=history_payload,
+                    )
+                except CRMRepositoryError as exc:  # pragma: no cover - no frena flujo
+                    logger.warning("prospeccion.historial_stage_error", extra={"error": str(exc)})
+
+    if oportunidad_id:
+        metadata["crm_oportunidad_id"] = str(oportunidad_id)
+        metadata["crm_origen_etapa"] = "prospeccion_primer_contacto"
+
     try:
         updated = await repo.update_prospecto(
             usuario_token=user_token,
@@ -6901,7 +7013,10 @@ async def convertir_prospecto_contacto(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return {"ok": True, "prospecto": updated, "contacto": contacto}
+    response: dict[str, Any] = {"ok": True, "prospecto": updated, "contacto": contacto}
+    if oportunidad:
+        response["oportunidad"] = oportunidad
+    return response
 
 
 @router.post("/prospeccion/prospectos")
@@ -8147,6 +8262,11 @@ async def pipeline_board(
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
 
     try:
+        try:
+            await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)
+        except CRMRepositoryError as stage_exc:
+            logger.warning("crm.ensure_prospeccion_stage_failed", extra={"error": str(stage_exc)})
+
         stages = await repo.list_pipelines(organizacion_id=organizacion_id, tablero_id=tablero_id)
         rows, _ = await repo.list_pipeline_opportunities(
             organizacion_id=organizacion_id,
@@ -8753,6 +8873,17 @@ def _build_pipeline_board(
         stage = _stage_from_row(stage_row)
         if not stage:
             continue
+        if (
+            tablero_filter
+            and not stage.tablero_id
+            and (stage.codigo or "").lower() == "prospeccion_primer_contacto"
+        ):
+            stage = CRMPipelineBoardStage(
+                **{
+                    **stage.model_dump(),
+                    "tablero_id": tablero_filter,
+                }
+            )
         if tablero_filter and stage.tablero_id != tablero_filter:
             continue
         stage_map[stage.id] = stage

@@ -133,6 +133,7 @@ const initialProspectoForm: ProspectoFormState = {
 }
 
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+type ProspeccionCanal = "correo" | "whatsapp" | "llamada" | "otro"
 
 const STAGE_LABELS: Record<ProspeccionStage, string> = {
   discover: "Discover",
@@ -148,6 +149,13 @@ const stageOptions: Array<{ value: ProspeccionStage; label: string }> = (Object.
   value,
   label,
 }))
+
+const CANAL_LABELS: Record<ProspeccionCanal, string> = {
+  correo: "Correo",
+  whatsapp: "WhatsApp",
+  llamada: "Llamada/voz",
+  otro: "Otro",
+}
 
 const LOOKUP_STATUS_LABELS: Record<string, string> = {
   pendiente: "Pendiente",
@@ -244,6 +252,7 @@ function ProspectosView() {
     company: string
     notas: string
     stage: ProspeccionStage
+    canal: ProspeccionCanal
   }>({
     nombre: "",
     correo: "",
@@ -251,6 +260,7 @@ function ProspectosView() {
     company: "",
     notas: "",
     stage: "evaluate",
+    canal: "correo",
   })
   const [convertError, setConvertError] = useState<string | null>(null)
   const [convertSubmitting, setConvertSubmitting] = useState(false)
@@ -609,6 +619,14 @@ function ProspectosView() {
         ? (rawStage as ProspeccionStage)
         : "evaluate"
     setConvertProspect(prospecto)
+    let canal: ProspeccionCanal = "otro"
+    if (prospecto.email) {
+      canal = "correo"
+    } else if (prospecto.whatsapp_permitido) {
+      canal = "whatsapp"
+    } else if (prospecto.phone || prospecto.phone_e164) {
+      canal = "llamada"
+    }
     setConvertForm({
       nombre: prospecto.display_name ?? "",
       correo: prospecto.email ?? "",
@@ -616,6 +634,7 @@ function ProspectosView() {
       company: prospecto.segmento ?? "",
       notas: "",
       stage: stageValue,
+      canal,
     })
     setConvertError(null)
     setConvertDialogOpen(true)
@@ -637,6 +656,9 @@ function ProspectosView() {
     assign(convertForm.notas, "notas")
     if (convertForm.stage) {
       payload.stage = convertForm.stage
+    }
+    if (convertForm.canal) {
+      payload.canal_origen = convertForm.canal
     }
 
     setConvertSubmitting(true)
@@ -1489,6 +1511,24 @@ function ProspectosView() {
                   {stageOptions.map((stage) => (
                     <SelectItem key={stage.value} value={stage.value}>
                       {stage.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Canal de origen</Label>
+              <Select
+                value={convertForm.canal}
+                onValueChange={(value) => setConvertForm((prev) => ({ ...prev, canal: value as ProspeccionCanal }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(CANAL_LABELS) as Array<[ProspeccionCanal, string]>).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>
