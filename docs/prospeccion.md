@@ -66,7 +66,7 @@
 4. [ ] **Integración CRM** (crear contacto/oportunidad directamente desde el prospecto).
    - [x] Crear etapa inicial del pipeline (“Prospección · Primer contacto”) para leads provenientes de campañas /prospección (seed automático por tenant vía `ensure_prospeccion_stage`).
    - [x] Al convertir un prospecto, crear la oportunidad en esa etapa y poblar `metadata.source` con `Prospección – {fuente_busqueda}` (Google/DENUE/Búsqueda web).
-   - [ ] Registrar en `public.contactos` el canal usado en la campaña (correo/WhatsApp/voz) y bloquear recontacto automático.
+   - [x] Registrar en `public.contactos` el canal usado en la campaña (correo/WhatsApp/voz) y bloquear recontacto automático (se guarda en `contacto_datos.prospeccion_canal` y el backend omite prospectos convertidos al programar nuevos envíos).
 5. [ ] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(agrupador listo; falta duplicar campañas)_.
 6. [ ] **Indicadores de progreso** por etapa (basados en `metadata.stage`).
 7. [ ] **Brevo**: definir método elegido, ajustar `send_email`, registrar estados y actualizar documentación.

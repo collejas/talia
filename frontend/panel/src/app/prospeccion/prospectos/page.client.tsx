@@ -594,11 +594,15 @@ function ProspectosView() {
           display_name: nameMap.get(resumen.prospecto_id) ?? null,
         }))
       )
+      const omitidosTotal =
+        response.omitidos?.reduce((acc, item) => acc + (item.total ?? item.prospecto_ids.length ?? 0), 0) ?? 0
+      const omitidosMensaje =
+        omitidosTotal > 0 ? ` (${omitidosTotal} prospectos convertidos se omitieron automáticamente).` : ""
       setBanner({
         type: "success",
         message: response.batch_id
-          ? `Se creó el lote ${response.batch_id} con ${totalAcciones} acciones.`
-          : `Se registraron ${totalAcciones} acciones de contacto.`,
+          ? `Se creó el lote ${response.batch_id} con ${totalAcciones} acciones.${omitidosMensaje}`
+          : `Se registraron ${totalAcciones} acciones de contacto.${omitidosMensaje}`,
       })
       setContactDialogOpen(false)
       await fetchProspectos(offset)

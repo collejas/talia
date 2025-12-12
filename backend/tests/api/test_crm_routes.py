@@ -18,6 +18,18 @@ class DummyCRMRepository(CRMRepository):
         self.pipeline_opportunities: list[dict[str, Any]] = []
         self.dashboard_kpis: dict[str, Any] = {"webchat": {"visitas_sin_chat": 0}}
 
+    async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
+        """Evita llamadas reales durante las pruebas."""
+
+        return {
+            "id": str(uuid.uuid4()),
+            "codigo": "prospeccion_primer_contacto",
+            "nombre": "Prospección · Primer contacto",
+            "orden": 0,
+            "categoria": "abierta",
+            "metadata": {"seed": "prospeccion_stage"},
+        }
+
     async def list_accounts(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_accounts", kwargs))
         return [

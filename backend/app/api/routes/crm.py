@@ -2484,6 +2484,40 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
     }
 
 
+def _is_recontact_blocked(metadata: dict[str, Any]) -> bool:
+    """Evalúa si el prospecto ya no debe recibir campañas automáticas."""
+
+    if not metadata:
+        return False
+    if str(metadata.get("recontact_blocked")).lower() in {"true", "1", "yes"}:
+        return True
+    block_reason = _clean_text(metadata.get("recontact_block_reason"))
+    if block_reason:
+        return True
+    convertido = _clean_text(metadata.get("convertido_contacto_id"))
+    if convertido:
+        return True
+    return False
+
+
+def _split_recontact_blocked_prospectos(
+    prospectos: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Separa los prospectos bloqueados para evitar recontacto."""
+
+    permitidos: list[dict[str, Any]] = []
+    bloqueados: list[str] = []
+    for prospecto in prospectos:
+        metadata = _ensure_dict(prospecto.get("metadata"), default={})
+        if _is_recontact_blocked(metadata):
+            prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
+            if prospecto_id:
+                bloqueados.append(str(prospecto_id))
+            continue
+        permitidos.append(prospecto)
+    return permitidos, bloqueados
+
+
 def _build_contact_envios_entries(
     *,
     batch_id: Any,
@@ -6921,6 +6955,11 @@ async def convertir_prospecto_contacto(
     if contacto_id:
         metadata["convertido_contacto_id"] = str(contacto_id)
     metadata["convertido_en"] = datetime.now(timezone.utc).isoformat()
+    metadata["recontact_blocked"] = True
+    metadata["recontact_block_reason"] = "convertido_contacto"
+    metadata["recontact_blocked_en"] = datetime.now(timezone.utc).isoformat()
+    if canal_origen and canal_origen != "otro":
+        metadata["ultimo_canal_prospeccion"] = canal_origen
     if payload.stage:
         metadata["stage"] = payload.stage
     elif not metadata.get("stage"):
@@ -7297,6 +7336,7 @@ async def contactar_prospectos(
 
     filtros_fuente: ProspectoFiltroPayload | None = None
     lista_nombre: str | None = None
+    omitidos: list[dict[str, Any]] = []
     if payload.lista_id:
         try:
             lista_row = await repo.get_contact_list(usuario_token=user_token, lista_id=payload.lista_id)
@@ -7354,6 +7394,20 @@ async def contactar_prospectos(
         total_prospectos = total
         selector_filtros = selector_filtros or filtros_fuente.model_dump(exclude_none=True)
 
+    prospectos, bloqueados = _split_recontact_blocked_prospectos(prospectos)
+    if not prospectos:
+        raise HTTPException(status_code=400, detail="prospectos_recontact_blocked")
+    total_prospectos = len(prospectos)
+    if bloqueados:
+        omitidos.append(
+            {
+                "motivo": "convertido_contacto",
+                "prospecto_ids": bloqueados,
+                "total": len(bloqueados),
+            }
+        )
+        metadata_extra["recontacto_bloqueados"] = {"total": len(bloqueados)}
+
     try:
         batch = await repo.create_contact_batch(
             usuario_token=user_token,
@@ -7390,7 +7444,10 @@ async def contactar_prospectos(
     resumen = _build_contact_resumen(envios)
     contact_sender.notify_new_envios()
 
-    return {"ok": True, "batch_id": str(batch_id), "contactos": resumen}
+    response: dict[str, Any] = {"ok": True, "batch_id": str(batch_id), "contactos": resumen}
+    if omitidos:
+        response["omitidos"] = omitidos
+    return response
 
 
 @router.get("/prospeccion/contacto/batches/{batch_id}")

@@ -103,6 +103,7 @@ export type ProspectoContactarResponse = {
   ok: boolean
   batch_id: string
   contactos: ProspectoContactoResumen[]
+  omitidos?: ProspeccionOmitido[]
 }
 
 export type ContactarProspectosPayload = {
@@ -123,6 +124,12 @@ export type ProspectoContactoResumen = {
   correo?: string
   whatsapp?: string
   llamada?: string
+}
+
+export type ProspeccionOmitido = {
+  motivo: string
+  prospecto_ids: string[]
+  total: number
 }
 
 export type ProspectoAuditEntry = {
