@@ -10,6 +10,7 @@ export type ProspectoItem = {
   website: string | null
   address: string | null
   fuente: "google_places" | "denue" | "usuario"
+  fuente_busqueda?: string | null
   segmento?: string | null
   lookup_status?: string | null
   whatsapp_permitido?: boolean | null

@@ -16,8 +16,8 @@ import {
   IconTrash,
   IconMail,
   IconTargetArrow,
-  IconBrandWhatsapp,
   IconPhone,
+  IconBrandWhatsapp,
 } from "@tabler/icons-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
@@ -167,6 +167,13 @@ const FUENTE_LABELS: Record<string, string> = {
   google_places: "Google Places",
   denue: "DENUE",
   usuario: "Usuario",
+}
+
+const FUENTE_BUSQUEDA_LABELS: Record<string, string> = {
+  buscador: "Búsqueda web",
+  manual: "Captura manual",
+  denue: "Importado DENUE",
+  google_places: "Importado Google",
 }
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
@@ -1160,6 +1167,11 @@ function ProspectosView() {
                         <TableCell>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="outline">{FUENTE_LABELS[prospecto.fuente] ?? prospecto.fuente}</Badge>
+                          {prospecto.fuente_busqueda ? (
+                            <Badge variant="secondary">
+                              {FUENTE_BUSQUEDA_LABELS[prospecto.fuente_busqueda] ?? prospecto.fuente_busqueda}
+                            </Badge>
+                          ) : null}
                           {typeof prospecto.rating === "number" ? (
                             <Badge variant="secondary">⭐ {prospecto.rating.toFixed(1)}</Badge>
                           ) : null}
@@ -1799,38 +1811,37 @@ type ProspectChannelBadgesProps = {
 }
 
 function ProspectChannelBadges({ prospecto }: ProspectChannelBadgesProps) {
-  const whatsappState = prospecto.whatsapp_permitido
-  const whatsappAllowed = whatsappState === true
-  const whatsappVariant = whatsappState === false ? "destructive" : whatsappAllowed ? "secondary" : "outline"
-  const whatsappLabel = whatsappAllowed ? "WhatsApp listo" : "WhatsApp pendiente"
+  const rawPhone = (prospecto.phone_e164 || prospecto.phone || "").trim()
+  const hasPhone = rawPhone.length > 0
+  const carrier = (prospecto.carrier_type || "").toLowerCase()
+  const whatsappAllowed = prospecto.whatsapp_permitido === true
+  const whatsappDenied = prospecto.whatsapp_permitido === false
 
-  const vozState = prospecto.llamada_permitida
-  const vozPermitida = vozState !== false
-  const vozVariant = vozPermitida ? "secondary" : "destructive"
-  const vozLabel = vozPermitida
-    ? prospecto.carrier_type
-      ? `Voz · ${carrierLabel(prospecto.carrier_type)}`
-      : "Llamada permitida"
-    : "Sin llamadas"
+  let label = "Pendiente"
+  let variantClass = "border border-border text-muted-foreground"
+  let icon = <IconPhone className="size-3" />
 
-  const emailDisponible = Boolean(prospecto.email && prospecto.email.trim().length)
-  const emailVariant = emailDisponible ? "secondary" : "outline"
-  const emailLabel = emailDisponible ? "Correo listo" : "Sin correo"
+  if (!hasPhone) {
+    label = "Sin teléfono"
+    variantClass = "border-destructive/40 bg-destructive/10 text-destructive"
+  } else if (whatsappAllowed || carrier === "mobile") {
+    label = "Teléfono móvil"
+    variantClass = "bg-emerald-100 text-emerald-800"
+    icon = <IconBrandWhatsapp className="size-3" />
+  } else if (whatsappDenied || carrier === "landline") {
+    label = "Teléfono fijo"
+    variantClass = "bg-blue-100 text-blue-800"
+  }
 
   return (
     <div className="mt-2 flex flex-wrap gap-2 text-xs">
-      <Badge variant={whatsappVariant} className="gap-1 text-[11px]">
-        <IconBrandWhatsapp className="size-3" />
-        {whatsappLabel}
-      </Badge>
-      <Badge variant={vozVariant} className="gap-1 text-[11px]">
-        <IconPhone className="size-3" />
-        {vozLabel}
-      </Badge>
-      <Badge variant={emailVariant} className="gap-1 text-[11px]">
-        <IconMail className="size-3" />
-        {emailLabel}
-      </Badge>
+      <span
+        className={cn("flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium", variantClass)}
+        title={whatsappAllowed || carrier === "mobile" ? "Probablemente tiene WhatsApp" : undefined}
+      >
+        {icon}
+        {label}
+      </span>
     </div>
   )
 }

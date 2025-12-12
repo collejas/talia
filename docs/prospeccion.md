@@ -60,7 +60,7 @@
 ---
 
 ## Plan de acción detallado
-1. [ ] **Centralizar navegación**: barra/tabs “Descubre · Enriquecer · Preparar · Lanzar · Evaluar” en `/prospeccion`.
+1. [x] **Centralizar navegación**: barra/tabs “Descubre · Enriquecer · Preparar · Lanzar · Evaluar” en `/prospeccion`.
 2. [x] **Checklist de enriquecimiento** en `/prospeccion/prospectos` con acciones automáticas (lookup, scraper, captura).
 3. [x] **Wizard de campañas** con scheduling básico y soporte multicanal.
 4. [ ] **Integración CRM** (crear contacto/oportunidad directamente desde el prospecto).
