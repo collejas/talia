@@ -64,6 +64,9 @@
 2. [x] **Checklist de enriquecimiento** en `/prospeccion/prospectos` con acciones automáticas (lookup, scraper, captura).
 3. [x] **Wizard de campañas** con scheduling básico y soporte multicanal.
 4. [ ] **Integración CRM** (crear contacto/oportunidad directamente desde el prospecto).
+   - [ ] Crear etapa inicial del pipeline (“Prospección · Primer contacto”) para leads provenientes de campañas /prospección.
+   - [ ] Al convertir un prospecto, crear la oportunidad en esa etapa y poblar `metadata.source` con `Prospección – {fuente_busqueda}` (Google/DENUE/Búsqueda web).
+   - [ ] Registrar en `public.contactos` el canal usado en la campaña (correo/WhatsApp/voz) y bloquear recontacto automático.
 5. [ ] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(agrupador listo; falta duplicar campañas)_.
 6. [ ] **Indicadores de progreso** por etapa (basados en `metadata.stage`).
 7. [ ] **Brevo**: definir método elegido, ajustar `send_email`, registrar estados y actualizar documentación.
