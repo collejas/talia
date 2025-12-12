@@ -1,6 +1,6 @@
 "use client"
 
-import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from "react"
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import {
   Select,
   SelectContent,
@@ -37,7 +39,9 @@ import {
   guardarBuscadorProspectos,
   obtenerBuscadorJob,
   obtenerBuscadorResultados,
+  listarBuscadorJobs,
   type BuscadorJob,
+  type BuscadorJobStatus,
   type BuscadorResult,
   type BuscadorRunPayload,
   type BuscadorStats,
@@ -69,6 +73,20 @@ const DEFAULT_FORM_STATE: FormState = {
   maxMemoryMb: "",
 }
 
+const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
+  pending: "Pendiente",
+  running: "En progreso",
+  completed: "Completado",
+  failed: "Fallido",
+}
+
+const STATUS_VARIANTS: Record<BuscadorJobStatus, string> = {
+  pending: "bg-amber-100 text-amber-800",
+  running: "bg-blue-100 text-blue-800",
+  completed: "bg-emerald-100 text-emerald-800",
+  failed: "bg-rose-100 text-rose-800",
+}
+
 export default function BuscadorClientPage() {
   return (
     <ProspeccionViewLayout title="Prospección · Buscador web">
@@ -90,6 +108,10 @@ function BuscadorView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [segmento, setSegmento] = useState("")
   const [savingProspectos, setSavingProspectos] = useState(false)
+  const [jobs, setJobs] = useState<BuscadorJob[]>([])
+  const [jobsLoading, setJobsLoading] = useState(false)
+  const [jobsError, setJobsError] = useState<string | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   const canDownload = results.length > 0
 
@@ -125,6 +147,46 @@ function BuscadorView() {
     return Number.isFinite(num) ? num : undefined
   }
 
+  const loadJobs = useCallback(async () => {
+    setJobsLoading(true)
+    setJobsError(null)
+    try {
+      const listado = await listarBuscadorJobs(15)
+      setJobs(listado)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo cargar el historial del buscador."
+      setJobsError(message)
+      toast.error(message)
+    } finally {
+      setJobsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadJobs()
+  }, [loadJobs])
+
+  const loadJobResults = useCallback(
+    async (job: BuscadorJob) => {
+      try {
+        const data = await obtenerBuscadorResultados(job.id)
+        setResults(data.items)
+        setStats(data.stats ?? job.stats ?? null)
+        setDurationMs(job.duration_ms ?? null)
+        setLastResultsJobId(job.id)
+        setSelectedJobId(job.id)
+        setSelectedIds(new Set())
+        toast.success(`Búsqueda completada con ${data.total} resultados.`)
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "No se pudo obtener los resultados del buscador."
+        setErrorMessage(message)
+        toast.error(message)
+      }
+    },
+    [],
+  )
+
   const buildPayload = (): BuscadorRunPayload => {
     const payload: BuscadorRunPayload = {
       sitio: formValues.sitio,
@@ -157,8 +219,10 @@ function BuscadorView() {
       const payload = buildPayload()
       const job = await crearBuscadorJob(payload)
       setJobInfo(job)
+      setSelectedJobId(job.id)
       setLastResultsJobId(null)
       toast.success("Búsqueda programada. Te avisaremos cuando termine.")
+      void loadJobs()
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo ejecutar el buscador."
       setErrorMessage(message)
@@ -184,21 +248,8 @@ function BuscadorView() {
       if (lastResultsJobId === jobInfo.id) {
         return
       }
-      ;(async () => {
-        try {
-          const data = await obtenerBuscadorResultados(jobInfo.id)
-          setResults(data.items)
-          setStats(data.stats ?? jobInfo.stats ?? null)
-          setDurationMs(jobInfo.duration_ms ?? null)
-          setLastResultsJobId(jobInfo.id)
-          toast.success(`Búsqueda completada con ${data.total} resultados.`)
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "No se pudo obtener los resultados del buscador."
-          setErrorMessage(message)
-          toast.error(message)
-        }
-      })()
+      void loadJobResults(jobInfo)
+      void loadJobs()
       return
     }
 
@@ -232,7 +283,7 @@ function BuscadorView() {
         clearTimeout(timeoutId)
       }
     }
-  }, [jobInfo, lastResultsJobId])
+  }, [jobInfo, lastResultsJobId, loadJobResults, loadJobs])
 
   const handleReset = () => {
     setFormValues(DEFAULT_FORM_STATE)
@@ -244,7 +295,25 @@ function BuscadorView() {
     setLastResultsJobId(null)
     setSelectedIds(new Set())
     setSegmento("")
+    setSelectedJobId(null)
   }
+
+  const handleSelectJob = useCallback(
+    (job: BuscadorJob) => {
+      setJobInfo(job)
+      setSelectedJobId(job.id)
+      setErrorMessage(null)
+      if (job.status !== "completed") {
+        setResults([])
+        setStats(job.stats ?? null)
+        setDurationMs(job.duration_ms ?? null)
+        toast.message("Esta búsqueda aún no termina. Vuelve a intentarlo más tarde.")
+        return
+      }
+      void loadJobResults(job)
+    },
+    [loadJobResults],
+  )
 
   useEffect(() => {
     if (!results.length) {
@@ -510,6 +579,66 @@ function BuscadorView() {
       <Card>
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
+            <CardTitle>Historial de búsquedas web</CardTitle>
+            <CardDescription>Consulta las últimas ejecuciones y vuelve a abrir sus resultados.</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void loadJobs()} disabled={jobsLoading}>
+            {jobsLoading ? "Actualizando..." : "Actualizar"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {jobsError ? <p className="text-sm text-destructive">{jobsError}</p> : null}
+          <div className="rounded-md border">
+            <ScrollArea className="h-[360px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Origen</TableHead>
+                    <TableHead>Modo</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Resultados</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jobs.map((job) => (
+                    <TableRow key={job.id} className={cn(selectedJobId === job.id && "bg-muted/40")}>
+                      <TableCell className="text-sm text-muted-foreground">{formatDateTime(job.created_at)}</TableCell>
+                      <TableCell className="max-w-[220px] truncate">
+                        {job.params.url?.length ? job.params.url : job.params.sitio === "demo" ? "Demo" : "Sin URL"}
+                      </TableCell>
+                      <TableCell className="capitalize">{job.params.mode}</TableCell>
+                      <TableCell>
+                        <Badge className={cn("capitalize", STATUS_VARIANTS[job.status])}>
+                          {STATUS_LABELS[job.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{job.total ?? "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleSelectJob(job)}>
+                          Ver detalles
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!jobs.length && !jobsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                        Aún no tienes ejecuciones registradas.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
             <CardTitle>Resultados</CardTitle>
             <CardDescription>
               {results.length
@@ -608,6 +737,13 @@ function BuscadorView() {
       </Card>
     </div>
   )
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "—"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  return date.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })
 }
 
 function NumberField({

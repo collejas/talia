@@ -9199,7 +9199,6 @@ def _buscador_result_to_prospecto(
         "address": pick("address"),
         "segmento": segmento,
         "metadata": metadata,
-        "contacto_datos": contacto_dict,
     }
     return payload
 

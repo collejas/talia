@@ -44,7 +44,9 @@
   - [x] Crear tablas `prospeccion_buscador_jobs` y `prospeccion_buscador_resultados` (migración Supabase + RLS).  
   - [x] Actualizar `BuscadorJobManager` para leer/escribir vía `CRMRepository` en vez de archivos.  
   - [x] Ajustar endpoints `/prospeccion/buscador/*` para usar datos persistidos (mismo contrato).  
-  - [x] Exponer “Guardar resultado como prospecto” directamente desde estos registros.
+  - [x] Exponer “Guardar resultado como prospecto” directamente desde estos registros.  
+  - [x] Agregar historial de jobs en `/prospeccion/buscador` para reabrir resultados guardados.  
+  - [x] Arreglar la conversión a prospecto desde resultados web (supresión de `contacto_datos`).
 
 ## 5. Evaluar (Campañas y métricas)
 - [ ] Extender `/prospeccion/contactos` con agrupación por “campaña” (`campana_id` en batch o metadata).

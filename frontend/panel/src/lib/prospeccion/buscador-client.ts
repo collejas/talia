@@ -72,6 +72,10 @@ export type BuscadorJobResults = {
   stats?: BuscadorStats | null
 }
 
+export type BuscadorJobsListResponse = {
+  items: BuscadorJob[]
+}
+
 function extractErrorMessage(data: unknown): string | null {
   if (typeof data === "string") return data
   if (typeof data === "object" && data !== null) {
@@ -129,6 +133,21 @@ export async function obtenerBuscadorJob(jobId: string): Promise<BuscadorJob> {
 
 export async function obtenerBuscadorResultados(jobId: string): Promise<BuscadorJobResults> {
   return requestJson<BuscadorJobResults>(`/api/prospeccion/buscador/jobs/${jobId}/results`)
+}
+
+export async function listarBuscadorJobs(limit = 20): Promise<BuscadorJob[]> {
+  const url = buildClientUrl("/api/prospeccion/buscador/jobs")
+  url.searchParams.set("limit", String(limit))
+  const data = await requestJson<BuscadorJobsListResponse>(url.toString())
+  return data.items
+}
+
+function buildClientUrl(path: string): URL {
+  const origin =
+    typeof window === "undefined"
+      ? process.env.NEXT_PUBLIC_PANEL_ORIGIN || "http://localhost"
+      : window.location.origin
+  return new URL(path, origin)
 }
 
 export async function guardarBuscadorProspectos(
