@@ -307,43 +307,6 @@ function BuscadorView() {
     }
   }, [jobInfo, lastResultsJobId, loadJobResults, loadJobs])
 
-  useEffect(() => {
-    if (!jobInfo || jobInfo.status !== "running") {
-      return
-    }
-    if (selectedJobId && selectedJobId !== jobInfo.id) {
-      return
-    }
-
-    let cancelled = false
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-
-    const pollPartialResults = async () => {
-      try {
-        const data = await obtenerBuscadorResultados(jobInfo.id)
-        if (cancelled) return
-        applyJobResults(jobInfo, data, { resetSelection: false, markAsFinal: false })
-      } catch (error) {
-        if (cancelled) return
-        const message =
-          error instanceof Error ? error.message : "No se pudo actualizar los resultados del buscador."
-        setErrorMessage(message)
-      }
-      if (!cancelled && jobInfo.status === "running") {
-        timeoutId = setTimeout(pollPartialResults, 7000)
-      }
-    }
-
-    pollPartialResults()
-
-    return () => {
-      cancelled = true
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
-  }, [jobInfo, selectedJobId, applyJobResults])
-
   const handleReset = () => {
     setFormValues(DEFAULT_FORM_STATE)
     setResults([])
@@ -363,8 +326,10 @@ function BuscadorView() {
       setSelectedJobId(job.id)
       setErrorMessage(null)
       if (job.status !== "completed") {
-        toast.message("Esta búsqueda aún no termina. Mostrando resultados parciales disponibles.")
-        void loadJobResults(job, { notify: false, markAsFinal: false, resetSelection: true })
+        setResults([])
+        setStats(job.stats ?? null)
+        setDurationMs(job.duration_ms ?? null)
+        toast.message("Esta búsqueda aún no termina. Vuelve a intentarlo más tarde.")
         return
       }
       void loadJobResults(job)

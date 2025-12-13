@@ -131,6 +131,12 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
         return requestJson<T>(input, init, false, retryNetwork)
       }
     }
+    if (response.status === 409) {
+      const conflictMessage =
+        extractErrorMessage(data) ||
+        "El job aún no ha finalizado. Estamos mostrando los resultados parciales disponibles."
+      throw new Error(conflictMessage)
+    }
     if (retryNetwork && RETRYABLE_STATUS.has(response.status)) {
       await delay(400)
       return requestJson<T>(input, init, retryAuth, false)
