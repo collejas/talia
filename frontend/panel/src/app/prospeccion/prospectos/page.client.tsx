@@ -22,6 +22,7 @@ import {
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionCampaignWizard } from "@/components/prospeccion/prospeccion-campaign-wizard"
+import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,6 +48,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { canalLabel, contactHistoryDetail, contactStatusLabel, contactStatusVariant } from "@/lib/prospeccion/contact-utils"
 import {
   actualizarProspecto,
   crearProspectoManual,
@@ -62,10 +64,10 @@ import {
   ejecutarChecklistScraper,
   type ProspectoItem,
   type ProspectoManualInput,
-  type ProspectoContactoResumen,
   type ProspectoAuditEntry,
   type ContactoEnvio,
   type ContactoTemplate,
+  type ProspeccionOmitido,
   verificarProspectos,
 } from "@/lib/prospeccion/prospectos-client"
 
@@ -87,7 +89,11 @@ type BannerState = {
   message: string
 }
 
-type ContactResultWithName = ProspectoContactoResumen & { display_name?: string | null }
+type ContactDrawerData = {
+  batchId?: string | null
+  results: ProspeccionContactResult[]
+  omitidos?: ProspeccionOmitido[]
+}
 type ChecklistSummary = {
   telefonos_pendientes: number
   sin_email: number
@@ -225,8 +231,8 @@ function ProspectosView() {
   const [deleteTarget, setDeleteTarget] = useState<ProspectoItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [lastBatchId, setLastBatchId] = useState<string | null>(null)
-  const [lastContactResults, setLastContactResults] = useState<ContactResultWithName[]>([])
+  const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
+  const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
@@ -457,6 +463,23 @@ function ProspectosView() {
     }
   }, [historyDialogOpen])
 
+  const openContactDrawer = useCallback((data: ContactDrawerData) => {
+    if (!data.results?.length) {
+      setContactDrawerData(null)
+      setContactDrawerOpen(false)
+      return
+    }
+    setContactDrawerData(data)
+    setContactDrawerOpen(true)
+  }, [])
+
+  const handleContactDrawerOpenChange = useCallback((open: boolean) => {
+    setContactDrawerOpen(open)
+    if (!open) {
+      setContactDrawerData(null)
+    }
+  }, [])
+
   const handleTemplateSelect = (canal: "correo" | "whatsapp" | "llamada", slug: string) => {
     setSelectedTemplates((prev) => ({ ...prev, [canal]: slug }))
     const template = templates.find((item) => item.slug === slug && item.canal === canal)
@@ -585,15 +608,19 @@ function ProspectosView() {
     setContactError(null)
     try {
       const response = await contactarProspectos(payload)
-      const totalAcciones = response.contactos?.length ?? payload.prospecto_ids.length
       const nameMap = new Map(items.map((item) => [item.id, item.display_name]))
-      setLastBatchId(response.batch_id ?? null)
-      setLastContactResults(
-        (response.contactos ?? []).map((resumen) => ({
-          ...resumen,
-          display_name: nameMap.get(resumen.prospecto_id) ?? null,
-        }))
-      )
+      const enrichedResults = (response.contactos ?? []).map((resumen) => ({
+        ...resumen,
+        display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
+      }))
+      if (enrichedResults.length) {
+        openContactDrawer({
+          batchId: response.batch_id ?? null,
+          results: enrichedResults,
+          omitidos: response.omitidos,
+        })
+      }
+      const totalAcciones = enrichedResults.length || payload.prospecto_ids?.length || 0
       const omitidosTotal =
         response.omitidos?.reduce((acc, item) => acc + (item.total ?? item.prospecto_ids.length ?? 0), 0) ?? 0
       const omitidosMensaje =
@@ -612,9 +639,9 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [contactForm, fetchProspectos, items, offset, selectedIds])
+  }, [contactForm, fetchProspectos, items, offset, openContactDrawer, selectedIds])
 
-  const handleOpenConvertDialog = (prospecto: ProspectoItem) => {
+  const handleOpenConvertDialog = useCallback((prospecto: ProspectoItem) => {
     if (!prospecto.id) return
     const metadataRecord = isRecord(prospecto.metadata) ? prospecto.metadata : {}
     const rawStage = typeof metadataRecord["stage"] === "string" ? metadataRecord["stage"] : null
@@ -642,7 +669,39 @@ function ProspectosView() {
     })
     setConvertError(null)
     setConvertDialogOpen(true)
-  }
+  }, [])
+
+  const handlePromoteFromDrawer = useCallback(
+    (result: ProspeccionContactResult) => {
+      const existing = items.find((item) => item.id === result.prospecto_id)
+      if (existing) {
+        handleOpenConvertDialog(existing)
+        return
+      }
+      const pseudo: ProspectoItem = {
+        id: result.prospecto_id,
+        display_name: result.display_name ?? result.prospecto_id,
+        actividad: null,
+        phone: result.telefono ?? null,
+        phone_e164: result.telefono ?? null,
+        email: result.email ?? null,
+        website: null,
+        address: null,
+        fuente: "usuario",
+        fuente_busqueda: null,
+        segmento: result.segmento ?? null,
+        lookup_status: null,
+        whatsapp_permitido: null,
+        llamada_permitida: null,
+        carrier_type: null,
+        rating: null,
+        distancia_m: null,
+        metadata: result.stage ? { stage: result.stage } : {},
+      }
+      handleOpenConvertDialog(pseudo)
+    },
+    [handleOpenConvertDialog, items]
+  )
 
   const handleConvertSubmit = useCallback(async () => {
     if (!convertProspect?.id) return
@@ -684,16 +743,28 @@ function ProspectosView() {
   }, [convertForm, convertProspect, fetchProspectos, offset])
 
   const handleWizardCompleted = useCallback(
-    (result: { batchId?: string | null }) => {
+    (result: { batchId?: string | null; contactos?: ProspeccionContactResult[]; omitidos?: ProspeccionOmitido[] }) => {
+      if (result.contactos?.length) {
+        openContactDrawer({
+          batchId: result.batchId ?? null,
+          results: result.contactos,
+          omitidos: result.omitidos,
+        })
+      }
+      const omitidosTotal =
+        result.omitidos?.reduce((acc, item) => acc + (item.total ?? item.prospecto_ids.length ?? 0), 0) ?? 0
+      const omitidosMensaje =
+        omitidosTotal > 0 ? ` (${omitidosTotal} prospectos convertidos se omitieron automáticamente).` : ""
+      const totalAcciones = result.contactos?.length ?? 0
       setBanner({
         type: "success",
         message: result.batchId
-          ? `Campaña programada. Lote ${result.batchId}.`
-          : "Se programó la campaña correctamente.",
+          ? `Campaña programada. Lote ${result.batchId} con ${totalAcciones} acciones.${omitidosMensaje}`
+          : `Se programó la campaña correctamente.${omitidosMensaje}`,
       })
       void fetchProspectos(offset)
     },
-    [fetchProspectos, offset]
+    [fetchProspectos, offset, openContactDrawer]
   )
 
   const handleOpenCreateDialog = () => {
@@ -857,11 +928,6 @@ function ProspectosView() {
     }
   }, [deleteTarget, fetchProspectos, items.length, limit, offset])
 
-  const handleClearContactResults = () => {
-    setLastBatchId(null)
-    setLastContactResults([])
-  }
-
   return (
     <div className="space-y-4">
       {banner ? (
@@ -894,46 +960,6 @@ function ProspectosView() {
         onOpenScraper={handleChecklistScraper}
         onOpenManual={handleChecklistManual}
       />
-
-      {lastContactResults.length ? (
-        <section className="rounded-lg border bg-card p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium">Último envío de contacto</p>
-              <p className="text-xs text-muted-foreground">
-                {lastBatchId ? `Lote ${lastBatchId}` : "Ejecución reciente"}
-              </p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleClearContactResults}>
-              Ocultar
-            </Button>
-          </div>
-          <div className="mt-4 space-y-3">
-            {lastContactResults.map((resultado) => (
-              <div
-                key={`${resultado.prospecto_id}-${resultado.display_name ?? "anon"}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-              >
-                <div>
-                  <div className="font-medium">{resultado.display_name || "Prospecto"}</div>
-                  <p className="text-xs text-muted-foreground">{resultado.prospecto_id}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {["correo", "whatsapp", "llamada"].map((canal) => {
-                    const estado = resultado[canal as keyof ProspectoContactoResumen] as string | undefined
-                    if (!estado) return null
-                    return (
-                      <Badge key={canal} variant={contactStatusVariant(estado)}>
-                        {canalLabel(canal)}: {contactStatusLabel(estado)}
-                      </Badge>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
         <form onSubmit={handleSearchSubmit} className="space-y-4">
@@ -1836,6 +1862,13 @@ function ProspectosView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProspeccionContactDrawer
+        open={contactDrawerOpen && Boolean(contactDrawerData)}
+        onOpenChange={handleContactDrawerOpenChange}
+        data={contactDrawerData}
+        onPromote={handlePromoteFromDrawer}
+      />
     </div>
   )
 }
@@ -2024,51 +2057,6 @@ function carrierLabel(value: string | null | undefined) {
   }
 }
 
-function contactStatusLabel(value: string | undefined) {
-  if (!value) return "Pendiente"
-  const normalized = value.toLowerCase()
-  switch (normalized) {
-    case "enviado":
-      return "Enviado"
-    case "omitido":
-      return "Omitido"
-    case "error":
-      return "Error"
-    case "pendiente":
-      return "Pendiente"
-    default:
-      return normalized
-  }
-}
-
-function contactStatusVariant(value: string | undefined): "default" | "secondary" | "destructive" | "outline" {
-  if (!value) return "secondary"
-  const normalized = value.toLowerCase()
-  switch (normalized) {
-    case "enviado":
-      return "secondary"
-    case "omitido":
-      return "outline"
-    case "error":
-      return "destructive"
-    default:
-      return "default"
-  }
-}
-
-function canalLabel(value: string) {
-  switch (value) {
-    case "correo":
-      return "Correo"
-    case "whatsapp":
-      return "WhatsApp"
-    case "llamada":
-      return "Llamada"
-    default:
-      return value
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -2083,24 +2071,6 @@ function extractProspectoNotes(metadata: unknown): string | null {
   }
   const trimmed = value.trim()
   return trimmed.length ? trimmed : null
-}
-
-function contactHistoryDetail(envio: ContactoEnvio): string {
-  const detalle = envio.detalle
-  if (!detalle) return "—"
-  if (envio.canal === "correo") {
-    const email = detalle["email"]
-    return typeof email === "string" && email.trim().length ? email : "—"
-  }
-  const phone = detalle["telefono"] || detalle["phone"]
-  if (typeof phone === "string" && phone.trim().length) {
-    return phone
-  }
-  const reason = detalle["reason"]
-  if (typeof reason === "string" && reason.trim().length) {
-    return reason
-  }
-  return "—"
 }
 
 function auditActionLabel(action: string): string {

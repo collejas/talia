@@ -1,3 +1,5 @@
+import { refreshSession, shouldAttemptSessionRefresh } from "@/lib/auth/session-refresh"
+
 export type BuscadorRunPayload = {
   sitio: "demo" | "simple" | "domain"
   url?: string
@@ -89,7 +91,7 @@ function extractErrorMessage(data: unknown): string | null {
   return null
 }
 
-async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(input: string, init?: RequestInit, retry = true): Promise<T> {
   const response = await fetch(input, {
     ...init,
     headers: {
@@ -111,6 +113,12 @@ async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    if (retry && shouldAttemptSessionRefresh(response.status, data)) {
+      const refreshed = await refreshSession()
+      if (refreshed) {
+        return requestJson<T>(input, init, false)
+      }
+    }
     const message =
       extractErrorMessage(data) ||
       (typeof rawText === "string" && rawText.trim().length ? rawText : "No se pudo ejecutar el buscador.")

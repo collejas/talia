@@ -21,7 +21,9 @@ import {
   type ProspeccionCampanaGroup,
   type ProspeccionLista,
   type ProspeccionCanalConfigInput,
+  type ProspeccionOmitido,
   type ProspectoFiltroInput,
+  type ProspectoContactoResumen,
 } from "@/lib/prospeccion/prospectos-client"
 import { cn } from "@/lib/utils"
 
@@ -60,7 +62,12 @@ type ProspeccionCampaignWizardProps = {
   onClose: () => void
   selectedIds: string[]
   defaultFilters?: ProspectoFiltroInput
-  onCompleted?: (result: { batchId?: string | null; total?: number }) => void
+  onCompleted?: (result: {
+    batchId?: string | null
+    total?: number
+    contactos?: ProspectoContactoResumen[]
+    omitidos?: ProspeccionOmitido[]
+  }) => void
 }
 
 export function ProspeccionCampaignWizard({
@@ -254,7 +261,12 @@ export function ProspeccionCampaignWizard({
     setSubmitting(true)
     try {
       const response = await contactarProspectos(payload)
-      onCompleted?.({ batchId: response.batch_id, total: response.contactos?.length })
+      onCompleted?.({
+        batchId: response.batch_id,
+        total: response.contactos?.length,
+        contactos: response.contactos ?? [],
+        omitidos: response.omitidos,
+      })
       onClose()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo crear la campaña."

@@ -2531,6 +2531,7 @@ def _build_contact_envios_entries(
         prospecto_id = prospecto.get("id") or prospecto.get("prospecto_id")
         if not prospecto_id:
             continue
+        metadata = _ensure_dict(prospecto.get("metadata"), default={})
         detalle = {
             "display_name": prospecto.get("display_name"),
             "actividad": prospecto.get("actividad"),
@@ -2539,6 +2540,8 @@ def _build_contact_envios_entries(
             "whatsapp_permitido": prospecto.get("whatsapp_permitido"),
             "llamada_permitida": prospecto.get("llamada_permitida"),
             "carrier_type": prospecto.get("carrier_type"),
+            "segmento": prospecto.get("segmento"),
+            "stage": metadata.get("stage"),
         }
         for canal, canal_payload in canales.items():
             entry = {
@@ -2565,7 +2568,28 @@ def _build_contact_resumen(envios: Sequence[dict[str, Any]]) -> list[dict[str, A
         key = str(prospecto_id)
         canal = _clean_text(envio.get("canal")) or "canal"
         estado = _clean_text(envio.get("estado")) or "pendiente"
-        resumen = resumen_por_prospecto.setdefault(key, {"prospecto_id": key})
+        detalle = _ensure_dict(envio.get("detalle"), default={})
+        resumen = resumen_por_prospecto.setdefault(
+            key,
+            {
+                "prospecto_id": key,
+                "display_name": detalle.get("display_name"),
+                "email": detalle.get("email"),
+                "telefono": detalle.get("phone"),
+                "segmento": detalle.get("segmento"),
+                "stage": detalle.get("stage"),
+            },
+        )
+        if detalle.get("display_name"):
+            resumen["display_name"] = detalle.get("display_name")
+        if detalle.get("email"):
+            resumen["email"] = detalle.get("email")
+        if detalle.get("phone"):
+            resumen["telefono"] = detalle.get("phone")
+        if detalle.get("segmento"):
+            resumen["segmento"] = detalle.get("segmento")
+        if detalle.get("stage"):
+            resumen["stage"] = detalle.get("stage")
         resumen[canal] = estado
     return list(resumen_por_prospecto.values())
 

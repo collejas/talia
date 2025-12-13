@@ -1,3 +1,5 @@
+import { refreshSession, shouldAttemptSessionRefresh } from "@/lib/auth/session-refresh"
+
 import type { BuscadorJob } from "./buscador-client"
 
 export type ProspectoItem = {
@@ -124,6 +126,11 @@ export type ProspectoContactoResumen = {
   correo?: string
   whatsapp?: string
   llamada?: string
+  display_name?: string | null
+  email?: string | null
+  telefono?: string | null
+  segmento?: string | null
+  stage?: string | null
 }
 
 export type ProspeccionOmitido = {
@@ -214,7 +221,7 @@ function buildClientUrl(path: string): URL {
 /**
  * Parse JSON responses, surfacing backend error details when possible.
  */
-async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(input: string, init?: RequestInit, retry = true): Promise<T> {
   const response = await fetch(input, {
     cache: "no-store",
     ...init,
@@ -236,6 +243,12 @@ async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    if (retry && shouldAttemptSessionRefresh(response.status, data)) {
+      const refreshed = await refreshSession()
+      if (refreshed) {
+        return requestJson<T>(input, init, false)
+      }
+    }
     const detail =
       extractStringField(data, "detail") ||
       extractStringField(data, "error") ||

@@ -1,3 +1,5 @@
+import { refreshSession, shouldAttemptSessionRefresh } from "@/lib/auth/session-refresh";
+
 export type GoogleSearchStrategy = "nearby" | "text";
 
 export type CreateGoogleSearchPayload = {
@@ -80,7 +82,7 @@ export type GoogleResultadosResponse = {
   offset: number;
 };
 
-async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(input: string, init?: RequestInit, retry = true): Promise<T> {
   const response = await fetch(input, {
     cache: "no-store",
     ...init,
@@ -102,6 +104,12 @@ async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    if (retry && shouldAttemptSessionRefresh(response.status, data)) {
+      const refreshed = await refreshSession();
+      if (refreshed) {
+        return requestJson<T>(input, init, false);
+      }
+    }
     const detail =
       extractStringField(data, "detail") ||
       extractStringField(data, "error") ||
