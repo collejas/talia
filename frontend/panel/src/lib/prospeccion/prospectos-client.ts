@@ -1,5 +1,7 @@
 import { refreshSession, shouldAttemptSessionRefresh } from "@/lib/auth/session-refresh"
 
+const RETRYABLE_STATUS = new Set([502, 503, 504, 522, 524])
+
 import type { BuscadorJob } from "./buscador-client"
 
 export type ProspectoItem = {
@@ -221,16 +223,26 @@ function buildClientUrl(path: string): URL {
 /**
  * Parse JSON responses, surfacing backend error details when possible.
  */
-async function requestJson<T>(input: string, init?: RequestInit, retry = true): Promise<T> {
-  const response = await fetch(input, {
-    cache: "no-store",
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  })
+async function requestJson<T>(input: string, init?: RequestInit, retryAuth = true, retryNetwork = true): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(input, {
+      cache: "no-store",
+      ...init,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    })
+  } catch (error) {
+    if (retryNetwork) {
+      await delay(400)
+      return requestJson<T>(input, init, retryAuth, false)
+    }
+    const message = error instanceof Error ? error.message : null
+    throw new Error(message || "Error de red al contactar el backend.")
+  }
 
   const rawText = await response.text()
   let data: unknown = null
@@ -243,11 +255,15 @@ async function requestJson<T>(input: string, init?: RequestInit, retry = true): 
   }
 
   if (!response.ok) {
-    if (retry && shouldAttemptSessionRefresh(response.status, data)) {
+    if (retryAuth && shouldAttemptSessionRefresh(response.status, data)) {
       const refreshed = await refreshSession()
       if (refreshed) {
-        return requestJson<T>(input, init, false)
+        return requestJson<T>(input, init, false, retryNetwork)
       }
+    }
+    if (retryNetwork && RETRYABLE_STATUS.has(response.status)) {
+      await delay(400)
+      return requestJson<T>(input, init, retryAuth, false)
     }
     const detail =
       extractStringField(data, "detail") ||
@@ -547,6 +563,10 @@ export type ContactoMetrics = {
 
 export async function getContactoMetrics() {
   return requestJson<ContactoMetrics>("/api/prospeccion/contacto/metrics")
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function extractStringField(payload: unknown, key: string): string | undefined {
