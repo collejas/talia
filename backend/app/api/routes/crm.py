@@ -9351,7 +9351,16 @@ class BuscadorJobParamsResponse(BaseModel):
 
 class BuscadorJobResponse(BaseModel):
     id: UUID
-    status: Literal["pending", "running", "completed", "failed"]
+    status: Literal[
+        "pending",
+        "running",
+        "pausing",
+        "canceling",
+        "completed",
+        "failed",
+        "paused",
+        "canceled",
+    ]
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -9449,6 +9458,93 @@ async def prospeccion_buscador_job_detail(
     return _job_row_to_response(job_row)
 
 
+@router.post(
+    "/prospeccion/buscador/jobs/{job_id}/pause",
+    response_model=BuscadorJobResponse,
+)
+async def prospeccion_buscador_job_pause(
+    job_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> BuscadorJobResponse:
+    try:
+        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not job_row:
+        raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+    status_value = str(job_row.get("status") or "pending")
+    if status_value != "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El job no está en ejecución",
+        )
+    if not BUSCADOR_JOB_MANAGER.request_pause(job_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El job ya finalizó",
+        )
+    try:
+        updated_row = await repo.worker_update_buscador_job(
+            job_id=job_id,
+            payload={"status": "pausing"},
+            strict=False,
+            extra_filters={"status": "eq.running"},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not updated_row:
+        refreshed = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        if not refreshed:
+            raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+        return _job_row_to_response(refreshed)
+    return _job_row_to_response(updated_row)
+
+
+@router.post(
+    "/prospeccion/buscador/jobs/{job_id}/cancel",
+    response_model=BuscadorJobResponse,
+)
+async def prospeccion_buscador_job_cancel(
+    job_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> BuscadorJobResponse:
+    try:
+        job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not job_row:
+        raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+    status_value = str(job_row.get("status") or "pending")
+    if status_value not in {"running", "pending"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El job no puede cancelarse en su estado actual",
+        )
+    if not BUSCADOR_JOB_MANAGER.request_cancel(job_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El job ya finalizó",
+        )
+    filters = {"or": "(status.eq.running,status.eq.pending)"}
+    try:
+        updated_row = await repo.worker_update_buscador_job(
+            job_id=job_id,
+            payload={"status": "canceling"},
+            strict=False,
+            extra_filters=filters,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not updated_row:
+        refreshed = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
+        if not refreshed:
+            raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+        return _job_row_to_response(refreshed)
+    return _job_row_to_response(updated_row)
+
+
 @router.get("/prospeccion/buscador/jobs/{job_id}/results")
 async def prospeccion_buscador_job_results(
     job_id: UUID,
@@ -9466,7 +9562,7 @@ async def prospeccion_buscador_job_results(
             status_code=status.HTTP_404_NOT_FOUND, detail="Buscador job no encontrado"
         )
     status_value = str(job_row.get("status") or "pending")
-    if status_value != "completed":
+    if status_value not in {"completed", "paused", "canceled"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="El job aún no ha finalizado",

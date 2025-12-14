@@ -4652,18 +4652,27 @@ class CRMRepository:
         *,
         job_id: UUID,
         payload: dict[str, Any],
-    ) -> dict[str, Any]:
+        strict: bool = True,
+        extra_filters: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {"id": f"eq.{job_id}"}
+        if extra_filters:
+            params.update(extra_filters)
         resp = await self._request(
             "PATCH",
             "/rest/v1/prospeccion_buscador_jobs",
-            params={"id": f"eq.{job_id}"},
+            params=params,
             json=payload,
             prefer="return=representation",
         )
         data = resp.json() or []
         row = self._first_row(data)
+        if row is None:
+            if strict:
+                raise CRMRepositoryError(f"buscador_job_update_invalid:{data!r}")
+            return None
         if not isinstance(row, dict):
-            raise CRMRepositoryError(f"buscador_job_update_invalid:{data!r}")
+            raise CRMRepositoryError(f"buscador_job_update_invalid:{row!r}")
         return row
 
     async def worker_replace_buscador_results(

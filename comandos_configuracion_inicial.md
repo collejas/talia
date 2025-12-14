@@ -739,3 +739,38 @@ https://talia.mx/api/inbox/threads?limit=25&message_limit=20
   Una vez que el prompt reciba ese bloque de texto completo, el asistente podrá saludar llamando por nombre, referirse a la
   necesidad (“automtizar agenda de citas”) y explicar en qué etapa del embudo está el lead, y el resultado será mucho más humano. Si
   quieres puedo implementarte ese helper y el bloque de texto ahora mismo. ¿Quieres que lo haga?
+
+
+
+
+• Para que pause/cancelación funcionen y sigan guardándose los contactos encontrados necesitamos tocar varias piezas. Propongo el
+  siguiente plan técnico:
+
+  - Nuevo controlador de trabajos
+      - Crear una clase BuscadorJobControl (por ejemplo en app/services/buscador_jobs.py) con un threading.Event y un estado
+        ("active", "paused", "canceled").
+      - BuscadorJobManager guardará objetos {task, control} en lugar de solo la tarea y expondrá métodos request_pause(job_id)
+        y request_cancel(job_id) que marquen el estado, actualicen Supabase a "pausing"/"canceling" y devuelvan 409 si el job
+        ya terminó.
+  - Runner cooperativo
+      - Extender run_buscador y BuscadorRunResult para aceptar el control y reportar stop_reason ("completed", "paused",
+        "canceled").
+      - Pasar el control al crawler (create_domain_crawler). Dentro de BaseDomainCrawler.run() añadir verificaciones al inicio
+        del loop: si el control fue marcado, romper el ciclo guardando self.stop_reason. Así el método retorna los resultados
+        acumulados hasta ese punto.
+      - Para distinguir pausa vs cancelación no haremos excepciones; bastará con result.stop_reason. BuscadorJobManager._run_job
+        usará ese campo para llamar _store_results y luego escribir status=paused/canceled con finished_at.
+  - API / repository
+      - Añadir endpoints REST (por ejemplo POST /api/crm/prospeccion/buscador/jobs/{id}/pause y /cancel) que llamen al
+        BuscadorJobManager. Validan que el job pertenezca al usuario, que esté en estado running y responden con el nuevo estado.
+      - Extender CRMRepository con métodos pause_buscador_job y cancel_buscador_job que hagan PATCH en Supabase (campos status,
+        finished_at, error si aplica).
+      - Registrar en la tabla prospeccion_buscador_jobs los nuevos estados paused y canceled para que la UI pueda diferenciarlos.
+  - Guardar resultados parciales
+      - No cambia _store_results: cuando el runner sale (por finalización normal, pausa o cancel), se ejecuta la misma rutina que
+        borra e inserta lo que haya acumulado, de modo que el usuario verá en la UI todo lo encontrado hasta ese punto.
+      - El job quedará con stats y duration_ms reales hasta la interrupción.
+  - Pausa vs reanudación
+      - Esta primera versión sólo detiene el crawling y guarda status="paused". Para reanudar, la UI podrá ofrecer “Reanudar” que
+        simplemente lanza un nuevo job reutilizando los parámetros guardados (los params ya viven en la fila de Supabase); más
+        adelante podemos automatizarlo si queremos restaurar la cola.

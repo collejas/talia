@@ -43,7 +43,15 @@ export type BuscadorStats = {
   top_source_hosts: BuscadorTopSource[]
 }
 
-export type BuscadorJobStatus = "pending" | "running" | "completed" | "failed"
+export type BuscadorJobStatus =
+  | "pending"
+  | "running"
+  | "pausing"
+  | "canceling"
+  | "completed"
+  | "failed"
+  | "paused"
+  | "canceled"
 
 export type BuscadorJobParams = {
   sitio: "demo" | "simple" | "domain"
@@ -184,6 +192,18 @@ export async function listarBuscadorJobs(limit = 20): Promise<BuscadorJob[]> {
   url.searchParams.set("limit", String(limit))
   const data = await requestJson<BuscadorJobsListResponse>(url.toString())
   return data.items
+}
+
+export async function pausarBuscadorJob(jobId: string): Promise<BuscadorJob> {
+  return requestJson<BuscadorJob>(`/api/prospeccion/buscador/jobs/${jobId}/pause`, {
+    method: "POST",
+  })
+}
+
+export async function cancelarBuscadorJob(jobId: string): Promise<BuscadorJob> {
+  return requestJson<BuscadorJob>(`/api/prospeccion/buscador/jobs/${jobId}/cancel`, {
+    method: "POST",
+  })
 }
 
 function buildClientUrl(path: string): URL {

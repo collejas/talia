@@ -8,10 +8,11 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from urllib.parse import urlparse
 
 from app.core.logging import get_logger
+from app.services.buscador_control import BuscadorJobControl
 
 LOG = get_logger(__name__)
 
@@ -62,14 +63,18 @@ class BuscadorRunResult:
     results: list[dict[str, Any]]
     duration_ms: int
     stats: dict[str, Any]
+    stop_reason: Literal["paused", "canceled"] | None = None
 
 
-async def run_buscador(params: BuscadorParams) -> BuscadorRunResult:
+async def run_buscador(
+    params: BuscadorParams,
+    control: BuscadorJobControl | None = None,
+) -> BuscadorRunResult:
     """Ejecuta el scraper en un hilo aparte para no bloquear el loop."""
 
     params.ensure_valid()
 
-    return await asyncio.to_thread(_run_buscador_sync, params)
+    return await asyncio.to_thread(_run_buscador_sync, params, control)
 
 
 STEALTH_HEADERS = {
@@ -82,7 +87,10 @@ STEALTH_HEADERS = {
 }
 
 
-def _run_buscador_sync(params: BuscadorParams) -> BuscadorRunResult:
+def _run_buscador_sync(
+    params: BuscadorParams,
+    control: BuscadorJobControl | None = None,
+) -> BuscadorRunResult:
     if params.mode == "stealth":
         fetcher = HttpFetcher(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -94,7 +102,17 @@ def _run_buscador_sync(params: BuscadorParams) -> BuscadorRunResult:
     email_extractor = EmailExtractor()
     contact_extractor = ContactContextExtractor()
 
-    scraper = _build_scraper(params, fetcher, email_extractor, contact_extractor)
+    stop_callback: Callable[[], str | None] | None = None
+    if control is not None:
+        stop_callback = control.check_stop
+
+    scraper = _build_scraper(
+        params,
+        fetcher,
+        email_extractor,
+        contact_extractor,
+        stop_callback=stop_callback,
+    )
     start_time = time.perf_counter()
 
     try:
@@ -107,7 +125,16 @@ def _run_buscador_sync(params: BuscadorParams) -> BuscadorRunResult:
     normalized = _normalize_results(raw_results)
     stats = _summarize_results(normalized)
 
-    return BuscadorRunResult(results=normalized, duration_ms=duration_ms, stats=stats)
+    stop_reason = getattr(scraper, "stop_reason", None)
+    if not stop_reason and control is not None:
+        stop_reason = control.stop_reason
+
+    return BuscadorRunResult(
+        results=normalized,
+        duration_ms=duration_ms,
+        stats=stats,
+        stop_reason=stop_reason,
+    )
 
 
 def _build_scraper(
@@ -115,6 +142,8 @@ def _build_scraper(
     fetcher: HttpFetcher,
     email_extractor: EmailExtractor,
     contact_extractor: ContactContextExtractor,
+    *,
+    stop_callback: Callable[[], str | None] | None = None,
 ):
     if params.sitio == "demo":
         return DemoSiteScraper(fetcher=fetcher, email_extractor=email_extractor)
@@ -137,6 +166,7 @@ def _build_scraper(
             max_queue_size=params.max_queue_size,
             max_no_new_emails=params.max_no_new_emails,
             max_memory_mb=params.max_memory_mb,
+            stop_callback=stop_callback,
         )
 
     raise BuscadorRunnerError(f"Tipo de sitio no soportado: {params.sitio}")

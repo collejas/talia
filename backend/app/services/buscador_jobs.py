@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.buscador_control import BuscadorJobControl
 from app.services.buscador_runner import (
     BuscadorParams,
     BuscadorRunnerError,
@@ -35,11 +36,17 @@ class QueuedBuscadorJob:
     params: BuscadorParams
 
 
+@dataclass(slots=True)
+class ManagedBuscadorJob:
+    task: asyncio.Task[None]
+    control: BuscadorJobControl
+
+
 class BuscadorJobManager:
     """Coordina trabajos y sincroniza su estado en Supabase."""
 
     def __init__(self) -> None:
-        self._tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._jobs: dict[UUID, ManagedBuscadorJob] = {}
 
     def schedule_job(
         self,
@@ -54,11 +61,39 @@ class BuscadorJobManager:
             return
         organizacion_id = _safe_uuid(job_row.get("organizacion_id"))
         job = QueuedBuscadorJob(id=job_id, organizacion_id=organizacion_id, params=params)
-        task = asyncio.create_task(self._run_job(repo, job), name=f"buscador-job-{job_id}")
-        self._tasks[job_id] = task
-        task.add_done_callback(lambda _task, job_id=job_id: self._tasks.pop(job_id, None))
+        control = BuscadorJobControl()
+        task = asyncio.create_task(self._run_job(repo, job, control), name=f"buscador-job-{job_id}")
+        self._jobs[job_id] = ManagedBuscadorJob(task=task, control=control)
+        task.add_done_callback(lambda _task, job_id=job_id: self._jobs.pop(job_id, None))
 
-    async def _run_job(self, repo: CRMRepository, job: QueuedBuscadorJob) -> None:
+    def request_pause(self, job_id: UUID) -> bool:
+        """Intenta pausar el job. Devuelve False si ya se completó."""
+
+        return self._request_stop(job_id, action="pause")
+
+    def request_cancel(self, job_id: UUID) -> bool:
+        """Intenta cancelar completamente el job."""
+
+        return self._request_stop(job_id, action="cancel")
+
+    def _request_stop(self, job_id: UUID, *, action: Literal["pause", "cancel"]) -> bool:
+        handle = self._jobs.get(job_id)
+        if not handle:
+            return False
+        if handle.task.done():
+            return False
+        if action == "pause":
+            handle.control.request_pause()
+        else:
+            handle.control.request_cancel()
+        return True
+
+    async def _run_job(
+        self,
+        repo: CRMRepository,
+        job: QueuedBuscadorJob,
+        control: BuscadorJobControl,
+    ) -> None:
         start_iso = datetime.now(timezone.utc).isoformat()
         try:
             await repo.worker_update_buscador_job(
@@ -70,7 +105,7 @@ class BuscadorJobManager:
             return
 
         try:
-            result = await run_buscador(job.params)
+            result = await run_buscador(job.params, control=control)
         except BuscadorRunnerError as exc:
             await self._mark_job_failed(repo, job.id, str(exc))
             return
@@ -85,11 +120,17 @@ class BuscadorJobManager:
             return
 
         finish_iso = datetime.now(timezone.utc).isoformat()
+        stop_reason = result.stop_reason or control.stop_reason
+        final_status = "completed"
+        if stop_reason == "paused":
+            final_status = "paused"
+        elif stop_reason == "canceled":
+            final_status = "canceled"
         try:
             await repo.worker_update_buscador_job(
                 job_id=job.id,
                 payload={
-                    "status": "completed",
+                    "status": final_status,
                     "finished_at": finish_iso,
                     "duration_ms": result.duration_ms,
                     "total": len(result.results),

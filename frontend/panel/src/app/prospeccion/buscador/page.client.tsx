@@ -35,12 +35,15 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  cancelarBuscadorJob,
   crearBuscadorJob,
   guardarBuscadorProspectos,
   obtenerBuscadorJob,
   obtenerBuscadorResultados,
   listarBuscadorJobs,
+  pausarBuscadorJob,
   type BuscadorJob,
+  type BuscadorJobParams,
   type BuscadorJobResults,
   type BuscadorJobStatus,
   type BuscadorResult,
@@ -80,16 +83,27 @@ const RESULTS_PAGE_SIZES = [200, 500, 1000] as const
 const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
   pending: "Pendiente",
   running: "En progreso",
+  pausing: "Pausando",
+  canceling: "Cancelando",
   completed: "Completado",
   failed: "Fallido",
+  paused: "Pausado",
+  canceled: "Cancelado",
 }
 
 const STATUS_VARIANTS: Record<BuscadorJobStatus, string> = {
   pending: "bg-amber-100 text-amber-800",
   running: "bg-blue-100 text-blue-800",
+  pausing: "bg-blue-50 text-blue-800",
+  canceling: "bg-rose-50 text-rose-800",
   completed: "bg-emerald-100 text-emerald-800",
   failed: "bg-rose-100 text-rose-800",
+  paused: "bg-amber-50 text-amber-800",
+  canceled: "bg-slate-200 text-slate-800",
 }
+
+const RESULT_READY_STATUSES = new Set<BuscadorJobStatus>(["completed", "paused", "canceled"])
+const PROCESSING_STATUSES = new Set<BuscadorJobStatus>(["pending", "running", "pausing", "canceling"])
 
 export default function BuscadorClientPage() {
   return (
@@ -120,6 +134,7 @@ function BuscadorView() {
   const [jobsLoading, setJobsLoading] = useState(false)
   const [jobsError, setJobsError] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [jobAction, setJobAction] = useState<"pause" | "cancel" | "relaunch" | null>(null)
 
   const canDownload = results.length > 0
   const totalResultsCount = resultsTotal || jobInfo?.total || 0
@@ -127,6 +142,9 @@ function BuscadorView() {
   const pageEnd = resultsOffset + results.length
   const hasPreviousPage = resultsOffset > 0
   const hasNextPage = totalResultsCount ? pageEnd < totalResultsCount : results.length === resultsLimit
+  const canPauseJob = jobInfo?.status === "running"
+  const canCancelJob = jobInfo ? ["pending", "running", "pausing"].includes(jobInfo.status) : false
+  const canRelaunchJob = jobInfo ? RESULT_READY_STATUSES.has(jobInfo.status) || jobInfo.status === "failed" : false
 
   const domainSummary = useMemo<SummaryEntry[] | null>(() => {
     if (!stats?.top_email_domains?.length) return null
@@ -269,6 +287,18 @@ function BuscadorView() {
     return payload
   }
 
+  const buildPayloadFromParams = (params: BuscadorJobParams): BuscadorRunPayload => ({
+    sitio: params.sitio,
+    url: params.url || undefined,
+    mode: params.mode,
+    max_pages: params.max_pages,
+    max_depth: params.max_depth,
+    max_runtime: params.max_runtime ?? undefined,
+    max_queue_size: params.max_queue_size ?? undefined,
+    max_no_new_emails: params.max_no_new_emails ?? undefined,
+    max_memory_mb: params.max_memory_mb ?? undefined,
+  })
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setIsRunning(true)
@@ -308,7 +338,7 @@ function BuscadorView() {
       return
     }
 
-    if (jobInfo.status === "completed") {
+    if (RESULT_READY_STATUSES.has(jobInfo.status)) {
       setIsPolling(false)
       if (lastResultsJobId === jobInfo.id) {
         return
@@ -373,7 +403,7 @@ function BuscadorView() {
       setSelectedJobId(job.id)
       setErrorMessage(null)
       setResultsOffset(0)
-      if (job.status !== "completed") {
+      if (!RESULT_READY_STATUSES.has(job.status)) {
         setResults([])
         setResultsTotal(job.total ?? 0)
         setStats(job.stats ?? null)
@@ -387,6 +417,66 @@ function BuscadorView() {
     },
     [loadJobResults],
   )
+
+  const handlePauseJob = async () => {
+    if (!jobInfo || jobAction === "pause") return
+    setJobAction("pause")
+    try {
+      const updated = await pausarBuscadorJob(jobInfo.id)
+      setJobInfo(updated)
+      toast.success("Búsqueda pausada. Puedes reanudarla más tarde.")
+      void loadJobs()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo pausar el job."
+      toast.error(message)
+    } finally {
+      setJobAction(null)
+    }
+  }
+
+  const handleCancelJob = async () => {
+    if (!jobInfo || jobAction === "cancel") return
+    setJobAction("cancel")
+    try {
+      const updated = await cancelarBuscadorJob(jobInfo.id)
+      setJobInfo(updated)
+      toast.success("Búsqueda cancelada.")
+      void loadJobs()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo cancelar el job."
+      toast.error(message)
+    } finally {
+      setJobAction(null)
+    }
+  }
+
+  const handleRelaunchJob = async () => {
+    if (!jobInfo || jobAction === "relaunch") return
+    setJobAction("relaunch")
+    setErrorMessage(null)
+    setResults([])
+    setResultsTotal(0)
+    setResultsOffset(0)
+    setStats(null)
+    setDurationMs(null)
+    setSelectedIds(new Set())
+    setSegmento("")
+    setLastResultsJobId(null)
+    try {
+      const payload = buildPayloadFromParams(jobInfo.params)
+      const newJob = await crearBuscadorJob(payload)
+      setJobInfo(newJob)
+      setSelectedJobId(newJob.id)
+      toast.success("Se inició una nueva búsqueda con los mismos parámetros.")
+      void loadJobs()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo reiniciar la búsqueda."
+      setErrorMessage(message)
+      toast.error(message)
+    } finally {
+      setJobAction(null)
+    }
+  }
 
   const toggleSelectAll = (checked: boolean | "indeterminate") => {
     if (!results.length) return
@@ -648,8 +738,8 @@ function BuscadorView() {
           <CardContent className="space-y-2">
             <p className="text-sm">
               Estado actual:{" "}
-              <span className="font-medium capitalize">{jobInfo.status}</span>
-              {(jobInfo.status === "pending" || jobInfo.status === "running") && " (procesando)"}
+              <span className="font-medium capitalize">{STATUS_LABELS[jobInfo.status]}</span>
+              {PROCESSING_STATUSES.has(jobInfo.status) ? " (procesando)" : null}
             </p>
             {jobInfo.status === "failed" && jobInfo.error && (
               <p className="text-sm text-destructive">Error: {jobInfo.error}</p>
@@ -662,6 +752,43 @@ function BuscadorView() {
             )}
             {isPolling && (
               <p className="text-xs text-muted-foreground">Consultando estado…</p>
+            )}
+            {(canPauseJob || canCancelJob || canRelaunchJob) && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {canPauseJob && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handlePauseJob}
+                    disabled={jobAction === "pause"}
+                  >
+                    {jobAction === "pause" ? "Pausando…" : "Pausar"}
+                  </Button>
+                )}
+                {canCancelJob && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleCancelJob}
+                    disabled={jobAction === "cancel"}
+                  >
+                    {jobAction === "cancel" ? "Cancelando…" : "Cancelar"}
+                  </Button>
+                )}
+                {canRelaunchJob && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRelaunchJob}
+                    disabled={jobAction === "relaunch"}
+                  >
+                    {jobAction === "relaunch" ? "Reiniciando…" : "Reiniciar búsqueda"}
+                  </Button>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
