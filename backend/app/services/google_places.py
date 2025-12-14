@@ -35,6 +35,7 @@ class GooglePlacesClient:
         timeout: float = 15.0,
         pause_between_pages: float = 2.0,
         grid_max_tile_radius_m: int = 1200,
+        details_concurrency: int = 20,
     ) -> None:
         self.api_key = api_key or settings.google_places_api_key
         self.nearby_url = nearby_url or settings.google_places_nearby_url
@@ -51,6 +52,7 @@ class GooglePlacesClient:
         )
         self._details_cache: dict[str, dict[str, Any]] = {}
         self.grid_max_tile_radius_m = max(200, grid_max_tile_radius_m)
+        self.details_concurrency = max(5, min(details_concurrency, 50))
 
     async def search_places(
         self,
@@ -407,23 +409,38 @@ class GooglePlacesClient:
                 result[place_id] = cache[place_id]
             else:
                 ids_to_fetch.append(place_id)
-        batch_size = 10
-        for chunk_start in range(0, len(ids_to_fetch), batch_size):
-            chunk = ids_to_fetch[chunk_start : chunk_start + batch_size]
-            tasks = [self._get_place_detail(place_id, language_code) for place_id in chunk]
+        concurrency = min(self.details_concurrency, len(ids_to_fetch) or 1)
+        semaphore = asyncio.Semaphore(max(1, concurrency))
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async def _run_detail_fetch(place_id: str) -> tuple[str, dict[str, Any] | None]:
+                async with semaphore:
+                    detail = await self._get_place_detail(
+                        place_id,
+                        language_code,
+                        client=client,
+                    )
+                    return place_id, detail
+
+            tasks = [_run_detail_fetch(place_id) for place_id in ids_to_fetch]
             responses = await asyncio.gather(*tasks, return_exceptions=True)
-            for place_id, resp in zip(chunk, responses):
-                if isinstance(resp, Exception) or resp is None:
-                    continue
-                cache[place_id] = resp
-                result[place_id] = resp
-            await asyncio.sleep(self.pause_between_pages / 2)
+
+        for entry in responses:
+            if isinstance(entry, Exception):
+                continue
+            place_id, detail = entry
+            if not detail:
+                continue
+            cache[place_id] = detail
+            result[place_id] = detail
         return result
 
     async def _get_place_detail(
         self,
         place_id: str,
         language_code: str | None,
+        *,
+        client: httpx.AsyncClient,
     ) -> dict[str, Any] | None:
         headers = {
             "Content-Type": "application/json",
@@ -437,8 +454,7 @@ class GooglePlacesClient:
             params["languageCode"] = lang
         url = f"{self.details_url}/{place_id}"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(url, headers=headers, params=params)
+            resp = await client.get(url, headers=headers, params=params)
         except httpx.RequestError as exc:
             logger.warning(
                 "google.places_details_request_error",

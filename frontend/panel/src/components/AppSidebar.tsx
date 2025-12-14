@@ -73,14 +73,14 @@ const NAVIGATION = {
       url: "/prospeccion",
       icon: IconTargetArrow,
       children: [
-        { title: "Pipeline", url: "/prospeccion/pipeline" },
-        { title: "Campañas", url: "/prospeccion/campanas" },
-        { title: "Mensajes automatizados", url: "/prospeccion/mensajes" },
-        { title: "Prospectos", url: "/prospeccion/prospectos" },
         { title: "Google búsqueda", url: "/prospeccion/google-busqueda" },
         { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda" },
         { title: "Buscador web", url: "/prospeccion/buscador" },
+        { title: "Prospectos", url: "/prospeccion/prospectos" },
         { title: "Contactos", url: "/prospeccion/contactos" },
+        { title: "Pipeline", url: "/prospeccion/pipeline" },
+        { title: "Campañas", url: "/prospeccion/campanas" },
+        { title: "Mensajes automatizados", url: "/prospeccion/mensajes" },
       ],
     },
     {

@@ -8,6 +8,10 @@
 - [ ] **Objetivo principal**  
   Construir una experiencia completa “Descubre → Enriquecer → Preparar → Lanzar → Evaluar”, habilitando campañas coordinadas de correo, WhatsApp y voz con métricas y handoff al CRM.
 
+## Avances recientes
+- [x] Multicanal: wizard en `/prospeccion/prospectos` + drawer y wizard reutilizado desde `/prospeccion/campanas` con presets que duplican filtros/plantillas.
+- [x] Brevo: `send_email` usa API/`BREVO_API_KEY`, se guarda `messageId` y el webhook `/crm/prospeccion/contacto/brevo/webhook` sincroniza envíos/rebotes.
+
 ---
 
 ## 1. Descubre (Búsquedas geolocalizadas)
