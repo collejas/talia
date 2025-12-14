@@ -206,6 +206,12 @@ export async function cancelarBuscadorJob(jobId: string): Promise<BuscadorJob> {
   })
 }
 
+export async function eliminarBuscadorJob(jobId: string): Promise<void> {
+  await requestJson<unknown>(`/api/prospeccion/buscador/jobs/${jobId}`, {
+    method: "DELETE",
+  })
+}
+
 function buildClientUrl(path: string): URL {
   const origin =
     typeof window === "undefined"

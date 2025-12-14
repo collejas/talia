@@ -4552,6 +4552,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"buscador_job_get_invalid:{row!r}")
         return row
 
+    async def delete_buscador_job(
+        self,
+        *,
+        job_id: UUID,
+        usuario_token: str,
+    ) -> int:
+        params = {
+            "id": f"eq.{job_id}",
+        }
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_buscador_jobs",
+            token=usuario_token,
+            params=params,
+            prefer="return=representation",
+        )
+        if resp.status_code == 204:
+            return 0
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"buscador_job_delete_invalid:{data!r}")
+        return len(data)
+
     async def list_buscador_resultados(
         self,
         *,

@@ -1,7 +1,8 @@
 "use client"
 
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react"
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { RefreshCw, Trash2 } from "lucide-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Button } from "@/components/ui/button"
@@ -37,6 +38,7 @@ import {
 import {
   cancelarBuscadorJob,
   crearBuscadorJob,
+  eliminarBuscadorJob,
   guardarBuscadorProspectos,
   obtenerBuscadorJob,
   obtenerBuscadorResultados,
@@ -135,6 +137,8 @@ function BuscadorView() {
   const [jobsError, setJobsError] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [jobAction, setJobAction] = useState<"pause" | "cancel" | "relaunch" | null>(null)
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
+  const resultsCardRef = useRef<HTMLDivElement | null>(null)
 
   const canDownload = results.length > 0
   const totalResultsCount = resultsTotal || jobInfo?.total || 0
@@ -145,6 +149,14 @@ function BuscadorView() {
   const canPauseJob = jobInfo?.status === "running"
   const canCancelJob = jobInfo ? ["pending", "running", "pausing"].includes(jobInfo.status) : false
   const canRelaunchJob = jobInfo ? RESULT_READY_STATUSES.has(jobInfo.status) || jobInfo.status === "failed" : false
+  const processingSelectedJob = jobInfo ? PROCESSING_STATUSES.has(jobInfo.status) : false
+  const resultsDescription = totalResultsCount
+    ? `Mostrando ${results.length ? `${pageStart}-${pageEnd}` : 0} de ${totalResultsCount} registros.`
+    : results.length
+      ? `Mostrando ${results.length} registros.`
+      : processingSelectedJob
+        ? "Esta búsqueda aún no finaliza. Mostraremos los resultados en cuanto estén listos."
+        : "Selecciona una búsqueda reciente o ejecuta el buscador para ver los resultados aquí."
 
   const domainSummary = useMemo<SummaryEntry[] | null>(() => {
     if (!stats?.top_email_domains?.length) return null
@@ -403,6 +415,9 @@ function BuscadorView() {
       setSelectedJobId(job.id)
       setErrorMessage(null)
       setResultsOffset(0)
+      if (resultsCardRef.current) {
+        resultsCardRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
       if (!RESULT_READY_STATUSES.has(job.status)) {
         setResults([])
         setResultsTotal(job.total ?? 0)
@@ -417,6 +432,31 @@ function BuscadorView() {
     },
     [loadJobResults],
   )
+
+  const handleDeleteJob = async (job: BuscadorJob) => {
+    if (deletingJobId) return
+    setDeletingJobId(job.id)
+    try {
+      await eliminarBuscadorJob(job.id)
+      toast.success("Búsqueda eliminada.")
+      if (selectedJobId === job.id) {
+        handleClearResults()
+        setJobInfo(null)
+        setStats(null)
+        setDurationMs(null)
+        setSelectedJobId(null)
+        setSegmento("")
+        setLastResultsJobId(null)
+        setErrorMessage(null)
+      }
+      void loadJobs()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo eliminar la búsqueda."
+      toast.error(message)
+    } finally {
+      setDeletingJobId(null)
+    }
+  }
 
   const handlePauseJob = async () => {
     if (!jobInfo || jobAction === "pause") return
@@ -830,65 +870,92 @@ function BuscadorView() {
         </CardHeader>
         <CardContent className="space-y-3">
           {jobsError ? <p className="text-sm text-destructive">{jobsError}</p> : null}
-          <div className="rounded-md border">
-            <ScrollArea className="h-[360px]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Origen</TableHead>
-                    <TableHead>Modo</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Resultados</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {jobs.map((job) => (
-                    <TableRow key={job.id} className={cn(selectedJobId === job.id && "bg-muted/40")}>
-                      <TableCell className="text-sm text-muted-foreground">{formatDateTime(job.created_at)}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">
-                        {job.params.url?.length ? job.params.url : job.params.sitio === "demo" ? "Demo" : "Sin URL"}
-                      </TableCell>
-                      <TableCell className="capitalize">{job.params.mode}</TableCell>
-                      <TableCell>
-                        <Badge className={cn("capitalize", STATUS_VARIANTS[job.status])}>
-                          {STATUS_LABELS[job.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{job.total ?? "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleSelectJob(job)}>
-                          Ver detalles
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!jobs.length && !jobsLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                        Aún no tienes ejecuciones registradas.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
+          {jobsLoading && !jobs.length ? (
+            <p className="text-sm text-muted-foreground">Cargando historial…</p>
+          ) : null}
+          {jobs.length ? (
+            <ScrollArea className="h-[360px] pr-2">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {jobs.map((job) => {
+                  const originLabel =
+                    job.params.url?.length && job.params.sitio !== "demo"
+                      ? job.params.url
+                      : job.params.sitio === "demo"
+                        ? "Demo"
+                      : "Sin URL"
+                  const sitioLabel =
+                    job.params.sitio === "domain"
+                      ? "Dominio completo"
+                      : job.params.sitio === "simple"
+                        ? "Página única"
+                      : "Demo"
+                  return (
+                    <div
+                      key={job.id}
+                      className={cn(
+                        "rounded-lg border p-3 text-sm",
+                        selectedJobId === job.id && "border-primary bg-primary/5",
+                      )}
+                    >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <p className="font-medium truncate">{originLabel}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateTime(job.created_at)}</p>
+                      </div>
+                      <Badge className={cn("capitalize", STATUS_VARIANTS[job.status])}>
+                        {STATUS_LABELS[job.status]}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {sitioLabel} · Modo {job.params.mode}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {typeof job.total === "number" ? `${job.total} resultados` : "Sin resultados"}{" "}
+                      {job.duration_ms ? `· ${(job.duration_ms / 1000).toFixed(1)} s` : null}
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selectedJobId === job.id ? "secondary" : "outline"}
+                        onClick={() => handleSelectJob(job)}
+                      >
+                        Ver
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Eliminar búsqueda"
+                        onClick={() => handleDeleteJob(job)}
+                        disabled={deletingJobId === job.id}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingJobId === job.id ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    </div>
+                  )
+                })}
+              </div>
             </ScrollArea>
-          </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {jobsLoading ? "Cargando historial…" : "Aún no tienes ejecuciones registradas."}
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card ref={resultsCardRef}>
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle>Resultados</CardTitle>
-            <CardDescription>
-              {totalResultsCount
-                ? `Mostrando ${results.length ? `${pageStart}-${pageEnd}` : 0} de ${totalResultsCount} registros.`
-                : results.length
-                  ? `Mostrando ${results.length} registros.`
-                  : "Ejecuta el buscador para ver los correos encontrados."}
-            </CardDescription>
+            <CardDescription>{resultsDescription}</CardDescription>
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={handleDownloadJson} disabled={!canDownload}>

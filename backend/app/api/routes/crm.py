@@ -9479,6 +9479,24 @@ async def prospeccion_buscador_job_detail(
     return _job_row_to_response(job_row)
 
 
+@router.delete(
+    "/prospeccion/buscador/jobs/{job_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def prospeccion_buscador_job_delete(
+    job_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> Response:
+    try:
+        deleted = await repo.delete_buscador_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if deleted <= 0:
+        raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/prospeccion/buscador/jobs/{job_id}/pause",
     response_model=BuscadorJobResponse,
