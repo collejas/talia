@@ -50,7 +50,7 @@ import {
 type FormState = {
   sitio: "domain" | "simple" | "demo"
   url: string
-  mode: "generic" | "government" | "intelligent" | "auto"
+  mode: "generic" | "government" | "intelligent" | "auto" | "stealth"
   maxPages: string
   maxDepth: string
   maxRuntime: string
@@ -457,11 +457,13 @@ function BuscadorView() {
                     <SelectItem value="generic">Genérico</SelectItem>
                     <SelectItem value="government">Gobierno</SelectItem>
                     <SelectItem value="intelligent">Inteligente</SelectItem>
-                    <SelectItem value="auto">Auto (detecta)</SelectItem>
+                <SelectItem value="auto">Auto (detecta)</SelectItem>
+                <SelectItem value="stealth">Evasión WAF (beta)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Sólo aplica para dominios; prioriza secciones de transparencia o negocios.
+                  Sólo aplica para dominios; prioriza secciones de transparencia o negocios. El modo evasión WAF
+                  intenta identificar headers tipo navegador para sitios protegidos.
                 </p>
               </div>
 

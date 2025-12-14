@@ -446,7 +446,7 @@ class ProspectoChecklistScraperPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     limit: int = Field(default=3, ge=1, le=20, description="Número de jobs a disparar.")
-    mode: Literal["generic", "government", "intelligent", "auto"] = Field(default="auto")
+    mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = Field(default="auto")
     max_pages: int = Field(default=150, ge=10, le=2000)
     max_depth: int = Field(default=3, ge=1, le=10)
     max_runtime: int | None = Field(default=900, ge=60, le=3600)
@@ -9253,7 +9253,7 @@ class BuscadorResultItem(BaseModel):
 class BuscadorRunPayload(BaseModel):
     sitio: Literal["demo", "simple", "domain"] = "domain"
     url: HttpUrl | None = None
-    mode: Literal["generic", "government", "intelligent", "auto"] = "generic"
+    mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = "generic"
     max_pages: int = Field(default=200, ge=1, le=5000)
     max_depth: int = Field(default=3, ge=1, le=50)
     max_runtime: int | None = Field(default=None, ge=10, le=7200)
@@ -9271,7 +9271,7 @@ class BuscadorRunPayload(BaseModel):
 class BuscadorJobParamsResponse(BaseModel):
     sitio: Literal["demo", "simple", "domain"]
     url: HttpUrl | None = None
-    mode: Literal["generic", "government", "intelligent", "auto"]
+    mode: Literal["generic", "government", "intelligent", "auto", "stealth"]
     max_pages: int
     max_depth: int
     max_runtime: int | None = None

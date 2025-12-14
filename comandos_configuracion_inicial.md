@@ -18,6 +18,8 @@ sudo apt install nginx -y
 sudo nano /etc/nginx/sites-available/talia.conf
 sudo micro /etc/nginx/sites-available/talia.conf
 
+sudo nano /etc/systemd/resolved.conf
+
 # Habilita el sitio:
 sudo ln -s /etc/nginx/sites-available/talia.conf /etc/nginx/sites-enabled/
 

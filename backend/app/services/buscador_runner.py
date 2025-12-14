@@ -42,7 +42,7 @@ class BuscadorRunnerError(Exception):
 class BuscadorParams:
     sitio: Literal["demo", "simple", "domain"]
     url: str | None = None
-    mode: Literal["generic", "government", "intelligent", "auto"] = "generic"
+    mode: Literal["generic", "government", "intelligent", "auto", "stealth"] = "generic"
     max_pages: int = 200
     max_depth: int = 3
     max_runtime: int | None = None
@@ -72,8 +72,25 @@ async def run_buscador(params: BuscadorParams) -> BuscadorRunResult:
     return await asyncio.to_thread(_run_buscador_sync, params)
 
 
+STEALTH_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
 def _run_buscador_sync(params: BuscadorParams) -> BuscadorRunResult:
-    fetcher = HttpFetcher()
+    if params.mode == "stealth":
+        fetcher = HttpFetcher(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            default_headers=STEALTH_HEADERS,
+            use_cloudscraper=True,
+        )
+    else:
+        fetcher = HttpFetcher()
     email_extractor = EmailExtractor()
     contact_extractor = ContactContextExtractor()
 

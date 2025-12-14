@@ -5,7 +5,7 @@ const RETRYABLE_STATUS = new Set([502, 503, 504, 522, 524])
 export type BuscadorRunPayload = {
   sitio: "demo" | "simple" | "domain"
   url?: string
-  mode?: "generic" | "government" | "intelligent" | "auto"
+  mode?: "generic" | "government" | "intelligent" | "auto" | "stealth"
   max_pages?: number
   max_depth?: number
   max_runtime?: number | null
@@ -48,7 +48,7 @@ export type BuscadorJobStatus = "pending" | "running" | "completed" | "failed"
 export type BuscadorJobParams = {
   sitio: "demo" | "simple" | "domain"
   url?: string | null
-  mode: "generic" | "government" | "intelligent" | "auto"
+  mode: "generic" | "government" | "intelligent" | "auto" | "stealth"
   max_pages: number
   max_depth: number
   max_runtime?: number | null
