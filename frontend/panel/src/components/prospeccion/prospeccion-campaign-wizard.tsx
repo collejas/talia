@@ -44,6 +44,45 @@ const STAGES = [
   { value: "evaluate", label: "Evaluate" },
 ]
 
+type ChannelState = Record<
+  "correo" | "whatsapp" | "llamada",
+  { enabled: boolean; templateSlug?: string; subject?: string; body?: string; message?: string; schedule?: string }
+>
+
+const DEFAULT_CHANNEL_STATE: ChannelState = {
+  correo: { enabled: true, subject: "", body: "" },
+  whatsapp: { enabled: false, body: "" },
+  llamada: { enabled: false, message: "" },
+}
+
+type ChannelOverrides = Partial<Record<keyof ChannelState, Partial<ChannelState["correo"]>>>
+
+function buildChannelState(overrides?: ChannelOverrides): ChannelState {
+  const base: ChannelState = {
+    correo: { ...DEFAULT_CHANNEL_STATE.correo },
+    whatsapp: { ...DEFAULT_CHANNEL_STATE.whatsapp },
+    llamada: { ...DEFAULT_CHANNEL_STATE.llamada },
+  }
+  if (overrides) {
+    ;(Object.keys(overrides) as Array<keyof ChannelState>).forEach((canal) => {
+      const override = overrides[canal]
+      if (!override) return
+      base[canal] = { ...base[canal], ...override }
+    })
+  }
+  return base
+}
+
+export type ProspeccionWizardPreset = {
+  source?: WizardSource
+  listaId?: string | null
+  filtros?: ProspectoFiltroInput
+  canales?: ChannelOverrides
+  titulo?: string | null
+  campanaId?: string | null
+  campanaNombre?: string | null
+}
+
 function sanitizeFilters(filters: ProspectoFiltroInput): ProspectoFiltroInput {
   const clean: ProspectoFiltroInput = {}
   if (filters.search?.trim()) clean.search = filters.search.trim()
@@ -62,6 +101,7 @@ type ProspeccionCampaignWizardProps = {
   onClose: () => void
   selectedIds: string[]
   defaultFilters?: ProspectoFiltroInput
+  preset?: ProspeccionWizardPreset | null
   onCompleted?: (result: {
     batchId?: string | null
     total?: number
@@ -75,10 +115,12 @@ export function ProspeccionCampaignWizard({
   onClose,
   selectedIds,
   defaultFilters,
+  preset,
   onCompleted,
 }: ProspeccionCampaignWizardProps) {
   const [step, setStep] = useState(0)
   const [source, setSource] = useState<WizardSource>("selected")
+  const [presetApplied, setPresetApplied] = useState(false)
   const [listas, setListas] = useState<ProspeccionLista[]>([])
   const [listasLoading, setListasLoading] = useState(false)
   const [selectedListaId, setSelectedListaId] = useState<string | null>(null)
@@ -89,16 +131,7 @@ export function ProspeccionCampaignWizard({
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanaId, setCampanaId] = useState<string | null>(null)
   const [titulo, setTitulo] = useState("")
-  const [channelState, setChannelState] = useState<
-    Record<
-      "correo" | "whatsapp" | "llamada",
-      { enabled: boolean; templateSlug?: string; subject?: string; body?: string; message?: string; schedule?: string }
-    >
-  >({
-    correo: { enabled: true, subject: "", body: "" },
-    whatsapp: { enabled: false, body: "" },
-    llamada: { enabled: false, message: "" },
-  })
+  const [channelState, setChannelState] = useState<ChannelState>(() => buildChannelState())
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -111,12 +144,9 @@ export function ProspeccionCampaignWizard({
     setFilters(defaultFilters ?? {})
     setCampanaId(null)
     setTitulo("")
-    setChannelState({
-      correo: { enabled: true, subject: "", body: "" },
-      whatsapp: { enabled: false, body: "" },
-      llamada: { enabled: false, message: "" },
-    })
+    setChannelState(buildChannelState())
     setError(null)
+    setPresetApplied(false)
   }, [defaultFilters])
 
   useEffect(() => {
@@ -136,9 +166,13 @@ export function ProspeccionCampaignWizard({
       .then(([listasResponse, templatesResponse, campanasResponse]) => {
         if (listasResponse?.items) {
           setListas(listasResponse.items)
-          if (!selectedListaId && listasResponse.items.length) {
-            setSelectedListaId(listasResponse.items[0].id)
-          }
+          setSelectedListaId((prev) => {
+            if (prev) return prev
+            if (preset?.listaId) return preset.listaId
+            if (presetApplied) return prev
+            const firstLista = listasResponse.items[0]
+            return firstLista ? firstLista.id : prev
+          })
         }
         if (templatesResponse?.items) {
           setTemplates(templatesResponse.items)
@@ -156,7 +190,34 @@ export function ProspeccionCampaignWizard({
         setTemplatesLoading(false)
         setCampanasLoading(false)
       })
-  }, [open, resetState, selectedListaId])
+  }, [open, preset, presetApplied, resetState])
+
+  useEffect(() => {
+    if (!open || !preset || presetApplied) return
+    if (preset.source) {
+      setSource(preset.source)
+    } else if (preset.listaId) {
+      setSource("lista")
+    } else if (preset.filtros && Object.keys(sanitizeFilters(preset.filtros)).length) {
+      setSource("filters")
+    }
+    if ("listaId" in preset) {
+      setSelectedListaId(preset.listaId ?? null)
+    }
+    if (preset.filtros) {
+      setFilters(preset.filtros)
+    }
+    if ("campanaId" in preset) {
+      setCampanaId(preset.campanaId ?? null)
+    }
+    if ("titulo" in preset) {
+      setTitulo(preset.titulo ?? "")
+    }
+    if (preset.canales) {
+      setChannelState(buildChannelState(preset.canales))
+    }
+    setPresetApplied(true)
+  }, [open, preset, presetApplied])
 
   const handleTemplateSelect = (canal: "correo" | "whatsapp" | "llamada", slug: string) => {
     const template = templates.find((tpl) => tpl.slug === slug)
@@ -619,6 +680,11 @@ export function ProspeccionCampaignWizard({
           <DialogDescription>
             Sigue el flujo Descubre → Enriquecer → Preparar → Lanzar para crear un lote multicanal listo para ejecutar.
           </DialogDescription>
+          {preset?.campanaNombre ? (
+            <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
+              Duplicando campaña {preset.campanaNombre}
+            </div>
+          ) : null}
         </DialogHeader>
 
         <div className="space-y-4">

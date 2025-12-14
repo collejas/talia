@@ -1,8 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconAlertTriangle, IconLoader, IconRefresh } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCopy, IconLoader, IconRefresh, IconX } from "@tabler/icons-react"
 
+import { ProspeccionCampaignWizard, type ProspeccionWizardPreset } from "@/components/prospeccion/prospeccion-campaign-wizard"
+import {
+  ProspeccionContactDrawer,
+  type ProspeccionContactDrawerData,
+} from "@/components/prospeccion/prospeccion-contact-drawer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import {
   getContactoMetrics,
+  getProspeccionCampanaPreset,
   getProspeccionCampanas,
   type ContactoMetrics,
   type ProspeccionCampanaGroup,
@@ -33,6 +39,26 @@ const estadoPalette: Record<string, string> = {
   omitido: "text-slate-500",
 }
 
+type CampanaChannelRaw = {
+  enabled?: boolean
+  templateSlug?: string | null
+  subject?: string | null
+  body?: string | null
+  message?: string | null
+  schedule?: string | null
+}
+
+type CampanaChannelPresetEntry = {
+  enabled?: boolean
+  templateSlug?: string
+  subject?: string
+  body?: string
+  message?: string
+  schedule?: string
+}
+
+type CampanaChannelPreset = Partial<Record<"correo" | "whatsapp" | "llamada", CampanaChannelPresetEntry>>
+
 export function CampanasMetricsClient() {
   const [data, setData] = useState<ContactoMetrics | null>(null)
   const [loading, setLoading] = useState(false)
@@ -40,6 +66,12 @@ export function CampanasMetricsClient() {
   const [campanas, setCampanas] = useState<ProspeccionCampanaGroup[]>([])
   const [campanasLoading, setCampanasLoading] = useState(false)
   const [campanasError, setCampanasError] = useState<string | null>(null)
+  const [duplicateLoading, setDuplicateLoading] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardPreset, setWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
+  const [drawerData, setDrawerData] = useState<ProspeccionContactDrawerData | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null)
 
   const fetchMetrics = useCallback(async () => {
     setLoading(true)
@@ -79,8 +111,94 @@ export function CampanasMetricsClient() {
     void fetchCampanas()
   }, [fetchCampanas])
 
+  const handleDuplicateCampana = useCallback(
+    async (campanaId: string) => {
+      setBanner(null)
+      setDuplicateLoading(campanaId)
+      try {
+        const response = await getProspeccionCampanaPreset(campanaId)
+        const canalesRaw = (response.defaults?.canales ?? {}) as Partial<
+          Record<"correo" | "whatsapp" | "llamada", CampanaChannelRaw>
+        >
+        const canalesPreset: CampanaChannelPreset = {}
+        const programacion = response.defaults?.programacion ?? {}
+        ;(["correo", "whatsapp", "llamada"] as const).forEach((canal) => {
+          const config = canalesRaw[canal]
+          if (!config) return
+          canalesPreset[canal] = {
+            enabled: config.enabled ?? true,
+            templateSlug: config.templateSlug ?? undefined,
+            subject: config.subject ?? undefined,
+            body: config.body ?? undefined,
+            message: config.message ?? undefined,
+            schedule: config.schedule ?? programacion[canal] ?? undefined,
+          }
+        })
+        setWizardPreset({
+          source: response.defaults?.source,
+          listaId: response.defaults?.lista_id ?? null,
+          filtros: response.defaults?.filtros,
+          canales: canalesPreset,
+          titulo: response.defaults?.titulo ?? "",
+          campanaId: response.defaults?.campana_id ?? response.campana?.id ?? null,
+          campanaNombre: response.campana?.nombre ?? undefined,
+        })
+        setWizardOpen(true)
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "No se pudo preparar la duplicación. Verifica que la campaña tenga al menos un lote."
+        setBanner({ type: "error", message })
+      } finally {
+        setDuplicateLoading(null)
+      }
+    },
+    []
+  )
+
+  const handleWizardCompleted = useCallback(
+    (result: {
+      batchId?: string | null
+      contactos?: ProspeccionContactDrawerData["results"]
+      omitidos?: ProspeccionContactDrawerData["omitidos"]
+      total?: number
+    }) => {
+      setBanner({
+        type: "success",
+        message: `Lote programado correctamente${result.total ? ` para ${result.total} prospectos` : ""}.`,
+      })
+      setDrawerData({
+        batchId: result.batchId,
+        results: result.contactos ?? [],
+        omitidos: result.omitidos,
+      })
+      setDrawerOpen(true)
+      void fetchCampanas()
+    },
+    [fetchCampanas]
+  )
+
+  const dismissBanner = useCallback(() => setBanner(null), [])
+
   return (
     <div className="space-y-6">
+      {banner ? (
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-md border px-3 py-2 text-sm",
+            banner.type === "success"
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200"
+              : "border-destructive/40 bg-destructive/10 text-destructive"
+          )}
+        >
+          <span>{banner.message}</span>
+          <Button variant="ghost" size="icon" className="size-6" onClick={dismissBanner}>
+            <IconX className="size-4" />
+          </Button>
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -168,6 +286,19 @@ export function CampanasMetricsClient() {
                     </Badge>
                   ))}
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!group.campana_id || duplicateLoading === group.campana_id}
+                  onClick={() => group.campana_id && void handleDuplicateCampana(group.campana_id)}
+                >
+                  {duplicateLoading === group.campana_id ? (
+                    <IconLoader className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <IconCopy className="mr-2 size-4" />
+                  )}
+                  Duplicar
+                </Button>
               </div>
               <div className="mt-4 space-y-3">
                 {group.batches.map((batch) => (
@@ -205,6 +336,16 @@ export function CampanasMetricsClient() {
           ) : null}
         </CardContent>
       </Card>
+
+      <ProspeccionCampaignWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        selectedIds={[]}
+        preset={wizardPreset}
+        onCompleted={handleWizardCompleted}
+      />
+
+      <ProspeccionContactDrawer open={drawerOpen} onOpenChange={setDrawerOpen} data={drawerData} />
     </div>
   )
 }

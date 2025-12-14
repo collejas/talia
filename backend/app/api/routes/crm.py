@@ -6846,6 +6846,75 @@ async def prospeccion_campanas_dashboard(
     return {"ok": True, "items": list(grouped.values())}
 
 
+@router.get("/prospeccion/campanas/{campana_id}/duplicar")
+async def prospeccion_campana_duplicar_defaults(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    campana_id: UUID,
+) -> dict[str, Any]:
+    """Obtiene el preset del lote más reciente para duplicar una campaña."""
+
+    campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
+    if not campana:
+        raise HTTPException(status_code=404, detail="campana_not_found")
+
+    batches, _ = await repo.list_contact_batches(
+        usuario_token=user_token,
+        limit=1,
+        offset=0,
+        campana_id=campana_id,
+        order="creado_en.desc",
+    )
+    if not batches:
+        raise HTTPException(status_code=404, detail="campana_without_batches")
+    base_batch = batches[0]
+    metadata = _ensure_dict(base_batch.get("metadata"), default={})
+    canales_config = _ensure_dict(metadata.get("canales_config"), default={})
+    programacion = _ensure_dict(base_batch.get("programacion"), default={})
+    filtros = base_batch.get("filtros") if isinstance(base_batch.get("filtros"), dict) else {}
+    lista_id = base_batch.get("lista_id")
+    source: Literal["selected", "lista", "filters"] = "selected"
+    if lista_id:
+        source = "lista"
+    elif filtros:
+        source = "filters"
+
+    canales_defaults: dict[str, Any] = {}
+    for canal, config in canales_config.items():
+        if not isinstance(config, dict):
+            continue
+        canales_defaults[canal] = {
+            "templateSlug": config.get("template_slug"),
+            "subject": config.get("subject"),
+            "body": config.get("body"),
+            "message": config.get("message"),
+            "schedule": programacion.get(canal),
+            "enabled": True,
+        }
+
+    defaults = {
+        "campana_id": str(campana_id),
+        "campana_nombre": campana.get("nombre"),
+        "titulo": base_batch.get("titulo"),
+        "source": source,
+        "lista_id": str(lista_id) if lista_id else None,
+        "filtros": filtros or {},
+        "canales": canales_defaults,
+        "programacion": programacion or {},
+    }
+    return {
+        "ok": True,
+        "campana": {
+            "id": str(campana_id),
+            "nombre": campana.get("nombre"),
+            "descripcion": campana.get("descripcion"),
+        },
+        "defaults": defaults,
+    }
+
+
 @router.get("/prospeccion/prospectos/{prospecto_id}/contactos")
 async def listar_contactos_por_prospecto(
     *,

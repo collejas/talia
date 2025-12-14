@@ -898,6 +898,26 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear campaña: {row!r}")
         return row
 
+    async def get_campaign(
+        self,
+        *,
+        organizacion_id: UUID,
+        campana_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{campana_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/campanas", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"campaign_get_invalid:{row!r}")
+        return row
+
     async def list_leads(
         self,
         *,
@@ -3858,6 +3878,7 @@ class CRMRepository:
         limit: int = 50,
         offset: int = 0,
         estado: str | None = None,
+        campana_id: UUID | None = None,
         order: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Obtiene lotes de contacto con filtros básicos."""
@@ -3870,6 +3891,8 @@ class CRMRepository:
         }
         if estado:
             params["estado"] = f"eq.{estado}"
+        if campana_id:
+            params["campana_id"] = f"eq.{campana_id}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_contacto_batch",

@@ -36,7 +36,7 @@ type ProspeccionContactDrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: ProspeccionContactDrawerData | null;
-  onPromote: (result: ProspeccionContactResult) => void;
+  onPromote?: (result: ProspeccionContactResult) => void;
 };
 
 export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }: ProspeccionContactDrawerProps) {
@@ -169,7 +169,7 @@ export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }
                 loading={timelineLoading[selectedResult.prospecto_id]}
                 error={timelineError[selectedResult.prospecto_id]}
                 onReload={() => loadTimeline(selectedResult.prospecto_id)}
-                onPromote={() => onPromote(selectedResult)}
+                onPromote={onPromote ? () => onPromote(selectedResult) : undefined}
               />
             )}
           </div>
@@ -190,7 +190,7 @@ type ProspectTimelinePanelProps = {
   loading?: boolean;
   error?: string | null;
   onReload: () => void;
-  onPromote: () => void;
+  onPromote?: () => void;
 };
 
 function ProspectTimelinePanel({ result, timeline, loading, error, onReload, onPromote }: ProspectTimelinePanelProps) {
@@ -201,10 +201,12 @@ function ProspectTimelinePanel({ result, timeline, loading, error, onReload, onP
           <p className="text-base font-semibold">{result.display_name || "Prospecto"}</p>
           <p className="text-xs text-muted-foreground">{result.email || result.telefono || "Sin datos de contacto"}</p>
         </div>
-        <Button size="sm" onClick={onPromote}>
-          <IconUserPlus className="mr-2 size-4" />
-          Promover a CRM
-        </Button>
+        {onPromote ? (
+          <Button size="sm" onClick={onPromote}>
+            <IconUserPlus className="mr-2 size-4" />
+            Promover a CRM
+          </Button>
+        ) : null}
       </div>
       <div className="space-y-1 text-xs text-muted-foreground">
         {result.segmento ? <p>Segmento: {result.segmento}</p> : null}

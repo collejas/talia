@@ -79,6 +79,34 @@ export type ProspeccionCampanaGroup = {
   batches: ProspeccionCampanaBatch[]
 }
 
+export type ProspeccionCampanaDuplicateDefaults = {
+  campana: {
+    id: string
+    nombre?: string | null
+    descripcion?: string | null
+  }
+  defaults: {
+    campana_id?: string | null
+    campana_nombre?: string | null
+    titulo?: string | null
+    source?: "selected" | "lista" | "filters"
+    lista_id?: string | null
+    filtros?: ProspectoFiltroInput
+    canales?: Record<
+      "correo" | "whatsapp" | "llamada",
+      {
+        enabled?: boolean
+        templateSlug?: string | null
+        subject?: string | null
+        body?: string | null
+        message?: string | null
+        schedule?: string | null
+      }
+    >
+    programacion?: Record<string, string>
+  }
+}
+
 export type ProspectosResponse = {
   ok: boolean
   items: ProspectoItem[]
@@ -445,6 +473,12 @@ export async function getProspeccionCampanas(limit?: number) {
   const url = buildClientUrl("/api/prospeccion/campanas")
   if (typeof limit === "number") url.searchParams.set("limit", String(limit))
   return requestJson<{ ok: boolean; items: ProspeccionCampanaGroup[] }>(url.toString())
+}
+
+export async function getProspeccionCampanaPreset(campanaId: string) {
+  return requestJson<{ ok: boolean } & ProspeccionCampanaDuplicateDefaults>(
+    `/api/prospeccion/campanas/${campanaId}/duplicar`
+  )
 }
 
 export type ConvertirProspectoPayload = {

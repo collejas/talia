@@ -183,6 +183,12 @@ TALIA_MAIL_OUTGOING_PORT_SMTP=465
 TALIA_MAIL_USE_SSL=true
 TALIA_MAIL_USE_TLS=false
 
+## =========================
+## Brevo
+## =========================
+BREVO_API_KEY=xxxxxx
+BREVO_BASE_URL=https://api.brevo.com/v3
+
 
 # VARIABLES EN: .env.local
 

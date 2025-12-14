@@ -35,7 +35,7 @@
   2. Selección de canales + plantillas (`prospeccion_contacto_templates`).  
   3. Programación (usar `programado_en` por canal).  
   4. Confirmación y creación de lote (`prospeccion_contacto_batch` + `prospeccion_contacto_envio`).
-- [ ] Añadir drawer post-confirmación con historial de cada prospecto y CTA “Promover a CRM”.
+- [x] Añadir drawer post-confirmación con historial de cada prospecto y CTA “Promover a CRM”.
 - [ ] Integrar Brevo para correo:  
   - [ ] Modo SMTP (configurar `SMTP_*`).  
   - [ ] Modo API (adapter send_email + guardar `messageId`).  
@@ -53,7 +53,7 @@
 - [ ] `/prospeccion/campanas`:  
   - [x] Mostrar secuencias (correo día 1, WhatsApp día 3…).  
   - [x] KPI por canal (entregados, fallidos, reintentos) usando `/api/prospeccion/contacto/metrics`.  
-  - [ ] Botón “Duplicar campaña” que clone filtros/plantillas.
+  - [x] Botón “Duplicar campaña” que clone filtros/plantillas.
 - [ ] Exponer timeline completo (logs, estados Twilio, Brevo SID) desde `prospeccion_contactos_log`.
 - [ ] Documentar runbook en `docs/plan_envios_prospeccion.md` (pausar lote, reintentar, monitoreo).
 
@@ -67,7 +67,7 @@
    - [x] Crear etapa inicial del pipeline (“Prospección · Primer contacto”) para leads provenientes de campañas /prospección (seed automático por tenant vía `ensure_prospeccion_stage`).
    - [x] Al convertir un prospecto, crear la oportunidad en esa etapa y poblar `metadata.source` con `Prospección – {fuente_busqueda}` (Google/DENUE/Búsqueda web).
    - [x] Registrar en `public.contactos` el canal usado en la campaña (correo/WhatsApp/voz) y bloquear recontacto automático (se guarda en `contacto_datos.prospeccion_canal` y el backend omite prospectos convertidos al programar nuevos envíos).
-5. [ ] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(agrupador listo; falta duplicar campañas)_.
+5. [x] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(botón Duplicar abre el wizard con presets del último lote y reutiliza el drawer de resultados)_.
 6. [ ] **Indicadores de progreso** por etapa (basados en `metadata.stage`).
 7. [ ] **Brevo**: definir método elegido, ajustar `send_email`, registrar estados y actualizar documentación.
 
