@@ -343,6 +343,16 @@ class Settings(BaseSettings):
             "TALIA_MAIL_FROM_NAME",
         ),
     )
+    brevo_api_key: str | None = Field(
+        default=None,
+        description="API Key de Brevo para envíos SMTP/API.",
+        validation_alias=AliasChoices("BREVO_API_KEY", "TALIA_BREVO_API_KEY"),
+    )
+    brevo_base_url: str = Field(
+        default="https://api.brevo.com/v3",
+        description="Endpoint base de la API de Brevo.",
+        validation_alias=AliasChoices("BREVO_BASE_URL", "TALIA_BREVO_BASE_URL"),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 

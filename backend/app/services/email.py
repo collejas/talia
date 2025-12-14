@@ -1,12 +1,15 @@
-"""Utilidades para enviar correos electrónicos mediante SMTP."""
+"""Utilidades para enviar correos electrónicos mediante SMTP o Brevo API."""
 
 from __future__ import annotations
 
+import base64
 import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from typing import Iterable, Sequence
+
+import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -38,11 +41,58 @@ def send_email(
     body_html: str | None = None,
     attachments: Sequence[dict[str, object]] | None = None,
 ) -> str:
-    """Envía un correo usando la configuración SMTP declarada en settings.
+    """Envía un correo y devuelve el Message-ID utilizado."""
 
-    Devuelve el Message-ID generado. Lanza EmailSendError si el envío falla.
-    """
+    to_recipients = _normalize_recipients(recipients)
+    if not to_recipients:
+        raise EmailSendError("No se proporcionaron destinatarios válidos.")
 
+    message_id = make_msgid()
+    if settings.brevo_api_key:
+        result = _send_email_brevo(
+            message_id=message_id,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            recipients=to_recipients,
+            attachments=attachments or (),
+        )
+    else:
+        result = _send_email_smtp(
+            message_id=message_id,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            recipients=to_recipients,
+            attachments=attachments or (),
+        )
+
+    logger.info(
+        "email.sent",
+        extra={
+            "subject": subject,
+            "recipients": to_recipients,
+        },
+    )
+    return result
+
+
+def _prepare_attachment_content(attachment: dict[str, object]) -> bytes:
+    content = attachment.get("content")
+    if isinstance(content, (bytes, bytearray)):
+        return bytes(content)
+    raise EmailSendError("Los adjuntos deben proporcionarse como bytes.")
+
+
+def _send_email_smtp(
+    *,
+    message_id: str,
+    subject: str,
+    body_text: str,
+    body_html: str | None,
+    recipients: Sequence[str],
+    attachments: Sequence[dict[str, object]],
+) -> str:
     smtp_host = (settings.mail_outgoing_server or "").strip()
     smtp_port = settings.mail_outgoing_port_smtp or 587
     username = (settings.mail_username or "").strip()
@@ -51,10 +101,6 @@ def send_email(
     if not smtp_host or not username or not password:
         raise EmailSendError("Configuración SMTP incompleta (host/usuario/contraseña).")
 
-    to_recipients = _normalize_recipients(recipients)
-    if not to_recipients:
-        raise EmailSendError("No se proporcionaron destinatarios válidos.")
-
     message = EmailMessage()
     message["Subject"] = subject
     display_name = (settings.mail_from_name or "").strip()
@@ -62,17 +108,14 @@ def send_email(
         message["From"] = formataddr((display_name, username))
     else:
         message["From"] = username
-    message["To"] = ", ".join(to_recipients)
-    msg_id = make_msgid()
-    message["Message-ID"] = msg_id
+    message["To"] = ", ".join(recipients)
+    message["Message-ID"] = message_id
     message.set_content(body_text)
     if body_html:
         message.add_alternative(body_html, subtype="html")
 
     for attachment in attachments or ():
-        content = attachment.get("content")
-        if not isinstance(content, (bytes, bytearray)):
-            raise EmailSendError("Los adjuntos deben proporcionarse como bytes.")
+        content = _prepare_attachment_content(attachment)
         maintype = str(attachment.get("maintype") or "application")
         subtype = str(attachment.get("subtype") or "octet-stream")
         filename = attachment.get("filename")
@@ -109,14 +152,83 @@ def send_email(
         logger.error("email.send_failed", extra={"error": str(exc)})
         raise EmailSendError(str(exc)) from exc
 
-    logger.info(
-        "email.sent",
-        extra={
-            "subject": subject,
-            "recipients": to_recipients,
-        },
-    )
-    return msg_id.strip("<>")
+    return message_id.strip("<>")
+
+
+def _send_email_brevo(
+    *,
+    message_id: str,
+    subject: str,
+    body_text: str,
+    body_html: str | None,
+    recipients: Sequence[str],
+    attachments: Sequence[dict[str, object]],
+) -> str:
+    api_key = (settings.brevo_api_key or "").strip()
+    base_url = (settings.brevo_base_url or "https://api.brevo.com/v3").strip().rstrip("/")
+    sender_email = (settings.mail_username or "").strip()
+    if not api_key:
+        raise EmailSendError("Configuración Brevo incompleta: falta API Key.")
+    if not sender_email:
+        raise EmailSendError("Configuración Brevo incompleta: falta MAIL_USERNAME como remitente.")
+
+    sender_name = (settings.mail_from_name or "").strip() or sender_email
+    endpoint = f"{base_url}/smtp/email"
+    payload: dict[str, object] = {
+        "sender": {"email": sender_email, "name": sender_name},
+        "to": [{"email": email} for email in recipients],
+        "subject": subject,
+        "textContent": body_text or "",
+        "headers": {"Message-ID": message_id},
+    }
+    if body_html:
+        payload["htmlContent"] = body_html
+
+    attachments_payload = []
+    for attachment in attachments:
+        content = _prepare_attachment_content(attachment)
+        filename = str(attachment.get("filename") or "adjunto")
+        attachments_payload.append(
+            {
+                "name": filename,
+                "content": base64.b64encode(content).decode("ascii"),
+            }
+        )
+    if attachments_payload:
+        payload["attachment"] = attachments_payload
+
+    headers = {
+        "api-key": api_key,
+        "accept": "application/json",
+        "content-type": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(endpoint, json=payload, headers=headers)
+    except httpx.RequestError as exc:  # pragma: no cover - depende de red
+        logger.error("email.brevo_request_error", extra={"error": str(exc)})
+        raise EmailSendError("No se pudo contactar Brevo.") from exc
+
+    if response.status_code >= 400:
+        detail = response.text[:200]
+        logger.error(
+            "email.brevo_response_error",
+            extra={"status": response.status_code, "detail": detail},
+        )
+        raise EmailSendError(f"Brevo respondió {response.status_code}")
+
+    message_id_value: str | None = None
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+
+    message_id_value = data.get("messageId") or data.get("messageIds")
+    if isinstance(message_id_value, list) and message_id_value:
+        message_id_value = message_id_value[0]
+    if not message_id_value:
+        message_id_value = response.headers.get("message-id") or message_id
+    return str(message_id_value).strip("<>")
 
 
 __all__ = ["EmailSendError", "send_email"]
