@@ -4584,6 +4584,46 @@ class CRMRepository:
             raise CRMRepositoryError(f"buscador_resultados_by_ids_invalid:{data!r}")
         return data
 
+    async def list_buscador_prospecto_result_ids(
+        self,
+        *,
+        usuario_token: str,
+        job_id: UUID,
+        chunk_size: int = 1000,
+    ) -> set[str]:
+        chunk_value = max(1, min(chunk_size, 2000))
+        existing: set[str] = set()
+        offset = 0
+        while True:
+            params: dict[str, str] = {
+                "metadata->>buscador_job_id": f"eq.{job_id}",
+                "select": "metadata",
+                "limit": str(chunk_value),
+            }
+            if offset:
+                params["offset"] = str(offset)
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_prospectos",
+                token=usuario_token,
+                params=params,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"buscador_prospectos_list_invalid:{data!r}")
+            if not data:
+                break
+            for row in data:
+                metadata = row.get("metadata")
+                if isinstance(metadata, dict):
+                    value = metadata.get("buscador_result_id")
+                    if isinstance(value, str) and value:
+                        existing.add(value)
+            if len(data) < chunk_value:
+                break
+            offset += len(data)
+        return existing
+
     async def worker_update_buscador_job(
         self,
         *,

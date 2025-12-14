@@ -9444,6 +9444,13 @@ async def prospeccion_buscador_guardar_prospectos(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
         raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+    try:
+        existing_result_ids = await repo.list_buscador_prospecto_result_ids(
+            usuario_token=user_token,
+            job_id=job_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     requested_total = len(result_id_list)
     if save_all:
         requested_total = int(job_row.get("total") or 0) or requested_total
@@ -9454,11 +9461,12 @@ async def prospeccion_buscador_guardar_prospectos(
             "segmento": payload.segmento,
             "result_ids_count": requested_total,
             "save_all": save_all,
+            "existing_result_ids": len(existing_result_ids),
         },
     )
 
     rows: list[dict[str, Any]] = []
-    fetched_ids: set[str] = set()
+    fetched_ids: set[str] = set(existing_result_ids)
     if save_all:
         offset = 0
         while True:
@@ -9506,11 +9514,15 @@ async def prospeccion_buscador_guardar_prospectos(
                 fetched_ids.add(row_id_str)
                 rows.append(row)
     if not rows:
-        logger.warning(
-            "buscador.prospectos.results_not_found",
-            extra={"job_id": str(job_id), "result_ids_count": requested_total},
+        logger.info(
+            "buscador.prospectos.no_new_rows",
+            extra={
+                "job_id": str(job_id),
+                "result_ids_count": requested_total,
+                "save_all": save_all,
+            },
         )
-        raise HTTPException(status_code=404, detail="buscador_results_not_found")
+        return {"ok": True, "prospectos": [], "total": 0}
 
     segmento_value = (payload.segmento or "").strip() or None
     prospectos: list[dict[str, Any]] = []
@@ -9524,11 +9536,11 @@ async def prospeccion_buscador_guardar_prospectos(
             prospectos.append(prospecto_payload)
 
     if not prospectos:
-        logger.warning(
-            "buscador.prospectos.invalid_payload",
+        logger.info(
+            "buscador.prospectos.no_payload_after_filter",
             extra={"job_id": str(job_id), "rows_considered": len(rows)},
         )
-        raise HTTPException(status_code=400, detail="prospectos_invalidos")
+        return {"ok": True, "prospectos": [], "total": 0}
 
     try:
         created = await repo.bulk_insert_prospectos(usuario_token=user_token, items=prospectos)
