@@ -633,13 +633,15 @@ class GooglePlacesClient:
     ) -> list[tuple[float, float]]:
         if tile_radius_m <= 0 or grid_size <= 1:
             return []
-        step = max(150, int(tile_radius_m * 0.9))
+        step = max(200, min(tile_radius_m, int(radius_m / max(1, grid_size - 1)) or tile_radius_m))
         centers: list[tuple[float, float]] = []
-        half_span = radius_m
-        for dx in range(-half_span, half_span + 1, step):
-            for dy in range(-half_span, half_span + 1, step):
-                if dx == 0 and dy == 0:
+        offset_range = range(-(grid_size // 2), grid_size // 2 + 1)
+        for ix in offset_range:
+            for iy in offset_range:
+                if ix == 0 and iy == 0:
                     continue
+                dx = ix * step
+                dy = iy * step
                 if dx * dx + dy * dy > radius_m * radius_m:
                     continue
                 lat_new, lng_new = _offset_coordinates(latitude, longitude, dx, dy)
