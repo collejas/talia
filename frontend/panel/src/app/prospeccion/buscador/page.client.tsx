@@ -956,7 +956,7 @@ function BuscadorView() {
                     >
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5">
-                        <p className="font-medium truncate">{originLabel}</p>
+                        <p className="font-medium break-words line-clamp-2">{originLabel}</p>
                         <p className="text-xs text-muted-foreground">{formatDateTime(job.created_at)}</p>
                       </div>
                       <Badge className={cn("capitalize", STATUS_VARIANTS[job.status])}>
