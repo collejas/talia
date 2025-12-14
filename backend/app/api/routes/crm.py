@@ -9298,8 +9298,9 @@ class BuscadorJobsListResponse(BaseModel):
 
 
 class GuardarBuscadorProspectosPayload(BaseModel):
-    result_ids: list[UUID]
+    result_ids: list[UUID] | None = None
     segmento: str | None = None
+    save_all: bool = False
 
 
 @router.post(
@@ -9384,6 +9385,8 @@ async def prospeccion_buscador_job_results(
     job_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
+    limit: Annotated[int, Query(gt=0, le=2000)] = 1000,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> JSONResponse:
     try:
         job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
@@ -9399,14 +9402,20 @@ async def prospeccion_buscador_job_results(
             status_code=status.HTTP_409_CONFLICT,
             detail="El job aún no ha finalizado",
         )
+    effective_limit = min(limit, 2000)
     try:
-        rows = await repo.list_buscador_resultados(usuario_token=user_token, job_id=job_id)
+        rows = await repo.list_buscador_resultados(
+            usuario_token=user_token, job_id=job_id, limit=effective_limit, offset=offset
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     stats_value = job_row.get("stats")
     stats = BuscadorStats(**stats_value).model_dump(mode="json") if isinstance(stats_value, dict) else None
     items = [_buscador_result_row_to_item(row).model_dump(mode="json") for row in rows]
-    total = job_row.get("total") or len(items)
+    total_value = job_row.get("total")
+    if not total_value and isinstance(stats_value, dict):
+        total_value = stats_value.get("emails_total")
+    total = total_value or len(items)
     return JSONResponse(
         {
             "items": items,
@@ -9423,7 +9432,11 @@ async def prospeccion_buscador_guardar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
-    if not payload.result_ids:
+    BATCH_SIZE = 200
+    FETCH_ALL_LIMIT = 1000
+    save_all = payload.save_all
+    result_id_list = list(payload.result_ids or [])
+    if not save_all and not result_id_list:
         raise HTTPException(status_code=400, detail="result_ids_required")
     try:
         job_row = await repo.get_buscador_job(job_id=job_id, usuario_token=user_token)
@@ -9431,35 +9444,106 @@ async def prospeccion_buscador_guardar_prospectos(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not job_row:
         raise HTTPException(status_code=404, detail="Buscador job no encontrado")
+    requested_total = len(result_id_list)
+    if save_all:
+        requested_total = int(job_row.get("total") or 0) or requested_total
+    logger.info(
+        "buscador.prospectos.save_start",
+        extra={
+            "job_id": str(job_id),
+            "segmento": payload.segmento,
+            "result_ids_count": requested_total,
+            "save_all": save_all,
+        },
+    )
 
-    try:
-        rows = await repo.list_buscador_resultados_by_ids(
-            usuario_token=user_token,
-            job_id=job_id,
-            result_ids=payload.result_ids,
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    rows: list[dict[str, Any]] = []
+    fetched_ids: set[str] = set()
+    if save_all:
+        offset = 0
+        while True:
+            try:
+                chunk_rows = await repo.list_buscador_resultados(
+                    usuario_token=user_token,
+                    job_id=job_id,
+                    limit=FETCH_ALL_LIMIT,
+                    offset=offset,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+            if not chunk_rows:
+                break
+            for row in chunk_rows:
+                row_id = row.get("id")
+                if not row_id:
+                    continue
+                row_id_str = str(row_id)
+                if row_id_str in fetched_ids:
+                    continue
+                fetched_ids.add(row_id_str)
+                rows.append(row)
+            offset += len(chunk_rows)
+            if len(chunk_rows) < FETCH_ALL_LIMIT:
+                break
+    else:
+        for start in range(0, len(result_id_list), BATCH_SIZE):
+            chunk_ids = result_id_list[start : start + BATCH_SIZE]
+            try:
+                chunk_rows = await repo.list_buscador_resultados_by_ids(
+                    usuario_token=user_token,
+                    job_id=job_id,
+                    result_ids=chunk_ids,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+            for row in chunk_rows:
+                row_id = row.get("id")
+                if not row_id:
+                    continue
+                row_id_str = str(row_id)
+                if row_id_str in fetched_ids:
+                    continue
+                fetched_ids.add(row_id_str)
+                rows.append(row)
     if not rows:
+        logger.warning(
+            "buscador.prospectos.results_not_found",
+            extra={"job_id": str(job_id), "result_ids_count": requested_total},
+        )
         raise HTTPException(status_code=404, detail="buscador_results_not_found")
 
+    segmento_value = (payload.segmento or "").strip() or None
     prospectos: list[dict[str, Any]] = []
     for row in rows:
         prospecto_payload = _buscador_result_to_prospecto(
             row=row,
             job_id=job_id,
-            segmento=payload.segmento,
+            segmento=segmento_value,
         )
         if prospecto_payload:
             prospectos.append(prospecto_payload)
 
     if not prospectos:
+        logger.warning(
+            "buscador.prospectos.invalid_payload",
+            extra={"job_id": str(job_id), "rows_considered": len(rows)},
+        )
         raise HTTPException(status_code=400, detail="prospectos_invalidos")
 
     try:
         created = await repo.bulk_insert_prospectos(usuario_token=user_token, items=prospectos)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    logger.info(
+        "buscador.prospectos.save_completed",
+        extra={
+            "job_id": str(job_id),
+            "result_ids_count": requested_total,
+            "rows_considered": len(rows),
+            "save_all": save_all,
+            "prospectos_created": len(created),
+        },
+    )
 
     return {"ok": True, "prospectos": created, "total": len(created)}
 

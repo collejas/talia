@@ -165,8 +165,18 @@ export async function obtenerBuscadorJob(jobId: string): Promise<BuscadorJob> {
   return requestJson<BuscadorJob>(`/api/prospeccion/buscador/jobs/${jobId}`)
 }
 
-export async function obtenerBuscadorResultados(jobId: string): Promise<BuscadorJobResults> {
-  return requestJson<BuscadorJobResults>(`/api/prospeccion/buscador/jobs/${jobId}/results`)
+export async function obtenerBuscadorResultados(
+  jobId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<BuscadorJobResults> {
+  const url = buildClientUrl(`/api/prospeccion/buscador/jobs/${jobId}/results`)
+  if (typeof params?.limit === "number") {
+    url.searchParams.set("limit", String(params.limit))
+  }
+  if (typeof params?.offset === "number") {
+    url.searchParams.set("offset", String(params.offset))
+  }
+  return requestJson<BuscadorJobResults>(url.toString())
 }
 
 export async function listarBuscadorJobs(limit = 20): Promise<BuscadorJob[]> {
@@ -186,10 +196,20 @@ function buildClientUrl(path: string): URL {
 
 export async function guardarBuscadorProspectos(
   jobId: string,
-  params: { result_ids: string[]; segmento?: string | null },
+  params: { result_ids?: string[]; segmento?: string | null; save_all?: boolean },
 ): Promise<{ ok: boolean; total: number }> {
+  const body: Record<string, unknown> = {}
+  if (params.result_ids?.length) {
+    body.result_ids = params.result_ids
+  }
+  if (params.segmento) {
+    body.segmento = params.segmento
+  }
+  if (params.save_all) {
+    body.save_all = true
+  }
   return requestJson<{ ok: boolean; total: number }>(`/api/prospeccion/buscador/jobs/${jobId}/prospectos`, {
     method: "POST",
-    body: JSON.stringify(params),
+    body: JSON.stringify(body),
   })
 }

@@ -4534,12 +4534,19 @@ class CRMRepository:
         *,
         usuario_token: str,
         job_id: UUID,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[dict[str, Any]]:
+        limit_value = limit if isinstance(limit, int) else 2000
+        limit_value = max(1, min(limit_value, 2000))
+        offset_value = max(offset or 0, 0)
         params = {
             "job_id": f"eq.{job_id}",
             "order": "creado_en.asc",
-            "limit": "2000",
+            "limit": str(limit_value),
         }
+        if offset_value:
+            params["offset"] = str(offset_value)
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_buscador_resultados",

@@ -41,6 +41,7 @@ import {
   obtenerBuscadorResultados,
   listarBuscadorJobs,
   type BuscadorJob,
+  type BuscadorJobResults,
   type BuscadorJobStatus,
   type BuscadorResult,
   type BuscadorRunPayload,
@@ -73,6 +74,9 @@ const DEFAULT_FORM_STATE: FormState = {
   maxMemoryMb: "",
 }
 
+const DEFAULT_RESULTS_LIMIT = 1000
+const RESULTS_PAGE_SIZES = [200, 500, 1000] as const
+
 const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
   pending: "Pendiente",
   running: "En progreso",
@@ -99,6 +103,10 @@ function BuscadorView() {
   const [formValues, setFormValues] = useState<FormState>(DEFAULT_FORM_STATE)
   const [isRunning, setIsRunning] = useState(false)
   const [results, setResults] = useState<BuscadorResult[]>([])
+  const [resultsTotal, setResultsTotal] = useState(0)
+  const [resultsLimit, setResultsLimit] = useState(DEFAULT_RESULTS_LIMIT)
+  const [resultsOffset, setResultsOffset] = useState(0)
+  const [resultsLoading, setResultsLoading] = useState(false)
   const [stats, setStats] = useState<BuscadorStats | null>(null)
   const [durationMs, setDurationMs] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -114,6 +122,11 @@ function BuscadorView() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   const canDownload = results.length > 0
+  const totalResultsCount = resultsTotal || jobInfo?.total || 0
+  const pageStart = results.length ? resultsOffset + 1 : 0
+  const pageEnd = resultsOffset + results.length
+  const hasPreviousPage = resultsOffset > 0
+  const hasNextPage = totalResultsCount ? pageEnd < totalResultsCount : results.length === resultsLimit
 
   const domainSummary = useMemo<SummaryEntry[] | null>(() => {
     if (!stats?.top_email_domains?.length) return null
@@ -172,14 +185,18 @@ function BuscadorView() {
   }
 
   const applyJobResults = useCallback(
-    (job: BuscadorJob, data: { items: BuscadorResult[]; stats?: BuscadorStats | null }, options?: ApplyJobResultsOptions) => {
+    (job: BuscadorJob, data: BuscadorJobResults, options?: ApplyJobResultsOptions) => {
       const resetSelection = options?.resetSelection ?? true
+      setSelectedJobId(job.id)
       setResults(data.items)
       setStats(data.stats ?? job.stats ?? null)
       setDurationMs(job.duration_ms ?? null)
+      setResultsTotal(data.total ?? job.total ?? data.items.length)
       if (resetSelection) {
-        setSelectedJobId(job.id)
-        setSelectedIds(new Set())
+        const ids = data.items
+          .map((result) => result.id?.trim())
+          .filter((value): value is string => Boolean(value))
+        setSelectedIds(new Set(ids))
       }
       if (options?.markAsFinal) {
         setLastResultsJobId(job.id)
@@ -189,9 +206,30 @@ function BuscadorView() {
   )
 
   const loadJobResults = useCallback(
-    async (job: BuscadorJob, options?: { notify?: boolean; resetSelection?: boolean; markAsFinal?: boolean }) => {
+    async (
+      job: BuscadorJob,
+      options?: {
+        notify?: boolean
+        resetSelection?: boolean
+        markAsFinal?: boolean
+        offset?: number
+        limit?: number
+      },
+    ) => {
+      const desiredLimit = options?.limit ?? resultsLimit
+      const safeLimit = Math.max(1, desiredLimit)
+      const desiredOffset = options?.offset ?? resultsOffset
+      const safeOffset = Math.max(0, desiredOffset)
+      setResultsLoading(true)
       try {
-        const data = await obtenerBuscadorResultados(job.id)
+        const data = await obtenerBuscadorResultados(job.id, {
+          limit: safeLimit,
+          offset: safeOffset,
+        })
+        setResultsOffset(safeOffset)
+        if (safeLimit !== resultsLimit) {
+          setResultsLimit(safeLimit)
+        }
         applyJobResults(job, data, {
           resetSelection: options?.resetSelection ?? true,
           markAsFinal: options?.markAsFinal ?? job.status === "completed",
@@ -204,9 +242,11 @@ function BuscadorView() {
           error instanceof Error ? error.message : "No se pudo obtener los resultados del buscador."
         setErrorMessage(message)
         toast.error(message)
+      } finally {
+        setResultsLoading(false)
       }
     },
-    [applyJobResults],
+    [applyJobResults, resultsLimit, resultsOffset],
   )
 
   const buildPayload = (): BuscadorRunPayload => {
@@ -234,6 +274,9 @@ function BuscadorView() {
     setIsRunning(true)
     setErrorMessage(null)
     setResults([])
+    setResultsTotal(0)
+    setResultsOffset(0)
+    setSelectedIds(new Set())
     setStats(null)
     setDurationMs(null)
 
@@ -270,7 +313,7 @@ function BuscadorView() {
       if (lastResultsJobId === jobInfo.id) {
         return
       }
-      void loadJobResults(jobInfo)
+      void loadJobResults(jobInfo, { offset: 0 })
       void loadJobs()
       return
     }
@@ -310,6 +353,9 @@ function BuscadorView() {
   const handleReset = () => {
     setFormValues(DEFAULT_FORM_STATE)
     setResults([])
+    setResultsTotal(0)
+    setResultsLimit(DEFAULT_RESULTS_LIMIT)
+    setResultsOffset(0)
     setStats(null)
     setDurationMs(null)
     setErrorMessage(null)
@@ -318,6 +364,7 @@ function BuscadorView() {
     setSelectedIds(new Set())
     setSegmento("")
     setSelectedJobId(null)
+    setResultsLoading(false)
   }
 
   const handleSelectJob = useCallback(
@@ -325,28 +372,21 @@ function BuscadorView() {
       setJobInfo(job)
       setSelectedJobId(job.id)
       setErrorMessage(null)
+      setResultsOffset(0)
       if (job.status !== "completed") {
         setResults([])
+        setResultsTotal(job.total ?? 0)
         setStats(job.stats ?? null)
         setDurationMs(job.duration_ms ?? null)
+        setSelectedIds(new Set())
+        setResultsLoading(false)
         toast.message("Esta búsqueda aún no termina. Vuelve a intentarlo más tarde.")
         return
       }
-      void loadJobResults(job)
+      void loadJobResults(job, { offset: 0 })
     },
     [loadJobResults],
   )
-
-  useEffect(() => {
-    if (!results.length) {
-      setSelectedIds(new Set())
-      return
-    }
-    const ids = results
-      .map((result) => result.id?.trim())
-      .filter((value): value is string => Boolean(value))
-    setSelectedIds(new Set(ids))
-  }, [results])
 
   const toggleSelectAll = (checked: boolean | "indeterminate") => {
     if (!results.length) return
@@ -375,6 +415,7 @@ function BuscadorView() {
 
   const handleSaveProspectos = async () => {
     if (!jobInfo) return
+    const segmentoValue = segmento.trim() || undefined
     const ids = (selectedIds.size ? Array.from(selectedIds) : [])
       .map((value) => value.trim())
       .filter((value) => value.length > 0)
@@ -386,7 +427,7 @@ function BuscadorView() {
     try {
       const response = await guardarBuscadorProspectos(jobInfo.id, {
         result_ids: ids,
-        segmento: segmento.trim() || undefined,
+        segmento: segmentoValue,
       })
       toast.success(`Se guardaron ${response.total} prospectos.`)
     } catch (error) {
@@ -396,6 +437,56 @@ function BuscadorView() {
     } finally {
       setSavingProspectos(false)
     }
+  }
+
+  const handleSaveAllProspectos = async () => {
+    if (!jobInfo) return
+    const segmentoValue = segmento.trim() || undefined
+    setSavingProspectos(true)
+    try {
+      const response = await guardarBuscadorProspectos(jobInfo.id, {
+        save_all: true,
+        segmento: segmentoValue,
+      })
+      toast.success(`Se guardaron ${response.total} prospectos.`)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudieron guardar los prospectos."
+      toast.error(message)
+    } finally {
+      setSavingProspectos(false)
+    }
+  }
+
+  const handleResultsLimitChange = (value: string) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return
+    }
+    setResultsLimit(parsed)
+    setResultsOffset(0)
+    if (jobInfo?.status === "completed") {
+      void loadJobResults(jobInfo, { limit: parsed, offset: 0, notify: false })
+    }
+  }
+
+  const handleNextPage = () => {
+    if (!jobInfo || !hasNextPage) return
+    const nextOffset = resultsOffset + resultsLimit
+    void loadJobResults(jobInfo, { offset: nextOffset, notify: false })
+  }
+
+  const handlePreviousPage = () => {
+    if (!jobInfo || !hasPreviousPage) return
+    const previousOffset = Math.max(resultsOffset - resultsLimit, 0)
+    void loadJobResults(jobInfo, { offset: previousOffset, notify: false })
+  }
+
+  const handleClearResults = () => {
+    setResults([])
+    setResultsTotal(0)
+    setResultsOffset(0)
+    setSelectedIds(new Set())
   }
 
   const handleDownloadJson = () => {
@@ -665,39 +756,99 @@ function BuscadorView() {
           <div>
             <CardTitle>Resultados</CardTitle>
             <CardDescription>
-              {results.length
-                ? `Mostrando ${results.length} registros.`
-                : "Ejecuta el buscador para ver los correos encontrados."}
+              {totalResultsCount
+                ? `Mostrando ${results.length ? `${pageStart}-${pageEnd}` : 0} de ${totalResultsCount} registros.`
+                : results.length
+                  ? `Mostrando ${results.length} registros.`
+                  : "Ejecuta el buscador para ver los correos encontrados."}
             </CardDescription>
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={handleDownloadJson} disabled={!canDownload}>
               Descargar JSON
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setResults([])} disabled={!canDownload}>
+            <Button variant="outline" size="sm" onClick={handleClearResults} disabled={!canDownload}>
               Limpiar tabla
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {results.length > 0 && (
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div className="w-full md:w-1/2">
-                <Label htmlFor="segmento">Segmento (opcional)</Label>
-                <Input
-                  id="segmento"
-                  placeholder="Ej. inbound, scraping mayo"
-                  value={segmento}
-                  onChange={(event) => setSegmento(event.target.value)}
-                />
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="w-full md:w-1/2">
+                  <Label htmlFor="segmento">Segmento (opcional)</Label>
+                  <Input
+                    id="segmento"
+                    placeholder="Ej. inbound, scraping mayo"
+                    value={segmento}
+                    onChange={(event) => setSegmento(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSaveAllProspectos}
+                    disabled={!jobInfo || savingProspectos || totalResultsCount === 0}
+                  >
+                    {savingProspectos ? "Guardando..." : `Guardar todos (${totalResultsCount || results.length})`}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveProspectos}
+                    disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
+                  >
+                    {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
+                  </Button>
+                </div>
               </div>
-              <Button
-                type="button"
-                onClick={handleSaveProspectos}
-                disabled={!jobInfo || savingProspectos || selectedIds.size === 0}
-              >
-                {savingProspectos ? "Guardando..." : "Guardar como prospectos"}
-              </Button>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {resultsLoading
+                    ? "Cargando página de resultados…"
+                    : totalResultsCount
+                      ? `Mostrando ${pageStart}-${pageEnd} de ${totalResultsCount} registros.`
+                      : `Mostrando ${results.length} registros.`}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Registros por página</span>
+                    <Select value={String(resultsLimit)} onValueChange={handleResultsLimitChange}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Límite" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RESULTS_PAGE_SIZES.map((size) => (
+                          <SelectItem key={size} value={String(size)}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePreviousPage}
+                      disabled={!hasPreviousPage || resultsLoading}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleNextPage}
+                      disabled={!hasNextPage || resultsLoading}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {results.length === 0 ? (

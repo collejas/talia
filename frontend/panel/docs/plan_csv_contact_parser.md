@@ -11,15 +11,15 @@ Cuando el crawler del buscador descargue archivos CSV (como directorios publicad
 
 ## Tareas
 
-1. [ ] **Detectar recursos CSV**
+1. [x] **Detectar recursos CSV**
    - Después del `fetcher.get`, revisar si la URL termina en `.csv` o si el `Content-Type` (si podemos exponerlo desde `HttpFetcher`) contiene `text/csv` o `application/vnd.ms-excel`.
    - Si se detecta CSV, derivar hacia una función `parse_csv_contacts`.
 
-2. [ ] **Exponer metadatos HTTP en `HttpFetcher`**
+2. [x] **Exponer metadatos HTTP en `HttpFetcher`**
    - Hoy `HttpFetcher.get` sólo regresa el texto; para inspeccionar cabeceras necesitamos que retorne `Tuple[str, str | None]` (contenido + content_type) o un objeto `HttpResponse`.
    - Mantener compatibilidad para los scrapers existentes (simple/demo).
 
-3. [ ] **Crear utilitario `parse_csv_contacts`**
+3. [x] **Crear utilitario `parse_csv_contacts`**
    - Ubicarlo en `core/utils.py` o un módulo nuevo `core/csv_parser.py`.
    - Usar `csv.DictReader` con `io.StringIO` respetando UTF-8.
    - Normalizar encabezados (quitar acentos, espacios, mayúsculas).
@@ -37,7 +37,7 @@ Cuando el crawler del buscador descargue archivos CSV (como directorios publicad
      ```
    - Devolver una lista de diccionarios con los campos traducidos más el `source_url`.
 
-4. [ ] **Integración en `BaseDomainCrawler.run`**
+4. [x] **Integración en `BaseDomainCrawler.run`**
    - Si la página es CSV:
      - No usar BeautifulSoup (evitar parseo HTML).
      - Llamar a `parse_csv_contacts`.
@@ -48,7 +48,7 @@ Cuando el crawler del buscador descargue archivos CSV (como directorios publicad
      - Incrementar `pages_without_new_emails` sólo si no se encontraron correos nuevos en ese CSV.
    - Si no es CSV, continuar con el flujo actual basado en HTML.
 
-5. [ ] **Pruebas y validación**
+5. [x] **Pruebas y validación**
    - Crear un archivo CSV de ejemplo en `tests/fixtures` para validar que se detectan y mapean los encabezados.
    - Añadir tests unitarios para `parse_csv_contacts`.
    - Probar manualmente un job apuntando al directorio CSV real (`Directorio_Funcionarios_ok.csv`) verificando que ahora `prospeccion_buscador_resultados.contacto` esté poblado con nombre/puesto/teléfono.
