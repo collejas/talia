@@ -86,6 +86,9 @@ export type BuscadorJobResults = {
 
 export type BuscadorJobsListResponse = {
   items: BuscadorJob[]
+  total: number
+  limit: number
+  offset: number
 }
 
 function extractErrorMessage(data: unknown): string | null {
@@ -187,11 +190,14 @@ export async function obtenerBuscadorResultados(
   return requestJson<BuscadorJobResults>(url.toString())
 }
 
-export async function listarBuscadorJobs(limit = 20): Promise<BuscadorJob[]> {
+export async function listarBuscadorJobs(limit = 20, offset = 0): Promise<BuscadorJobsListResponse> {
   const url = buildClientUrl("/api/prospeccion/buscador/jobs")
   url.searchParams.set("limit", String(limit))
+  if (offset > 0) {
+    url.searchParams.set("offset", String(offset))
+  }
   const data = await requestJson<BuscadorJobsListResponse>(url.toString())
-  return data.items
+  return data
 }
 
 export async function pausarBuscadorJob(jobId: string): Promise<BuscadorJob> {

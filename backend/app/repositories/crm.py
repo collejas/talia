@@ -4506,21 +4506,29 @@ class CRMRepository:
         *,
         usuario_token: str,
         limit: int = 20,
-    ) -> list[dict[str, Any]]:
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        limit_value = max(1, min(limit, 200))
+        offset_value = max(0, offset)
         params = {
             "order": "created_at.desc",
-            "limit": str(max(1, min(limit, 200))),
+            "limit": str(limit_value),
         }
+        if offset_value:
+            params["offset"] = str(offset_value)
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_buscador_jobs",
             token=usuario_token,
             params=params,
+            prefer="count=exact",
         )
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"buscador_job_list_invalid:{data!r}")
-        return data
+        total = self._extract_total_count(resp.headers.get("content-range"))
+        total_value = total if total is not None else len(data)
+        return data, total_value
 
     async def get_buscador_job(
         self,

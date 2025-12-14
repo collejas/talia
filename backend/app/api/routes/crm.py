@@ -9394,6 +9394,9 @@ class BuscadorJobResponse(BaseModel):
 
 class BuscadorJobsListResponse(BaseModel):
     items: list[BuscadorJobResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class GuardarBuscadorProspectosPayload(BaseModel):
@@ -9449,14 +9452,24 @@ async def prospeccion_buscador_run(
 )
 async def prospeccion_buscador_jobs(
     limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0, le=10_000),
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
 ) -> BuscadorJobsListResponse:
     try:
-        rows = await repo.list_buscador_jobs(usuario_token=user_token, limit=limit)
+        rows, total = await repo.list_buscador_jobs(
+            usuario_token=user_token,
+            limit=limit,
+            offset=offset,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return BuscadorJobsListResponse(items=[_job_row_to_response(row) for row in rows])
+    return BuscadorJobsListResponse(
+        items=[_job_row_to_response(row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

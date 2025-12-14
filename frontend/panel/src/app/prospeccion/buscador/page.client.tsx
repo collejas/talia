@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { RefreshCw, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { Button } from "@/components/ui/button"
@@ -81,6 +81,7 @@ const DEFAULT_FORM_STATE: FormState = {
 
 const DEFAULT_RESULTS_LIMIT = 1000
 const RESULTS_PAGE_SIZES = [200, 500, 1000] as const
+const JOBS_PAGE_SIZE = 28
 
 const STATUS_LABELS: Record<BuscadorJobStatus, string> = {
   pending: "Pendiente",
@@ -135,6 +136,8 @@ function BuscadorView() {
   const [jobs, setJobs] = useState<BuscadorJob[]>([])
   const [jobsLoading, setJobsLoading] = useState(false)
   const [jobsError, setJobsError] = useState<string | null>(null)
+  const [jobsTotal, setJobsTotal] = useState(0)
+  const [jobsOffset, setJobsOffset] = useState(0)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [jobAction, setJobAction] = useState<"pause" | "cancel" | "relaunch" | null>(null)
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
@@ -150,6 +153,10 @@ function BuscadorView() {
   const canCancelJob = jobInfo ? ["pending", "running", "pausing"].includes(jobInfo.status) : false
   const canRelaunchJob = jobInfo ? RESULT_READY_STATUSES.has(jobInfo.status) || jobInfo.status === "failed" : false
   const processingSelectedJob = jobInfo ? PROCESSING_STATUSES.has(jobInfo.status) : false
+  const jobsPageStart = jobs.length ? jobsOffset + 1 : 0
+  const jobsPageEnd = jobsOffset + jobs.length
+  const jobsHasPreviousPage = jobsOffset > 0
+  const jobsHasNextPage = jobsOffset + jobs.length < jobsTotal
   const resultsDescription = totalResultsCount
     ? `Mostrando ${results.length ? `${pageStart}-${pageEnd}` : 0} de ${totalResultsCount} registros.`
     : results.length
@@ -157,6 +164,12 @@ function BuscadorView() {
       : processingSelectedJob
         ? "Esta búsqueda aún no finaliza. Mostraremos los resultados en cuanto estén listos."
         : "Selecciona una búsqueda reciente o ejecuta el buscador para ver los resultados aquí."
+  const jobsRangeDescription =
+    jobsTotal > 0
+      ? `Mostrando ${jobsPageStart}-${jobsPageEnd} de ${jobsTotal}`
+      : jobsLoading
+        ? "Cargando historial…"
+        : "Sin ejecuciones registradas."
 
   const domainSummary = useMemo<SummaryEntry[] | null>(() => {
     if (!stats?.top_email_domains?.length) return null
@@ -190,12 +203,15 @@ function BuscadorView() {
     return Number.isFinite(num) ? num : undefined
   }
 
-  const loadJobs = useCallback(async () => {
+  const loadJobs = useCallback(async (offsetValue = 0) => {
+    const safeOffset = Math.max(0, offsetValue)
     setJobsLoading(true)
     setJobsError(null)
     try {
-      const listado = await listarBuscadorJobs(15)
-      setJobs(listado)
+      const listado = await listarBuscadorJobs(JOBS_PAGE_SIZE, safeOffset)
+      setJobs(listado.items)
+      setJobsTotal(listado.total ?? listado.items.length)
+      setJobsOffset(listado.offset ?? safeOffset)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo cargar el historial del buscador."
       setJobsError(message)
@@ -206,7 +222,7 @@ function BuscadorView() {
   }, [])
 
   useEffect(() => {
-    void loadJobs()
+    void loadJobs(0)
   }, [loadJobs])
 
   type ApplyJobResultsOptions = {
@@ -329,7 +345,7 @@ function BuscadorView() {
       setSelectedJobId(job.id)
       setLastResultsJobId(null)
       toast.success("Búsqueda programada. Te avisaremos cuando termine.")
-      void loadJobs()
+      void loadJobs(0)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo ejecutar el buscador."
       setErrorMessage(message)
@@ -356,7 +372,7 @@ function BuscadorView() {
         return
       }
       void loadJobResults(jobInfo, { offset: 0 })
-      void loadJobs()
+      void loadJobs(0)
       return
     }
 
@@ -449,7 +465,9 @@ function BuscadorView() {
         setLastResultsJobId(null)
         setErrorMessage(null)
       }
-      void loadJobs()
+      const nextOffset =
+        jobsOffset > 0 && jobs.length <= 1 ? Math.max(0, jobsOffset - JOBS_PAGE_SIZE) : jobsOffset
+      void loadJobs(nextOffset)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo eliminar la búsqueda."
       toast.error(message)
@@ -465,7 +483,7 @@ function BuscadorView() {
       const updated = await pausarBuscadorJob(jobInfo.id)
       setJobInfo(updated)
       toast.success("Búsqueda pausada. Puedes reanudarla más tarde.")
-      void loadJobs()
+      void loadJobs(jobsOffset)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo pausar el job."
       toast.error(message)
@@ -481,7 +499,7 @@ function BuscadorView() {
       const updated = await cancelarBuscadorJob(jobInfo.id)
       setJobInfo(updated)
       toast.success("Búsqueda cancelada.")
-      void loadJobs()
+      void loadJobs(jobsOffset)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo cancelar el job."
       toast.error(message)
@@ -508,7 +526,7 @@ function BuscadorView() {
       setJobInfo(newJob)
       setSelectedJobId(newJob.id)
       toast.success("Se inició una nueva búsqueda con los mismos parámetros.")
-      void loadJobs()
+      void loadJobs(0)
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo reiniciar la búsqueda."
       setErrorMessage(message)
@@ -610,6 +628,18 @@ function BuscadorView() {
     if (!jobInfo || !hasPreviousPage) return
     const previousOffset = Math.max(resultsOffset - resultsLimit, 0)
     void loadJobResults(jobInfo, { offset: previousOffset, notify: false })
+  }
+
+  const handleJobsNextPage = () => {
+    if (jobsLoading || !jobsHasNextPage) return
+    const nextOffset = jobsOffset + JOBS_PAGE_SIZE
+    void loadJobs(nextOffset)
+  }
+
+  const handleJobsPreviousPage = () => {
+    if (jobsLoading || !jobsHasPreviousPage) return
+    const prevOffset = Math.max(0, jobsOffset - JOBS_PAGE_SIZE)
+    void loadJobs(prevOffset)
   }
 
   const handleClearResults = () => {
@@ -864,9 +894,36 @@ function BuscadorView() {
             <CardTitle>Historial de búsquedas web</CardTitle>
             <CardDescription>Consulta las últimas ejecuciones y vuelve a abrir sus resultados.</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void loadJobs()} disabled={jobsLoading}>
-            {jobsLoading ? "Actualizando..." : "Actualizar"}
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <p className="text-xs text-muted-foreground sm:text-sm">{jobsRangeDescription}</p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void loadJobs(jobsOffset)} disabled={jobsLoading}>
+                {jobsLoading ? "Actualizando..." : "Actualizar"}
+              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Página anterior"
+                  onClick={handleJobsPreviousPage}
+                  disabled={!jobsHasPreviousPage || jobsLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Página siguiente"
+                  onClick={handleJobsNextPage}
+                  disabled={!jobsHasNextPage || jobsLoading}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {jobsError ? <p className="text-sm text-destructive">{jobsError}</p> : null}
