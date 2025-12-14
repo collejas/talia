@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     File,
     Form,
@@ -57,6 +58,7 @@ from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
+from app.services.brevo import process_brevo_events
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_contact_sender import contact_sender
@@ -7752,6 +7754,25 @@ async def obtener_metrics_contacto() -> dict[str, Any]:
         for canal, counter in snapshot.por_canal.items()
     }
     return {"ok": True, "canales": transformado}
+
+
+@router.post("/prospeccion/contacto/brevo/webhook", include_in_schema=False)
+async def prospeccion_contacto_brevo_webhook(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    payload: Any = Body(...),
+) -> dict[str, Any]:
+    """Recibe eventos desde Brevo y sincroniza los envíos."""
+
+    events: list[dict[str, Any]] = []
+    if isinstance(payload, list):
+        events = [event for event in payload if isinstance(event, dict)]
+    elif isinstance(payload, dict):
+        events = [payload]
+    if not events:
+        raise HTTPException(status_code=400, detail="payload_invalid")
+    processed = await process_brevo_events(repo=repo, events=events)
+    return {"ok": True, "procesados": processed}
 
 
 @router.get("/visitas/kpis")

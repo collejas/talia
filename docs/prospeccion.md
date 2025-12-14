@@ -36,10 +36,10 @@
   3. Programación (usar `programado_en` por canal).  
   4. Confirmación y creación de lote (`prospeccion_contacto_batch` + `prospeccion_contacto_envio`).
 - [x] Añadir drawer post-confirmación con historial de cada prospecto y CTA “Promover a CRM”.
-- [ ] Integrar Brevo para correo:  
-  - [ ] Modo SMTP (configurar `SMTP_*`).  
-  - [ ] Modo API (adapter send_email + guardar `messageId`).  
-  - [ ] Documentar en `variables.md` y mapear estados Brevo → UI.
+- [x] Integrar Brevo para correo:  
+  - [x] Modo SMTP (se mantiene como respaldo).  
+  - [x] Modo API (send_email usa `BREVO_API_KEY/BREVO_BASE_URL` y almacena `messageId`).  
+  - [x] Webhook `/crm/prospeccion/contacto/brevo/webhook` para mapear delivered/bounces hacia `prospeccion_contactos_log` y métricas. Documentado en `variables.md`.
 - [x] Persistir el Buscador en BD:  
   - [x] Crear tablas `prospeccion_buscador_jobs` y `prospeccion_buscador_resultados` (migración Supabase + RLS).  
   - [x] Actualizar `BuscadorJobManager` para leer/escribir vía `CRMRepository` en vez de archivos.  
@@ -69,7 +69,7 @@
    - [x] Registrar en `public.contactos` el canal usado en la campaña (correo/WhatsApp/voz) y bloquear recontacto automático (se guarda en `contacto_datos.prospeccion_canal` y el backend omite prospectos convertidos al programar nuevos envíos).
 5. [x] **Agrupador de campañas + duplicación** en `/prospeccion/campanas`. _(botón Duplicar abre el wizard con presets del último lote y reutiliza el drawer de resultados)_.
 6. [ ] **Indicadores de progreso** por etapa (basados en `metadata.stage`).
-7. [ ] **Brevo**: definir método elegido, ajustar `send_email`, registrar estados y actualizar documentación.
+7. [x] **Brevo**: definir método elegido, ajustar `send_email`, registrar estados (webhook) y actualizar documentación.
 
 ---
 
