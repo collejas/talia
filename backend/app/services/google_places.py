@@ -143,6 +143,21 @@ class GooglePlacesClient:
                         dedup_ids.add(place_id)
                     if limit is not None and len(results) >= limit:
                         break
+        if strategy == "text" and query and (limit is None or len(results) < limit):
+            remaining_limit = None if limit is None else max(limit - len(results), 0)
+            existing_ids = {place.get("id") for place in results if place.get("id")}
+            extra_text = await self._search_text_additional_centers(
+                query=query,
+                remaining_limit=remaining_limit,
+                latitude=latitude,
+                longitude=longitude,
+                radius_m=normalized_radius,
+                grid_config=grid,
+                language_code=language_code,
+                region_code=region_code,
+                existing_ids=existing_ids,
+            )
+            results.extend(extra_text)
 
         filtered = self._filter_results_by_radius(
             results=results,
@@ -257,27 +272,27 @@ class GooglePlacesClient:
         results: list[dict[str, Any]] = []
         page_token: str | None = None
         limit = max_results if max_results and max_results > 0 else None
+        base_payload = self._build_payload(
+            strategy=strategy,
+            query=query,
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            included_types=included_types,
+            max_result_count=20,
+            language_code=language_code,
+            region_code=region_code,
+        )
 
         while True:
             remaining = None if limit is None else max(limit - len(results), 0)
             if limit is not None and remaining <= 0:
                 break
             max_result_count = 20 if remaining is None else max(1, min(20, remaining))
-
+            payload = dict(base_payload)
+            payload["maxResultCount"] = max(1, min(max_result_count, 20))
             if page_token:
-                payload: dict[str, Any] = {"pageToken": page_token}
-            else:
-                payload = self._build_payload(
-                    strategy=strategy,
-                    query=query,
-                    latitude=latitude,
-                    longitude=longitude,
-                    radius_m=radius_m,
-                    included_types=included_types,
-                    max_result_count=max_result_count,
-                    language_code=language_code,
-                    region_code=region_code,
-                )
+                payload["pageToken"] = page_token
             data = await self._post(url=self._resolve_url(strategy), payload=payload)
             places = data.get("places") or []
             logger.debug(
@@ -513,6 +528,60 @@ class GooglePlacesClient:
                     longitude=lng_new,
                     radius_m=grid_config["tile_radius_m"],
                     included_types=included_types,
+                    max_results=per_tile_limit,
+                    language_code=language_code,
+                    region_code=region_code,
+                )
+            except GooglePlacesError:
+                continue
+            for place in tile_results:
+                place_id = place.get("id")
+                if place_id and place_id in existing_ids:
+                    continue
+                collected.append(place)
+                if place_id:
+                    existing_ids.add(place_id)
+                if remaining_limit is not None and len(collected) >= remaining_limit:
+                    return collected
+        return collected
+
+    async def _search_text_additional_centers(
+        self,
+        *,
+        query: str,
+        remaining_limit: int | None,
+        latitude: float,
+        longitude: float,
+        radius_m: int,
+        grid_config: dict[str, int],
+        language_code: str | None,
+        region_code: str | None,
+        existing_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        if not query:
+            return []
+        centers = self._generate_grid_centers(
+            latitude=latitude,
+            longitude=longitude,
+            radius_m=radius_m,
+            tile_radius_m=grid_config["tile_radius_m"],
+            grid_size=grid_config["grid_size"],
+        )
+        collected: list[dict[str, Any]] = []
+        for lat_new, lng_new in centers:
+            per_tile_limit = (
+                None if remaining_limit is None else max(remaining_limit - len(collected), 0)
+            )
+            if per_tile_limit is not None and per_tile_limit <= 0:
+                break
+            try:
+                tile_results = await self._collect_pages_for_strategy(
+                    strategy="text",
+                    query=query,
+                    latitude=lat_new,
+                    longitude=lng_new,
+                    radius_m=grid_config["tile_radius_m"],
+                    included_types=None,
                     max_results=per_tile_limit,
                     language_code=language_code,
                     region_code=region_code,
