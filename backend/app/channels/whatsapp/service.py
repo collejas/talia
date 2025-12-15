@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -536,8 +537,15 @@ async def _generate_assistant_reply(
     )
 
 
-async def _send_whatsapp_reply(*, to_number: str, body: str) -> TwilioSendResult:
+async def _send_whatsapp_reply(
+    *,
+    to_number: str,
+    body: str | None = None,
+    content_sid: str | None = None,
+    content_variables: dict[str, str] | None = None,
+) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando la API de Twilio."""
+
     if (
         not settings.twilio_phone_number
         or not settings.twilio_account_sid
@@ -545,6 +553,10 @@ async def _send_whatsapp_reply(*, to_number: str, body: str) -> TwilioSendResult
     ):
         logger.warning("whatsapp.twilio_not_configured")
         return TwilioSendResult(sid=None, status="skipped", error="twilio_not_configured")
+
+    if not body and not content_sid:
+        logger.warning("whatsapp.empty_payload")
+        return TwilioSendResult(sid=None, status="skipped", error="empty_payload")
 
     normalized_to = to_number or ""
     if normalized_to and not normalized_to.lower().startswith("whatsapp:"):
@@ -554,12 +566,24 @@ async def _send_whatsapp_reply(*, to_number: str, body: str) -> TwilioSendResult
         normalized_from = f"whatsapp:{normalized_from}"
 
     client = twilio_service.get_twilio_client()
+    message_kwargs: dict[str, Any] = {
+        "to": normalized_to,
+        "from_": normalized_from,
+    }
+    if content_sid:
+        message_kwargs["content_sid"] = content_sid
+        if content_variables:
+            message_kwargs["content_variables"] = json.dumps(
+                content_variables,
+                ensure_ascii=False,
+            )
+    else:
+        message_kwargs["body"] = body or ""
+
     try:
         message = await asyncio.to_thread(
             client.messages.create,
-            to=normalized_to,
-            from_=normalized_from,
-            body=body,
+            **message_kwargs,
         )
     except Exception as exc:  # pragma: no cover - errores propios del SDK
         logger.exception("whatsapp.twilio_send_failed", extra={"error": str(exc)})

@@ -2428,33 +2428,57 @@ def _build_prospecto_from_contactable(
 
 def _resolve_contact_channels(
     payload: ProspectoContactarPayload,
+    *,
+    template_map: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
     """Construye la configuración de canales y sus programaciones."""
 
     canales: dict[str, dict[str, Any]] = {}
     programacion: dict[str, str] = {}
+    templates = template_map or {}
 
     if payload.canales:
         for canal_config in payload.canales:
             canal = canal_config.canal
             entry: dict[str, Any] = {}
             if canal_config.template_id:
-                entry["template_id"] = str(canal_config.template_id)
+                template_key = str(canal_config.template_id)
+                entry["template_id"] = template_key
+                template_row = templates.get(template_key)
+            else:
+                template_row = None
+
+            entry_metadata: dict[str, Any] = {}
+            if template_row:
+                template_meta = template_row.get("metadata")
+                if isinstance(template_meta, dict):
+                    entry_metadata.update(template_meta)
+                slug_value = _clean_text(template_row.get("slug"))
+                if slug_value:
+                    entry_metadata.setdefault("template_slug", slug_value)
             if canal_config.metadata:
-                entry["metadata"] = canal_config.metadata
+                entry_metadata.update(canal_config.metadata)
+            if entry_metadata:
+                entry["metadata"] = entry_metadata
 
             if canal == "correo":
                 subject = _clean_text(canal_config.subject)
-                body = canal_config.body
+                if not subject and template_row:
+                    subject = _clean_text(template_row.get("asunto"))
+                body = canal_config.body or (template_row.get("cuerpo_texto") if template_row else None)
                 if not subject or not body:
                     raise HTTPException(status_code=400, detail="correo_payload_incompleto")
                 entry["subject"] = subject
                 entry["body"] = body
             elif canal == "whatsapp":
                 message = _clean_text(canal_config.body or canal_config.message)
-                if not message:
+                if not message and template_row:
+                    message = _clean_text(template_row.get("cuerpo_texto"))
+                twilio_sid = _clean_text((entry_metadata or {}).get("twilio_content_sid"))
+                if message:
+                    entry["body"] = message
+                elif not twilio_sid:
                     raise HTTPException(status_code=400, detail="whatsapp_payload_incompleto")
-                entry["body"] = message
             elif canal == "llamada":
                 message = _clean_text(canal_config.message or canal_config.body) or "Llamada programada desde Tal IA."
                 entry["message"] = message
@@ -2481,6 +2505,24 @@ def _resolve_contact_channels(
     if llamada_notas:
         canales["llamada"] = {"message": llamada_notas}
     return canales, programacion
+
+
+async def _fetch_contact_templates(
+    *,
+    repo: CRMRepository,
+    user_token: str,
+    template_ids: set[UUID],
+) -> dict[str, dict[str, Any]]:
+    template_map: dict[str, dict[str, Any]] = {}
+    for template_id in template_ids:
+        template = await repo.get_contact_template(
+            usuario_token=user_token,
+            template_id=template_id,
+        )
+        if not template:
+            raise HTTPException(status_code=404, detail="contact_template_not_found")
+        template_map[str(template_id)] = template
+    return template_map
 
 
 def _build_contact_batch_payload(
@@ -7531,7 +7573,20 @@ async def contactar_prospectos(
 ) -> dict[str, Any]:
     """Envía correos, WhatsApps o llamadas registrando lotes y envíos individuales."""
 
-    canales_config, programacion = _resolve_contact_channels(payload)
+    template_map: dict[str, dict[str, Any]] = {}
+    if payload.canales:
+        template_ids = {config.template_id for config in payload.canales if config.template_id}
+        if template_ids:
+            template_map = await _fetch_contact_templates(
+                repo=repo,
+                user_token=user_token,
+                template_ids=template_ids,
+            )
+
+    canales_config, programacion = _resolve_contact_channels(
+        payload,
+        template_map=template_map,
+    )
     if not canales_config:
         raise HTTPException(status_code=400, detail="contact_channels_required")
 

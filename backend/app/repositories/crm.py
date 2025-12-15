@@ -3999,6 +3999,26 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_templates_invalid:{data!r}")
         return data
 
+    async def get_contact_template(
+        self,
+        *,
+        usuario_token: str,
+        template_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params={"id": f"eq.{template_id}", "limit": "1"},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_template_invalid:{row!r}")
+        return row
+
     async def list_contact_lists(
         self,
         *,

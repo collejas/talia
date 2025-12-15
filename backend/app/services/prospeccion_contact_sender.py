@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Any, Sequence
 from uuid import UUID
 
@@ -21,6 +22,7 @@ from app.services.prospeccion_progress import progress_hub
 logger = get_logger("prospeccion.contact_sender")
 
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
+PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 
 
 @dataclass(slots=True)
@@ -64,6 +66,45 @@ def _merge_detalle(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any
     return merged
 
 
+def _build_placeholder_context(*sources: Any) -> dict[str, Any]:
+    context: dict[str, Any] = {}
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        for key, value in source.items():
+            if value is None:
+                continue
+            if isinstance(value, (str, int, float)):
+                context[str(key)] = value
+    if "nombre" not in context and context.get("display_name"):
+        context["nombre"] = context["display_name"]
+    return context
+
+
+def _render_template_text(template: str, context: dict[str, Any]) -> str:
+    if not template:
+        return ""
+
+    def _replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        value = context.get(key)
+        return "" if value is None else str(value)
+
+    return PLACEHOLDER_PATTERN.sub(_replace, template)
+
+
+def _render_twilio_variables(definition: Any, context: dict[str, Any]) -> dict[str, str] | None:
+    if not isinstance(definition, dict):
+        return None
+    rendered: dict[str, str] = {}
+    for key, raw_value in definition.items():
+        if raw_value is None:
+            continue
+        text = _render_template_text(str(raw_value), context)
+        rendered[str(key)] = text
+    return rendered or None
+
+
 def _build_contact_log_entry(
     *,
     prospecto_id: Any,
@@ -99,10 +140,21 @@ async def _broadcast_batch_event(batch_id: Any, payload: dict[str, Any]) -> None
     await progress_hub.publish(str(batch_id), enriched)
 
 
-async def _send_whatsapp_message(to_number: str, body: str) -> TwilioSendResult:
-    if not body:
+async def _send_whatsapp_message(
+    to_number: str,
+    body: str | None,
+    *,
+    content_sid: str | None = None,
+    content_variables: dict[str, str] | None = None,
+) -> TwilioSendResult:
+    if not body and not content_sid:
         return TwilioSendResult(sid=None, status="skipped", error="empty_body")
-    return await _send_whatsapp_reply(to_number=to_number, body=body)
+    return await _send_whatsapp_reply(
+        to_number=to_number,
+        body=body or "",
+        content_sid=content_sid,
+        content_variables=content_variables,
+    )
 
 
 async def _run_envio_correo(envio: dict[str, Any], payload: dict[str, Any]) -> ContactEnvioResult:
@@ -141,21 +193,36 @@ async def _run_envio_correo(envio: dict[str, Any], payload: dict[str, Any]) -> C
     )
 
 
-async def _run_envio_whatsapp(envio: dict[str, Any], payload: dict[str, Any]) -> ContactEnvioResult:
-    telefono = _clean_text(envio.get("phone"))
-    if not telefono or not _prospecto_whatsapp_allowed(envio):
+async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) -> ContactEnvioResult:
+    telefono = _clean_text(detalle.get("phone"))
+    if not telefono or not _prospecto_whatsapp_allowed(detalle):
         return ContactEnvioResult(
             estado="omitido",
             detalle={"reason": "whatsapp_no_permitido"},
         )
-    body = _clean_text(payload.get("body"))
-    if not body:
-        return ContactEnvioResult(
-            estado="error",
-            detalle={"reason": "whatsapp_payload_incompleto"},
-            error="whatsapp_payload_incompleto",
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    template_sid = _clean_text(metadata.get("twilio_content_sid") or payload.get("twilio_content_sid"))
+    variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
+    context = _build_placeholder_context(detalle, metadata, payload)
+
+    wa_result: TwilioSendResult
+    if template_sid:
+        rendered_vars = _render_twilio_variables(variables_def, context)
+        wa_result = await _send_whatsapp_message(
+            to_number=telefono,
+            body=None,
+            content_sid=template_sid,
+            content_variables=rendered_vars,
         )
-    wa_result = await _send_whatsapp_message(to_number=telefono, body=body)
+    else:
+        rendered_body = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
+        if not rendered_body:
+            return ContactEnvioResult(
+                estado="error",
+                detalle={"reason": "whatsapp_payload_incompleto"},
+                error="whatsapp_payload_incompleto",
+            )
+        wa_result = await _send_whatsapp_message(to_number=telefono, body=rendered_body)
     estado = "enviado" if not wa_result.error else "error"
     return ContactEnvioResult(
         estado=estado,
