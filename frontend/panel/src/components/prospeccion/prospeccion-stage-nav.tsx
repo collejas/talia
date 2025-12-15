@@ -28,15 +28,15 @@ const STAGES: StageConfig[] = [
     key: "enriquecer",
     label: "Enriquecer",
     description: "Normaliza datos, verifica teléfonos y notas.",
-    href: "/prospeccion/prospectos",
+    href: "/prospeccion/prospectos#enriquecer",
     matches: ["/prospeccion/prospectos"],
   },
   {
     key: "preparar",
     label: "Preparar",
     description: "Segmenta y convierte a contactos del CRM.",
-    href: "/prospeccion/pipeline",
-    matches: ["/prospeccion/pipeline"],
+    href: "/prospeccion/prospectos#preparar",
+    matches: ["/prospeccion/prospectos"],
   },
   {
     key: "lanzar",
@@ -62,6 +62,7 @@ export function ProspeccionStageNav() {
   const pathname = usePathname()
   const [summary, setSummary] = useState<Partial<Record<StageKey, number>>>({})
   const [loading, setLoading] = useState(true)
+  const [hash, setHash] = useState<string>("")
 
   useEffect(() => {
     let cancelled = false
@@ -93,10 +94,25 @@ export function ProspeccionStageNav() {
   }, [])
 
   const activeStage = useMemo(() => {
+    if (pathname?.startsWith("/prospeccion/prospectos")) {
+      return hash === "#preparar" ? "preparar" : "enriquecer"
+    }
     return (
       STAGES.find((stage) => stage.matches.some((match) => pathname?.startsWith(match ?? "")))?.key ?? "descubre"
     )
-  }, [pathname])
+  }, [pathname, hash])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const updateHash = () => {
+      setHash(window.location.hash || "")
+    }
+    updateHash()
+    window.addEventListener("hashchange", updateHash)
+    return () => {
+      window.removeEventListener("hashchange", updateHash)
+    }
+  }, [])
 
   return (
     <div className="rounded-2xl border bg-card p-4 shadow-sm">

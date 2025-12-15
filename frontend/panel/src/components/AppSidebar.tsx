@@ -78,7 +78,6 @@ const NAVIGATION = {
         { title: "Buscador web", url: "/prospeccion/buscador" },
         { title: "Prospectos", url: "/prospeccion/prospectos" },
         { title: "Contactos", url: "/prospeccion/contactos" },
-        { title: "Pipeline", url: "/prospeccion/pipeline" },
         { title: "Campañas", url: "/prospeccion/campanas" },
         { title: "Mensajes automatizados", url: "/prospeccion/mensajes" },
       ],

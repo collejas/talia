@@ -82,7 +82,7 @@ Implementar estos ajustes debería reducir la confusión actual, alinear el fluj
 - **Dónde se expone**: en el monitor `/prospeccion/contactos/{batch_id}` (drawer y página dedicada). Cada lote ya muestra el timeline lineal con logs crudos (`prospeccion_contactos_log`) y los `SIDs` de Twilio/Brevo cuando aplica.  
 - **Qué contiene**: eventos `queued → sent → delivered → failed → responded`, timestamps, payloads reducidos, canal y referencia al mensaje remoto.  
 - **Por qué importa**: soporte y operaciones pueden auditar todo el ciclo sin ir a Supabase o al proveedor externo; si hay un reclamo bastan los `SIDs` para cruzarlo en Twilio/Brevo.  
-- **Siguiente paso UX**: reutilizar este timeline filtrado por `prospecto_id` dentro del drawer de `/prospeccion/prospectos` para que ventas vea el historial antes de moverlo al pipeline.
+- **Siguiente paso UX**: reutilizar este timeline filtrado por `prospecto_id` dentro del drawer de `/prospeccion/prospectos` para que ventas vea el historial antes de promoverlo al embudo (etapa “Prospección · Primer contacto”).
 
 ---
 
@@ -100,15 +100,15 @@ Implementar estos ajustes debería reducir la confusión actual, alinear el fluj
 
 ---
 
-## 7. Vista `/prospeccion/pipeline`
+## 7. Handoff directo al embudo (sin `/prospeccion/pipeline`)
 
-- **Función**: es el pre-Kanban donde sólo entran prospectos “trabajables”, es decir, aquellos con al menos un intento registrado (correo, WhatsApp o llamada) y reglas básicas validadas (datos completos, canal permitido, sin bloqueo de privacidad).  
-- **Cómo llega un prospecto**:
-  1. Desde `/prospeccion/prospectos` se ejecutan campañas o acciones manuales.  
-  2. Cada envío crea registros en `prospeccion_contacto_envio` y logs detallados.  
-  3. Al detectar el primer contacto exitoso o una respuesta, se marca `pipeline_ready = true` (campo planeado) y el prospecto aparece en la vista `/prospeccion/pipeline`.  
-- **Qué aporta**: agrupa a los prospectos que ya pasaron por outreach inicial y están listos para seguimiento humano estilo Kanban (Contactado → Interesado → Negociación → Cerrado). Sirve para evitar que la vista de pipeline se llene de leads fríos sin contexto.  
-- **Próxima mejora**: mostrar tarjetas con los contadores de correos/WhatsApp/llamadas, último resultado y botón para mover de etapa o devolverlo a prospección si falta data.
+- **Decisión**: eliminar la vista intermedia `/prospeccion/pipeline` para evitar duplicar procesos. El handoff ocurre directamente en el embudo `/embudo`, cuya primera etapa ya es “Prospección · Primer contacto”.  
+- **Cómo llega un prospecto al Kanban**:
+  1. Desde `/prospeccion/prospectos` se ejecutan campañas o acciones manuales.
+  2. Cada envío crea registros en `prospeccion_contacto_envio` y se audita en `prospeccion_contactos_log`.
+  3. Cuando se detecta un contacto exitoso o una respuesta, el `auto_promoter` crea/actualiza la oportunidad en el CRM con `stage = Prospección · Primer contacto` y `metadata.canal` (Google, DENUE, Web, Manual).
+- **Beneficio**: una sola vista Kanban concentra todo el seguimiento comercial; prospección aporta contexto (intentos, respuestas, canal). Si el lead no avanza, se archiva desde el mismo embudo.
+- **Pendiente UX**: en `/prospeccion/prospectos` deben verse claramente los contadores de intentos y un CTA “Ver en embudo” que lleve a la tarjeta recién creada.
 
 ---
 

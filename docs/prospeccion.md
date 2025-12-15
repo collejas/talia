@@ -31,7 +31,7 @@
 - [ ] Persistir `metadata.stage` (`discover/enrich/prepare/launch/evaluate`) y mostrar progreso global.
 - [ ] Guardar filtros frecuentes como “listas inteligentes” (`prospeccion_contacto_batch.filtros` plantillas) para reutilizar.
 - [x] Integrar botón “Convertir a contacto” → crear registro en `public.contactos` y marcar al prospecto como promovido (`metadata.convertido_contacto_id`).
-- [ ] Considerar job/trigger que mueva prospectos verificados al pipeline `/prospeccion/pipeline`.
+- [ ] Considerar job/trigger que mueva prospectos verificados al embudo CRM (etapa “Prospección · Primer contacto”).
 
 ## 4. Lanzar (Constructor de campañas)
 - [x] Diseñar wizard en `/prospeccion/prospectos`:
