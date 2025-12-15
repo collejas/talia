@@ -435,6 +435,7 @@ export async function ejecutarChecklistScraper(payload: {
   maxPages?: number
   maxDepth?: number
   maxRuntime?: number
+  prospectoIds?: string[]
 } = {}): Promise<ChecklistScraperResponse> {
   const body: Record<string, unknown> = {}
   if (typeof payload.limit === "number") {
@@ -451,6 +452,17 @@ export async function ejecutarChecklistScraper(payload: {
   }
   if (typeof payload.maxRuntime === "number") {
     body.max_runtime = payload.maxRuntime
+  }
+  if (Array.isArray(payload.prospectoIds)) {
+    for (const id of payload.prospectoIds) {
+      const trimmed = (id || "").trim()
+      if (trimmed) {
+        if (!Array.isArray(body.prospecto_ids)) {
+          body.prospecto_ids = []
+        }
+        ;(body.prospecto_ids as string[]).push(trimmed)
+      }
+    }
   }
   return requestJson<ChecklistScraperResponse>("/api/prospeccion/prospectos/checklist/scraper", {
     method: "POST",

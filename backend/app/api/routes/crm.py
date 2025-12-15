@@ -452,6 +452,26 @@ class ProspectoChecklistScraperPayload(BaseModel):
     max_pages: int = Field(default=150, ge=10, le=2000)
     max_depth: int = Field(default=3, ge=1, le=10)
     max_runtime: int | None = Field(default=900, ge=60, le=3600)
+    prospecto_ids: list[UUID] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="Prospectos específicos a scrapear (opcional).",
+    )
+
+    @field_validator("prospecto_ids")
+    @classmethod
+    def _dedupe_scraper_ids(cls, value: list[UUID] | None) -> list[UUID] | None:
+        if not value:
+            return value
+        unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for item in value:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique.append(item)
+        return unique
 
 
 class ProspectoListQuery(BaseModel):
@@ -7431,19 +7451,31 @@ async def prospeccion_checklist_scraper(
 ) -> dict[str, Any]:
     """Dispara jobs del buscador web para prospectos sin correo pero con sitio web."""
 
-    try:
-        candidatos = await repo.list_scraper_pending_prospectos(
-            usuario_token=user_token,
-            limit=max(payload.limit * 3, payload.limit),
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    candidatos: list[dict[str, Any]] = []
+    if payload.prospecto_ids:
+        try:
+            candidatos = await repo.list_prospectos_by_ids(
+                usuario_token=user_token,
+                prospecto_ids=payload.prospecto_ids,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    else:
+        fetch_limit = max(payload.limit * 3, payload.limit)
+        try:
+            candidatos = await repo.list_scraper_pending_prospectos(
+                usuario_token=user_token,
+                limit=fetch_limit,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     jobs: list[BuscadorJobResponse] = []
     seen_hosts: set[str] = set()
+    job_cap = payload.limit if payload.limit else 1
 
     for candidato in candidatos:
-        if len(jobs) >= payload.limit:
+        if len(jobs) >= job_cap:
             break
         target = _normalize_scraper_target(candidato.get("website"))
         if not target:

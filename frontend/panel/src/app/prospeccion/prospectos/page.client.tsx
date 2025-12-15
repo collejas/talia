@@ -22,6 +22,7 @@ import {
   IconPhone,
   IconBrandWhatsapp,
   IconUsersGroup,
+  IconWorldSearch,
 } from "@tabler/icons-react"
 
 import Link from "next/link"
@@ -368,6 +369,28 @@ function ProspectosView() {
   const [convertError, setConvertError] = useState<string | null>(null)
   const [convertSubmitting, setConvertSubmitting] = useState(false)
 
+  const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
+  const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
+  const selectedCount = selectedIds.length
+  const canUseQuickPlan = selectedCount > 0
+  const selectionChips = useMemo(() => {
+    const chips: string[] = []
+    if (filters.fuente) {
+      chips.push(`Fuente: ${FUENTE_LABELS[filters.fuente] ?? filters.fuente}`)
+    }
+    if (filters.segmento.trim()) {
+      chips.push(`Segmento: ${filters.segmento.trim()}`)
+    }
+    if (filters.lookupStatus) {
+      chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
+    }
+    if (filters.carrierType) {
+      const label = carrierLabel(filters.carrierType)
+      chips.push(`Línea: ${label || filters.carrierType}`)
+    }
+    return chips
+  }, [filters])
+
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       setLoading(true)
@@ -553,7 +576,7 @@ function ProspectosView() {
     }
     try {
       const response = await ejecutarChecklistScraper({
-        limit: Math.max(1, Math.min(5, pending)),
+        limit: Math.max(1, Math.min(20, pending)),
         mode: "auto",
       })
       if (!response.programados) {
@@ -575,6 +598,38 @@ function ProspectosView() {
       setChecklistAction(null)
     }
   }, [checklist, refreshChecklist])
+
+  const handleScraperSelected = useCallback(async () => {
+    if (!selectedIds.length) return
+    setChecklistAction("scraper")
+    setBanner(null)
+    const cappedIds = selectedIds.slice(0, 200)
+    const limit = Math.max(1, Math.min(20, cappedIds.length))
+    try {
+      const response = await ejecutarChecklistScraper({
+        limit,
+        mode: "auto",
+        prospectoIds: cappedIds,
+      })
+      if (!response.programados) {
+        setBanner({
+          type: "error",
+          message: "Los prospectos seleccionados no tienen sitio web válido para lanzar el scraper.",
+        })
+      } else {
+        setBanner({
+          type: "success",
+          message: `Scraper lanzado para ${response.programados} prospectos seleccionados.`,
+        })
+      }
+      await refreshChecklist()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo lanzar el scraper."
+      setBanner({ type: "error", message })
+    } finally {
+      setChecklistAction(null)
+    }
+  }, [refreshChecklist, selectedIds])
 
   const handleChecklistManual = useCallback(() => {
     setFormMode("create")
@@ -654,27 +709,6 @@ function ProspectosView() {
     }
   }
 
-  const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
-  const selectedCount = selectedIds.length
-  const canUseQuickPlan = selectedCount > 0
-  const selectionChips = useMemo(() => {
-    const chips: string[] = []
-    if (filters.fuente) {
-      chips.push(`Fuente: ${FUENTE_LABELS[filters.fuente] ?? filters.fuente}`)
-    }
-    if (filters.segmento.trim()) {
-      chips.push(`Segmento: ${filters.segmento.trim()}`)
-    }
-    if (filters.lookupStatus) {
-      chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
-    }
-    if (filters.carrierType) {
-      const label = carrierLabel(filters.carrierType)
-      chips.push(`Línea: ${label || filters.carrierType}`)
-    }
-    return chips
-  }, [filters])
-  const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   useEffect(() => {
     if (!currentIds.length) {
       setContactIndicators({})
@@ -1706,6 +1740,17 @@ function ProspectosView() {
             >
               <IconPhoneCheck className={cn("mr-1.5 size-4", action === "lookup" && "animate-spin")} />
               Verificar teléfonos
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleScraperSelected()}
+              disabled={!selectedCount || checklistAction === "scraper"}
+            >
+              <IconWorldSearch
+                className={cn("mr-1.5 size-4", checklistAction === "scraper" && "animate-spin")}
+              />
+              Scraper seleccionados
             </Button>
             <Button size="sm" onClick={handlePlannerOpen}>
               <IconSparkles className="mr-1.5 size-4" />
