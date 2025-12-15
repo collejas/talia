@@ -3,25 +3,29 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
 import {
   IconAlertTriangle,
+  IconBolt,
   IconCircleCheck,
   IconDotsVertical,
   IconHistory,
   IconLoader,
+  IconNotebook,
   IconPencil,
   IconPhoneCheck,
   IconPlus,
   IconRefresh,
   IconSearch,
+  IconSparkles,
   IconSend2,
   IconTrash,
   IconMail,
   IconTargetArrow,
   IconPhone,
   IconBrandWhatsapp,
+  IconUsersGroup,
 } from "@tabler/icons-react"
 
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
-import { ProspeccionCampaignWizard } from "@/components/prospeccion/prospeccion-campaign-wizard"
+import { ProspeccionCampaignWizard, type ProspeccionWizardPreset } from "@/components/prospeccion/prospeccion-campaign-wizard"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,6 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -88,6 +93,8 @@ type BannerState = {
   type: "success" | "error"
   message: string
 }
+
+type PlannerMode = "quick" | "campaign"
 
 type ContactDrawerData = {
   batchId?: string | null
@@ -249,6 +256,11 @@ function ProspectosView() {
   const [checklistLoading, setChecklistLoading] = useState(false)
   const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
+  const [plannerOpen, setPlannerOpen] = useState(false)
+  const [plannerMode, setPlannerMode] = useState<PlannerMode>("campaign")
+  const [plannerName, setPlannerName] = useState("")
+  const [plannerError, setPlannerError] = useState<string | null>(null)
+  const [campaignWizardPreset, setCampaignWizardPreset] = useState<ProspeccionWizardPreset | null>(null)
   const [convertDialogOpen, setConvertDialogOpen] = useState(false)
   const [convertProspect, setConvertProspect] = useState<ProspectoItem | null>(null)
   const [convertForm, setConvertForm] = useState<{
@@ -463,6 +475,12 @@ function ProspectosView() {
     }
   }, [historyDialogOpen])
 
+  useEffect(() => {
+    if (!campaignWizardOpen) {
+      setCampaignWizardPreset(null)
+    }
+  }, [campaignWizardOpen])
+
   const openContactDrawer = useCallback((data: ContactDrawerData) => {
     if (!data.results?.length) {
       setContactDrawerData(null)
@@ -505,6 +523,24 @@ function ProspectosView() {
 
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
+  const canUseQuickPlan = selectedCount > 0
+  const selectionChips = useMemo(() => {
+    const chips: string[] = []
+    if (filters.fuente) {
+      chips.push(`Fuente: ${FUENTE_LABELS[filters.fuente] ?? filters.fuente}`)
+    }
+    if (filters.segmento.trim()) {
+      chips.push(`Segmento: ${filters.segmento.trim()}`)
+    }
+    if (filters.lookupStatus) {
+      chips.push(`Verificación: ${LOOKUP_STATUS_LABELS[filters.lookupStatus] ?? filters.lookupStatus}`)
+    }
+    if (filters.carrierType) {
+      const label = carrierLabel(filters.carrierType)
+      chips.push(`Línea: ${label || filters.carrierType}`)
+    }
+    return chips
+  }, [filters])
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
   const showingFrom = items.length ? offset + 1 : 0
@@ -640,6 +676,61 @@ function ProspectosView() {
       setAction(null)
     }
   }, [contactForm, fetchProspectos, items, offset, openContactDrawer, selectedIds])
+
+  const handlePlannerOpen = useCallback(() => {
+    setPlannerMode(selectedCount ? "quick" : "campaign")
+    setPlannerName("")
+    setPlannerError(null)
+    setPlannerOpen(true)
+  }, [selectedCount])
+
+  const handlePlannerOpenChange = useCallback(
+    (open: boolean) => {
+      setPlannerOpen(open)
+      if (!open) {
+        setPlannerError(null)
+        setPlannerName("")
+        setPlannerMode(selectedCount ? "quick" : "campaign")
+      }
+    },
+    [selectedCount]
+  )
+
+  const handlePlannerModeSelect = useCallback(
+    (mode: PlannerMode) => {
+      if (mode === "quick" && !canUseQuickPlan) {
+        setPlannerError("Selecciona al menos un prospecto para usar esta opción.")
+        return
+      }
+      setPlannerMode(mode)
+      setPlannerError(null)
+    },
+    [canUseQuickPlan]
+  )
+
+  const handlePlannerContinue = useCallback(() => {
+    setPlannerError(null)
+    if (plannerMode === "quick") {
+      if (!canUseQuickPlan) {
+        setPlannerError("Selecciona al menos un prospecto para programar el contacto.")
+        return
+      }
+      handlePlannerOpenChange(false)
+      setContactDialogOpen(true)
+      return
+    }
+    const trimmedName = plannerName.trim()
+    if (!trimmedName) {
+      setPlannerError("Asigna un nombre interno a la campaña.")
+      return
+    }
+    setCampaignWizardPreset({
+      titulo: trimmedName,
+      source: canUseQuickPlan ? "selected" : "filters",
+    })
+    handlePlannerOpenChange(false)
+    setCampaignWizardOpen(true)
+  }, [canUseQuickPlan, handlePlannerOpenChange, plannerMode, plannerName])
 
   const handleOpenConvertDialog = useCallback((prospecto: ProspectoItem) => {
     if (!prospecto.id) return
@@ -1080,6 +1171,148 @@ function ProspectosView() {
         </form>
       </section>
 
+      <Drawer open={plannerOpen} onOpenChange={handlePlannerOpenChange} direction="right">
+        <DrawerContent className="flex flex-col data-[vaul-drawer-direction=right]:h-screen data-[vaul-drawer-direction=right]:max-h-screen data-[vaul-drawer-direction=right]:max-w-3xl data-[vaul-drawer-direction=right]:overflow-hidden">
+          <DrawerHeader className="items-start space-y-2">
+            <DrawerTitle>Elige cómo lanzar tu contacto</DrawerTitle>
+            <DrawerDescription>
+              Define si quieres un envío rápido con la selección actual o abrir el wizard completo para convertirlo en
+              campaña.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="flex-1 overflow-y-auto px-6 pb-8">
+            <div className="rounded-2xl border bg-muted/30 p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="inline-flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <IconUsersGroup className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium">Audiencia base</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedCount
+                      ? `${selectedCount} prospecto${selectedCount === 1 ? "" : "s"} seleccionados`
+                      : "Aún no seleccionas prospectos; puedes usar listas o filtros en el wizard."}
+                  </p>
+                </div>
+              </div>
+              {selectionChips.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectionChips.map((chip) => (
+                    <Badge key={chip} variant="outline" className="text-xs">
+                      {chip}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Card
+                role="button"
+                tabIndex={canUseQuickPlan ? 0 : -1}
+                aria-pressed={plannerMode === "quick"}
+                aria-disabled={!canUseQuickPlan}
+                onClick={() => handlePlannerModeSelect("quick")}
+                className={cn(
+                  "cursor-pointer border-2 transition hover:border-primary/40",
+                  plannerMode === "quick" ? "border-primary bg-primary/5 shadow-sm" : "border-border",
+                  !canUseQuickPlan && "cursor-not-allowed opacity-60"
+                )}
+              >
+                <CardContent className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="rounded-full bg-primary/10 p-2 text-primary">
+                      <IconBolt className="size-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold">Programar ahora</p>
+                      <p className="text-sm text-muted-foreground">
+                        Abre el editor rápido y define los mensajes por canal para la selección actual.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-dashed bg-background/80 p-3 text-sm">
+                    <p className="font-medium">Incluye</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-muted-foreground">
+                      <li>Asunto y cuerpo de correo</li>
+                      <li>Mensaje WhatsApp / guion de llamada</li>
+                      <li>Programación puntual por canal</li>
+                    </ul>
+                  </div>
+                  {canUseQuickPlan ? (
+                    <p className="text-xs text-muted-foreground">Ideal para recordatorios o outreach inmediato.</p>
+                  ) : (
+                    <p className="text-xs text-destructive">Selecciona al menos un prospecto para usar esta opción.</p>
+                  )}
+                </CardContent>
+              </Card>
+              <Card
+                role="button"
+                aria-pressed={plannerMode === "campaign"}
+                onClick={() => handlePlannerModeSelect("campaign")}
+                className={cn(
+                  "cursor-pointer border-2 transition hover:border-primary/40",
+                  plannerMode === "campaign" ? "border-primary bg-primary/5 shadow-sm" : "border-border"
+                )}
+              >
+                <CardContent className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="rounded-full bg-primary/10 p-2 text-primary">
+                      <IconNotebook className="size-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold">Campaña con nombre</p>
+                      <p className="text-sm text-muted-foreground">
+                        Abre el wizard para reutilizar listas inteligentes, definir canales y registrar un título claro.
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    className="space-y-2 rounded-lg border border-dashed bg-background/80 p-3"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Label className="text-xs font-medium">Nombre interno</Label>
+                    <Input
+                      value={plannerName}
+                      onChange={(event) => setPlannerName(event.target.value)}
+                      onFocus={() => handlePlannerModeSelect("campaign")}
+                      placeholder="Ej. Seguimiento hoteles Q4"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Podrás ajustar filtros, listas y canales antes de confirmar.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="mt-6 rounded-2xl border bg-muted/20 p-4 text-sm">
+              <p className="font-semibold">¿Qué sucederá después?</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                <li>Verás el detalle de cada canal antes de lanzar.</li>
+                <li>Se creará un lote con seguimiento en Campañas y Contactos.</li>
+              </ul>
+            </div>
+            {plannerError ? <p className="mt-4 text-sm text-destructive">{plannerError}</p> : null}
+          </div>
+          <DrawerFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-background/80">
+            <Button variant="outline" onClick={() => handlePlannerOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handlePlannerContinue} disabled={plannerMode === "quick" && !canUseQuickPlan}>
+              {plannerMode === "quick" ? (
+                <>
+                  <IconSend2 className="mr-2 size-4" />
+                  Configurar envío rápido
+                </>
+              ) : (
+                <>
+                  <IconTargetArrow className="mr-2 size-4" />
+                  Abrir wizard de campaña
+                </>
+              )}
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
       <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
           <div>
@@ -1107,17 +1340,14 @@ function ProspectosView() {
               <IconPhoneCheck className={cn("mr-1.5 size-4", action === "lookup" && "animate-spin")} />
               Verificar teléfonos
             </Button>
-            <Button
-              size="sm"
-              onClick={() => setContactDialogOpen(true)}
-              disabled={!selectedCount || action === "contact"}
-            >
-              <IconSend2 className="mr-1.5 size-4" />
-              Programar contacto
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setCampaignWizardOpen(true)}>
-              <IconTargetArrow className="mr-1.5 size-4" />
-              Lanzar campaña
+            <Button size="sm" onClick={handlePlannerOpen}>
+              <IconSparkles className="mr-1.5 size-4" />
+              Preparar envíos
+              {selectedCount ? (
+                <span className="ml-2 inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-primary/15 px-2 text-[11px] font-semibold text-primary">
+                  {selectedCount}
+                </span>
+              ) : null}
             </Button>
           </div>
         </div>
@@ -1595,6 +1825,7 @@ function ProspectosView() {
           fuente: filters.fuente || undefined,
           segmento: filters.segmento || undefined,
         }}
+        preset={campaignWizardPreset}
         onCompleted={handleWizardCompleted}
       />
 
