@@ -226,6 +226,9 @@ type FlowStepDefinition = {
   actionHref: string
   actionLabel: string
   icon: typeof IconSearch
+  count?: number
+  meta?: string
+  isCurrent?: boolean
 }
 
 const PROSPECCION_FLOW_DEFINITIONS: FlowStepDefinition[] = [
@@ -325,6 +328,8 @@ function ProspectosView() {
   const [recentBatches, setRecentBatches] = useState<ContactoBatch[]>([])
   const [recentBatchLoading, setRecentBatchLoading] = useState(false)
   const [recentBatchError, setRecentBatchError] = useState<string | null>(null)
+  const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
+  const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [plannerMode, setPlannerMode] = useState<PlannerMode>("campaign")
@@ -429,6 +434,33 @@ function ProspectosView() {
   useEffect(() => {
     void refreshChecklist()
   }, [refreshChecklist])
+
+  const fetchStageSummary = useCallback(async () => {
+    setStageSummaryLoading(true)
+    try {
+      const response = await fetch("/api/prospeccion/stage-resumen", { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error("stage_summary_failed")
+      }
+      const data = (await response.json()) as { stages?: Record<string, number> }
+      const stages = data?.stages ?? {}
+      setStageSummary({
+        discover: Number(stages["descubre"]) || 0,
+        enrich: Number(stages["enriquecer"]) || 0,
+        prepare: Number(stages["preparar"]) || 0,
+        launch: Number(stages["lanzar"]) || 0,
+        evaluate: Number(stages["evaluar"]) || 0,
+      })
+    } catch {
+      setStageSummary({})
+    } finally {
+      setStageSummaryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchStageSummary()
+  }, [fetchStageSummary])
 
   useEffect(() => {
     void fetchRecentBatches()
@@ -663,10 +695,11 @@ function ProspectosView() {
         default:
           meta = ""
       }
-      return { ...step, meta, isCurrent: step.key === "prepare" }
+      const count = stageSummary[step.key] ?? 0
+      return { ...step, meta, count, isCurrent: step.key === "prepare" }
     })
     return steps
-  }, [checklist, selectedCount, total])
+  }, [checklist, selectedCount, stageSummary, total])
 
   const handleToggleRow = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -723,13 +756,14 @@ function ProspectosView() {
         message: `Se actualizaron ${response.procesados} prospectos.`,
       })
       await fetchProspectos(offset)
+      void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo verificar los teléfonos."
       setBanner({ type: "error", message })
     } finally {
       setAction(null)
     }
-  }, [fetchProspectos, offset, selectedIds])
+  }, [fetchProspectos, fetchStageSummary, offset, selectedIds])
 
   const handleContactSubmit = useCallback(async () => {
     if (!selectedIds.length) {
@@ -790,13 +824,14 @@ function ProspectosView() {
       setContactDialogOpen(false)
       await fetchProspectos(offset)
       void fetchRecentBatches()
+      void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo programar el contacto."
       setContactError(message)
     } finally {
       setAction(null)
     }
-  }, [contactForm, fetchProspectos, items, offset, openContactDrawer, selectedIds])
+  }, [contactForm, fetchProspectos, fetchRecentBatches, fetchStageSummary, items, offset, openContactDrawer, selectedIds])
 
   const handlePlannerOpen = useCallback(() => {
     setPlannerMode(selectedCount ? "quick" : "campaign")
@@ -946,13 +981,14 @@ function ProspectosView() {
       })
       setConvertDialogOpen(false)
       await fetchProspectos(offset)
+      void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo convertir el prospecto."
       setConvertError(message)
     } finally {
       setConvertSubmitting(false)
     }
-  }, [convertForm, convertProspect, fetchProspectos, offset])
+  }, [convertForm, convertProspect, fetchProspectos, fetchStageSummary, offset])
 
   const handleWizardCompleted = useCallback(
     (result: { batchId?: string | null; contactos?: ProspeccionContactResult[]; omitidos?: ProspeccionOmitido[] }) => {
@@ -976,8 +1012,9 @@ function ProspectosView() {
       })
       void fetchProspectos(offset)
       void fetchRecentBatches()
+      void fetchStageSummary()
     },
-    [fetchProspectos, fetchRecentBatches, offset, openContactDrawer]
+    [fetchProspectos, fetchRecentBatches, fetchStageSummary, offset, openContactDrawer]
   )
 
   const handleOpenCreateDialog = () => {
@@ -1133,13 +1170,14 @@ function ProspectosView() {
       const nextOffset = shouldGoBack ? Math.max(0, offset - limit) : offset
       await fetchProspectos(nextOffset)
       setDeleteDialogOpen(false)
+      void fetchStageSummary()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo eliminar el prospecto."
       setDeleteError(message)
     } finally {
       setDeleteLoading(false)
     }
-  }, [deleteTarget, fetchProspectos, items.length, limit, offset])
+  }, [deleteTarget, fetchProspectos, fetchStageSummary, items.length, limit, offset])
 
   return (
     <div className="space-y-4">
@@ -1199,6 +1237,12 @@ function ProspectosView() {
                   </span>
                   <span>{step.title}</span>
                   {step.isCurrent ? <Badge variant="secondary">En esta vista</Badge> : null}
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">
+                    {stageSummaryLoading ? "…" : (step.count ?? 0).toLocaleString("es-MX")}
+                  </span>
+                  <span className="text-xs text-muted-foreground">en etapa</span>
                 </div>
                 <p className="mt-2 flex-1 text-muted-foreground">{step.description}</p>
                 <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">

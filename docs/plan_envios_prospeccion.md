@@ -117,3 +117,26 @@ Con este plan damos continuidad al documento “plan realizado para extender pro
 4. **Checklist de monitoreo**
    - Documentar en la guía operativa qué pasos seguir cuando un canal presenta fallos (revisar métricas, cancelar lote, reintentar).
    - Mantener un runbook con acciones rápidas (reiniciar worker, validar credenciales Twilio/SMTP).
+
+---
+
+## Runbook operativo (envíos en producción)
+
+1. **Antes de lanzar**
+   - Verifica que las plantillas en `/prospeccion/contacto/templates` estén activas y con placeholders probados.
+   - En `/prospeccion/prospectos`, usa el planner (“Preparar envíos”) para confirmar la audiencia seleccionada y, si aplica, asigna el nombre de campaña.
+   - Asegúrate de que la tarjeta de métricas en `/prospeccion/campanas` no muestre picos de errores en el canal que vas a utilizar; si hay fallos recientes, revisa primero el monitor.
+
+2. **Durante la ejecución**
+   - Monitorea `/prospeccion/contactos`: el lote recién creado aparece en la tabla superior; selecciónalo para ver los envíos y, si es necesario, cancela desde el botón “Cancelar lote”.
+   - El resumen del lote muestra agregados por estado; el SSE actualiza los totales en vivo. Usa el botón “Reintentar” en cada fila para reprocesar envíos `error/fallido/omitido`.
+   - El nuevo bloque “Timeline del lote” lista cada evento de `prospeccion_contactos_log` con hora, canal, estado y SIDs (Brevo/Twilio/voz). Desde ahí puedes copiar los IDs para investigarlos en la consola del proveedor.
+
+3. **Diagnóstico y escalamiento**
+   - Si un canal falla de manera masiva, revisa primero el timeline para identificar si es error del proveedor (`message_id`, `call_sid`) o validación interna (ej. prospecto sin permiso de WhatsApp).
+   - Consulta la tarjeta “Salud por canal” para confirmar si el worker está procesando otros lotes correctamente.
+   - Para incidentes críticos: pausar el lote (`Cancelar lote`), extraer los logs relevantes (IDs en el timeline) y validar credenciales/estado de Twilio o Brevo antes de relanzar.
+
+4. **Después del envío**
+   - Revisa `/prospeccion/campanas` para confirmar que la campaña tenga el estado esperado y, si aplica, duplica la configuración para la siguiente iteración.
+   - Documenta cualquier incidencia en `docs/plan_envios_prospeccion.md` o en el canal operativo para mantener el historial.
