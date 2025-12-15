@@ -3728,6 +3728,49 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def worker_get_prospecto(
+        self,
+        *,
+        prospecto_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "id": f"eq.{prospecto_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_get_prospecto_invalid:{row!r}")
+        return row
+
+    async def worker_update_prospecto_metadata(
+        self,
+        *,
+        prospecto_id: UUID,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_prospectos",
+            params={"id": f"eq.{prospecto_id}"},
+            json={"metadata": metadata},
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("worker_update_prospecto_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_update_prospecto_invalid:{row!r}")
+        return row
+
     async def list_lookup_pending_prospectos(
         self,
         *,
@@ -4514,6 +4557,54 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"worker_insert_log_invalid:{data!r}")
+
+    async def worker_find_contact_by_prospecto(
+        self,
+        *,
+        organizacion_id: UUID,
+        prospecto_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "contacto_datos->>prospecto_id": f"eq.{prospecto_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/contactos",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_find_contact_invalid:{row!r}")
+        return row
+
+    async def worker_find_opportunity_by_prospecto(
+        self,
+        *,
+        organizacion_id: UUID,
+        prospecto_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "metadata->>prospecto_id": f"eq.{prospecto_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/oportunidades",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_find_opportunity_invalid:{row!r}")
+        return row
 
     async def worker_sync_batch_status(self, *, batch_id: UUID) -> str | None:
         """Actualiza el estado del lote conforme avanza el procesamiento."""

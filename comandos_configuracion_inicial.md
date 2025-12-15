@@ -801,3 +801,30 @@ https://talia.mx/api/inbox/threads?limit=25&message_limit=20
      logs?prospecto_id=…) con cada evento, similar al timeline del monitor pero filtrado por prospecto.
   3. Respuesta/seguimiento: cuando detectemos estado=entregado y luego un log con accion=reply o similar (si Twilio/Brevo lo
      reportan), marcar ese evento para que soporte/ventas lo vea al instante.
+
+
+
+# propesctos embudo
+ sabes que, creo que eso dell pipeline seria solo duplicar procesos, en mi vista de kanban ya tengo una primera etapa integrada
+  en el embudo, llamada 'Prospeccion - Primer contaco'ceo que ahi deberiamos mandar los que ya les hemos enviado correo/
+  whatsapp/llamada, y de ahi ir avanzando, porue tener eso de prospeccon/pipeline seria duplicar y no lo veo practico, prefier
+  que todo se haga en el kanban que ya tengo, y si ahi no se logra nada solo archivar o eliminar el prospecto/contacto. que
+  opinas tu?
+
+
+• Tiene mucho sentido unificar: si el embudo/kanban ya arranca con la etapa “Prospección – Primer contacto”, meter otro pipeline
+  previo solo duplica trabajo y confunde. Con los indicadores por prospecto ya sabes quién recibió correo/WhatsApp/llamada; lo
+  natural es que, cuando un prospecto tenga al menos un envío exitoso o respuesta, lo promovamos directo hacia esa primera etapa
+  del kanban existente (creando/actualizando la oportunidad y ligando el contacto). Así todo el seguimiento posterior ocurre en
+  un solo lugar, y si no hay tracción ahí, lo archivas desde el mismo embudo.
+
+  Acciones sugeridas:
+
+  1. Automatizar la promoción: cuando un envío llegue a estado “entregado/enviado” o haya respuesta registrada, marcar el
+     prospecto como “listo” y crear/actualizar la tarjeta en la etapa “Prospección – Primer contacto”.
+  2. Evitar duplicados: añadir una bandera crm_oportunidad_id o similar para no volver a crear la misma tarjeta si ya existe.
+  3. Reglas de limpieza: si en el kanban se archiva/descarta, reflejarlo en prospección (por ejemplo, marcar el prospecto como
+     “cerrado” o bloquear recontacto).
+
+  Con eso mantienes un flujo único: prospección sirve para descubrir/enriquecer/lanzar, y el pipeline real (kanban) maneja todo
+  lo que viene después sin pantallas intermedias redundantes.

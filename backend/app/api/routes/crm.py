@@ -7083,13 +7083,6 @@ async def convertir_prospecto_contacto(
     telefono = payload.telefono or prospecto.get("phone_e164") or prospecto.get("phone")
     canal_origen = (payload.canal_origen or "otro").lower()
     source_label = _describe_prospeccion_source(prospecto)
-    contacto_metadata = {
-        "prospecto_id": str(prospecto_id),
-        "prospeccion_fuente": source_label,
-    }
-    if canal_origen != "otro":
-        contacto_metadata["prospeccion_canal"] = canal_origen
-
     contacto_body = {
         "nombre_completo": nombre,
         "correo": correo,
@@ -7097,7 +7090,6 @@ async def convertir_prospecto_contacto(
         "company_name": payload.company_name or prospecto.get("segmento"),
         "notes": payload.notas or prospecto.get("notas"),
         "origen": "prospeccion",
-        "metadata": contacto_metadata,
     }
     contacto_datos = {
         "prospecto_id": str(prospecto_id),

@@ -15,6 +15,7 @@ from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import EmailSendError, send_email
 from app.services.metrics import metrics
+from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
 from app.services.prospeccion_progress import progress_hub
 
 logger = get_logger("prospeccion.contact_sender")
@@ -352,6 +353,14 @@ class ProspeccionContactSender:
             envio_id=envio_id,
         )
         await repo.worker_insert_contact_logs([log_entry])
+
+        if is_promotable_estado(update_payload.get("estado")):
+            await auto_promote_prospecto(
+                prospecto_id=envio.get("prospecto_id"),
+                canal=canal,
+                estado=update_payload.get("estado"),
+                repo=repo,
+            )
 
         batch_id = envio.get("batch_id")
         batch_state: str | None = None

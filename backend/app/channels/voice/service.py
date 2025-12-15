@@ -11,6 +11,7 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
@@ -110,6 +111,12 @@ async def _sync_envio_status_from_voice(callback: VoiceStatusCallback) -> None:
                     "envio_id": str(envio_uuid),
                 }
             ]
+        )
+        await auto_promote_prospecto(
+            prospecto_id=envio.get("prospecto_id"),
+            canal="llamada",
+            estado=estado_envio,
+            repo=repo,
         )
         batch_state = None
         if estado_envio == "fallido" and batch_id_value:

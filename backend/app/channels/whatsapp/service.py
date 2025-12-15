@@ -24,6 +24,7 @@ from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
+from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 
 from . import schemas
 
@@ -289,6 +290,12 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
                     "envio_id": str(envio_uuid),
                 }
             ]
+        )
+        await auto_promote_prospecto(
+            prospecto_id=envio.get("prospecto_id"),
+            canal="whatsapp",
+            estado=estado_envio,
+            repo=repo,
         )
         batch_state = None
         if estado_envio == "fallido" and batch_id_value:

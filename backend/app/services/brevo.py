@@ -9,6 +9,7 @@ from uuid import UUID
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.metrics import metrics
+from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services.prospeccion_progress import progress_hub
 
 logger = get_logger("brevo.webhook")
@@ -156,6 +157,13 @@ async def process_brevo_events(
                 await repo.worker_insert_contact_logs([log_entry])
             except CRMRepositoryError as exc:
                 log_event(logger, "brevo.webhook_log_failed", error=str(exc))
+            else:
+                await auto_promote_prospecto(
+                    prospecto_id=envio.get("prospecto_id"),
+                    canal="correo",
+                    estado=estado,
+                    repo=repo,
+                )
             if batch_id_value:
                 try:
                     batch_state = await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id_value)))
