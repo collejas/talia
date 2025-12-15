@@ -65,7 +65,9 @@ import {
   type ConvertirProspectoPayload,
   listProspectos,
   listContactoEnviosPorProspecto,
+  listContactoLogs,
   listContactoTemplates,
+  listProspectoContactIndicators,
   listProspectoAudit,
   ejecutarChecklistLookup,
   ejecutarChecklistScraper,
@@ -75,6 +77,8 @@ import {
   type ContactoEnvio,
   type ContactoTemplate,
   type ProspeccionOmitido,
+  type ProspectoContactIndicators,
+  type ContactoLog,
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
@@ -310,15 +314,21 @@ function ProspectosView() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [contactDrawerOpen, setContactDrawerOpen] = useState(false)
   const [contactDrawerData, setContactDrawerData] = useState<ContactDrawerData | null>(null)
+  const [contactIndicators, setContactIndicators] = useState<Record<string, ProspectoContactIndicators>>({})
+  const [contactIndicatorsLoading, setContactIndicatorsLoading] = useState(false)
+  const [contactIndicatorsError, setContactIndicatorsError] = useState<string | null>(null)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyProspect, setHistoryProspect] = useState<ProspectoItem | null>(null)
   const [historyEntries, setHistoryEntries] = useState<ContactoEnvio[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [timelineEntries, setTimelineEntries] = useState<ContactoLog[]>([])
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [timelineError, setTimelineError] = useState<string | null>(null)
   const [auditEntries, setAuditEntries] = useState<ProspectoAuditEntry[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditError, setAuditError] = useState<string | null>(null)
-  const [historyTab, setHistoryTab] = useState<"contact" | "audit">("contact")
+  const [historyTab, setHistoryTab] = useState<"timeline" | "envios" | "audit">("timeline")
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
@@ -588,10 +598,13 @@ function ProspectosView() {
       setHistoryProspect(null)
       setHistoryError(null)
       setHistoryLoading(false)
+      setTimelineEntries([])
+      setTimelineError(null)
+      setTimelineLoading(false)
       setAuditEntries([])
       setAuditError(null)
       setAuditLoading(false)
-      setHistoryTab("contact")
+      setHistoryTab("timeline")
     }
   }, [historyDialogOpen])
 
@@ -662,6 +675,43 @@ function ProspectosView() {
     return chips
   }, [filters])
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
+  useEffect(() => {
+    if (!currentIds.length) {
+      setContactIndicators({})
+      setContactIndicatorsError(null)
+      return
+    }
+    let cancelled = false
+    setContactIndicatorsLoading(true)
+    setContactIndicatorsError(null)
+    ;(async () => {
+      try {
+        const response = await listProspectoContactIndicators(currentIds)
+        if (cancelled) return
+        const indicators: Record<string, ProspectoContactIndicators> = {}
+        for (const indicator of response.items ?? []) {
+          const key = indicator?.prospecto_id
+          if (key) {
+            indicators[key] = indicator
+          }
+        }
+        setContactIndicators(indicators)
+      } catch (err) {
+        if (!cancelled) {
+          setContactIndicators({})
+          const message = err instanceof Error ? err.message : "No se pudieron cargar los indicadores."
+          setContactIndicatorsError(message)
+        }
+      } finally {
+        if (!cancelled) {
+          setContactIndicatorsLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentIds])
   const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
   const showingFrom = items.length ? offset + 1 : 0
   const showingTo = items.length ? offset + items.length : 0
@@ -1054,14 +1104,17 @@ function ProspectosView() {
     if (!prospecto.id) return
     setHistoryProspect(prospecto)
     setHistoryDialogOpen(true)
-    setHistoryTab("contact")
+    setHistoryTab("timeline")
     setHistoryLoading(true)
     setHistoryError(null)
+    setTimelineLoading(true)
+    setTimelineError(null)
     setAuditLoading(true)
     setAuditError(null)
-    const [contactResult, auditResult] = await Promise.allSettled([
+    const [contactResult, auditResult, timelineResult] = await Promise.allSettled([
       listContactoEnviosPorProspecto(prospecto.id, { limit: 50 }),
       listProspectoAudit(prospecto.id, { limit: 100 }),
+      listContactoLogs({ prospecto_id: prospecto.id, limit: 100, order: "antiguo" }),
     ])
     if (contactResult.status === "fulfilled") {
       setHistoryEntries(contactResult.value.items ?? [])
@@ -1079,8 +1132,17 @@ function ProspectosView() {
       setAuditError(message)
       setAuditEntries([])
     }
+    if (timelineResult.status === "fulfilled") {
+      setTimelineEntries(timelineResult.value.items ?? [])
+    } else {
+      const reason = timelineResult.reason
+      const message = reason instanceof Error ? reason.message : "No se pudo cargar el timeline."
+      setTimelineError(message)
+      setTimelineEntries([])
+    }
     setHistoryLoading(false)
     setAuditLoading(false)
+    setTimelineLoading(false)
   }
 
   const handleFormSubmit = useCallback(async () => {
@@ -1742,6 +1804,11 @@ function ProspectosView() {
                           <div className="text-xs text-muted-foreground">{prospecto.email}</div>
                         ) : null}
                         <ProspectChannelBadges prospecto={prospecto} />
+                        <ProspectContactIndicatorsView
+                          indicator={prospecto.id ? contactIndicators[prospecto.id] : undefined}
+                          loading={contactIndicatorsLoading}
+                          error={contactIndicatorsError}
+                        />
                         </TableCell>
                         <TableCell>
                         <LookupStatusBadge status={prospecto.lookup_status} />
@@ -2288,12 +2355,52 @@ function ProspectosView() {
               {historyProspect ? historyProspect.display_name ?? "Prospecto" : "Sin prospecto seleccionado"}
             </DialogDescription>
           </DialogHeader>
-          <Tabs value={historyTab} onValueChange={(value) => setHistoryTab(value as "contact" | "audit")} className="mt-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="contact">Envíos recientes</TabsTrigger>
-              <TabsTrigger value="audit">Timeline</TabsTrigger>
+          <Tabs
+            value={historyTab}
+            onValueChange={(value) => setHistoryTab(value as "timeline" | "envios" | "audit")}
+            className="mt-4"
+          >
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="timeline">Timeline</TabsTrigger>
+              <TabsTrigger value="envios">Envíos</TabsTrigger>
+              <TabsTrigger value="audit">Auditoría</TabsTrigger>
             </TabsList>
-            <TabsContent value="contact" className="mt-4">
+            <TabsContent value="timeline" className="mt-4">
+              {timelineError ? (
+                <p className="text-sm text-destructive">{timelineError}</p>
+              ) : (
+                <div className="max-h-[50vh] space-y-3 overflow-y-auto">
+                  {timelineLoading ? (
+                    <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <IconLoader className="size-4 animate-spin" />
+                      Cargando timeline...
+                    </p>
+                  ) : null}
+                  {!timelineLoading && !timelineEntries.length ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">Sin eventos registrados.</p>
+                  ) : null}
+                  {!timelineLoading
+                    ? timelineEntries.map((entry) => (
+                        <div key={entry.id} className="rounded-lg border bg-muted/30 p-3 text-sm shadow-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Badge variant={contactStatusVariant(entry.estado)}>
+                              {contactStatusLabel(entry.estado)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{formatDate(entry.creado_en)}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {canalLabel(entry.canal)} · {formatContactLogDetail(entry)}
+                          </p>
+                          {entry.error ? (
+                            <p className="mt-1 text-xs text-destructive">Error: {entry.error}</p>
+                          ) : null}
+                        </div>
+                      ))
+                    : null}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="envios" className="mt-4">
               {historyError ? (
                 <p className="text-sm text-destructive">{historyError}</p>
               ) : (
@@ -2459,11 +2566,94 @@ function ProspectChannelBadges({ prospecto }: ProspectChannelBadgesProps) {
   )
 }
 
+type ProspectContactIndicatorsViewProps = {
+  indicator?: ProspectoContactIndicators
+  loading: boolean
+  error: string | null
+}
+
+function ProspectContactIndicatorsView({ indicator, loading, error }: ProspectContactIndicatorsViewProps) {
+  if (loading && !indicator) {
+    return <p className="mt-2 text-[11px] text-muted-foreground">Calculando indicadores…</p>
+  }
+  if (error && !indicator) {
+    return (
+      <Badge variant="outline" className="mt-2 text-[11px] font-normal text-destructive">
+        Indicadores no disponibles
+      </Badge>
+    )
+  }
+  if (!indicator) {
+    return (
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Sin envíos registrados para este prospecto.
+      </p>
+    )
+  }
+  const canales = indicator.canales ?? {}
+  const entries = Object.entries(canales)
+  if (!entries.length && !(indicator.respondio || indicator.total_respuestas)) {
+    return null
+  }
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      {entries.map(([canal, stats]) => {
+        if (!stats) return null
+        const total = stats.total ?? 0
+        const resumen: string[] = []
+        if ((stats.exitosos ?? 0) > 0) resumen.push(`${stats.exitosos} ok`)
+        if ((stats.pendientes ?? 0) > 0) resumen.push(`${stats.pendientes} pend`)
+        if ((stats.fallidos ?? 0) > 0) resumen.push(`${stats.fallidos} err`)
+        if ((stats.omitidos ?? 0) > 0) resumen.push(`${stats.omitidos} omit`)
+        const label = `${canalLabel(canal)} · ${total} env${total === 1 ? "ío" : "íos"}${
+          resumen.length ? ` (${resumen.join(" · ")})` : ""
+        }`
+        return (
+          <Badge key={canal} variant="secondary" className="w-fit text-[11px] font-normal">
+            {label}
+          </Badge>
+        )
+      })}
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <Badge variant={indicator.respondio ? "default" : "outline"} className="text-[11px] font-medium">
+          {indicator.respondio
+            ? `Respondió${indicator.total_respuestas ? ` (${indicator.total_respuestas})` : ""}`
+            : "Sin respuesta"}
+        </Badge>
+        {indicator.ultima_respuesta_en ? (
+          <span>Última resp.: {formatDate(indicator.ultima_respuesta_en)}</span>
+        ) : indicator.ultimo_contacto_en ? (
+          <span>Último contacto: {formatDate(indicator.ultimo_contacto_en)}</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—"
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return DATE_TIME_FORMATTER.format(date)
+}
+
+function formatContactLogDetail(entry: ContactoLog) {
+  const detail = isRecord(entry.detalle) ? entry.detalle : {}
+  const parts: string[] = []
+  const candidates = ["status", "reason", "email", "phone", "telefono", "action", "detail"]
+  for (const key of candidates) {
+    const raw = detail[key]
+    if (typeof raw === "string" && raw.trim().length) {
+      parts.push(raw.trim())
+    }
+  }
+  const sid = detail["sid"]
+  if (typeof sid === "string" && sid.trim().length) {
+    parts.push(`SID ${sid.trim()}`)
+  } else if (entry.envio_id) {
+    parts.push(`Envio ${String(entry.envio_id).slice(0, 8)}`)
+  }
+  return parts.length ? parts.join(" · ") : "—"
 }
 
 function batchStateLabel(value?: string | null) {

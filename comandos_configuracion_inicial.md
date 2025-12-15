@@ -778,3 +778,26 @@ https://talia.mx/api/inbox/threads?limit=25&message_limit=20
       - Esta primera versión sólo detiene el crawling y guarda status="paused". Para reanudar, la UI podrá ofrecer “Reanudar” que
         simplemente lanza un nuevo job reutilizando los parámetros guardados (los params ya viven en la fila de Supabase); más
         adelante podemos automatizarlo si queremos restaurar la cola.
+
+
+
+
+# HISTORIAL PROSPECTOS
+ ok, antes de este paso, deberiamos poder registrar en cada propspecto, si ya le fue enviado un correo/whatsapp/llamada y
+  cuantas de cada una, y ademas si respondio o no y todo su historial, no crees que eso seria bueno tenerlo como informacion??
+
+
+• Totalmente; tener ese historico visible por prospecto es clave antes de pensar en el pipeline. El backend ya guarda gran parte
+  de esa data:
+
+  - prospeccion_contacto_envio: un registro por prospecto/canal con estado, mensaje_id/call_sid, fechas.
+  - prospeccion_contactos_log: cada evento granular (intentado, entregado, leído, error).
+
+  Lo que falta es exponerlo claramente en la UI. Te propongo este camino:
+
+  1. Resumen por prospecto: en la tabla o el drawer de Prospectos, mostrar chips tipo “Correo: 2 envíos (1 entregado, 1 fallido)
+     · WhatsApp: 1 leído…”. Eso se puede derivar de listContactoEnviosPorProspecto, agregando conteos por canal/estado.
+  2. Historial detallado: además del modal actual, añadir una pestaña “Timeline” que consuma los logs (/api/prospeccion/contacto/
+     logs?prospecto_id=…) con cada evento, similar al timeline del monitor pero filtrado por prospecto.
+  3. Respuesta/seguimiento: cuando detectemos estado=entregado y luego un log con accion=reply o similar (si Twilio/Brevo lo
+     reportan), marcar ese evento para que soporte/ventas lo vea al instante.

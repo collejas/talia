@@ -4160,6 +4160,33 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_prospecto_contact_indicators(
+        self,
+        *,
+        usuario_token: str,
+        prospecto_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        """Obtiene indicadores agregados por prospecto/canal."""
+
+        if not prospecto_ids:
+            return []
+        ids_param = ",".join(str(value) for value in prospecto_ids)
+        params = {
+            "select": "prospecto_id,canales,total_envios,ultimo_contacto_en,total_respuestas,respondio,ultima_respuesta_en",
+            "prospecto_id": f"in.({ids_param})",
+            "order": "prospecto_id.asc",
+        }
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospecto_contacto_stats",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
+        return data
+
     async def list_prospecto_audit(
         self,
         *,

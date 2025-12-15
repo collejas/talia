@@ -6605,6 +6605,29 @@ async def listar_prospectos(
     }
 
 
+@router.get("/prospeccion/prospectos/contact-indicadores")
+async def listar_prospecto_contact_indicadores(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    prospecto_ids: Annotated[list[UUID] | None, Query(alias="prospecto_id")] = None,
+) -> dict[str, Any]:
+    """Devuelve los indicadores agregados de contacto por prospecto."""
+
+    if not prospecto_ids:
+        raise HTTPException(status_code=400, detail="prospecto_ids_required")
+    if len(prospecto_ids) > 50:
+        raise HTTPException(status_code=400, detail="prospecto_ids_limit_exceeded")
+    try:
+        rows = await repo.list_prospecto_contact_indicators(
+            usuario_token=user_token,
+            prospecto_ids=prospecto_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "items": rows}
+
+
 @router.get("/prospeccion/contacto/batches")
 async def listar_contacto_batches(
     *,

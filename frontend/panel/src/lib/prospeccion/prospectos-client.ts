@@ -163,6 +163,27 @@ export type ProspectoContactoResumen = {
   stage?: string | null
 }
 
+export type ProspectoCanalIndicator = {
+  total?: number | null
+  pendientes?: number | null
+  exitosos?: number | null
+  fallidos?: number | null
+  omitidos?: number | null
+  cancelados?: number | null
+  ultimo_estado?: string | null
+  ultima_actividad_en?: string | null
+}
+
+export type ProspectoContactIndicators = {
+  prospecto_id: string
+  canales?: Record<string, ProspectoCanalIndicator> | null
+  total_envios?: number | null
+  ultimo_contacto_en?: string | null
+  total_respuestas?: number | null
+  respondio?: boolean | null
+  ultima_respuesta_en?: string | null
+}
+
 export type ProspeccionOmitido = {
   motivo: string
   prospecto_ids: string[]
@@ -561,6 +582,22 @@ export async function listContactoEnviosPorProspecto(
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
   return requestJson(url.toString())
+}
+
+export async function listProspectoContactIndicators(prospectoIds: string[]) {
+  if (!prospectoIds.length) {
+    return { ok: true, items: [] as ProspectoContactIndicators[] }
+  }
+  const url = buildClientUrl("/api/prospeccion/prospectos/contact-indicadores")
+  const search = new URLSearchParams(url.search)
+  for (const id of prospectoIds) {
+    const trimmed = (id || "").trim()
+    if (trimmed) {
+      search.append("prospecto_id", trimmed)
+    }
+  }
+  url.search = search.toString()
+  return requestJson<{ ok: boolean; items: ProspectoContactIndicators[] }>(url.toString())
 }
 
 export async function listContactoLogs(params: {

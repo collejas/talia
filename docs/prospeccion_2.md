@@ -74,3 +74,49 @@ Referencia principal: `docs/prospeccion.md`. Aquí se explica en lenguaje operat
    - Permitir que este CTA reciba un set de filtros predefinidos (listas inteligentes) para lanzar campañas recurrentes sin re-seleccionar prospectos manualmente.
 
 Implementar estos ajustes debería reducir la confusión actual, alinear el flujo real con el plan documentado y dar señales claras de dónde nombrar campañas y dónde monitorearlas.
+
+---
+
+## 5. Timeline completo por lote
+
+- **Dónde se expone**: en el monitor `/prospeccion/contactos/{batch_id}` (drawer y página dedicada). Cada lote ya muestra el timeline lineal con logs crudos (`prospeccion_contactos_log`) y los `SIDs` de Twilio/Brevo cuando aplica.  
+- **Qué contiene**: eventos `queued → sent → delivered → failed → responded`, timestamps, payloads reducidos, canal y referencia al mensaje remoto.  
+- **Por qué importa**: soporte y operaciones pueden auditar todo el ciclo sin ir a Supabase o al proveedor externo; si hay un reclamo bastan los `SIDs` para cruzarlo en Twilio/Brevo.  
+- **Siguiente paso UX**: reutilizar este timeline filtrado por `prospecto_id` dentro del drawer de `/prospeccion/prospectos` para que ventas vea el historial antes de moverlo al pipeline.
+
+---
+
+## 6. Indicadores por etapa
+
+- **Fuente**: endpoint `/api/prospeccion/stage-resumen` que ya calcula los totales por etapa (Descubre, Enriquecer, Preparar, Lanzar, Evaluar) a partir de jobs, prospectos, batches y campañas.  
+- **Qué mostraremos**:
+  - Chips o tarjetas en la parte superior de `/prospeccion/prospectos` con:  
+    - `Descubre`: búsquedas realizadas vs. pendientes de revisar.  
+    - `Enriquecer`: prospectos con datos completos vs. incompletos.  
+    - `Preparar`: prospectos seleccionados/listas guardadas listas para lanzar.  
+    - `Lanzar`: campañas activas/programadas esta semana.  
+    - `Evaluar`: lotes en monitoreo / con alertas.  
+- **Objetivo**: que el usuario entienda en qué etapa falta trabajo y pueda saltar directo al módulo correspondiente, alineando el flujo narrado en la documentación con la interfaz real.
+
+---
+
+## 7. Vista `/prospeccion/pipeline`
+
+- **Función**: es el pre-Kanban donde sólo entran prospectos “trabajables”, es decir, aquellos con al menos un intento registrado (correo, WhatsApp o llamada) y reglas básicas validadas (datos completos, canal permitido, sin bloqueo de privacidad).  
+- **Cómo llega un prospecto**:
+  1. Desde `/prospeccion/prospectos` se ejecutan campañas o acciones manuales.  
+  2. Cada envío crea registros en `prospeccion_contacto_envio` y logs detallados.  
+  3. Al detectar el primer contacto exitoso o una respuesta, se marca `pipeline_ready = true` (campo planeado) y el prospecto aparece en la vista `/prospeccion/pipeline`.  
+- **Qué aporta**: agrupa a los prospectos que ya pasaron por outreach inicial y están listos para seguimiento humano estilo Kanban (Contactado → Interesado → Negociación → Cerrado). Sirve para evitar que la vista de pipeline se llene de leads fríos sin contexto.  
+- **Próxima mejora**: mostrar tarjetas con los contadores de correos/WhatsApp/llamadas, último resultado y botón para mover de etapa o devolverlo a prospección si falta data.
+
+---
+
+## 8. Registro detallado por prospecto
+
+- **Necesidad**: antes de mandar un lead al pipeline se debe saber cuántos intentos hubo, por qué canal y si respondió.  
+- **Plan**:
+  - En la tabla/drawer de `/prospeccion/prospectos` mostrar chips tipo `Correo 2/1 entregado`, `WhatsApp 1 pendiente`, `Llamada 0`.  
+  - Añadir una pestaña “Historial” que consuma el timeline (logs) filtrado por `prospecto_id`, incluyendo respuestas entrantes.  
+  - Guardar banderas `respondio_correo`, `respondio_whatsapp`, `respondio_llamada` y contador por canal para facilitar filtros.  
+- **Uso**: con esta visibilidad el agente decide si reintentar, si pasa a pipeline o si cierra el lead. Además, los datos alimentan reportes y reglas automáticas (por ejemplo, mover a pipeline tras 1 respuesta positiva).
