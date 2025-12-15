@@ -193,6 +193,11 @@ export type ContactoBatch = {
   finalizado_en?: string | null
   metadata?: Record<string, unknown> | null
   creado_en?: string | null
+  campana_id?: string | null
+  lista_id?: string | null
+  titulo?: string | null
+  filtros?: Record<string, unknown> | null
+  programacion?: Record<string, unknown> | null
 }
 
 export type ContactoEnvio = {

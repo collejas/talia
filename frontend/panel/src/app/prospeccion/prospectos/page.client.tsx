@@ -76,6 +76,8 @@ import {
   type ContactoTemplate,
   type ProspeccionOmitido,
   verificarProspectos,
+  listContactoBatches,
+  type ContactoBatch,
 } from "@/lib/prospeccion/prospectos-client"
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
@@ -199,6 +201,16 @@ const FUENTE_BUSQUEDA_LABELS: Record<string, string> = {
   google_places: "Importado Google",
 }
 
+const BATCH_STATE_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
+  pendiente: "secondary",
+  procesando: "secondary",
+  completado: "default",
+  enviado: "default",
+  cancelado: "outline",
+  error: "destructive",
+  fallido: "destructive",
+}
+
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -310,6 +322,9 @@ function ProspectosView() {
   const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
   const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
+  const [recentBatches, setRecentBatches] = useState<ContactoBatch[]>([])
+  const [recentBatchLoading, setRecentBatchLoading] = useState(false)
+  const [recentBatchError, setRecentBatchError] = useState<string | null>(null)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [plannerMode, setPlannerMode] = useState<PlannerMode>("campaign")
@@ -397,9 +412,27 @@ function ProspectosView() {
     }
   }, [])
 
+  const fetchRecentBatches = useCallback(async () => {
+    setRecentBatchLoading(true)
+    setRecentBatchError(null)
+    try {
+      const response = await listContactoBatches({ limit: 3 })
+      setRecentBatches(response.items ?? [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar los lotes recientes."
+      setRecentBatchError(message)
+    } finally {
+      setRecentBatchLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void refreshChecklist()
   }, [refreshChecklist])
+
+  useEffect(() => {
+    void fetchRecentBatches()
+  }, [fetchRecentBatches])
 
   useEffect(() => {
     if (!contactDialogOpen) {
@@ -756,6 +789,7 @@ function ProspectosView() {
       })
       setContactDialogOpen(false)
       await fetchProspectos(offset)
+      void fetchRecentBatches()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo programar el contacto."
       setContactError(message)
@@ -941,8 +975,9 @@ function ProspectosView() {
           : `Se programó la campaña correctamente.${omitidosMensaje}`,
       })
       void fetchProspectos(offset)
+      void fetchRecentBatches()
     },
-    [fetchProspectos, offset, openContactDrawer]
+    [fetchProspectos, fetchRecentBatches, offset, openContactDrawer]
   )
 
   const handleOpenCreateDialog = () => {
@@ -1175,6 +1210,96 @@ function ProspectosView() {
               </div>
             )
           })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Últimos envíos">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Últimos lotes programados</p>
+            <p className="text-xs text-muted-foreground">
+              Consulta rápidamente cómo van las campañas más recientes y abre el monitor detallado si necesitas más
+              contexto.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void fetchRecentBatches()}
+              disabled={recentBatchLoading}
+            >
+              <IconRefresh className={cn("mr-1.5 size-4", recentBatchLoading && "animate-spin")} />
+              Actualizar
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/prospeccion/contactos">Ver monitor</Link>
+            </Button>
+          </div>
+        </div>
+        {recentBatchError ? (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <IconAlertTriangle className="size-4" />
+            <span className="flex-1">{recentBatchError}</span>
+          </div>
+        ) : null}
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {recentBatchLoading && !recentBatches.length ? (
+            Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={`batch-skeleton-${index}`}
+                className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground"
+              >
+                <IconLoader className="mb-1 size-4 animate-spin" />
+                Cargando lote...
+              </div>
+            ))
+          ) : recentBatches.length ? (
+            recentBatches.map((batch) => (
+              <div key={batch.id} className="flex h-full flex-col rounded-xl border bg-background/80 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {batch.titulo?.trim() || `Lote ${batch.id.slice(0, 8)}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(batch.programado_en ?? batch.creado_en)}
+                    </p>
+                  </div>
+                  <Badge variant={BATCH_STATE_VARIANTS[batch.estado?.toLowerCase() ?? ""] ?? "outline"} className="capitalize">
+                    {batchStateLabel(batch.estado)}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos ·{" "}
+                  {(batch.canales ?? []).map((canal) => CANAL_LABELS[canal as keyof typeof CANAL_LABELS] ?? canal).join(", ") ||
+                    "Sin canales"}
+                </p>
+                {batch.metadata && typeof batch.metadata["campana_nombre"] === "string" ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Campaña: {String(batch.metadata["campana_nombre"])}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(batch.canales ?? []).map((canal) => (
+                    <Badge key={`${batch.id}-${canal}`} variant="outline" className="text-[11px]">
+                      {CANAL_LABELS[canal as keyof typeof CANAL_LABELS] ?? canal}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="mt-4 flex flex-1 items-end justify-between text-xs text-muted-foreground">
+                  <span>ID: {batch.id.slice(0, 8)}</span>
+                  <Button asChild variant="ghost" size="sm" className="text-xs">
+                    <Link href="/prospeccion/contactos">Ver detalle</Link>
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
+              No hay envíos recientes. Programa uno desde la tabla para verlo aquí.
+            </div>
+          )}
         </div>
       </section>
 
@@ -2295,6 +2420,29 @@ function formatDate(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return DATE_TIME_FORMATTER.format(date)
+}
+
+function batchStateLabel(value?: string | null) {
+  if (!value) return "Desconocido"
+  const normalized = value.toLowerCase()
+  switch (normalized) {
+    case "pendiente":
+      return "Pendiente"
+    case "procesando":
+      return "Procesando"
+    case "completado":
+      return "Completado"
+    case "cancelado":
+      return "Cancelado"
+    case "error":
+      return "Error"
+    case "fallido":
+      return "Fallido"
+    case "enviado":
+      return "Enviado"
+    default:
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+  }
 }
 
 type EnrichmentChecklistProps = {
