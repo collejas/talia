@@ -44,6 +44,7 @@ export function AppViewLayout({
   withThemeToggle = true,
   className,
   style,
+  defaultOpen = false,
   ...providerProps
 }: AppViewLayoutProps) {
   return (
@@ -56,6 +57,7 @@ export function AppViewLayout({
           ...style,
         } as CSSProperties
       }
+      defaultOpen={defaultOpen}
       {...providerProps}
     >
       <AppSidebar variant={sidebarVariant} />

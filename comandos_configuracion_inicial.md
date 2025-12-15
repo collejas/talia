@@ -92,6 +92,8 @@ codex resume 019b0a33-3b12-7e21-8191-075e0deb333e
 
 codex resume 019b196a-f55b-7f82-afa1-91208c4b517a
 
+# SORIANA
+carlossanchez-fanjul@soriana.com
 # Sncronizar despues de cambios:
 sudo chown -R www-data:www-data /var/www/talia
 

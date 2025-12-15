@@ -118,7 +118,10 @@ const NAVIGATION = {
   ],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  collapsible = "icon",
+  ...props
+}: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter()
   const { user, loading } = useCurrentUser()
   const [hydrated, setHydrated] = useState(false)
@@ -196,7 +199,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar collapsible={collapsible} {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

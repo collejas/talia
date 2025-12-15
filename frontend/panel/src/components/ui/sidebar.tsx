@@ -54,7 +54,7 @@ function useSidebar() {
 }
 
 function SidebarProvider({
-  defaultOpen = true,
+  defaultOpen = false,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -87,6 +87,22 @@ function SidebarProvider({
     },
     [setOpenProp, open]
   )
+
+  React.useEffect(() => {
+    if (typeof document === "undefined" || typeof openProp === "boolean") {
+      return
+    }
+    const match = document.cookie
+      ?.split(";")
+      .map((cookie) => cookie.trim())
+      .find((cookie) => cookie.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
+    if (!match) {
+      _setOpen(defaultOpen)
+      return
+    }
+    const value = match.split("=", 2)[1]
+    _setOpen(value === "true")
+  }, [defaultOpen, openProp])
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
