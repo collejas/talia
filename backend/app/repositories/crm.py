@@ -4272,17 +4272,12 @@ class CRMRepository:
 
         if not batch_ids:
             return {}
-        ids_param = ",".join(str(value) for value in batch_ids)
-        params = {
-            "select": "batch_id,estado,count:count()",
-            "batch_id": f"in.({ids_param})",
-            "group": "batch_id,estado",
-        }
+        payload = {"batch_ids": [str(value) for value in batch_ids]}
         resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_contacto_envio",
+            "POST",
+            "/rest/v1/rpc/prospeccion_contacto_envio_resumen",
             token=usuario_token,
-            params=params,
+            json=payload,
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -4292,7 +4287,7 @@ class CRMRepository:
             batch_id = str(row.get("batch_id"))
             estado = str(row.get("estado") or "pendiente").strip() or "pendiente"
             try:
-                count_value = int(row.get("count"))
+                count_value = int(row.get("total"))
             except (TypeError, ValueError):
                 count_value = 0
             bucket = resultado.setdefault(batch_id, {})
