@@ -24,6 +24,8 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react"
 
+import Link from "next/link"
+
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionCampaignWizard, type ProspeccionWizardPreset } from "@/components/prospeccion/prospeccion-campaign-wizard"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
@@ -203,6 +205,59 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   timeStyle: "short",
   timeZone: "America/Mexico_City",
 })
+
+type FlowStepKey = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
+type FlowStepDefinition = {
+  key: FlowStepKey
+  title: string
+  description: string
+  actionHref: string
+  actionLabel: string
+  icon: typeof IconSearch
+}
+
+const PROSPECCION_FLOW_DEFINITIONS: FlowStepDefinition[] = [
+  {
+    key: "discover",
+    title: "1. Descubre",
+    description: "Busca en Google, DENUE o Web para alimentar tu lista.",
+    actionHref: "/prospeccion/buscador",
+    actionLabel: "Abrir buscador",
+    icon: IconSearch,
+  },
+  {
+    key: "enrich",
+    title: "2. Enriquecer",
+    description: "Valida teléfonos y completa datos clave desde este panel.",
+    actionHref: "#checklist",
+    actionLabel: "Ver checklist",
+    icon: IconSparkles,
+  },
+  {
+    key: "prepare",
+    title: "3. Preparar",
+    description: "Selecciona prospectos, define filtros y listas inteligentes.",
+    actionHref: "#prospectos",
+    actionLabel: "Revisar tabla",
+    icon: IconUsersGroup,
+  },
+  {
+    key: "launch",
+    title: "4. Lanzar",
+    description: "Configura canales y plantillas multicanal antes de enviar.",
+    actionHref: "/prospeccion/campanas",
+    actionLabel: "Ver campañas",
+    icon: IconTargetArrow,
+  },
+  {
+    key: "evaluate",
+    title: "5. Evaluar",
+    description: "Monitorea KPIs, streams y reintentos en tiempo real.",
+    actionHref: "/prospeccion/contactos",
+    actionLabel: "Abrir monitor",
+    icon: IconPhone,
+  },
+]
 
 export default function ProspectosClientPage() {
   return (
@@ -547,6 +602,38 @@ function ProspectosView() {
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(total / limit) : 1
   const currentPage = limit ? Math.floor(offset / limit) + 1 : 1
+  const flowSteps = useMemo(() => {
+    const pendingPhones = checklist?.telefonos_pendientes ?? 0
+    const pendingEmails = checklist?.sin_email ?? 0
+    const steps = PROSPECCION_FLOW_DEFINITIONS.map((step) => {
+      let meta: string
+      switch (step.key) {
+        case "discover":
+          meta = total ? `${total.toLocaleString("es-MX")} prospectos` : "Sin búsquedas guardadas"
+          break
+        case "enrich": {
+          const parts = []
+          if (pendingPhones > 0) parts.push(`${pendingPhones} tel. pendientes`)
+          if (pendingEmails > 0) parts.push(`${pendingEmails} sin email`)
+          meta = parts.length ? parts.join(" · ") : "Datos verificados"
+          break
+        }
+        case "prepare":
+          meta = selectedCount ? `${selectedCount} seleccionados` : "Selecciona prospectos"
+          break
+        case "launch":
+          meta = "Wizard multicanal"
+          break
+        case "evaluate":
+          meta = "KPIs y stream en vivo"
+          break
+        default:
+          meta = ""
+      }
+      return { ...step, meta, isCurrent: step.key === "prepare" }
+    })
+    return steps
+  }, [checklist, selectedCount, total])
 
   const handleToggleRow = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -1042,6 +1129,55 @@ function ProspectosView() {
         </div>
       ) : null}
 
+      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Guía rápida de prospección">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo recomendado</p>
+            <p className="text-base text-muted-foreground">
+              Sigue los pasos “Descubre → Enriquecer → Preparar → Lanzar → Evaluar” desde un solo lugar.
+            </p>
+          </div>
+          <Button size="sm" onClick={handlePlannerOpen}>
+            <IconSparkles className="mr-1.5 size-4" />
+            Preparar envíos
+          </Button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {flowSteps.map((step) => {
+            const Icon = step.icon
+            return (
+              <div
+                key={step.key}
+                className={cn(
+                  "flex h-full flex-col rounded-xl border bg-background/70 p-4 text-sm shadow-sm transition",
+                  step.isCurrent ? "border-primary shadow-md" : "border-border hover:border-primary/40"
+                )}
+              >
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-full p-1.5",
+                      step.isCurrent ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <span>{step.title}</span>
+                  {step.isCurrent ? <Badge variant="secondary">En esta vista</Badge> : null}
+                </div>
+                <p className="mt-2 flex-1 text-muted-foreground">{step.description}</p>
+                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{step.meta}</span>
+                  <Button asChild variant={step.isCurrent ? "secondary" : "ghost"} size="sm">
+                    <Link href={step.actionHref}>{step.actionLabel}</Link>
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
       <EnrichmentChecklist
         data={checklist}
         loading={checklistLoading}
@@ -1313,7 +1449,7 @@ function ProspectosView() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
-      <section className="overflow-hidden rounded-lg border bg-card shadow-sm">
+      <section id="prospectos" className="overflow-hidden rounded-lg border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
           <div>
             <p className="text-sm font-medium">Prospectos guardados</p>
@@ -2214,7 +2350,7 @@ function EnrichmentChecklist({
   ]
 
   return (
-    <Card>
+      <Card id="checklist">
       <CardHeader className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <CardTitle className="text-base font-semibold">Checklist de enriquecimiento</CardTitle>
