@@ -551,6 +551,38 @@ class ProspeccionListaQuery(BaseModel):
     search: str | None = Field(default=None, max_length=120)
 
 
+class ContactoTemplatePayload(BaseModel):
+    """Crea una plantilla multicanal para prospección."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canal: Literal["correo", "whatsapp", "llamada"]
+    nombre: str = Field(..., min_length=3, max_length=160)
+    slug: str = Field(..., min_length=3, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
+    asunto: str | None = Field(default=None, max_length=200)
+    cuerpo_texto: str | None = Field(default=None, max_length=4000)
+    cuerpo_html: str | None = Field(default=None, max_length=8000)
+    metadata: dict[str, Any] | None = Field(default=None)
+    activo: bool = Field(default=True)
+
+
+class ContactoTemplateUpdatePayload(BaseModel):
+    """Campos editables de una plantilla existente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canal: Literal["correo", "whatsapp", "llamada"] | None = None
+    nombre: str | None = Field(default=None, min_length=3, max_length=160)
+    slug: str | None = Field(default=None, min_length=3, max_length=160)
+    descripcion: str | None = Field(default=None, max_length=400)
+    asunto: str | None = Field(default=None, max_length=200)
+    cuerpo_texto: str | None = Field(default=None, max_length=4000)
+    cuerpo_html: str | None = Field(default=None, max_length=8000)
+    metadata: dict[str, Any] | None = Field(default=None)
+    activo: bool | None = None
+
+
 class ProspeccionCampanaQuery(BaseModel):
     """Parámetros del dashboard de campañas."""
 
@@ -2523,6 +2555,30 @@ async def _fetch_contact_templates(
             raise HTTPException(status_code=404, detail="contact_template_not_found")
         template_map[str(template_id)] = template
     return template_map
+
+
+def _build_contact_template_payload(
+    data: dict[str, Any],
+    *,
+    include_metadata: bool = False,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in data.items():
+        if value is None:
+            continue
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed:
+                continue
+            payload[key] = trimmed
+        else:
+            payload[key] = value
+
+    metadata_requested = "metadata" in data or include_metadata
+    if metadata_requested:
+        metadata_value = data.get("metadata") or {}
+        payload["metadata"] = metadata_value if isinstance(metadata_value, dict) else {}
+    return payload
 
 
 def _build_contact_batch_payload(
@@ -6815,6 +6871,62 @@ async def listar_contacto_templates(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "items": items}
+
+
+@router.post("/prospeccion/contacto/templates")
+async def crear_contacto_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    payload: ContactoTemplatePayload,
+) -> dict[str, Any]:
+    body = _build_contact_template_payload(payload.model_dump(), include_metadata=True)
+    try:
+        template = await repo.create_contact_template(usuario_token=user_token, payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "template": template}
+
+
+@router.patch("/prospeccion/contacto/templates/{template_id}")
+async def actualizar_contacto_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    template_id: UUID,
+    payload: ContactoTemplateUpdatePayload,
+) -> dict[str, Any]:
+    raw_data = payload.model_dump(exclude_none=True)
+    if not raw_data:
+        raise HTTPException(status_code=400, detail="empty_update")
+    body = _build_contact_template_payload(raw_data)
+    try:
+        template = await repo.update_contact_template(
+            usuario_token=user_token,
+            template_id=template_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        if "contact_template_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="contact_template_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "template": template}
+
+
+@router.delete("/prospeccion/contacto/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_contacto_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    template_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_contact_template(usuario_token=user_token, template_id=template_id)
+    except CRMRepositoryError as exc:
+        if "contact_template_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="contact_template_not_found") from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/prospeccion/contacto/listas")

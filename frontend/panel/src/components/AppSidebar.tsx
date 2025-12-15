@@ -99,6 +99,11 @@ const NAVIGATION = {
           url: "/settings/catalogo",
           icon: IconBox,
         },
+        {
+          title: "Plantillas de contacto",
+          url: "/settings/prospeccion/plantillas",
+          icon: IconMessageCircle,
+        },
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder },

@@ -290,14 +290,17 @@ export function ProspeccionCampaignWizard({
     const payload: ContactarProspectosPayload = {
       canales: activeChannels.map(({ key }) => {
         const config = channelState[key]
+        const template =
+          config.templateSlug && templates.length
+            ? templates.find((tpl) => tpl.slug === config.templateSlug && tpl.canal === key)
+            : null
         const channelPayload: ProspeccionCanalConfigInput = {
           canal: key,
-          template_id: config.templateSlug,
+          template_id: template?.id,
           subject: config.subject,
           body: config.body,
           message: config.message,
           programado_en: config.schedule ? new Date(config.schedule).toISOString() : undefined,
-          metadata: config.templateSlug ? { template_slug: config.templateSlug } : undefined,
         }
         return channelPayload
       }),

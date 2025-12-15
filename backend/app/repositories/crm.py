@@ -4019,6 +4019,66 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_template_invalid:{row!r}")
         return row
 
+    async def create_contact_template(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_template_create_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_template_create_invalid:{row!r}")
+        return row
+
+    async def update_contact_template(
+        self,
+        *,
+        usuario_token: str,
+        template_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request_with_user(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params={"id": f"eq.{template_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("contact_template_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_template_update_invalid:{row!r}")
+        return row
+
+    async def delete_contact_template(
+        self,
+        *,
+        usuario_token: str,
+        template_id: UUID,
+    ) -> None:
+        resp = await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params={"id": f"eq.{template_id}"},
+        )
+        data = resp.json() or []
+        if isinstance(data, dict) and data.get("message") == "No rows deleted":
+            raise CRMRepositoryError("contact_template_not_found")
+
     async def list_contact_lists(
         self,
         *,

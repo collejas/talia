@@ -37,6 +37,10 @@ class DummyRepo:
     async def worker_sync_batch_status(self, *, batch_id: UUID):
         self.synced_batch = batch_id
 
+    async def worker_get_prospecto(self, *, prospecto_id: UUID):
+        assert str(prospecto_id) == self._envio["prospecto_id"]
+        return {"id": str(prospecto_id)}
+
 
 @pytest.mark.asyncio
 async def test_sync_envio_status_from_voice_completed(monkeypatch) -> None:

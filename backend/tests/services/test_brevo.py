@@ -36,6 +36,9 @@ class RepoStub:
         self.synced.append(batch_id)
         return "completado"
 
+    async def worker_get_prospecto(self, *, prospecto_id: uuid.UUID):
+        return {"id": str(prospecto_id)}
+
 
 @pytest.mark.anyio
 async def test_process_brevo_events_updates_envio(monkeypatch):

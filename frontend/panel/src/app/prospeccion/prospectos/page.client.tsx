@@ -83,6 +83,7 @@ import {
   verificarProspectos,
   listContactoBatches,
   type ContactoBatch,
+  type ProspeccionCanalConfigInput,
 } from "@/lib/prospeccion/prospectos-client"
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
@@ -332,7 +333,7 @@ function ProspectosView() {
   const [historyTab, setHistoryTab] = useState<"timeline" | "envios" | "audit">("timeline")
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
-  const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
+const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const [checklist, setChecklist] = useState<ChecklistSummary | null>(null)
   const [checklistLoading, setChecklistLoading] = useState(false)
   const [checklistAction, setChecklistAction] = useState<"lookup" | "scraper" | null>(null)
@@ -499,12 +500,13 @@ function ProspectosView() {
     void fetchRecentBatches()
   }, [fetchRecentBatches])
 
-  useEffect(() => {
-    if (!contactDialogOpen) {
-      setContactError(null)
-      setContactForm(initialContactForm)
-    }
-  }, [contactDialogOpen])
+useEffect(() => {
+  if (!contactDialogOpen) {
+    setContactError(null)
+    setContactForm(initialContactForm)
+    setSelectedTemplates({})
+  }
+}, [contactDialogOpen])
 
   useEffect(() => {
     if (!contactDialogOpen) {
@@ -860,20 +862,94 @@ function ProspectosView() {
       correo_cuerpo?: string
       whatsapp_mensaje?: string
       llamada_notas?: string
+      canales?: ProspeccionCanalConfigInput[]
     } = { prospecto_ids: selectedIds }
 
-    if (contactForm.correoAsunto.trim() && contactForm.correoCuerpo.trim()) {
-      payload.correo_asunto = contactForm.correoAsunto.trim()
-      payload.correo_cuerpo = contactForm.correoCuerpo.trim()
-    }
-    if (contactForm.whatsappMensaje.trim()) {
-      payload.whatsapp_mensaje = contactForm.whatsappMensaje.trim()
-    }
-    if (contactForm.llamadaNotas.trim()) {
-      payload.llamada_notas = contactForm.llamadaNotas.trim()
+    const correoAsunto = contactForm.correoAsunto.trim()
+    const correoCuerpo = contactForm.correoCuerpo.trim()
+    const whatsappMensaje = contactForm.whatsappMensaje.trim()
+    const llamadaNotas = contactForm.llamadaNotas.trim()
+
+    const canalesPayload: ProspeccionCanalConfigInput[] = []
+
+    const resolveTemplate = (canal: "correo" | "whatsapp" | "llamada") => {
+      const slug = selectedTemplates[canal]
+      if (!slug) return null
+      const template = templates.find((item) => item.slug === slug && item.canal === canal)
+      return template ?? null
     }
 
-    if (Object.keys(payload).length === 1) {
+    const correoTemplate = resolveTemplate("correo")
+    if (selectedTemplates.correo && !correoTemplate) {
+      setContactError("La plantilla de correo seleccionada ya no está disponible.")
+      return
+    }
+    if (correoTemplate) {
+      const subject = correoAsunto || correoTemplate.asunto?.trim() || ""
+      const body = correoCuerpo || correoTemplate.cuerpo_texto?.trim() || ""
+      if (!subject || !body) {
+        setContactError("La plantilla de correo seleccionada necesita asunto y cuerpo.")
+        return
+      }
+      canalesPayload.push({
+        canal: "correo",
+        template_id: correoTemplate.id,
+        subject,
+        body,
+      })
+    } else if (correoAsunto && correoCuerpo) {
+      payload.correo_asunto = correoAsunto
+      payload.correo_cuerpo = correoCuerpo
+    }
+
+    const whatsappTemplate = resolveTemplate("whatsapp")
+    if (selectedTemplates.whatsapp && !whatsappTemplate) {
+      setContactError("La plantilla de WhatsApp seleccionada ya no está disponible.")
+      return
+    }
+    if (whatsappTemplate) {
+      const message = whatsappMensaje || whatsappTemplate.cuerpo_texto?.trim() || ""
+      const entry: ProspeccionCanalConfigInput = {
+        canal: "whatsapp",
+        template_id: whatsappTemplate.id,
+      }
+      if (message) {
+        entry.body = message
+      }
+      canalesPayload.push(entry)
+    } else if (whatsappMensaje) {
+      payload.whatsapp_mensaje = whatsappMensaje
+    }
+
+    const llamadaTemplate = resolveTemplate("llamada")
+    if (selectedTemplates.llamada && !llamadaTemplate) {
+      setContactError("La plantilla de llamada seleccionada ya no está disponible.")
+      return
+    }
+    if (llamadaTemplate) {
+      const script = llamadaNotas || llamadaTemplate.cuerpo_texto?.trim() || llamadaTemplate.descripcion?.trim() || ""
+      const entry: ProspeccionCanalConfigInput = {
+        canal: "llamada",
+        template_id: llamadaTemplate.id,
+      }
+      if (script) {
+        entry.message = script
+      }
+      canalesPayload.push(entry)
+    } else if (llamadaNotas) {
+      payload.llamada_notas = llamadaNotas
+    }
+
+    if (canalesPayload.length) {
+      payload.canales = canalesPayload
+    }
+
+    const hasLegacyChannel =
+      Boolean(payload.correo_asunto && payload.correo_cuerpo) ||
+      Boolean(payload.whatsapp_mensaje) ||
+      Boolean(payload.llamada_notas)
+
+    if (!canalesPayload.length && !hasLegacyChannel) {
       setContactError("Define al menos un canal (correo, WhatsApp o llamada).")
       return
     }
@@ -915,7 +991,18 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [contactForm, fetchProspectos, fetchRecentBatches, fetchStageSummary, items, offset, openContactDrawer, selectedIds])
+  }, [
+    contactForm,
+    fetchProspectos,
+    fetchRecentBatches,
+    fetchStageSummary,
+    items,
+    offset,
+    openContactDrawer,
+    selectedIds,
+    selectedTemplates,
+    templates,
+  ])
 
   const handlePlannerOpen = useCallback(() => {
     setPlannerMode(selectedCount ? "quick" : "campaign")
