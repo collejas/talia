@@ -1,7 +1,5 @@
 import type { ReactNode } from "react"
 
-import { ProspeccionStageNav } from "@/components/prospeccion/prospeccion-stage-nav"
-
 import { AppViewLayout } from "./app-view-layout"
 
 type ProspeccionViewLayoutProps = {
@@ -13,7 +11,6 @@ export function ProspeccionViewLayout({ title, children }: ProspeccionViewLayout
   return (
     <AppViewLayout title={title}>
       <div className="space-y-4 px-4 pb-10 pt-4 md:px-6 lg:px-8">
-        <ProspeccionStageNav />
         {children}
       </div>
     </AppViewLayout>
