@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconAlertTriangle, IconLoader, IconRefresh, IconRepeat } from "@tabler/icons-react"
+import { IconAlertTriangle, IconLoader, IconRefresh, IconRepeat, IconTimeline } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,10 +13,12 @@ import {
   getContactoMetrics,
   listContactoBatches,
   listContactoEnvios,
+  listContactoLogs,
   reintentarContactoEnvio,
   type ContactoBatch,
   type ContactoBatchResumen,
   type ContactoEnvio,
+  type ContactoLog,
   type ContactoMetrics,
 } from "@/lib/prospeccion/prospectos-client"
 import { cn } from "@/lib/utils"
@@ -79,6 +81,9 @@ export default function ContactosPageClient() {
 
   const [metrics, setMetrics] = useState<ContactoMetrics | null>(null)
   const [metricsError, setMetricsError] = useState<string | null>(null)
+  const [logs, setLogs] = useState<ContactoLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState<string | null>(null)
 
   const fetchBatchSummary = useCallback(async (batchId: string | null) => {
     if (!batchId) {
@@ -104,6 +109,26 @@ export default function ContactosPageClient() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar las métricas."
       setMetricsError(message)
+    }
+  }, [])
+
+  const fetchLogs = useCallback(async (batchId: string | null) => {
+    if (!batchId) {
+      setLogs([])
+      setLogsError(null)
+      return
+    }
+    setLogsLoading(true)
+    setLogsError(null)
+    try {
+      const response = await listContactoLogs({ batch_id: batchId, limit: 200 })
+      setLogs(response.items ?? [])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar la bitácora del lote."
+      setLogsError(message)
+      setLogs([])
+    } finally {
+      setLogsLoading(false)
     }
   }, [])
 
@@ -143,6 +168,7 @@ export default function ContactosPageClient() {
         await reintentarContactoEnvio(envioId)
         await fetchEnvios(selectedBatchId)
         await fetchBatchSummary(selectedBatchId)
+        await fetchLogs(selectedBatchId)
       } catch (err) {
         const message = err instanceof Error ? err.message : "No se pudo reintentar el envío."
         setEnvioError(message)
@@ -150,7 +176,7 @@ export default function ContactosPageClient() {
         setRetryingEnvioId(null)
       }
     },
-    [fetchBatchSummary, fetchEnvios, selectedBatchId]
+    [fetchBatchSummary, fetchEnvios, fetchLogs, selectedBatchId]
   )
 
   const handleCancelBatch = useCallback(async () => {
@@ -161,6 +187,7 @@ export default function ContactosPageClient() {
       await cancelarContactoBatch(selectedBatchId)
       await fetchBatchSummary(selectedBatchId)
       await fetchEnvios(selectedBatchId)
+      await fetchLogs(selectedBatchId)
       await fetchBatches()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo cancelar el lote."
@@ -168,16 +195,19 @@ export default function ContactosPageClient() {
     } finally {
       setCancelLoading(false)
     }
-  }, [fetchBatchSummary, fetchBatches, fetchEnvios, selectedBatchId])
+  }, [fetchBatchSummary, fetchBatches, fetchEnvios, fetchLogs, selectedBatchId])
 
   useEffect(() => {
     if (!selectedBatchId) {
       setBatchSummary(null)
       setEnvios([])
+      setLogs([])
+      setLogsError(null)
       return
     }
     void fetchBatchSummary(selectedBatchId)
     void fetchEnvios(selectedBatchId)
+    void fetchLogs(selectedBatchId)
     const source = new EventSource(`/api/prospeccion/contacto/batches/${selectedBatchId}/stream`)
     source.onmessage = (event) => {
       if (!event?.data) return
@@ -195,6 +225,7 @@ export default function ContactosPageClient() {
       }
       void fetchBatchSummary(selectedBatchId)
       void fetchEnvios(selectedBatchId)
+      void fetchLogs(selectedBatchId)
     }
     source.onerror = () => {
       source.close()
@@ -202,7 +233,7 @@ export default function ContactosPageClient() {
     return () => {
       source.close()
     }
-  }, [fetchBatchSummary, fetchEnvios, fetchBatches, fetchMetrics, selectedBatchId])
+  }, [fetchBatchSummary, fetchEnvios, fetchLogs, fetchBatches, fetchMetrics, selectedBatchId])
 
   const selectedBatch = useMemo(() => batches.find((batch) => batch.id === selectedBatchId) ?? null, [
     batches,
@@ -442,6 +473,86 @@ export default function ContactosPageClient() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-semibold">Timeline del lote</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Eventos detallados registrados en la bitácora (Brevo/Twilio/voz) para el lote seleccionado.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => selectedBatchId && void fetchLogs(selectedBatchId)}
+            disabled={!selectedBatchId || logsLoading}
+          >
+            <IconRefresh className={cn("mr-1.5 size-4", logsLoading && "animate-spin")} />
+            Actualizar
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {logsError ? (
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <IconAlertTriangle className="size-4" />
+              <span>{logsError}</span>
+            </div>
+          ) : null}
+          {!selectedBatchId ? (
+            <p className="text-sm text-muted-foreground">Selecciona un lote para consultar su timeline.</p>
+          ) : null}
+          {selectedBatchId ? (
+            logs.length ? (
+              <ol className="space-y-3">
+                {logs.map((log) => (
+                  <li key={log.id} className="rounded-lg border bg-muted/40 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{canalLabel[log.canal] ?? log.canal}</Badge>
+                        <span className="font-medium">{log.accion ?? "Evento"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant={envioEstadoVariant[log.estado] ?? "outline"} className="capitalize">
+                          {log.estado}
+                        </Badge>
+                        <span>{formatDate(log.creado_en)}</span>
+                      </div>
+                    </div>
+                    {log.envio_id ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Envio: {log.envio_id}</p>
+                    ) : null}
+                    {log.detalle ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatLogMessage(log.detalle) || "Sin mensaje adicional."}
+                      </p>
+                    ) : null}
+                    {log.error ? (
+                      <p className="mt-1 text-xs text-destructive">Error: {log.error}</p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {extractLogHighlights(log.detalle).map((item) => (
+                        <span
+                          key={`${log.id}-${item.label}`}
+                          className="rounded-full bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground"
+                        >
+                          {item.label}: <span className="text-foreground">{item.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : logsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <IconLoader className="size-4 animate-spin" /> Cargando eventos...
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Este lote aún no tiene eventos registrados.</p>
+            )
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -469,4 +580,42 @@ function prospectoLabel(envio: ContactoEnvio): string {
   const email = detalle && typeof detalle["email"] === "string" ? detalle["email"] : null
   if (email) return email
   return "Prospecto sin nombre"
+}
+
+function formatLogMessage(detalle?: Record<string, unknown> | null): string {
+  if (!detalle || typeof detalle !== "object") {
+    return ""
+  }
+  const message = detalle["message"]
+  if (typeof message === "string" && message.trim()) {
+    return message.trim()
+  }
+  const status = detalle["status"]
+  if (typeof status === "string" && status.trim()) {
+    return `Estado reportado: ${status.trim()}`
+  }
+  return ""
+}
+
+function extractLogHighlights(detalle?: Record<string, unknown> | null) {
+  if (!detalle || typeof detalle !== "object") {
+    return []
+  }
+  const mapping: Array<[string, string]> = [
+    ["brevo_message_id", "Brevo"],
+    ["message_id", "Mensaje"],
+    ["mensaje_id", "Mensaje"],
+    ["whatsapp_sid", "WhatsApp SID"],
+    ["call_sid", "Call SID"],
+    ["twilio_sid", "Twilio SID"],
+    ["provider_message_id", "Provider ID"],
+  ]
+  const highlights: Array<{ label: string; value: string }> = []
+  for (const [key, label] of mapping) {
+    const value = detalle[key]
+    if (typeof value === "string" && value.trim()) {
+      highlights.push({ label, value: value.trim() })
+    }
+  }
+  return highlights
 }

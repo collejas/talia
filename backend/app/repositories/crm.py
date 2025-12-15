@@ -4115,6 +4115,51 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
 
+    async def list_contact_logs(
+        self,
+        *,
+        usuario_token: str,
+        limit: int = 200,
+        offset: int = 0,
+        batch_id: UUID | None = None,
+        envio_id: UUID | None = None,
+        prospecto_id: UUID | None = None,
+        canal: str | None = None,
+        estado: str | None = None,
+        order: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista eventos registrados en la bitácora de contactos."""
+
+        params: dict[str, str] = {
+            "select": "*",
+            "limit": str(limit),
+            "offset": str(offset),
+            "order": order or "creado_en.desc",
+        }
+        if batch_id:
+            params["batch_id"] = f"eq.{batch_id}"
+        if envio_id:
+            params["envio_id"] = f"eq.{envio_id}"
+        if prospecto_id:
+            params["prospecto_id"] = f"eq.{prospecto_id}"
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if estado:
+            params["estado"] = f"eq.{estado}"
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contactos_log",
+            token=usuario_token,
+            params=params,
+            prefer="count=exact",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_log_list_invalid:{data!r}")
+        total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        return data, total
+
     async def list_prospecto_audit(
         self,
         *,

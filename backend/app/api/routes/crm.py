@@ -672,6 +672,21 @@ class ContactEnvioQuery(BaseModel):
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
 
 
+class ContactLogQuery(BaseModel):
+    """Filtros para consultar la bitácora de contactos."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=200, ge=1, le=500)
+    offset: int = Field(default=0, ge=0, le=10_000)
+    batch_id: UUID | None = Field(default=None)
+    envio_id: UUID | None = Field(default=None)
+    prospecto_id: UUID | None = Field(default=None)
+    canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
+    estado: str | None = Field(default=None, max_length=40)
+    order: Literal["reciente", "antiguo"] = Field(default="reciente")
+
+
 class ContactTemplateQuery(BaseModel):
     """Filtros simples para listar plantillas."""
 
@@ -6637,6 +6652,39 @@ async def listar_contacto_envios(
             batch_id=params.batch_id,
             prospecto_id=params.prospecto_id,
             canal=params.canal or None,
+            estado=params.estado,
+            order=order,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "items": rows,
+        "total": total,
+        "limit": params.limit,
+        "offset": params.offset,
+    }
+
+
+@router.get("/prospeccion/contacto/logs")
+async def listar_contacto_logs(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    params: ContactLogQuery = Depends(),
+) -> dict[str, Any]:
+    """Bitácora detallada de eventos por lote/envío."""
+
+    order = "creado_en.asc" if params.order == "antiguo" else "creado_en.desc"
+    try:
+        rows, total = await repo.list_contact_logs(
+            usuario_token=user_token,
+            limit=params.limit,
+            offset=params.offset,
+            batch_id=params.batch_id,
+            envio_id=params.envio_id,
+            prospecto_id=params.prospecto_id,
+            canal=params.canal if params.canal else None,
             estado=params.estado,
             order=order,
         )

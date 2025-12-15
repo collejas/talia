@@ -212,6 +212,19 @@ export type ContactoEnvio = {
   procesado_en?: string | null
 }
 
+export type ContactoLog = {
+  id: string
+  prospecto_id: string
+  canal: string
+  accion?: string | null
+  estado: string
+  detalle?: Record<string, unknown> | null
+  error?: string | null
+  creado_en?: string | null
+  batch_id?: string | null
+  envio_id?: string | null
+}
+
 export type ContactoBatchResumen = {
   ok: boolean
   batch: ContactoBatch
@@ -547,6 +560,28 @@ export async function listContactoEnviosPorProspecto(
   const url = buildClientUrl(`/api/prospeccion/prospectos/${prospectoId}/contactos`)
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  return requestJson(url.toString())
+}
+
+export async function listContactoLogs(params: {
+  limit?: number
+  offset?: number
+  batch_id?: string
+  envio_id?: string
+  prospecto_id?: string
+  canal?: "correo" | "whatsapp" | "llamada"
+  estado?: string
+  order?: "reciente" | "antiguo"
+} = {}): Promise<{ ok: boolean; items: ContactoLog[]; total: number; limit: number; offset: number }> {
+  const url = buildClientUrl("/api/prospeccion/contacto/logs")
+  if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
+  if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  if (params.batch_id) url.searchParams.set("batch_id", params.batch_id)
+  if (params.envio_id) url.searchParams.set("envio_id", params.envio_id)
+  if (params.prospecto_id) url.searchParams.set("prospecto_id", params.prospecto_id)
+  if (params.canal) url.searchParams.set("canal", params.canal)
+  if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
+  if (params.order) url.searchParams.set("order", params.order)
   return requestJson(url.toString())
 }
 
