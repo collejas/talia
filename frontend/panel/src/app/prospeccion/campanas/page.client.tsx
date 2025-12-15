@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconAlertTriangle, IconCopy, IconLoader, IconRefresh, IconX } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCopy, IconLoader, IconRefresh, IconTargetArrow, IconX } from "@tabler/icons-react"
 
 import { ProspeccionCampaignWizard, type ProspeccionWizardPreset } from "@/components/prospeccion/prospeccion-campaign-wizard"
 import {
@@ -111,6 +111,11 @@ export function CampanasMetricsClient() {
     void fetchCampanas()
   }, [fetchCampanas])
 
+  const handleNewCampaign = useCallback(() => {
+    setWizardPreset(null)
+    setWizardOpen(true)
+  }, [])
+
   const handleDuplicateCampana = useCallback(
     async (campanaId: string) => {
       setBanner(null)
@@ -198,6 +203,35 @@ export function CampanasMetricsClient() {
           </Button>
         </div>
       ) : null}
+
+      <Card className="bg-gradient-to-br from-primary/10 via-background to-background">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <CardTitle className="text-base font-semibold">Lanza una nueva campaña</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Define filtros, selecciona plantillas y programa envíos multicanal desde un solo wizard.
+            </p>
+          </div>
+          <Button onClick={handleNewCampaign}>
+            <IconTargetArrow className="mr-2 size-4" />
+            Crear campaña
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-4 text-sm text-muted-foreground md:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide">Audiencias</p>
+            <p className="text-base text-foreground">Listas inteligentes o filtros dinámicos.</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide">Canales</p>
+            <p className="text-base text-foreground">Correo, WhatsApp y llamadas coordinadas.</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide">Seguimiento</p>
+            <p className="text-base text-foreground">Monitorea resultados en Contactos y KPIs.</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
