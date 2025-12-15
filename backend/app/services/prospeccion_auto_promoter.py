@@ -51,6 +51,18 @@ def _describe_source(row: dict[str, Any]) -> str:
     return "Prospección – Manual"
 
 
+def _channel_label(row: dict[str, Any]) -> str:
+    fuente_busqueda = _clean_text(row.get("fuente_busqueda"))
+    fuente = _clean_text(row.get("fuente"))
+    if fuente == "google_places":
+        return "Google"
+    if fuente == "denue":
+        return "Denue"
+    if fuente_busqueda == "buscador":
+        return "Web"
+    return "Manual"
+
+
 def is_promotable_estado(estado: str | None) -> bool:
     if not estado:
         return False
@@ -115,6 +127,7 @@ async def auto_promote_prospecto(
     notas_value = metadata.get("notas")
     notas = notas_value.strip() if isinstance(notas_value, str) else None
     source_label = _describe_source(prospecto)
+    pipeline_canal_label = _channel_label(prospecto)
     canal_label = (canal or metadata.get("ultimo_canal_prospeccion") or "").lower() or None
 
     contacto_id = metadata.get("crm_contacto_id")
@@ -203,6 +216,7 @@ async def auto_promote_prospecto(
         opportunity_metadata = {
             "prospecto_id": str(prospecto_uuid),
             "source": source_label,
+            "canal": pipeline_canal_label,
             "auto_promovido": True,
         }
         if canal_label:

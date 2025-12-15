@@ -1439,6 +1439,20 @@ def _describe_prospeccion_source(row: Mapping[str, Any]) -> str:
     return "Prospección – Manual"
 
 
+def _infer_prospeccion_canal_label(row: Mapping[str, Any]) -> str:
+    """Regresa un label corto para mostrar en el pipeline."""
+
+    fuente_busqueda = _clean_text(row.get("fuente_busqueda"))
+    fuente = _clean_text(row.get("fuente"))
+    if fuente == "google_places":
+        return "Google"
+    if fuente == "denue":
+        return "Denue"
+    if fuente_busqueda == "buscador":
+        return "Web"
+    return "Manual"
+
+
 def _single_related(value: Any) -> dict[str, Any] | None:
     if isinstance(value, dict):
         return value
@@ -7083,6 +7097,7 @@ async def convertir_prospecto_contacto(
     telefono = payload.telefono or prospecto.get("phone_e164") or prospecto.get("phone")
     canal_origen = (payload.canal_origen or "otro").lower()
     source_label = _describe_prospeccion_source(prospecto)
+    pipeline_canal_label = _infer_prospeccion_canal_label(prospecto)
     contacto_body = {
         "nombre_completo": nombre,
         "correo": correo,
@@ -7163,6 +7178,7 @@ async def convertir_prospecto_contacto(
         fuente_busqueda = _clean_text(prospecto.get("fuente_busqueda"))
         if fuente_busqueda:
             opportunity_metadata["prospeccion_fuente_codigo"] = fuente_busqueda
+        opportunity_metadata["canal"] = pipeline_canal_label
 
         opportunity_payload = {
             "contacto_principal_id": contacto_id,
