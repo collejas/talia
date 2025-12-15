@@ -44,6 +44,8 @@ const STAGES = [
   { value: "evaluate", label: "Evaluate" },
 ]
 
+const CAMPANA_NONE_OPTION = "__none__"
+
 type ChannelState = Record<
   "correo" | "whatsapp" | "llamada",
   { enabled: boolean; templateSlug?: string; subject?: string; body?: string; message?: string; schedule?: string }
@@ -266,7 +268,7 @@ export function ProspeccionCampaignWizard({
   const canContinueStepTwo = activeChannels.length > 0
 
   const campanaOptions = useMemo(() => {
-    const options: Array<{ value: string; label: string }> = [{ value: "", label: "Sin campaña" }]
+    const options: Array<{ value: string; label: string }> = [{ value: CAMPANA_NONE_OPTION, label: "Sin campaña" }]
     campanas.forEach((group) => {
       if (group.campana_id) {
         options.push({
@@ -603,7 +605,10 @@ export function ProspeccionCampaignWizard({
         </div>
         <div className="space-y-1">
           <Label>Campaña CRM</Label>
-          <Select value={campanaId ?? ""} onValueChange={(value) => setCampanaId(value || null)}>
+          <Select
+            value={campanaId ?? CAMPANA_NONE_OPTION}
+            onValueChange={(value) => setCampanaId(value === CAMPANA_NONE_OPTION ? null : value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder={campanasLoading ? "Cargando..." : "Sin campaña"} />
             </SelectTrigger>
@@ -635,7 +640,14 @@ export function ProspeccionCampaignWizard({
               ? activeChannels.map((channel) => channel.label).join(", ")
               : "Ninguno"}
           </li>
-          <li>Campaña: {campanaOptions.find((option) => option.value === (campanaId ?? ""))?.label ?? "Sin campaña"}</li>
+          <li>
+            Campaña:{" "}
+            {
+              campanaOptions.find(
+                (option) => option.value === (campanaId ?? CAMPANA_NONE_OPTION)
+              )?.label
+            }
+          </li>
         </ul>
       </div>
     </div>
