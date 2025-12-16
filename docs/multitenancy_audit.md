@@ -56,6 +56,7 @@ Patrón recomendado para aislamiento fuerte:
 
 - `supabase/migrations/20270519_090000_multitenant_security_hardening.sql`: roles por org + `es_admin()` tenant-aware + RLS para `conversation_summaries`.
 - `supabase/migrations/20270519_100000_multitenant_calendar_catalog_agents.sql`: vuelve tenant-scoped `calendar_*`, `catalog_*`, `agentes/prompts/custom_fields`, y corrige `prospeccion_contacto_templates.slug` para que sea único por organización.
+- `supabase/migrations/20270519_110000_multitenant_remaining_tables.sql`: completa tenant-scoping para inbox, panel, permisos/roles_permisos, secretos, webchat, etc. (incluye backfills y FKs compuestas donde aplica).
 
 Ambas migraciones usan `00000000-0000-0000-0000-000000000001` como organización “legacy” para datos existentes; después conviene migrar datos a organizaciones reales.
 
