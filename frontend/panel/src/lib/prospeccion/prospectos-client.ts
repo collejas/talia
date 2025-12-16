@@ -263,6 +263,7 @@ export type ContactoTemplate = {
   cuerpo_texto?: string | null
   cuerpo_html?: string | null
   activo?: boolean
+  metadata?: Record<string, unknown> | null
 }
 
 export type ProspectoManualInput = {

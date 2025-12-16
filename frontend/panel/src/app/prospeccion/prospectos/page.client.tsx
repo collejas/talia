@@ -692,6 +692,11 @@ useEffect(() => {
     setSelectedTemplates((prev) => ({ ...prev, [canal]: slug }))
     const template = templates.find((item) => item.slug === slug && item.canal === canal)
     if (!template) return
+    const metadata = template.metadata && typeof template.metadata === "object" ? template.metadata : null
+    const twilioSid =
+      metadata && typeof metadata["twilio_content_sid"] === "string"
+        ? metadata["twilio_content_sid"].trim()
+        : ""
     if (canal === "correo") {
       setContactForm((prev) => ({
         ...prev,
@@ -701,7 +706,7 @@ useEffect(() => {
     } else if (canal === "whatsapp") {
       setContactForm((prev) => ({
         ...prev,
-        whatsappMensaje: template.cuerpo_texto ?? prev.whatsappMensaje,
+        whatsappMensaje: twilioSid ? "" : template.cuerpo_texto ?? prev.whatsappMensaje,
       }))
     } else if (canal === "llamada") {
       setContactForm((prev) => ({
