@@ -14,10 +14,11 @@ from app.channels.whatsapp.service import TwilioSendResult, _send_whatsapp_reply
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import EmailSendError, send_email
+from app.services import EmailSendError, send_email, storage
 from app.services.metrics import metrics
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto, is_promotable_estado
 from app.services.prospeccion_progress import progress_hub
+from app.services.storage import StorageError
 
 logger = get_logger("prospeccion.contact_sender")
 
@@ -130,6 +131,117 @@ def _build_contact_log_entry(
     return entry
 
 
+async def _log_whatsapp_inbox_message(
+    *,
+    repo: CRMRepository,
+    envio: dict[str, Any],
+    detalle: dict[str, Any],
+    payload: dict[str, Any],
+    result: ContactEnvioResult,
+) -> None:
+    contact_id = await _resolve_contact_id_for_prospecto(repo=repo, prospecto_id=envio.get("prospecto_id"))
+    if not contact_id:
+        return
+    conversation_id = await _ensure_whatsapp_conversation(repo=repo, contact_id=contact_id)
+    if not conversation_id:
+        return
+    telefono = _clean_text(detalle.get("phone"))
+    if not telefono:
+        return
+    detalle_meta = result.detalle if isinstance(result.detalle, dict) else {}
+    body_preview = _clean_text(detalle_meta.get("body_preview"))
+    if not body_preview:
+        body_preview = _clean_text(payload.get("body"))
+    if not body_preview and detalle_meta.get("template_sid"):
+        body_preview = f"[Plantilla {detalle_meta.get('template_sid')}]"
+    metadata_payload: dict[str, Any] = {
+        "source": "prospeccion",
+        "envio_id": str(envio.get("id")) if envio.get("id") else None,
+        "batch_id": str(envio.get("batch_id")) if envio.get("batch_id") else None,
+        "delivery_status": detalle_meta.get("status"),
+    }
+    if detalle_meta.get("template_sid"):
+        metadata_payload["twilio_content_sid"] = detalle_meta.get("template_sid")
+    if detalle_meta.get("twilio_variables"):
+        metadata_payload["twilio_variables"] = detalle_meta.get("twilio_variables")
+    metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
+    try:
+        await storage.register_whatsapp_message(
+            direction="saliente",
+            wa_id=None,
+            phone_e164=telefono,
+            body=body_preview,
+            message_sid=result.mensaje_id,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            metadata=metadata_payload,
+        )
+    except StorageError as exc:
+        log_event(
+            logger,
+            "prospeccion.sender_inbox_record_failed",
+            envio_id=str(envio.get("id")),
+            error=str(exc),
+        )
+
+
+async def _resolve_contact_id_for_prospecto(
+    *,
+    repo: CRMRepository,
+    prospecto_id: Any,
+) -> str | None:
+    if not prospecto_id:
+        return None
+    try:
+        prospecto_uuid = UUID(str(prospecto_id))
+    except (TypeError, ValueError):
+        return None
+    try:
+        prospecto = await repo.worker_get_prospecto(prospecto_id=prospecto_uuid)
+    except CRMRepositoryError:
+        return None
+    if not prospecto:
+        return None
+    metadata = prospecto.get("metadata") if isinstance(prospecto.get("metadata"), dict) else {}
+    contact_id = metadata.get("crm_contacto_id")
+    return str(contact_id) if contact_id else None
+
+
+async def _ensure_whatsapp_conversation(
+    *,
+    repo: CRMRepository,
+    contact_id: str,
+) -> str | None:
+    try:
+        existing = await repo.get_latest_whatsapp_conversation(contact_id=contact_id)
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "prospeccion.sender_inbox_fetch_conversation_failed",
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        existing = None
+    if existing and existing.get("id"):
+        return str(existing.get("id"))
+    try:
+        contact_uuid = UUID(str(contact_id))
+    except (TypeError, ValueError):
+        return None
+    try:
+        conversation = await repo.create_conversation(contacto_id=contact_uuid, canal="whatsapp")
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "prospeccion.sender_inbox_create_conversation_failed",
+            contact_id=contact_id,
+            error=str(exc),
+        )
+        return None
+    conversation_id = conversation.get("id") if isinstance(conversation, dict) else None
+    return str(conversation_id) if conversation_id else None
+
+
 async def _broadcast_batch_event(batch_id: Any, payload: dict[str, Any]) -> None:
     """Envía eventos de actualización a los suscriptores SSE."""
 
@@ -204,10 +316,13 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
     template_sid = _clean_text(metadata.get("twilio_content_sid") or payload.get("twilio_content_sid"))
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
+    rendered_vars: dict[str, str] | None = None
 
     wa_result: TwilioSendResult
+    preview_text: str | None = None
     if template_sid:
         rendered_vars = _render_twilio_variables(variables_def, context)
+        preview_text = _render_template_text(_clean_text(payload.get("body")) or "", context).strip()
         wa_result = await _send_whatsapp_message(
             to_number=telefono,
             body=None,
@@ -223,10 +338,17 @@ async def _run_envio_whatsapp(detalle: dict[str, Any], payload: dict[str, Any]) 
                 error="whatsapp_payload_incompleto",
             )
         wa_result = await _send_whatsapp_message(to_number=telefono, body=rendered_body)
+        preview_text = rendered_body
     estado = "enviado" if not wa_result.error else "error"
     return ContactEnvioResult(
         estado=estado,
-        detalle={"status": wa_result.status, "sid": wa_result.sid},
+        detalle={
+            "status": wa_result.status,
+            "sid": wa_result.sid,
+            "template_sid": template_sid,
+            "twilio_variables": rendered_vars if template_sid else None,
+            "body_preview": preview_text,
+        },
         error=wa_result.error,
         mensaje_id=wa_result.sid,
         retryable=bool(wa_result.error),
@@ -428,6 +550,14 @@ class ProspeccionContactSender:
                 estado=update_payload.get("estado"),
                 repo=repo,
             )
+            if canal == "whatsapp" and result.mensaje_id:
+                await _log_whatsapp_inbox_message(
+                    repo=repo,
+                    envio=envio,
+                    detalle=detalle,
+                    payload=payload,
+                    result=result,
+                )
 
         batch_id = envio.get("batch_id")
         batch_state: str | None = None

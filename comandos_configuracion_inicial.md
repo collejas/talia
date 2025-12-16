@@ -830,3 +830,10 @@ https://talia.mx/api/inbox/threads?limit=25&message_limit=20
 
   Con eso mantienes un flujo único: prospección sirve para descubrir/enriquecer/lanzar, y el pipeline real (kanban) maneja todo
   lo que viene después sin pantallas intermedias redundantes.
+
+
+
+# twilio curl
+
+export TWILIO_ACCOUNT_SID=
+export TWILIO_AUTH_TOKEN=

@@ -1445,6 +1445,31 @@ class CRMRepository:
             return None
         return row
 
+    async def get_latest_whatsapp_conversation(self, *, contact_id: str) -> dict[str, Any] | None:
+        contact_key = contact_id.strip()
+        if not contact_key:
+            return None
+        params = {
+            "select": "id,contacto_id,canal,estado",
+            "contacto_id": f"eq.{contact_key}",
+            "canal": "eq.whatsapp",
+            "order": "iniciada_en.desc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            return None
+        if not isinstance(row, dict):
+            return None
+        if str(row.get("estado") or "").lower() == "cerrada":
+            return None
+        return row
+
     async def upsert_conversation_insights(
         self,
         *,
