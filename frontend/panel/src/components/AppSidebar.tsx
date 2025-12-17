@@ -26,6 +26,10 @@ import {
   IconBell,
   IconTargetArrow,
   IconUsersGroup,
+  IconBriefcase,
+  IconHierarchy,
+  IconShieldCheck,
+  IconShieldLock,
   IconBox,
 } from "@tabler/icons-react"
 
@@ -99,6 +103,12 @@ const NAVIGATION = {
           url: "/settings/catalogo",
           icon: IconBox,
         },
+        { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers },
+        { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck },
+        { title: "Permisos", url: "/settings/usuarios/permisos", icon: IconShieldLock },
+        { title: "Empleados", url: "/settings/empleados", icon: IconUsersGroup },
+        { title: "Departamentos", url: "/settings/empleados/departamentos", icon: IconHierarchy },
+        { title: "Puestos", url: "/settings/empleados/puestos", icon: IconBriefcase },
         {
           title: "Plantillas de contacto",
           url: "/settings/prospeccion/plantillas",
