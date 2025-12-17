@@ -82,3 +82,43 @@ from public.tickets t
 join public.cuentas cu on cu.id = t.cuenta_id
 where t.organizacion_id <> cu.organizacion_id;
 ```
+
+
+
+
+# HICE ESTO 
+
+• Continué y ya quedó cerrada la parte crítica de multitenancy a nivel RLS + relaciones + creación de registros.
+
+  - Corregí un problema fuerte: varias policies tipo *_admin_all usaban es_admin() sin filtrar por organizacion_id, lo que permitía
+    que un admin de un tenant pudiera ver/modificar filas de otros tenants. Esto ya quedó tenant-safe.
+  - Eliminé todos los defaults de organizacion_id (evita que algo caiga “por accidente” en 000...001) y aseguré triggers BEFORE
+    INSERT en todas las tablas tenant-scoped para completar organizacion_id cuando viene NULL (y si no se puede inferir, ahora falla
+    en vez de contaminar).
+  - Forcé RLS en todas las tablas public (excepto spatial_ref_sys).
+
+  Migrations nuevas en el repo (ya aplicadas):
+
+
+  - supabase/migrations/20270519_090000_multitenant_security_hardening.sql
+  - supabase/migrations/20270519_100000_multitenant_calendar_catalog_agents.sql
+  - supabase/migrations/20270519_110000_multitenant_remaining_tables.sql
+  - supabase/migrations/20270519_120000_multitenant_fk_hardening.sql
+  - supabase/migrations/20270519_130000_multitenant_fk_hardening_crm.sql
+  - supabase/migrations/20270519_140000_multitenant_policy_hardening.sql
+  - supabase/migrations/20270519_150000_multitenant_policy_org_enforcement.sql
+  - supabase/migrations/20270519_160000_multitenant_orgid_defaults_and_triggers.sql
+  - supabase/migrations/20270519_170000_multitenant_force_rls.sql
+
+  Checks finales:
+
+  - Tablas sin organizacion_id: solo organizaciones.
+  - FKs “débiles” sin (organizacion_id, …): 0.
+  - Policies sin guard de organizacion_id: 0.
+  - Triggers faltantes BEFORE INSERT: 0.
+  
+  
+  
+# FALTANTE:
+ - siguiente nivel (lockdown de GRANTS para anon/authenticated y revisar si alguna tabla debería ser solo “server-
+  side”)

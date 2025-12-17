@@ -67,11 +67,11 @@ class CRMRepository:
             "creado_en",
             "actualizado_en",
             "cerrado_en",
-            "asignado:usuarios!oportunidades_asignado_a_usuario_id_fkey(id,nombre_completo,correo)",
-            "propietario:usuarios!oportunidades_propietario_usuario_id_fkey(id,nombre_completo,correo)",
-            "etapa:etapas_pipeline!oportunidades_etapa_id_fkey(id,nombre,codigo,categoria,orden,metadata)",
-            "contacto:contactos!oportunidades_contacto_principal_id_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado)",
-            "cuenta:cuentas!oportunidades_cuenta_id_fkey(id,nombre,telefono,correo)",
+            "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo)",
+            "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo)",
+            "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
+            "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado)",
+            "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo)",
         ]
     )
 
@@ -82,23 +82,23 @@ class CRMRepository:
         "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
         "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
         "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
-        "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
-        "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
+        "contacto:contactos!clientes_contacto_org_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
+        "documentos:cliente_documentos!cliente_documentos_cliente_org_fkey(id,tipo,estado,descripcion,storage_url,"
         "storage_path,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id),"
-        "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
+        "responsables:cliente_responsables!cliente_responsables_cliente_org_fkey(id,nombre,correo,telefono_e164,rol,"
         "es_responsable_principal,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id)"
     )
 
     _PORTAL_TOKEN_SELECT = (
         "id,cliente_id,organizacion_id,cuenta_id,oportunidad_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
         "ultimo_acceso_ip,creado_en,actualizado_en,"
-        f"cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_CLIENTE_SELECT})"
+        f"cliente:clientes!cliente_portal_tokens_cliente_org_fkey({_CLIENTE_SELECT})"
     )
 
     _PORTAL_TOKEN_MIN_SELECT = (
         "id,cliente_id,organizacion_id,cuenta_id,oportunidad_id,token,expira_en,revocado,usos,nota,metadata,ultimo_acceso_en,"
         "ultimo_acceso_ip,creado_en,actualizado_en,"
-        "cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
+        "cliente:clientes!cliente_portal_tokens_cliente_org_fkey(id)"
     )
 
     _HISTORY_SELECT = ",".join(
@@ -112,9 +112,9 @@ class CRMRepository:
             "etapa_origen_id",
             "etapa_destino_id",
             "cambiado_por_usuario_id",
-            "etapa_origen:etapas_pipeline!oportunidad_etapas_historial_etapa_origen_id_fkey(id,nombre)",
-            "etapa_destino:etapas_pipeline!oportunidad_etapas_historial_etapa_destino_id_fkey(id,nombre)",
-            "cambiado_por:usuarios!oportunidad_etapas_historial_cambiado_por_usuario_id_fkey(id,nombre_completo,correo)",
+            "etapa_origen:etapas_pipeline!oportunidad_historial_etapa_origen_org_fkey(id,nombre)",
+            "etapa_destino:etapas_pipeline!oportunidad_historial_etapa_destino_org_fkey(id,nombre)",
+            "cambiado_por:usuarios!oportunidad_historial_cambiado_por_usuario_org_fkey(id,nombre_completo,correo)",
         ]
     )
 

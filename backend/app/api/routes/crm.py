@@ -946,10 +946,10 @@ def _cliente_select_clause() -> str:
         "id,organizacion_id,contacto_id,cuenta_id,oportunidad_id,legacy_lead_id,"
         "estado_onboarding,rfc,razon_social,domicilio_fiscal,domicilio_fisico,regimen_fiscal,"
         "datos_facturacion,fuente,monto_estimado,moneda,metadatos,ganado_en,creado_en,actualizado_en,"
-        "contacto:contactos!clientes_contacto_id_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
-        "documentos:cliente_documentos!cliente_documentos_cliente_id_fkey(id,tipo,estado,descripcion,storage_url,"
+        "contacto:contactos!clientes_contacto_org_fkey(id,nombre_completo,correo,telefono_e164,company_name),"
+        "documentos:cliente_documentos!cliente_documentos_cliente_org_fkey(id,tipo,estado,descripcion,storage_url,"
         "storage_path,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id),"
-        "responsables:cliente_responsables!cliente_responsables_cliente_id_fkey(id,nombre,correo,telefono_e164,rol,"
+        "responsables:cliente_responsables!cliente_responsables_cliente_org_fkey(id,nombre,correo,telefono_e164,rol,"
         "es_responsable_principal,metadatos,creado_en,actualizado_en,cuenta_id,oportunidad_id)"
     )
 
@@ -961,10 +961,10 @@ def _portal_token_select_clause(include_relations: bool = True) -> str:
     )
     if include_relations:
         base += (
-            f",cliente:clientes!cliente_portal_tokens_cliente_id_fkey({_cliente_select_clause()})"
+            f",cliente:clientes!cliente_portal_tokens_cliente_org_fkey({_cliente_select_clause()})"
         )
     else:
-        base += ",cliente:clientes!cliente_portal_tokens_cliente_id_fkey(id)"
+        base += ",cliente:clientes!cliente_portal_tokens_cliente_org_fkey(id)"
     return base
 
 

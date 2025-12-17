@@ -227,6 +227,7 @@ async function mapResponseError(response: Response): Promise<string> {
         return (
           json.error_description ||
           json.message ||
+          json.detail ||
           json.error ||
           `Error ${response.status}`
         );

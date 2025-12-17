@@ -88,6 +88,11 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+
+# CORRECCIONES BASE DATOS 
+codex resume 019b2974-9cf6-70e0-b634-fde1f0394354
+embudo, leads
+
 codex resume 019b23d2-a2ee-7df3-a0fb-2c10530e5186
 
 codex resume 019b1e71-4b72-7352-a90d-320e151c35e0
