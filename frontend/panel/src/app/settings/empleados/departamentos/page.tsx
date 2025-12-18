@@ -1,41 +1,11 @@
-import Link from "next/link"
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { EntitySummaryCard, type EntitySchema } from "@/components/settings/entity-summary-card"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
 import { fetchDepartmentsDirectory, type HrDepartmentsDirectory } from "@/lib/settings/hr-directory"
-
-const DEPARTMENTS_SCHEMA: EntitySchema = {
-  title: "Departamentos",
-  description:
-    "Agrupan empleados y puestos en niveles jerárquicos. Cada departamento pertenece a una organización para mantener la separación multitenant.",
-  tenantField: "organizacion_id",
-  highlight: "Estructura",
-  actionLabel: "Nuevo departamento",
-  fields: [
-    { name: "id", type: "uuid", required: true, notes: "PK autonumérico (gen_random_uuid)" },
-    { name: "nombre", type: "text", required: true },
-    {
-      name: "departamento_padre_id",
-      type: "uuid",
-      required: false,
-      notes: "Auto-relación para tipos jerárquicos",
-    },
-    { name: "creado_en", type: "timestamp with time zone", required: true },
-    { name: "organizacion_id", type: "uuid", required: true, notes: "FK → organizaciones.id" },
-  ],
-  relations: [
-    { title: "Organización", detail: "organizaciones.id" },
-    { title: "Empleados", detail: "empleados.departamento_id" },
-    { title: "Puestos", detail: "puestos.departamento_id" },
-  ],
-  operations: ["Crear departamento", "Reorganizar jerarquía", "Asignar empleados"],
-}
 
 export const metadata: Metadata = {
   title: "Departamentos · Settings",
@@ -62,38 +32,7 @@ export default async function DepartamentosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
-          <EntitySummaryCard schema={DEPARTMENTS_SCHEMA} />
           <DepartmentsDirectoryCard data={departmentsDirectory} />
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Empleados</CardTitle>
-                <CardDescription>Se reportan al departamento.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Los empleados pertenecen a un departamento, lo que ayuda a controlar visibilidad y liderazgo.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/settings/empleados">Ir a empleados</Link>
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Puestos</CardTitle>
-                <CardDescription>Funciones dentro del departamento.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Cada departamento define los puestos disponibles que, a su vez, se asignan a empleados.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/settings/empleados/puestos">Ir a puestos</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </div>
     </AppViewLayout>

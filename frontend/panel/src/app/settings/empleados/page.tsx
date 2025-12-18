@@ -1,40 +1,12 @@
-import Link from "next/link"
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { EntitySummaryCard, type EntitySchema } from "@/components/settings/entity-summary-card"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
 import { fetchEmployeesDirectory, type HrEmployeesDirectory } from "@/lib/settings/hr-directory"
-
-const EMPLEADOS_SCHEMA: EntitySchema = {
-  title: "Empleados",
-  description:
-    "Registra el equipo humano y lo vincula a su usuario, departamento y puesto. Nos ayuda a identificar quién realiza cada actividad.",
-  tenantField: "organizacion_id",
-  highlight: "Talento",
-  actionLabel: "Agregar empleado",
-  fields: [
-    { name: "usuario_id", type: "uuid", required: true, notes: "FK → usuarios.id" },
-    { name: "departamento_id", type: "uuid", required: false, notes: "FK opcional" },
-    { name: "es_gestor", type: "boolean", required: true, notes: "Indica si puede ver todo el departamento" },
-    { name: "puesto_id", type: "uuid", required: false, notes: "FK → puestos.id" },
-    { name: "es_vendedor", type: "boolean", required: true, notes: "Marca si puede cerrar leads" },
-    { name: "ultimo_lead_asignado_en", type: "timestamp with time zone", required: false },
-    { name: "creado_en", type: "timestamp with time zone", required: true },
-    { name: "organizacion_id", type: "uuid", required: true, notes: "FK → organizaciones.id" },
-  ],
-  relations: [
-    { title: "Usuario", detail: "usuarios.id / usuarios.organizacion_id" },
-    { title: "Departamento", detail: "departamentos.id / departamentos.organizacion_id" },
-    { title: "Puesto", detail: "puestos.id / puestos.organizacion_id" },
-  ],
-  operations: ["Asignar puesto", "Reasignar departamento", "Marcar gestor", "Actualizar leads"],
-}
 
 export const metadata: Metadata = {
   title: "Empleados · Settings",
@@ -61,38 +33,7 @@ export default async function EmpleadosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
-          <EntitySummaryCard schema={EMPLEADOS_SCHEMA} />
           <EmployeesDirectoryCard data={empleadosDirectory} />
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Departamentos</CardTitle>
-                <CardDescription>Organiza equipos por funciones.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Cada departamento agrupa empleados y puestos, y mantiene la jerarquía por organización.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/settings/empleados/departamentos">Ir a departamentos</Link>
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Puestos</CardTitle>
-                <CardDescription>Roles operativos dentro de cada departamento.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Los puestos definen flujos de autorización y sirvieron para aplicar permisos específicos.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/settings/empleados/puestos">Ir a puestos</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </div>
     </AppViewLayout>

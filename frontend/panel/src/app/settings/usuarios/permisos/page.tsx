@@ -1,37 +1,12 @@
-import Link from "next/link"
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { EntitySummaryCard, type EntitySchema } from "@/components/settings/entity-summary-card"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
 import { fetchPermissionsDirectory, type HrPermissionsDirectory } from "@/lib/settings/hr-directory"
-
-const PERMISSIONS_SCHEMA: EntitySchema = {
-  title: "Permisos",
-  description:
-    "Listado de capacidades atómicas. Los roles combinan estos permisos, pero cada permiso se declara con nivel de organización.",
-  tenantField: "organizacion_id",
-  highlight: "Acceso",
-  actionLabel: "Registrar permiso",
-  fields: [
-    { name: "id", type: "uuid", required: true, notes: "Identificador único" },
-    { name: "codigo", type: "text", required: true, notes: "Llave superficial para UI/backoffice" },
-    { name: "descripcion", type: "text", required: false },
-    { name: "creado_en", type: "timestamp with time zone", required: true },
-    { name: "organizacion_id", type: "uuid", required: true, notes: "FK → organizaciones.id" },
-  ],
-  relations: [
-    { title: "Roles", detail: "roles.organizacion_id" },
-    { title: "Usuarios", detail: "usuarios.organizacion_id" },
-    { title: "Empleados", detail: "empleados.organizacion_id" },
-  ],
-  operations: ["Registrar permiso", "Asignar a roles", "Auditar usos", "Restringir por organización"],
-}
 
 export const metadata: Metadata = {
   title: "Permisos · Settings",
@@ -54,38 +29,7 @@ export default async function PermisosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
-          <EntitySummaryCard schema={PERMISSIONS_SCHEMA} />
           <PermissionsDirectoryCard data={permissionsDirectory} />
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Roles</CardTitle>
-                <CardDescription>Agregan permisos en bloque.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Cada permiso puede sumarse a varios roles sin salir de la misma organización.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/settings/usuarios/roles">Ir a roles</Link>
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Empleados</CardTitle>
-                <CardDescription>El sujeto de los permisos.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Los permisos llegan a empleados a través de sus roles y su puesto dentro del departamento.
-                </p>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/settings/empleados">Ir a empleados</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </div>
     </AppViewLayout>
