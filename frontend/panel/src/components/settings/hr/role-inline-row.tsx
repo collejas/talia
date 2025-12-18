@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
 import { HrRoleItem } from "@/lib/settings/hr-types"
@@ -25,6 +26,7 @@ type RoleInlineRowProps = {
 export function RoleInlineRow({ role }: RoleInlineRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
   const [editState, editAction] = useActionState(updateRoleAction, INITIAL_STATE)
   const [deleteState, deleteAction] = useActionState(deleteRoleAction, INITIAL_STATE)
 
@@ -34,8 +36,10 @@ export function RoleInlineRow({ role }: RoleInlineRowProps) {
         <TableCell>
           <div className="flex flex-col gap-1">
             <span className="font-medium">{role.nombre}</span>
-            <span className="text-xs text-muted-foreground">Código · {role.codigo}</span>
-            <span className="text-[0.65rem] font-mono text-muted-foreground/80">{role.id}</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-mono text-[0.65rem]">{role.codigo}</span>
+              <span className="text-[0.65rem] font-mono text-muted-foreground/80">{role.id}</span>
+            </div>
           </div>
         </TableCell>
         <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
@@ -121,17 +125,9 @@ export function RoleInlineRow({ role }: RoleInlineRowProps) {
                     defaultValue={role.nombre}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`role-edit-codigo-${role.id}`}>Código</Label>
-                  <Input
-                    id={`role-edit-codigo-${role.id}`}
-                    name="codigo"
-                    defaultValue={role.codigo}
-                  />
-                </div>
                 <div className="space-y-1 md:col-span-2">
                   <Label htmlFor={`role-edit-descripcion-${role.id}`}>Descripción</Label>
-                  <Input
+                  <Textarea
                     id={`role-edit-descripcion-${role.id}`}
                     name="descripcion"
                     defaultValue={role.descripcion === "—" ? "" : role.descripcion}

@@ -425,17 +425,17 @@ export const deleteUserAction: CrudActionHandler = async (_, formData) => {
 export const createRoleAction: CrudActionHandler = async (_, formData) => {
   try {
     const orgId = requireOrgId()
-    const codigo = getText(formData, "codigo")
     const nombre = getText(formData, "nombre")
     const descripcion = getOptionalText(formData, "descripcion")
+    const body: Record<string, unknown> = {
+      nombre,
+      descripcion: descripcion || null,
+      organizacion_id: orgId,
+    }
+
     await callAndValidate("/rest/v1/roles", {
       method: "POST",
-      body: {
-        codigo,
-        nombre,
-        descripcion: descripcion || null,
-        organizacion_id: orgId,
-      },
+      body,
       prefer: "return=representation",
     })
     revalidatePath(PATHS.roles)
@@ -448,14 +448,9 @@ export const createRoleAction: CrudActionHandler = async (_, formData) => {
 export const updateRoleAction: CrudActionHandler = async (_, formData) => {
   try {
     const roleId = getText(formData, "id")
-    const codigo = getOptionalText(formData, "codigo")
     const nombre = getOptionalText(formData, "nombre")
     const descripcion = getOptionalText(formData, "descripcion")
     const body: Record<string, unknown> = {}
-    if (codigo !== null) {
-      if (!codigo.length) throw new Error("El código no puede estar vacío.")
-      body.codigo = codigo
-    }
     if (nombre !== null) {
       if (!nombre.length) throw new Error("El nombre no puede estar vacío.")
       body.nombre = nombre

@@ -475,10 +475,6 @@ function RoleCreateForm() {
       <FormStatusMessage state={state} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="role-create-codigo">Código</Label>
-          <Input id="role-create-codigo" name="codigo" placeholder="admin" required />
-        </div>
-        <div className="space-y-1">
           <Label htmlFor="role-create-nombre">Nombre</Label>
           <Input id="role-create-nombre" name="nombre" placeholder="Administrador" required />
         </div>
@@ -501,10 +497,6 @@ function RoleUpdateForm() {
         <div className="space-y-1 md:col-span-2">
           <Label htmlFor="role-update-id">Rol ID</Label>
           <Input id="role-update-id" name="id" placeholder="uuid" required />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="role-update-codigo">Código</Label>
-          <Input id="role-update-codigo" name="codigo" placeholder="admin" />
         </div>
         <div className="space-y-1">
           <Label htmlFor="role-update-nombre">Nombre</Label>
