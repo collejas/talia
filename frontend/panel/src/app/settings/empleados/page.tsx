@@ -3,8 +3,13 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { EntitySummaryCard, type EntitySchema } from "@/components/settings/entity-summary-card"
+import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDateTime } from "@/lib/formatters"
+import { fetchEmployeesDirectory, type HrEmployeesDirectory } from "@/lib/settings/hr-directory"
 
 const EMPLEADOS_SCHEMA: EntitySchema = {
   title: "Empleados",
@@ -35,7 +40,9 @@ export const metadata: Metadata = {
   title: "Empleados · Settings",
 }
 
-export default function EmpleadosSettingsPage() {
+export default async function EmpleadosSettingsPage() {
+  const empleadosDirectory = await fetchEmployeesDirectory()
+
   return (
     <AppViewLayout
       title="Settings · Empleados"
@@ -55,6 +62,7 @@ export default function EmpleadosSettingsPage() {
         </header>
         <div className="space-y-6">
           <EntitySummaryCard schema={EMPLEADOS_SCHEMA} />
+          <EmployeesDirectoryCard data={empleadosDirectory} />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader>
@@ -89,4 +97,91 @@ export default function EmpleadosSettingsPage() {
       </div>
     </AppViewLayout>
   )
+}
+
+function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle>Directorio por organización</CardTitle>
+        <CardDescription>
+          Mostramos los últimos {data.items.length} registros ({data.total} en total).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <SettingsErrorCallout
+          title="No se pudo recuperar toda la información"
+          messages={data.errors}
+        />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SettingsStatCard label="Empleados" value={data.total} />
+          <SettingsStatCard label="Gestores" value={data.stats.gestores} />
+          <SettingsStatCard label="Vendedores" value={data.stats.vendedores} />
+        </div>
+        <div className="rounded-lg border border-border/60">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead className="hidden md:table-cell">Departamento</TableHead>
+                  <TableHead className="hidden lg:table-cell">Puesto</TableHead>
+                  <TableHead>Gestor</TableHead>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead className="hidden lg:table-cell">Estado</TableHead>
+                  <TableHead className="hidden xl:table-cell">Creado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                      No hay empleados registrados en esta organización.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.items.map((employee) => (
+                    <TableRow key={employee.id}>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{employee.nombre}</span>
+                          <span className="text-xs text-muted-foreground">{employee.correo || "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">{employee.departamento}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{employee.puesto}</TableCell>
+                      <TableCell>
+                        <Badge variant={employee.esGestor ? "secondary" : "outline"}>
+                          {employee.esGestor ? "Sí" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={employee.esVendedor ? "secondary" : "outline"}>
+                          {employee.esVendedor ? "Sí" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <Badge variant={estadoVariant(employee.estado)}>{employee.estado}</Badge>
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        <span className="text-xs text-muted-foreground">
+                          {formatDateTime(employee.creadoEn)}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function estadoVariant(estado: string): "secondary" | "outline" | "destructive" {
+  if (estado === "activo") return "secondary"
+  if (estado === "bloqueado") return "destructive"
+  return "outline"
 }

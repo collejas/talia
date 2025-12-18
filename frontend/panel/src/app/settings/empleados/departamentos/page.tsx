@@ -3,8 +3,12 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { EntitySummaryCard, type EntitySchema } from "@/components/settings/entity-summary-card"
+import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDateTime } from "@/lib/formatters"
+import { fetchDepartmentsDirectory, type HrDepartmentsDirectory } from "@/lib/settings/hr-directory"
 
 const DEPARTMENTS_SCHEMA: EntitySchema = {
   title: "Departamentos",
@@ -37,7 +41,9 @@ export const metadata: Metadata = {
   title: "Departamentos · Settings",
 }
 
-export default function DepartamentosSettingsPage() {
+export default async function DepartamentosSettingsPage() {
+  const departmentsDirectory = await fetchDepartmentsDirectory()
+
   return (
     <AppViewLayout
       title="Settings · Departamentos"
@@ -57,6 +63,7 @@ export default function DepartamentosSettingsPage() {
         </header>
         <div className="space-y-6">
           <EntitySummaryCard schema={DEPARTMENTS_SCHEMA} />
+          <DepartmentsDirectoryCard data={departmentsDirectory} />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader>
@@ -90,5 +97,67 @@ export default function DepartamentosSettingsPage() {
         </div>
       </div>
     </AppViewLayout>
+  )
+}
+
+function DepartmentsDirectoryCard({ data }: { data: HrDepartmentsDirectory }) {
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle>Jerarquía de departamentos</CardTitle>
+        <CardDescription>
+          Mostramos hasta {data.items.length} registros recientes ({data.total} en total).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <SettingsErrorCallout
+          title="No se pudo recuperar toda la información"
+          messages={data.errors}
+        />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SettingsStatCard label="Departamentos" value={data.total} />
+          <SettingsStatCard label="Puestos definidos" value={data.stats.puestos} />
+          <SettingsStatCard label="Colaboradores" value={data.stats.empleados} />
+        </div>
+        <div className="rounded-lg border border-border/60">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Departamento</TableHead>
+                  <TableHead className="hidden md:table-cell">Superior</TableHead>
+                  <TableHead>Puestos</TableHead>
+                  <TableHead>Colaboradores</TableHead>
+                  <TableHead className="hidden lg:table-cell">Creado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                      No hay departamentos registrados en la organización.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.items.map((dept) => (
+                    <TableRow key={dept.id}>
+                      <TableCell className="font-medium">{dept.nombre}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {dept.padreNombre}
+                      </TableCell>
+                      <TableCell>{dept.puestos}</TableCell>
+                      <TableCell>{dept.empleados}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                        {formatDateTime(dept.creadoEn)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

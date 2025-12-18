@@ -3,8 +3,12 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { EntitySummaryCard, type EntitySchema } from "@/components/settings/entity-summary-card"
+import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDateTime } from "@/lib/formatters"
+import { fetchPositionsDirectory, type HrPositionsDirectory } from "@/lib/settings/hr-directory"
 
 const POSITIONS_SCHEMA: EntitySchema = {
   title: "Puestos",
@@ -33,7 +37,9 @@ export const metadata: Metadata = {
   title: "Puestos · Settings",
 }
 
-export default function PuestosSettingsPage() {
+export default async function PuestosSettingsPage() {
+  const positionsDirectory = await fetchPositionsDirectory()
+
   return (
     <AppViewLayout
       title="Settings · Puestos"
@@ -53,6 +59,7 @@ export default function PuestosSettingsPage() {
         </header>
         <div className="space-y-6">
           <EntitySummaryCard schema={POSITIONS_SCHEMA} />
+          <PositionsDirectoryCard data={positionsDirectory} />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader>
@@ -86,5 +93,69 @@ export default function PuestosSettingsPage() {
         </div>
       </div>
     </AppViewLayout>
+  )
+}
+
+function PositionsDirectoryCard({ data }: { data: HrPositionsDirectory }) {
+  const vacantes = data.items.filter((item) => item.empleados === 0).length
+
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle>Puestos disponibles</CardTitle>
+        <CardDescription>
+          Mostramos hasta {data.items.length} puestos recientes ({data.total} en total).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <SettingsErrorCallout
+          title="No se pudo recuperar toda la información"
+          messages={data.errors}
+        />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SettingsStatCard label="Puestos" value={data.total} />
+          <SettingsStatCard label="Colaboradores asignados" value={data.stats.empleados} />
+          <SettingsStatCard label="Vacantes" value={vacantes} />
+        </div>
+        <div className="rounded-lg border border-border/60">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Puesto</TableHead>
+                  <TableHead className="hidden md:table-cell">Departamento</TableHead>
+                  <TableHead className="hidden lg:table-cell">Descripción</TableHead>
+                  <TableHead>Colaboradores</TableHead>
+                  <TableHead className="hidden lg:table-cell">Creado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                      No hay puestos dados de alta todavía.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.items.map((puesto) => (
+                    <TableRow key={puesto.id}>
+                      <TableCell className="font-medium">{puesto.nombre}</TableCell>
+                      <TableCell className="hidden md:table-cell">{puesto.departamento}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                        {puesto.descripcion}
+                      </TableCell>
+                      <TableCell>{puesto.empleados}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                        {formatDateTime(puesto.creadoEn)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

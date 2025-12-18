@@ -87,8 +87,9 @@ npm run build --webpack && npm start
 
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
+codex resume 019b2e79-916e-70c2-aa64-a7c29ffccd1b
 
-
+sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 # CORRECCIONES BASE DATOS 
 codex resume 019b2974-9cf6-70e0-b634-fde1f0394354
 embudo, leads
@@ -842,3 +843,7 @@ https://talia.mx/api/inbox/threads?limit=25&message_limit=20
 
 export TWILIO_ACCOUNT_SID=
 export TWILIO_AUTH_TOKEN=
+
+
+
+revisa mi base de datos con la nueva funcion de MCP supabase, quiero agregar a mi app fronted las vistas para manejar empleados, usuarios, roles, departamentos, permisos, puestos, queiro que me digas que es lo que esta en base de datos para luego decirte que haremos.
