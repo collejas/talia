@@ -2,11 +2,10 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { RoleCrudPanel } from "@/components/settings/hr/crud-forms"
+import { RoleInlineRow } from "@/components/settings/hr/role-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatDateTime } from "@/lib/formatters"
 import { fetchRolesDirectory, type HrRolesDirectory } from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
@@ -71,11 +70,11 @@ function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
-                  <TableHead className="hidden md:table-cell">Código</TableHead>
                   <TableHead className="hidden lg:table-cell">Descripción</TableHead>
                   <TableHead className="hidden lg:table-cell">Permisos</TableHead>
                   <TableHead>Usuarios</TableHead>
                   <TableHead className="hidden xl:table-cell">Creado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -86,41 +85,7 @@ function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.items.map((rol) => (
-                    <TableRow key={rol.id}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{rol.nombre}</span>
-                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-                            {rol.id}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">
-                        {rol.codigo}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {rol.descripcion}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {rol.permisos.length ? (
-                          <div className="flex flex-wrap gap-1">
-                            {rol.permisos.map((permiso) => (
-                              <Badge key={permiso} variant="outline">
-                                {permiso}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sin permisos</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{rol.usuarios}</TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
-                        {formatDateTime(rol.creadoEn)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  data.items.map((rol) => <RoleInlineRow key={rol.id} role={rol} />)
                 )}
               </TableBody>
             </Table>

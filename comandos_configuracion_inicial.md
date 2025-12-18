@@ -133,7 +133,9 @@ http://127.0.0.1:3000/auth/login
 # Entarada a Ser
 ssh-copy-id jorge T@67.205.156.148
 
+67135462
 
+57618790
 
 codex resume 019af9d1-5c6a-79e2-8ab8-e9fa2bad544c
 
