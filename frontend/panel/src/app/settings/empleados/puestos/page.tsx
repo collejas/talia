@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { PositionCrudPanel } from "@/components/settings/hr/crud-forms"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -10,6 +11,9 @@ import { fetchPositionsDirectory, type HrPositionsDirectory } from "@/lib/settin
 export const metadata: Metadata = {
   title: "Puestos · Settings",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function PuestosSettingsPage() {
   const positionsDirectory = await fetchPositionsDirectory()
@@ -32,6 +36,7 @@ export default async function PuestosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
+          <PositionCrudPanel />
           <PositionsDirectoryCard data={positionsDirectory} />
         </div>
       </div>
@@ -82,7 +87,14 @@ function PositionsDirectoryCard({ data }: { data: HrPositionsDirectory }) {
                 ) : (
                   data.items.map((puesto) => (
                     <TableRow key={puesto.id}>
-                      <TableCell className="font-medium">{puesto.nombre}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{puesto.nombre}</span>
+                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
+                            {puesto.id}
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell className="hidden md:table-cell">{puesto.departamento}</TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {puesto.descripcion}

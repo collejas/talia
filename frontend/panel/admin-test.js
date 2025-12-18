@@ -1,0 +1,11 @@
+const payload={
+  email:'prueba-inline@geoactiv.mx',
+  password:'Temporal123!',
+  email_confirm:true,
+  user_metadata:{organizacion_id:'00000000-0000-0000-0000-000000000001'},
+  app_metadata:{organizacion_id:'00000000-0000-0000-0000-000000000001'}
+};
+(async()=>{
+  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
+  console.log('URL', url);
+})();

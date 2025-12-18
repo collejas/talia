@@ -87,6 +87,9 @@ npm run build --webpack && npm start
 
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
+
+codex resume 019b2f18-d112-7ad1-9dde-e7c9f8d165df
+
 codex resume 019b2e79-916e-70c2-aa64-a7c29ffccd1b
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
@@ -847,3 +850,17 @@ export TWILIO_AUTH_TOKEN=
 
 
 revisa mi base de datos con la nueva funcion de MCP supabase, quiero agregar a mi app fronted las vistas para manejar empleados, usuarios, roles, departamentos, permisos, puestos, queiro que me digas que es lo que esta en base de datos para luego decirte que haremos.
+
+
+
+
+
+export NEXT_PUBLIC_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
+     export SUPABASE_SERVICE_ROLE=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuaW15YW10Y3piYndtbHJsZWpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDk1NzUzOSwiZXhwIjoyMDgwMzE3NTM5fQ.y7TptlnVqITaLEukjwgYxCRfqE4jRWgmXGv6Kz61W4U
+     export ORG_ID=00000000-0000-0000-0000-000000000001
+
+     curl -i "$NEXT_PUBLIC_SUPABASE_URL/auth/v1/admin/users" \
+       -H "apikey: $SUPABASE_SERVICE_ROLE" \
+       -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE" \
+       -H "Content-Type: application/json" \
+       -d '{"email":"prueba-inline@geoactiv.mx","password":"Temporal123!","email_confirm":true,"user_metadata":

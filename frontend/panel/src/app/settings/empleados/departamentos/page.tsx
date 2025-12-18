@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { DepartmentCrudPanel } from "@/components/settings/hr/crud-forms"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -10,6 +11,9 @@ import { fetchDepartmentsDirectory, type HrDepartmentsDirectory } from "@/lib/se
 export const metadata: Metadata = {
   title: "Departamentos · Settings",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function DepartamentosSettingsPage() {
   const departmentsDirectory = await fetchDepartmentsDirectory()
@@ -32,6 +36,7 @@ export default async function DepartamentosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
+          <DepartmentCrudPanel />
           <DepartmentsDirectoryCard data={departmentsDirectory} />
         </div>
       </div>
@@ -80,7 +85,14 @@ function DepartmentsDirectoryCard({ data }: { data: HrDepartmentsDirectory }) {
                 ) : (
                   data.items.map((dept) => (
                     <TableRow key={dept.id}>
-                      <TableCell className="font-medium">{dept.nombre}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{dept.nombre}</span>
+                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
+                            {dept.id}
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">
                         {dept.padreNombre}
                       </TableCell>

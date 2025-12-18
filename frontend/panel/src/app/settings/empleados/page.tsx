@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { EmployeeCrudPanel } from "@/components/settings/hr/crud-forms"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
@@ -11,6 +12,9 @@ import { fetchEmployeesDirectory, type HrEmployeesDirectory } from "@/lib/settin
 export const metadata: Metadata = {
   title: "Empleados · Settings",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function EmpleadosSettingsPage() {
   const empleadosDirectory = await fetchEmployeesDirectory()
@@ -33,6 +37,7 @@ export default async function EmpleadosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
+          <EmployeeCrudPanel />
           <EmployeesDirectoryCard data={empleadosDirectory} />
         </div>
       </div>
@@ -87,6 +92,9 @@ function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
                         <div className="flex flex-col gap-1">
                           <span className="font-medium">{employee.nombre}</span>
                           <span className="text-xs text-muted-foreground">{employee.correo || "—"}</span>
+                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
+                            {employee.id}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">{employee.departamento}</TableCell>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { RoleCrudPanel } from "@/components/settings/hr/crud-forms"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
@@ -11,6 +12,9 @@ import { fetchRolesDirectory, type HrRolesDirectory } from "@/lib/settings/hr-di
 export const metadata: Metadata = {
   title: "Roles · Settings",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function RolesSettingsPage() {
   const rolesDirectory = await fetchRolesDirectory()
@@ -34,6 +38,7 @@ export default async function RolesSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
+          <RoleCrudPanel />
           <RolesDirectoryCard data={rolesDirectory} />
         </div>
       </div>
@@ -83,7 +88,14 @@ function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
                 ) : (
                   data.items.map((rol) => (
                     <TableRow key={rol.id}>
-                      <TableCell className="font-medium">{rol.nombre}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{rol.nombre}</span>
+                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
+                            {rol.id}
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground">
                         {rol.codigo}
                       </TableCell>

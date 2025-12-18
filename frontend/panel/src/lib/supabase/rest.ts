@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
+import { getDefaultOrganizacionId } from "@/lib/settings/org"
 
 type SupabaseRestMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
@@ -33,12 +34,6 @@ type SupabaseRestFailure = {
 
 export type SupabaseRestResult<T> = SupabaseRestSuccess<T> | SupabaseRestFailure
 
-const ORGANIZATION_ENV_KEYS = [
-  "PANEL_ORGANIZACION_ID",
-  "TALIA_ORGANIZACION_ID",
-  "NEXT_PUBLIC_ORGANIZACION_ID",
-] as const
-
 export async function callSupabaseRest<T = unknown>(
   path: string,
   options: SupabaseRestOptions = {},
@@ -63,7 +58,7 @@ export async function callSupabaseRest<T = unknown>(
   }
 
   if (options.enforceOrganization && !url.searchParams.has("organizacion_id")) {
-    const organizacionId = resolveDefaultOrganizacionId()
+    const organizacionId = getDefaultOrganizacionId()
     if (organizacionId) {
       url.searchParams.set("organizacion_id", `eq.${organizacionId}`)
     }
@@ -108,12 +103,24 @@ export async function callSupabaseRest<T = unknown>(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers,
-    cache: "no-store",
-    ...(body ? { body } : {}),
-  })
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      cache: "no-store",
+      ...(body ? { body } : {}),
+    })
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message || "No se pudo conectar con Supabase."
+        : "No se pudo conectar con Supabase."
+    return {
+      ok: false,
+      error: message,
+    }
+  }
 
   if (!response.ok) {
     return {
@@ -182,16 +189,6 @@ function resolveServiceKeyToken(): string | null {
   for (const key of keys) {
     if (key && key.trim().length) {
       return key.trim()
-    }
-  }
-  return null
-}
-
-function resolveDefaultOrganizacionId(): string | null {
-  for (const key of ORGANIZATION_ENV_KEYS) {
-    const value = process.env[key]
-    if (value && value.trim().length) {
-      return value.trim()
     }
   }
   return null

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { PermissionCrudPanel } from "@/components/settings/hr/crud-forms"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
@@ -11,6 +12,9 @@ import { fetchPermissionsDirectory, type HrPermissionsDirectory } from "@/lib/se
 export const metadata: Metadata = {
   title: "Permisos · Settings",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function PermisosSettingsPage() {
   const permissionsDirectory = await fetchPermissionsDirectory()
@@ -29,6 +33,7 @@ export default async function PermisosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
+          <PermissionCrudPanel />
           <PermissionsDirectoryCard data={permissionsDirectory} />
         </div>
       </div>
@@ -80,7 +85,14 @@ function PermissionsDirectoryCard({ data }: { data: HrPermissionsDirectory }) {
                 ) : (
                   data.items.map((permiso) => (
                     <TableRow key={permiso.id}>
-                      <TableCell className="font-medium">{permiso.codigo}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{permiso.codigo}</span>
+                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
+                            {permiso.id}
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell>{permiso.descripcion}</TableCell>
                       <TableCell className="hidden lg:table-cell">
                         {permiso.roles.length ? (

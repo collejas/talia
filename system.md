@@ -29,13 +29,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-
-# Código del panel
 WorkingDirectory=/var/www/talia/frontend/panel
 
 # Variables de entorno
 Environment=NODE_ENV=production
 Environment=PANEL_API_URL=http://127.0.0.1:8004/api
+EnvironmentFile=/var/www/talia/frontend/panel/.env.local
 
 # Crear carpeta de logs (propietario root)
 ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs
@@ -47,8 +46,6 @@ ExecStart=/usr/bin/npm run start -- -p 3001
 
 Restart=on-failure
 RestartSec=5
-
-# Lo corremos como root por ahora (luego podemos crear devuser y bajar privilegios)
 User=root
 
 StandardOutput=append:/var/www/talia/logs/panel.log

@@ -1,16 +1,19 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
+import { UserCrudPanel } from "@/components/settings/hr/crud-forms"
+import { UserInlineRow } from "@/components/settings/hr/user-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatDateTime } from "@/lib/formatters"
 import { fetchUsersDirectory, type HrUsersDirectory } from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
   title: "Usuarios · Settings",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function UsuariosSettingsPage() {
   const usersDirectory = await fetchUsersDirectory()
@@ -34,6 +37,7 @@ export default async function UsuariosSettingsPage() {
           </p>
         </header>
         <div className="space-y-6">
+          <UserCrudPanel />
           <UsersDirectoryCard data={usersDirectory} />
         </div>
       </div>
@@ -73,52 +77,18 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
                   <TableHead>Estado</TableHead>
                   <TableHead className="hidden xl:table-cell">Último acceso</TableHead>
                   <TableHead className="hidden xl:table-cell">Creado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                       No hay usuarios registrados.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.items.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{user.nombre}</span>
-                          <span className="text-xs text-muted-foreground">{user.correo || "—"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {user.roles.length ? (
-                          <div className="flex flex-wrap gap-1">
-                            {user.roles.map((role) => (
-                              <Badge key={role} variant="secondary">
-                                {role}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sin rol</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">{user.departamento}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {user.puesto}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={estadoVariant(user.estado)}>{user.estado}</Badge>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
-                        {formatDateTime(user.ultimoAcceso)}
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
-                        {formatDateTime(user.creadoEn)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  data.items.map((user) => <UserInlineRow key={user.id} user={user} />)
                 )}
               </TableBody>
             </Table>
@@ -127,10 +97,4 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
       </CardContent>
     </Card>
   )
-}
-
-function estadoVariant(estado: string): "secondary" | "outline" | "destructive" {
-  if (estado === "activo") return "secondary"
-  if (estado === "bloqueado") return "destructive"
-  return "outline"
 }
