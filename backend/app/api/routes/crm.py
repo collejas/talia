@@ -4556,7 +4556,10 @@ async def get_quote_template(
     slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
 ) -> CRMQuoteTemplate:
     try:
-        row = await repo.get_quote_template(slug=slug)
+        row = await repo.get_quote_template(
+            slug=slug,
+            organizacion_id=organizacion_id,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if row is None:
@@ -4570,11 +4573,17 @@ async def update_quote_template(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
     payload: CRMQuoteTemplateUpdate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
 ) -> CRMQuoteTemplate:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
-        row = await repo.upsert_quote_template(slug=slug, payload=body)
+        row = await repo.upsert_quote_template(
+            slug=slug,
+            organizacion_id=organizacion_id,
+            payload=body,
+            updated_by=usuario_id,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuoteTemplate.model_validate(row)

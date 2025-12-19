@@ -3086,22 +3086,38 @@ class CRMRepository:
         )
 
     async def user_has_role(self, *, usuario_id: UUID, role_code: str) -> bool:
+        normalized_target = (role_code or "").strip().lower()
+        if not normalized_target:
+            return False
+
+        alias_map: dict[str, set[str]] = {
+            "admin": {"admin", "administrador"},
+            "administrador": {"admin", "administrador"},
+        }
+        lookup_targets = alias_map.get(normalized_target, {normalized_target})
+
         params = {
-            "select": "rol:roles(codigo)",
+            "select": "rol:roles(codigo,nombre)",
             "usuario_id": f"eq.{usuario_id}",
-            "rol.codigo": f"eq.{role_code}",
-            "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/usuarios_roles", params=params)
         data = resp.json() or []
+
+        rows: list[Any]
         if isinstance(data, list):
-            for row in data:
-                role = row.get("rol") if isinstance(row, dict) else None
-                if isinstance(role, dict) and role.get("codigo") == role_code:
-                    return True
-        if isinstance(data, dict):
-            role = data.get("rol")
-            if isinstance(role, dict) and role.get("codigo") == role_code:
+            rows = data
+        elif isinstance(data, dict):
+            rows = [data]
+        else:
+            rows = []
+
+        for row in rows:
+            role = row.get("rol") if isinstance(row, dict) else None
+            if not isinstance(role, dict):
+                continue
+            codigo_norm = str(role.get("codigo") or "").strip().lower()
+            nombre_norm = str(role.get("nombre") or "").strip().lower()
+            if codigo_norm in lookup_targets or nombre_norm in lookup_targets:
                 return True
         return False
 
@@ -5105,9 +5121,11 @@ class CRMRepository:
         self,
         *,
         slug: str,
+        organizacion_id: UUID,
     ) -> dict[str, Any] | None:
         params = {
             "slug": f"eq.{slug}",
+            "organizacion_id": f"eq.{organizacion_id}",
             "limit": "1",
         }
         resp = await self._request(
@@ -5129,13 +5147,21 @@ class CRMRepository:
         self,
         *,
         slug: str,
+        organizacion_id: UUID,
         payload: dict[str, Any],
+        updated_by: UUID | None = None,
     ) -> dict[str, Any]:
-        body = {"slug": slug, **payload}
+        body: dict[str, Any] = {
+            "slug": slug,
+            "organizacion_id": str(organizacion_id),
+            **payload,
+        }
+        if updated_by:
+            body["updated_by"] = str(updated_by)
         resp = await self._request(
             "POST",
             "/rest/v1/quote_templates",
-            params={"on_conflict": "slug"},
+            params={"on_conflict": "slug,organizacion_id"},
             json=body,
             prefer="return=representation,resolution=merge-duplicates",
         )
