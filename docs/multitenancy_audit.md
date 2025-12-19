@@ -110,6 +110,9 @@ where t.organizacion_id <> cu.organizacion_id;
   - supabase/migrations/20270519_160000_multitenant_orgid_defaults_and_triggers.sql
   - supabase/migrations/20270519_170000_multitenant_force_rls.sql
   - supabase/migrations/20270519_183000_quotes_bucket_private.sql
+  - supabase/migrations/20270519_184500_panel_calendar_bookings_grant.sql
+  - supabase/migrations/20270519_185500_calendar_tables_select.sql
+  - supabase/migrations/20270519_190000_panel_agenda_table_grants.sql
 
   Checks finales:
 
