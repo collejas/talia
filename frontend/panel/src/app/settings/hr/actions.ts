@@ -437,6 +437,7 @@ export const createRoleAction: CrudActionHandler = async (_, formData) => {
       method: "POST",
       body,
       prefer: "return=representation",
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.roles)
     return success("Rol creado.")
@@ -467,6 +468,7 @@ export const updateRoleAction: CrudActionHandler = async (_, formData) => {
       },
       prefer: "return=representation",
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.roles)
     return success("Rol actualizado.")
@@ -484,6 +486,7 @@ export const deleteRoleAction: CrudActionHandler = async (_, formData) => {
         id: `eq.${roleId}`,
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.roles)
     return success("Rol eliminado.")
