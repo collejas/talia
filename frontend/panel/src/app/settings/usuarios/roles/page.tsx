@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { RoleCrudPanel } from "@/components/settings/hr/crud-forms"
 import { RoleInlineRow } from "@/components/settings/hr/role-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
@@ -36,10 +35,7 @@ export default async function RolesSettingsPage() {
             puestos que controla qué puede ver cada empleado.
           </p>
         </header>
-        <div className="space-y-6">
-          <RoleCrudPanel />
-          <RolesDirectoryCard data={rolesDirectory} />
-        </div>
+        <RolesDirectoryCard data={rolesDirectory} />
       </div>
     </AppViewLayout>
   )

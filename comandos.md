@@ -93,6 +93,7 @@ codex resume 019b2f18-d112-7ad1-9dde-e7c9f8d165df
 codex resume 019b2e79-916e-70c2-aa64-a7c29ffccd1b
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
+
 # CORRECCIONES BASE DATOS 
 codex resume 019b2974-9cf6-70e0-b634-fde1f0394354
 embudo, leads
