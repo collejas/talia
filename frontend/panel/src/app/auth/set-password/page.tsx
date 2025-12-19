@@ -2,6 +2,8 @@ import { Metadata } from "next"
 
 import { SetPasswordForm } from "@/components/auth/set-password-form"
 
+type SearchParamRecord = Record<string, string | string[] | undefined>
+
 export const metadata: Metadata = {
   title: "Establece tu contraseña · Talia",
 }
@@ -11,11 +13,12 @@ const getFirstValue = (value?: string | string[]) => {
   return value ?? ""
 }
 
-export default async function SetPasswordPage({ searchParams }: { searchParams?: any }) {
-  const resolvedParams =
-    searchParams && typeof searchParams.then === "function"
-      ? await searchParams
-      : (searchParams as Record<string, string | string[] | undefined> | undefined)
+export default async function SetPasswordPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParamRecord>
+}) {
+  const resolvedParams = searchParams ? await searchParams : undefined
   const params = resolvedParams ?? {}
   const accessToken = getFirstValue(params.access_token) || getFirstValue(params.token)
   const type = getFirstValue(params.type)

@@ -1,6 +1,7 @@
 "use server"
 
 import { getSupabaseConfig } from "@/lib/auth/supabase"
+import { sendInviteEmailViaSmtp } from "@/lib/mail/send-invite-email"
 
 const SERVICE_KEY_ENV_KEYS = [
   "SUPABASE_SERVICE_ROLE",
@@ -37,87 +38,95 @@ export async function createSupabaseAuthUser(
 
   const telefono = input.telefono?.trim() ?? ""
   const hasTelefono = telefono.length > 0
-  const payload = {
+  const baseUrl = config.url.replace(/\/+$/, "")
+  const metadata: Record<string, unknown> = {
+    organizacion_id: input.organizacion_id,
+  }
+  if (input.nombre) {
+    metadata.nombre = input.nombre
+  }
+  if (hasTelefono) {
+    metadata.telefono_e164 = telefono
+  }
+  console.info("[settings/hr] Invitando usuario auth", {
     email: input.email,
-    password: input.password,
-    email_confirm: true,
+    redirect_to: RESET_REDIRECT_URL,
+    organizacion_id: metadata.organizacion_id,
+  })
+
+  const inviteBody: Record<string, unknown> = {
+    type: "invite",
+    email: input.email,
+  }
+  if (RESET_REDIRECT_URL) {
+    inviteBody.redirect_to = RESET_REDIRECT_URL
+  }
+  if (Object.keys(metadata).length) {
+    inviteBody.data = metadata
+  }
+
+  const inviteResponse = await fetch(`${baseUrl}/auth/v1/admin/generate_link`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(inviteBody),
+    cache: "no-store",
+  })
+
+  if (!inviteResponse.ok) {
+    const errorText = await getErrorMessage(inviteResponse)
+    throw new Error(errorText || "No se pudo invitar al usuario en Supabase Auth.")
+  }
+
+  const inviteResult = (await inviteResponse.json()) as {
+    id?: string
+    user?: { id?: string }
+    action_link?: string
+  }
+  const invitedUserId = inviteResult?.id ?? inviteResult?.user?.id
+  const actionLink = inviteResult?.action_link
+  if (!invitedUserId) {
+    throw new Error("Supabase Auth no regresó un identificador de usuario al invitar.")
+  }
+  if (!actionLink) {
+    throw new Error("Supabase Auth no regresó el enlace de invitación.")
+  }
+
+  const updatePayload = {
     phone: hasTelefono ? telefono : DEFAULT_TELEFONO_E164,
     phone_confirm: hasTelefono,
-    user_metadata: {
-      nombre: input.nombre,
-      organizacion_id: input.organizacion_id,
-    },
+    user_metadata: metadata,
     app_metadata: {
       organizacion_id: input.organizacion_id,
     },
   }
 
-  console.info("[settings/hr] Creando usuario auth", {
-    email: payload.email,
-    phone: payload.phone,
-    phone_confirm: payload.phone_confirm,
-    organizacion_id: payload.app_metadata.organizacion_id,
-  })
-
-  const response = await fetch(`${config.url.replace(/\/+$/, "")}/auth/v1/admin/users`, {
-    method: "POST",
+  const updateResponse = await fetch(`${baseUrl}/auth/v1/admin/users/${invitedUserId}`, {
+    method: "PUT",
     headers: {
       apikey: serviceKey,
       Authorization: `Bearer ${serviceKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(updatePayload),
     cache: "no-store",
   })
 
-  if (!response.ok) {
-    const errorText = await getErrorMessage(response)
-    throw new Error(errorText || "No se pudo crear el usuario en Supabase Auth.")
+  if (!updateResponse.ok) {
+    const errorText = await getErrorMessage(updateResponse)
+    throw new Error(errorText || "No se pudo actualizar la información del usuario invitado.")
   }
 
-  const result = (await response.json()) as { id?: string }
-  if (!result?.id) {
-    throw new Error("Supabase Auth no regresó un identificador.")
-  }
-  return { id: result.id }
-}
-
-export async function sendSupabaseInvitation(email: string): Promise<void> {
-  if (!email) {
-    throw new Error("No se proporcionó un correo para enviar el enlace de acceso.")
-  }
-  const config = getSupabaseConfig()
-  if (!config) {
-    throw new Error("Supabase no está configurado.")
-  }
-  const serviceKey = getServiceRoleKey()
-  if (!serviceKey) {
-    throw new Error("Configura SUPABASE_SERVICE_ROLE para enviar invitaciones.")
-  }
-
-  const baseUrl = config.url.replace(/\/+$/, "")
-  const inviteUrl = new URL(`${baseUrl}/auth/v1/admin/invite`)
-
-  const body: Record<string, unknown> = { email }
-  if (RESET_REDIRECT_URL) {
-    body.redirect_to = RESET_REDIRECT_URL
-  }
-
-  const response = await fetch(inviteUrl, {
-    method: "POST",
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
+  await sendInviteEmailViaSmtp({
+    to: input.email,
+    nombre: input.nombre,
+    actionLink,
   })
 
-  if (!response.ok) {
-    const errorText = await getErrorMessage(response)
-    throw new Error(errorText || "No se pudo enviar el correo de invitación.")
-  }
+  return { id: invitedUserId }
 }
 
 function getServiceRoleKey(): string | null {

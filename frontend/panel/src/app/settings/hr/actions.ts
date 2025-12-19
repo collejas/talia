@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache"
 
 import { callSupabaseRest } from "@/lib/supabase/rest"
-import { createSupabaseAuthUser, sendSupabaseInvitation } from "@/lib/supabase/auth-admin"
+import { createSupabaseAuthUser } from "@/lib/supabase/auth-admin"
 import { getDefaultOrganizacionId } from "@/lib/settings/org"
 
 export type CrudActionState = {
@@ -363,17 +363,9 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
       },
       prefer: "return=representation",
     })
-    let message = "Usuario registrado."
-    if (correo) {
-      try {
-        await sendSupabaseInvitation(correo)
-        message = "Usuario registrado. Enviamos un correo para que establezca su contraseña."
-      } catch (emailError) {
-        console.error("[settings/hr] No se pudo enviar el correo de acceso", emailError)
-        message =
-          "Usuario registrado, pero no pudimos enviar el correo de acceso automáticamente. Intenta reenviarlo más tarde."
-      }
-    }
+    const message = correo
+      ? "Usuario registrado. Enviamos una invitación para que establezca su contraseña."
+      : "Usuario registrado."
     revalidatePath(PATHS.usuarios)
     return success(message)
   } catch (error) {

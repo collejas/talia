@@ -156,6 +156,18 @@ unset DATABASE_URL
 cd /var/www/talia/backend
 PATH=/usr/lib/postgresql/17/bin:$PATH poetry run python scripts/backup_db.py --output-dir ../backups
 
+curl -v smtps://mail.talia.mx:465 \
+       --mail-from hola@talia.mx \
+       --mail-rcpt hola@talia.mx \
+       --upload-file <(printf "Subject: Prueba SMTP\r\n\r\nHola") \
+       --user 'hola@talia.mx:TU_puTA_mADRE_479156376421_8NbukI5vDpp0We1U'
+
+curl -v smtps://mail.talia.mx:465 \
+    --mail-from hola@talia.mx \
+    --mail-rcpt collejas1@gmail.com \
+    --upload-file <(printf "Subject: Prueba SMTP\r\nTo: collejas1@gmail.com\r\nFrom: hola@talia.mx\r\n\r\nHola, esto es una prueba
+  desde curl.") \
+    --user 'hola@talia.mx:TU_puTA_mADRE_479156376421_8NbukI5vDpp0We1U'
 
 ## hacer un respaldo con IPv6 Direct Connection
 
