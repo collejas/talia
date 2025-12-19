@@ -712,7 +712,7 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
 export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
   const errors: string[] = []
 
-  const [departamentosRes, puestosRes] = await Promise.all([
+  const [departamentosRes, puestosRes, usuariosRes] = await Promise.all([
     callSupabaseRest<SupabaseDepartmentRow[]>("/rest/v1/departamentos", {
       searchParams: {
         select: "id,nombre",
@@ -726,6 +726,15 @@ export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
       searchParams: {
         select: "id,nombre,departamento_id",
         order: "nombre.asc",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<SupabaseUserRow[]>("/rest/v1/usuarios", {
+      searchParams: {
+        select: "id,correo,nombre_completo",
+        order: "nombre_completo.asc",
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
@@ -759,9 +768,22 @@ export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
     errors.push(puestosRes.error)
   }
 
+  const usuarios =
+    usuariosRes.ok && Array.isArray(usuariosRes.data)
+      ? usuariosRes.data.map((usuario) => ({
+          id: usuario.id,
+          nombre: sanitizeText(usuario.nombre_completo) || "Sin nombre",
+          correo: sanitizeText(usuario.correo).toLowerCase(),
+        }))
+      : []
+  if (!usuariosRes.ok) {
+    errors.push(usuariosRes.error)
+  }
+
   return {
     departamentos,
     puestos,
+    usuarios,
     errors,
   }
 }

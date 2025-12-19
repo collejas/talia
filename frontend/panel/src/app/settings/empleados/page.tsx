@@ -95,6 +95,7 @@ function EmployeesDirectoryCard({
                 <EmployeeCreateRow
                   departments={lookups.departamentos}
                   positions={lookups.puestos}
+                  userOptions={lookups.usuarios}
                 />
                 {data.items.length === 0 ? (
                   <TableRow>

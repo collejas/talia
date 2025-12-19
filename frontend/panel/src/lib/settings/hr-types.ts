@@ -31,6 +31,12 @@ export type HrPositionOption = {
   departamentoNombre: string
 }
 
+export type HrEmployeeUserOption = {
+  id: string
+  nombre: string
+  correo: string
+}
+
 export type HrDepartmentItem = {
   id: string
   nombre: string
@@ -121,5 +127,6 @@ export type HrPermissionsDirectory = {
 export type HrAssignmentLookups = {
   departamentos: HrDepartmentOption[]
   puestos: HrPositionOption[]
+  usuarios: HrEmployeeUserOption[]
   errors: string[]
 }

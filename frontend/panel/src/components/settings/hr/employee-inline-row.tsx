@@ -13,11 +13,20 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
 import {
   HrDepartmentOption,
   HrEmployeeItem,
+  HrEmployeeUserOption,
   HrPositionOption,
 } from "@/lib/settings/hr-types"
 import { cn } from "@/lib/utils"
@@ -29,12 +38,45 @@ type AssignmentOptions = {
   positions: HrPositionOption[]
 }
 
-export function EmployeeCreateRow({ departments, positions }: AssignmentOptions) {
+type EmployeeCreateOptions = AssignmentOptions & {
+  userOptions: HrEmployeeUserOption[]
+}
+
+type EmployeeInlineRowProps = AssignmentOptions & {
+  employee: HrEmployeeItem
+}
+
+export function EmployeeCreateRow({ departments, positions, userOptions }: EmployeeCreateOptions) {
   const [state, action] = useActionState(createEmployeeAction, INITIAL_STATE)
+  const [blockingMessage, setBlockingMessage] = useState<string | null>(null)
+  const knownUserIds = useMemo(
+    () => new Set(userOptions.map((user) => user.id.toLowerCase())),
+    [userOptions],
+  )
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    if (knownUserIds.size === 0) {
+      event.preventDefault()
+      setBlockingMessage(
+        "Antes de registrar un empleado debes crear primero el usuario en Settings → Usuarios.",
+      )
+      return
+    }
+    const formData = new FormData(event.currentTarget)
+    const usuarioIdRaw = formData.get("usuario_id")
+    const usuarioId =
+      typeof usuarioIdRaw === "string" ? usuarioIdRaw.trim().toLowerCase() : undefined
+    if (usuarioId && !knownUserIds.has(usuarioId)) {
+      event.preventDefault()
+      setBlockingMessage(
+        `No encontramos un usuario con ID ${usuarioId}. Crea el usuario en Settings → Usuarios y vuelve a intentarlo.`,
+      )
+    }
+  }
   return (
     <TableRow className="bg-muted/30">
       <TableCell colSpan={8}>
-        <form action={action} className="space-y-4">
+        <form action={action} className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor="employee-new-user">Usuario ID</Label>
@@ -44,6 +86,9 @@ export function EmployeeCreateRow({ departments, positions }: AssignmentOptions)
                 placeholder="UUID del usuario"
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Copia el ID mostrado en la vista de Usuarios antes de registrar al empleado.
+              </p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="employee-new-depto">Departamento</Label>
@@ -83,13 +128,25 @@ export function EmployeeCreateRow({ departments, positions }: AssignmentOptions)
             <InlineSubmitButton label="Crear empleado" pendingLabel="Guardando..." />
           </div>
         </form>
+        <Dialog open={Boolean(blockingMessage)} onOpenChange={(open) => !open && setBlockingMessage(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Usuario requerido</DialogTitle>
+              <DialogDescription>
+                {blockingMessage ??
+                  "Crea primero el usuario en Settings → Usuarios antes de asignarlo como empleado."}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" onClick={() => setBlockingMessage(null)}>
+                Entendido
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </TableCell>
     </TableRow>
   )
-}
-
-type EmployeeInlineRowProps = AssignmentOptions & {
-  employee: HrEmployeeItem
 }
 
 export function EmployeeInlineRow({ employee, departments, positions }: EmployeeInlineRowProps) {
