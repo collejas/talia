@@ -5,12 +5,7 @@ import { UserCreateRow, UserInlineRow } from "@/components/settings/hr/user-inli
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  fetchAssignmentLookups,
-  fetchUsersDirectory,
-  type HrAssignmentLookups,
-  type HrUsersDirectory,
-} from "@/lib/settings/hr-directory"
+import { fetchUsersDirectory, type HrUsersDirectory } from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
   title: "Usuarios · Settings",
@@ -20,10 +15,7 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export default async function UsuariosSettingsPage() {
-  const [usersDirectory, assignments] = await Promise.all([
-    fetchUsersDirectory(),
-    fetchAssignmentLookups(),
-  ])
+  const usersDirectory = await fetchUsersDirectory()
 
   return (
     <AppViewLayout
@@ -43,19 +35,13 @@ export default async function UsuariosSettingsPage() {
             esta misma sección.
           </p>
         </header>
-        <UsersDirectoryCard data={usersDirectory} lookups={assignments} />
+        <UsersDirectoryCard data={usersDirectory} />
       </div>
     </AppViewLayout>
   )
 }
 
-function UsersDirectoryCard({
-  data,
-  lookups,
-}: {
-  data: HrUsersDirectory
-  lookups: HrAssignmentLookups
-}) {
+function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
   return (
     <Card>
       <CardHeader className="space-y-1">
@@ -67,7 +53,7 @@ function UsersDirectoryCard({
       <CardContent className="space-y-4">
         <SettingsErrorCallout
           title="No se pudo recuperar toda la información"
-          messages={[...data.errors, ...lookups.errors]}
+          messages={data.errors}
         />
         <div className="grid gap-3 sm:grid-cols-4">
           <SettingsStatCard label="Usuarios" value={data.total} />
@@ -91,10 +77,7 @@ function UsersDirectoryCard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <UserCreateRow
-                  departments={lookups.departamentos}
-                  positions={lookups.puestos}
-                />
+                <UserCreateRow />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
@@ -102,14 +85,7 @@ function UsersDirectoryCard({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.items.map((user) => (
-                    <UserInlineRow
-                      key={user.id}
-                      user={user}
-                      departments={lookups.departamentos}
-                      positions={lookups.puestos}
-                    />
-                  ))
+                  data.items.map((user) => <UserInlineRow key={user.id} user={user} />)
                 )}
               </TableBody>
             </Table>

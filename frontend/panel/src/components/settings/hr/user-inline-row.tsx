@@ -15,21 +15,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
-import { HrDepartmentOption, HrPositionOption, HrUserItem } from "@/lib/settings/hr-types"
+import { HrUserItem } from "@/lib/settings/hr-types"
 import { cn } from "@/lib/utils"
 
 const INITIAL_STATE: CrudActionState = { status: "idle" }
 
-type AssignmentOptions = {
-  departments: HrDepartmentOption[]
-  positions: HrPositionOption[]
-}
-
-type UserInlineRowProps = AssignmentOptions & {
+type UserInlineRowProps = {
   user: HrUserItem
 }
 
-export function UserCreateRow({ departments, positions }: AssignmentOptions) {
+export function UserCreateRow() {
   const [state, action] = useActionState(createUserAction, INITIAL_STATE)
   return (
     <TableRow className="bg-muted/30">
@@ -69,30 +64,6 @@ export function UserCreateRow({ departments, positions }: AssignmentOptions) {
                 <option value="bloqueado">Bloqueado</option>
               </select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="user-new-depto">Departamento</Label>
-              <InlineAssignmentSelect
-                id="user-new-depto"
-                name="departamento_id"
-                placeholder="Sin departamento"
-                options={departments.map((dept) => ({
-                  id: dept.id,
-                  label: dept.nombre,
-                }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="user-new-puesto">Puesto</Label>
-              <InlineAssignmentSelect
-                id="user-new-puesto"
-                name="puesto_id"
-                placeholder="Sin puesto"
-                options={positions.map((puesto) => ({
-                  id: puesto.id,
-                  label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
-                }))}
-              />
-            </div>
           </div>
           <InlineStateMessage state={state} />
           <div className="flex justify-end">
@@ -104,7 +75,7 @@ export function UserCreateRow({ departments, positions }: AssignmentOptions) {
   )
 }
 
-export function UserInlineRow({ user, departments, positions }: UserInlineRowProps) {
+export function UserInlineRow({ user }: UserInlineRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -250,32 +221,6 @@ export function UserInlineRow({ user, departments, positions }: UserInlineRowPro
                 <option value="bloqueado">Bloqueado</option>
               </select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor={`user-edit-depto-${user.id}`}>Departamento</Label>
-              <InlineAssignmentSelect
-                id={`user-edit-depto-${user.id}`}
-                name="departamento_id"
-                defaultValue={user.departamentoId ?? ""}
-                placeholder="Sin departamento"
-                options={departments.map((dept) => ({
-                  id: dept.id,
-                  label: dept.nombre,
-                }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`user-edit-puesto-${user.id}`}>Puesto</Label>
-              <InlineAssignmentSelect
-                id={`user-edit-puesto-${user.id}`}
-                name="puesto_id"
-                defaultValue={user.puestoId ?? ""}
-                placeholder="Sin puesto"
-                options={positions.map((puesto) => ({
-                  id: puesto.id,
-                  label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
-                }))}
-              />
-            </div>
           </div>
               {editState.status === "error" && (
                 <p className="text-sm text-destructive">{editState.message}</p>
@@ -331,39 +276,6 @@ function getEstadoVariant(
   if (estado === "activo") return "secondary"
   if (estado === "bloqueado") return "destructive"
   return "outline"
-}
-
-function InlineAssignmentSelect({
-  id,
-  name,
-  options,
-  defaultValue,
-  placeholder,
-}: {
-  id: string
-  name: string
-  options: Array<{ id: string; label: string }>
-  defaultValue?: string
-  placeholder: string
-}) {
-  return (
-    <select
-      id={id}
-      name={name}
-      defaultValue={defaultValue ?? ""}
-      className={cn(
-        "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
-        "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      )}
-    >
-      <option value="">{placeholder}</option>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  )
 }
 
 function InlineStateMessage({ state }: { state: CrudActionState }) {
