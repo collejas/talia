@@ -69,6 +69,7 @@ function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Código</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead className="hidden lg:table-cell">Descripción</TableHead>
                   <TableHead className="hidden lg:table-cell">Permisos</TableHead>
@@ -80,7 +81,7 @@ function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
               <TableBody>
                 {data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
                       Aún no hay roles configurados.
                     </TableCell>
                   </TableRow>

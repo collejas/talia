@@ -34,12 +34,12 @@ export function RoleInlineRow({ role }: RoleInlineRowProps) {
     <>
       <TableRow>
         <TableCell>
+          <span className="font-mono text-sm text-muted-foreground">{role.codigo}</span>
+        </TableCell>
+        <TableCell>
           <div className="flex flex-col gap-1">
             <span className="font-medium">{role.nombre}</span>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-mono text-[0.65rem]">{role.codigo}</span>
-              <span className="text-[0.65rem] font-mono text-muted-foreground/80">{role.id}</span>
-            </div>
+            <span className="text-[0.65rem] font-mono text-muted-foreground/80">{role.id}</span>
           </div>
         </TableCell>
         <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
@@ -113,7 +113,7 @@ export function RoleInlineRow({ role }: RoleInlineRowProps) {
       </TableRow>
       {isEditing && (
         <TableRow className="bg-muted/40">
-          <TableCell colSpan={6}>
+          <TableCell colSpan={7}>
             <form action={editAction} className="space-y-4">
               <input type="hidden" name="id" value={role.id} />
               <div className="grid gap-4 md:grid-cols-2">

@@ -14,7 +14,7 @@ import {
   HrUserItem,
   HrUsersDirectory,
 } from "@/lib/settings/hr-types"
-import { callSupabaseRest } from "@/lib/supabase/rest"
+import { callSupabaseRest, type SupabaseRestResult } from "@/lib/supabase/rest"
 
 export type {
   HrDepartmentItem,
@@ -107,6 +107,15 @@ type SupabasePermissionRow = {
   codigo: string | null
   descripcion: string | null
   creado_en: string | null
+}
+
+type RestSummary = { ok: true; count: number } | { ok: false; error: string }
+
+function summarizeResult<T>(result: SupabaseRestResult<T[]>): RestSummary {
+  if (result.ok) {
+    return { ok: true, count: Array.isArray(result.data) ? result.data.length : 0 }
+  }
+  return { ok: false, error: result.error }
 }
 
 export async function fetchEmployeesDirectory(
@@ -493,6 +502,7 @@ export async function fetchRolesDirectory(): Promise<HrRolesDirectory> {
       },
       prefer: "count=exact",
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseRolePermissionRow[]>("/rest/v1/roles_permisos", {
       searchParams: {
@@ -500,6 +510,7 @@ export async function fetchRolesDirectory(): Promise<HrRolesDirectory> {
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseUserRoleRow[]>("/rest/v1/usuarios_roles", {
       searchParams: {
@@ -507,6 +518,7 @@ export async function fetchRolesDirectory(): Promise<HrRolesDirectory> {
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabasePermissionRow[]>("/rest/v1/permisos", {
       searchParams: {
@@ -514,6 +526,7 @@ export async function fetchRolesDirectory(): Promise<HrRolesDirectory> {
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
   ])
 
@@ -584,6 +597,14 @@ export async function fetchRolesDirectory(): Promise<HrRolesDirectory> {
     (sum, count) => sum + count,
     0,
   )
+
+  console.info("[settings/hr.roles] fetch summary", {
+    roles: summarizeResult(rolesRes),
+    permisos: summarizeResult(permisosRes),
+    rolesPermisos: summarizeResult(rolesPermisosRes),
+    usuariosRoles: summarizeResult(usuariosRolesRes),
+    errors,
+  })
 
   return {
     items,

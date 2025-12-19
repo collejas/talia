@@ -17,6 +17,7 @@ export type SupabaseRestOptions = {
   body?: unknown
   prefer?: string
   enforceOrganization?: boolean
+  forceServiceToken?: boolean
 }
 
 type SupabaseRestSuccess<T> = {
@@ -65,16 +66,34 @@ export async function callSupabaseRest<T = unknown>(
   }
 
   const method: SupabaseRestMethod = options.method ?? (options.body ? "POST" : "GET")
-  const headers: Record<string, string> = {
-    apikey: config.anonKey,
-    ...(options.headers ?? {}),
+  const headers: Record<string, string> = {}
+  if (options.headers) {
+    for (const [key, value] of Object.entries(options.headers)) {
+      if (typeof value === "string") {
+        headers[key] = value
+      }
+    }
   }
   if (options.prefer) {
     headers["Prefer"] = options.prefer
   }
 
-  const authToken =
-    (await resolveSupabaseAuthToken()) ?? resolveServiceKeyToken() ?? config.anonKey
+  const serviceKey = resolveServiceKeyToken()
+  const shouldForceService = options.forceServiceToken ?? false
+  if (shouldForceService && !serviceKey) {
+    return {
+      ok: false,
+      error: "No hay SUPABASE_SERVICE_ROLE configurado para llamadas privilegiadas.",
+    }
+  }
+
+  const sessionToken = await resolveSupabaseAuthToken()
+  const authToken = shouldForceService
+    ? serviceKey ?? config.anonKey
+    : sessionToken ?? serviceKey ?? config.anonKey
+  const tokenSource = authToken === config.anonKey ? "anon" : authToken === serviceKey ? "service" : "session"
+
+  headers["apikey"] = shouldForceService ? serviceKey ?? config.anonKey : config.anonKey
   headers["Authorization"] = `Bearer ${authToken}`
 
   let body: BodyInit | undefined
@@ -120,6 +139,16 @@ export async function callSupabaseRest<T = unknown>(
       ok: false,
       error: message,
     }
+  }
+
+  if (url.pathname.includes("/rest/v1/roles")) {
+    console.info("[supabase/rest] request", {
+      url: url.toString(),
+      method,
+      enforceOrganization: options.enforceOrganization ?? false,
+      tokenSource,
+      status: response.status,
+    })
   }
 
   if (!response.ok) {
