@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { UserCrudPanel } from "@/components/settings/hr/crud-forms"
 import { UserInlineRow } from "@/components/settings/hr/user-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,10 +35,7 @@ export default async function UsuariosSettingsPage() {
             esta misma sección.
           </p>
         </header>
-        <div className="space-y-6">
-          <UserCrudPanel />
-          <UsersDirectoryCard data={usersDirectory} />
-        </div>
+        <UsersDirectoryCard data={usersDirectory} />
       </div>
     </AppViewLayout>
   )
