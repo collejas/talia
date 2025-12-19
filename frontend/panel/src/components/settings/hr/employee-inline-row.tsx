@@ -11,7 +11,6 @@ import {
 } from "@/app/settings/hr/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -49,28 +48,14 @@ type EmployeeInlineRowProps = AssignmentOptions & {
 export function EmployeeCreateRow({ departments, positions, userOptions }: EmployeeCreateOptions) {
   const [state, action] = useActionState(createEmployeeAction, INITIAL_STATE)
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null)
-  const knownUserIds = useMemo(
-    () => new Set(userOptions.map((user) => user.id.toLowerCase())),
-    [userOptions],
-  )
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (knownUserIds.size === 0) {
+    if (userOptions.length === 0) {
       event.preventDefault()
       setBlockingMessage(
         "Antes de registrar un empleado debes crear primero el usuario en Settings → Usuarios.",
       )
       return
-    }
-    const formData = new FormData(event.currentTarget)
-    const usuarioIdRaw = formData.get("usuario_id")
-    const usuarioId =
-      typeof usuarioIdRaw === "string" ? usuarioIdRaw.trim().toLowerCase() : undefined
-    if (usuarioId && !knownUserIds.has(usuarioId)) {
-      event.preventDefault()
-      setBlockingMessage(
-        `No encontramos un usuario con ID ${usuarioId}. Crea el usuario en Settings → Usuarios y vuelve a intentarlo.`,
-      )
     }
   }
   return (
@@ -79,15 +64,28 @@ export function EmployeeCreateRow({ departments, positions, userOptions }: Emplo
         <form action={action} className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-1">
-              <Label htmlFor="employee-new-user">Usuario ID</Label>
-              <Input
+              <Label htmlFor="employee-new-user">Usuario</Label>
+              <AssignmentSelect
                 id="employee-new-user"
                 name="usuario_id"
-                placeholder="UUID del usuario"
+                placeholder={
+                  userOptions.length
+                    ? "Selecciona un usuario disponible"
+                    : "No hay usuarios disponibles"
+                }
+                options={userOptions.map((user) => ({
+                  id: user.id,
+                  label: `${user.nombre}${
+                    user.correo ? ` · ${user.correo}` : ""
+                  }`,
+                }))}
+                disabled={userOptions.length === 0}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Copia el ID mostrado en la vista de Usuarios antes de registrar al empleado.
+                {userOptions.length
+                  ? "Sólo aparecen usuarios que aún no tienen registro de empleado."
+                  : "Crea el usuario en Settings → Usuarios y vuelve a intentarlo."}
               </p>
             </div>
             <div className="space-y-1">
@@ -399,21 +397,28 @@ function AssignmentSelect({
   options,
   defaultValue,
   placeholder,
+  disabled,
+  required,
 }: {
   id: string
   name: string
   options: Array<{ id: string; label: string }>
   defaultValue?: string
   placeholder: string
+  disabled?: boolean
+  required?: boolean
 }) {
   return (
     <select
       id={id}
       name={name}
       defaultValue={defaultValue ?? ""}
+      disabled={disabled}
+      required={required}
       className={cn(
         "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
         "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        disabled && "cursor-not-allowed opacity-60",
       )}
     >
       <option value="">{placeholder}</option>
