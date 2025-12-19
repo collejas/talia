@@ -1,12 +1,13 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { EmployeeCrudPanel } from "@/components/settings/hr/crud-forms"
+import {
+  EmployeeCreateRow,
+  EmployeeInlineRow,
+} from "@/components/settings/hr/employee-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatDateTime } from "@/lib/formatters"
 import { fetchEmployeesDirectory, type HrEmployeesDirectory } from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
@@ -36,10 +37,7 @@ export default async function EmpleadosSettingsPage() {
             ejecuta qué procesos dentro de cada organización.
           </p>
         </header>
-        <div className="space-y-6">
-          <EmployeeCrudPanel />
-          <EmployeesDirectoryCard data={empleadosDirectory} />
-        </div>
+        <EmployeesDirectoryCard data={empleadosDirectory} />
       </div>
     </AppViewLayout>
   )
@@ -76,48 +74,20 @@ function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
                   <TableHead>Vendedor</TableHead>
                   <TableHead className="hidden lg:table-cell">Estado</TableHead>
                   <TableHead className="hidden xl:table-cell">Creado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
+                <EmployeeCreateRow />
                 {data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                       No hay empleados registrados en esta organización.
                     </TableCell>
                   </TableRow>
                 ) : (
                   data.items.map((employee) => (
-                    <TableRow key={employee.id}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{employee.nombre}</span>
-                          <span className="text-xs text-muted-foreground">{employee.correo || "—"}</span>
-                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-                            {employee.id}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">{employee.departamento}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{employee.puesto}</TableCell>
-                      <TableCell>
-                        <Badge variant={employee.esGestor ? "secondary" : "outline"}>
-                          {employee.esGestor ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={employee.esVendedor ? "secondary" : "outline"}>
-                          {employee.esVendedor ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <Badge variant={estadoVariant(employee.estado)}>{employee.estado}</Badge>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        <span className="text-xs text-muted-foreground">
-                          {formatDateTime(employee.creadoEn)}
-                        </span>
-                      </TableCell>
-                    </TableRow>
+                    <EmployeeInlineRow key={employee.id} employee={employee} />
                   ))
                 )}
               </TableBody>
@@ -127,10 +97,4 @@ function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
       </CardContent>
     </Card>
   )
-}
-
-function estadoVariant(estado: string): "secondary" | "outline" | "destructive" {
-  if (estado === "activo") return "secondary"
-  if (estado === "bloqueado") return "destructive"
-  return "outline"
 }

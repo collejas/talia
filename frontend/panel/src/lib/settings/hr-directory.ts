@@ -713,9 +713,11 @@ function mapEmployeeRow(row: SupabaseEmployeeRow): HrEmployeeItem {
     departamento: row.departamento?.nombre
       ? sanitizeText(row.departamento.nombre) || "Sin departamento"
       : "Sin departamento",
+    departamentoId: row.departamento_id,
     puesto: row.puesto?.nombre
       ? sanitizeText(row.puesto.nombre) || "Sin puesto"
       : "Sin puesto",
+    puestoId: row.puesto_id,
     esGestor: Boolean(row.es_gestor),
     esVendedor: Boolean(row.es_vendedor),
     creadoEn: row.creado_en ?? null,

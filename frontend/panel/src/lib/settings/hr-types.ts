@@ -5,7 +5,9 @@ export type HrEmployeeItem = {
   telefono: string
   estado: string
   departamento: string
+  departamentoId: string | null
   puesto: string
+  puestoId: string | null
   esGestor: boolean
   esVendedor: boolean
   creadoEn: string | null
