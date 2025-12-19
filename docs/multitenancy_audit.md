@@ -113,6 +113,8 @@ where t.organizacion_id <> cu.organizacion_id;
   - supabase/migrations/20270519_184500_panel_calendar_bookings_grant.sql
   - supabase/migrations/20270519_185500_calendar_tables_select.sql
   - supabase/migrations/20270519_190000_panel_agenda_table_grants.sql
+  - supabase/migrations/20270519_191000_prospeccion_table_grants.sql
+  - supabase/migrations/20270519_192000_prospeccion_results_functions_grants.sql
 
   Checks finales:
 
