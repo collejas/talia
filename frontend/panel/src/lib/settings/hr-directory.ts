@@ -356,6 +356,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
         },
         prefer: "count=exact",
         enforceOrganization: true,
+        forceServiceToken: true,
       }),
       callSupabaseRest<SupabaseSimpleEmployeeRow[]>("/rest/v1/empleados", {
         searchParams: {
@@ -363,6 +364,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
           limit: String(LARGE_LIMIT),
         },
         enforceOrganization: true,
+        forceServiceToken: true,
       }),
       callSupabaseRest<SupabaseDepartmentRow[]>("/rest/v1/departamentos", {
         searchParams: {
@@ -370,6 +372,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
           limit: String(LARGE_LIMIT),
         },
         enforceOrganization: true,
+        forceServiceToken: true,
       }),
       callSupabaseRest<SupabasePositionRow[]>("/rest/v1/puestos", {
         searchParams: {
@@ -377,6 +380,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
           limit: String(LARGE_LIMIT),
         },
         enforceOrganization: true,
+        forceServiceToken: true,
       }),
       callSupabaseRest<SupabaseUserRoleRow[]>("/rest/v1/usuarios_roles", {
         searchParams: {
@@ -384,6 +388,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
           limit: String(LARGE_LIMIT),
         },
         enforceOrganization: true,
+        forceServiceToken: true,
       }),
       callSupabaseRest<SupabaseRoleRow[]>("/rest/v1/roles", {
         searchParams: {
@@ -391,6 +396,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
           limit: String(LARGE_LIMIT),
         },
         enforceOrganization: true,
+        forceServiceToken: true,
       }),
     ])
 

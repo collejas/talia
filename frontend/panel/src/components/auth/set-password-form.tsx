@@ -1,6 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,14 +12,40 @@ type SetPasswordFormProps = {
   type: string
 }
 
+function parseHashParams() {
+  if (typeof window === "undefined") return { token: "", type: "" }
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash
+  if (!hash.length) return { token: "", type: "" }
+  const params = new URLSearchParams(hash)
+  return {
+    token: params.get("access_token") || params.get("token") || "",
+    type: params.get("type") || "",
+  }
+}
+
 export function SetPasswordForm({ accessToken, type }: SetPasswordFormProps) {
+  const [tokenValue, setTokenValue] = useState(accessToken)
+  const [tokenType, setTokenType] = useState(type)
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const isTokenValid = Boolean(accessToken) && (type === "recovery" || type === "invite")
+  useEffect(() => {
+    if (accessToken && type) return
+    const { token, type: hashType } = parseHashParams()
+    if (token && !tokenValue) {
+      setTokenValue(token)
+    }
+    if (hashType && !tokenType) {
+      setTokenType(hashType)
+    }
+  }, [accessToken, type, tokenType, tokenValue])
+
+  const isTokenValid = Boolean(tokenValue) && (tokenType === "recovery" || tokenType === "invite")
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -38,7 +65,7 @@ export function SetPasswordForm({ accessToken, type }: SetPasswordFormProps) {
       const response = await fetch("/api/auth/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: accessToken, password }),
+        body: JSON.stringify({ access_token: tokenValue, password }),
       })
       const data = (await response.json()) as { ok?: boolean; error?: string }
       if (!response.ok || !data.ok) {

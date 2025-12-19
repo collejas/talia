@@ -364,7 +364,7 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
       prefer: "return=representation",
     })
     const message = correo
-      ? "Usuario registrado. Enviamos una invitación para que establezca su contraseña."
+      ? "Usuario registrado. Enviamos un correo para que establezca su contraseña."
       : "Usuario registrado."
     revalidatePath(PATHS.usuarios)
     return success(message)
