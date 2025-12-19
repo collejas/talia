@@ -119,6 +119,12 @@ where t.organizacion_id <> cu.organizacion_id;
   
   
   
+## Lockdown de GRANTS
+
+- `supabase/migrations/20270519_180500_multitenant_grants_lockdown.sql` revoca absolutamente todos los privilegios que tenían `anon` y `authenticated` sobre `public.*` (tablas, vistas, materialized views y secuencias) y elimina los *default privileges* que volvían a otorgarlos para objetos nuevos.  
+- Únicamente se restauran permisos `SELECT/INSERT/UPDATE/DELETE` para `authenticated` en los módulos que todavía hablan directo con Supabase (`empleados`, `departamentos`, `puestos`, `usuarios`, `usuarios_roles`, `roles`, `roles_permisos`, `permisos`). Todo lo demás queda accesible sólo vía `service_role`.
+- Con esto, un actor que tenga únicamente el anon key ya no puede consultar ninguna tabla `public.*`, y un usuario autenticado necesita pasar por FastAPI salvo en la sección de RRHH.
+- `supabase/migrations/20270519_181500_multitenant_function_grants.sql` barre todas las funciones/RPC definidas por la app (excluye las que pertenecen a extensiones Postgres/PostGIS mediante `pg_depend`) y les revoca `EXECUTE` para `anon` y `authenticated`. Las funciones siguen disponibles para `service_role`, que es lo que usa FastAPI; desde el frontend ya no se pueden invocar RPCs directamente.
+
 # FALTANTE:
- - siguiente nivel (lockdown de GRANTS para anon/authenticated y revisar si alguna tabla debería ser solo “server-
-  side”)
+ - siguiente nivel: revisar funciones expuestas (RPCs), GRANTS en schemas fuera de `public` (storage/realtime) y definir si alguna tabla debe quedar totalmente “server-side” (ni siquiera HR).
