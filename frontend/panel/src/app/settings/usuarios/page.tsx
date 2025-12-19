@@ -1,11 +1,16 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { UserInlineRow } from "@/components/settings/hr/user-inline-row"
+import { UserCreateRow, UserInlineRow } from "@/components/settings/hr/user-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { fetchUsersDirectory, type HrUsersDirectory } from "@/lib/settings/hr-directory"
+import {
+  fetchAssignmentLookups,
+  fetchUsersDirectory,
+  type HrAssignmentLookups,
+  type HrUsersDirectory,
+} from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
   title: "Usuarios · Settings",
@@ -15,7 +20,10 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export default async function UsuariosSettingsPage() {
-  const usersDirectory = await fetchUsersDirectory()
+  const [usersDirectory, assignments] = await Promise.all([
+    fetchUsersDirectory(),
+    fetchAssignmentLookups(),
+  ])
 
   return (
     <AppViewLayout
@@ -35,13 +43,19 @@ export default async function UsuariosSettingsPage() {
             esta misma sección.
           </p>
         </header>
-        <UsersDirectoryCard data={usersDirectory} />
+        <UsersDirectoryCard data={usersDirectory} lookups={assignments} />
       </div>
     </AppViewLayout>
   )
 }
 
-function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
+function UsersDirectoryCard({
+  data,
+  lookups,
+}: {
+  data: HrUsersDirectory
+  lookups: HrAssignmentLookups
+}) {
   return (
     <Card>
       <CardHeader className="space-y-1">
@@ -53,7 +67,7 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
       <CardContent className="space-y-4">
         <SettingsErrorCallout
           title="No se pudo recuperar toda la información"
-          messages={data.errors}
+          messages={[...data.errors, ...lookups.errors]}
         />
         <div className="grid gap-3 sm:grid-cols-4">
           <SettingsStatCard label="Usuarios" value={data.total} />
@@ -77,6 +91,10 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                <UserCreateRow
+                  departments={lookups.departamentos}
+                  positions={lookups.puestos}
+                />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
@@ -84,7 +102,14 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.items.map((user) => <UserInlineRow key={user.id} user={user} />)
+                  data.items.map((user) => (
+                    <UserInlineRow
+                      key={user.id}
+                      user={user}
+                      departments={lookups.departamentos}
+                      positions={lookups.puestos}
+                    />
+                  ))
                 )}
               </TableBody>
             </Table>

@@ -15,11 +15,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { formatDateTime } from "@/lib/formatters"
-import { HrEmployeeItem } from "@/lib/settings/hr-types"
+import {
+  HrDepartmentOption,
+  HrEmployeeItem,
+  HrPositionOption,
+} from "@/lib/settings/hr-types"
+import { cn } from "@/lib/utils"
 
 const INITIAL_STATE: CrudActionState = { status: "idle" }
 
-export function EmployeeCreateRow() {
+type AssignmentOptions = {
+  departments: HrDepartmentOption[]
+  positions: HrPositionOption[]
+}
+
+export function EmployeeCreateRow({ departments, positions }: AssignmentOptions) {
   const [state, action] = useActionState(createEmployeeAction, INITIAL_STATE)
   return (
     <TableRow className="bg-muted/30">
@@ -36,16 +46,28 @@ export function EmployeeCreateRow() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="employee-new-depto">Departamento ID</Label>
-              <Input
+              <Label htmlFor="employee-new-depto">Departamento</Label>
+              <AssignmentSelect
                 id="employee-new-depto"
                 name="departamento_id"
-                placeholder="Opcional"
+                placeholder="Sin departamento"
+                options={departments.map((dept) => ({
+                  id: dept.id,
+                  label: dept.nombre,
+                }))}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="employee-new-puesto">Puesto ID</Label>
-              <Input id="employee-new-puesto" name="puesto_id" placeholder="Opcional" />
+              <Label htmlFor="employee-new-puesto">Puesto</Label>
+              <AssignmentSelect
+                id="employee-new-puesto"
+                name="puesto_id"
+                placeholder="Sin puesto"
+                options={positions.map((puesto) => ({
+                  id: puesto.id,
+                  label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
+                }))}
+              />
             </div>
           </div>
           <div className="flex flex-wrap gap-4 rounded-md border border-border/60 p-3">
@@ -66,11 +88,11 @@ export function EmployeeCreateRow() {
   )
 }
 
-type EmployeeInlineRowProps = {
+type EmployeeInlineRowProps = AssignmentOptions & {
   employee: HrEmployeeItem
 }
 
-export function EmployeeInlineRow({ employee }: EmployeeInlineRowProps) {
+export function EmployeeInlineRow({ employee, departments, positions }: EmployeeInlineRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -179,21 +201,29 @@ export function EmployeeInlineRow({ employee }: EmployeeInlineRowProps) {
               <input type="hidden" name="usuario_id" value={employee.id} />
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label htmlFor={`employee-edit-depto-${employee.id}`}>Departamento ID</Label>
-                  <Input
+                  <Label htmlFor={`employee-edit-depto-${employee.id}`}>Departamento</Label>
+                  <AssignmentSelect
                     id={`employee-edit-depto-${employee.id}`}
                     name="departamento_id"
                     defaultValue={employee.departamentoId ?? ""}
-                    placeholder="uuid o vacío para remover"
+                    placeholder="Sin departamento"
+                    options={departments.map((dept) => ({
+                      id: dept.id,
+                      label: dept.nombre,
+                    }))}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor={`employee-edit-puesto-${employee.id}`}>Puesto ID</Label>
-                  <Input
+                  <Label htmlFor={`employee-edit-puesto-${employee.id}`}>Puesto</Label>
+                  <AssignmentSelect
                     id={`employee-edit-puesto-${employee.id}`}
                     name="puesto_id"
                     defaultValue={employee.puestoId ?? ""}
-                    placeholder="uuid o vacío para remover"
+                    placeholder="Sin puesto"
+                    options={positions.map((puesto) => ({
+                      id: puesto.id,
+                      label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
+                    }))}
                   />
                 </div>
                 <div className="space-y-1">
@@ -304,4 +334,37 @@ function getEstadoVariant(
   if (estado === "activo") return "secondary"
   if (estado === "bloqueado") return "destructive"
   return "outline"
+}
+
+function AssignmentSelect({
+  id,
+  name,
+  options,
+  defaultValue,
+  placeholder,
+}: {
+  id: string
+  name: string
+  options: Array<{ id: string; label: string }>
+  defaultValue?: string
+  placeholder: string
+}) {
+  return (
+    <select
+      id={id}
+      name={name}
+      defaultValue={defaultValue ?? ""}
+      className={cn(
+        "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+        "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      )}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
 }

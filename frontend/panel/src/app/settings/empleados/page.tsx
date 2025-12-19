@@ -8,7 +8,12 @@ import {
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { fetchEmployeesDirectory, type HrEmployeesDirectory } from "@/lib/settings/hr-directory"
+import {
+  fetchAssignmentLookups,
+  fetchEmployeesDirectory,
+  type HrAssignmentLookups,
+  type HrEmployeesDirectory,
+} from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
   title: "Empleados · Settings",
@@ -18,7 +23,10 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export default async function EmpleadosSettingsPage() {
-  const empleadosDirectory = await fetchEmployeesDirectory()
+  const [empleadosDirectory, assignments] = await Promise.all([
+    fetchEmployeesDirectory(),
+    fetchAssignmentLookups(),
+  ])
 
   return (
     <AppViewLayout
@@ -37,13 +45,19 @@ export default async function EmpleadosSettingsPage() {
             ejecuta qué procesos dentro de cada organización.
           </p>
         </header>
-        <EmployeesDirectoryCard data={empleadosDirectory} />
+        <EmployeesDirectoryCard data={empleadosDirectory} lookups={assignments} />
       </div>
     </AppViewLayout>
   )
 }
 
-function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
+function EmployeesDirectoryCard({
+  data,
+  lookups,
+}: {
+  data: HrEmployeesDirectory
+  lookups: HrAssignmentLookups
+}) {
   return (
     <Card>
       <CardHeader className="space-y-1">
@@ -55,7 +69,7 @@ function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
       <CardContent className="space-y-4">
         <SettingsErrorCallout
           title="No se pudo recuperar toda la información"
-          messages={data.errors}
+          messages={[...data.errors, ...lookups.errors]}
         />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Empleados" value={data.total} />
@@ -78,7 +92,10 @@ function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <EmployeeCreateRow />
+                <EmployeeCreateRow
+                  departments={lookups.departamentos}
+                  positions={lookups.puestos}
+                />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
@@ -87,7 +104,12 @@ function EmployeesDirectoryCard({ data }: { data: HrEmployeesDirectory }) {
                   </TableRow>
                 ) : (
                   data.items.map((employee) => (
-                    <EmployeeInlineRow key={employee.id} employee={employee} />
+                    <EmployeeInlineRow
+                      key={employee.id}
+                      employee={employee}
+                      departments={lookups.departamentos}
+                      positions={lookups.puestos}
+                    />
                   ))
                 )}
               </TableBody>

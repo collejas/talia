@@ -1,6 +1,7 @@
 "use server"
 
 import {
+  HrAssignmentLookups,
   HrDepartmentItem,
   HrDepartmentsDirectory,
   HrEmployeeItem,
@@ -18,12 +19,15 @@ import { callSupabaseRest, type SupabaseRestResult } from "@/lib/supabase/rest"
 
 export type {
   HrDepartmentItem,
+  HrDepartmentOption,
   HrDepartmentsDirectory,
   HrEmployeeItem,
   HrEmployeesDirectory,
+  HrAssignmentLookups,
   HrPermissionItem,
   HrPermissionsDirectory,
   HrPositionItem,
+  HrPositionOption,
   HrPositionsDirectory,
   HrRoleItem,
   HrRolesDirectory,
@@ -466,7 +470,9 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
       telefono: sanitizeText(usuario.telefono_e164) || "—",
       roles: roleNames,
       departamento: departamentoNombre,
+      departamentoId: empleado?.departamento_id ?? null,
       puesto: puestoNombre,
+      puestoId: empleado?.puesto_id ?? null,
       creadoEn: usuario.creado_en ?? null,
       ultimoAcceso: usuario.ultimo_acceso_en ?? null,
     }
@@ -699,6 +705,63 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
     items,
     total,
     stats: { sinRol },
+    errors,
+  }
+}
+
+export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
+  const errors: string[] = []
+
+  const [departamentosRes, puestosRes] = await Promise.all([
+    callSupabaseRest<SupabaseDepartmentRow[]>("/rest/v1/departamentos", {
+      searchParams: {
+        select: "id,nombre",
+        order: "nombre.asc",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<SupabasePositionRow[]>("/rest/v1/puestos", {
+      searchParams: {
+        select: "id,nombre,departamento_id",
+        order: "nombre.asc",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+  ])
+
+  const departamentos =
+    departamentosRes.ok && Array.isArray(departamentosRes.data)
+      ? departamentosRes.data.map((dept) => ({
+          id: dept.id,
+          nombre: sanitizeText(dept.nombre) || "Sin nombre",
+        }))
+      : []
+  if (!departamentosRes.ok) {
+    errors.push(departamentosRes.error)
+  }
+
+  const departamentoNombreMap = new Map(departamentos.map((dept) => [dept.id, dept.nombre]))
+  const puestos =
+    puestosRes.ok && Array.isArray(puestosRes.data)
+      ? puestosRes.data.map((puesto) => ({
+          id: puesto.id,
+          nombre: sanitizeText(puesto.nombre) || "Sin nombre",
+          departamentoNombre: puesto.departamento_id
+            ? departamentoNombreMap.get(puesto.departamento_id) || "Sin departamento"
+            : "Sin departamento",
+        }))
+      : []
+  if (!puestosRes.ok) {
+    errors.push(puestosRes.error)
+  }
+
+  return {
+    departamentos,
+    puestos,
     errors,
   }
 }

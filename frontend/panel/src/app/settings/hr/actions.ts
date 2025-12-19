@@ -63,6 +63,12 @@ function getOptionalText(formData: FormData, key: string): string | null {
   return trimmed.length ? trimmed : ""
 }
 
+function getRelationId(formData: FormData, key: string): string | null | undefined {
+  const value = getOptionalText(formData, key)
+  if (value === null) return undefined
+  return value.length ? value : null
+}
+
 function parseBoolean(value: FormDataEntryValue | null): boolean {
   if (value === null) return false
   if (typeof value === "string") {
@@ -325,6 +331,58 @@ function parseTelefonoE164(raw: string | null): string | null {
   return normalized
 }
 
+async function upsertEmployeeAssignment(
+  userId: string,
+  departamentoId: string | null | undefined,
+  puestoId: string | null | undefined,
+): Promise<void> {
+  const shouldHandleDepartamento = departamentoId !== undefined
+  const shouldHandlePuesto = puestoId !== undefined
+  if (!shouldHandleDepartamento && !shouldHandlePuesto) return
+
+  const body: Record<string, unknown> = {}
+  if (shouldHandleDepartamento) {
+    body.departamento_id = departamentoId
+  }
+  if (shouldHandlePuesto) {
+    body.puesto_id = puestoId
+  }
+  if (!Object.keys(body).length) return
+
+  const patchResponse = await callSupabaseRest("/rest/v1/empleados", {
+    method: "PATCH",
+    body,
+    searchParams: {
+      usuario_id: `eq.${userId}`,
+    },
+    prefer: "return=representation",
+    enforceOrganization: true,
+  })
+  if (!patchResponse.ok) {
+    throw new Error(
+      `[empleados] ${patchResponse.error || "No se pudo actualizar los datos del empleado."}`,
+    )
+  }
+  const updatedRows = Array.isArray(patchResponse.data) ? patchResponse.data.length : 0
+  const shouldInsert =
+    updatedRows === 0 &&
+    ((shouldHandleDepartamento && departamentoId !== null) ||
+      (shouldHandlePuesto && puestoId !== null))
+  if (shouldInsert) {
+    const orgId = requireOrgId()
+    await callAndValidate("/rest/v1/empleados", {
+      method: "POST",
+      body: {
+        usuario_id: userId,
+        departamento_id: departamentoId ?? null,
+        puesto_id: puestoId ?? null,
+        organizacion_id: orgId,
+      },
+      prefer: "return=representation",
+    })
+  }
+}
+
 export const createUserAction: CrudActionHandler = async (_, formData) => {
   try {
     const orgId = requireOrgId()
@@ -333,6 +391,8 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
     const nombre = getOptionalText(formData, "nombre_completo")
     const telefono = parseTelefonoE164(getOptionalText(formData, "telefono"))
     const estado = getOptionalText(formData, "estado")
+    const departamentoId = getRelationId(formData, "departamento_id")
+    const puestoId = getRelationId(formData, "puesto_id")
 
     let userId = idInput && idInput.length ? idInput : null
     if (!userId) {
@@ -363,6 +423,7 @@ export const createUserAction: CrudActionHandler = async (_, formData) => {
       },
       prefer: "return=representation",
     })
+    await upsertEmployeeAssignment(userId, departamentoId, puestoId)
     revalidatePath(PATHS.usuarios)
     return success("Usuario registrado.")
   } catch (error) {
@@ -378,6 +439,8 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
     const telefonoInput = getOptionalText(formData, "telefono")
     const telefono = telefonoInput === null ? null : parseTelefonoE164(telefonoInput)
     const estado = getOptionalText(formData, "estado")
+    const departamentoId = getRelationId(formData, "departamento_id")
+    const puestoId = getRelationId(formData, "puesto_id")
     const body: Record<string, unknown> = {}
     if (correo !== null) body.correo = correo || null
     if (nombre !== null) body.nombre_completo = nombre || null
@@ -398,6 +461,7 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
       prefer: "return=representation",
       enforceOrganization: true,
     })
+    await upsertEmployeeAssignment(userId, departamentoId, puestoId)
     revalidatePath(PATHS.usuarios)
     return success("Usuario actualizado.")
   } catch (error) {

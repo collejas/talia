@@ -20,6 +20,17 @@ export type HrEmployeesDirectory = {
   errors: string[]
 }
 
+export type HrDepartmentOption = {
+  id: string
+  nombre: string
+}
+
+export type HrPositionOption = {
+  id: string
+  nombre: string
+  departamentoNombre: string
+}
+
 export type HrDepartmentItem = {
   id: string
   nombre: string
@@ -61,7 +72,9 @@ export type HrUserItem = {
   telefono: string
   roles: string[]
   departamento: string
+  departamentoId: string | null
   puesto: string
+  puestoId: string | null
   creadoEn: string | null
   ultimoAcceso: string | null
 }
@@ -102,5 +115,11 @@ export type HrPermissionsDirectory = {
   items: HrPermissionItem[]
   total: number
   stats: { sinRol: number }
+  errors: string[]
+}
+
+export type HrAssignmentLookups = {
+  departamentos: HrDepartmentOption[]
+  puestos: HrPositionOption[]
   errors: string[]
 }
