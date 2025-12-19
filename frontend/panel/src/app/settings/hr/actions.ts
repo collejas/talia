@@ -508,6 +508,7 @@ export const createPermissionAction: CrudActionHandler = async (_, formData) => 
         organizacion_id: orgId,
       },
       prefer: "return=representation",
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.permisos)
     return success("Permiso creado.")
@@ -538,6 +539,7 @@ export const updatePermissionAction: CrudActionHandler = async (_, formData) => 
       },
       prefer: "return=representation",
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.permisos)
     return success("Permiso actualizado.")
@@ -555,6 +557,7 @@ export const deletePermissionAction: CrudActionHandler = async (_, formData) => 
         id: `eq.${permisoId}`,
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.permisos)
     return success("Permiso eliminado.")

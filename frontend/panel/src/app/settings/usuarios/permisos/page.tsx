@@ -1,12 +1,13 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { PermissionCrudPanel } from "@/components/settings/hr/crud-forms"
+import {
+  PermissionCreateRow,
+  PermissionInlineRow,
+} from "@/components/settings/hr/permission-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatDateTime } from "@/lib/formatters"
 import { fetchPermissionsDirectory, type HrPermissionsDirectory } from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
@@ -32,10 +33,7 @@ export default async function PermisosSettingsPage() {
             y configura qué roles los incluyen. Como siempre, cada permiso queda ligado a una organización específica.
           </p>
         </header>
-        <div className="space-y-6">
-          <PermissionCrudPanel />
-          <PermissionsDirectoryCard data={permissionsDirectory} />
-        </div>
+        <PermissionsDirectoryCard data={permissionsDirectory} />
       </div>
     </AppViewLayout>
   )
@@ -73,44 +71,23 @@ function PermissionsDirectoryCard({ data }: { data: HrPermissionsDirectory }) {
                   <TableHead>Descripción</TableHead>
                   <TableHead className="hidden lg:table-cell">Roles asociados</TableHead>
                   <TableHead className="hidden xl:table-cell">Creado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
+                <PermissionCreateRow />
                 {data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                    <TableCell
+                      colSpan={5}
+                      className="text-center text-sm text-muted-foreground"
+                    >
                       No hay permisos registrados.
                     </TableCell>
                   </TableRow>
                 ) : (
                   data.items.map((permiso) => (
-                    <TableRow key={permiso.id}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{permiso.codigo}</span>
-                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-                            {permiso.id}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{permiso.descripcion}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {permiso.roles.length ? (
-                          <div className="flex flex-wrap gap-1">
-                            {permiso.roles.map((rol) => (
-                              <Badge key={rol} variant="outline">
-                                {rol}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sin rol</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
-                        {formatDateTime(permiso.creadoEn)}
-                      </TableCell>
-                    </TableRow>
+                    <PermissionInlineRow key={permiso.id} permission={permiso} />
                   ))
                 )}
               </TableBody>

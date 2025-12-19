@@ -629,6 +629,7 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
       },
       prefer: "count=exact",
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseRolePermissionRow[]>("/rest/v1/roles_permisos", {
       searchParams: {
@@ -636,6 +637,7 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseRoleRow[]>("/rest/v1/roles", {
       searchParams: {
@@ -643,6 +645,7 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
   ])
 
