@@ -21,6 +21,7 @@ export type CreateAuthUserResult = {
 }
 
 const DEFAULT_TELEFONO_E164 = "+00000000000"
+const RESET_REDIRECT_URL = process.env.SUPABASE_RESET_REDIRECT_URL?.trim()
 
 export async function createSupabaseAuthUser(
   input: CreateAuthUserInput,
@@ -79,6 +80,44 @@ export async function createSupabaseAuthUser(
     throw new Error("Supabase Auth no regresó un identificador.")
   }
   return { id: result.id }
+}
+
+export async function sendSupabaseInvitation(email: string): Promise<void> {
+  if (!email) {
+    throw new Error("No se proporcionó un correo para enviar el enlace de acceso.")
+  }
+  const config = getSupabaseConfig()
+  if (!config) {
+    throw new Error("Supabase no está configurado.")
+  }
+  const serviceKey = getServiceRoleKey()
+  if (!serviceKey) {
+    throw new Error("Configura SUPABASE_SERVICE_ROLE para enviar invitaciones.")
+  }
+
+  const baseUrl = config.url.replace(/\/+$/, "")
+  const inviteUrl = new URL(`${baseUrl}/auth/v1/admin/invite`)
+
+  const body: Record<string, unknown> = { email }
+  if (RESET_REDIRECT_URL) {
+    body.redirect_to = RESET_REDIRECT_URL
+  }
+
+  const response = await fetch(inviteUrl, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const errorText = await getErrorMessage(response)
+    throw new Error(errorText || "No se pudo enviar el correo de invitación.")
+  }
 }
 
 function getServiceRoleKey(): string | null {

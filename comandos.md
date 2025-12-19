@@ -867,3 +867,26 @@ export NEXT_PUBLIC_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
        -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE" \
        -H "Content-Type: application/json" \
        -d '{"email":"prueba-inline@geoactiv.mx","password":"Temporal123!","email_confirm":true,"user_metadata":
+
+
+
+
+# consumir el manejo de usuarios de supabase en la app:
+
+ si, creoque hay que ligar todos los procesos que se hacen en el dashboard de supabase de crear usuario, resetear contasena o
+  mandar a que el nuevo usaurio resetie su contrasena o la cambe etc, para que el usaurio de TI no tenga que hacerlo desde
+  supabase, sino que o haga desde la misma app
+
+
+• Tiene sentido llevar todo ese flujo a tu panel para que el equipo de TI no tenga que entrar al dashboard de Supabase. Hoy ya
+  consumimos el Admin API para crear usuarios, así que extenderlo es directo:
+
+  1. Invitar/activar al crear: después de createSupabaseAuthUser, podemos llamar a POST /auth/v1/recover (o invite_user_by_email)
+     para que Supabase envíe el correo de “establece tu contraseña”. Basta con habilitarlo en createUserAction y mostrar el estado
+     al operador (éxito/error del envío).
+  2. Reset password manual: agrega un botón “Reenviar enlace de restablecimiento” por usuario. El server action invoca /auth/v1/
+     recover con su correo; Supabase manda el mail como si lo hicieras en el dashboard.
+  3. Bloquear/desbloquear: ya tenemos el campo estado en la tabla usuarios, pero podemos sincronizarlo con Supabase Auth usando
+     PATCH /auth/v1/admin/users/{id} para desactivar/reactivar la cuenta real.
+  4. Cambiar contraseña directa (opcional): si alguna vez necesitas establecer una contraseña temporal manualmente (sin correo), el
+     Admin API permite enviar password en la actualización.
