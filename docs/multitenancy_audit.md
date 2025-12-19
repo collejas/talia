@@ -109,6 +109,7 @@ where t.organizacion_id <> cu.organizacion_id;
   - supabase/migrations/20270519_150000_multitenant_policy_org_enforcement.sql
   - supabase/migrations/20270519_160000_multitenant_orgid_defaults_and_triggers.sql
   - supabase/migrations/20270519_170000_multitenant_force_rls.sql
+  - supabase/migrations/20270519_183000_quotes_bucket_private.sql
 
   Checks finales:
 
@@ -126,6 +127,7 @@ where t.organizacion_id <> cu.organizacion_id;
 - Con esto, un actor que tenga únicamente el anon key ya no puede consultar ninguna tabla `public.*`, y un usuario autenticado necesita pasar por FastAPI salvo en la sección de RRHH.
 - `supabase/migrations/20270519_181500_multitenant_function_grants.sql` barre todas las funciones/RPC definidas por la app (excluye las que pertenecen a extensiones Postgres/PostGIS mediante `pg_depend`) y les revoca `EXECUTE` para `anon` y `authenticated`. Las funciones siguen disponibles para `service_role`, que es lo que usa FastAPI; desde el frontend ya no se pueden invocar RPCs directamente.
 - `supabase/migrations/20270519_182500_storage_realtime_grants.sql` quita cualquier `SELECT/INSERT/UPDATE/DELETE` o acceso a secuencias en los schemas `storage` y `realtime` para `anon`/`authenticated`. Los servicios nativos de Supabase ya usan roles dedicados (`supabase_storage_admin`, `supabase_realtime_admin`), así que no impacta el backend pero evita que alguien con el anon key lea buckets/objetos directamente vía SQL.
+- El bucket `quotes` dejó de ser público: los PDFs ahora viven privados en `storage` y se entregan con enlaces firmados efímeros a través de `/crm/quotes/{quote_id}/pdf` (consumido por `/api/embudo/quotes/[quoteId]/pdf`). Cualquier envío por WhatsApp genera un link firmado nuevo, y el panel ya no usa `storage/v1/object/public/*`.
 
 # FALTANTE:
  - siguiente nivel: revisar funciones expuestas (RPCs), GRANTS en schemas fuera de `public` (storage/realtime) y definir si alguna tabla debe quedar totalmente “server-side” (ni siquiera HR).

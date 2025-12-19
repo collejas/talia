@@ -443,9 +443,6 @@ async def upload_quote_document(
 ) -> dict[str, str]:
     """Sube el PDF de una cotización al bucket `quotes`."""
 
-    if not settings.supabase_url:
-        raise StorageError("Supabase no está configurado (SUPABASE_URL)")
-
     safe_name = Path(filename).name or "cotizacion.pdf"
     key = f"{lead_id}/{uuid4().hex}-{safe_name}"
     repo = CRMRepository()
@@ -459,14 +456,43 @@ async def upload_quote_document(
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
-    base_url = settings.supabase_url.rstrip("/")
-    public_url = f"{base_url}/storage/v1/object/public/{public_path}"
+    try:
+        signed_url = await repo.create_signed_storage_url(
+            bucket="quotes",
+            object_path=public_path,
+            expires_in=3600,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
     return {
-        "url": public_url,
+        "url": signed_url,
         "path": public_path,
+        "bucket": "quotes",
         "name": safe_name,
     }
+
+
+async def generate_quote_signed_url(*, path: str, expires_in: int = 300) -> str:
+    """Genera un enlace firmado temporal para una cotización almacenada."""
+
+    normalized = path.strip().lstrip("/")
+    if not normalized:
+        raise StorageError("quote_path_required")
+
+    bucket, _, key = normalized.partition("/")
+    if not bucket or not key:
+        raise StorageError("quote_path_invalid")
+
+    repo = CRMRepository()
+    try:
+        return await repo.create_signed_storage_url(
+            bucket=bucket,
+            object_path=f"{bucket}/{key}",
+            expires_in=expires_in,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
 
 
 async def upload_logo_asset(*, file: UploadFile, folder: str = "general") -> dict[str, str]:

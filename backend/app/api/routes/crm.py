@@ -3328,6 +3328,11 @@ class LeadQuoteListResponse(BaseModel):
     quotes: list[LeadQuote] = Field(default_factory=list)
 
 
+class QuoteSignedUrlResponse(BaseModel):
+    url: HttpUrl
+    expires_in: int = Field(default=300, ge=1)
+
+
 class CRMContactSummary(BaseModel):
     total: int | None = 0
     completos: int | None = 0
@@ -5856,6 +5861,45 @@ async def send_lead_quote(
             quote=quote,
         )
     return LeadQuoteResponse(quote=quote)
+
+
+@router.get(
+    "/quotes/{quote_id}/pdf",
+    response_model=QuoteSignedUrlResponse,
+)
+async def get_quote_pdf_signed_url(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    quote_id: UUID,
+    expires_in: int = Query(300, ge=30, le=3600),
+) -> QuoteSignedUrlResponse:
+    try:
+        row = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=quote_id,
+        )
+    except CRMRepositoryError:
+        raise HTTPException(status_code=404, detail="quote_not_found") from None
+
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    pdf_path = (
+        metadata.get("pdf_path")
+        or metadata.get("pdfPath")
+        or row.get("pdf_path")
+    )
+    if not isinstance(pdf_path, str) or not pdf_path.strip():
+        raise HTTPException(status_code=404, detail="quote_pdf_not_found")
+
+    try:
+        signed_url = await storage.generate_quote_signed_url(
+            path=pdf_path,
+            expires_in=expires_in,
+        )
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="quote_pdf_link_failed") from exc
+
+    return QuoteSignedUrlResponse(url=signed_url, expires_in=expires_in)
 
 
 @router.post("/cotizaciones/{cotizacion_id}/mark", response_model=LeadQuoteResponse)

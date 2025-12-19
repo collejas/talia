@@ -5313,6 +5313,48 @@ class CRMRepository:
             public_path = f"{prefix}{key}" if not key.startswith(prefix) else key
         return public_path
 
+    async def create_signed_storage_url(
+        self,
+        *,
+        bucket: str,
+        object_path: str,
+        expires_in: int = 300,
+    ) -> str:
+        """Genera un enlace firmado para un objeto de Storage."""
+
+        bucket_name = bucket.strip().strip("/")
+        if not bucket_name:
+            raise CRMRepositoryError("bucket_required")
+        if expires_in <= 0:
+            raise CRMRepositoryError("expires_in_invalid")
+
+        key = object_path.lstrip("/")
+        if key.startswith(f"{bucket_name}/"):
+            key = key[len(bucket_name) + 1 :]
+        if not key:
+            raise CRMRepositoryError("object_key_required")
+
+        resp = await self._request(
+            "POST",
+            f"/storage/v1/object/sign/{bucket_name}/{key}",
+            json={"expiresIn": expires_in},
+        )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError("signed_url_invalid_response")
+        signed_fragment = data.get("signedURL") or data.get("signedUrl")
+        if not signed_fragment or not isinstance(signed_fragment, str):
+            raise CRMRepositoryError("signed_url_missing")
+        if signed_fragment.startswith("http://") or signed_fragment.startswith("https://"):
+            return signed_fragment
+
+        fragment = signed_fragment if signed_fragment.startswith("/") else f"/{signed_fragment}"
+        if not fragment.startswith("/storage/"):
+            fragment = f"/storage/v1{fragment}"
+
+        base = self._base_url.rstrip("/")
+        return f"{base}{fragment}"
+
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
         url = f"{self._base_url}/rest/v1/rpc/{function_name}"
         headers = {

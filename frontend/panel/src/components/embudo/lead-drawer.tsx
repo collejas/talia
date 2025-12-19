@@ -46,6 +46,7 @@ import {
   IconChecklist,
   IconDownload,
   IconHandStop,
+  IconLoader2,
   IconMail,
   IconMessageCircle,
   IconPlus,
@@ -145,7 +146,7 @@ type LeadQuoteEntry = {
   sentAt: string | null;
   total: number | null;
   currency: string | null;
-  pdfUrl: string | null;
+  pdfPath: string | null;
   createdAt: string | null;
   title: string | null;
   description: string | null;
@@ -715,6 +716,7 @@ export function LeadDrawer({
   const [error, setError] = useState<string | null>(null);
   const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
   const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
+  const [quotePdfLoadingId, setQuotePdfLoadingId] = useState<string | null>(null);
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
@@ -1593,6 +1595,30 @@ export function LeadDrawer({
     });
   };
 
+  const handleQuotePdfPreview = useCallback(async (quote: LeadQuoteEntry) => {
+    if (!quote.pdfPath) {
+      window.alert("Esta cotización no tiene un PDF disponible.");
+      return;
+    }
+    try {
+      setQuotePdfLoadingId(quote.id);
+      const response = await fetch(`/api/embudo/quotes/${quote.id}/pdf`);
+      if (!response.ok) {
+        throw new Error("request_failed");
+      }
+      const payload = (await response.json()) as { url?: string };
+      if (!payload?.url) {
+        throw new Error("missing_url");
+      }
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("[LeadDrawer] quote pdf preview failed", error);
+      window.alert("No pudimos generar el enlace de descarga. Inténtalo de nuevo.");
+    } finally {
+      setQuotePdfLoadingId(null);
+    }
+  }, []);
+
   const handleQuoteStatusChange = useCallback(
     (quote: LeadQuoteEntry, nextStatus: "aceptada" | "rechazada" | "cancelada") => {
       if (!card) return;
@@ -2146,12 +2172,21 @@ export function LeadDrawer({
                               </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              {quote.pdfUrl ? (
-                                <Button asChild variant="ghost" size="sm" className="gap-1">
-                                  <a href={quote.pdfUrl} target="_blank" rel="noopener noreferrer">
+                              {quote.pdfPath ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1"
+                                  onClick={() => handleQuotePdfPreview(quote)}
+                                  disabled={quotePdfLoadingId === quote.id}
+                                >
+                                  {quotePdfLoadingId === quote.id ? (
+                                    <IconLoader2 className="size-4 animate-spin" />
+                                  ) : (
                                     <IconDownload className="size-4" />
-                                    Ver PDF
-                                  </a>
+                                  )}
+                                  Ver PDF
                                 </Button>
                               ) : null}
                               <Button
@@ -3493,7 +3528,12 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     sentAt: typeof row.enviada_en === "string" ? row.enviada_en : null,
     total: totalValue,
     currency: typeof row.moneda === "string" ? row.moneda : null,
-    pdfUrl: typeof row.pdf_url === "string" ? row.pdf_url : null,
+    pdfPath:
+      typeof row.pdf_path === "string"
+        ? row.pdf_path
+        : typeof metadataRecord["pdf_path"] === "string"
+          ? (metadataRecord["pdf_path"] as string)
+          : null,
     createdAt: typeof row.creado_en === "string" ? row.creado_en : null,
     title: typeof row.titulo === "string" ? row.titulo : null,
     description: typeof row.descripcion === "string" ? row.descripcion : null,
