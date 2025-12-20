@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { RoleInlineRow } from "@/components/settings/hr/role-inline-row"
+import { RoleCreateSection, RoleInlineRow } from "@/components/settings/hr/role-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -55,6 +55,7 @@ function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
           title="No se pudo recuperar toda la información"
           messages={data.errors}
         />
+        <RoleCreateSection />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Roles" value={data.total} />
           <SettingsStatCard label="Permisos asignados" value={data.stats.permisos} />

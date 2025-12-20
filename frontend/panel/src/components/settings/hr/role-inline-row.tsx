@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom"
 
 import {
   CrudActionState,
+  createRoleAction,
   deleteRoleAction,
   updateRoleAction,
 } from "@/app/settings/hr/actions"
@@ -18,6 +19,39 @@ import { formatDateTime } from "@/lib/formatters"
 import { HrRoleItem } from "@/lib/settings/hr-types"
 
 const INITIAL_STATE: CrudActionState = { status: "idle" }
+
+export function RoleCreateSection() {
+  const [state, action] = useActionState(createRoleAction, INITIAL_STATE)
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <form action={action} className="mx-auto max-w-4xl space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="role-new-nombre">Nombre</Label>
+            <Input
+              id="role-new-nombre"
+              name="nombre"
+              placeholder="Administrador"
+              required
+            />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <Label htmlFor="role-new-descripcion">Descripción</Label>
+            <Textarea
+              id="role-new-descripcion"
+              name="descripcion"
+              placeholder="Define las capacidades generales del rol"
+            />
+          </div>
+        </div>
+        <InlineStateMessage state={state} />
+        <div className="flex justify-end">
+          <InlineSubmitButton label="Crear rol" pendingLabel="Guardando..." />
+        </div>
+      </form>
+    </div>
+  )
+}
 
 type RoleInlineRowProps = {
   role: HrRoleItem
@@ -34,18 +68,13 @@ export function RoleInlineRow({ role }: RoleInlineRowProps) {
     <>
       <TableRow>
         <TableCell>
-          <span className="font-mono text-sm text-muted-foreground">{role.codigo}</span>
+          <span className="font-medium">{role.nombre}</span>
+          <p className="text-xs text-muted-foreground">{role.codigo}</p>
         </TableCell>
-        <TableCell>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">{role.nombre}</span>
-            <span className="text-[0.65rem] font-mono text-muted-foreground/80">{role.id}</span>
-          </div>
-        </TableCell>
-        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+        <TableCell className="hidden lg:table-cell max-w-[280px] whitespace-normal text-sm text-muted-foreground">
           {role.descripcion}
         </TableCell>
-        <TableCell className="hidden lg:table-cell">
+        <TableCell className="hidden lg:table-cell max-w-[280px] whitespace-normal">
           {role.permisos.length ? (
             <div className="flex flex-wrap gap-1">
               {role.permisos.map((permiso) => (
@@ -58,7 +87,9 @@ export function RoleInlineRow({ role }: RoleInlineRowProps) {
             <span className="text-xs text-muted-foreground">Sin permisos</span>
           )}
         </TableCell>
-        <TableCell className="text-sm text-muted-foreground">{role.usuarios}</TableCell>
+        <TableCell className="w-20 text-center text-sm text-muted-foreground">
+          {role.usuarios}
+        </TableCell>
         <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
           {formatDateTime(role.creadoEn)}
         </TableCell>
@@ -171,4 +202,19 @@ function InlineSubmitButton({
       {pending ? pendingLabel : label}
     </Button>
   )
+}
+
+function InlineStateMessage({ state }: { state: CrudActionState }) {
+  if (state.status === "idle") return null
+  if (state.status === "error") {
+    return <p className="text-sm text-destructive">{state.message}</p>
+  }
+  if (state.status === "success") {
+    return (
+      <p className="text-sm text-emerald-600 dark:text-emerald-400">
+        {state.message ?? "Operación completada."}
+      </p>
+    )
+  }
+  return null
 }
