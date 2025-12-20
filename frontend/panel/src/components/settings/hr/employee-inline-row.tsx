@@ -45,7 +45,11 @@ type EmployeeInlineRowProps = AssignmentOptions & {
   employee: HrEmployeeItem
 }
 
-export function EmployeeCreateRow({ departments, positions, userOptions }: EmployeeCreateOptions) {
+export function EmployeeCreateSection({
+  departments,
+  positions,
+  userOptions,
+}: EmployeeCreateOptions) {
   const [state, action] = useActionState(createEmployeeAction, INITIAL_STATE)
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null)
 
@@ -59,91 +63,83 @@ export function EmployeeCreateRow({ departments, positions, userOptions }: Emplo
     }
   }
   return (
-    <TableRow className="bg-muted/30">
-      <TableCell colSpan={8}>
-        <form action={action} className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-1">
-              <Label htmlFor="employee-new-user">Usuario</Label>
-              <AssignmentSelect
-                id="employee-new-user"
-                name="usuario_id"
-                placeholder={
-                  userOptions.length
-                    ? "Selecciona un usuario disponible"
-                    : "No hay usuarios disponibles"
-                }
-                options={userOptions.map((user) => ({
-                  id: user.id,
-                  label: `${user.nombre}${
-                    user.correo ? ` · ${user.correo}` : ""
-                  }`,
-                }))}
-                disabled={userOptions.length === 0}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                {userOptions.length
-                  ? "Sólo aparecen usuarios que aún no tienen registro de empleado."
-                  : "Crea el usuario en Settings → Usuarios y vuelve a intentarlo."}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="employee-new-depto">Departamento</Label>
-              <AssignmentSelect
-                id="employee-new-depto"
-                name="departamento_id"
-                placeholder="Sin departamento"
-                options={departments.map((dept) => ({
-                  id: dept.id,
-                  label: dept.nombre,
-                }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="employee-new-puesto">Puesto</Label>
-              <AssignmentSelect
-                id="employee-new-puesto"
-                name="puesto_id"
-                placeholder="Sin puesto"
-                options={positions.map((puesto) => ({
-                  id: puesto.id,
-                  label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
-                }))}
-              />
-            </div>
+    <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <form action={action} className="space-y-4" onSubmit={handleSubmit}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-1">
+            <Label htmlFor="employee-new-user">Usuario</Label>
+            <AssignmentSelect
+              id="employee-new-user"
+              name="usuario_id"
+              placeholder={
+                userOptions.length
+                  ? "Selecciona un usuario disponible"
+                  : "No hay usuarios disponibles"
+              }
+              options={userOptions.map((user) => ({
+                id: user.id,
+                label: `${user.nombre}${user.correo ? ` · ${user.correo}` : ""}`,
+              }))}
+              disabled={userOptions.length === 0}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              {userOptions.length
+                ? "Sólo aparecen usuarios que aún no tienen registro de empleado."
+                : "Crea el usuario en Settings → Usuarios y vuelve a intentarlo."}
+            </p>
           </div>
-          <div className="flex flex-wrap gap-4 rounded-md border border-border/60 p-3">
-            <InlineCheckbox id="employee-new-gestor" name="es_gestor" label="Gestor" />
-            <InlineCheckbox
-              id="employee-new-vendedor"
-              name="es_vendedor"
-              label="Vendedor"
+          <div className="space-y-1">
+            <Label htmlFor="employee-new-depto">Departamento</Label>
+            <AssignmentSelect
+              id="employee-new-depto"
+              name="departamento_id"
+              placeholder="Sin departamento"
+              options={departments.map((dept) => ({
+                id: dept.id,
+                label: dept.nombre,
+              }))}
             />
           </div>
-          <InlineStateMessage state={state} />
-          <div className="flex justify-end">
-            <InlineSubmitButton label="Crear empleado" pendingLabel="Guardando..." />
+          <div className="space-y-1">
+            <Label htmlFor="employee-new-puesto">Puesto</Label>
+            <AssignmentSelect
+              id="employee-new-puesto"
+              name="puesto_id"
+              placeholder="Sin puesto"
+              options={positions.map((puesto) => ({
+                id: puesto.id,
+                label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
+              }))}
+            />
           </div>
-        </form>
-        <Dialog open={Boolean(blockingMessage)} onOpenChange={(open) => !open && setBlockingMessage(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Usuario requerido</DialogTitle>
-              <DialogDescription>
-                {blockingMessage ??
-                  "Crea primero el usuario en Settings → Usuarios antes de asignarlo como empleado."}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button type="button" onClick={() => setBlockingMessage(null)}>
-                Entendido
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </TableCell>
-    </TableRow>
+        </div>
+        <div className="flex flex-wrap gap-4 rounded-md border border-border/60 p-3">
+          <InlineCheckbox id="employee-new-gestor" name="es_gestor" label="Gestor" />
+          <InlineCheckbox id="employee-new-vendedor" name="es_vendedor" label="Vendedor" />
+        </div>
+        <InlineStateMessage state={state} />
+        <div className="flex justify-end">
+          <InlineSubmitButton label="Crear empleado" pendingLabel="Guardando..." />
+        </div>
+      </form>
+      <Dialog open={Boolean(blockingMessage)} onOpenChange={(open) => !open && setBlockingMessage(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Usuario requerido</DialogTitle>
+            <DialogDescription>
+              {blockingMessage ??
+                "Crea primero el usuario en Settings → Usuarios antes de asignarlo como empleado."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" onClick={() => setBlockingMessage(null)}>
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -179,13 +175,14 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
           <div className="flex flex-col gap-1">
             <span className="font-medium">{employee.nombre}</span>
             <span className="text-xs text-muted-foreground">{employee.correo || "—"}</span>
-            <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-              {employee.id}
-            </span>
           </div>
         </TableCell>
-        <TableCell className="hidden md:table-cell">{departamentoNombre}</TableCell>
-        <TableCell className="hidden lg:table-cell">{puestoNombre}</TableCell>
+        <TableCell className="hidden md:table-cell max-w-[220px] whitespace-normal">
+          {departamentoNombre}
+        </TableCell>
+        <TableCell className="hidden lg:table-cell max-w-[220px] whitespace-normal">
+          {puestoNombre}
+        </TableCell>
         <TableCell>
           <Badge variant={employee.esGestor ? "secondary" : "outline"}>
             {employee.esGestor ? "Sí" : "No"}

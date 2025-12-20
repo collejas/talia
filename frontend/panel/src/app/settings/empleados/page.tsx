@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import {
-  EmployeeCreateRow,
+  EmployeeCreateSection,
   EmployeeInlineRow,
 } from "@/components/settings/hr/employee-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
@@ -71,6 +71,11 @@ function EmployeesDirectoryCard({
           title="No se pudo recuperar toda la información"
           messages={[...data.errors, ...lookups.errors]}
         />
+        <EmployeeCreateSection
+          departments={lookups.departamentos}
+          positions={lookups.puestos}
+          userOptions={lookups.usuarios}
+        />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Empleados" value={data.total} />
           <SettingsStatCard label="Gestores" value={data.stats.gestores} />
@@ -92,11 +97,6 @@ function EmployeesDirectoryCard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <EmployeeCreateRow
-                  departments={lookups.departamentos}
-                  positions={lookups.puestos}
-                  userOptions={lookups.usuarios}
-                />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
