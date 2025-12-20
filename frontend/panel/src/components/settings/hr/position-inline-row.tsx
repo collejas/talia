@@ -84,15 +84,14 @@ export function PositionInlineRow({ position, departments }: PositionInlineRowPr
         <TableCell>
           <div className="flex flex-col gap-1">
             <span className="font-medium">{position.nombre}</span>
-            <InlineCode>{position.id}</InlineCode>
           </div>
         </TableCell>
         <TableCell className="hidden md:table-cell">{position.departamento}</TableCell>
-        <TableCell className="hidden lg:table-cell max-w-[320px] text-sm text-muted-foreground">
+        <TableCell className="hidden lg:table-cell w-1/3 max-w-[220px] whitespace-normal break-words text-sm text-muted-foreground">
           {position.descripcion}
         </TableCell>
-        <TableCell>{position.empleados}</TableCell>
-        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+        <TableCell className="w-20 text-center">{position.empleados}</TableCell>
+        <TableCell className="hidden lg:table-cell w-32 text-xs text-muted-foreground">
           {formatDateTime(position.creadoEn)}
         </TableCell>
         <TableCell className="text-right">
@@ -238,10 +237,6 @@ function InlineStateMessage({
     )
   }
   return null
-}
-
-function InlineCode({ children }: { children: React.ReactNode }) {
-  return <span className="text-[0.65rem] font-mono text-muted-foreground/80">{children}</span>
 }
 
 function DepartmentSelect({
