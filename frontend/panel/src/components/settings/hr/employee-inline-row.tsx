@@ -155,6 +155,22 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
   const [deleteState, deleteAction] = useActionState(deleteEmployeeAction, INITIAL_STATE)
 
   const estadoVariant = useMemo(() => getEstadoVariant(employee.estado), [employee.estado])
+  const departamentoNombre = useMemo(() => {
+    if (!employee.departamentoId) return "Sin departamento"
+    return (
+      departments.find((dept) => dept.id === employee.departamentoId)?.nombre ??
+      employee.departamento ??
+      "Sin departamento"
+    )
+  }, [employee.departamento, employee.departamentoId, departments])
+  const puestoNombre = useMemo(() => {
+    if (!employee.puestoId) return "Sin puesto"
+    return (
+      positions.find((puesto) => puesto.id === employee.puestoId)?.nombre ??
+      employee.puesto ??
+      "Sin puesto"
+    )
+  }, [employee.puesto, employee.puestoId, positions])
 
   return (
     <>
@@ -168,18 +184,8 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
             </span>
           </div>
         </TableCell>
-        <TableCell className="hidden md:table-cell">
-          <div className="flex flex-col">
-            <span>{employee.departamento}</span>
-            <InlineCode>{employee.departamentoId ?? "—"}</InlineCode>
-          </div>
-        </TableCell>
-        <TableCell className="hidden lg:table-cell">
-          <div className="flex flex-col">
-            <span>{employee.puesto}</span>
-            <InlineCode>{employee.puestoId ?? "—"}</InlineCode>
-          </div>
-        </TableCell>
+        <TableCell className="hidden md:table-cell">{departamentoNombre}</TableCell>
+        <TableCell className="hidden lg:table-cell">{puestoNombre}</TableCell>
         <TableCell>
           <Badge variant={employee.esGestor ? "secondary" : "outline"}>
             {employee.esGestor ? "Sí" : "No"}
@@ -377,10 +383,6 @@ function InlineStateMessage({
     )
   }
   return null
-}
-
-function InlineCode({ children }: { children: React.ReactNode }) {
-  return <span className="text-[0.65rem] font-mono text-muted-foreground/80">{children}</span>
 }
 
 function getEstadoVariant(
