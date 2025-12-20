@@ -20,43 +20,41 @@ import { HrPermissionItem } from "@/lib/settings/hr-types"
 
 const INITIAL_STATE: CrudActionState = { status: "idle" }
 
-export function PermissionCreateRow() {
+export function PermissionCreateSection() {
   const [state, formAction] = useActionState(createPermissionAction, INITIAL_STATE)
   return (
-    <TableRow className="bg-muted/30">
-      <TableCell colSpan={4}>
-        <form action={formAction} className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-1">
-            <Label htmlFor="permission-new-codigo">Código</Label>
-            <Input
-              id="permission-new-codigo"
-              name="codigo"
-              placeholder="crm.leads.read"
-              required
-            />
-          </div>
-          <div className="space-y-1 md:col-span-2">
-            <Label htmlFor="permission-new-descripcion">Descripción</Label>
-            <Textarea
-              id="permission-new-descripcion"
-              name="descripcion"
-              placeholder="Describe qué permite hacer"
-            />
-          </div>
-          {state.status === "error" && (
-            <p className="md:col-span-3 text-sm text-destructive">{state.message}</p>
-          )}
-          {state.status === "success" && (
-            <p className="md:col-span-3 text-sm text-emerald-600 dark:text-emerald-400">
-              {state.message ?? "Permiso registrado."}
-            </p>
-          )}
-          <div className="md:col-span-3 flex justify-end">
-            <InlineSubmitButton label="Guardar permiso" pendingLabel="Guardando..." />
-          </div>
-        </form>
-      </TableCell>
-    </TableRow>
+    <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <form action={formAction} className="mx-auto max-w-4xl grid gap-4 md:grid-cols-3">
+        <div className="space-y-1">
+          <Label htmlFor="permission-new-codigo">Código</Label>
+          <Input
+            id="permission-new-codigo"
+            name="codigo"
+            placeholder="crm.leads.read"
+            required
+          />
+        </div>
+        <div className="space-y-1 md:col-span-2">
+          <Label htmlFor="permission-new-descripcion">Descripción</Label>
+          <Textarea
+            id="permission-new-descripcion"
+            name="descripcion"
+            placeholder="Describe qué permite hacer"
+          />
+        </div>
+        {state.status === "error" && (
+          <p className="md:col-span-3 text-sm text-destructive">{state.message}</p>
+        )}
+        {state.status === "success" && (
+          <p className="md:col-span-3 text-sm text-emerald-600 dark:text-emerald-400">
+            {state.message ?? "Permiso registrado."}
+          </p>
+        )}
+        <div className="md:col-span-3 flex justify-end">
+          <InlineSubmitButton label="Guardar permiso" pendingLabel="Guardando..." />
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -74,15 +72,12 @@ export function PermissionInlineRow({ permission }: PermissionInlineRowProps) {
     <>
       <TableRow>
         <TableCell>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">{permission.codigo}</span>
-            <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-              {permission.id}
-            </span>
-          </div>
+          <span className="font-medium">{permission.codigo}</span>
         </TableCell>
-        <TableCell>{permission.descripcion}</TableCell>
-        <TableCell className="hidden lg:table-cell">
+        <TableCell className="max-w-[280px] whitespace-normal">
+          {permission.descripcion}
+        </TableCell>
+        <TableCell className="hidden lg:table-cell max-w-[280px] whitespace-normal">
           {permission.roles.length ? (
             <div className="flex flex-wrap gap-1">
               {permission.roles.map((rol) => (

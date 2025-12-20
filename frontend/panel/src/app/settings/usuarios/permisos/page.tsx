@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import {
-  PermissionCreateRow,
+  PermissionCreateSection,
   PermissionInlineRow,
 } from "@/components/settings/hr/permission-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
@@ -53,6 +53,7 @@ function PermissionsDirectoryCard({ data }: { data: HrPermissionsDirectory }) {
           title="No se pudo recuperar toda la información"
           messages={data.errors}
         />
+        <PermissionCreateSection />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Permisos" value={data.total} />
           <SettingsStatCard label="Sin rol asignado" value={data.stats.sinRol} />
@@ -75,7 +76,6 @@ function PermissionsDirectoryCard({ data }: { data: HrPermissionsDirectory }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <PermissionCreateRow />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { UserCreateRow, UserInlineRow } from "@/components/settings/hr/user-inline-row"
+import { UserCreateSection, UserInlineRow } from "@/components/settings/hr/user-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -55,6 +55,7 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
           title="No se pudo recuperar toda la información"
           messages={data.errors}
         />
+        <UserCreateSection />
         <div className="grid gap-3 sm:grid-cols-4">
           <SettingsStatCard label="Usuarios" value={data.total} />
           <SettingsStatCard label="Activos" value={data.stats.activos} />
@@ -77,7 +78,6 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <UserCreateRow />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">

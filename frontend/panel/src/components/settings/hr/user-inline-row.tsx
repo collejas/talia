@@ -24,54 +24,52 @@ type UserInlineRowProps = {
   user: HrUserItem
 }
 
-export function UserCreateRow() {
+export function UserCreateSection() {
   const [state, action] = useActionState(createUserAction, INITIAL_STATE)
   return (
-    <TableRow className="bg-muted/30">
-      <TableCell colSpan={8}>
-        <form action={action} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="user-new-name">Nombre completo</Label>
-              <Input id="user-new-name" name="nombre_completo" placeholder="Nombre" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="user-new-email">Correo</Label>
-              <Input
-                id="user-new-email"
-                name="correo"
-                type="email"
-                placeholder="usuario@empresa.com"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="user-new-phone">Teléfono</Label>
-              <Input id="user-new-phone" name="telefono" placeholder="+521234567890" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="user-new-estado">Estado</Label>
-              <select
-                id="user-new-estado"
-                name="estado"
-                defaultValue="activo"
-                className={cn(
-                  "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
-                  "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                )}
-              >
-                <option value="activo">Activo</option>
-                <option value="bloqueado">Bloqueado</option>
-              </select>
-            </div>
+    <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <form action={action} className="mx-auto max-w-4xl space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="user-new-name">Nombre completo</Label>
+            <Input id="user-new-name" name="nombre_completo" placeholder="Nombre" />
           </div>
-          <InlineStateMessage state={state} />
-          <div className="flex justify-end">
-            <InlineSubmitButton label="Crear usuario" pendingLabel="Guardando..." />
+          <div className="space-y-1">
+            <Label htmlFor="user-new-email">Correo</Label>
+            <Input
+              id="user-new-email"
+              name="correo"
+              type="email"
+              placeholder="usuario@empresa.com"
+              required
+            />
           </div>
-        </form>
-      </TableCell>
-    </TableRow>
+          <div className="space-y-1">
+            <Label htmlFor="user-new-phone">Teléfono</Label>
+            <Input id="user-new-phone" name="telefono" placeholder="+521234567890" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="user-new-estado">Estado</Label>
+            <select
+              id="user-new-estado"
+              name="estado"
+              defaultValue="activo"
+              className={cn(
+                "h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+                "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              )}
+            >
+              <option value="activo">Activo</option>
+              <option value="bloqueado">Bloqueado</option>
+            </select>
+          </div>
+        </div>
+        <InlineStateMessage state={state} />
+        <div className="flex justify-end">
+          <InlineSubmitButton label="Crear usuario" pendingLabel="Guardando..." />
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -91,12 +89,9 @@ export function UserInlineRow({ user }: UserInlineRowProps) {
           <div className="flex flex-col gap-1">
             <span className="font-medium">{user.nombre}</span>
             <span className="text-xs text-muted-foreground">{user.correo || "—"}</span>
-            <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-              {user.id}
-            </span>
           </div>
         </TableCell>
-        <TableCell className="hidden lg:table-cell">
+        <TableCell className="hidden lg:table-cell max-w-[240px] whitespace-normal">
           {user.roles.length ? (
             <div className="flex flex-wrap gap-1">
               {user.roles.map((role) => (
@@ -109,8 +104,10 @@ export function UserInlineRow({ user }: UserInlineRowProps) {
             <span className="text-xs text-muted-foreground">Sin rol</span>
           )}
         </TableCell>
-        <TableCell className="hidden md:table-cell">{user.departamento}</TableCell>
-        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+        <TableCell className="hidden md:table-cell max-w-[220px] whitespace-normal">
+          {user.departamento}
+        </TableCell>
+        <TableCell className="hidden lg:table-cell max-w-[220px] whitespace-normal text-sm text-muted-foreground">
           {user.puesto}
         </TableCell>
         <TableCell>
