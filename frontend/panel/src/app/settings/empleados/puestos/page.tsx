@@ -1,12 +1,19 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { PositionCrudPanel } from "@/components/settings/hr/crud-forms"
+import {
+  PositionCreateRow,
+  PositionInlineRow,
+} from "@/components/settings/hr/position-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatDateTime } from "@/lib/formatters"
-import { fetchPositionsDirectory, type HrPositionsDirectory } from "@/lib/settings/hr-directory"
+import {
+  fetchDepartmentOptions,
+  fetchPositionsDirectory,
+  type HrDepartmentOption,
+  type HrPositionsDirectory,
+} from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
   title: "Puestos · Settings",
@@ -16,7 +23,10 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export default async function PuestosSettingsPage() {
-  const positionsDirectory = await fetchPositionsDirectory()
+  const [positionsDirectory, departmentOptions] = await Promise.all([
+    fetchPositionsDirectory(),
+    fetchDepartmentOptions(),
+  ])
 
   return (
     <AppViewLayout
@@ -35,16 +45,25 @@ export default async function PuestosSettingsPage() {
             separación por organización y facilita la asignación de permisos.
           </p>
         </header>
-        <div className="space-y-6">
-          <PositionCrudPanel />
-          <PositionsDirectoryCard data={positionsDirectory} />
-        </div>
+        <PositionsDirectoryCard
+          data={positionsDirectory}
+          departments={departmentOptions.options}
+          extraErrors={departmentOptions.errors}
+        />
       </div>
     </AppViewLayout>
   )
 }
 
-function PositionsDirectoryCard({ data }: { data: HrPositionsDirectory }) {
+function PositionsDirectoryCard({
+  data,
+  departments,
+  extraErrors,
+}: {
+  data: HrPositionsDirectory
+  departments: HrDepartmentOption[]
+  extraErrors: string[]
+}) {
   const vacantes = data.items.filter((item) => item.empleados === 0).length
 
   return (
@@ -58,7 +77,7 @@ function PositionsDirectoryCard({ data }: { data: HrPositionsDirectory }) {
       <CardContent className="space-y-4">
         <SettingsErrorCallout
           title="No se pudo recuperar toda la información"
-          messages={data.errors}
+          messages={[...data.errors, ...extraErrors]}
         />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Puestos" value={data.total} />
@@ -75,35 +94,24 @@ function PositionsDirectoryCard({ data }: { data: HrPositionsDirectory }) {
                   <TableHead className="hidden lg:table-cell">Descripción</TableHead>
                   <TableHead>Colaboradores</TableHead>
                   <TableHead className="hidden lg:table-cell">Creado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
+                <PositionCreateRow departments={departments} />
                 {data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                       No hay puestos dados de alta todavía.
                     </TableCell>
                   </TableRow>
                 ) : (
                   data.items.map((puesto) => (
-                    <TableRow key={puesto.id}>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium">{puesto.nombre}</span>
-                          <span className="text-[0.65rem] font-mono text-muted-foreground/80">
-                            {puesto.id}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">{puesto.departamento}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                        {puesto.descripcion}
-                      </TableCell>
-                      <TableCell>{puesto.empleados}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                        {formatDateTime(puesto.creadoEn)}
-                      </TableCell>
-                    </TableRow>
+                    <PositionInlineRow
+                      key={puesto.id}
+                      position={puesto}
+                      departments={departments}
+                    />
                   ))
                 )}
               </TableBody>

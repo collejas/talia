@@ -59,6 +59,7 @@ export type HrPositionItem = {
   nombre: string
   descripcion: string
   departamento: string
+  departamentoId: string | null
   empleados: number
   creadoEn: string | null
 }

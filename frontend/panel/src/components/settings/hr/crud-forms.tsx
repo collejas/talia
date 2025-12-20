@@ -1,26 +1,20 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState } from "react"
+import { useActionState, useEffect, useRef } from "react"
 import { useFormStatus } from "react-dom"
 
 import {
   createDepartmentAction,
-  createEmployeeAction,
   createPermissionAction,
-  createPositionAction,
   createRoleAction,
   createUserAction,
   CrudActionHandler,
   CrudActionState,
   deleteDepartmentAction,
-  deleteEmployeeAction,
   deletePermissionAction,
-  deletePositionAction,
   deleteRoleAction,
   updateDepartmentAction,
-  updateEmployeeAction,
   updatePermissionAction,
-  updatePositionAction,
   updateRoleAction,
 } from "@/app/settings/hr/actions"
 import { Button } from "@/components/ui/button"
@@ -108,145 +102,19 @@ function SubmitButton({ label }: { label: string }) {
   )
 }
 
-function CheckboxField({
-  name,
-  label,
-  defaultChecked,
-}: {
-  name: string
-  label: string
-  defaultChecked?: boolean
-}) {
-  const [checked, setChecked] = useState(defaultChecked ?? false)
-  return (
-    <label className="flex items-center gap-2 text-sm font-medium">
-      <input
-        type="checkbox"
-        name={name}
-        checked={checked}
-        onChange={(event) => setChecked(event.target.checked)}
-        className="h-4 w-4 rounded border-border"
-      />
-      {label}
-    </label>
-  )
-}
-
 export function EmployeeCrudPanel() {
   return (
-    <CrudTabs
-      title="Gestionar empleados"
-      description="Registra, actualiza o elimina colaboradores vinculados a usuarios existentes."
-      tabs={[
-        {
-          value: "create",
-          label: "Agregar",
-          content: <EmployeeCreateForm />,
-        },
-        {
-          value: "update",
-          label: "Editar",
-          content: <EmployeeUpdateForm />,
-        },
-        {
-          value: "delete",
-          label: "Eliminar",
-          content: <EmployeeDeleteForm />,
-        },
-      ]}
-    />
+    <Card>
+      <CardHeader>
+        <CardTitle>Gestión inline</CardTitle>
+        <CardDescription>
+          Usa los controles directamente en la tabla de empleados para agregar, editar o eliminar.
+        </CardDescription>
+      </CardHeader>
+    </Card>
   )
 }
 
-function EmployeeCreateForm() {
-  const { state, formAction, formRef } = useCrudForm(createEmployeeAction)
-  return (
-    <form ref={formRef} action={formAction} className="space-y-4">
-      <FormStatusMessage state={state} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="employee-create-usuario">Usuario ID</Label>
-          <Input
-            id="employee-create-usuario"
-            name="usuario_id"
-            placeholder="uuid del usuario"
-            required
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="employee-create-departamento">Departamento ID (opcional)</Label>
-          <Input
-            id="employee-create-departamento"
-            name="departamento_id"
-            placeholder="uuid del departamento"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="employee-create-puesto">Puesto ID (opcional)</Label>
-          <Input id="employee-create-puesto" name="puesto_id" placeholder="uuid del puesto" />
-        </div>
-        <div className="space-y-1">
-          <Label>Permisos adicionales</Label>
-          <div className="flex gap-4 rounded-md border border-border/60 p-3">
-            <CheckboxField name="es_gestor" label="Gestor" />
-            <CheckboxField name="es_vendedor" label="Vendedor" />
-          </div>
-        </div>
-      </div>
-      <SubmitButton label="Guardar empleado" />
-    </form>
-  )
-}
-
-function EmployeeUpdateForm() {
-  const { state, formAction, formRef } = useCrudForm(updateEmployeeAction)
-  return (
-    <form ref={formRef} action={formAction} className="space-y-4">
-      <FormStatusMessage state={state} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1 md:col-span-2">
-          <Label htmlFor="employee-update-id">Usuario ID</Label>
-          <Input id="employee-update-id" name="usuario_id" placeholder="uuid" required />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="employee-update-departamento">
-            Departamento ID (deja vacío para conservar)
-          </Label>
-          <Input id="employee-update-departamento" name="departamento_id" />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="employee-update-puesto">Puesto ID (deja vacío para conservar)</Label>
-          <Input id="employee-update-puesto" name="puesto_id" />
-        </div>
-        <div className="space-y-1 md:col-span-2">
-          <Label>Permisos adicionales</Label>
-          <div className="flex gap-4 rounded-md border border-border/60 p-3">
-            <CheckboxField name="es_gestor" label="Gestor" />
-            <CheckboxField name="es_vendedor" label="Vendedor" />
-          </div>
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Si necesitas limpiar un campo, escribe <strong>null</strong> en el input correspondiente.
-      </p>
-      <SubmitButton label="Actualizar empleado" />
-    </form>
-  )
-}
-
-function EmployeeDeleteForm() {
-  const { state, formAction, formRef } = useCrudForm(deleteEmployeeAction)
-  return (
-    <form ref={formRef} action={formAction} className="space-y-4">
-      <FormStatusMessage state={state} />
-      <div className="space-y-1">
-        <Label htmlFor="employee-delete-id">Usuario ID</Label>
-        <Input id="employee-delete-id" name="usuario_id" placeholder="uuid" required />
-      </div>
-      <SubmitButton label="Eliminar empleado" />
-    </form>
-  )
-}
 
 export function DepartmentCrudPanel() {
   return (
@@ -326,85 +194,14 @@ function DepartmentDeleteForm() {
 
 export function PositionCrudPanel() {
   return (
-    <CrudTabs
-      title="Gestionar puestos"
-      description="Crea o ajusta los puestos asociados a cada departamento."
-      tabs={[
-        { value: "create", label: "Agregar", content: <PositionCreateForm /> },
-        { value: "update", label: "Editar", content: <PositionUpdateForm /> },
-        { value: "delete", label: "Eliminar", content: <PositionDeleteForm /> },
-      ]}
-    />
-  )
-}
-
-function PositionCreateForm() {
-  const { state, formAction, formRef } = useCrudForm(createPositionAction)
-  return (
-    <form ref={formRef} action={formAction} className="space-y-4">
-      <FormStatusMessage state={state} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="position-create-nombre">Nombre</Label>
-          <Input id="position-create-nombre" name="nombre" placeholder="Ej. Ejecutivo" required />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="position-create-departamento">Departamento ID (opcional)</Label>
-          <Input id="position-create-departamento" name="departamento_id" placeholder="uuid" />
-        </div>
-        <div className="space-y-1 md:col-span-2">
-          <Label htmlFor="position-create-descripcion">Descripción</Label>
-          <Textarea
-            id="position-create-descripcion"
-            name="descripcion"
-            placeholder="Funciones principales..."
-          />
-        </div>
-      </div>
-      <SubmitButton label="Crear puesto" />
-    </form>
-  )
-}
-
-function PositionUpdateForm() {
-  const { state, formAction, formRef } = useCrudForm(updatePositionAction)
-  return (
-    <form ref={formRef} action={formAction} className="space-y-4">
-      <FormStatusMessage state={state} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1 md:col-span-2">
-          <Label htmlFor="position-update-id">Puesto ID</Label>
-          <Input id="position-update-id" name="id" placeholder="uuid" required />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="position-update-nombre">Nombre (opcional)</Label>
-          <Input id="position-update-nombre" name="nombre" placeholder="Nuevo nombre" />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="position-update-departamento">Departamento ID</Label>
-          <Input id="position-update-departamento" name="departamento_id" placeholder="uuid" />
-        </div>
-        <div className="space-y-1 md:col-span-2">
-          <Label htmlFor="position-update-descripcion">Descripción</Label>
-          <Textarea id="position-update-descripcion" name="descripcion" />
-        </div>
-      </div>
-      <SubmitButton label="Actualizar puesto" />
-    </form>
-  )
-}
-
-function PositionDeleteForm() {
-  const { state, formAction, formRef } = useCrudForm(deletePositionAction)
-  return (
-    <form ref={formRef} action={formAction} className="space-y-4">
-      <FormStatusMessage state={state} />
-      <div className="space-y-1">
-        <Label htmlFor="position-delete-id">Puesto ID</Label>
-        <Input id="position-delete-id" name="id" placeholder="uuid" required />
-      </div>
-      <SubmitButton label="Eliminar puesto" />
-    </form>
+    <Card>
+      <CardHeader>
+        <CardTitle>Gestión inline</CardTitle>
+        <CardDescription>
+          Utiliza los controles dentro del listado de puestos para agregar o editar registros.
+        </CardDescription>
+      </CardHeader>
+    </Card>
   )
 }
 

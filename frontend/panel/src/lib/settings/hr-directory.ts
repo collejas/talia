@@ -3,6 +3,7 @@
 import {
   HrAssignmentLookups,
   HrDepartmentItem,
+  HrDepartmentOption,
   HrDepartmentsDirectory,
   HrEmployeeItem,
   HrEmployeesDirectory,
@@ -146,7 +147,7 @@ export async function fetchEmployeesDirectory(
   }
 
   const rows = Array.isArray(response.data) ? response.data : []
-  const items = rows.map(mapEmployeeRow)
+  const items = rows.map(mapEmployeeRow).sort((a, b) => a.nombre.localeCompare(b.nombre))
   const gestores = items.filter((item) => item.esGestor).length
   const vendedores = items.filter((item) => item.esVendedor).length
   const total = parseTotalFromRange(response.headers.get("content-range"))
@@ -272,6 +273,7 @@ export async function fetchPositionsDirectory(): Promise<HrPositionsDirectory> {
       },
       prefer: "count=exact",
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseDepartmentRow[]>("/rest/v1/departamentos", {
       searchParams: {
@@ -279,6 +281,7 @@ export async function fetchPositionsDirectory(): Promise<HrPositionsDirectory> {
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseSimpleEmployeeRow[]>("/rest/v1/empleados", {
       searchParams: {
@@ -286,6 +289,7 @@ export async function fetchPositionsDirectory(): Promise<HrPositionsDirectory> {
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
   ])
 
@@ -316,16 +320,19 @@ export async function fetchPositionsDirectory(): Promise<HrPositionsDirectory> {
     errors.push(empleadosRes.error)
   }
 
-  const items: HrPositionItem[] = puestos.map((puesto) => ({
-    id: puesto.id,
-    nombre: sanitizeText(puesto.nombre) || "Sin nombre",
-    descripcion: sanitizeText(puesto.descripcion) || "—",
-    departamento: puesto.departamento_id
-      ? departamentos.get(puesto.departamento_id) || "Sin departamento"
-      : "Sin departamento",
-    empleados: empleadosPorPuesto.get(puesto.id) ?? 0,
-    creadoEn: puesto.creado_en ?? null,
-  }))
+  const items: HrPositionItem[] = puestos
+    .map((puesto) => ({
+      id: puesto.id,
+      nombre: sanitizeText(puesto.nombre) || "Sin nombre",
+      descripcion: sanitizeText(puesto.descripcion) || "—",
+      departamentoId: puesto.departamento_id ?? null,
+      departamento: puesto.departamento_id
+        ? departamentos.get(puesto.departamento_id) || "Sin departamento"
+        : "Sin departamento",
+      empleados: empleadosPorPuesto.get(puesto.id) ?? 0,
+      creadoEn: puesto.creado_en ?? null,
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
   const total = puestosRes.ok
     ? parseTotalFromRange(puestosRes.headers.get("content-range"))
@@ -713,6 +720,33 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
     stats: { sinRol },
     errors,
   }
+}
+
+export async function fetchDepartmentOptions(): Promise<{
+  options: HrDepartmentOption[]
+  errors: string[]
+}> {
+  const response = await callSupabaseRest<SupabaseDepartmentRow[]>("/rest/v1/departamentos", {
+    searchParams: {
+      select: "id,nombre",
+      order: "nombre.asc",
+      limit: String(LARGE_LIMIT),
+    },
+    enforceOrganization: true,
+    forceServiceToken: true,
+  })
+
+  if (!response.ok) {
+    return { options: [], errors: [response.error] }
+  }
+
+  const departamentos = Array.isArray(response.data) ? response.data : []
+  const options = departamentos.map((dept) => ({
+    id: dept.id,
+    nombre: sanitizeText(dept.nombre) || "Sin nombre",
+  }))
+
+  return { options, errors: [] }
 }
 
 export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
