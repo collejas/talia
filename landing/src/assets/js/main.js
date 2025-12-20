@@ -23,6 +23,9 @@ async function bootstrapChat() {
       if (typeof data?.persist_session === 'boolean') {
         options.persistSession = data.persist_session;
       }
+      if (typeof data?.tenant_alias === 'string' && data.tenant_alias.trim()) {
+        options.tenantAlias = data.tenant_alias.trim();
+      }
     }
   } catch (error) {
     console.warn('[main] No se pudo obtener configuración del webchat.', error);

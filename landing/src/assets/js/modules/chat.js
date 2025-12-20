@@ -10,6 +10,7 @@ const defaultConfig = {
   autoLifecycle: true,
   hiddenInactivityTimeoutMs: 45 * 60 * 1000,
   persistSession: true,
+  tenantAlias: null,
   getScrollContainer: () => {
     const layout = document.querySelector('.layout');
     return layout || document.scrollingElement || document.documentElement;
@@ -479,8 +480,15 @@ function sendSessionClosure({ allowBeacon = false } = {}) {
   const url = `${config.apiBaseUrl}/close`;
   const clientMeta = collectClientMetadata();
   const payload = { session_id: state.sessionId };
+  const metadataPayload = {};
   if (clientMeta && Object.keys(clientMeta).length > 0) {
-    payload.metadata = { client: clientMeta };
+    metadataPayload.client = clientMeta;
+  }
+  if (config.tenantAlias) {
+    metadataPayload.tenant_alias = config.tenantAlias;
+  }
+  if (Object.keys(metadataPayload).length > 0) {
+    payload.metadata = metadataPayload;
   }
   const jsonPayload = JSON.stringify(payload);
   let sent = false;
@@ -1438,8 +1446,15 @@ async function ensureVisitRegistered(force = false) {
   if (state.visitRegistered && !force) return;
   const clientMeta = collectClientMetadata();
   const payload = { session_id: state.sessionId };
+  const metadataPayload = {};
   if (clientMeta && Object.keys(clientMeta).length > 0) {
-    payload.metadata = { client: clientMeta };
+    metadataPayload.client = clientMeta;
+  }
+  if (config.tenantAlias) {
+    metadataPayload.tenant_alias = config.tenantAlias;
+  }
+  if (Object.keys(metadataPayload).length > 0) {
+    payload.metadata = metadataPayload;
   }
   try {
     const response = await fetch(`${config.apiBaseUrl}/visit`, {
@@ -1481,7 +1496,12 @@ async function sendToAssistant(message, clientMessageId, attachments = []) {
     if (state.lastAssistantResponseId) {
       metaPayload.assistant_response_id = state.lastAssistantResponseId;
     }
-    metaPayload.client = clientMeta;
+    if (clientMeta && Object.keys(clientMeta).length > 0) {
+      metaPayload.client = clientMeta;
+    }
+    if (config.tenantAlias) {
+      metaPayload.tenant_alias = config.tenantAlias;
+    }
     payload.metadata = metaPayload;
     if (clientMessageId) {
       payload.client_message_id = clientMessageId;

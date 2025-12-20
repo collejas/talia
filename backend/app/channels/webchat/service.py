@@ -1081,6 +1081,105 @@ def _extract_contact_org(contact: dict[str, Any] | None) -> str | None:
     return text or None
 
 
+def _safe_str_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    try:
+        return str(value).strip() or None
+    except Exception:
+        return None
+
+
+def _normalized_alias_map() -> dict[str, str]:
+    configured = getattr(settings, "webchat_tenant_alias_map", {}) or {}
+    normalized: dict[str, str] = {}
+    for alias, org in configured.items():
+        alias_key = _safe_str_value(alias)
+        org_value = _safe_str_value(org)
+        if alias_key and org_value:
+            normalized[alias_key.lower()] = org_value
+    default_org = _safe_str_value(settings.webchat_default_organizacion_id)
+    default_alias = _safe_str_value(settings.webchat_default_tenant_alias)
+    if not default_alias and default_org:
+        default_alias = "default"
+    if default_alias and default_org and default_alias.lower() not in normalized:
+        normalized[default_alias.lower()] = default_org
+    return normalized
+
+
+def get_webchat_tenant_alias() -> str | None:
+    """Alias que debe exponerse al widget del sitio."""
+    explicit_alias = _safe_str_value(settings.webchat_default_tenant_alias)
+    alias_map = _normalized_alias_map()
+    if explicit_alias and explicit_alias.lower() in alias_map:
+        return explicit_alias
+    if alias_map:
+        # Devuelve el primer alias disponible para no dejar al widget sin contexto.
+        return next(iter(alias_map.keys()))
+    return None
+
+
+def _extract_metadata_alias(metadata: dict[str, Any] | None) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    alias = metadata.get("tenant_alias") or metadata.get("tenantAlias")
+    alias_value = _safe_str_value(alias)
+    if alias_value:
+        return alias_value
+    extra = metadata.get("extra")
+    if isinstance(extra, dict):
+        extra_alias = extra.get("tenant_alias") or extra.get("tenantAlias")
+        return _safe_str_value(extra_alias)
+    return None
+
+
+def _extract_metadata_organizacion(metadata: dict[str, Any] | None) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    candidate = metadata.get("organizacion_id") or metadata.get("organizacionId")
+    value = _safe_str_value(candidate)
+    if value:
+        return value
+    extra = metadata.get("extra")
+    if isinstance(extra, dict):
+        extra_value = extra.get("organizacion_id") or extra.get("organizacionId")
+        return _safe_str_value(extra_value)
+    return None
+
+
+def _resolve_alias_to_org(alias: str | None) -> str | None:
+    alias_key = _safe_str_value(alias)
+    if not alias_key:
+        return None
+    alias_map = _normalized_alias_map()
+    return alias_map.get(alias_key.lower())
+
+
+def resolve_webchat_organizacion(
+    metadata: dict[str, Any] | None,
+    contact: dict[str, Any] | None = None,
+) -> str | None:
+    """Determina el organizacion_id para eventos del webchat."""
+    contact_org = _extract_contact_org(contact)
+    if contact_org:
+        return contact_org
+    metadata_org = _extract_metadata_organizacion(metadata)
+    if metadata_org:
+        return metadata_org
+    alias_value = _extract_metadata_alias(metadata)
+    alias_org = _resolve_alias_to_org(alias_value)
+    if alias_org:
+        return alias_org
+    fallback_alias = get_webchat_tenant_alias()
+    alias_org = _resolve_alias_to_org(fallback_alias)
+    if alias_org:
+        return alias_org
+    return _safe_str_value(settings.webchat_default_organizacion_id)
+
+
 def _guess_extension(name: str | None, url: str | None) -> str:
     candidates: list[str] = []
     if name:
@@ -1325,15 +1424,17 @@ async def _maybe_enrich_contact_metadata(
     cvegeo: str | None,
     referrer: str | None,
     landing_url: str | None,
+    contact: dict[str, Any] | None = None,
 ) -> None:
-    try:
-        contact = await storage.fetch_contact(contact_id)
-    except storage.StorageError as exc:
-        logger.exception(
-            "webchat.contact_fetch_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
-        )
-        return
+    if contact is None:
+        try:
+            contact = await storage.fetch_contact(contact_id)
+        except storage.StorageError as exc:
+            logger.exception(
+                "webchat.contact_fetch_failed",
+                extra={"contact_id": contact_id, "error": str(exc)},
+            )
+            return
 
     contacto_datos = _safe_dict(contact.get("contacto_datos"))
     if contacto_datos:
@@ -1441,6 +1542,7 @@ async def _register_webchat_visit(
     request: Request | None,
     metadata: dict[str, Any] | None,
     contact_id_hint: str | None = None,
+    contact: dict[str, Any] | None = None,
 ) -> str | None:
     """Registra la visita para métricas y enriquece metadatos del contacto."""
     client_meta = _safe_dict(metadata)
@@ -1534,6 +1636,23 @@ async def _register_webchat_visit(
         },
     )
 
+    contact_id = str(contact_id_hint) if contact_id_hint else None
+    if not contact_id:
+        try:
+            contact_id = await storage.get_webchat_contact_id(session_id)
+        except storage.StorageError as exc:
+            logger.exception(
+                "webchat.resolve_contact_failed",
+                extra={"session_id": session_id, "error": str(exc)},
+            )
+            contact_id = None
+    resolved_contact = contact
+    if contact_id and (
+        not resolved_contact
+        or _safe_str_value(resolved_contact.get("id")) != _safe_str_value(contact_id)
+    ):
+        resolved_contact = await _resolve_contact(contact_id)
+
     try:
         await storage.record_webchat_visit(
             session_id,
@@ -1547,23 +1666,16 @@ async def _register_webchat_visit(
             cvegeo=cvegeo,
             referrer=referrer,
             landing_url=landing_url,
+            organizacion_id=resolve_webchat_organizacion(
+                client_meta,
+                contact=resolved_contact,
+            ),
         )
     except storage.StorageError as exc:
         logger.exception(
             "webchat.record_visit_failed",
             extra={"session_id": session_id, "error": str(exc)},
         )
-
-    contact_id = str(contact_id_hint) if contact_id_hint else None
-    if not contact_id:
-        try:
-            contact_id = await storage.get_webchat_contact_id(session_id)
-        except storage.StorageError as exc:
-            logger.exception(
-                "webchat.resolve_contact_failed",
-                extra={"session_id": session_id, "error": str(exc)},
-            )
-            contact_id = None
 
     if contact_id:
         try:
@@ -1579,6 +1691,7 @@ async def _register_webchat_visit(
                 cvegeo=cvegeo,
                 referrer=referrer,
                 landing_url=landing_url,
+                contact=resolved_contact,
             )
         except Exception:  # pragma: no cover - best effort
             logger.exception(
@@ -1617,6 +1730,7 @@ async def handle_message(
 
     metadata_dict = payload.metadata if isinstance(payload.metadata, dict) else None
     attachments_payload = payload.attachments or []
+    organizacion_hint = resolve_webchat_organizacion(metadata_dict)
 
     try:
         registration = await storage.register_webchat_message(
@@ -1631,6 +1745,7 @@ async def handle_message(
                 "extra": payload.metadata or {},
             },
             attachments=[attachment.model_dump(mode="json") for attachment in attachments_payload],
+            organizacion_id=organizacion_hint,
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -1694,12 +1809,17 @@ async def handle_message(
         raise HTTPException(
             status_code=500, detail="No se pudo asociar la conversación al contacto"
         )
+    contact: dict[str, Any] | None = await _resolve_contact(str(contact_id))
+    resolved_organizacion_id = (
+        resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
+    )
 
     contact_id_value = await _register_webchat_visit(
         payload.session_id,
         request=request,
         metadata=metadata_dict,
         contact_id_hint=str(contact_id),
+        contact=contact,
     )
     contact_id = contact_id_value or str(contact_id)
 
@@ -1789,6 +1909,7 @@ async def handle_message(
                 response_id=metadata.assistant_response_id,
                 inactivity_hours=settings.webchat_inactivity_hours,
                 metadata=message_metadata,
+                organizacion_id=resolved_organizacion_id,
             )
         except storage.StorageError as exc:
             logger.exception(

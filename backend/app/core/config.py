@@ -1,5 +1,7 @@
 """Configuración central basada en variables de entorno."""
 
+import json
+
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -198,6 +200,32 @@ class Settings(BaseSettings):
         default="America/Mexico_City",
         description="Zona horaria preferida para mostrar la agenda cuando el usuario no especifica otra.",
     )
+    webchat_default_organizacion_id: str | None = Field(
+        default=None,
+        description="Organización que se asignará por defecto a los visitantes del webchat.",
+        validation_alias=AliasChoices(
+            "WEBCHAT_DEFAULT_ORGANIZACION_ID",
+            "WEBCHAT_ORGANIZACION_ID",
+            "TALIA_WEBCHAT_DEFAULT_ORGANIZACION_ID",
+            "TALIA_ORGANIZACION_ID",
+        ),
+    )
+    webchat_default_tenant_alias: str | None = Field(
+        default=None,
+        description="Alias público asociado a la organización predeterminada del webchat.",
+        validation_alias=AliasChoices(
+            "WEBCHAT_DEFAULT_TENANT_ALIAS",
+            "TALIA_WEBCHAT_DEFAULT_TENANT_ALIAS",
+        ),
+    )
+    webchat_tenant_alias_map: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapa alias → organización para identificar tenants sin filtrar el UUID.",
+        validation_alias=AliasChoices(
+            "WEBCHAT_TENANT_ALIAS_MAP",
+            "TALIA_WEBCHAT_TENANT_ALIAS_MAP",
+        ),
+    )
     webchat_calendar_default_days: int = Field(
         default=21,
         description="Ventana predeterminada (en días) para consultar disponibilidad del calendario.",
@@ -355,6 +383,52 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
+
+    @field_validator("webchat_tenant_alias_map", mode="before")
+    @classmethod
+    def _parse_alias_map(cls, value: object) -> dict[str, str]:
+        if value in (None, "", {}, []):
+            return {}
+        iterable: list[tuple[str, str]] = []
+        if isinstance(value, str):
+            candidate = value.strip()
+            if not candidate:
+                return {}
+            parsed: object
+            try:
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                iterable = [(str(key), str(val)) for key, val in parsed.items()]
+            else:
+                fragments = [
+                    fragment.strip()
+                    for fragment in candidate.replace(";", ",").replace("\n", ",").split(",")
+                    if fragment.strip()
+                ]
+                for fragment in fragments:
+                    if "=" in fragment:
+                        alias, org = fragment.split("=", 1)
+                    elif ":" in fragment:
+                        alias, org = fragment.split(":", 1)
+                    else:
+                        continue
+                    alias_key = alias.strip()
+                    org_value = org.strip()
+                    if alias_key and org_value:
+                        iterable.append((alias_key, org_value))
+        elif isinstance(value, dict):
+            iterable = [(str(key), str(val)) for key, val in value.items()]
+        if not iterable:
+            return {}
+        result: dict[str, str] = {}
+        for alias_key, org_value in iterable:
+            alias = alias_key.strip().lower()
+            org = org_value.strip()
+            if alias and org:
+                result[alias] = org
+        return result
 
     @field_validator("request_log_skip_prefixes", mode="before")
     @classmethod

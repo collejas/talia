@@ -4922,6 +4922,24 @@ async def reply_inbox_conversation(
             if resolved_email:
                 extra_metadata.setdefault("manual_email", resolved_email)
                 extra_metadata.setdefault("agent_email", resolved_email)
+
+        contact_org_id: str | None = None
+        if str(contact_id).strip():
+            try:
+                contact_row = await storage.fetch_contact(str(contact_id))
+            except StorageError as exc:
+                logger.warning(
+                    "panel.inbox.contact_lookup_failed",
+                    extra={"contact_id": str(contact_id), "error": str(exc)},
+                )
+            else:
+                org_value = contact_row.get("organizacion_id") if isinstance(contact_row, dict) else None
+                if org_value:
+                    try:
+                        contact_org_id = str(org_value).strip() or None
+                    except Exception:  # pragma: no cover - str conversion defensiva
+                        contact_org_id = None
+
         if channel == "webchat":
             try:
                 await storage.register_webchat_message(
@@ -4931,6 +4949,7 @@ async def reply_inbox_conversation(
                     inactivity_hours=settings.webchat_inactivity_hours,
                     metadata=extra_metadata,
                     attachments=attachments_payload,
+                    organizacion_id=contact_org_id,
                 )
             except StorageError as exc:
                 logger.exception(

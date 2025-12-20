@@ -112,6 +112,7 @@ async def get_webchat_config() -> schemas.ClientConfig:
     return schemas.ClientConfig(
         persist_session=settings.webchat_persist_session,
         inactivity_timeout_hours=settings.webchat_inactivity_hours,
+        tenant_alias=service.get_webchat_tenant_alias(),
     )
 
 

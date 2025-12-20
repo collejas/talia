@@ -136,6 +136,10 @@ class ClientConfig(BaseModel):
         default=None,
         description="Horas de inactividad en backend antes de iniciar nueva conversación.",
     )
+    tenant_alias: str | None = Field(
+        default=None,
+        description="Alias público asociado a la organización para metadatos del widget.",
+    )
 
 
 class UploadResponse(BaseModel):

@@ -1209,6 +1209,7 @@ class CRMRepository:
         metadata: dict[str, Any] | None = None,
         inactivity_hours: int | None = None,
         attachments: list[dict[str, Any]] | None = None,
+        organizacion_id: str | None = None,
     ) -> dict[str, str | None]:
         payload: dict[str, Any] = {
             "p_session_id": session_id,
@@ -1223,6 +1224,8 @@ class CRMRepository:
             payload["p_inactivity_hours"] = inactivity_hours
         if attachments:
             payload["p_attachments"] = attachments
+        if organizacion_id:
+            payload["p_organizacion_id"] = organizacion_id
         data = await self._rpc("registrar_mensaje_webchat", payload)
         if not isinstance(data, list) or not data:
             raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_webchat: {data!r}")

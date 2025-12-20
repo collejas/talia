@@ -78,6 +78,7 @@ async def register_webchat_message(
     metadata: dict[str, Any] | None = None,
     inactivity_hours: int | None = None,
     attachments: list[dict[str, Any]] | None = None,
+    organizacion_id: str | None = None,
 ) -> dict[str, str | None]:
     """Invoca la RPC `registrar_mensaje_webchat` a través del repositorio CRM."""
     repo = CRMRepository()
@@ -90,6 +91,7 @@ async def register_webchat_message(
             metadata=metadata or {},
             inactivity_hours=inactivity_hours,
             attachments=attachments or [],
+            organizacion_id=organizacion_id,
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
@@ -253,6 +255,7 @@ async def record_webchat_visit(
     cvegeo: str | None = None,
     referrer: str | None = None,
     landing_url: str | None = None,
+    organizacion_id: str | None = None,
 ) -> None:
     """Actualiza/crea el registro del visitante con metadata adicional."""
     repo = CRMRepository()
@@ -278,6 +281,8 @@ async def record_webchat_visit(
         payload["p_referrer"] = referrer
     if landing_url:
         payload["p_landing_url"] = landing_url
+    if organizacion_id:
+        payload["p_organizacion_id"] = organizacion_id
 
     try:
         await repo.record_webchat_visit(session_id=session_id, payload=payload)
