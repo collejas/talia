@@ -10,7 +10,11 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from app.channels.voice.service import VoiceCallResult, start_outbound_call
-from app.channels.whatsapp.service import TwilioSendResult, _send_whatsapp_reply
+from app.channels.whatsapp.service import (
+    TwilioSendResult,
+    _send_whatsapp_reply,
+    resolve_whatsapp_organizacion,
+)
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -165,6 +169,13 @@ async def _log_whatsapp_inbox_message(
     if detalle_meta.get("twilio_variables"):
         metadata_payload["twilio_variables"] = detalle_meta.get("twilio_variables")
     metadata_payload = {k: v for k, v in metadata_payload.items() if v not in (None, "", {})}
+
+    contact_record: dict[str, Any] | None = None
+    try:
+        contact_record = await storage.fetch_contact(contact_id)
+    except StorageError:
+        contact_record = None
+    organizacion_hint = resolve_whatsapp_organizacion(contact=contact_record)
     try:
         await storage.register_whatsapp_message(
             direction="saliente",
@@ -175,6 +186,7 @@ async def _log_whatsapp_inbox_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             metadata=metadata_payload,
+            organizacion_id=organizacion_hint,
         )
     except StorageError as exc:
         log_event(

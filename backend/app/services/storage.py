@@ -125,9 +125,13 @@ async def register_whatsapp_message(
     inactivity_hours: int | None = None,
     attachments: list[dict[str, Any]] | None = None,
     webhook_payload: dict[str, Any] | None = None,
+    organizacion_id: str | None = None,
 ) -> dict[str, Any]:
     """Invoca registrar_mensaje_whatsapp para almacenar interacciones del canal y ligar el webhook."""
     repo = CRMRepository()
+    metadata_payload = dict(metadata or {})
+    if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
+        metadata_payload["resolved_organizacion_id"] = organizacion_id
     try:
         result = await repo.register_whatsapp_message(
             direction=direction,
@@ -139,7 +143,7 @@ async def register_whatsapp_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             response_id=response_id,
-            metadata=metadata,
+            metadata=metadata_payload,
             inactivity_minutes=(
                 inactivity_minutes
                 if inactivity_minutes is not None
@@ -147,6 +151,7 @@ async def register_whatsapp_message(
             ),
             attachments=attachments,
             webhook_payload=webhook_payload,
+            organizacion_id=organizacion_id,
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc

@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 
 from app.core.config import settings
+from app.core.logging import get_logger
 
 
 class CRMRepositoryError(RuntimeError):
@@ -1225,7 +1226,10 @@ class CRMRepository:
         if attachments:
             payload["p_attachments"] = attachments
         if organizacion_id:
-            payload["p_organizacion_id"] = organizacion_id
+            try:
+                payload["p_organizacion_id"] = str(UUID(str(organizacion_id)))
+            except (ValueError, TypeError) as exc:
+                raise CRMRepositoryError(f"organizacion_id inválido: {organizacion_id}") from exc
         data = await self._rpc("registrar_mensaje_webchat", payload)
         if not isinstance(data, list) or not data:
             raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_webchat: {data!r}")
@@ -1256,6 +1260,7 @@ class CRMRepository:
         inactivity_hours: int | None = None,
         attachments: list[dict[str, Any]] | None = None,
         webhook_payload: dict[str, Any] | None = None,
+        organizacion_id: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "p_direction": direction,
@@ -1280,6 +1285,8 @@ class CRMRepository:
             payload["p_attachments"] = attachments
         if webhook_payload is not None:
             payload["p_webhook_payload"] = webhook_payload
+        if organizacion_id:
+            payload["p_organizacion_id"] = organizacion_id
         data = await self._rpc("registrar_mensaje_whatsapp", payload)
         if not isinstance(data, list) or not data:
             raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_whatsapp: {data!r}")
@@ -5392,6 +5399,11 @@ class CRMRepository:
             "Authorization": f"Bearer {self._service_role}",
             "Content-Type": "application/json",
         }
+        if function_name == "registrar_mensaje_whatsapp":
+            logger.info(
+                "crm.rpc_payload",
+                extra={"function": function_name, "payload": payload},
+            )
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, json=payload, headers=headers)
@@ -5438,3 +5450,4 @@ class CRMRepository:
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"
             )
         return resp
+logger = get_logger("app.repositories.crm")

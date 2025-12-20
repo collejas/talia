@@ -29,6 +29,9 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
     """Cuando la conversación está en modo manual no debe invocar al asistente."""
     message = _build_sample_message()
 
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+
     register_calls: list[dict[str, object]] = []
 
     async def fake_register(**kwargs):
@@ -76,12 +79,16 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
 
     assert called["assistant"] is False
     assert register_calls and register_calls[0]["webhook_payload"] == message.raw_payload
+    assert register_calls[0]["organizacion_id"] == "org-test"
 
 
 @pytest.mark.asyncio
 async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     """Flujo completo exitoso registra mensajes entrante y saliente."""
     message = _build_sample_message()
+
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
 
     register_calls: list[dict] = []
 
@@ -140,6 +147,8 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     assert register_calls[1]["body"] == "Respuesta automática"
     assert register_calls[0]["webhook_payload"] == message.raw_payload
     assert "webhook_payload" not in register_calls[1]
+    assert register_calls[0]["organizacion_id"] == "org-test"
+    assert register_calls[1]["organizacion_id"] == "org-test"
 
 
 @pytest.mark.asyncio

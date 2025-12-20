@@ -58,6 +58,16 @@ class TwilioSendResult:
 async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> None:
     """Procesa un mensaje entrante desde Twilio y delega la respuesta a OpenAI."""
     normalized_from = _normalize_phone_number(message.from_number)
+    recipient_number = _normalize_phone_number(message.to_number)
+    organizacion_hint = resolve_whatsapp_organizacion(to_number=recipient_number)
+
+    if not organizacion_hint:
+        logger.error(
+            "whatsapp.organizacion_unresolved",
+            extra={"to_number": recipient_number, "wa_id": message.wa_id},
+        )
+        raise HTTPException(status_code=500, detail="No se pudo enrutar el mensaje entrante")
+
     try:
         registration = await storage.register_whatsapp_message(
             direction="entrante",
@@ -70,9 +80,18 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             metadata=message.metadata(),
             attachments=message.attachments_as_dict(),
             webhook_payload=message.raw_payload,
+            organizacion_id=organizacion_hint,
         )
     except StorageError as exc:
-        logger.exception("whatsapp.register_incoming_failed", extra={"error": str(exc)})
+        logger.exception(
+            "whatsapp.register_incoming_failed",
+            extra={
+                "error": str(exc),
+                "resolved_organizacion_id": organizacion_hint,
+                "to_number": recipient_number,
+                "from_number": normalized_from,
+            },
+        )
         raise HTTPException(status_code=502, detail="whatsapp_register_failed") from exc
 
     conversation_id = str(registration.get("conversation_id") or "")
@@ -98,7 +117,7 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
-    await _maybe_update_contact_location(contact_id)
+    contact_record = await _maybe_update_contact_location(contact_id)
 
     try:
         conversation_meta = await storage.fetch_conversation(conversation_id)
@@ -165,6 +184,7 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
     if send_result.error:
         metadata["delivery_error"] = send_result.error
 
+    resolved_contact_org = resolve_whatsapp_organizacion(contact=contact_record)
     try:
         await storage.register_whatsapp_message(
             direction="saliente",
@@ -176,6 +196,7 @@ async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> N
             metadata=metadata,
             wa_id=message.wa_id,
             phone_e164=normalized_from,
+            organizacion_id=resolved_contact_org,
         )
     except StorageError as exc:
         logger.warning(
@@ -319,25 +340,30 @@ async def _sync_envio_status_from_whatsapp(callback: schemas.WhatsAppStatusCallb
         )
 
 
-async def _maybe_update_contact_location(contact_id: str) -> None:
+async def _maybe_update_contact_location(
+    contact_id: str,
+    contact: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Enriquece el contacto con la ubicación inferida a partir de su teléfono/LADA."""
-    try:
-        contact = await storage.fetch_contact(contact_id)
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.fetch_contact_failed",
-            extra={"contact_id": contact_id, "error": str(exc)},
-        )
-        return
+    contact_data = contact
+    if contact_data is None:
+        try:
+            contact_data = await storage.fetch_contact(contact_id)
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fetch_contact_failed",
+                extra={"contact_id": contact_id, "error": str(exc)},
+            )
+            return None
 
-    contacto_datos = contact.get("contacto_datos") or {}
+    contacto_datos = contact_data.get("contacto_datos") or {}
     ubicacion = dict(contacto_datos.get("ubicacion") or {})
     lada_exists = ubicacion.get("lada")
     estado_exists = ubicacion.get("cve_ent")
     cvegeo_exists = ubicacion.get("cvegeo")
 
     if lada_exists and estado_exists and cvegeo_exists:
-        return
+        return contact_data
 
     try:
         identities = await storage.fetch_contact_identities(contact_id)
@@ -349,7 +375,7 @@ async def _maybe_update_contact_location(contact_id: str) -> None:
         identities = []
 
     channels = []
-    origen = contact.get("origen")
+    origen = contact_data.get("origen")
     if isinstance(origen, str) and origen:
         channels.append(origen)
     else:
@@ -357,7 +383,7 @@ async def _maybe_update_contact_location(contact_id: str) -> None:
 
     location = leads_geo.infer_contact_location(
         contacto_id=contact_id,
-        data=contact,
+        data=contact_data,
         channels=channels,
         identities=identities,
     )
@@ -386,7 +412,7 @@ async def _maybe_update_contact_location(contact_id: str) -> None:
         updated = True
 
     if not updated:
-        return
+        return contact_data
 
     contacto_datos["ubicacion"] = ubicacion
     try:
@@ -396,7 +422,10 @@ async def _maybe_update_contact_location(contact_id: str) -> None:
             "whatsapp.update_contact_location_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
+    else:
+        contact_data["contacto_datos"] = contacto_datos
 
+    return contact_data
 
 async def _generate_assistant_reply(
     *,
@@ -670,6 +699,63 @@ def _normalize_phone_number(value: str | None) -> str | None:
     if text.lower().startswith("whatsapp:"):
         return text.split(":", 1)[1]
     return text
+
+
+def _safe_str_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    try:
+        text = str(value).strip()
+    except Exception:
+        return None
+    return text or None
+
+
+def _normalize_phone_key(value: str | None) -> str | None:
+    normalized = _normalize_phone_number(value)
+    if not normalized:
+        return None
+    key = normalized.strip().replace(" ", "")
+    if key and not key.startswith("+") and key.replace("+", "").isdigit():
+        if key.startswith("+"):
+            return key
+        return f"+{key}"
+    return key or None
+
+
+def _whatsapp_phone_map() -> dict[str, str]:
+    configured = getattr(settings, "whatsapp_phone_org_map", {}) or {}
+    normalized: dict[str, str] = {}
+    for phone, org in configured.items():
+        key = _normalize_phone_key(phone)
+        org_value = _safe_str_value(org)
+        if key and org_value:
+            normalized[key] = org_value
+    default_org = _safe_str_value(settings.whatsapp_default_organizacion_id)
+    default_phone = _normalize_phone_key(settings.twilio_phone_number)
+    if default_org and default_phone and default_phone not in normalized:
+        normalized[default_phone] = default_org
+    return normalized
+
+
+def resolve_whatsapp_organizacion(
+    *,
+    to_number: str | None = None,
+    contact: dict[str, Any] | None = None,
+) -> str | None:
+    """Identifica el tenant asociado al canal WhatsApp."""
+    if contact and isinstance(contact, dict):
+        contact_org = _safe_str_value(contact.get("organizacion_id"))
+        if contact_org:
+            return contact_org
+    phone_key = _normalize_phone_key(to_number)
+    phone_map = _whatsapp_phone_map()
+    if phone_key and phone_key in phone_map:
+        return phone_map[phone_key]
+    return _safe_str_value(settings.whatsapp_default_organizacion_id)
 
 
 def _map_status_to_event(status: str | None) -> str | None:

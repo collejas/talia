@@ -226,6 +226,23 @@ class Settings(BaseSettings):
             "TALIA_WEBCHAT_TENANT_ALIAS_MAP",
         ),
     )
+    whatsapp_default_organizacion_id: str | None = Field(
+        default=None,
+        description="Organización predeterminada para el canal WhatsApp.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_DEFAULT_ORGANIZACION_ID",
+            "TALIA_WHATSAPP_DEFAULT_ORGANIZACION_ID",
+            "TALIA_ORGANIZACION_ID",
+        ),
+    )
+    whatsapp_phone_org_map: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapa número Twilio (E.164) → organización para enrutar mensajes entrantes.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_TENANT_PHONE_MAP",
+            "TALIA_WHATSAPP_TENANT_PHONE_MAP",
+        ),
+    )
     webchat_calendar_default_days: int = Field(
         default=21,
         description="Ventana predeterminada (en días) para consultar disponibilidad del calendario.",
@@ -384,9 +401,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TALIA_", extra="allow")
 
-    @field_validator("webchat_tenant_alias_map", mode="before")
-    @classmethod
-    def _parse_alias_map(cls, value: object) -> dict[str, str]:
+    @staticmethod
+    def _parse_kv_map(value: object) -> dict[str, str]:
         if value in (None, "", {}, []):
             return {}
         iterable: list[tuple[str, str]] = []
@@ -429,6 +445,16 @@ class Settings(BaseSettings):
             if alias and org:
                 result[alias] = org
         return result
+
+    @field_validator("webchat_tenant_alias_map", mode="before")
+    @classmethod
+    def _validate_webchat_alias_map(cls, value: object) -> dict[str, str]:
+        return cls._parse_kv_map(value)
+
+    @field_validator("whatsapp_phone_org_map", mode="before")
+    @classmethod
+    def _validate_whatsapp_phone_map(cls, value: object) -> dict[str, str]:
+        return cls._parse_kv_map(value)
 
     @field_validator("request_log_skip_prefixes", mode="before")
     @classmethod

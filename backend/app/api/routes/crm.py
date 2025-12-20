@@ -10305,7 +10305,7 @@ async def _send_manual_whatsapp_message(
     content: str,
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
-    phone, wa_id = await _resolve_whatsapp_identity(contact_id)
+    phone, wa_id, contact = await _resolve_whatsapp_identity(contact_id)
     if not phone:
         raise HTTPException(status_code=400, detail="contact_phone_missing")
 
@@ -10334,6 +10334,7 @@ async def _send_manual_whatsapp_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             metadata=metadata_payload,
+            organizacion_id=whatsapp_service.resolve_whatsapp_organizacion(contact=contact),
         )
     except StorageError as exc:
         logger.exception(
@@ -10356,9 +10357,10 @@ async def _send_manual_whatsapp_message(
     return response_metadata
 
 
-async def _resolve_whatsapp_identity(contact_id: str) -> tuple[str | None, str | None]:
+async def _resolve_whatsapp_identity(contact_id: str) -> tuple[str | None, str | None, dict[str, Any] | None]:
     phone: str | None = None
     wa_id: str | None = None
+    contact: dict[str, Any] | None = None
     try:
         contact = await storage.fetch_contact(contact_id)
         phone = _clean_phone(contact.get("telefono_e164"))
@@ -10382,7 +10384,7 @@ async def _resolve_whatsapp_identity(contact_id: str) -> tuple[str | None, str |
             wa_id = candidate_wa.strip()
         if phone and wa_id:
             break
-    return phone, wa_id
+    return phone, wa_id, contact
 
 
 def _clean_phone(raw: Any) -> str | None:
