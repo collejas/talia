@@ -172,6 +172,7 @@ export async function fetchDepartmentsDirectory(): Promise<HrDepartmentsDirector
       },
       prefer: "count=exact",
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabaseSimpleEmployeeRow[]>("/rest/v1/empleados", {
       searchParams: {
@@ -179,6 +180,7 @@ export async function fetchDepartmentsDirectory(): Promise<HrDepartmentsDirector
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
     callSupabaseRest<SupabasePositionRow[]>("/rest/v1/puestos", {
       searchParams: {
@@ -186,6 +188,7 @@ export async function fetchDepartmentsDirectory(): Promise<HrDepartmentsDirector
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     }),
   ])
 

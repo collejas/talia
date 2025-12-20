@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import {
-  DepartmentCreateRow,
+  DepartmentCreateSection,
   DepartmentInlineRow,
 } from "@/components/settings/hr/department-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
@@ -57,6 +57,7 @@ function DepartmentsDirectoryCard({ data }: { data: HrDepartmentsDirectory }) {
           title="No se pudo recuperar toda la información"
           messages={data.errors}
         />
+        <DepartmentCreateSection />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Departamentos" value={data.total} />
           <SettingsStatCard label="Puestos definidos" value={data.stats.puestos} />
@@ -76,7 +77,6 @@ function DepartmentsDirectoryCard({ data }: { data: HrDepartmentsDirectory }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <DepartmentCreateRow />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">

@@ -18,38 +18,36 @@ import { HrDepartmentItem } from "@/lib/settings/hr-types"
 
 const INITIAL_STATE: CrudActionState = { status: "idle" }
 
-export function DepartmentCreateRow() {
+export function DepartmentCreateSection() {
   const [state, action] = useActionState(createDepartmentAction, INITIAL_STATE)
   return (
-    <TableRow className="bg-muted/30">
-      <TableCell colSpan={6}>
-        <form action={action} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="department-new-nombre">Nombre</Label>
-              <Input
-                id="department-new-nombre"
-                name="nombre"
-                placeholder="Departamento de ventas"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="department-new-padre">Departamento padre ID</Label>
-              <Input
-                id="department-new-padre"
-                name="departamento_padre_id"
-                placeholder="Opcional"
-              />
-            </div>
+    <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <form action={action} className="mx-auto max-w-4xl space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="department-new-nombre">Nombre</Label>
+            <Input
+              id="department-new-nombre"
+              name="nombre"
+              placeholder="Departamento de ventas"
+              required
+            />
           </div>
-          <InlineStateMessage state={state} />
-          <div className="flex justify-end">
-            <InlineSubmitButton label="Crear departamento" pendingLabel="Guardando..." />
+          <div className="space-y-1">
+            <Label htmlFor="department-new-padre">Departamento padre ID</Label>
+            <Input
+              id="department-new-padre"
+              name="departamento_padre_id"
+              placeholder="Opcional"
+            />
           </div>
-        </form>
-      </TableCell>
-    </TableRow>
+        </div>
+        <InlineStateMessage state={state} />
+        <div className="flex justify-end">
+          <InlineSubmitButton label="Crear departamento" pendingLabel="Guardando..." />
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -64,20 +62,14 @@ export function DepartmentInlineRow({ department }: { department: HrDepartmentIt
     <>
       <TableRow>
         <TableCell>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">{department.nombre}</span>
-            <InlineCode>{department.id}</InlineCode>
-          </div>
+          <span className="font-medium">{department.nombre}</span>
         </TableCell>
         <TableCell className="hidden md:table-cell">
-          <div className="flex flex-col">
-            <span className="text-sm text-muted-foreground">{department.padreNombre}</span>
-            <InlineCode>{department.padreId ?? "—"}</InlineCode>
-          </div>
+          <span className="text-sm text-muted-foreground">{department.padreNombre}</span>
         </TableCell>
-        <TableCell>{department.puestos}</TableCell>
-        <TableCell>{department.empleados}</TableCell>
-        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+        <TableCell className="w-24 text-center">{department.puestos}</TableCell>
+        <TableCell className="w-24 text-center">{department.empleados}</TableCell>
+        <TableCell className="hidden lg:table-cell w-32 text-xs text-muted-foreground">
           {formatDateTime(department.creadoEn)}
         </TableCell>
         <TableCell className="text-right">
@@ -212,8 +204,4 @@ function InlineStateMessage({
     )
   }
   return null
-}
-
-function InlineCode({ children }: { children: React.ReactNode }) {
-  return <span className="text-[0.65rem] font-mono text-muted-foreground/80">{children}</span>
 }
