@@ -161,3 +161,27 @@ async function triggerSupabaseRecovery(baseUrl: string, serviceKey: string, emai
     )
   }
 }
+
+export async function deleteSupabaseAuthUser(userId: string): Promise<void> {
+  const config = getSupabaseConfig()
+  if (!config) {
+    throw new Error("Supabase no está configurado.")
+  }
+  const serviceKey = getServiceRoleKey()
+  if (!serviceKey) {
+    throw new Error("Configura SUPABASE_SERVICE_ROLE para eliminar usuarios.")
+  }
+  const baseUrl = config.url.replace(/\/+$/, "")
+  const response = await fetch(`${baseUrl}/auth/v1/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    cache: "no-store",
+  })
+  if (!response.ok) {
+    const errorText = await getErrorMessage(response)
+    throw new Error(errorText || "No se pudo eliminar el usuario en Supabase Auth.")
+  }
+}

@@ -31,6 +31,7 @@ export function SetPasswordForm({ accessToken, type }: SetPasswordFormProps) {
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [message, setMessage] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -76,6 +77,7 @@ export function SetPasswordForm({ accessToken, type }: SetPasswordFormProps) {
       setMessage("¡Listo! Ya puedes iniciar sesión con tu nueva contraseña.")
       setPassword("")
       setConfirm("")
+      setSuccess(true)
     })
   }
 
@@ -121,10 +123,21 @@ export function SetPasswordForm({ accessToken, type }: SetPasswordFormProps) {
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? "Guardando..." : "Guardar contraseña"}
       </Button>
-      <p className="text-center text-xs text-muted-foreground">
-        Después de guardar, vuelve a la pantalla de inicio de sesión e ingresa con tu correo y la
-        contraseña que acabas de definir.
-      </p>
+      {success ? (
+        <>
+          <Button asChild variant="outline" className="w-full">
+            <a href="/auth/login">Ir a iniciar sesión</a>
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Usa tu correo y la contraseña recién creada para ingresar a la plataforma.
+          </p>
+        </>
+      ) : (
+        <p className="text-center text-xs text-muted-foreground">
+          Después de guardar, vuelve a la pantalla de inicio de sesión e ingresa con tu correo y la
+          contraseña que acabas de definir.
+        </p>
+      )}
     </form>
   )
 }

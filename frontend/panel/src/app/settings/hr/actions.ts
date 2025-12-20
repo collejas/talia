@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache"
 
 import { callSupabaseRest } from "@/lib/supabase/rest"
-import { createSupabaseAuthUser } from "@/lib/supabase/auth-admin"
+import { createSupabaseAuthUser, deleteSupabaseAuthUser } from "@/lib/supabase/auth-admin"
 import { getDefaultOrganizacionId } from "@/lib/settings/org"
 
 export type CrudActionState = {
@@ -110,6 +110,7 @@ export const createEmployeeAction: CrudActionHandler = async (_, formData) => {
         organizacion_id: orgId,
       },
       prefer: "return=representation",
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.empleados)
     return success("Empleado registrado.")
@@ -400,6 +401,7 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
       },
       prefer: "return=representation",
       enforceOrganization: true,
+      forceServiceToken: true,
     })
     revalidatePath(PATHS.usuarios)
     return success("Usuario actualizado.")
@@ -417,7 +419,9 @@ export const deleteUserAction: CrudActionHandler = async (_, formData) => {
         id: `eq.${userId}`,
       },
       enforceOrganization: true,
+      forceServiceToken: true,
     })
+    await deleteSupabaseAuthUser(userId)
     revalidatePath(PATHS.usuarios)
     return success("Usuario eliminado.")
   } catch (error) {
