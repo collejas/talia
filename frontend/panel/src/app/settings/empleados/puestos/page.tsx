@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import {
-  PositionCreateRow,
+  PositionCreateSection,
   PositionInlineRow,
 } from "@/components/settings/hr/position-inline-row"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
@@ -79,6 +79,7 @@ function PositionsDirectoryCard({
           title="No se pudo recuperar toda la información"
           messages={[...data.errors, ...extraErrors]}
         />
+        <PositionCreateSection departments={departments} />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Puestos" value={data.total} />
           <SettingsStatCard label="Colaboradores asignados" value={data.stats.empleados} />
@@ -98,7 +99,6 @@ function PositionsDirectoryCard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <PositionCreateRow departments={departments} />
                 {data.items.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">

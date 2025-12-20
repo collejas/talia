@@ -28,49 +28,47 @@ type PositionInlineRowProps = PositionBaseProps & {
   position: HrPositionItem
 }
 
-export function PositionCreateRow({ departments }: PositionBaseProps) {
+export function PositionCreateSection({ departments }: PositionBaseProps) {
   const [state, action] = useActionState(createPositionAction, INITIAL_STATE)
 
   return (
-    <TableRow className="bg-muted/30">
-      <TableCell colSpan={6}>
-        <form action={action} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="position-new-nombre">Nombre</Label>
-              <Input
-                id="position-new-nombre"
-                name="nombre"
-                placeholder="Coordinador de operaciones"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="position-new-depto">Departamento</Label>
-              <DepartmentSelect
-                id="position-new-depto"
-                name="departamento_id"
-                departments={departments}
-                placeholder="Sin departamento"
-              />
-            </div>
-          </div>
+    <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+      <form action={action} className="mx-auto max-w-4xl space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="position-new-desc">Descripción</Label>
-            <Textarea
-              id="position-new-desc"
-              name="descripcion"
-              placeholder="Responsabilidades principales"
-              rows={3}
+            <Label htmlFor="position-new-nombre">Nombre</Label>
+            <Input
+              id="position-new-nombre"
+              name="nombre"
+              placeholder="Coordinador de operaciones"
+              required
             />
           </div>
-          <InlineStateMessage state={state} />
-          <div className="flex justify-end">
-            <InlineSubmitButton label="Crear puesto" pendingLabel="Guardando..." />
+          <div className="space-y-1">
+            <Label htmlFor="position-new-depto">Departamento</Label>
+            <DepartmentSelect
+              id="position-new-depto"
+              name="departamento_id"
+              departments={departments}
+              placeholder="Sin departamento"
+            />
           </div>
-        </form>
-      </TableCell>
-    </TableRow>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="position-new-desc">Descripción</Label>
+          <Textarea
+            id="position-new-desc"
+            name="descripcion"
+            placeholder="Responsabilidades principales"
+            rows={3}
+          />
+        </div>
+        <InlineStateMessage state={state} />
+        <div className="flex justify-end">
+          <InlineSubmitButton label="Crear puesto" pendingLabel="Guardando..." />
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -90,7 +88,7 @@ export function PositionInlineRow({ position, departments }: PositionInlineRowPr
           </div>
         </TableCell>
         <TableCell className="hidden md:table-cell">{position.departamento}</TableCell>
-        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+        <TableCell className="hidden lg:table-cell max-w-[320px] text-sm text-muted-foreground">
           {position.descripcion}
         </TableCell>
         <TableCell>{position.empleados}</TableCell>
