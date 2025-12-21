@@ -17,6 +17,7 @@ class DummyCRMRepository(CRMRepository):
         self.pipeline_stages: list[dict[str, Any]] = []
         self.pipeline_opportunities: list[dict[str, Any]] = []
         self.dashboard_kpis: dict[str, Any] = {"webchat": {"visitas_sin_chat": 0}}
+        self.next_sales_rep: uuid.UUID | None = None
 
     async def ensure_prospeccion_stage(self, **kwargs: Any) -> dict[str, Any]:
         """Evita llamadas reales durante las pruebas."""
@@ -138,6 +139,16 @@ class DummyCRMRepository(CRMRepository):
                 "responsables": [],
             }
         ]
+
+    async def assign_next_sales_rep(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("assign_next_sales_rep", kwargs))
+        rep_id = self.next_sales_rep or uuid.uuid4()
+        return {
+            "usuario_id": rep_id,
+            "nombre": "Seller Demo",
+            "correo": "seller@example.com",
+            "telefono_e164": "+521234567890",
+        }
 
     async def create_account(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("create_account", kwargs))

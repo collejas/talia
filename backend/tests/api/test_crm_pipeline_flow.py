@@ -22,6 +22,7 @@ class InMemoryPipelineRepository(CRMRepository):
         self.notes: dict[str, dict[str, Any]] = {}
         self.quotes: dict[str, dict[str, Any]] = {}
         self.clients: dict[str, dict[str, Any]] = {}
+        self.assigned_reps: list[uuid.UUID] = []
 
     async def create_account(
         self,
@@ -36,6 +37,16 @@ class InMemoryPipelineRepository(CRMRepository):
             **payload,
             "creado_en": datetime.now(timezone.utc).isoformat(),
             "actualizado_en": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def assign_next_sales_rep(self, **kwargs: Any) -> dict[str, Any] | None:
+        rep_id = uuid.uuid4()
+        self.assigned_reps.append(rep_id)
+        return {
+            "usuario_id": rep_id,
+            "nombre": "Pipeline Seller",
+            "correo": "seller@pipeline.test",
+            "telefono_e164": "+521000000000",
         }
 
     def _stage(self, codigo: str, nombre: str, categoria: str, orden: int) -> dict[str, Any]:

@@ -1026,7 +1026,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "metadata->>conversation_id": f"eq.{conversation_key}",
-            "select": "id,metadata",
+            "select": "id,metadata,asignado_a_usuario_id",
             "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
@@ -1035,13 +1035,25 @@ class CRMRepository:
             row = rows[0]
             opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
             metadata = _merged_metadata(row.get("metadata"))
-            return await _patch_metadata(opportunity_id, metadata)
+            current_assignee = row.get("asignado_a_usuario_id")
+            assignee_uuid = (
+                _coerce_uuid(current_assignee, field="asignado_a_usuario_id")
+                if current_assignee
+                else None
+            )
+            result_id = await _patch_metadata(opportunity_id, metadata)
+            await self._assign_sales_rep_if_needed(
+                oportunidad_id=opportunity_id,
+                organizacion_id=organizacion_id,
+                current_assignee=assignee_uuid,
+            )
+            return result_id
 
         # Buscar por contacto principal
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "contacto_principal_id": f"eq.{contacto_id}",
-            "select": "id,metadata",
+            "select": "id,metadata,asignado_a_usuario_id",
             "order": "creado_en.desc",
             "limit": "1",
         }
@@ -1051,7 +1063,19 @@ class CRMRepository:
             row = rows[0]
             opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
             metadata = _merged_metadata(row.get("metadata"))
-            return await _patch_metadata(opportunity_id, metadata)
+            current_assignee = row.get("asignado_a_usuario_id")
+            assignee_uuid = (
+                _coerce_uuid(current_assignee, field="asignado_a_usuario_id")
+                if current_assignee
+                else None
+            )
+            result_id = await _patch_metadata(opportunity_id, metadata)
+            await self._assign_sales_rep_if_needed(
+                oportunidad_id=opportunity_id,
+                organizacion_id=organizacion_id,
+                current_assignee=assignee_uuid,
+            )
+            return result_id
 
         # Crear oportunidad mínima
         etapa_id = await self._get_default_stage_id(organizacion_id=organizacion_id)
@@ -1076,9 +1100,19 @@ class CRMRepository:
         )
         data = resp.json() or []
         if isinstance(data, list) and data:
-            return _coerce_uuid(data[0].get("id"), field="opportunity_id")
+            opportunity_id = _coerce_uuid(data[0].get("id"), field="opportunity_id")
+            await self._assign_sales_rep_if_needed(
+                oportunidad_id=opportunity_id,
+                organizacion_id=organizacion_id,
+            )
+            return opportunity_id
         if isinstance(data, dict) and data:
-            return _coerce_uuid(data.get("id"), field="opportunity_id")
+            opportunity_id = _coerce_uuid(data.get("id"), field="opportunity_id")
+            await self._assign_sales_rep_if_needed(
+                oportunidad_id=opportunity_id,
+                organizacion_id=organizacion_id,
+            )
+            return opportunity_id
         raise CRMRepositoryError("Respuesta inesperada al crear oportunidad")
 
     async def get_pipeline_opportunity(
@@ -1123,6 +1157,69 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad por id: {row!r}")
         return row
+
+    async def assign_next_sales_rep(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        """Invoca la RPC que selecciona al siguiente vendedor disponible."""
+        payload = {"p_organizacion_id": str(organizacion_id)}
+        data = await self._rpc("asignar_vendedor_round_robin", payload)
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict) and data:
+            row = data
+        else:
+            return None
+        usuario_value = row.get("usuario_id")
+        if not usuario_value:
+            return None
+        usuario_id = _coerce_uuid(usuario_value, field="usuario_id")
+        return {
+            "usuario_id": usuario_id,
+            "nombre": row.get("nombre"),
+            "correo": row.get("correo"),
+            "telefono_e164": row.get("telefono_e164"),
+        }
+
+    async def _assign_sales_rep_if_needed(
+        self,
+        *,
+        oportunidad_id: UUID,
+        organizacion_id: UUID,
+        current_assignee: UUID | None = None,
+    ) -> UUID | None:
+        """Asigna un vendedor round-robin cuando la oportunidad aún no tiene dueño."""
+        if current_assignee:
+            return current_assignee
+        candidate = await self.assign_next_sales_rep(organizacion_id=organizacion_id)
+        if not candidate:
+            logger.info(
+                "crm.sales_assignment.skipped",
+                extra={
+                    "oportunidad_id": str(oportunidad_id),
+                    "organizacion_id": str(organizacion_id),
+                },
+            )
+            return None
+        params = {
+            "id": f"eq.{oportunidad_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        await self._request(
+            "PATCH",
+            "/rest/v1/oportunidades",
+            params=params,
+            json={"asignado_a_usuario_id": str(candidate["usuario_id"])},
+            prefer="return=minimal",
+        )
+        logger.info(
+            "crm.sales_assignment.completed",
+            extra={
+                "oportunidad_id": str(oportunidad_id),
+                "organizacion_id": str(organizacion_id),
+                "usuario_id": str(candidate["usuario_id"]),
+            },
+        )
+        return candidate["usuario_id"]
 
     async def get_contact_opportunity(
         self,
