@@ -1034,6 +1034,7 @@ async def ensure_conversation_opportunity(
     conversation_id: str,
     contact_id: str | None,
     channel: str | None = None,
+    force_new_opportunity_on_restart: bool = False,
 ) -> str:
     """Resuelve o crea una oportunidad CRM asociada a la conversación actual."""
 
@@ -1064,6 +1065,7 @@ async def ensure_conversation_opportunity(
             canal=channel,
             contacto_nombre=contact.get("nombre_completo"),
             contacto_empresa=contact.get("company_name"),
+            force_new_opportunity_on_restart=force_new_opportunity_on_restart,
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc

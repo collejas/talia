@@ -40,6 +40,44 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _coerce_positive_int(value: Any, default: int = 1) -> int:
+    try:
+        number = int(value)
+        if number > 0:
+            return number
+    except (TypeError, ValueError):
+        pass
+    return default
+
+
+def _build_conversation_history(
+    previous_metadata: dict[str, Any],
+    new_conversation_id: str,
+) -> list[str]:
+    """Combina el historial previo de conversaciones con la conversación actual."""
+    history: list[str] = []
+    prev_history = previous_metadata.get("conversation_history")
+    if isinstance(prev_history, list):
+        for item in prev_history:
+            if isinstance(item, str):
+                trimmed = item.strip()
+                if trimmed:
+                    history.append(trimmed)
+    prev_conversation_id = previous_metadata.get("conversation_id")
+    if isinstance(prev_conversation_id, str):
+        trimmed = prev_conversation_id.strip()
+        if trimmed:
+            history.append(trimmed)
+    history.append(new_conversation_id)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in history:
+        if item not in seen:
+            deduped.append(item)
+            seen.add(item)
+    return deduped
+
+
 def _is_jwt_expired_error(error: Exception) -> bool:
     return "JWT expired" in str(error)
 
@@ -983,6 +1021,7 @@ class CRMRepository:
         canal: str | None = None,
         contacto_nombre: str | None = None,
         contacto_empresa: str | None = None,
+        force_new_opportunity_on_restart: bool = False,
     ) -> UUID:
         conversation_key = conversation_id.strip()
         if not conversation_key:
@@ -1022,11 +1061,16 @@ class CRMRepository:
             )
             return opportunity_id
 
+        select_columns = (
+            "id,metadata,asignado_a_usuario_id,etapa_id,titulo,descripcion,"
+            "monto_estimado,moneda,probabilidad"
+        )
+
         # Buscar por metadata->>conversation_id
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "metadata->>conversation_id": f"eq.{conversation_key}",
-            "select": "id,metadata,asignado_a_usuario_id",
+            "select": select_columns,
             "limit": "1",
         }
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
@@ -1055,7 +1099,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "contacto_principal_id": f"eq.{contacto_id}",
-            "select": "id,metadata,asignado_a_usuario_id",
+            "select": select_columns,
             "order": "creado_en.desc",
             "limit": "1",
         }
@@ -1071,6 +1115,29 @@ class CRMRepository:
                 if current_assignee
                 else None
             )
+            existing_conversation = ""
+            metadata_conversation = metadata.get("conversation_id")
+            if isinstance(metadata_conversation, str):
+                existing_conversation = metadata_conversation.strip()
+            should_restart = (
+                force_new_opportunity_on_restart
+                and existing_conversation
+                and existing_conversation != conversation_key
+            )
+            if should_restart:
+                return await self._create_opportunity_from_contact(
+                    organizacion_id=organizacion_id,
+                    contacto_id=contacto_id,
+                    conversation_id=conversation_key,
+                    canal=canal,
+                    contacto_nombre=contacto_nombre,
+                    contacto_empresa=contacto_empresa,
+                    base_metadata=base_metadata,
+                    parent_row=row,
+                    parent_metadata=metadata,
+                    parent_assignee=assignee_uuid,
+                )
+
             result_id = await _patch_metadata(opportunity_id, metadata)
             await self._assign_sales_rep_if_needed(
                 oportunidad_id=opportunity_id,
@@ -1081,21 +1148,77 @@ class CRMRepository:
             )
             return result_id
 
-        # Crear oportunidad mínima
-        etapa_id = await self._get_default_stage_id(organizacion_id=organizacion_id)
-        titulo = (
-            (contacto_nombre or "").strip()
-            or (contacto_empresa or "").strip()
-            or f"Conversación {conversation_key[:8]}"
+        # Crear oportunidad mínima (no había registros previos)
+        return await self._create_opportunity_from_contact(
+            organizacion_id=organizacion_id,
+            contacto_id=contacto_id,
+            conversation_id=conversation_key,
+            canal=canal,
+            contacto_nombre=contacto_nombre,
+            contacto_empresa=contacto_empresa,
+            base_metadata=base_metadata,
         )
-        create_body = {
+
+    async def _create_opportunity_from_contact(
+        self,
+        *,
+        organizacion_id: UUID,
+        contacto_id: UUID,
+        conversation_id: str,
+        canal: str | None,
+        contacto_nombre: str | None,
+        contacto_empresa: str | None,
+        base_metadata: dict[str, Any],
+        parent_row: dict[str, Any] | None = None,
+        parent_metadata: dict[str, Any] | None = None,
+        parent_assignee: UUID | None = None,
+    ) -> UUID:
+        stage_id_value = parent_row.get("etapa_id") if parent_row else None
+        stage_id: UUID | None = None
+        if stage_id_value:
+            try:
+                stage_id = UUID(str(stage_id_value))
+            except (TypeError, ValueError):
+                stage_id = None
+        if stage_id is None:
+            stage_id = await self._get_default_stage_id(organizacion_id=organizacion_id)
+
+        base_title = (contacto_nombre or "").strip() or (contacto_empresa or "").strip()
+        if parent_row and isinstance(parent_row.get("titulo"), str):
+            parent_title = parent_row["titulo"].strip()
+        else:
+            parent_title = ""
+        titulo = parent_title or base_title or f"Conversación {conversation_id[:8]}"
+
+        metadata = {k: v for k, v in base_metadata.items() if v is not None}
+        conversation_history = [conversation_id]
+        restart_sequence = 1
+        parent_id: UUID | None = None
+        if parent_row:
+            parent_id = _coerce_uuid(parent_row.get("id"), field="parent_opportunity_id")
+            metadata["parent_opportunity_id"] = str(parent_id)
+            parent_meta = parent_metadata or {}
+            restart_sequence = _coerce_positive_int(parent_meta.get("restart_sequence"), default=1) + 1
+            conversation_history = _build_conversation_history(parent_meta, conversation_id)
+        metadata["restart_sequence"] = restart_sequence
+        metadata["conversation_history"] = conversation_history
+
+        moneda_value = parent_row.get("moneda") if parent_row else None
+
+        create_body: dict[str, Any] = {
             "organizacion_id": str(organizacion_id),
             "contacto_principal_id": str(contacto_id),
-            "etapa_id": str(etapa_id),
+            "etapa_id": str(stage_id),
             "titulo": titulo,
-            "moneda": "MXN",
-            "metadata": {k: v for k, v in base_metadata.items() if v is not None},
+            "moneda": moneda_value or "MXN",
+            "metadata": metadata,
         }
+        if parent_row:
+            for field in ("monto_estimado", "descripcion", "probabilidad"):
+                value = parent_row.get(field)
+                if value not in (None, ""):
+                    create_body[field] = value
+
         resp = await self._request(
             "POST",
             "/rest/v1/oportunidades",
@@ -1103,25 +1226,66 @@ class CRMRepository:
             prefer="return=representation",
         )
         data = resp.json() or []
+        row: dict[str, Any]
         if isinstance(data, list) and data:
-            opportunity_id = _coerce_uuid(data[0].get("id"), field="opportunity_id")
-            await self._assign_sales_rep_if_needed(
+            row = data[0]
+        elif isinstance(data, dict) and data:
+            row = data
+        else:
+            raise CRMRepositoryError("Respuesta inesperada al crear oportunidad")
+
+        opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
+        assigned_user_id = parent_assignee
+
+        if parent_assignee:
+            await self._set_opportunity_assignee(
+                organizacion_id=organizacion_id,
+                oportunidad_id=opportunity_id,
+                usuario_id=parent_assignee,
+            )
+        else:
+            assigned_user_id = await self._assign_sales_rep_if_needed(
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
             )
-            return opportunity_id
-        if isinstance(data, dict) and data:
-            opportunity_id = _coerce_uuid(data.get("id"), field="opportunity_id")
-            await self._assign_sales_rep_if_needed(
-                oportunidad_id=opportunity_id,
+
+        if parent_row and assigned_user_id:
+            audit_metadata: dict[str, Any] = {"source": "restart"}
+            if parent_id:
+                audit_metadata["parent_opportunity_id"] = str(parent_id)
+            await self._insert_assignment_audit(
                 organizacion_id=organizacion_id,
+                oportunidad_id=opportunity_id,
+                vendedor_id=assigned_user_id,
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
+                trigger="restart_conversation",
+                metadata=audit_metadata,
             )
-            return opportunity_id
-        raise CRMRepositoryError("Respuesta inesperada al crear oportunidad")
+
+        return opportunity_id
+
+    async def _set_opportunity_assignee(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        usuario_id: UUID,
+    ) -> None:
+        params = {
+            "id": f"eq.{oportunidad_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        await self._request(
+            "PATCH",
+            "/rest/v1/oportunidades",
+            params=params,
+            json={"asignado_a_usuario_id": str(usuario_id)},
+            prefer="return=minimal",
+        )
 
     async def get_pipeline_opportunity(
         self,

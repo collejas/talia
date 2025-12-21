@@ -61,7 +61,10 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
         called["assistant"] = True
         return service.AssistantReply(text="ok", openai_conversation_id=None, response_id=None)
 
-    async def fake_ensure_conversation_opportunity(*_: object, **__: object) -> None:
+    ensure_calls: list[dict[str, Any]] = []
+
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object) -> None:
+        ensure_calls.append(kwargs)
         return None
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
@@ -80,6 +83,7 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
     assert called["assistant"] is False
     assert register_calls and register_calls[0]["webhook_payload"] == message.raw_payload
     assert register_calls[0]["organizacion_id"] == "org-test"
+    assert ensure_calls and ensure_calls[0]["force_new_opportunity_on_restart"] is True
 
 
 @pytest.mark.asyncio
@@ -125,7 +129,10 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     async def fake_send(**kwargs):
         return service.TwilioSendResult(sid="SM-out", status="sent")
 
-    async def fake_ensure_conversation_opportunity(*_: object, **__: object) -> None:
+    ensure_calls: list[dict[str, Any]] = []
+
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object) -> None:
+        ensure_calls.append(kwargs)
         return None
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
@@ -149,6 +156,7 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     assert "webhook_payload" not in register_calls[1]
     assert register_calls[0]["organizacion_id"] == "org-test"
     assert register_calls[1]["organizacion_id"] == "org-test"
+    assert ensure_calls and ensure_calls[0]["force_new_opportunity_on_restart"] is True
 
 
 @pytest.mark.asyncio
