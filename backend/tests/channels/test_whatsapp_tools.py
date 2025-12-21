@@ -8,6 +8,7 @@ class DummySalesRepo:
     def __init__(self, metadata: dict | None = None) -> None:
         self.metadata = metadata or {}
         self.updated_payload: dict | None = None
+        self.audit_calls: list[dict[str, Any]] = []
 
     async def get_pipeline_opportunity(self, **_: object) -> dict:
         return {
@@ -22,6 +23,9 @@ class DummySalesRepo:
     async def update_opportunity(self, **kwargs: object) -> dict:
         self.updated_payload = kwargs.get("payload")
         return {"status": "ok"}
+
+    async def insert_sales_assignment_audit(self, **kwargs: object) -> None:
+        self.audit_calls.append(kwargs)
 
 
 @pytest.mark.asyncio

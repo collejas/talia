@@ -1046,6 +1046,8 @@ class CRMRepository:
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
                 current_assignee=assignee_uuid,
+                conversation_id=conversation_id,
+                contact_id=str(contact_id),
             )
             return result_id
 
@@ -1074,6 +1076,8 @@ class CRMRepository:
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
                 current_assignee=assignee_uuid,
+                conversation_id=conversation_id,
+                contact_id=str(contact_id),
             )
             return result_id
 
@@ -1104,6 +1108,8 @@ class CRMRepository:
             await self._assign_sales_rep_if_needed(
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
+                conversation_id=conversation_id,
+                contact_id=str(contact_id),
             )
             return opportunity_id
         if isinstance(data, dict) and data:
@@ -1111,6 +1117,8 @@ class CRMRepository:
             await self._assign_sales_rep_if_needed(
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
+                conversation_id=conversation_id,
+                contact_id=str(contact_id),
             )
             return opportunity_id
         raise CRMRepositoryError("Respuesta inesperada al crear oportunidad")
@@ -1185,6 +1193,8 @@ class CRMRepository:
         oportunidad_id: UUID,
         organizacion_id: UUID,
         current_assignee: UUID | None = None,
+        conversation_id: str | None = None,
+        contact_id: str | None = None,
     ) -> UUID | None:
         """Asigna un vendedor round-robin cuando la oportunidad aún no tiene dueño."""
         if current_assignee:
@@ -1219,7 +1229,67 @@ class CRMRepository:
                 "usuario_id": str(candidate["usuario_id"]),
             },
         )
+        await self._insert_assignment_audit(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            vendedor_id=candidate["usuario_id"],
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            trigger="auto_assign",
+            metadata={"source": "round_robin"},
+        )
         return candidate["usuario_id"]
+
+    async def insert_sales_assignment_audit(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID | None,
+        vendedor_id: UUID,
+        conversation_id: str | None,
+        contact_id: str | None,
+        trigger: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        await self._insert_assignment_audit(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            vendedor_id=vendedor_id,
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            trigger=trigger,
+            metadata=metadata,
+        )
+
+    async def _insert_assignment_audit(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID | None,
+        vendedor_id: UUID,
+        conversation_id: str | None,
+        contact_id: str | None,
+        trigger: str,
+        metadata: dict[str, Any] | None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "vendedor_usuario_id": str(vendedor_id),
+            "trigger_event": trigger,
+            "metadata": metadata or {},
+        }
+        if oportunidad_id:
+            payload["oportunidad_id"] = str(oportunidad_id)
+        if conversation_id:
+            payload["conversacion_id"] = str(conversation_id)
+        if contact_id:
+            payload["contacto_id"] = str(contact_id)
+        await self._request(
+            "POST",
+            "/rest/v1/asignaciones_vendedores_whatsapp",
+            json=payload,
+            prefer="return=minimal",
+        )
 
     async def get_contact_opportunity(
         self,

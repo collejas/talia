@@ -489,14 +489,26 @@ async def _notify_sales_rep(
             oportunidad_id=opp_uuid,
             payload={"metadata": metadata},
         )
-    except CRMRepositoryError as exc:
+
+        seller_id_value = assigned.get("id")
+        if seller_id_value:
+            seller_uuid = UUID(str(seller_id_value))
+            await repo.insert_sales_assignment_audit(
+                organizacion_id=org_uuid,
+                oportunidad_id=opp_uuid,
+                vendedor_id=seller_uuid,
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                trigger=f"notify_{trigger}",
+                metadata={"reason": extra or {}},
+            )
+    except (ValueError, CRMRepositoryError) as exc:
         logger.warning(
             "whatsapp.notify_sales.metadata_failed",
             extra={
                 "conversation_id": context.conversation_id,
                 "trigger": trigger,
-                "error": str(exc),
-            },
+                "error": str(exc)},
         )
         return
 
