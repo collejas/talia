@@ -21,6 +21,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 ## 3. Persistencia y auditoría de asignaciones
 - [x] (Opcional) Crear tabla `asignaciones_ventas` con `conversation_id`, `oportunidad_id`, `usuario_id`, `asignado_en`.
 - [x] Registrar cada asignación (aunque se repita el mismo vendedor) para auditoría y métricas.
+- [x] Crear la vista `v_asignaciones_vendedores_whatsapp` para combinar conversación, contacto y vendedor.
 
 ## 4. Notificación cuando el bot completa calificación
 - [x] Identificar el hook exacto:
@@ -73,3 +74,8 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 - [ ] Desplegar backend + workers.
 - [ ] Configurar alertas (ej. si falla `get_next_sales_rep` o no hay vendedores disponibles).
 - [ ] Monitorear dashboards para asegurar distribución equitativa y tiempos de respuesta.
+
+## 11. Panel y reportes
+- [x] Crear endpoint `/crm/whatsapp/asignaciones` que consuma la vista y respete `X-Organizacion-Id`.
+- [x] Mostrar el historial de asignaciones en el panel (`/crm/whatsapp/asignaciones`) con tabla y manejo de errores.
+- [ ] Agregar filtros/búsqueda en la vista (por vendedor, fecha, trigger) o exportación CSV.

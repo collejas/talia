@@ -1047,7 +1047,7 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 current_assignee=assignee_uuid,
                 conversation_id=conversation_id,
-                contact_id=str(contact_id),
+                contact_id=str(contacto_id),
             )
             return result_id
 
@@ -1077,7 +1077,7 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 current_assignee=assignee_uuid,
                 conversation_id=conversation_id,
-                contact_id=str(contact_id),
+                contact_id=str(contacto_id),
             )
             return result_id
 
@@ -1109,7 +1109,7 @@ class CRMRepository:
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
                 conversation_id=conversation_id,
-                contact_id=str(contact_id),
+                contact_id=str(contacto_id),
             )
             return opportunity_id
         if isinstance(data, dict) and data:
@@ -1118,7 +1118,7 @@ class CRMRepository:
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
                 conversation_id=conversation_id,
-                contact_id=str(contact_id),
+                contact_id=str(contacto_id),
             )
             return opportunity_id
         raise CRMRepositoryError("Respuesta inesperada al crear oportunidad")
@@ -3219,6 +3219,32 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en conversaciones: {data!r}")
+        return data
+
+    async def list_whatsapp_sales_assignments(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+        order: Literal["creado_en.desc", "creado_en.asc"] = "creado_en.desc",
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": str(limit),
+            "offset": str(offset),
+            "order": order,
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/v_asignaciones_vendedores_whatsapp",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar asignaciones WhatsApp: {data!r}"
+            )
         return data
 
     async def list_agenda_bookings(

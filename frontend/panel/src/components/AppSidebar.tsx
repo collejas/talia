@@ -70,6 +70,7 @@ const NAVIGATION = {
         { title: "Campañas", url: "/crm/campanas" },
         { title: "Leads", url: "/crm/leads" },
         { title: "Notas", url: "/crm/notas" },
+        { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones" },
       ],
     },
     {

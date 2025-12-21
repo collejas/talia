@@ -138,6 +138,38 @@ class CRMAccountsResponse(BaseModel):
     offset: int
 
 
+class WhatsAppSalesAssignment(BaseModel):
+    """Registro auditado de asignaciones de vendedores en WhatsApp."""
+
+    id: UUID
+    creado_en: str
+    organizacion_id: UUID
+    organizacion_nombre: str | None = None
+    conversacion_id: str | None = None
+    conversacion_canal: str | None = None
+    oportunidad_id: UUID | None = None
+    oportunidad_titulo: str | None = None
+    contacto_id: UUID | None = None
+    contacto_nombre: str | None = None
+    contacto_empresa: str | None = None
+    contacto_telefono: str | None = None
+    contacto_correo: str | None = None
+    vendedor_usuario_id: UUID
+    vendedor_nombre: str | None = None
+    vendedor_correo: str | None = None
+    vendedor_telefono: str | None = None
+    trigger_event: str
+    metadata: dict[str, Any] | None = None
+
+
+class WhatsAppSalesAssignmentsResponse(BaseModel):
+    """Respuesta paginada para la vista de asignaciones WhatsApp."""
+
+    items: list[WhatsAppSalesAssignment]
+    limit: int
+    offset: int
+
+
 class ClienteOnboardingEstado(str, Enum):
     PENDIENTE = "pendiente"
     EN_PROGRESO = "en_progreso"
@@ -8747,6 +8779,29 @@ async def list_audit_logs(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMAuditLog.model_validate(row) for row in rows]
+
+
+@router.get(
+    "/whatsapp/asignaciones",
+    response_model=WhatsAppSalesAssignmentsResponse,
+)
+async def list_whatsapp_sales_assignments(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> WhatsAppSalesAssignmentsResponse:
+    try:
+        rows = await repo.list_whatsapp_sales_assignments(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    items = [WhatsAppSalesAssignment.model_validate(row) for row in rows]
+    return WhatsAppSalesAssignmentsResponse(items=items, limit=limit, offset=offset)
 
 
 @router.get("/pipeline/overview", response_model=CRMPipelineOverview)
