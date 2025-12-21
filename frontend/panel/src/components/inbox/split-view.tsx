@@ -1087,6 +1087,8 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 const displayTime = thread.previewAt || thread.ultimoMensajeEn || thread.iniciadoEn || null;
                 const unread = thread.noLeidos > 0;
                 const formattedTime = formatShortTimeLabel(displayTime, isHydrated);
+                const restartSequence = Math.max(1, thread.restartSequence ?? 1);
+                const isRestart = restartSequence > 1;
                 return (
                   <li key={thread.id}>
                     <button
@@ -1097,6 +1099,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{thread.contactoNombre}</span>
+                          {isRestart ? (
+                            <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
+                              {`Reinicio #${restartSequence}`}
+                            </Badge>
+                          ) : null}
                           {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
                         </div>
                         <span className="text-xs text-muted-foreground">{formattedTime}</span>
@@ -1136,6 +1143,11 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
             <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
               <div className="space-y-1">
                 <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
+                {selectedThread.restartSequence > 1 ? (
+                  <Badge variant="secondary" className="text-[11px] uppercase">
+                    {`Conversación reiniciada (ciclo #${selectedThread.restartSequence})`}
+                  </Badge>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Badge variant="outline" className="uppercase">{selectedThread.canal}</Badge>
                   {selectedThread.contactoCorreo ? <span>{selectedThread.contactoCorreo}</span> : null}

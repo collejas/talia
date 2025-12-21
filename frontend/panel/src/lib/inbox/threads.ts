@@ -24,6 +24,11 @@ export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       preview: row.last_message_preview ?? "",
       previewAt: row.last_message_at,
       messages,
+      opportunityId: row.oportunidad_id ?? null,
+      parentOpportunityId: row.parent_opportunity_id ?? null,
+      restartSequence: row.restart_sequence ?? 1,
+      conversationHistory: row.conversation_history?.filter((id): id is string => Boolean(id && id.length)) ??
+        (row.conversacion_id ? [row.conversacion_id] : []),
     };
   });
 }

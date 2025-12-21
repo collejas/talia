@@ -3432,6 +3432,10 @@ class CRMInboxThread(BaseModel):
     asignado_nombre: str | None = None
     tags: list[str] | None = None
     manual_override: bool | None = None
+    oportunidad_id: UUID | None = None
+    parent_opportunity_id: UUID | None = None
+    restart_sequence: int | None = None
+    conversation_history: list[str] | None = None
     last_message_preview: str | None = None
     last_message_at: datetime | None = None
     messages: list[dict[str, Any]] | None = None

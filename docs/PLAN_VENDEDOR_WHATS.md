@@ -104,7 +104,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
   - { } Actualizar el prompt para indicar que, si ya existe una oportunidad activa y no hay cambio de tema, debe seguir usando la misma.
 
 - { } Inbox y panel
-  - { } Mostrar visualmente las “continuaciones” en Inbox (badge con link a la oportunidad previa) y numerar los reinicios.
+  - {x} Mostrar visualmente las “continuaciones” en Inbox (badge con link a la oportunidad previa) y numerar los reinicios.
   - { } Permitir filtrar oportunidades por contacto para ver cada ciclo consecutivo.
   - { } Alimentar dashboards/informes con conteos de “oportunidades por contacto” y el valor generado por cada reinicio.
 

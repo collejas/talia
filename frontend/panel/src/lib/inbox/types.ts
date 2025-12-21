@@ -27,6 +27,10 @@ export type InboxThreadRow = {
   asignado_nombre: string | null;
   tags: string[] | null;
   manual_override: boolean | null;
+  oportunidad_id: string | null;
+  parent_opportunity_id: string | null;
+  restart_sequence: number | null;
+  conversation_history: string[] | null;
   last_message_preview: string | null;
   last_message_at: string | null;
   messages: unknown;
@@ -85,6 +89,10 @@ export type InboxThread = {
   previewAt: string | null;
   messages: InboxMessage[];
   manualMode: boolean;
+  opportunityId: string | null;
+  parentOpportunityId: string | null;
+  restartSequence: number;
+  conversationHistory: string[];
 };
 
 export type InboxPayload = {
