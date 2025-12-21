@@ -1,6 +1,6 @@
 """Endpoints del canal WhatsApp (Twilio)."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from starlette.datastructures import FormData
 
 from . import schemas, service
@@ -11,11 +11,12 @@ router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
 @router.post("/webhook", summary="Webhook de recepción WhatsApp")
 async def whatsapp_webhook(
+    background_tasks: BackgroundTasks,
     form_data: FormData = Depends(verify_twilio_signature),
 ) -> dict[str, str]:
     """Procesa mensajes entrantes desde Twilio."""
     payload = schemas.WhatsAppIncomingMessage.from_form_data(form_data)
-    await service.handle_incoming_message(payload)
+    background_tasks.add_task(service.handle_incoming_message, payload, "webhook")
     return {"status": "accepted"}
 
 
@@ -31,9 +32,10 @@ async def whatsapp_status_callback(
 
 @router.post("/fallback", summary="Webhook de contingencia WhatsApp")
 async def whatsapp_fallback_webhook(
+    background_tasks: BackgroundTasks,
     form_data: FormData = Depends(verify_twilio_signature),
 ) -> dict[str, str]:
     """Se invoca cuando Twilio marca error en el webhook principal; se vuelve a procesar el mensaje."""
     payload = schemas.WhatsAppIncomingMessage.from_form_data(form_data)
-    await service.handle_incoming_message(payload)
+    background_tasks.add_task(service.handle_incoming_message, payload, "fallback")
     return {"status": "fallback-accepted"}

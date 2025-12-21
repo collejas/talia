@@ -169,6 +169,17 @@ async def register_whatsapp_message(
     return result
 
 
+async def fetch_message_by_twilio_sid(message_sid: str | None) -> dict[str, Any] | None:
+    """Recupera un mensaje existente usando el SID de Twilio."""
+    if not message_sid:
+        return None
+    repo = CRMRepository()
+    try:
+        return await repo.get_message_by_twilio_sid(message_sid=message_sid)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
 async def fetch_conversation(conversation_id: str) -> dict[str, Any]:
     """Recupera metadatos de una conversación incluyendo control manual."""
     repo = CRMRepository()

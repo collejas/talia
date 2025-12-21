@@ -1300,6 +1300,29 @@ class CRMRepository:
             "openai_conversation_id": row.get("conversacion_openai_id"),
         }
 
+    async def get_message_by_twilio_sid(self, *, message_sid: str) -> dict[str, Any] | None:
+        """Obtiene el mensaje guardado con un SID de Twilio específico."""
+        sid = str(message_sid or "").strip()
+        if not sid:
+            return None
+        params = {
+            "twilio_message_sid": f"eq.{sid}",
+            "select": "id,direccion,twilio_message_sid,creado_en",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/mensajes", params=params)
+        data = resp.json() or []
+        row: Any
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            return None
+        if isinstance(row, dict):
+            return row
+        return None
+
     async def get_conversation_with_controls(self, *, conversation_id: str) -> dict[str, Any]:
         conversation_key = conversation_id.strip()
         if not conversation_key:

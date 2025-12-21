@@ -55,8 +55,36 @@ class TwilioSendResult:
     error: str | None = None
 
 
-async def handle_incoming_message(message: schemas.WhatsAppIncomingMessage) -> None:
+async def handle_incoming_message(
+    message: schemas.WhatsAppIncomingMessage,
+    source: str = "webhook",
+) -> None:
     """Procesa un mensaje entrante desde Twilio y delega la respuesta a OpenAI."""
+    log_event(
+        logger,
+        "whatsapp.incoming_message_received",
+        message_sid=message.message_sid,
+        source=source,
+    )
+
+    if message.message_sid:
+        try:
+            existing_message = await storage.fetch_message_by_twilio_sid(message.message_sid)
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fetch_message_by_sid_failed",
+                extra={"message_sid": message.message_sid, "error": str(exc)},
+            )
+        else:
+            if existing_message and (existing_message.get("direccion") == "entrante"):
+                log_event(
+                    logger,
+                    "whatsapp.duplicate_incoming_ignored",
+                    message_sid=message.message_sid,
+                    source=source,
+                )
+                return
+
     normalized_from = _normalize_phone_number(message.from_number)
     recipient_number = _normalize_phone_number(message.to_number)
     organizacion_hint = resolve_whatsapp_organizacion(to_number=recipient_number)

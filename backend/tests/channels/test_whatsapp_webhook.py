@@ -12,8 +12,9 @@ async def test_whatsapp_webhook_accepts_payload(monkeypatch, async_client: Async
     """El endpoint debe delegar al servicio con el formulario parseado."""
     called: dict[str, object] = {}
 
-    async def fake_handler(message):
+    async def fake_handler(message, source="webhook"):
         called["payload"] = message
+        called["source"] = source
 
     monkeypatch.setattr(service, "handle_incoming_message", fake_handler)
     monkeypatch.setattr(settings, "twilio_validate_signatures", False)
@@ -30,6 +31,7 @@ async def test_whatsapp_webhook_accepts_payload(monkeypatch, async_client: Async
     assert response.status_code == 200
     assert called["payload"].body == "hola"
     assert response.json()["status"] == "accepted"
+    assert called["source"] == "webhook"
 
 
 @pytest.mark.asyncio
@@ -60,8 +62,9 @@ async def test_whatsapp_fallback_webhook(monkeypatch, async_client: AsyncClient)
     """El fallback debe reutilizar el mismo handler para reprocesar mensajes."""
     recorded: dict[str, object] = {}
 
-    async def fake_handler(message):
+    async def fake_handler(message, source="webhook"):
         recorded["payload"] = message
+        recorded["source"] = source
 
     monkeypatch.setattr(service, "handle_incoming_message", fake_handler)
     monkeypatch.setattr(settings, "twilio_validate_signatures", False)
@@ -78,3 +81,4 @@ async def test_whatsapp_fallback_webhook(monkeypatch, async_client: AsyncClient)
     assert response.status_code == 200
     assert response.json()["status"] == "fallback-accepted"
     assert recorded["payload"].body == "reintento"
+    assert recorded["source"] == "fallback"
