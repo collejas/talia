@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -52,6 +53,53 @@ async def run_followups(*, now: datetime | None = None, limit: int | None = None
                 "whatsapp.followup.unexpected_error",
                 extra={"conversation_id": conversation.get("id"), "error": str(exc)},
             )
+
+
+class WhatsAppFollowupRunner:
+    """Ejecuta run_followups en intervalos definidos."""
+
+    def __init__(self, *, interval_minutes: int = 5) -> None:
+        self._interval = max(1, interval_minutes)
+        self._task: asyncio.Task[None] | None = None
+        self._stop_event = asyncio.Event()
+        self._enabled = True
+
+    async def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        if not settings.supabase_url or not settings.supabase_service_role:
+            self._enabled = False
+            logger.warning("whatsapp.followup.disabled", extra={"reason": "supabase_config_missing"})
+            return
+        self._enabled = True
+        self._stop_event.clear()
+        self._task = asyncio.create_task(self._run_loop(), name="whatsapp-followups")
+        logger.info("whatsapp.followup.started")
+
+    async def shutdown(self) -> None:
+        if not self._task:
+            return
+        self._stop_event.set()
+        try:
+            await self._task
+        finally:
+            self._task = None
+        logger.info("whatsapp.followup.stopped")
+
+    async def _run_loop(self) -> None:
+        interval_seconds = self._interval * 60
+        while not self._stop_event.is_set():
+            try:
+                await run_followups()
+            except Exception as exc:  # pragma: no cover
+                logger.exception("whatsapp.followup.loop_error", extra={"error": str(exc)})
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=interval_seconds)
+            except asyncio.TimeoutError:
+                continue
+
+
+followup_runner = WhatsAppFollowupRunner()
 
 
 async def _process_conversation(
