@@ -1420,6 +1420,30 @@ class CRMRepository:
             return row
         return None
 
+    async def list_whatsapp_conversations_for_followup(
+        self,
+        *,
+        inactive_since: datetime,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Lista conversaciones WhatsApp que superaron el umbral de inactividad."""
+        cutoff = inactive_since.astimezone(timezone.utc).isoformat()
+        params = {
+            "select": (
+                "id,contacto_id,organizacion_id,estado,ultimo_saliente_en,ultimo_entrante_en,"
+                "conversaciones_controles(manual_override)"
+            ),
+            "canal": "eq.whatsapp",
+            "ultimo_saliente_en": f"lte.{cutoff}",
+            "order": "ultimo_saliente_en.asc",
+            "limit": str(max(1, limit)),
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            return []
+        return data  # type: ignore[return-value]
+
     async def get_conversation_with_controls(self, *, conversation_id: str) -> dict[str, Any]:
         conversation_key = conversation_id.strip()
         if not conversation_key:

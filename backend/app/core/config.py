@@ -260,6 +260,24 @@ class Settings(BaseSettings):
         ),
         ge=1,
     )
+    whatsapp_reengage_minutes: int = Field(
+        default=30,
+        description="Minutos sin respuesta del prospecto antes de que el bot envíe un mensaje de reenganche.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_REENGAGE_MINUTES",
+            "TALIA_WHATSAPP_REENGAGE_MINUTES",
+        ),
+        ge=5,
+    )
+    whatsapp_escalate_minutes: int = Field(
+        default=120,
+        description="Minutos sin respuesta tras el reenganche para escalar al vendedor asignado.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_ESCALATE_MINUTES",
+            "TALIA_WHATSAPP_ESCALATE_MINUTES",
+        ),
+        ge=15,
+    )
     whatsapp_prompt_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

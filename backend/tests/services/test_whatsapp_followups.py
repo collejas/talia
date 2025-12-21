@@ -1,0 +1,139 @@
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+import pytest
+
+from app.services import whatsapp_followups
+
+
+class DummyRepo:
+    def __init__(self, conversations, opportunity_metadata=None):
+        self.conversations = conversations
+        self.opportunity_metadata = opportunity_metadata or {}
+        self.updated_payloads = []
+
+    async def list_whatsapp_conversations_for_followup(self, *, inactive_since, limit):
+        self.inactive_since = inactive_since
+        self.limit = limit
+        return self.conversations
+
+    async def get_pipeline_opportunity(self, *, organizacion_id, oportunidad_id):
+        data = {
+            "id": str(oportunidad_id),
+            "organizacion_id": str(organizacion_id),
+            "metadata": self.opportunity_metadata.copy(),
+            "contacto": {
+                "nombre_completo": "Lead Demo",
+                "necesidad_proposito": "Automatizar",
+                "notes": "Demo asap",
+            },
+            "asignado": {
+                "id": str(uuid4()),
+                "telefono_e164": "+521000000001",
+            },
+        }
+        return data
+
+    async def update_opportunity(self, *, organizacion_id, oportunidad_id, payload):
+        self.updated_payloads.append(payload)
+        return payload
+
+
+@pytest.mark.asyncio
+async def test_run_followups_sends_reengage(monkeypatch):
+    now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    convo = {
+        "id": "conv-1",
+        "contacto_id": "contact-1",
+        "organizacion_id": str(uuid4()),
+        "ultimo_saliente_en": (now - timedelta(minutes=40)).isoformat(),
+        "ultimo_entrante_en": (now - timedelta(minutes=120)).isoformat(),
+        "conversaciones_controles": [],
+    }
+    repo = DummyRepo([convo])
+    monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)
+    monkeypatch.setattr(whatsapp_followups.settings, "whatsapp_reengage_minutes", 30)
+    monkeypatch.setattr(whatsapp_followups.settings, "whatsapp_escalate_minutes", 120)
+
+    async def fake_fetch_contact(contact_id):
+        return {
+            "id": contact_id,
+            "organizacion_id": convo["organizacion_id"],
+            "telefono_e164": "+5219998887777",
+        }
+
+    async def fake_ensure_conversation_opportunity(**kwargs):
+        return str(uuid4())
+
+    sent = {}
+
+    async def fake_send_manual_message(*, to_number, body):
+        sent["to"] = to_number
+        sent["body"] = body
+
+    monkeypatch.setattr(whatsapp_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(
+        whatsapp_followups.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity
+    )
+    monkeypatch.setattr(
+        whatsapp_followups.whatsapp_service,
+        "send_manual_message",
+        fake_send_manual_message,
+    )
+    monkeypatch.setattr(whatsapp_followups.whatsapp_tools, "_notify_sales_rep", lambda **_: None)
+
+    await whatsapp_followups.run_followups(now=now)
+
+    assert sent["to"] == "+5219998887777"
+    assert repo.updated_payloads, "Debe actualizar metadata con reengage"
+
+
+@pytest.mark.asyncio
+async def test_run_followups_escalates_after_reengage(monkeypatch):
+    now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    convo = {
+        "id": "conv-2",
+        "contacto_id": "contact-2",
+        "organizacion_id": str(uuid4()),
+        "ultimo_saliente_en": (now - timedelta(hours=3)).isoformat(),
+        "ultimo_entrante_en": None,
+        "conversaciones_controles": [],
+    }
+    repo = DummyRepo(
+        [convo],
+        opportunity_metadata={
+            "whatsapp_followup": {
+                "reengage": {"sent_at": (now - timedelta(hours=2)).isoformat(), "attempts": 1}
+            }
+        },
+    )
+    monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)
+    monkeypatch.setattr(whatsapp_followups.settings, "whatsapp_reengage_minutes", 30)
+    monkeypatch.setattr(whatsapp_followups.settings, "whatsapp_escalate_minutes", 60)
+
+    async def fake_fetch_contact(contact_id):
+        return {
+            "id": contact_id,
+            "organizacion_id": convo["organizacion_id"],
+            "telefono_e164": "+5218887776666",
+        }
+
+    async def fake_ensure_conversation_opportunity(**kwargs):
+        return str(uuid4())
+
+    escalated = {}
+
+    async def fake_notify_sales_rep(**kwargs):
+        escalated["trigger"] = kwargs["trigger"]
+
+    monkeypatch.setattr(whatsapp_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(
+        whatsapp_followups.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity
+    )
+    monkeypatch.setattr(whatsapp_followups.whatsapp_service, "send_manual_message", lambda **_: None)
+    monkeypatch.setattr(whatsapp_followups.whatsapp_tools, "_notify_sales_rep", fake_notify_sales_rep)
+
+    await whatsapp_followups.run_followups(now=now)
+
+    assert escalated["trigger"] == "followup_escalate"
+    assert repo.updated_payloads, "Debe registrar metadata de escalación"
