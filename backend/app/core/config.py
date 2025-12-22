@@ -278,6 +278,14 @@ class Settings(BaseSettings):
         ),
         ge=15,
     )
+    whatsapp_sales_template_sid: str | None = Field(
+        default=None,
+        description="Content SID de la plantilla de WhatsApp para notificar a vendedores.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_SALES_TEMPLATE_SID",
+            "TALIA_WHATSAPP_SALES_TEMPLATE_SID",
+        ),
+    )
     whatsapp_prompt_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

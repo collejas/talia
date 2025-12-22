@@ -252,11 +252,11 @@ Cuando el usuario responda a tu hook:
       }
     },
     "required": [
-      "conversacion_id"
+      "conversacion_id",
+      "reason"
     ],
     "additionalProperties": false
   }
 }
 
 ---
-

@@ -690,9 +690,20 @@ async def _send_whatsapp_reply(
     return TwilioSendResult(sid=getattr(message, "sid", None), status=status, error=None)
 
 
-async def send_manual_message(*, to_number: str, body: str) -> TwilioSendResult:
-    """Expone el envío de mensajes manuales desde el panel."""
-    return await _send_whatsapp_reply(to_number=to_number, body=body)
+async def send_manual_message(
+    *,
+    to_number: str,
+    body: str | None = None,
+    template_sid: str | None = None,
+    template_variables: dict[str, str] | None = None,
+) -> TwilioSendResult:
+    """Expone el envío de mensajes manuales desde el panel o automatizaciones."""
+    return await _send_whatsapp_reply(
+        to_number=to_number,
+        body=body,
+        content_sid=template_sid,
+        content_variables=template_variables,
+    )
 
 
 def _build_openai_input(

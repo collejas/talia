@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from app.assistants.tool_runtime import ToolRuntimeContext
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import send_email, storage
@@ -491,6 +492,7 @@ async def _notify_sales_rep(
     assigned = opportunity.get("asignado") or {}
     seller_id = assigned.get("id")
     seller_phone = assigned.get("telefono_e164") or assigned.get("telefono")
+    seller_name = str(assigned.get("nombre_completo") or "").strip() or "Equipo Tal-IA"
     if not seller_id or not seller_phone:
         logger.warning(
             "whatsapp.notify_sales.no_seller",
@@ -506,11 +508,26 @@ async def _notify_sales_rep(
         email=email,
         extra=extra,
     )
+    template_sid = settings.whatsapp_sales_template_sid
+    template_vars = None
+    if template_sid:
+        template_vars = _build_sales_template_variables(
+            contact=contact_record,
+            resumen=resumen,
+            notes=notes,
+            extra=extra,
+            seller_name=seller_name,
+        )
 
     try:
         from app.channels.whatsapp import service as whatsapp_service
 
-        await whatsapp_service.send_manual_message(to_number=seller_phone, body=message_body)
+        send_result = await whatsapp_service.send_manual_message(
+            to_number=seller_phone,
+            body=None if template_sid else message_body,
+            template_sid=template_sid,
+            template_variables=template_vars,
+        )
     except Exception as exc:  # pragma: no cover
         logger.warning(
             "whatsapp.notify_sales.send_failed",
@@ -518,6 +535,17 @@ async def _notify_sales_rep(
                 "conversation_id": context.conversation_id,
                 "trigger": trigger,
                 "error": str(exc),
+            },
+        )
+        return
+
+    if send_result.error:
+        logger.warning(
+            "whatsapp.notify_sales.send_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "trigger": trigger,
+                "error": send_result.error,
             },
         )
         return
@@ -608,3 +636,28 @@ def _compose_sales_notification_message(
 
     lines.append("Puedes seguir la conversación desde el panel o responder por WhatsApp.")
     return "\n".join(lines)
+
+
+def _build_sales_template_variables(
+    *,
+    contact: dict[str, Any],
+    resumen: str | None,
+    notes: str | None,
+    extra: dict[str, Any] | None,
+    seller_name: str,
+) -> dict[str, str]:
+    """Mapea los valores dinámicos a las variables esperadas por la plantilla."""
+    name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
+    company = str(contact.get("company_name") or "").strip()
+    summary_text = resumen or notes or "Pendiente de detalle"
+    next_action = str((extra or {}).get("siguiente_accion") or "").strip()
+    phone = str(contact.get("telefono_e164") or "").strip()
+
+    return {
+        "1": seller_name,
+        "2": name,
+        "3": company or "Sin empresa",
+        "4": summary_text,
+        "5": next_action or "Contacta y confirma próximos pasos.",
+        "6": phone or "N/D",
+    }

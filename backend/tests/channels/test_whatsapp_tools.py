@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from app.assistants.tool_runtime import ToolRuntimeContext
@@ -32,12 +34,21 @@ class DummySalesRepo:
 async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -> None:
     dummy_repo = DummySalesRepo()
     monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
+    monkeypatch.setattr(tools.settings, "whatsapp_sales_template_sid", "HXexample")
 
     sent: dict[str, str] = {}
 
-    async def fake_send_manual_message(*, to_number: str, body: str) -> None:
+    async def fake_send_manual_message(
+        *,
+        to_number: str,
+        body: str | None = None,
+        template_sid: str | None = None,
+        template_variables: dict | None = None,
+    ) -> None:
         sent["to"] = to_number
         sent["body"] = body
+        sent["template_sid"] = template_sid
+        sent["template_vars"] = template_variables
 
     monkeypatch.setattr(
         "app.channels.whatsapp.service.send_manual_message",
@@ -69,6 +80,10 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     )
 
     assert sent["to"] == "+521234567890"
+    assert sent["template_sid"] == "HXexample"
+    assert sent["template_vars"]["1"] == "Seller Demo"
+    assert sent["template_vars"]["2"] == "Lead Demo"
+    assert sent["template_vars"]["6"] == "+529991112233"
     assert "information_email" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
 
 

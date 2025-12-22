@@ -54,6 +54,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
   - [x] Alerta por inactividad (“El prospecto [Nombre] no respondió en X min…”).
   - [x] Mensaje de reenganche del bot (“¿Seguimos? Tengo ejemplos listos.”).
 - [x] Validar que Twilio permita enviar esos mensajes (evitar plantillas restringidas).
+- [x] Configurar plantilla WhatsApp para notificaciones internas (`WHATSAPP_SALES_TEMPLATE_SID`) y enviar los mensajes 100% vía plantilla aprobada.
 
 ## 8. Configuración y parámetros
 - [x] Exponer en settings/env:

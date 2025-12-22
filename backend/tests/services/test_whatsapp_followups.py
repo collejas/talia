@@ -67,7 +67,7 @@ async def test_run_followups_sends_reengage(monkeypatch):
 
     sent = {}
 
-    async def fake_send_manual_message(*, to_number, body):
+    async def fake_send_manual_message(*, to_number, body=None, template_sid=None, template_variables=None):
         sent["to"] = to_number
         sent["body"] = body
 
