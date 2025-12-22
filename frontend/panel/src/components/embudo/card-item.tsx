@@ -6,6 +6,7 @@ import type { DraggableSyntheticListeners } from "@dnd-kit/core"
 
 import type { EmbudoCard } from "@/lib/embudo/data"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 
 type EmbudoCardItemProps = {
   card: EmbudoCard
@@ -69,6 +70,11 @@ export function EmbudoCardItem({
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1">
             <h4 className="font-semibold leading-tight">{opportunityName}</h4>
+            {card.restartSequence > 1 ? (
+              <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
+                {`Reinicio #${card.restartSequence}`}
+              </Badge>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               Contacto: {contactName}
             </p>

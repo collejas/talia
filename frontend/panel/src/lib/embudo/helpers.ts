@@ -34,6 +34,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
       : typeof metadata.estado === "string"
         ? metadata.estado
         : null;
+  const restartSequence = extractRestartSequence(metadata);
   return {
     oportunidadId,
     contactoId: card.contacto_id ?? "",
@@ -62,6 +63,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     etiquetas: Array.isArray(card.etiquetas) ? card.etiquetas : [],
     metadata,
     autoStage: resolveAutoStage(metadata, etapaCodigo),
+    restartSequence,
   };
 }
 
@@ -100,6 +102,20 @@ function resolveAutoStage(
     channel,
     at,
   };
+}
+
+function extractRestartSequence(metadata: Record<string, unknown>): number {
+  const rawValue = metadata?.restart_sequence;
+  if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+    return rawValue > 0 ? rawValue : 1;
+  }
+  if (typeof rawValue === "string") {
+    const parsed = Number(rawValue);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 1;
 }
 
 export function adaptStage(stage: PipelineBoardStage, metadatos: Record<string, unknown>): EmbudoStage {

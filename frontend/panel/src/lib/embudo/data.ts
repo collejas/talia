@@ -44,6 +44,7 @@ export type EmbudoCard = {
   etiquetas: string[];
   metadata: Record<string, unknown>;
   autoStage: AutoStageInfo | null;
+  restartSequence: number;
 };
 
 export type EmbudoData = {
