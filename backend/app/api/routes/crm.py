@@ -4021,6 +4021,7 @@ async def list_opportunities(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    contacto_id: UUID | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMOpportunitiesResponse:
@@ -4029,6 +4030,7 @@ async def list_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
+            contacto_id=contacto_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

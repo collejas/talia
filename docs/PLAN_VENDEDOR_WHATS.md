@@ -105,7 +105,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 
 - { } Inbox y panel
   - {x} Mostrar visualmente las “continuaciones” en Inbox (badge con link a la oportunidad previa) y numerar los reinicios.
-  - { } Permitir filtrar oportunidades por contacto para ver cada ciclo consecutivo.
+  - {x} Permitir filtrar oportunidades por contacto para ver cada ciclo consecutivo.
   - { } Alimentar dashboards/informes con conteos de “oportunidades por contacto” y el valor generado por cada reinicio.
 
 - { } QA / validación

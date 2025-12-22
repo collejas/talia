@@ -237,13 +237,16 @@ class CRMRepository:
         organizacion_id: UUID,
         limit: int = 50,
         offset: int = 0,
+        contacto_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
-        params = {
+        params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
             "order": "creado_en.desc",
             "limit": str(limit),
             "offset": str(offset),
         }
+        if contacto_id:
+            params["contacto_principal_id"] = f"eq.{contacto_id}"
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         data = resp.json()
         if not isinstance(data, list):
