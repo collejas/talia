@@ -3,13 +3,16 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { SectionCards } from "@/components/section-cards"
 import { SessionRecovery } from "@/components/session-recovery"
 import { LeadsRestartTableClient } from "@/components/leads/restart-table.client"
-import { loadLeadsData } from "@/lib/leads/data"
-import type { RestartKpis } from "@/lib/leads/data"
+import { loadLeadsData, type RestartKpis } from "@/lib/leads/data"
+import { loadSalesRepOptions } from "@/lib/leads/sales-reps"
 
 export const dynamic = "force-dynamic"
 
 export default async function Page() {
-  const leadsData = await loadLeadsData()
+  const [leadsData, salesReps] = await Promise.all([
+    loadLeadsData(),
+    loadSalesRepOptions(),
+  ])
 
   return (
     <AppViewLayout title="Leads">
@@ -41,7 +44,7 @@ export default async function Page() {
           </p>
         </div>
         {leadsData.restartTable.length > 0 ? (
-          <LeadsRestartTableClient data={leadsData.restartTable} />
+          <LeadsRestartTableClient data={leadsData.restartTable} salesReps={salesReps} />
         ) : (
           <p className="text-sm text-slate-500">
             Aún no hay contactos con reinicios registrados en este periodo.

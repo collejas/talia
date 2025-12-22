@@ -1,11 +1,17 @@
 "use client";
 
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { IconCheck, IconLoader2, IconX } from "@tabler/icons-react";
 
 import type { DataTableRow } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { reassignOpportunitySeller } from "@/lib/leads/actions";
+import type { SalesRepOption } from "@/lib/leads/sales-reps";
 
 type RestartCycleDetail = {
   oportunidad_id?: string | null;
@@ -24,6 +30,7 @@ type RestartRowRaw = {
   contacto_telefono?: string | null;
   vendedor_nombre?: string | null;
   vendedor_id?: string | null;
+  oportunidad_id?: string | null;
   monto_total?: number | null;
   monto_ciclo_actual?: number | null;
   monto_ciclos_previos?: number | null;
@@ -36,9 +43,12 @@ type RestartRowRaw = {
 
 type Props = {
   row: DataTableRow;
+  salesReps: SalesRepOption[];
 };
 
-export function LeadRestartDetails({ row }: Props) {
+const UNASSIGNED_VALUE = "__none__";
+
+export function LeadRestartDetails({ row, salesReps }: Props) {
   const raw = (row.raw || {}) as RestartRowRaw;
   const cycles = Array.isArray(raw.ciclos_detalle) ? raw.ciclos_detalle : [];
   const cicloActual = raw.ciclo_actual ?? cycles.length ?? 1;
@@ -53,6 +63,47 @@ export function LeadRestartDetails({ row }: Props) {
   }).length;
   const lastActivityLabel = formatDate(raw.ultimo_reinicio_en ?? raw.primer_ciclo_en);
   const daysSinceLast = daysSince(raw.ultimo_reinicio_en ?? raw.primer_ciclo_en);
+  const [selectedRep, setSelectedRep] = useState<string>(raw.vendedor_id ?? UNASSIGNED_VALUE);
+  const [localSellerName, setLocalSellerName] = useState<string>(raw.vendedor_nombre || "Sin asignar");
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const options = useMemo(() => {
+    return [{ id: UNASSIGNED_VALUE, name: "Sin asignar", phone: null, email: null }, ...salesReps];
+  }, [salesReps]);
+
+  const handleAssigneeChange = useCallback(
+    (value: string) => {
+      if (!raw.oportunidad_id) {
+        setFeedback({ type: "error", message: "No se encontró la oportunidad para reasignar." });
+        return;
+      }
+      setSelectedRep(value);
+      setFeedback(null);
+      startTransition(async () => {
+        const usuarioId = value === UNASSIGNED_VALUE ? null : value;
+        const result = await reassignOpportunitySeller({
+          oportunidadId: raw.oportunidad_id!,
+          usuarioId,
+        });
+        if (!result.ok) {
+          setFeedback({
+            type: "error",
+            message: result.error || "No se pudo actualizar el vendedor.",
+          });
+          return;
+        }
+        const nextName =
+          options.find((option) => option.id === value)?.name || "Sin asignar";
+        setLocalSellerName(nextName);
+        setFeedback({
+          type: "success",
+          message: "Vendedor actualizado correctamente.",
+        });
+      });
+    },
+    [options, raw.oportunidad_id],
+  );
 
   return (
     <div className="space-y-6 py-2">
@@ -68,10 +119,69 @@ export function LeadRestartDetails({ row }: Props) {
         <div className="text-sm text-muted-foreground">
           Vendedor asignado:{" "}
           <span className="font-medium text-slate-900">
-            {raw.vendedor_nombre || "Sin asignar"}
+            {localSellerName}
           </span>
         </div>
       </header>
+
+      <section className="rounded-lg border bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Cambiar vendedor</h3>
+            <p className="text-xs text-muted-foreground">
+              Reasigna la oportunidad al vendedor que dará seguimiento.
+            </p>
+          </div>
+          <div className="min-w-[200px] flex-1">
+            <Label htmlFor="seller-select" className="sr-only">
+              Seleccionar vendedor
+            </Label>
+            <Select
+              value={selectedRep}
+              onValueChange={handleAssigneeChange}
+              disabled={pending || !raw.oportunidad_id}
+            >
+              <SelectTrigger id="seller-select" className="w-full">
+                <SelectValue placeholder="Seleccionar vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-xs">
+          {pending ? (
+            <>
+              <IconLoader2 className="size-3 animate-spin text-slate-500" />
+              <span className="text-muted-foreground">Actualizando vendedor…</span>
+            </>
+          ) : feedback ? (
+            <>
+              {feedback.type === "success" ? (
+                <IconCheck className="size-3 text-green-600" />
+              ) : (
+                <IconX className="size-3 text-red-500" />
+              )}
+              <span
+                className={
+                  feedback.type === "success" ? "text-green-600" : "text-red-600"
+                }
+              >
+                {feedback.message}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">
+              Puedes dejarlo sin asignar si aún no hay un responsable definido.
+            </span>
+          )}
+        </div>
+      </section>
 
       <section className="grid gap-3 sm:grid-cols-2">
         <StatCard label="Monto acumulado" value={formatCurrency(raw.monto_total)} />

@@ -1,11 +1,13 @@
 "use client";
 
 import { DataTable, type DataTableColumnLabels, type DataTableRow } from "@/components/data-table";
+import type { SalesRepOption } from "@/lib/leads/sales-reps";
 
 import { LeadRestartDetails } from "./restart-details";
 
 type Props = {
   data: DataTableRow[];
+  salesReps: SalesRepOption[];
 };
 
 const columnLabels: DataTableColumnLabels = {
@@ -16,13 +18,13 @@ const columnLabels: DataTableColumnLabels = {
   reviewer: "Vendedor",
 };
 
-export function LeadsRestartTableClient({ data }: Props) {
+export function LeadsRestartTableClient({ data, salesReps }: Props) {
   return (
     <DataTable
       data={data}
       storageKey="leads-restarts-table-column-order"
       columnLabels={columnLabels}
-      renderRowDetails={(row) => <LeadRestartDetails row={row} />}
+      renderRowDetails={(row) => <LeadRestartDetails row={row} salesReps={salesReps} />}
     />
   );
 }
