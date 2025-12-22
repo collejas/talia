@@ -25,6 +25,77 @@ def _build_sample_message() -> schemas.WhatsAppIncomingMessage:
 
 
 @pytest.mark.asyncio
+async def test_handle_incoming_message_records_sales_ack(monkeypatch) -> None:
+    """Los acuses del botón de vendedor no deben disparar al asistente."""
+    message = schemas.WhatsAppIncomingMessage(
+        message_sid="SM-ack",
+        from_number="whatsapp:+5215550000000",
+        to_number="whatsapp:+521000000000",
+        body="Aceptar",
+        wa_id="5215550000000",
+        profile_name="Seller",
+        num_media=0,
+        media=[],
+        raw_payload={"ButtonPayload": "Aceptar", "ButtonText": "Aceptar"},
+    )
+
+    class RepoStub:
+        def __init__(self) -> None:
+            self.updated: dict[str, Any] | None = None
+
+        async def find_sales_rep_by_phone(self, *, phone_e164: str | None) -> dict[str, Any] | None:
+            assert phone_e164 == "+5215550000000"
+            return {
+                "usuario_id": UUID("00000000-0000-0000-0000-0000000000aa"),
+                "organizacion_ids": [UUID("00000000-0000-0000-0000-0000000000bb")],
+            }
+
+        async def find_pending_sales_assignment(
+            self,
+            *,
+            vendedor_id: UUID,
+            organizacion_ids: list[UUID] | None = None,
+        ) -> dict[str, Any] | None:
+            assert str(vendedor_id) == "00000000-0000-0000-0000-0000000000aa"
+            assert organizacion_ids is not None
+            return {
+                "id": "00000000-0000-0000-0000-0000000000cc",
+                "metadata": {},
+            }
+
+        async def update_sales_assignment_ack(
+            self,
+            *,
+            assignment_id: UUID,
+            ack_user_id: UUID,
+            ack_time,
+            ack_via: str,
+            metadata: dict[str, Any] | None = None,
+        ) -> None:
+            self.updated = {
+                "assignment_id": assignment_id,
+                "ack_user_id": ack_user_id,
+                "ack_time": ack_time,
+                "ack_via": ack_via,
+                "metadata": metadata,
+            }
+
+    repo = RepoStub()
+    monkeypatch.setattr(service, "CRMRepository", lambda: repo)
+
+    async def fail_register(**_: object):
+        raise AssertionError("register_whatsapp_message no debe invocarse en acuse")
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fail_register)
+
+    await service.handle_incoming_message(message)
+
+    assert repo.updated is not None
+    assert repo.updated["ack_via"] == "whatsapp_quick_reply"
+    assert repo.updated["metadata"]["acknowledgement"]["button_payload"] == "Aceptar"
+
+
+@pytest.mark.asyncio
 async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None:
     """Cuando la conversación está en modo manual no debe invocar al asistente."""
     message = _build_sample_message()

@@ -1482,6 +1482,7 @@ class CRMRepository:
         contact_id: str | None,
         trigger: str,
         metadata: dict[str, Any] | None = None,
+        notification_sid: str | None = None,
     ) -> None:
         await self._insert_assignment_audit(
             organizacion_id=organizacion_id,
@@ -1491,6 +1492,7 @@ class CRMRepository:
             contact_id=contact_id,
             trigger=trigger,
             metadata=metadata,
+            notification_sid=notification_sid,
         )
 
     async def _insert_assignment_audit(
@@ -1503,6 +1505,7 @@ class CRMRepository:
         contact_id: str | None,
         trigger: str,
         metadata: dict[str, Any] | None,
+        notification_sid: str | None = None,
     ) -> None:
         payload: dict[str, Any] = {
             "organizacion_id": str(organizacion_id),
@@ -1516,9 +1519,114 @@ class CRMRepository:
             payload["conversacion_id"] = str(conversation_id)
         if contact_id:
             payload["contacto_id"] = str(contact_id)
+        if notification_sid:
+            payload["notificacion_message_sid"] = notification_sid
         await self._request(
             "POST",
             "/rest/v1/asignaciones_vendedores_whatsapp",
+            json=payload,
+            prefer="return=minimal",
+        )
+
+    async def find_sales_rep_by_phone(self, *, phone_e164: str) -> dict[str, Any] | None:
+        """Localiza a un usuario/empleado usando su número de WhatsApp."""
+        normalized = (phone_e164 or "").strip()
+        if not normalized:
+            return None
+        params = {
+            "telefono_e164": f"eq.{normalized}",
+            "select": "id,nombre_completo,correo",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        try:
+            usuario_id = UUID(str(row.get("id")))
+        except (TypeError, ValueError):
+            return None
+        empleados_params = {
+            "usuario_id": f"eq.{usuario_id}",
+            "es_vendedor": "is.true",
+            "select": "organizacion_id",
+        }
+        resp = await self._request("GET", "/rest/v1/empleados", params=empleados_params)
+        empleados = resp.json() or []
+        organizacion_ids: list[UUID] = []
+        if isinstance(empleados, list):
+            for item in empleados:
+                try:
+                    org_id = UUID(str(item.get("organizacion_id")))
+                except (TypeError, ValueError):
+                    continue
+                organizacion_ids.append(org_id)
+        if not organizacion_ids:
+            return None
+        return {
+            "usuario_id": usuario_id,
+            "nombre": row.get("nombre_completo") or row.get("correo"),
+            "correo": row.get("correo"),
+            "organizacion_ids": organizacion_ids,
+        }
+
+    async def find_pending_sales_assignment(
+        self,
+        *,
+        vendedor_id: UUID,
+        organizacion_ids: Sequence[UUID] | None = None,
+    ) -> dict[str, Any] | None:
+        """Obtiene la última notificación pendiente de acuse para el vendedor."""
+        params: dict[str, Any] = {
+            "vendedor_usuario_id": f"eq.{vendedor_id}",
+            "aceptado_en": "is.null",
+            "trigger_event": "like.notify_%",
+            "order": "creado_en.desc",
+            "limit": "1",
+            "select": "id,organizacion_id,oportunidad_id,contacto_id,conversacion_id,metadata",
+        }
+        if organizacion_ids:
+            org_values = ",".join(f'"{org_id}"' for org_id in organizacion_ids)
+            params["organizacion_id"] = f"in.({org_values})"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/asignaciones_vendedores_whatsapp",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        return row
+
+    async def update_sales_assignment_ack(
+        self,
+        *,
+        assignment_id: UUID,
+        ack_user_id: UUID,
+        ack_time: datetime,
+        ack_via: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Marca el registro de auditoría como aceptado por el vendedor."""
+        params = {
+            "id": f"eq.{assignment_id}",
+            "limit": "1",
+        }
+        payload: dict[str, Any] = {
+            "aceptado_en": ack_time.isoformat(),
+            "aceptado_por_usuario_id": str(ack_user_id),
+            "aceptado_via": ack_via,
+        }
+        if metadata is not None:
+            payload["metadata"] = metadata
+        await self._request(
+            "PATCH",
+            "/rest/v1/asignaciones_vendedores_whatsapp",
+            params=params,
             json=payload,
             prefer="return=minimal",
         )

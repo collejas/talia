@@ -67,6 +67,9 @@ async def handle_incoming_message(
         source=source,
     )
 
+    if await _maybe_handle_sales_acknowledgement(message):
+        return
+
     if message.message_sid:
         try:
             existing_message = await storage.fetch_message_by_twilio_sid(message.message_sid)
@@ -769,6 +772,151 @@ def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     if payload.get("status") == "requires_action":
         logger.warning("whatsapp.tool_call_unhandled", extra={"output": payload.get("output")})
     return None
+
+
+def _ensure_metadata_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _parse_interactive_payload(raw_payload: dict[str, Any]) -> dict[str, Any] | None:
+    data_text = raw_payload.get("InteractiveData") or raw_payload.get("interactivedata")
+    if not data_text:
+        return None
+    try:
+        parsed = json.loads(data_text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict):
+        return parsed
+    return None
+
+
+def _extract_quick_reply_data(raw_payload: dict[str, Any]) -> dict[str, Any] | None:
+    if not raw_payload:
+        return None
+    button_payload = raw_payload.get("ButtonPayload") or raw_payload.get("buttonpayload")
+    button_text = raw_payload.get("ButtonText") or raw_payload.get("buttontext")
+    interactive = _parse_interactive_payload(raw_payload)
+    if not button_payload and interactive:
+        reply_data = interactive.get("button_reply") or {}
+        button_payload = reply_data.get("id") or button_payload
+        button_text = button_text or reply_data.get("title") or reply_data.get("text")
+    if not button_payload and not interactive:
+        return None
+    raw_fields = {
+        "ButtonText": raw_payload.get("ButtonText"),
+        "ButtonPayload": raw_payload.get("ButtonPayload"),
+        "InteractiveData": raw_payload.get("InteractiveData"),
+    }
+    return {
+        "payload": button_payload,
+        "text": button_text or raw_payload.get("Body"),
+        "interactive": interactive,
+        "raw_fields": raw_fields,
+    }
+
+
+async def _maybe_handle_sales_acknowledgement(
+    message: schemas.WhatsAppIncomingMessage,
+) -> bool:
+    """Detecta respuestas de botones del vendedor y marca la asignación como aceptada."""
+    quick_reply = _extract_quick_reply_data(message.raw_payload or {})
+    if not quick_reply:
+        return False
+
+    normalized_from = _normalize_phone_number(message.from_number)
+    if not normalized_from:
+        logger.warning("whatsapp.sales_ack.invalid_from_number")
+        return True
+
+    repo = CRMRepository()
+    try:
+        seller = await repo.find_sales_rep_by_phone(phone_e164=normalized_from)
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.sales_ack.sales_rep_lookup_failed",
+            extra={"error": str(exc)},
+        )
+        return True
+
+    if not seller:
+        logger.info(
+            "whatsapp.sales_ack.sales_rep_missing",
+            extra={"from_number": normalized_from},
+        )
+        return True
+
+    vendedor_id = seller.get("usuario_id")
+    organizacion_ids = seller.get("organizacion_ids") or []
+    try:
+        pending = await repo.find_pending_sales_assignment(
+            vendedor_id=vendedor_id,
+            organizacion_ids=organizacion_ids,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.sales_ack.assignment_lookup_failed",
+            extra={"error": str(exc)},
+        )
+        return True
+
+    if not pending:
+        logger.info(
+            "whatsapp.sales_ack.no_pending_assignment",
+            extra={"seller_id": str(vendedor_id)},
+        )
+        return True
+
+    try:
+        assignment_id = UUID(str(pending.get("id")))
+    except (TypeError, ValueError):
+        logger.warning(
+            "whatsapp.sales_ack.invalid_assignment_id",
+            extra={"assignment_id": pending.get("id")},
+        )
+        return True
+
+    metadata = _ensure_metadata_dict(pending.get("metadata"))
+    metadata["acknowledgement"] = {
+        "type": "whatsapp_quick_reply",
+        "button_text": quick_reply.get("text"),
+        "button_payload": quick_reply.get("payload"),
+        "message_sid": message.message_sid,
+        "raw_fields": quick_reply.get("raw_fields"),
+    }
+    ack_time = datetime.now(timezone.utc)
+    try:
+        await repo.update_sales_assignment_ack(
+            assignment_id=assignment_id,
+            ack_user_id=vendedor_id,
+            ack_time=ack_time,
+            ack_via="whatsapp_quick_reply",
+            metadata=metadata,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.sales_ack.update_failed",
+            extra={"assignment_id": str(assignment_id), "error": str(exc)},
+        )
+        return True
+
+    log_event(
+        logger,
+        "whatsapp.sales_acknowledged",
+        assignment_id=str(assignment_id),
+        vendedor_id=str(vendedor_id),
+        button_payload=str(quick_reply.get("payload") or ""),
+    )
+    return True
 
 
 def _normalize_phone_number(value: str | None) -> str | None:

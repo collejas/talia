@@ -566,6 +566,13 @@ async def _notify_sales_rep(
         seller_id_value = assigned.get("id")
         if seller_id_value:
             seller_uuid = UUID(str(seller_id_value))
+            assignment_metadata: dict[str, Any] = {
+                "reason": extra or {},
+                "notification": {
+                    "trigger": trigger,
+                    "uses_template": bool(template_sid),
+                },
+            }
             await repo.insert_sales_assignment_audit(
                 organizacion_id=org_uuid,
                 oportunidad_id=opp_uuid,
@@ -573,7 +580,8 @@ async def _notify_sales_rep(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 trigger=f"notify_{trigger}",
-                metadata={"reason": extra or {}},
+                metadata=assignment_metadata,
+                notification_sid=send_result.sid,
             )
     except (ValueError, CRMRepositoryError) as exc:
         logger.warning(

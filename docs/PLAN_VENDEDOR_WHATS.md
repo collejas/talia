@@ -23,6 +23,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 - [x] (Opcional) Crear tabla `asignaciones_ventas` con `conversation_id`, `oportunidad_id`, `usuario_id`, `asignado_en`.
 - [x] Registrar cada asignación (aunque se repita el mismo vendedor) para auditoría y métricas.
 - [x] Crear la vista `v_asignaciones_vendedores_whatsapp` para combinar conversación, contacto y vendedor.
+- [x] Registrar el acuse del vendedor (botón “Aceptar”): guardar `notificacion_message_sid`, `aceptado_en`, `aceptado_por_usuario_id` y el canal (`aceptado_via`) para medir el SLA de respuesta.
 
 ## 4. Notificación cuando el bot completa calificación
 - [x] Identificar el hook exacto:
