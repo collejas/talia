@@ -109,6 +109,9 @@ async def execute_tool(
     if func == "close_lead":
         return await _handle_close_lead(arguments, context)
 
+    if func == "restart_conversation_cycle":
+        return await _handle_restart_cycle(arguments, context)
+
     raise ValueError(f"La función '{func}' no está disponible en WhatsApp")
 
 
@@ -338,6 +341,48 @@ async def _handle_close_lead(
         "necesidad_proposito": necesidad,
         "siguiente_accion": siguiente_accion,
         "tarjeta_id": tarjeta_id,
+    }
+
+
+async def _handle_restart_cycle(
+    arguments: dict[str, Any], context: ToolRuntimeContext
+) -> dict[str, Any]:
+    reason = str(arguments.get("reason") or "").strip()
+    ensure_payload = await storage.ensure_conversation_opportunity(
+        conversation_id=context.conversation_id,
+        contact_id=context.contact_id,
+        channel=context.channel or "whatsapp",
+        force_new_opportunity_on_restart=True,
+        include_restart_metadata=True,
+    )
+    restart_created = False
+    restart_sequence = 1
+    oportunidad_id = None
+    if isinstance(ensure_payload, dict):
+        restart_created = bool(ensure_payload.get("restart_created"))
+        restart_sequence = int(ensure_payload.get("restart_sequence") or 1)
+        oportunidad_id = ensure_payload.get("oportunidad_id")
+    else:
+        oportunidad_id = ensure_payload
+
+    if restart_created:
+        resumen_text = reason or f"Nuevo ciclo #{restart_sequence} solicitado por el asistente."
+        await _notify_sales_rep(
+            context=context,
+            trigger="restart_tool",
+            contact=None,
+            opportunity_id=oportunidad_id,
+            resumen=resumen_text,
+            notes="El asistente detectó un cambio de tema y abrió un ciclo nuevo.",
+            email=None,
+            extra={"restart_sequence": restart_sequence},
+        )
+
+    return {
+        "status": "ok",
+        "restart_created": restart_created,
+        "restart_sequence": restart_sequence,
+        "oportunidad_id": oportunidad_id,
     }
 
 

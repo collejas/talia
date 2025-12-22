@@ -1044,7 +1044,7 @@ class CRMRepository:
         contacto_nombre: str | None = None,
         contacto_empresa: str | None = None,
         force_new_opportunity_on_restart: bool = False,
-    ) -> UUID:
+    ) -> tuple[UUID, bool, int]:
         conversation_key = conversation_id.strip()
         if not conversation_key:
             raise CRMRepositoryError("conversation_id_required")
@@ -1108,6 +1108,11 @@ class CRMRepository:
                 else None
             )
             result_id = await _patch_metadata(opportunity_id, metadata)
+            restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
+            await self._set_conversation_restart_sequence(
+                conversation_id=conversation_key,
+                restart_sequence=restart_sequence,
+            )
             await self._assign_sales_rep_if_needed(
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
@@ -1115,7 +1120,7 @@ class CRMRepository:
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
             )
-            return result_id
+            return result_id, False, restart_sequence
 
         # Buscar por contacto principal
         params = {
@@ -1158,9 +1163,15 @@ class CRMRepository:
                     parent_row=row,
                     parent_metadata=metadata,
                     parent_assignee=assignee_uuid,
+                    is_restart=True,
                 )
 
             result_id = await _patch_metadata(opportunity_id, metadata)
+            restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
+            await self._set_conversation_restart_sequence(
+                conversation_id=conversation_key,
+                restart_sequence=restart_sequence,
+            )
             await self._assign_sales_rep_if_needed(
                 oportunidad_id=opportunity_id,
                 organizacion_id=organizacion_id,
@@ -1168,7 +1179,7 @@ class CRMRepository:
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
             )
-            return result_id
+            return result_id, False, restart_sequence
 
         # Crear oportunidad mínima (no había registros previos)
         return await self._create_opportunity_from_contact(
@@ -1179,6 +1190,7 @@ class CRMRepository:
             contacto_nombre=contacto_nombre,
             contacto_empresa=contacto_empresa,
             base_metadata=base_metadata,
+            is_restart=False,
         )
 
     async def _create_opportunity_from_contact(
@@ -1194,7 +1206,8 @@ class CRMRepository:
         parent_row: dict[str, Any] | None = None,
         parent_metadata: dict[str, Any] | None = None,
         parent_assignee: UUID | None = None,
-    ) -> UUID:
+        is_restart: bool = False,
+    ) -> tuple[UUID, bool, int]:
         stage_id_value = parent_row.get("etapa_id") if parent_row else None
         stage_id: UUID | None = None
         if stage_id_value:
@@ -1287,7 +1300,12 @@ class CRMRepository:
                 metadata=audit_metadata,
             )
 
-        return opportunity_id
+        await self._set_conversation_restart_sequence(
+            conversation_id=conversation_id,
+            restart_sequence=restart_sequence,
+        )
+
+        return opportunity_id, bool(parent_row) or is_restart, restart_sequence
 
     async def _set_opportunity_assignee(
         self,
@@ -1425,6 +1443,34 @@ class CRMRepository:
             metadata={"source": "round_robin"},
         )
         return candidate["usuario_id"]
+
+    async def _set_conversation_restart_sequence(
+        self,
+        *,
+        conversation_id: str,
+        restart_sequence: int,
+    ) -> None:
+        conversation_key = (conversation_id or "").strip()
+        if not conversation_key:
+            return
+        params = {
+            "id": f"eq.{conversation_key}",
+            "limit": "1",
+        }
+        payload = {"restart_sequence": max(1, restart_sequence)}
+        try:
+            await self._request(
+                "PATCH",
+                "/rest/v1/conversaciones",
+                params=params,
+                json=payload,
+                prefer="return=minimal",
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "crm.conversation.restart_sequence_update_failed",
+                extra={"conversation_id": conversation_key, "error": str(exc)},
+            )
 
     async def insert_sales_assignment_audit(
         self,

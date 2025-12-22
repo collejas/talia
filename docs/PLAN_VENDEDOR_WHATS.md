@@ -84,26 +84,26 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 ## 12. Plan para reinicios con nueva oportunidad
 **Idea general:** cuando un contacto existente vuelve después de un periodo largo o abre un tema distinto, queremos iniciar un “ciclo” nuevo: se registra otra conversación, se genera una oportunidad fresca conservando el estado de la anterior y se notifica al mismo vendedor (o se reasigna desde el panel). Esto evita mezclar contextos muy antiguos con conversaciones recientes sin perder el historial previo.
 
-- { } Definir criterios de reinicio
-  - { } Alinear `WHATSAPP_INACTIVITY_MINUTES` con el concepto de “nuevo ciclo” (documentar el valor acordado).
-  - { } Definir los eventos manuales que también disparan un reinicio (cerrar conversación en panel, cambio de tema explícito, etc.).
+- {x} Definir criterios de reinicio
+  - {x} `WHATSAPP_INACTIVITY_MINUTES=30` minutos define el reinicio automático; al llegar un mensaje tras ese umbral se crea una oportunidad hija con `force_new_opportunity_on_restart`.
+  - {x} El asistente expone la tool `restart_conversation_cycle` para disparar manualmente un reinicio cuando detecta un cambio de tema antes del SLA.
 
-- { } Backend: oportunidad y conversación
+- {x} Backend: oportunidad y conversación
   - {x} Extender `storage.ensure_conversation_opportunity` y `CRMRepository.ensure_conversation_opportunity` con un flag `force_new_opportunity`.
   - {x} Si se activa el flag (nuevo hilo), crear una oportunidad hija copiando etapa, monto y metadata de la anterior.
   - {x} Mantener `asignado_a_usuario_id` cuando exista; sólo correr round-robin si no hay vendedor previo.
   - {x} Guardar en metadata referencias cruzadas (`parent_opportunity_id`, lista de `conversation_ids`) para trazabilidad.
-  - { } Exponer en el registro de la conversación un indicador (`reengage_sequence` o similar) para que el Inbox muestre “Reinicio #N”.
+  - {x} Exponer en el registro de la conversación un indicador (`restart_sequence`) para que el Inbox muestre “Reinicio #N”.
 
-- { } Notificaciones y auditoría
-  - { } Crear un trigger `restart_conversation` para `_notify_sales_rep`, reutilizando el vendedor previo.
-  - { } Registrar ese trigger en `asignaciones_vendedores_whatsapp` para tener evidencia del nuevo ciclo.
+- {x} Notificaciones y auditoría
+  - {x} Crear un trigger `restart_conversation` para `_notify_sales_rep`, reutilizando el vendedor previo.
+  - {x} Registrar ese trigger en `asignaciones_vendedores_whatsapp` para tener evidencia del nuevo ciclo.
 
-- { } Prompt y tools
-  - { } Añadir una tool (o argumento) que permita al asistente solicitar la creación de una nueva oportunidad cuando detecte un reinicio real.
-  - { } Actualizar el prompt para indicar que, si ya existe una oportunidad activa y no hay cambio de tema, debe seguir usando la misma.
+- {x} Prompt y tools
+  - {x} Añadir una tool (o argumento) que permita al asistente solicitar la creación de una nueva oportunidad cuando detecte un reinicio real.
+  - {x} Actualizar el prompt para indicar que, si ya existe una oportunidad activa y no hay cambio de tema, debe seguir usando la misma.
 
-- { } Inbox y panel
+- {x} Inbox y panel
   - {x} Mostrar visualmente las “continuaciones” en Inbox (badge con link a la oportunidad previa) y numerar los reinicios.
   - {x} Permitir filtrar oportunidades por contacto para ver cada ciclo consecutivo.
   - {x} Alimentar dashboards/informes con conteos de “oportunidades por contacto” y el valor generado por cada reinicio.

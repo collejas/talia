@@ -63,9 +63,13 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
 
     ensure_calls: list[dict[str, Any]] = []
 
-    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object) -> None:
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object):
         ensure_calls.append(kwargs)
-        return None
+        return {
+            "oportunidad_id": "opp-1",
+            "restart_created": False,
+            "restart_sequence": 1,
+        }
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
@@ -84,6 +88,7 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
     assert register_calls and register_calls[0]["webhook_payload"] == message.raw_payload
     assert register_calls[0]["organizacion_id"] == "org-test"
     assert ensure_calls and ensure_calls[0]["force_new_opportunity_on_restart"] is True
+    assert ensure_calls[0]["include_restart_metadata"] is True
 
 
 @pytest.mark.asyncio
@@ -131,9 +136,13 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
 
     ensure_calls: list[dict[str, Any]] = []
 
-    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object) -> None:
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object):
         ensure_calls.append(kwargs)
-        return None
+        return {
+            "oportunidad_id": "opp-1",
+            "restart_created": False,
+            "restart_sequence": 1,
+        }
 
     monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
     monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
@@ -157,6 +166,75 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     assert register_calls[0]["organizacion_id"] == "org-test"
     assert register_calls[1]["organizacion_id"] == "org-test"
     assert ensure_calls and ensure_calls[0]["force_new_opportunity_on_restart"] is True
+    assert ensure_calls[0]["include_restart_metadata"] is True
+
+
+@pytest.mark.asyncio
+async def test_handle_incoming_message_notifies_on_restart(monkeypatch) -> None:
+    """Cuando se crea una oportunidad por reinicio se notifica al vendedor."""
+    message = _build_sample_message()
+
+    monkeypatch.setattr(service.settings, "whatsapp_default_organizacion_id", "org-test")
+    monkeypatch.setattr(service.settings, "whatsapp_phone_org_map", {})
+
+    async def fake_register(**_: object):
+        return {
+            "conversation_id": "conv-1",
+            "contact_id": "contact-1",
+            "openai_conversation_id": None,
+        }
+
+    async def fake_fetch_conversation(conversation_id: str):
+        return {
+            "id": conversation_id,
+            "contact_id": "contact-1",
+            "manual_override": False,
+            "openai_conversation_id": None,
+            "last_response_id": None,
+        }
+
+    async def fake_fetch_contact(contact_id: str):
+        return {"id": contact_id, "organizacion_id": "org-test"}
+
+    async def fake_fetch_contact_identities(contact_id: str):
+        return []
+
+    async def fake_generate(**kwargs):
+        return service.AssistantReply(
+            text="Respuesta",
+            openai_conversation_id="conv-openai",
+            response_id="resp-1",
+        )
+
+    async def fake_send(**kwargs):
+        return service.TwilioSendResult(sid="SM-out", status="sent")
+
+    async def fake_ensure_conversation_opportunity(*_: object, **kwargs: object):
+        return {
+            "oportunidad_id": "opp-99",
+            "restart_created": True,
+            "restart_sequence": 3,
+        }
+
+    notify_calls: dict[str, Any] = {}
+
+    async def fake_notify_sales_rep(**kwargs: object):
+        notify_calls["trigger"] = kwargs.get("trigger")
+        notify_calls["extra"] = kwargs.get("extra")
+
+    monkeypatch.setattr(service.storage, "register_whatsapp_message", fake_register)
+    monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(service.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(service.storage, "fetch_contact_identities", fake_fetch_contact_identities)
+    monkeypatch.setattr(service.storage, "ensure_conversation_opportunity", fake_ensure_conversation_opportunity)
+    monkeypatch.setattr(service, "_generate_assistant_reply", fake_generate)
+    monkeypatch.setattr(service, "_send_whatsapp_reply", fake_send)
+    monkeypatch.setattr(service.whatsapp_tools, "_notify_sales_rep", fake_notify_sales_rep)
+
+    await service.handle_incoming_message(message)
+
+    assert notify_calls["trigger"] == "restart_conversation"
+    assert notify_calls["extra"]["restart_sequence"] == 3
 
 
 @pytest.mark.asyncio

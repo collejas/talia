@@ -1035,7 +1035,8 @@ async def ensure_conversation_opportunity(
     contact_id: str | None,
     channel: str | None = None,
     force_new_opportunity_on_restart: bool = False,
-) -> str:
+    include_restart_metadata: bool = False,
+) -> str | dict[str, Any]:
     """Resuelve o crea una oportunidad CRM asociada a la conversación actual."""
 
     if not contact_id:
@@ -1058,7 +1059,7 @@ async def ensure_conversation_opportunity(
 
     repo = CRMRepository()
     try:
-        oportunidad_id = await repo.ensure_conversation_opportunity(
+        opportunity_id, restart_created, restart_sequence = await repo.ensure_conversation_opportunity(
             organizacion_id=organizacion_uuid,
             contacto_id=contacto_uuid,
             conversation_id=conversation_id,
@@ -1069,7 +1070,13 @@ async def ensure_conversation_opportunity(
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
-    return str(oportunidad_id)
+    if include_restart_metadata:
+        return {
+            "oportunidad_id": str(opportunity_id),
+            "restart_created": restart_created,
+            "restart_sequence": restart_sequence,
+        }
+    return str(opportunity_id)
 
 
 async def ensure_lead_tarjeta(

@@ -133,20 +133,59 @@ async def handle_incoming_message(
         )
         return
 
+    restart_context: dict[str, Any] | None = None
     try:
-        await storage.ensure_conversation_opportunity(
+        ensure_payload = await storage.ensure_conversation_opportunity(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel="whatsapp",
             force_new_opportunity_on_restart=True,
+            include_restart_metadata=True,
         )
     except StorageError as exc:
         logger.warning(
             "whatsapp.ensure_opportunity_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
+    else:
+        if isinstance(ensure_payload, dict):
+            restart_context = ensure_payload
+        else:
+            restart_context = {
+                "oportunidad_id": ensure_payload,
+                "restart_created": False,
+                "restart_sequence": 1,
+            }
 
     contact_record = await _maybe_update_contact_location(contact_id)
+
+    restart_created = bool(restart_context and restart_context.get("restart_created"))
+    if restart_created:
+        restart_sequence = int(restart_context.get("restart_sequence") or 1)
+        opportunity_ref = restart_context.get("oportunidad_id")
+        context = ToolRuntimeContext(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            channel="whatsapp",
+        )
+        resumen_text = f"El contacto retomó la conversación (ciclo #{restart_sequence})."
+        notes_text = message.body or "El contacto reactivó la conversación."
+        try:
+            await whatsapp_tools._notify_sales_rep(
+                context=context,
+                trigger="restart_conversation",
+                contact=contact_record,
+                opportunity_id=opportunity_ref,
+                resumen=resumen_text,
+                notes=notes_text,
+                email=None,
+                extra={"restart_sequence": restart_sequence},
+            )
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.warning(
+                "whatsapp.restart_notify_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
 
     try:
         conversation_meta = await storage.fetch_conversation(conversation_id)
