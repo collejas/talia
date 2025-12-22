@@ -3800,6 +3800,9 @@ class CRMContactRestartStat(BaseModel):
     vendedor_id: UUID | None = None
     vendedor_nombre: str | None = None
     actualizado_en: datetime
+    primer_ciclo_en: datetime | None = None
+    ultimo_reinicio_en: datetime | None = None
+    ciclos_detalle: list[dict[str, Any]] | None = None
 
 
 class CRMPipelineTopSeller(BaseModel):

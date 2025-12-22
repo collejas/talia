@@ -39,6 +39,7 @@ export type LeadsPayload = {
   chart: LeadChartPoint[];
   table: LeadTableRow[];
   totalRows: number;
+  restartTable: LeadTableRow[];
   errors: string[];
 };
 
@@ -49,7 +50,42 @@ type PipelineOverviewResponse = {
   total_rows: number;
 };
 
+type CRMLeadRestartStat = {
+  contacto_id: string;
+  contacto_nombre: string | null;
+  contacto_correo: string | null;
+  contacto_telefono: string | null;
+  total_ciclos: number;
+  ciclo_actual: number;
+  monto_total: number | null;
+  monto_ciclo_actual: number | null;
+  monto_ciclos_previos: number | null;
+  oportunidad_id: string | null;
+  etapa_id: string | null;
+  etapa_nombre: string | null;
+  estado: string | null;
+  vendedor_id: string | null;
+  vendedor_nombre: string | null;
+  actualizado_en: string;
+  primer_ciclo_en: string | null;
+  ultimo_reinicio_en: string | null;
+  ciclos_detalle: LeadRestartCycleDetail[] | null;
+};
+
+type LeadRestartCycleDetail = {
+  oportunidad_id: string | null;
+  restart_sequence: number;
+  monto_estimado: number | null;
+  etapa_id: string | null;
+  estado: string | null;
+  asignado_a_usuario_id: string | null;
+  actualizado_en: string | null;
+  creado_en: string | null;
+};
+
 const DEFAULT_LIMIT = 200;
+const DEFAULT_RESTART_MIN_SEQUENCE = 2;
+const DEFAULT_RESTART_LIMIT = 200;
 const EMPTY_CARDS: LeadCards = {
   total: 0,
   abiertas: 0,
@@ -60,33 +96,54 @@ const EMPTY_CARDS: LeadCards = {
 };
 
 export async function loadLeadsData(): Promise<LeadsPayload> {
-  const response = await callCrmApi<PipelineOverviewResponse>("/crm/pipeline/overview", {
-    searchParams: {
-      limit: String(DEFAULT_LIMIT),
-    },
-  });
+  const [overviewResp, restartResp] = await Promise.all([
+    callCrmApi<PipelineOverviewResponse>("/crm/pipeline/overview", {
+      searchParams: {
+        limit: String(DEFAULT_LIMIT),
+      },
+    }),
+    callCrmApi<CRMLeadRestartStat[]>("/crm/leads/restarts", {
+      searchParams: {
+        min_restart_sequence: String(DEFAULT_RESTART_MIN_SEQUENCE),
+        limit: String(DEFAULT_RESTART_LIMIT),
+      },
+    }),
+  ]);
 
-  if (!response.ok) {
-    return {
-      cards: EMPTY_CARDS,
-      chart: [],
-      table: [],
-      totalRows: 0,
-      errors: [response.error],
-    };
+  const errors: string[] = [];
+
+  let cards = EMPTY_CARDS;
+  let chart: LeadChartPoint[] = [];
+  let table: LeadTableRow[] = [];
+  let totalRows = 0;
+
+  if (!overviewResp.ok) {
+    errors.push(overviewResp.error);
+  } else {
+    cards = normalizeCards(overviewResp.data.cards);
+    chart = Array.isArray(overviewResp.data.chart) ? overviewResp.data.chart : [];
+    table = Array.isArray(overviewResp.data.table) ? overviewResp.data.table : [];
+    totalRows = Number.isFinite(overviewResp.data.total_rows)
+      ? overviewResp.data.total_rows
+      : table.length;
   }
 
-  const cards = normalizeCards(response.data.cards);
-  const chart = Array.isArray(response.data.chart) ? response.data.chart : [];
-  const table = Array.isArray(response.data.table) ? response.data.table : [];
-  const totalRows = Number.isFinite(response.data.total_rows) ? response.data.total_rows : table.length;
+  let restartTable: LeadTableRow[] = [];
+  if (!restartResp.ok) {
+    errors.push(restartResp.error);
+  } else if (!Array.isArray(restartResp.data)) {
+    errors.push("Respuesta inválida del CRM (reinicios).");
+  } else {
+    restartTable = buildRestartTable(restartResp.data);
+  }
 
   return {
     cards,
     chart,
     table,
     totalRows,
-    errors: [],
+    restartTable,
+    errors,
   };
 }
 
@@ -101,4 +158,75 @@ function normalizeCards(payload?: Partial<LeadCards> & { monto_total?: number; t
     montoTotal: payload.montoTotal ?? payload.monto_total ?? 0,
     topVendedor: payload.topVendedor ?? payload.top_vendedor,
   };
+}
+
+function buildRestartTable(stats: CRMLeadRestartStat[]): LeadTableRow[] {
+  return stats.map<LeadTableRow>((stat, index) => ({
+    id: index + 1,
+    header: formatContactName(stat),
+    type: formatStageLabel(stat),
+    status: "restart",
+    target: formatCurrency(stat.monto_total),
+    limit: formatUpdatedAt(stat.actualizado_en),
+    reviewer: formatSellerName(stat),
+    raw: {
+      ...stat,
+      status_meta: {
+        label: formatRestartStatus(stat),
+        variant: "default",
+      },
+    },
+  }));
+}
+
+function formatContactName(stat: CRMLeadRestartStat): string {
+  if (stat.contacto_nombre && stat.contacto_nombre.trim().length) {
+    return stat.contacto_nombre.trim();
+  }
+  return `Contacto ${stat.contacto_id.slice(0, 8)}`;
+}
+
+function formatSellerName(stat: CRMLeadRestartStat): string {
+  if (stat.vendedor_nombre && stat.vendedor_nombre.trim().length) {
+    return stat.vendedor_nombre.trim();
+  }
+  return "Sin vendedor asignado";
+}
+
+function formatRestartStatus(stat: CRMLeadRestartStat): string {
+  const cicloActual = Number(stat.ciclo_actual) || 1;
+  const totalCiclos = Number(stat.total_ciclos) || cicloActual;
+  return `Reinicio #${cicloActual} · ${totalCiclos} ciclos`;
+}
+
+function formatStageLabel(stat: CRMLeadRestartStat): string {
+  if (stat.etapa_nombre && stat.etapa_nombre.trim().length) {
+    return stat.etapa_nombre.trim();
+  }
+  if (stat.estado && stat.estado.trim().length) {
+    return stat.estado.trim();
+  }
+  return "Etapa sin nombre";
+}
+
+function formatUpdatedAt(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "Sin fecha";
+  return date.toLocaleString("es-MX", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function formatCurrency(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 0,
+    }).format(Number(value));
+  } catch {
+    return Number(value).toLocaleString("es-MX");
+  }
 }

@@ -29,11 +29,30 @@ export default async function Page() {
       <div className="px-4 lg:px-6">
         <ChartAreaInteractive data={leadsData.chart} />
       </div>
-      <div className="px-4 lg:px-6">
-        <DataTable
-          data={leadsData.table}
-          storageKey="leads-table-column-order"
-        />
+      <div className="px-4 lg:px-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Contactos con reinicios</h2>
+          <p className="text-sm text-slate-500">
+            Muestra a los contactos que ya van en el ciclo #2 o mayor, el monto acumulado y el vendedor que los atiende.
+          </p>
+        </div>
+        {leadsData.restartTable.length > 0 ? (
+          <DataTable
+            data={leadsData.restartTable}
+            storageKey="leads-restarts-table-column-order"
+            columnLabels={{
+              header: "Contacto",
+              type: "Etapa actual",
+              status: "Reinicio",
+              target: "Monto total",
+              reviewer: "Vendedor",
+            }}
+          />
+        ) : (
+          <p className="text-sm text-slate-500">
+            Aún no hay contactos con reinicios registrados en este periodo.
+          </p>
+        )}
       </div>
     </AppViewLayout>
   )

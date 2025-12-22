@@ -902,3 +902,49 @@ export NEXT_PUBLIC_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
      PATCH /auth/v1/admin/users/{id} para desactivar/reactivar la cuenta real.
   4. Cambiar contraseña directa (opcional): si alguna vez necesitas establecer una contraseña temporal manualmente (sin correo), el
      Admin API permite enviar password en la actualización.
+
+
+
+# drawer Leads
+• Para sacarle provecho al drawer y que “Contactos con reinicios” funcione como un panel de inteligencia, propongo dividir el trabajo
+  en tres ejes:
+
+  1. Datos para el detalle
+      - Cada fila hoy trae raw con los campos del RPC (monto_total, monto_ciclos_previos, oportunidad_id, contacto_id, etc.). Podemos
+        completar ese payload con dos cosas más:
+          1. Historial compacto de reinicios: basta con agregar en la RPC los conversation_ids y restart_sequence para cada oportunidad
+             previa (o mandar una lista en el frontend usando un callCrmApi adicional hacia /crm/oportunidades?contacto_id).
+          2. Línea de tiempo básica: último mensaje, fecha del primer ciclo, fecha del último reinicio. Todo se puede derivar del RPC
+             actual si le sumamos primer_ciclo_en y ultimo_reinicio_en.
+      - Con eso, el frontend no tendría que hacer peticiones extra al abrir el drawer; usaríamos renderRowDetails para mostrar el
+        detalle.
+  2. Diseño del drawer
+      - Reemplazar el formulario “mock” del DataTable por un layout de “ficha” cuando renderRowDetails esté definido.
+      - Para la vista /leads, bastaría con pasar desde la página un renderRowDetails que:
+          - Muestre el vendedor, etapa y estado en un bloque destacado.
+          - Liste los ciclos anteriores (ej. “Ciclo #1 · Demo agendada · $120k · 12/Oct/24”).
+          - Incluya botones/links rápidos: “ver oportunidad en CRM”, “abrir conversación en Inbox”.
+          - Opcional: si queremos métricas vivas, podemos cargar al abrir el drawer un use/fetch a un endpoint como /crm/oportunidades/
+            {id} para mostrar stage history; se hace con un hook useEffect dentro de un componente cliente.
+  3. Pasos concretos
+      - Backend (opcional según cuánta info necesitemos):
+          1. Extender crm_contact_restart_stats para devolver primer_ciclo_en, ultimo_reinicio_en y, si es viable, un arreglo
+             ciclos_previos con oportunidad_id, restart_sequence, monto, etapa, fechas.
+          2. Alternativa: crear un nuevo endpoint /crm/leads/restarts/{contactoId} que devuelva el detalle completo cuando el drawer se
+             abre.
+      - Frontend:
+          1. Crear un componente LeadRestartDetailsDrawer (cliente) que reciba row.raw y renderice la ficha (estadísticas, historiales,
+             CTA). Dentro, si falta información, lanzar un fetch adicional (con useEffect) al endpoint de detalle.
+          2. Pasar ese componente como renderRowDetails al DataTable en /leads. Así el drawer izquierdo sigue genérico para otras
+             vistas, pero en esta página se ve el contenido especializado.
+          3. Ajustar DataTable para ocultar los inputs dummy cuando renderRowDetails existe (usar if (customContent) return
+             customContent;).
+
+  Con esta estructura obtendrías:
+
+  - Lista rápida que muestra ciclo y monto como ahora.
+  - Drawer derecho que, al hacer clic en un contacto, despliega toda la historia de reinicios, montos por ciclo y accesos directos para
+    seguir la oportunidad o la conversación.
+
+  Si te late esta propuesta, el siguiente paso sería decidir si enriquecemos la RPC existente o preferimos un endpoint de detalle bajo
+  demanda; a partir de eso, implementamos el componente para el drawer.
