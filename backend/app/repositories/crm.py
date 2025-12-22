@@ -1015,6 +1015,25 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar eventos de lead: {data!r}")
         return data
 
+    async def contact_restart_stats(
+        self,
+        *,
+        organizacion_id: UUID,
+        min_restart_sequence: int = 2,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_min_restart_sequence": max(1, min_restart_sequence),
+            "p_limit": max(1, min(limit, 500)),
+        }
+        data = await self._rpc("crm_contact_restart_stats", payload)
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(
+            f"Respuesta inesperada al obtener reinicios de contactos: {data!r}"
+        )
+
     async def ensure_conversation_opportunity(
         self,
         *,

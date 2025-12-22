@@ -3783,6 +3783,25 @@ class CRMLeadEventCreate(BaseModel):
     metadata: dict | None = Field(default_factory=dict)
 
 
+class CRMContactRestartStat(BaseModel):
+    contacto_id: UUID
+    contacto_nombre: str | None = None
+    contacto_correo: str | None = None
+    contacto_telefono: str | None = None
+    total_ciclos: int
+    ciclo_actual: int
+    monto_total: float | None = None
+    monto_ciclo_actual: float | None = None
+    monto_ciclos_previos: float | None = None
+    oportunidad_id: UUID | None = None
+    etapa_id: UUID | None = None
+    etapa_nombre: str | None = None
+    estado: str | None = None
+    vendedor_id: UUID | None = None
+    vendedor_nombre: str | None = None
+    actualizado_en: datetime
+
+
 class CRMPipelineTopSeller(BaseModel):
     id: UUID | None = None
     nombre: str | None = None
@@ -8732,6 +8751,25 @@ async def create_lead_event(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMLeadEvent.model_validate(row)
+
+
+@router.get("/leads/restarts", response_model=list[CRMContactRestartStat])
+async def list_lead_restart_stats(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    min_restart_sequence: Annotated[int, Query(ge=1, le=100)] = 2,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMContactRestartStat]:
+    try:
+        rows = await repo.contact_restart_stats(
+            organizacion_id=organizacion_id,
+            min_restart_sequence=min_restart_sequence,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMContactRestartStat.model_validate(row) for row in rows]
 
 
 @router.get("/notas", response_model=list[CRMNote])
