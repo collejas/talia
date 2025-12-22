@@ -40,6 +40,7 @@ export type LeadsPayload = {
   table: LeadTableRow[];
   totalRows: number;
   restartTable: LeadTableRow[];
+  restartKpis: RestartKpis;
   errors: string[];
 };
 
@@ -83,6 +84,12 @@ type LeadRestartCycleDetail = {
   creado_en: string | null;
 };
 
+export type RestartKpis = {
+  reconversionRate: number;
+  avgDaysBetweenCycles: number;
+  avgAmountPerCycle: number;
+};
+
 const DEFAULT_LIMIT = 200;
 const DEFAULT_RESTART_MIN_SEQUENCE = 2;
 const DEFAULT_RESTART_LIMIT = 200;
@@ -116,6 +123,11 @@ export async function loadLeadsData(): Promise<LeadsPayload> {
   let chart: LeadChartPoint[] = [];
   let table: LeadTableRow[] = [];
   let totalRows = 0;
+  let restartKpis: RestartKpis = {
+    reconversionRate: 0,
+    avgDaysBetweenCycles: 0,
+    avgAmountPerCycle: 0,
+  };
 
   if (!overviewResp.ok) {
     errors.push(overviewResp.error);
@@ -135,6 +147,7 @@ export async function loadLeadsData(): Promise<LeadsPayload> {
     errors.push("Respuesta inválida del CRM (reinicios).");
   } else {
     restartTable = buildRestartTable(restartResp.data);
+    restartKpis = calculateRestartKpis(restartResp.data);
   }
 
   return {
@@ -143,6 +156,7 @@ export async function loadLeadsData(): Promise<LeadsPayload> {
     table,
     totalRows,
     restartTable,
+    restartKpis,
     errors,
   };
 }
@@ -229,4 +243,49 @@ function formatCurrency(value: number | null | undefined): string {
   } catch {
     return Number(value).toLocaleString("es-MX");
   }
+}
+
+function calculateRestartKpis(stats: CRMLeadRestartStat[]): RestartKpis {
+  if (!stats.length) {
+    return {
+      reconversionRate: 0,
+      avgDaysBetweenCycles: 0,
+      avgAmountPerCycle: 0,
+    };
+  }
+
+  let totalCycles = 0;
+  let successfulCycles = 0;
+  let totalDaysBetween = 0;
+  let intervalSamples = 0;
+  let totalAmount = 0;
+
+  for (const stat of stats) {
+    const cycles = Array.isArray(stat.ciclos_detalle) ? stat.ciclos_detalle : [];
+    totalCycles += cycles.length || stat.total_ciclos || 0;
+    totalAmount += Number(stat.monto_total ?? 0);
+
+    for (const cycle of cycles) {
+      const estado = cycle.estado?.toLowerCase() ?? "";
+      if (estado.includes("ganado") || estado.includes("demo") || estado.includes("agend")) {
+        successfulCycles += 1;
+      }
+    }
+
+    const sortedCycles = cycles
+      .map((cycle) => new Date(cycle.creado_en ?? cycle.actualizado_en ?? "").getTime())
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < sortedCycles.length; i += 1) {
+      const diffDays = Math.max(0, (sortedCycles[i] - sortedCycles[i - 1]) / (1000 * 60 * 60 * 24));
+      totalDaysBetween += diffDays;
+      intervalSamples += 1;
+    }
+  }
+
+  return {
+    reconversionRate: totalCycles > 0 ? (successfulCycles / totalCycles) * 100 : 0,
+    avgDaysBetweenCycles: intervalSamples > 0 ? totalDaysBetween / intervalSamples : 0,
+    avgAmountPerCycle: totalCycles > 0 ? totalAmount / totalCycles : 0,
+  };
 }
