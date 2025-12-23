@@ -305,8 +305,26 @@ async def _handle_close_lead(
         context.contact_id,
         {"notes": notes, "necesidad_proposito": necesidad},
     )
+    if tarjeta_id and contact and contact.get("organizacion_id"):
+        try:
+            await storage.promote_opportunity_stage(
+                oportunidad_id=str(tarjeta_id),
+                organizacion_id=str(contact["organizacion_id"]),
+                stage_code="precalificado",
+                source="whatsapp_close_lead",
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.close_lead.promote_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "error": str(exc),
+                },
+            )
     try:
-        await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
+        await storage.update_conversation(context.conversation_id, {"estado": "cerrada"})
     except StorageError as exc:
         logger.warning(
             "whatsapp.close_lead.conversation_update_failed",
@@ -482,6 +500,18 @@ async def _notify_sales_rep(
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     notifications = _ensure_dict(metadata.get("sales_notifications"))
+    primary_triggers = {"close_lead", "information_email"}
+    if trigger == "information_email":
+        if any(
+            notifications.get(existing)
+            for existing in primary_triggers
+            if existing != "information_email"
+        ):
+            logger.info(
+                "whatsapp.notify_sales.primary_already_sent",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
     if notifications.get(trigger):
         logger.info(
             "whatsapp.notify_sales.already_sent",

@@ -129,6 +129,15 @@ async def handle_incoming_message(
     contact_id = str(registration.get("contact_id") or "")
     openai_conversation_id = registration.get("openai_conversation_id")
 
+    if conversation_id:
+        try:
+            await storage.update_conversation(conversation_id, {"estado": "abierta"})
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.conversation_reopen_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+
     if not conversation_id or not contact_id:
         logger.error(
             "whatsapp.registration_missing_ids",

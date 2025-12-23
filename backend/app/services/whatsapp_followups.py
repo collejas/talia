@@ -110,6 +110,9 @@ async def _process_conversation(
 ) -> None:
     if _manual_override(conversation):
         return
+    state = str(conversation.get("estado") or "").lower()
+    if state == "cerrada":
+        return
     convo_id = conversation.get("id")
     contact_id = conversation.get("contacto_id")
     if not convo_id or not contact_id:

@@ -206,6 +206,17 @@ async def test_handle_close_lead_triggers_notification(
     monkeypatch.setattr(tools.storage, "update_contact", fake_update_contact)
     monkeypatch.setattr(tools.storage, "update_conversation", fake_update_contact)
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_update_contact)
+    promoted: dict[str, Any] = {}
+
+    async def fake_promote_opportunity_stage(**kwargs: object) -> None:
+        promoted["called"] = True
+        promoted["payload"] = kwargs
+
+    monkeypatch.setattr(
+        tools.storage,
+        "promote_opportunity_stage",
+        fake_promote_opportunity_stage,
+    )
 
     notified: list[str] = []
 
@@ -228,3 +239,5 @@ async def test_handle_close_lead_triggers_notification(
     result = await tools._handle_close_lead(arguments, context)
     assert result["status"] == "ok"
     assert notified == ["close_lead"]
+    assert promoted.get("called") is True
+    assert promoted["payload"]["stage_code"] == "precalificado"
