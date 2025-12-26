@@ -136,17 +136,22 @@ async def try_execute_lead_tool(
         necesidad = _require_argument(arguments, "necesidad_proposito")
         siguiente_accion = str(arguments.get("siguiente_accion") or "").strip() or None
         tarjeta_id: str | None = None
-        try:
-            tarjeta_id = await storage.ensure_conversation_opportunity(
-                conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
-                channel=context.channel,
-            )
-        except StorageError as exc:
-            logger.warning(
-                "lead_tools.ensure_opportunity_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
+        contact_ready = await webchat_followups.ensure_contact_ready_for_assignment(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+        )
+        if contact_ready:
+            try:
+                tarjeta_id = await storage.ensure_conversation_opportunity(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    channel=context.channel,
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.ensure_opportunity_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
         await storage.update_contact(
             context.contact_id,
             {"notes": notes, "necesidad_proposito": necesidad},

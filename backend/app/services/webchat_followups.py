@@ -150,6 +150,26 @@ async def refresh_contact_followup_state(
     return state
 
 
+async def ensure_contact_ready_for_assignment(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    contact: dict[str, Any] | None = None,
+) -> bool:
+    """Verifica y marca que el contacto tiene al menos teléfono o correo."""
+    contact_row = contact or await storage.fetch_contact(contact_id)
+    has_phone = _has_value(contact_row.get("telefono_e164"))
+    has_email = _has_value(contact_row.get("correo"))
+    if not (has_phone or has_email):
+        return False
+    await refresh_contact_followup_state(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        contact=contact_row,
+    )
+    return True
+
+
 async def mark_information_delivered(
     *,
     conversation_id: str,

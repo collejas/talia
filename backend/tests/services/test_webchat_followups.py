@@ -146,3 +146,57 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
     assert contact_store["contacto_datos"].get("webchat_followup")
     state = contact_store["contacto_datos"]["webchat_followup"]["state"]
     assert state.get("stop_reason") == "session_closed"
+
+
+@pytest.mark.asyncio
+async def test_ensure_contact_ready_for_assignment(monkeypatch: pytest.MonkeyPatch) -> None:
+    contact_data = {
+        "contact-free": {
+            "id": "contact-free",
+            "organizacion_id": "org-1",
+            "telefono_e164": "",
+            "correo": "",
+            "contacto_datos": {},
+        },
+        "contact-ready": {
+            "id": "contact-ready",
+            "organizacion_id": "org-1",
+            "telefono_e164": "+5212345678999",
+            "correo": "",
+            "contacto_datos": {},
+        },
+    }
+
+    async def fake_fetch(contact_id: str):
+        record = contact_data.get(contact_id)
+        if not record:
+            raise ValueError("missing contact")
+        return dict(record)
+
+    refresh_calls: list[str] = []
+
+    async def fake_refresh(*, conversation_id: str, contact_id: str, contact: dict | None = None, **__):
+        refresh_calls.append(contact_id)
+        return {"contact_ready_at": "ts"}
+
+    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch)
+    monkeypatch.setattr(
+        webchat_followups,
+        "refresh_contact_followup_state",
+        fake_refresh,
+    )
+
+    ready = await webchat_followups.ensure_contact_ready_for_assignment(
+        conversation_id="conv-1",
+        contact_id="contact-ready",
+    )
+    assert ready is True
+    assert refresh_calls[-1] == "contact-ready"
+
+    prev_len = len(refresh_calls)
+    not_ready = await webchat_followups.ensure_contact_ready_for_assignment(
+        conversation_id="conv-2",
+        contact_id="contact-free",
+    )
+    assert not_ready is False
+    assert len(refresh_calls) == prev_len
