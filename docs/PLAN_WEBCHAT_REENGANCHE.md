@@ -36,7 +36,7 @@ Checklist para replicar el flujo de vendedores y reenganches en el canal webchat
 
 ## 6. Integraciones con el asistente de webchat
 - [ ] Actualizar prompts/tools para priorizar la captura de contacto y marcar explícitamente cuando se obtiene cada dato.
-- [ ] Añadir tool `mark_contact_ready` que permita al asistente disparar manualmente la asignación si detecta un escenario especial.
+- [x] Añadir tool `mark_contact_ready` que permita al asistente disparar manualmente la asignación si detecta un escenario especial.
 - [x] Ajustar tool `close_lead` para que, en webchat, setee la bandera `datos_completos`.
 - [ ] Documentar en `docs/canales/webchat.md` los nuevos eventos y metadata.
 

@@ -184,6 +184,25 @@ async def try_execute_lead_tool(
             "tarjeta_id": tarjeta_id,
         }
 
+    if tool_name == "mark_contact_ready":
+        ready = await webchat_followups.ensure_contact_ready_for_assignment(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+        )
+        if not ready:
+            raise ValueError("No hay teléfono ni correo para marcar contacto listo")
+        _, oportunidad_id = await storage.capture_opportunity_if_ready(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=context.channel or "webchat",
+        )
+        await _refresh_webchat_followup_state(context)
+        return {
+            "status": "ok",
+            "contact_ready": True,
+            "oportunidad_id": oportunidad_id,
+        }
+
     return None
 
 
