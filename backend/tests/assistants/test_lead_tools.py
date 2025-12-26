@@ -44,7 +44,7 @@ async def test_mark_contact_ready_success(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mark_contact_ready_requires_contact(monkeypatch):
-    async def fake_ensure(*, **__):
+    async def fake_ensure(**__):
         return False
 
     monkeypatch.setattr(

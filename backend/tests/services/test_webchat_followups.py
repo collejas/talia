@@ -79,6 +79,13 @@ async def test_run_followups_sends_reengage(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
     monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
     monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+    record_attempts: list[dict] = []
+
+    async def fake_record_reengage_attempt(*, conversation_id: str, contact_id: str, sent_at, message: str | None = None):
+        record_attempts.append(
+            {"conversation_id": conversation_id, "contact_id": contact_id, "message": message}
+        )
+
     monkeypatch.setattr(webchat_followups.storage, "fetch_webchat_session_id", fake_fetch_session)
     monkeypatch.setattr(
         webchat_followups.storage,
@@ -86,6 +93,11 @@ async def test_run_followups_sends_reengage(monkeypatch: pytest.MonkeyPatch) -> 
         fake_register_message,
     )
     monkeypatch.setattr(webchat_followups.settings, "webchat_reengage_minutes", 15)
+    monkeypatch.setattr(
+        webchat_followups,
+        "record_reengage_attempt",
+        fake_record_reengage_attempt,
+    )
 
     await webchat_followups.run_followups(now=now)
 
@@ -93,8 +105,8 @@ async def test_run_followups_sends_reengage(monkeypatch: pytest.MonkeyPatch) -> 
     payload = sent_messages[0]
     assert payload["session_id"] == "session-1"
     assert "correo" in payload["content"]
-    followup_state = contact_store["contacto_datos"]["webchat_followup"]["state"]
-    assert followup_state["reengage"]["attempts"] == 1
+    assert record_attempts, "Debe registrar el intento de reenganche"
+    assert record_attempts[0]["conversation_id"] == "conv-1"
 
 
 @pytest.mark.asyncio
@@ -127,6 +139,11 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
     async def fake_fetch_session(contact_id: str):
         return "session-closed"
 
+    reason_calls: list[str] = []
+
+    async def fake_mark_stop_reason(*, conversation_id: str, contact_id: str, reason: str):
+        reason_calls.append(reason)
+
     monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
     monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
     monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
@@ -140,12 +157,15 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
         fake_register_message,
     )
     monkeypatch.setattr(webchat_followups.settings, "webchat_reengage_minutes", 15)
+    monkeypatch.setattr(
+        webchat_followups,
+        "mark_stop_reason",
+        fake_mark_stop_reason,
+    )
 
     await webchat_followups.run_followups(now=now)
 
-    assert contact_store["contacto_datos"].get("webchat_followup")
-    state = contact_store["contacto_datos"]["webchat_followup"]["state"]
-    assert state.get("stop_reason") == "session_closed"
+    assert "session_closed" in reason_calls
 
 
 @pytest.mark.asyncio

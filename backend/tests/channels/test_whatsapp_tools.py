@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -44,11 +45,12 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         body: str | None = None,
         template_sid: str | None = None,
         template_variables: dict | None = None,
-    ) -> None:
+    ) -> object:
         sent["to"] = to_number
         sent["body"] = body
         sent["template_sid"] = template_sid
         sent["template_vars"] = template_variables
+        return SimpleNamespace(error=False, sid="MSG123")
 
     monkeypatch.setattr(
         "app.channels.whatsapp.service.send_manual_message",
@@ -102,6 +104,7 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     async def fake_send_manual_message(*_, **__):
         nonlocal called
         called = True
+        return SimpleNamespace(error=False, sid="MSG123")
 
     monkeypatch.setattr(
         "app.channels.whatsapp.service.send_manual_message",

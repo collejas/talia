@@ -56,6 +56,13 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - `webchat_message_sent` / `webchat_message_received` → almacenados en `public.mensajes` con `direccion` `entrante/saliente`.
 - `lead_captured` → completar datos en `contactos` y `conversaciones`.
 
+## Seguimiento y reenganches automáticos
+- `contactos.contacto_datos.webchat_followup` guarda el estado de captura/autorización: contiene `state` con `fields` (timestamps `email_captured_at`, `phone_captured_at`, `company_captured_at`, `need_captured_at`), `contact_ready_at`, `datos_completos_at` y `entrega_realizada_at`. La clave `stop_reason` explica por qué se frenó el workflow (ej. `datos_completos`, `entrega`, `session_closed`).  
+- El job `webchat_followups.run_followups` revisa conversaciones `webchat` inactivas, ignora las que tengan `datos_completos_at`/`entrega_realizada_at`, verifica cierres con `webchat_session_closures` y registra en metadata cada intento `webchat_followup.state.reengage` con `attempts`, `sent_at` y `last_message`.  
+- Se documentan eventos de observabilidad como `webchat.followup.reengage_sent`, `webchat.followup.skipped_session_closed`, `webchat.followup.reengage_recorded`, `webchat.followup.state_updated` y `webchat_followup.stop_reason_marked`.  
+- Configuración: `WEBCHAT_REENGAGE_MINUTES` define el SLA de inactividad, `WEBCHAT_REENGAGE_MAX_ATTEMPTS` limita los intentos y `WEBCHAT_REENGAGE_MINUTES` se puede ajustar por tenant en env.  
+- El asistente ofrece tool `mark_contact_ready` y el helper `capture_opportunity_if_ready` para asegurar que la asignación de vendedores solo ocurra después de capturar al menos teléfono o correo. La tool dispara `ensure_contact_ready_for_assignment` y, si se cumplen los datos, llama a `capture_opportunity_if_ready` antes de registrar la oportunidad.  
+
 ## Consideraciones
 - Implementar rate limiting básico por `session_id`/IP.
 - Guardar consentimiento antes de enviar datos personales.

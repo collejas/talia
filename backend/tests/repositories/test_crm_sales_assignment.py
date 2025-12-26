@@ -53,10 +53,15 @@ async def test_assign_sales_rep_if_needed_updates_when_missing(
         json: dict[str, object] | None = None,
         prefer: str | None = None,
     ) -> SimpleNamespace:
-        assert method == "PATCH"
-        assert path == "/rest/v1/oportunidades"
-        assert params is not None and "id" in params
-        assert json == {"asignado_a_usuario_id": str(rep_id)}
+        if path == "/rest/v1/oportunidades":
+            assert method == "PATCH"
+            assert params is not None and "id" in params
+            assert json == {"asignado_a_usuario_id": str(rep_id)}
+        elif path == "/rest/v1/asignaciones_vendedores_whatsapp":
+            assert method == "POST"
+            assert json and json.get("oportunidad_id")
+        else:
+            pytest.fail(f"Unexpected path {path}")
         return SimpleNamespace(status_code=200, json=lambda: [])
 
     monkeypatch.setattr(repo, "assign_next_sales_rep", fake_assign_next_sales_rep)

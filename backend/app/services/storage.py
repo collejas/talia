@@ -1398,13 +1398,13 @@ async def capture_opportunity_if_ready(
                 "error": str(exc),
             },
         )
-            log_event(
-                logger,
-                "capture_opportunity.promote_failed",
-                opportunity_id=oportunidad_id,
-                error=str(exc),
-                **log_context,
-            )
+        log_event(
+            logger,
+            "capture_opportunity.promote_failed",
+            opportunity_id=oportunidad_id,
+            error=str(exc),
+            **log_context,
+        )
         return True, oportunidad_id
 
     log_event(
