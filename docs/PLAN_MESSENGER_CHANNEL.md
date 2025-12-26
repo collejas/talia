@@ -13,6 +13,41 @@ Checklist detallada para replicar en Messenger el flujo que ya opera en WhatsApp
 - [ ] Garantizar que cada mensaje crea o actualiza `identidades_canal` y `conversaciones`, y que `ensure_conversation_opportunity` se llama igual que en WhatsApp, con `channel="messenger"`, `force_new_opportunity_on_restart` cuando se detecta reinicio y metadata que indique `messenger_followup`.  
 - [ ] Confirmar que el contacto ya existe o se crea, y que `contacto_datos.webchat_followup`/similar se inicializa si es necesario (los helpers actuales podrían servir para varios canales).
 
+### Diseño arquitectónico y diagrama
+
+1. **Router/webhook** (`app/channels/messenger/router.py`):
+   - `GET /api/messenger/webhook` valida `X-Hub-Signature` y responde el challenge.
+   - `POST /api/messenger/webhook` itera `entry[].messaging[]`, extrae eventos de tipo `message`, `postback`, `message_echo`, y los pasa al service.
+2. **Service** (`app/channels/messenger/service.py`):
+   - Normaliza `sender.id`, `recipient.id`, `message.mid`, `attachments` y `quick_reply`.
+   - Obtiene el `organizacion_id` usando el `page_id`/`recipient.id` con un resolver tipo `resolve_messenger_organizacion(recipient_id)` (similar a WhatsApp).
+   - Registra el mensaje con un helper `storage.register_messenger_message(...)` que llama a una nueva RPC/tabla o reutiliza `register_webchat_message` con `channel="messenger"`.
+   - Llama a `storage.ensure_conversation_opportunity(..., channel="messenger")` y al loop del asistente (`run_tool_loop`) utilizando `ToolRuntimeContext`.
+   - Manda la respuesta con la Graph API (`POST /<PAGE_ID>/messages`) y registra logs `messenger.reply_sent` / `messenger.reply_failed`.
+
+```
+Facebook Messenger webhook 
+        |
+   FastAPI Router (/api/messenger/webhook)
+        |
+   messenger.service.handle_entry(...)
+        |
+   storage.register_messenger_message (identidades, conversation, attachments)
+        |
+   storage.ensure_conversation_opportunity(channel="messenger")
+        |
+   ToolRuntimeContext + lead_tools + run_tool_loop
+        |
+   POST respuesta a Graph API (<PAGE_ID>/messages)
+        |
+   metadata + logs + followup job (webchat_followups o helper compartido)
+```
+
+3. **Metadata y followups**:
+   - Reutilizar `webchat_followups` para `contacto_datos.webchat_followup` o introducir `messenger_followup` (compartido) con `state.reengage`/`stop_reason`.
+   - Emitir eventos `messenger.followup.reengage_sent`, `messenger.followup.escalated`, `messenger.followup.escalate_pending` para monitoreo.
+
+
 ## 3. Assistant loop y respuesta
 - [ ] Reusar la infraestructura de assistant: `ToolRuntimeContext`, `run_tool_loop`, `assistant_spec` y `lead_tools`.  
 - [ ] Crear utilería similar a `whatsapp/service.py` que arme el prompt, invoque OpenAI y genere el payload de respuesta.  
@@ -38,4 +73,3 @@ Checklist detallada para replicar en Messenger el flujo que ya opera en WhatsApp
 - [ ] Actualizar `docs/canales` con una sección para Messenger que describa endpoints, metadatos, eventos y variables.  
 - [ ] Añadir entradas de log/metricas en `app/core/logging.py` si es necesario.  
 - [ ] Configurar alertas (e.g., en logs/observabilidad) para detectar fallas en el webhook o en la respuesta de Facebook.
-
