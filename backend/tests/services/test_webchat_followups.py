@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import uuid
+from typing import Any
 
 import pytest
 
@@ -11,6 +13,7 @@ class DummyRepo:
         self.closure = closure
         self.requested_limit: int | None = None
         self.requested_cutoff: datetime | None = None
+        self.opportunity_response: dict[str, Any] | None = None
 
     async def list_webchat_conversations_for_followup(self, *, inactive_since, limit):
         self.requested_cutoff = inactive_since
@@ -19,6 +22,14 @@ class DummyRepo:
 
     async def get_latest_webchat_session_closure(self, *, session_id: str):
         return self.closure
+
+    async def get_pipeline_opportunity(
+        self,
+        *,
+        organizacion_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
+    ) -> dict[str, Any] | None:
+        return self.opportunity_response
 
 
 def _build_contact_store(**overrides) -> dict:
@@ -166,6 +177,122 @@ async def test_run_followups_skips_when_session_closed(monkeypatch: pytest.Monke
     await webchat_followups.run_followups(now=now)
 
     assert "session_closed" in reason_calls
+
+
+@pytest.mark.asyncio
+async def test_run_followups_escalates_when_attempts_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    org_id = uuid.uuid4()
+    opp_id = uuid.uuid4()
+    convo = {
+        "id": "conv-1",
+        "contacto_id": "contact-1",
+        "organizacion_id": str(org_id),
+        "estado": "abierta",
+        "ultimo_saliente_en": (now - timedelta(minutes=45)).isoformat(),
+        "ultimo_entrante_en": (now - timedelta(hours=1)).isoformat(),
+        "conversaciones_controles": [],
+    }
+    repo = DummyRepo([convo])
+    repo.opportunity_response = {
+        "id": str(opp_id),
+        "organizacion_id": str(org_id),
+        "contacto": {
+            "nombre_completo": "Lead Demo",
+            "correo": "lead@example.com",
+            "telefono_e164": "+5212345678999",
+            "company_name": "Demo SA",
+            "necesidad_proposito": "Escalation",
+            "notes": "Solicita más info",
+        },
+        "asignado": {
+            "id": str(uuid.uuid4()),
+            "nombre_completo": "Seller",
+            "telefono_e164": "+521000000001",
+        },
+        "metadata": {},
+    }
+    contact_store = _build_contact_store(
+        telefono_e164="+5212345678999",
+        correo="lead@example.com",
+        organizacion_id=str(org_id),
+    )
+    contact_store["notes"] = "Solicita más info"
+    contact_store["contacto_datos"] = {
+        "webchat_followup": {
+            "current_conversation_id": "conv-1",
+            "state": {"reengage": {"attempts": 2}},
+        }
+    }
+
+    async def fake_fetch_contact(contact_id: str):
+        assert contact_id == "contact-1"
+        return _snapshot(contact_store)
+
+    async def fake_update_contact(contact_id: str, patch: dict):
+        if "contacto_datos" in patch:
+            contact_store["contacto_datos"] = dict(patch["contacto_datos"])
+        return _snapshot(contact_store)
+
+    async def fake_ensure_opportunity(*, conversation_id: str, contact_id: str, channel: str | None = None):
+        return str(opp_id)
+
+    notified: list[dict] = []
+
+    async def fake_notify_sales_rep(**kwargs):
+        notified.append(kwargs)
+
+    stop_reasons: list[str] = []
+
+    async def fake_mark_stop_reason(*, conversation_id: str, contact_id: str, reason: str):
+        stop_reasons.append(reason)
+
+    sent_messages: list[dict] = []
+
+    async def fake_register_webchat_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    record_calls: list[dict] = []
+
+    async def fake_record_reengage_attempt(*, conversation_id: str, contact_id: str, sent_at, message: str | None = None):
+        record_calls.append({"conversation_id": conversation_id, "contact_id": contact_id})
+
+    logged_events: list[str] = []
+
+    def fake_log_event(_logger, event_name: str, **__):
+        logged_events.append(event_name)
+
+    monkeypatch.setattr(webchat_followups, "CRMRepository", lambda: repo)
+    monkeypatch.setattr(webchat_followups.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(webchat_followups.storage, "update_contact", fake_update_contact)
+    monkeypatch.setattr(webchat_followups.storage, "ensure_conversation_opportunity", fake_ensure_opportunity)
+    monkeypatch.setattr(
+        webchat_followups.whatsapp_tools,
+        "_notify_sales_rep",
+        fake_notify_sales_rep,
+    )
+    monkeypatch.setattr(webchat_followups, "mark_stop_reason", fake_mark_stop_reason)
+    monkeypatch.setattr(webchat_followups, "record_reengage_attempt", fake_record_reengage_attempt)
+    monkeypatch.setattr(webchat_followups.storage, "register_webchat_message", fake_register_webchat_message)
+    monkeypatch.setattr(
+        webchat_followups,
+        "log_event",
+        fake_log_event,
+    )
+    monkeypatch.setattr(webchat_followups.settings, "webchat_reengage_minutes", 15)
+    monkeypatch.setattr(webchat_followups.settings, "webchat_reengage_max_attempts", 2)
+
+    await webchat_followups.run_followups(now=now)
+
+    assert notified, "Debe notificar la escalación"
+    assert notified[0]["trigger"] == "webchat_escalate"
+    assert notified[0]["extra"]["attempts"] == 2
+    assert logged_events and "webchat.followup.escalated" in logged_events
+    assert stop_reasons == ["reengage_limit"]
+    assert not sent_messages
+    assert not record_calls
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,10 @@ import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
+from app.assistants.tool_runtime import ToolRuntimeContext
+from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -347,6 +350,152 @@ async def record_reengage_attempt(
     )
 
 
+async def _escalate_due_to_attempt_limit(
+    *,
+    repo: CRMRepository,
+    conversation: dict[str, Any],
+    contact: dict[str, Any],
+    conversation_id: str,
+    contact_id: str,
+    missing_fields: list[str],
+    attempts: int,
+) -> None:
+    try:
+        oportunidad_id = await storage.ensure_conversation_opportunity(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            channel="webchat",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "webchat.followup.escalate.ensure_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return
+
+    if not oportunidad_id:
+        return
+
+    org_id = contact.get("organizacion_id") or conversation.get("organizacion_id")
+    if not org_id:
+        logger.warning(
+            "webchat.followup.escalate.org_missing",
+            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+        )
+        return
+
+    try:
+        org_uuid = UUID(str(org_id))
+        opp_uuid = UUID(str(oportunidad_id))
+    except (TypeError, ValueError):
+        logger.warning(
+            "webchat.followup.escalate.invalid_ids",
+            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+        )
+        return
+
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "webchat.followup.escalate.fetch_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return
+
+    if not opportunity:
+        logger.warning(
+            "webchat.followup.escalate.opportunity_missing",
+            extra={"conversation_id": conversation_id, "contact_id": contact_id},
+        )
+        return
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    notifications = _ensure_dict(metadata.get("sales_notifications"))
+    if notifications.get("webchat_escalate"):
+        log_event(
+            logger,
+            "webchat.followup.escalate_skipped_duplicate",
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+        )
+        return
+
+    assigned = opportunity.get("asignado") or {}
+    seller_id = assigned.get("id")
+    seller_phone = assigned.get("telefono_e164") or assigned.get("telefono")
+    if not seller_id or not seller_phone:
+        logger.warning(
+            "webchat.followup.escalate.no_seller",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "attempts": attempts,
+            },
+        )
+        return
+
+    context = ToolRuntimeContext(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        channel="webchat",
+    )
+    resumen = str(contact.get("necesidad_proposito") or contact.get("notes") or "").strip() or None
+    notes = str(contact.get("notes") or "").strip() or None
+    email = str(contact.get("correo") or "").strip() or None
+
+    try:
+        await whatsapp_tools._notify_sales_rep(
+            context=context,
+            trigger="webchat_escalate",
+            contact=contact,
+            opportunity_id=str(opportunity.get("id")),
+            resumen=resumen,
+            notes=notes,
+            email=email,
+            extra={
+                "reason": "max_reengage_attempts",
+                "attempts": attempts,
+                "missing_fields": missing_fields,
+            },
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.warning(
+            "webchat.followup.escalate_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+        return
+
+    await mark_stop_reason(
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        reason="reengage_limit",
+    )
+    log_event(
+        logger,
+        "webchat.followup.escalated",
+        conversation_id=conversation_id,
+        contact_id=contact_id,
+        attempts=attempts,
+        missing_fields=",".join(missing_fields),
+    )
+
+
 async def run_followups(*, now: datetime | None = None, limit: int | None = None) -> None:
     """Ejecuta el flujo automático de reenganche para canales webchat."""
     reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -432,11 +581,13 @@ async def _process_conversation(
     reengage_meta = _ensure_dict(state.get("reengage"))
     attempts = int(reengage_meta.get("attempts") or 0)
     if attempts >= settings.webchat_reengage_max_attempts:
-        log_event(
-            logger,
-            "webchat.followup.skipped_attempt_limit",
+        await _escalate_due_to_attempt_limit(
+            repo=repo,
+            conversation=conversation,
+            contact=contact,
             conversation_id=conversation_id,
             contact_id=contact_id_str,
+            missing_fields=missing_fields,
             attempts=attempts,
         )
         return

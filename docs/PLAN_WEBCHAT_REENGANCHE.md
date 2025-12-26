@@ -29,10 +29,10 @@ Checklist para replicar el flujo de vendedores y reenganches en el canal webchat
 - [x] Cada mensaje debe enviarse usando el mismo pipeline del canal webchat (no WhatsApp) respetando `session_id` y contexto.
 
 ## 5. Notificación/escalación a vendedor
-- [ ] Cuando un reenganche alcanza el máximo sin respuesta, enviar notificación al vendedor asignado con resumen de la conversación.
-- [ ] Reusar plantillas del CRM (correo, Slack o WhatsApp interno) pero etiquetadas como `webchat`.
-- [ ] Registrar la alerta en `asignaciones_ventas` o una tabla análoga para webchat (`asignaciones_vendedores_webchat` si hace falta).
-- [ ] Evitar alertas si la sesión se cerró o si el prospecto ya tiene datos completos + entrega.
+- [x] Cuando un reenganche alcanza el máximo sin respuesta, enviar notificación al vendedor asignado con resumen de la conversación.
+- [x] Reusar plantillas del CRM (correo, Slack o WhatsApp interno) pero etiquetadas como `webchat`.
+- [x] Registrar la alerta en `asignaciones_ventas` o una tabla análoga para webchat (`asignaciones_vendedores_webchat` si hace falta).
+- [x] Evitar alertas si la sesión se cerró o si el prospecto ya tiene datos completos + entrega.
 
 ## 6. Integraciones con el asistente de webchat
 - [ ] Actualizar prompts/tools para priorizar la captura de contacto y marcar explícitamente cuando se obtiene cada dato.
