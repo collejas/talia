@@ -34,6 +34,7 @@ from app.services import (
     leads_geo,
     send_email,
     storage,
+    webchat_followups,
 )
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
@@ -891,6 +892,17 @@ async def schedule_calendar_booking(
         tarjeta_id=tarjeta_id,
         contact=contact,
     )
+    try:
+        await webchat_followups.mark_information_delivered(
+            conversation_id=conversation_id,
+            contact_id=contact_id,
+            reason="demo_booking",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "webchat.booking.followup_mark_failed",
+            extra={"conversation_id": conversation_id, "contact_id": contact_id, "error": str(exc)},
+        )
     return booking_response
 
 

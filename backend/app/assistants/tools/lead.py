@@ -7,7 +7,7 @@ from typing import Any
 
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.core.logging import get_logger
-from app.services import send_email, storage
+from app.services import send_email, storage, webchat_followups
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
 
@@ -41,6 +41,52 @@ def _require_argument(arguments: dict[str, Any], key: str) -> str:
     return text
 
 
+def _is_webchat_context(context: ToolRuntimeContext) -> bool:
+    channel = (context.channel or "").strip().lower()
+    return not channel or channel == "webchat"
+
+
+async def _refresh_webchat_followup_state(context: ToolRuntimeContext) -> None:
+    if not _is_webchat_context(context):
+        return
+    try:
+        await webchat_followups.refresh_contact_followup_state(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            session_id=context.session_id,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.followup_refresh_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "error": str(exc),
+            },
+        )
+
+
+async def _mark_webchat_delivery(context: ToolRuntimeContext, reason: str) -> None:
+    if not _is_webchat_context(context):
+        return
+    try:
+        await webchat_followups.mark_information_delivered(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            reason=reason,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.followup_delivery_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "reason": reason,
+                "error": str(exc),
+            },
+        )
+
+
 async def try_execute_lead_tool(
     name: str | None,
     arguments: dict[str, Any],
@@ -62,6 +108,7 @@ async def try_execute_lead_tool(
             contact_id=context.contact_id,
             channel=context.channel or "webchat",
         )
+        await _refresh_webchat_followup_state(context)
         return {"status": "ok", "email": email}
 
     if tool_name == "set_phone_number":
@@ -72,11 +119,13 @@ async def try_execute_lead_tool(
             contact_id=context.contact_id,
             channel=context.channel or "webchat",
         )
+        await _refresh_webchat_followup_state(context)
         return {"status": "ok", "phone_number": phone_number}
 
     if tool_name == "set_company_name":
         company_name = _require_argument(arguments, "company_name")
         await storage.update_contact(context.contact_id, {"company_name": company_name})
+        await _refresh_webchat_followup_state(context)
         return {"status": "ok", "company_name": company_name}
 
     if tool_name == "send_information_email":
@@ -121,6 +170,7 @@ async def try_execute_lead_tool(
                 "lead_tools.insights_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
+        await _refresh_webchat_followup_state(context)
         return {
             "status": "ok",
             "notes": notes,
@@ -263,6 +313,7 @@ async def _handle_information_email(
             "lead_tools.insights_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
+    await _mark_webchat_delivery(context, reason="information_email")
 
     return {
         "status": "sent",

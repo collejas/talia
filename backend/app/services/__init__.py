@@ -8,6 +8,7 @@ from .google_places import (
     normalize_place_for_result,
 )
 from .twilio_lookup import TwilioLookupError, lookup_phone_number
+from . import webchat_followups
 
 __all__ = [
     "EmailSendError",
@@ -20,4 +21,5 @@ __all__ = [
     "send_email",
     "lookup_phone_number",
     "TwilioLookupError",
+    "webchat_followups",
 ]

@@ -1318,7 +1318,7 @@ async def capture_opportunity_if_ready(
     conversation_id: str,
     contact_id: str,
     channel: str | None = None,
-) -> bool:
+) -> tuple[bool, str | None]:
     """Crea/promueve la oportunidad cuando el contacto ya tiene al menos un dato válido."""
     capture_channel = channel or "assistant"
     log_context = {
@@ -1340,13 +1340,13 @@ async def capture_opportunity_if_ready(
             error=str(exc),
             **log_context,
         )
-        return False
+        return False, None
 
     correo = str(contact.get("correo") or "").strip()
     telefono = str(contact.get("telefono_e164") or "").strip()
     if not correo and not telefono:
         log_event(logger, "capture_opportunity.skipped_no_contact_data", **log_context)
-        return False
+        return False, None
 
     try:
         oportunidad_id = await ensure_conversation_opportunity(
@@ -1369,7 +1369,7 @@ async def capture_opportunity_if_ready(
             error=str(exc),
             **log_context,
         )
-        return False
+        return False, None
 
     organizacion_id = contact.get("organizacion_id")
     if not organizacion_id:
@@ -1379,7 +1379,7 @@ async def capture_opportunity_if_ready(
             opportunity_id=oportunidad_id,
             **log_context,
         )
-        return True
+        return True, oportunidad_id
 
     try:
         await promote_opportunity_stage(
@@ -1398,14 +1398,14 @@ async def capture_opportunity_if_ready(
                 "error": str(exc),
             },
         )
-        log_event(
-            logger,
-            "capture_opportunity.promote_failed",
-            opportunity_id=oportunidad_id,
-            error=str(exc),
-            **log_context,
-        )
-        return True
+            log_event(
+                logger,
+                "capture_opportunity.promote_failed",
+                opportunity_id=oportunidad_id,
+                error=str(exc),
+                **log_context,
+            )
+        return True, oportunidad_id
 
     log_event(
         logger,
@@ -1414,7 +1414,7 @@ async def capture_opportunity_if_ready(
         stage_code="captado",
         **log_context,
     )
-    return True
+    return True, oportunidad_id
 
 
 async def capture_lead_if_ready(
@@ -1422,7 +1422,7 @@ async def capture_lead_if_ready(
     conversation_id: str,
     contact_id: str,
     channel: str | None = None,
-) -> bool:
+) -> tuple[bool, str | None]:
     """Compatibilidad: delega a capture_opportunity_if_ready."""
 
     return await capture_opportunity_if_ready(

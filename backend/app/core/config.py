@@ -251,6 +251,14 @@ class Settings(BaseSettings):
         default=10,
         description="Minutos que se mantiene bloqueado un horario antes de confirmar la cita.",
     )
+    webchat_reengage_minutes: int = Field(
+        default=30,
+        description="Minutos sin respuesta en webchat antes de que el bot intente reenganchar.",
+    )
+    webchat_reengage_max_attempts: int = Field(
+        default=2,
+        description="Intentos máximos de reenganche automático en conversaciones webchat.",
+    )
     whatsapp_inactivity_minutes: int = Field(
         default=24 * 60,
         description="Minutos de inactividad para abrir una nueva conversación de WhatsApp.",

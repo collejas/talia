@@ -1854,6 +1854,29 @@ class CRMRepository:
             return []
         return data  # type: ignore[return-value]
 
+    async def list_webchat_conversations_for_followup(
+        self,
+        *,
+        inactive_since: datetime,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Lista conversaciones Webchat candidatas para reenganche."""
+        cutoff = inactive_since.astimezone(timezone.utc).isoformat()
+        params = {
+            "select": (
+                "id,contacto_id,organizacion_id,estado,ultimo_saliente_en,ultimo_entrante_en,"
+                "conversaciones_controles(manual_override)"
+            ),
+            "canal": "eq.webchat",
+            "estado": "in.(abierta,pendiente)",
+            "ultimo_saliente_en": f"lte.{cutoff}",
+            "order": "ultimo_saliente_en.asc",
+            "limit": str(max(1, limit)),
+        }
+        resp = await self._request("GET", "/rest/v1/conversaciones", params=params)
+        data = resp.json() or []
+        return data if isinstance(data, list) else []
+
     async def get_conversation_with_controls(self, *, conversation_id: str) -> dict[str, Any]:
         conversation_key = conversation_id.strip()
         if not conversation_key:
@@ -2321,6 +2344,26 @@ class CRMRepository:
             json={"session_id": session_key},
             prefer="resolution=merge-duplicates",
         )
+
+    async def get_latest_webchat_session_closure(self, *, session_id: str) -> dict[str, Any] | None:
+        session_key = session_id.strip()
+        if not session_key:
+            return None
+        params = {
+            "select": "session_id,closed_at,contacto_id,organizacion_id",
+            "session_id": f"eq.{session_key}",
+            "order": "closed_at.desc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/webchat_session_closures", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            return None
+        return row if isinstance(row, dict) else None
 
     async def record_webchat_visit(
         self,
