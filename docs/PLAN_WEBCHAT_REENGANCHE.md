@@ -9,10 +9,10 @@ Checklist para replicar el flujo de vendedores y reenganches en el canal webchat
 - [x] Definir los settings requeridos (`WEBCHAT_ASSIGN_ON_CONTACT`, `WEBCHAT_REENGAGE_MINUTES`, `WEBCHAT_REENGAGE_MAX_ATTEMPTS`, etc.).
 
 ## 2. Asignación condicionada a datos de contacto
-- [ ] Agregar un gate en el webhook/service webchat para evaluar si ya tenemos al menos uno de `telefono` o `correo`.
-- [ ] Hasta que no exista un dato de contacto, no llamar a `ensure_conversation_opportunity` con `force_sales_assignment`.
-- [ ] Cuando se cumpla el requisito, crear/actualizar la conversación y disparar la selección del vendedor (reusar round-robin existente).
-- [ ] Guardar en metadata el momento en que la conversación cumplió “contact-ready” para auditoría.
+- [x] Agregar un gate en el webhook/service webchat para evaluar si ya tenemos al menos uno de `telefono` o `correo`.
+- [x] Hasta que no exista un dato de contacto, no llamar a `ensure_conversation_opportunity` con `force_sales_assignment`.
+- [x] Cuando se cumpla el requisito, crear/actualizar la conversación y disparar la selección del vendedor (reusar round-robin existente).
+- [x] Guardar en metadata el momento en que la conversación cumplió “contact-ready” para auditoría.
 - [ ] Manejar reintentos: si se pierde el vendedor asignado por reinicio manual, volver a evaluarlo con la misma regla.
 
 ## 3. Detección de estados “datos completos”

@@ -80,6 +80,9 @@ REMINDER_MINUTES_MIN = 15
 REMINDER_MINUTES_MAX = 720
 REMINDER_SETTINGS_TTL_SECONDS = 300
 DEMO_STAGE_CODE = "demo"
+CONTACT_ASSIGNMENT_ERROR = (
+    "Necesito al menos un teléfono o correo para conectarte con un vendedor."
+)
 
 
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
@@ -204,6 +207,36 @@ async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]
     if not contact_id:
         raise ValueError("No se encontró el contacto asociado a la conversación.")
     return conversation_meta
+
+
+async def _ensure_opportunity_when_contact_ready(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    channel: str | None = None,
+    contact: dict[str, Any] | None = None,
+) -> str:
+    contact_key = (contact_id or "").strip()
+    if not contact_key:
+        raise ValueError("No se pudo determinar el contacto para asignar a un vendedor.")
+    ready = await webchat_followups.ensure_contact_ready_for_assignment(
+        conversation_id=conversation_id,
+        contact_id=contact_key,
+        contact=contact,
+    )
+    if not ready:
+        log_event(
+            logger,
+            "webchat.assignment.blocked_contact_missing",
+            conversation_id=conversation_id,
+            contact_id=contact_key,
+        )
+        raise ValueError(CONTACT_ASSIGNMENT_ERROR)
+    return await storage.ensure_conversation_opportunity(
+        conversation_id=conversation_id,
+        contact_id=contact_key,
+        channel=channel,
+    )
 
 
 def _build_booking_response(data: dict[str, Any]) -> schemas.CalendarBookingResponse:
@@ -823,10 +856,11 @@ async def schedule_calendar_booking(
     contact: dict[str, Any] | None = await _resolve_contact(contact_id)
     organizacion_id = _extract_contact_org(contact)
     try:
-        tarjeta_id = await storage.ensure_conversation_opportunity(
+        tarjeta_id = await _ensure_opportunity_when_contact_ready(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel=channel_value,
+            contact=contact,
         )
     except storage.StorageError as exc:
         logger.exception(
@@ -2515,7 +2549,7 @@ async def _execute_function_call(
         notes = (arguments.get("notes") or "").strip() or None
 
         try:
-            tarjeta_id = await storage.ensure_conversation_opportunity(
+            tarjeta_id = await _ensure_opportunity_when_contact_ready(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
                 channel="webchat",
