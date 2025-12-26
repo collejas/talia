@@ -496,6 +496,20 @@ async def _escalate_due_to_attempt_limit(
     )
 
 
+def _escalate_delay_reached(
+    reference_time: datetime,
+    reengage_sent_at: datetime | None,
+    last_out: datetime | None,
+) -> bool:
+    delay_minutes = max(0, settings.webchat_escalate_minutes)
+    if delay_minutes <= 0:
+        return True
+    baseline = reengage_sent_at or last_out
+    if not baseline:
+        return True
+    return (reference_time - baseline) >= timedelta(minutes=delay_minutes)
+
+
 async def run_followups(*, now: datetime | None = None, limit: int | None = None) -> None:
     """Ejecuta el flujo automático de reenganche para canales webchat."""
     reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -580,16 +594,26 @@ async def _process_conversation(
 
     reengage_meta = _ensure_dict(state.get("reengage"))
     attempts = int(reengage_meta.get("attempts") or 0)
+    reengage_sent_at = _parse_ts(reengage_meta.get("sent_at"))
     if attempts >= settings.webchat_reengage_max_attempts:
-        await _escalate_due_to_attempt_limit(
-            repo=repo,
-            conversation=conversation,
-            contact=contact,
-            conversation_id=conversation_id,
-            contact_id=contact_id_str,
-            missing_fields=missing_fields,
-            attempts=attempts,
-        )
+        if _escalate_delay_reached(reference_time, reengage_sent_at, last_out):
+            await _escalate_due_to_attempt_limit(
+                repo=repo,
+                conversation=conversation,
+                contact=contact,
+                conversation_id=conversation_id,
+                contact_id=contact_id_str,
+                missing_fields=missing_fields,
+                attempts=attempts,
+            )
+        else:
+            log_event(
+                logger,
+                "webchat.followup.escalate_pending",
+                conversation_id=conversation_id,
+                contact_id=contact_id_str,
+                wait_minutes=max(0, settings.webchat_escalate_minutes),
+            )
         return
 
     session_id = _strip_text(state.get("last_session_id"))

@@ -259,6 +259,11 @@ class Settings(BaseSettings):
         default=2,
         description="Intentos máximos de reenganche automático en conversaciones webchat.",
     )
+    webchat_escalate_minutes: int = Field(
+        default=0,
+        ge=0,
+        description="Minutos de espera adicionales después de los reenganches antes de escalar al vendedor. 0 dispara la escalación inmediata.",
+    )
     whatsapp_inactivity_minutes: int = Field(
         default=24 * 60,
         description="Minutos de inactividad para abrir una nueva conversación de WhatsApp.",
