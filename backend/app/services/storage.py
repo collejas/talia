@@ -69,6 +69,15 @@ def _normalize_manual_override(raw: Any) -> bool:
     return False
 
 
+def _contact_has_minimum_info(contact: dict[str, Any]) -> bool:
+    """Determina si el contacto ya tiene al menos teléfono o correo."""
+    if not contact:
+        return False
+    phone = str(contact.get("telefono_e164") or "").strip()
+    email = str(contact.get("correo") or "").strip()
+    return bool(phone or email)
+
+
 async def register_webchat_message(
     *,
     session_id: str,
@@ -1036,6 +1045,7 @@ async def ensure_conversation_opportunity(
     channel: str | None = None,
     force_new_opportunity_on_restart: bool = False,
     include_restart_metadata: bool = False,
+    require_contact_ready: bool | None = None,
 ) -> str | dict[str, Any]:
     """Resuelve o crea una oportunidad CRM asociada a la conversación actual."""
 
@@ -1057,6 +1067,14 @@ async def ensure_conversation_opportunity(
     except (TypeError, ValueError) as exc:
         raise StorageError("contacto_id_invalido") from exc
 
+    normalized_channel = (channel or "").strip().lower()
+    requires_ready = (
+        bool(require_contact_ready)
+        if require_contact_ready is not None
+        else normalized_channel == "webchat"
+    )
+    contact_ready = _contact_has_minimum_info(contact)
+
     repo = CRMRepository()
     try:
         opportunity_id, restart_created, restart_sequence = await repo.ensure_conversation_opportunity(
@@ -1067,6 +1085,8 @@ async def ensure_conversation_opportunity(
             contacto_nombre=contact.get("nombre_completo"),
             contacto_empresa=contact.get("company_name"),
             force_new_opportunity_on_restart=force_new_opportunity_on_restart,
+            contact_ready=contact_ready,
+            require_contact_ready=requires_ready,
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc

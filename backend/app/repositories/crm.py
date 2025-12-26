@@ -1044,6 +1044,8 @@ class CRMRepository:
         contacto_nombre: str | None = None,
         contacto_empresa: str | None = None,
         force_new_opportunity_on_restart: bool = False,
+        contact_ready: bool | None = None,
+        require_contact_ready: bool = False,
     ) -> tuple[UUID, bool, int]:
         conversation_key = conversation_id.strip()
         if not conversation_key:
@@ -1119,6 +1121,8 @@ class CRMRepository:
                 current_assignee=assignee_uuid,
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
+                contact_ready=contact_ready,
+                require_contact_ready=require_contact_ready,
             )
             return result_id, False, restart_sequence
 
@@ -1153,18 +1157,20 @@ class CRMRepository:
             )
             if should_restart:
                 return await self._create_opportunity_from_contact(
-                    organizacion_id=organizacion_id,
-                    contacto_id=contacto_id,
-                    conversation_id=conversation_key,
-                    canal=canal,
-                    contacto_nombre=contacto_nombre,
-                    contacto_empresa=contacto_empresa,
-                    base_metadata=base_metadata,
-                    parent_row=row,
-                    parent_metadata=metadata,
-                    parent_assignee=assignee_uuid,
-                    is_restart=True,
-                )
+                organizacion_id=organizacion_id,
+                contacto_id=contacto_id,
+                conversation_id=conversation_key,
+                canal=canal,
+                contacto_nombre=contacto_nombre,
+                contacto_empresa=contacto_empresa,
+                base_metadata=base_metadata,
+                parent_row=row,
+                parent_metadata=metadata,
+                parent_assignee=assignee_uuid,
+                is_restart=True,
+                contact_ready=contact_ready,
+                require_contact_ready=require_contact_ready,
+            )
 
             result_id = await _patch_metadata(opportunity_id, metadata)
             restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
@@ -1178,6 +1184,8 @@ class CRMRepository:
                 current_assignee=assignee_uuid,
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
+                contact_ready=contact_ready,
+                require_contact_ready=require_contact_ready,
             )
             return result_id, False, restart_sequence
 
@@ -1191,6 +1199,8 @@ class CRMRepository:
             contacto_empresa=contacto_empresa,
             base_metadata=base_metadata,
             is_restart=False,
+            contact_ready=contact_ready,
+            require_contact_ready=require_contact_ready,
         )
 
     async def _create_opportunity_from_contact(
@@ -1207,6 +1217,8 @@ class CRMRepository:
         parent_metadata: dict[str, Any] | None = None,
         parent_assignee: UUID | None = None,
         is_restart: bool = False,
+        contact_ready: bool | None = None,
+        require_contact_ready: bool = False,
     ) -> tuple[UUID, bool, int]:
         stage_id_value = parent_row.get("etapa_id") if parent_row else None
         stage_id: UUID | None = None
@@ -1284,6 +1296,8 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 conversation_id=conversation_id,
                 contact_id=str(contacto_id),
+                contact_ready=contact_ready,
+                require_contact_ready=require_contact_ready,
             )
 
         if parent_row and assigned_user_id:
@@ -1399,10 +1413,22 @@ class CRMRepository:
         current_assignee: UUID | None = None,
         conversation_id: str | None = None,
         contact_id: str | None = None,
+        contact_ready: bool | None = None,
+        require_contact_ready: bool = False,
     ) -> UUID | None:
         """Asigna un vendedor round-robin cuando la oportunidad aún no tiene dueño."""
         if current_assignee:
             return current_assignee
+        if require_contact_ready and not bool(contact_ready):
+            logger.info(
+                "crm.sales_assignment.skipped_contact_not_ready",
+                extra={
+                    "oportunidad_id": str(oportunidad_id),
+                    "organizacion_id": str(organizacion_id),
+                    "contact_id": contact_id,
+                },
+            )
+            return None
         candidate = await self.assign_next_sales_rep(organizacion_id=organizacion_id)
         if not candidate:
             logger.info(

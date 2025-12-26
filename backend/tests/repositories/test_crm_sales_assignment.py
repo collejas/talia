@@ -86,3 +86,23 @@ async def test_assign_sales_rep_if_needed_skips_when_already_assigned() -> None:
     )
 
     assert assigned == existing
+
+
+@pytest.mark.asyncio
+async def test_assign_sales_rep_if_needed_skips_when_contact_not_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = CRMRepository()
+    async def fake_assign_next_sales_rep(**_: object) -> dict[str, object]:
+        pytest.fail("No debe solicitarse un vendedor cuando falta dato de contacto")
+
+    monkeypatch.setattr(repo, "assign_next_sales_rep", fake_assign_next_sales_rep)
+
+    assigned = await repo._assign_sales_rep_if_needed(
+        oportunidad_id=uuid.uuid4(),
+        organizacion_id=uuid.uuid4(),
+        require_contact_ready=True,
+        contact_ready=False,
+    )
+
+    assert assigned is None
