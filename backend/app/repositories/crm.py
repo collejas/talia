@@ -1833,6 +1833,49 @@ class CRMRepository:
             "openai_conversation_id": row.get("conversacion_openai_id"),
         }
 
+    async def register_messenger_message(
+        self,
+        *,
+        sender_id: str,
+        recipient_id: str | None = None,
+        message_id: str | None = None,
+        content: str | None = None,
+        direction: Literal["entrante", "saliente"] = "entrante",
+        metadata: dict[str, Any] | None = None,
+        inactivity_hours: int | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+        response_id: str | None = None,
+        organizacion_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "p_sender_id": sender_id,
+            "p_recipient_id": recipient_id,
+            "p_message_id": message_id,
+            "p_content": content,
+            "p_direction": direction,
+            "p_metadata": metadata or {},
+            "p_inactivity_hours": inactivity_hours,
+            "p_attachments": attachments or [],
+            "p_response_id": response_id,
+        }
+        if organizacion_id:
+            try:
+                payload["p_organizacion_id"] = str(UUID(str(organizacion_id)))
+            except (TypeError, ValueError) as exc:
+                raise CRMRepositoryError(f"organizacion_id inválido: {organizacion_id}") from exc
+        data = await self._rpc("registrar_mensaje_messenger", payload)
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_messenger: {data!r}")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida registrar_mensaje_messenger: {row!r}")
+        return {
+            "conversation_id": row.get("conversacion_id"),
+            "message_id": row.get("mensaje_id"),
+            "contact_id": row.get("contacto_id"),
+            "openai_conversation_id": row.get("conversacion_openai_id"),
+        }
+
     async def get_message_by_twilio_sid(self, *, message_sid: str) -> dict[str, Any] | None:
         """Obtiene el mensaje guardado con un SID de Twilio específico."""
         sid = str(message_sid or "").strip()

@@ -178,6 +178,54 @@ async def register_whatsapp_message(
     return result
 
 
+async def register_messenger_message(
+    *,
+    sender_id: str,
+    recipient_id: str | None = None,
+    message_id: str | None = None,
+    text: str | None = None,
+    direction: Literal["entrante", "saliente"] = "entrante",
+    metadata: dict[str, Any] | None = None,
+    inactivity_hours: int | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    response_id: str | None = None,
+    organizacion_id: str | None = None,
+) -> dict[str, Any]:
+    """Registra un mensaje inbound del canal Messenger y marca la conversación."""
+
+    repo = CRMRepository()
+    metadata_payload = dict(metadata or {})
+    if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
+        metadata_payload["resolved_organizacion_id"] = organizacion_id
+    try:
+        result = await repo.register_messenger_message(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            message_id=message_id,
+            content=text,
+            direction=direction,
+            metadata=metadata_payload,
+            inactivity_hours=inactivity_hours,
+            attachments=attachments or [],
+            response_id=response_id,
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+    conversation_id = result.get("conversation_id")
+    if conversation_id:
+        try:
+            await repo.update_conversation(
+                conversation_id=conversation_id, patch={"canal": "messenger"}
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.messenger_channel_patch_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+    return result
+
+
 async def fetch_message_by_twilio_sid(message_sid: str | None) -> dict[str, Any] | None:
     """Recupera un mensaje existente usando el SID de Twilio."""
     if not message_sid:

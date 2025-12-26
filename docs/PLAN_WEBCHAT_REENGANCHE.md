@@ -2,6 +2,11 @@
 
 Checklist para replicar el flujo de vendedores y reenganches en el canal webchat respetando las reglas solicitadas: asignar sólo cuando exista contacto verificable, reenganchar mientras faltan datos críticos y omitir cualquier intento si la sesión fue cerrada.
 
+## Avance reciente
+- El plan de reenganches ya se encuentra en producción: la metadata `webchat_followup` registra los cuatro datos requeridos, `mark_contact_ready` / `capture_opportunity_if_ready` liberan la asignación solo cuando hay correo o teléfono, y los eventos `webchat.followup.*` documentan cada intento, salto o escalación.
+- El job `webchat_followups.run_followups` ignora sesiones cerradas (`webchat_session_closures`), respeta `WEBCHAT_REENGAGE_MINUTES` / `WEBCHAT_REENGAGE_MAX_ATTEMPTS` antes de avisar al vendedor y detiene los reenganches cuando `datos_completos_at` o `entrega_realizada_at` están definidos.
+- Las herramientas del asistente (mark_contact_ready, close_lead, etc.) disparan `ensure_contact_ready_for_assignment`, almacenan el estado `contact_ready_at` y garantizan que la CRM solo asigna vendedores al canal webchat cuando el contacto tiene datos mínimos.
+
 ## 1. Información base y dependencias
 - [ ] Confirmar campos necesarios en `webchat_sessions`, `conversaciones`, `oportunidades` y `webchat_session_closures` para detectar señales de cierre explícito.
 - [x] Documentar qué metadata produce el asistente webchat cuando captura `telefono`, `correo`, `nombre_empresa`, `necesidad` (insight) y cuando envía correo/agrega booking.

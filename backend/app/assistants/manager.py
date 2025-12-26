@@ -61,3 +61,26 @@ def get_whatsapp_assistant() -> AssistantConfig:
         assistant_id=target_id,
         project_id=settings.openai_project_id,
     )
+
+
+def get_messenger_assistant() -> AssistantConfig:
+    """Resuelve la configuración específica del canal Messenger."""
+    prompt_id = settings.messenger_prompt_id
+    assistant_id = settings.messenger_assistant_id
+
+    if prompt_id:
+        return AssistantConfig(
+            assistant_id=None,
+            prompt_id=prompt_id,
+            prompt_version=settings.messenger_prompt_version or settings.openai_prompt_version,
+            project_id=settings.openai_project_id,
+        )
+
+    target_id = assistant_id or settings.openai_assistant_id
+    if not target_id:
+        msg = "No se configuró un ASSISTANT_ID para Messenger"
+        raise RuntimeError(msg)
+    return AssistantConfig(
+        assistant_id=target_id,
+        project_id=settings.openai_project_id,
+    )

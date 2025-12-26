@@ -320,6 +320,71 @@ class Settings(BaseSettings):
             "TALIA_WHATSAPP_ASSISTANT_ID",
         ),
     )
+    messenger_page_access_token: str | None = Field(
+        default=None,
+        description="Token de página de Facebook necesario para responder a mensajes.",
+        validation_alias=AliasChoices(
+            "MESSENGER_PAGE_ACCESS_TOKEN",
+            "TALIA_MESSENGER_PAGE_ACCESS_TOKEN",
+        ),
+    )
+    messenger_verify_token: str | None = Field(
+        default=None,
+        description="Token que Facebook usa para verificar el webhook del canal Messenger.",
+        validation_alias=AliasChoices(
+            "MESSENGER_VERIFY_TOKEN",
+            "TALIA_MESSENGER_VERIFY_TOKEN",
+        ),
+    )
+    messenger_app_secret: str | None = Field(
+        default=None,
+        description="App Secret de Facebook para verificar las firmas de los webhooks.",
+        validation_alias=AliasChoices(
+            "MESSENGER_APP_SECRET",
+            "TALIA_MESSENGER_APP_SECRET",
+        ),
+    )
+    messenger_default_organizacion_id: str | None = Field(
+        default=None,
+        description="Organización por defecto que se usa cuando no se identifica el tenant via page_id.",
+        validation_alias=AliasChoices(
+            "MESSENGER_DEFAULT_ORGANIZACION_ID",
+            "TALIA_MESSENGER_DEFAULT_ORGANIZACION_ID",
+        ),
+    )
+    messenger_page_organizacion_map: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapa Facebook Page ID → organización para enrutar distintos tenants.",
+        validation_alias=AliasChoices(
+            "MESSENGER_PAGE_ORGANIZACION_MAP",
+            "TALIA_MESSENGER_PAGE_ORGANIZACION_MAP",
+        ),
+    )
+    messenger_prompt_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "MESSENGER_PROMPT_ID",
+            "TALIA_MESSENGER_PROMPT_ID",
+        ),
+    )
+    messenger_prompt_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "MESSENGER_PROMPT_VERSION",
+            "TALIA_MESSENGER_PROMPT_VERSION",
+        ),
+    )
+    messenger_assistant_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "MESSENGER_ASSISTANT_ID",
+            "TALIA_MESSENGER_ASSISTANT_ID",
+        ),
+    )
+    messenger_inactivity_hours: int | None = Field(
+        default=None,
+        description="Horas sin actividad para reiniciar la conversación de Messenger.",
+    )
     conversation_summary_model: str = Field(
         default="gpt-4o-mini",
         description="Modelo que se usa para generar resúmenes de conversaciones antes de invocar al asistente.",
@@ -507,6 +572,11 @@ class Settings(BaseSettings):
         if isinstance(value, (list, tuple)):
             return tuple(value)
         return value
+
+    @field_validator("messenger_page_organizacion_map", mode="before")
+    @classmethod
+    def _validate_messenger_map(cls, value: object) -> dict[str, str]:
+        return cls._parse_kv_map(value)
 
 
 settings = Settings()

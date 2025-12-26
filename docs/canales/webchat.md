@@ -71,3 +71,8 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - Guardar consentimiento antes de enviar datos personales.
 - Preparar pruebas de snapshots para asegurar la conversación base.
  - Persistir el `conversacion_openai_id` (ID `conv_...` de OpenAI) asociado al hilo para conservar memoria entre reinicios y réplicas. Si pasan 24 horas sin actividad, se inicia una nueva conversación y se reinicia el `conversacion_openai_id`.
+
+## Estado del plan de reenganches
+- Se completó la fase de reenganche documentada en `docs/PLAN_WEBCHAT_REENGANCHE.md`: se registran los cuatro datos clave (correo, teléfono, empresa, necesidad) y `mark_contact_ready`/`capture_opportunity_if_ready` sólo desbloquean la asignación con información contactable.
+- El job `webchat_followups` ya respeta cierres en `webchat_session_closures`, ignora conversaciones con `datos_completos_at`/`entrega_realizada_at` y respeta los máximos `WEBCHAT_REENGAGE_MAX_ATTEMPTS` y el SLA `WEBCHAT_REENGAGE_MINUTES`.
+- El flujo de notificaciones al vendedor publica eventos estructurados (`webchat.followup.*`), actualiza `webchat_followup.state` y dispara escaladas sólo cuando el prospecto no responde, el contacto sigue abierto y se agotaron los reenganches.

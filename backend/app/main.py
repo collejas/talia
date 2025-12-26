@@ -10,6 +10,7 @@ from starlette.staticfiles import StaticFiles
 
 from app.api.routes.crm import router as crm_router
 from app.api.routes.health import router as health_router
+from app.channels.messenger.router import router as messenger_router
 from app.channels.voice.router import router as voice_router
 from app.channels.webchat.router import router as webchat_router
 from app.channels.whatsapp.router import router as whatsapp_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     per_logger_files = {
         "app.request": str(log_dir / "request.log"),
         "app.channels.whatsapp": str(log_dir / "whatsapp.log"),
+        "app.channels.messenger": str(log_dir / "messenger.log"),
         "app.channels.voice": str(log_dir / "voice.log"),
         "app.channels.webchat": str(log_dir / "webchat.log"),
         "app.analytics.visitas": str(log_dir / "visitas.log"),
@@ -68,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(crm_router)
     app.include_router(webchat_router)
     app.include_router(whatsapp_router)
+    app.include_router(messenger_router)
     app.include_router(voice_router)
 
     @app.get("/info", tags=["info"])

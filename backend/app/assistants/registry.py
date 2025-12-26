@@ -10,6 +10,7 @@ AssistantResolver = Callable[[], manager.AssistantConfig]
 REGISTRY: dict[str, AssistantResolver] = {
     "landing": manager.get_landing_assistant,
     "whatsapp": manager.get_whatsapp_assistant,
+    "messenger": manager.get_messenger_assistant,
 }
 
 
