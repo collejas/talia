@@ -88,6 +88,8 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+codex resume 019b5bc9-5365-7e10-83c1-9d33b44f1f61
+
 codex resume 019b4224-315f-7c43-a0f2-1d7e50717429
 
 codex resume 019b2e79-916e-70c2-aa64-a7c29ffccd1b
@@ -134,10 +136,11 @@ http://127.0.0.1:3000/auth/login
 # Entarada a Ser
 ssh-copy-id jorge T@67.205.156.148
 
-67135462
+curl -X POST "https://graph.facebook.com/v17.0/691881910681610/subscribed_apps" \
+       -d "subscribed_fields=messages,message_reads,message_deliveries" \
+       -d "access_token=EAAcfgInlKWQBQaFaaJISfQXr5G6haOz6WuOkEalUVwhiMiO91ZCZC4x5dImUsOoWiMrXpt3Ww2mZBxvxcTf6uFZCXQFcEO3mmOXjbCW7kosogL2YmU2AZCma6OEViBnqP7svYgwCOSNrHLBR6eRhNg6TUh2qBg1TwTpq0v93MFrtuwM1fc9ht5FzC2Y59I5Us0Oz0EwZDZD"
 
-57618790
-
+EAAcfgInlKWQBQaFaaJISfQXr5G6haOz6WuOkEalUVwhiMiO91ZCZC4x5dImUsOoWiMrXpt3Ww2mZBxvxcTf6uFZCXQFcEO3mmOXjbCW7kosogL2YmU2AZCma6OEViBnqP7svYgwCOSNrHLBR6eRhNg6TUh2qBg1TwTpq0v93MFrtuwM1fc9ht5FzC2Y59I5Us0Oz0EwZDZD
 codex resume 019af9d1-5c6a-79e2-8ab8-e9fa2bad544c
 
 psql "postgresql://postgres:DE_se479156376421@db.qnimyamtczbbwmlrlejc.supabase.co:5432/postgres?sslmode=require"

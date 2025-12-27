@@ -93,6 +93,18 @@ server {
         proxy_buffering off;
     }
 
+    location ^~ /api/messenger/ {
+        proxy_pass http://127.0.0.1:8004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
     location ^~ /api/kpis/ {
         proxy_pass http://127.0.0.1:8004;
         proxy_http_version 1.1;
@@ -101,6 +113,17 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Prefix /api;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+    }
+
+    location ^~ /privacy-policy {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
         proxy_buffering off;
     }
@@ -242,5 +265,9 @@ server {
     listen [::]:80;
     server_name talia.mx www.talia.mx;
     return 404; # managed by Certbot
+
+
+
+
 }
 ```

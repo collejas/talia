@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
 import json
 from dataclasses import dataclass
 from hashlib import sha1
@@ -45,15 +46,31 @@ class MessengerPayload:
     attachments: list[dict[str, Any]] | None
 
 
+def _ht_digest(payload: bytes, secret: str, algorithm: str) -> str:
+    secret_bytes = secret.encode("ascii")
+    if algorithm == "sha1":
+        return hmac.new(secret_bytes, payload, sha1).hexdigest()
+    return hmac.new(secret_bytes, payload, getattr(hashlib, algorithm)).hexdigest()
+
+
 def verify_signature(payload: bytes, signature: str | None) -> bool:
     secret_value = settings.messenger_app_secret
     if not secret_value:
         return True
     if not signature:
         return False
-    secret = secret_value.encode("ascii")
-    expected = hmac.new(secret, payload, sha1).hexdigest()
-    return hmac.compare_digest(expected, signature.replace("sha1=", ""))
+    parts = signature.split("=", 1)
+    if len(parts) != 2:
+        return False
+    algo, value = parts
+    algo = algo.strip().lower()
+    if algo not in {"sha1", "sha256"}:
+        return False
+    try:
+        expected = _ht_digest(payload, secret_value, algo)
+    except AttributeError:
+        return False
+    return hmac.compare_digest(expected, value)
 
 
 def _normalize_page_id(value: str | None) -> str | None:
@@ -437,11 +454,50 @@ async def _handle_message(
         reply_text = _extract_text_from_response(result.response) or DEFAULT_FALLBACK
 
     if reply_text:
-        await _send_messenger_reply(
+        sent_ok = await _send_messenger_reply(
             page_id=payload.recipient_id,
             recipient_id=payload.sender_id,
             text=reply_text,
         )
+        if sent_ok:
+            outgoing_metadata = {
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "channel": "messenger",
+                "sender_id": payload.sender_id,
+                "page_id": payload.recipient_id,
+            }
+            if result.conversation_id:
+                outgoing_metadata["openai_conversation_id"] = result.conversation_id
+            try:
+                await storage.register_messenger_message(
+                    sender_id=payload.sender_id,
+                    recipient_id=payload.recipient_id,
+                    message_id=None,
+                    text=reply_text,
+                    direction="saliente",
+                    metadata=outgoing_metadata,
+                    response_id=result.response_id or None,
+                    organizacion_id=org_id,
+                )
+            except StorageError as exc:  # pragma: no cover - fallo secundario
+                logger.warning(
+                    "messenger.outgoing_register_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.update_conversation(
+                    conversation_id,
+                    {
+                        "last_response_id": result.response_id,
+                        "conversacion_openai_id": result.conversation_id,
+                    },
+                )
+            except storage.StorageError as exc:  # pragma: no cover
+                logger.warning(
+                    "messenger.conversation_update_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
 
 
 async def handle_webhook(payload: dict[str, Any]) -> None:
