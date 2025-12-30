@@ -80,84 +80,77 @@ class GooglePlacesClient:
         normalized_radius = max(50, min(radius_m, 50_000))
         grid = self._select_grid_config(normalized_radius)
         limit = max_results if max_results and max_results > 0 else None
-        results: list[dict[str, Any]] = []
-
-        base_results = await self._collect_pages_for_strategy(
-            strategy=strategy,
-            query=query,
-            latitude=latitude,
-            longitude=longitude,
-            radius_m=normalized_radius,
-            included_types=included_types,
-            max_results=limit,
-            language_code=language_code,
-            region_code=region_code,
-        )
-        results.extend(base_results)
-
-        if (
-            strategy == "nearby"
-            and allow_text_fallback
-            and included_types
-            and (limit is None or len(results) < limit)
-        ):
-            remaining_limit = None if limit is None else max(limit - len(results), 0)
-            existing_ids = {place.get("id") for place in results if place.get("id")}
-            extra_nearby = await self._search_nearby_additional_centers(
-                included_types=included_types,
-                remaining_limit=remaining_limit,
+        if strategy == "text" and query:
+            results = await self._search_text_tiles(
+                query=query,
                 latitude=latitude,
                 longitude=longitude,
                 radius_m=normalized_radius,
                 grid_config=grid,
                 language_code=language_code,
                 region_code=region_code,
-                existing_ids=existing_ids,
+                max_results=limit,
             )
-            results.extend(extra_nearby)
-        if (
-            strategy == "nearby"
-            and allow_text_fallback
-            and included_types
-            and (limit is None or len(results) < limit)
-        ):
-            remaining_limit = None if limit is None else max(limit - len(results), 0)
-            fallback_results = await self._search_text_fallback(
-                included_types=included_types,
-                remaining_limit=remaining_limit,
+        else:
+            results = await self._collect_pages_for_strategy(
+                strategy=strategy,
                 query=query,
-                latitude=latitude,
-                longitude=longitude,
-                radius_m=radius_m,
-                language_code=language_code,
-                region_code=region_code,
-            )
-            if fallback_results:
-                dedup_ids = {place.get("id") for place in results if place.get("id")}
-                for place in fallback_results:
-                    place_id = place.get("id")
-                    if place_id and place_id in dedup_ids:
-                        continue
-                    results.append(place)
-                    if place_id:
-                        dedup_ids.add(place_id)
-                    if limit is not None and len(results) >= limit:
-                        break
-        if strategy == "text" and query and (limit is None or len(results) < limit):
-            remaining_limit = None if limit is None else max(limit - len(results), 0)
-            existing_ids = {place.get("id") for place in results if place.get("id")}
-            extra_text = await self._search_text_additional_centers(
-                query=query,
-                remaining_limit=remaining_limit,
                 latitude=latitude,
                 longitude=longitude,
                 radius_m=normalized_radius,
-                grid_config=grid,
+                included_types=included_types,
+                max_results=limit,
                 language_code=language_code,
                 region_code=region_code,
-                existing_ids=existing_ids,
             )
-            results.extend(extra_text)
+            if (
+                strategy == "nearby"
+                and allow_text_fallback
+                and included_types
+                and (limit is None or len(results) < limit)
+            ):
+                remaining_limit = None if limit is None else max(limit - len(results), 0)
+                existing_ids = {place.get("id") for place in results if place.get("id")}
+                extra_nearby = await self._search_nearby_additional_centers(
+                    included_types=included_types,
+                    remaining_limit=remaining_limit,
+                    latitude=latitude,
+                    longitude=longitude,
+                    radius_m=normalized_radius,
+                    grid_config=grid,
+                    language_code=language_code,
+                    region_code=region_code,
+                    existing_ids=existing_ids,
+                )
+                results.extend(extra_nearby)
+            if (
+                strategy == "nearby"
+                and allow_text_fallback
+                and included_types
+                and (limit is None or len(results) < limit)
+            ):
+                remaining_limit = None if limit is None else max(limit - len(results), 0)
+                fallback_results = await self._search_text_fallback(
+                    included_types=included_types,
+                    remaining_limit=remaining_limit,
+                    query=query,
+                    latitude=latitude,
+                    longitude=longitude,
+                    radius_m=radius_m,
+                    language_code=language_code,
+                    region_code=region_code,
+                )
+                if fallback_results:
+                    dedup_ids = {place.get("id") for place in results if place.get("id")}
+                    for place in fallback_results:
+                        place_id = place.get("id")
+                        if place_id and place_id in dedup_ids:
+                            continue
+                        results.append(place)
+                        if place_id:
+                            dedup_ids.add(place_id)
+                        if limit is not None and len(results) >= limit:
+                            break
 
         filtered = self._filter_results_by_radius(
             results=results,
@@ -545,22 +538,19 @@ class GooglePlacesClient:
                     return collected
         return collected
 
-    async def _search_text_additional_centers(
+    async def _search_text_tiles(
         self,
         *,
         query: str,
-        remaining_limit: int | None,
         latitude: float,
         longitude: float,
         radius_m: int,
         grid_config: dict[str, int],
         language_code: str | None,
         region_code: str | None,
-        existing_ids: set[str],
+        max_results: int | None,
     ) -> list[dict[str, Any]]:
-        if not query:
-            return []
-        centers = self._generate_grid_centers(
+        centers = [(latitude, longitude)] + self._generate_grid_centers(
             latitude=latitude,
             longitude=longitude,
             radius_m=radius_m,
@@ -568,12 +558,13 @@ class GooglePlacesClient:
             grid_size=grid_config["grid_size"],
         )
         collected: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        limit = max_results if max_results and max_results > 0 else None
         for lat_new, lng_new in centers:
-            per_tile_limit = (
-                None if remaining_limit is None else max(remaining_limit - len(collected), 0)
-            )
-            if per_tile_limit is not None and per_tile_limit <= 0:
+            remaining = None if limit is None else max(limit - len(collected), 0)
+            if remaining is not None and remaining <= 0:
                 break
+            per_tile_limit = None if remaining is None else max(remaining, 1)
             try:
                 tile_results = await self._collect_pages_for_strategy(
                     strategy="text",
@@ -590,12 +581,12 @@ class GooglePlacesClient:
                 continue
             for place in tile_results:
                 place_id = place.get("id")
-                if place_id and place_id in existing_ids:
+                if place_id and place_id in seen_ids:
                     continue
-                collected.append(place)
                 if place_id:
-                    existing_ids.add(place_id)
-                if remaining_limit is not None and len(collected) >= remaining_limit:
+                    seen_ids.add(place_id)
+                collected.append(place)
+                if limit is not None and len(collected) >= limit:
                     return collected
         return collected
 
