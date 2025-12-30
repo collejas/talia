@@ -4264,7 +4264,7 @@ class CRMRepository:
             path,
             token=usuario_token,
             params=params,
-            prefer="count=planned",
+            prefer="count=exact",
         )
         data = resp.json() or []
         if not isinstance(data, list):

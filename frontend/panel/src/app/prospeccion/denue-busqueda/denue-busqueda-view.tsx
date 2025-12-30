@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Globe,
@@ -103,6 +103,7 @@ export function DenueBusquedaView() {
   const [resultados, setResultados] = useState<DenueResultadoItem[]>([]);
   const [isLoadingResultados, setIsLoadingResultados] = useState(false);
   const [resultadosPagination, setResultadosPagination] = useState({ limit: LIST_PAGE_SIZE, offset: 0 });
+  const [resultadosTotal, setResultadosTotal] = useState(0);
   const [filterText, setFilterText] = useState("");
   const [phoneFilter, setPhoneFilter] = useState<ContactFilterValue>("any");
   const [emailFilter, setEmailFilter] = useState<ContactFilterValue>("any");
@@ -146,18 +147,55 @@ export function DenueBusquedaView() {
     busquedasRef.current = busquedas;
   }, [busquedas]);
 
-  const loadResultadosForBusqueda = useCallback(async (busquedaId: string) => {
+  const fetchResultadosPage = useCallback(
+    async ({
+      busquedaId,
+      limit,
+      offset,
+    }: {
+      busquedaId: string;
+      limit: number;
+      offset: number;
+    }) => {
       setIsLoadingResultados(true);
       try {
         const response = await listDenueResultados({
           busquedaId,
-          limit: MAP_RESULTS_LIMIT,
+          limit,
+          offset,
+          order: "recientes",
+        });
+        const rows = response.items ?? [];
+        setResultados(rows);
+        setResultadosPagination({ limit, offset });
+        const totalRecords = response.total ?? rows.length;
+        setResultadosTotal(totalRecords);
+        return {
+          totalRecords,
+          response,
+        };
+      } finally {
+        setIsLoadingResultados(false);
+      }
+    },
+    [],
+  );
+
+  const loadResultadosForBusqueda = useCallback(
+    async (busquedaId: string) => {
+      if (!busquedaId) {
+        return;
+      }
+      setSelectedIds(new Set());
+      setSelectedActividades(new Set());
+      setActividadSearch("");
+      setActiveBusquedaId(busquedaId);
+      try {
+        const { totalRecords } = await fetchResultadosPage({
+          busquedaId,
+          limit: LIST_PAGE_SIZE,
           offset: 0,
         });
-        setResultados(response.items ?? []);
-        setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
-        setSelectedIds(new Set());
-        setActiveBusquedaId(busquedaId);
         const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
         if (selectedBusqueda) {
           setFormValues((prev) => ({
@@ -168,24 +206,19 @@ export function DenueBusquedaView() {
             radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
           }));
         }
-        const totalRecords = response.total ?? (response.items?.length ?? 0);
-        if (typeof totalRecords === "number") {
-          setBusquedas((prev) =>
-            prev.map((item) =>
-              item.id === busquedaId ? { ...item, total_encontrados: totalRecords } : item,
-            ),
-          );
-        }
+        setBusquedas((prev) =>
+          prev.map((item) =>
+            item.id === busquedaId ? { ...item, total_encontrados: totalRecords } : item,
+          ),
+        );
       } catch (error) {
         setFeedback({
           type: "error",
           message: error instanceof Error ? error.message : "No fue posible consultar los resultados.",
         });
-      } finally {
-        setIsLoadingResultados(false);
       }
     },
-    [],
+    [fetchResultadosPage],
   );
 
   useEffect(() => {
@@ -306,27 +339,32 @@ export function DenueBusquedaView() {
   }, [actividadSearch, generalFilteredResults, selectedActividades]);
 
   const totalFiltered = filteredResults.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / resultadosPagination.limit));
+  const effectiveTotal = Math.max(resultadosTotal || 0, totalFiltered);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(effectiveTotal / resultadosPagination.limit),
+  );
   const currentPage = Math.min(
     totalPages - 1,
     Math.floor(resultadosPagination.offset / resultadosPagination.limit),
   );
-  const pageOffset = currentPage * resultadosPagination.limit;
+  const pageOffset = resultadosPagination.offset;
+  const maxPageOffset = Math.max(0, (totalPages - 1) * resultadosPagination.limit);
 
   useEffect(() => {
-    const maxOffset = Math.max(0, (totalPages - 1) * resultadosPagination.limit);
-    if (resultadosPagination.offset > maxOffset) {
-      setResultadosPagination((prev) => ({ ...prev, offset: maxOffset }));
+    if (resultadosPagination.offset > maxPageOffset) {
+      setResultadosPagination((prev) => ({ ...prev, offset: maxPageOffset }));
     }
-  }, [resultadosPagination.offset, resultadosPagination.limit, totalPages]);
+  }, [resultadosPagination.offset, resultadosPagination.limit, maxPageOffset]);
 
-  const paginatedResults = useMemo(() => {
-    const end = pageOffset + resultadosPagination.limit;
-    return filteredResults.slice(pageOffset, end);
-  }, [filteredResults, pageOffset, resultadosPagination.limit]);
-  const pageStart = totalFiltered === 0 ? 0 : pageOffset + 1;
+  const paginatedResults = filteredResults;
+  const pageStart = effectiveTotal === 0 ? 0 : pageOffset + 1;
   const pageEnd =
-    totalFiltered === 0 ? 0 : Math.min(pageOffset + resultadosPagination.limit, totalFiltered);
+    effectiveTotal === 0
+      ? 0
+      : Math.min(pageOffset + paginatedResults.length, effectiveTotal);
+  const hasPrevPage = resultadosPagination.offset > 0;
+  const hasNextPage = resultadosPagination.offset < maxPageOffset;
   const mapResults = useMemo<GoogleResultadoItem[]>(
     () =>
       filteredResults.map((item) => ({
@@ -438,6 +476,25 @@ export function DenueBusquedaView() {
     setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
   }, [handleClearActividades]);
 
+  const handleLimitChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const value = Number(event.target.value) || 50;
+      const limit = Math.min(500, Math.max(50, value));
+      setResultadosPagination((prev) => ({ ...prev, limit, offset: 0 }));
+      if (!activeBusquedaId) {
+        return;
+      }
+      void fetchResultadosPage({ busquedaId: activeBusquedaId, limit, offset: 0 }).catch((error) => {
+        setFeedback({
+          type: "error",
+          message:
+            error instanceof Error ? error.message : "No fue posible actualizar el número de resultados por página.",
+        });
+      });
+    },
+    [activeBusquedaId, fetchResultadosPage, setFeedback],
+  );
+
   const handleDeleteBusqueda = useCallback(
     async (busquedaId: string) => {
       if (!busquedaId) {
@@ -535,10 +592,23 @@ export function DenueBusquedaView() {
 
   const goToPage = useCallback(
     (pageIndex: number) => {
+      if (!activeBusquedaId) {
+        return;
+      }
       const clamped = Math.min(Math.max(pageIndex, 0), Math.max(0, totalPages - 1));
-      setResultadosPagination((prev) => ({ ...prev, offset: clamped * prev.limit }));
+      const nextOffset = clamped * resultadosPagination.limit;
+      void fetchResultadosPage({
+        busquedaId: activeBusquedaId,
+        limit: resultadosPagination.limit,
+        offset: nextOffset,
+      }).catch((error) => {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "No fue posible cambiar la página.",
+        });
+      });
     },
-    [totalPages],
+    [activeBusquedaId, fetchResultadosPage, resultadosPagination.limit, setFeedback, totalPages],
   );
 
   const handlePrevPage = useCallback(() => goToPage(currentPage - 1), [currentPage, goToPage]);
@@ -753,7 +823,9 @@ export function DenueBusquedaView() {
                     <span>
                       {isLoadingResultados
                         ? "Descargando datos…"
-                        : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(resultados.length)} coincidencias`}
+                        : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(
+                            effectiveTotal,
+                          )} coincidencias`}
                     </span>
                     {busquedaDescriptor ? (
                       <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
@@ -962,13 +1034,7 @@ export function DenueBusquedaView() {
                   max={500}
                   step={50}
                   value={resultadosPagination.limit}
-                  onChange={(event) =>
-                    setResultadosPagination((prev) => ({
-                      ...prev,
-                      limit: Math.min(500, Math.max(50, Number(event.target.value) || 50)),
-                      offset: 0,
-                    }))
-                  }
+                  onChange={handleLimitChange}
                   className="h-8 text-sm"
                 />
               </div>
@@ -1144,23 +1210,23 @@ export function DenueBusquedaView() {
                   variant="ghost"
                   size="sm"
                   onClick={handlePrevPage}
-                  disabled={isLoadingResultados || currentPage === 0 || !totalFiltered}
+                  disabled={isLoadingResultados || !hasPrevPage}
                 >
                   Anterior
                 </Button>
                 <span>
-                  {totalFiltered === 0
+                  {effectiveTotal === 0
                     ? "No hay registros"
                     : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(
                         pageEnd,
-                      )} de ${numberFormatter.format(totalFiltered)}`}
+                      )} de ${numberFormatter.format(effectiveTotal)}`}
                 </span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={handleNextPage}
-                  disabled={isLoadingResultados || currentPage >= totalPages - 1 || !totalFiltered}
+                  disabled={isLoadingResultados || !hasNextPage}
                 >
                   Siguiente
                 </Button>
