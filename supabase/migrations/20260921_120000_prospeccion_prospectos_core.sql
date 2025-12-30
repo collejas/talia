@@ -200,7 +200,8 @@ $$;
 CREATE OR REPLACE FUNCTION public.upsert_resultados_lote(
     p_busqueda_id uuid,
     p_fuente public.fuente_resultado,
-    p_items jsonb
+    p_items jsonb,
+    p_organizacion_id uuid DEFAULT NULL
 ) RETURNS integer
     LANGUAGE plpgsql
     SECURITY INVOKER
@@ -209,9 +210,22 @@ AS $$
 declare
     v_count int := 0;
     v_it jsonb;
+    v_organizacion uuid := p_organizacion_id;
+    v_header text;
 begin
     IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
         RETURN 0;
+    END IF;
+
+    IF v_organizacion IS NULL THEN
+        BEGIN
+            v_header := NULLIF(current_setting('request.headers.x-organizacion-id', true), '');
+            IF v_header IS NOT NULL THEN
+                v_organizacion := v_header::uuid;
+            END IF;
+        EXCEPTION WHEN others THEN
+            v_organizacion := NULL;
+        END;
     END IF;
 
     FOR v_it IN SELECT * FROM jsonb_array_elements(p_items)
@@ -234,6 +248,7 @@ begin
             rating,
             reviews,
             maps_url,
+            organizacion_id,
             raw
         )
         VALUES (
@@ -254,6 +269,7 @@ begin
             NULLIF(v_it ->> 'rating', '')::numeric,
             NULLIF(v_it ->> 'reviews', '')::int,
             COALESCE(v_it ->> 'maps_url', v_it ->> 'maps'),
+            v_organizacion,
             v_it
         )
         ON CONFLICT (busqueda_id, fuente, external_id) DO UPDATE

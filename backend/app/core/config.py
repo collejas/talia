@@ -175,6 +175,26 @@ class Settings(BaseSettings):
             "TALIA_GOOGLE_PLACES_REGION_CODE",
         ),
     )
+    google_places_grid_max_tile_radius_m: int = Field(
+        default=1200,
+        description="Máximo en metros que puede alcanzar una tile en búsquedas Nearby normales.",
+    )
+    google_places_pause_between_pages: float = Field(
+        default=2.0,
+        description="Segundos de espera entre páginas cuando se recorren múltiples tiles.",
+    )
+    google_places_dense_grid_max_tile_radius_m: int = Field(
+        default=600,
+        description="En modo denso, usamos tiles más pequeños (más pasos) para cubrir zonas amplias.",
+    )
+    google_places_dense_pause_between_pages: float = Field(
+        default=0.6,
+        description="Pausa menor entre páginas en modo denso para que avance rápido aunque tome tiempo total.",
+    )
+    google_places_dense_max_results: int | None = Field(
+        default=None,
+        description="Máximo de resultados que aceptamos en modo denso (None = sin límite).",
+    )
     denue_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices("DENUE_TOKEN", "TALIA_DENUE_TOKEN"),

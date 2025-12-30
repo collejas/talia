@@ -128,11 +128,14 @@ export function GoogleBusquedaView() {
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
+  const [queuedBusquedaId, setQueuedBusquedaId] = useState<string | null>(null);
+  const [resultsLoadedForId, setResultsLoadedForId] = useState<string | null>(null);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
   );
   const resultadosCount = resultados.length;
+  const [denseMode, setDenseMode] = useState(false);
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -159,26 +162,29 @@ export function GoogleBusquedaView() {
 
   const loadResultadosForBusqueda = useCallback(async (busquedaId: string) => {
       setIsLoadingResultados(true);
-      try {
-        const response = await listGoogleResultados({
-          busquedaId,
-          limit: MAP_RESULTS_LIMIT,
-          offset: 0,
-        });
+    try {
+      const response = await listGoogleResultados({
+        busquedaId,
+        limit: MAP_RESULTS_LIMIT,
+        offset: 0,
+      });
         setResultados(response.items ?? []);
         setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
         setSelectedIds(new Set());
         setActiveBusquedaId(busquedaId);
-        const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
-        if (selectedBusqueda) {
-          setFormValues((prev) => ({
-            ...prev,
-            query: selectedBusqueda.query ?? prev.query,
-            lat: typeof selectedBusqueda.lat === "number" ? selectedBusqueda.lat : prev.lat,
-            lng: typeof selectedBusqueda.lng === "number" ? selectedBusqueda.lng : prev.lng,
-            radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
-          }));
-        }
+      const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
+      if (selectedBusqueda) {
+        setFormValues((prev) => ({
+          ...prev,
+          query: selectedBusqueda.query ?? prev.query,
+          lat: typeof selectedBusqueda.lat === "number" ? selectedBusqueda.lat : prev.lat,
+          lng: typeof selectedBusqueda.lng === "number" ? selectedBusqueda.lng : prev.lng,
+          radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
+        }));
+        const denseFlag = Boolean(selectedBusqueda.meta?.dense_mode);
+        setDenseMode(denseFlag);
+      }
+      setResultsLoadedForId(busquedaId);
       } catch (error) {
         setFeedback({
           type: "error",
@@ -299,6 +305,85 @@ export function GoogleBusquedaView() {
       return current;
     });
   }, [activeBusquedaId, resultadosCount]);
+
+  useEffect(() => {
+    if (!activeBusquedaId) {
+      return;
+    }
+    const status = activeBusqueda?.meta?.status;
+    if (!status || status === "completed" || status === "failed") {
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      if (cancelled) {
+        return;
+      }
+      try {
+        await loadBusquedas();
+      } finally {
+        if (!cancelled) {
+          timer = setTimeout(poll, 2000);
+        }
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [activeBusquedaId, activeBusqueda?.meta?.status, loadBusquedas]);
+
+  useEffect(() => {
+    if (!activeBusquedaId) {
+      return;
+    }
+    if (activeBusqueda?.meta?.status === "completed") {
+      void loadResultadosForBusqueda(activeBusquedaId);
+    }
+  }, [activeBusquedaId, activeBusqueda?.meta?.status, loadResultadosForBusqueda]);
+
+  useEffect(() => {
+    if (!activeBusquedaId) {
+      return;
+    }
+    if (queuedBusquedaId !== activeBusquedaId) {
+      return;
+    }
+    const status = activeBusqueda?.meta?.status;
+    if (status === "completed" && resultsLoadedForId === activeBusquedaId) {
+      setFeedback({
+        type: "success",
+        message: (() => {
+          const declaredTotal = activeBusqueda?.total_encontrados;
+          const finalCount =
+            typeof declaredTotal === "number" && declaredTotal >= 0
+              ? declaredTotal
+              : resultadosCount;
+          if (finalCount > 0) {
+            return `La búsqueda terminó y se encontraron ${numberFormatter.format(finalCount)} resultados.`;
+          }
+          return "La búsqueda terminó, pero no se encontraron resultados.";
+        })(),
+      });
+      setQueuedBusquedaId(null);
+    } else if (status === "failed") {
+      setFeedback({
+        type: "error",
+        message: "La búsqueda falló. Intenta nuevamente.",
+      });
+      setQueuedBusquedaId(null);
+    }
+  }, [
+    activeBusquedaId,
+    activeBusqueda?.meta?.status,
+    resultadosCount,
+    queuedBusquedaId,
+    resultsLoadedForId,
+  ]);
 
   const busquedaDescriptor = useMemo(() => {
     if (!activeBusqueda) return null;
@@ -578,6 +663,7 @@ export function GoogleBusquedaView() {
       strategy: formValues.strategy,
       language_code: formValues.language_code || undefined,
       region_code: formValues.region_code || undefined,
+      dense_mode: denseMode,
       meta: {
         source: "panel",
       },
@@ -585,11 +671,18 @@ export function GoogleBusquedaView() {
 
     setIsSearching(true);
     try {
+      setResultsLoadedForId(null);
       const response = await createGoogleBusqueda(payload);
-      setFeedback({
-        type: "success",
-        message: `Se guardaron ${response.upserted} resultados desde Google Places (${response.google_results} encontrados).`,
-      });
+      const queuedMessage =
+        response.status === "queued"
+          ? "La búsqueda quedó en cola y se procesará en segundo plano; los resultados estarán listos en unos instantes."
+          : "La búsqueda ya se procesó y los resultados están disponibles.";
+      setFeedback({ type: "success", message: queuedMessage });
+      if (response.status === "queued") {
+        setQueuedBusquedaId(response.busqueda_id);
+      } else {
+        setQueuedBusquedaId(null);
+      }
       await loadBusquedas();
       await loadResultadosForBusqueda(response.busqueda_id);
     } catch (error) {
@@ -597,10 +690,11 @@ export function GoogleBusquedaView() {
         type: "error",
         message: error instanceof Error ? error.message : "No fue posible ejecutar la búsqueda.",
       });
+      setQueuedBusquedaId(null);
     } finally {
       setIsSearching(false);
     }
-  }, [formValues, loadBusquedas, loadResultadosForBusqueda]);
+  }, [denseMode, formValues, loadBusquedas, loadResultadosForBusqueda]);
 
   const handleAction = useCallback(
     (action: (typeof ACTIONS)[number]["key"]) => {
@@ -839,6 +933,15 @@ export function GoogleBusquedaView() {
                     placeholder="MX"
                   />
                 </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Checkbox
+                  checked={denseMode}
+                  onCheckedChange={(value) => setDenseMode(Boolean(value))}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Modo denso (más tiles y sin límite, aunque tarde más)
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 <Button onClick={runBusqueda} disabled={isSearching}>

@@ -4193,6 +4193,25 @@ class CRMRepository:
         except ValueError as exc:  # pragma: no cover
             raise CRMRepositoryError("crear_busqueda_response_invalid") from exc
 
+    async def get_prospeccion_busqueda(
+        self,
+        *,
+        busqueda_id: UUID,
+        select: str | None = "organizacion_id",
+    ) -> dict[str, Any] | None:
+        params: dict[str, str] = {
+            "id": f"eq.{busqueda_id}",
+            "limit": "1",
+        }
+        if select:
+            params["select"] = select
+        resp = await self._request("GET", "/rest/v1/busquedas", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"busqueda_get_invalid:{data!r}")
+        row = data[0] if data else None
+        return row if isinstance(row, dict) else None
+
     async def upsert_prospeccion_resultados(
         self,
         *,
@@ -5705,16 +5724,52 @@ class CRMRepository:
         for start in range(0, len(items), chunk_size):
             chunk = items[start : start + chunk_size]
             # Asegurar job_id/organizacion_id presentes
-            for row in chunk:
-                row.setdefault("job_id", str(job_id))
-                if organizacion_id:
-                    row.setdefault("organizacion_id", str(organizacion_id))
+        for row in chunk:
+            row.setdefault("job_id", str(job_id))
+            if organizacion_id:
+                row.setdefault("organizacion_id", str(organizacion_id))
             await self._request(
                 "POST",
                 "/rest/v1/prospeccion_buscador_resultados",
                 json=chunk,
                 prefer="return=minimal",
             )
+
+    async def worker_upsert_resultados(
+        self,
+        *,
+        payload: dict[str, Any],
+        organizacion_id: UUID | None = None,
+    ) -> None:
+        logger.info(
+            "worker_upsert_resultados_start",
+            extra={
+                "organizacion_id": str(organizacion_id) if organizacion_id else None,
+                "item_count": len(payload.get("p_items", [])) if isinstance(payload.get("p_items"), list) else None,
+                "busqueda": payload.get("p_busqueda_id"),
+            },
+        )
+        await self._request(
+            "POST",
+            "/rest/v1/rpc/upsert_resultados_lote",
+            json=payload,
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
+
+    async def worker_update_busqueda(
+        self,
+        *,
+        busqueda_id: UUID,
+        payload: dict[str, Any],
+    ) -> None:
+        await self._request(
+            "PATCH",
+            "/rest/v1/busquedas",
+            params={"id": f"eq.{busqueda_id}"},
+            json=payload,
+            prefer="return=minimal",
+        )
 
     async def bulk_insert_prospectos(
         self,
@@ -5974,6 +6029,7 @@ class CRMRepository:
         params: dict[str, Any] | None = None,
         json: Any = None,
         prefer: str | None = None,
+        organizacion_id: UUID | None = None,
     ) -> httpx.Response:
         url = f"{self._base_url}{path}"
         headers = {
@@ -5981,13 +6037,29 @@ class CRMRepository:
             "apikey": self._service_role,
             "Authorization": f"Bearer {self._service_role}",
         }
+        if organizacion_id:
+            headers["X-Organizacion-Id"] = str(organizacion_id)
         if prefer:
             headers["Prefer"] = prefer
+        logger.info(
+            "crm_request_start",
+            extra={
+                "method": method,
+                "path": path,
+                "params": params,
+                "json_keys": list(json.keys()) if isinstance(json, dict) else None,
+                "organizacion_id": str(organizacion_id) if organizacion_id else None,
+            },
+        )
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.request(method, url, params=params, json=json, headers=headers)
         except httpx.RequestError as exc:  # pragma: no cover - red de terceros
             raise CRMRepositoryError(f"Error de red al llamar Supabase: {exc}") from exc
+        logger.info(
+            "crm_request_response",
+            extra={"method": method, "path": path, "status": resp.status_code},
+        )
         if resp.status_code >= 400:
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"

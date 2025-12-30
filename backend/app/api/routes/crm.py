@@ -42,20 +42,18 @@ from app.services import (
     DenueClient,
     DenueError,
     EmailSendError,
-    GooglePlacesClient,
-    GooglePlacesError,
     TwilioLookupError,
     demografia_service,
     leads_geo,
     lookup_phone_number,
     normalize_denue_place,
-    normalize_place_for_result,
     send_email,
     storage,
 )
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
+from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSearchJob
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.brevo import process_brevo_events
@@ -824,6 +822,10 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
     meta: dict[str, Any] | None = Field(
         default=None,
         description="Metadatos adicionales para guardar en public.busquedas.meta.",
+    )
+    dense_mode: bool = Field(
+        default=False,
+        description="Activa el modo denso para cubrir zonas amplias sin límite de resultados.",
     )
 
     model_config = ConfigDict(extra="ignore")
@@ -6427,28 +6429,12 @@ async def crear_busqueda_google(
     user_token: str = Depends(require_user_token),
     payload: GoogleProspeccionBusquedaPayload,
 ) -> dict[str, Any]:
-    client = GooglePlacesClient()
+    dense_mode = bool(payload.dense_mode)
     query_value = payload.query or ", ".join(payload.included_types or []) or "google_places"
-    try:
-        places = await client.search_places(
-            query=payload.query,
-            latitude=payload.lat,
-            longitude=payload.lng,
-            radius_m=payload.radio_m,
-            included_types=payload.included_types,
-            strategy=payload.strategy,
-            language_code=payload.language_code,
-            region_code=payload.region_code,
-            enrich_details=True,
-        )
-    except GooglePlacesError as exc:
-        detail = str(exc) or "google_places_error"
-        raise HTTPException(status_code=502, detail=detail) from exc
-
-    normalized_items = [normalize_place_for_result(place) for place in places]
     meta_payload: dict[str, Any] = {
         "strategy": payload.strategy,
         "included_types": payload.included_types,
+        "dense_mode": dense_mode,
     }
     if payload.meta:
         meta_payload.update(payload.meta)
@@ -6457,14 +6443,17 @@ async def crear_busqueda_google(
     if payload.region_code:
         meta_payload["region_code"] = payload.region_code
 
+    job_meta = dict(meta_payload)
+    job_meta["status"] = "queued"
+
     crear_body = {
         "p_fuente": "google_places",
         "p_query": query_value,
         "p_radio_m": payload.radio_m,
         "p_lat": payload.lat,
         "p_lng": payload.lng,
-        "p_total": len(normalized_items),
-        "p_meta": meta_payload,
+        "p_total": 0,
+        "p_meta": job_meta,
     }
     try:
         crear_data = await repo.create_prospeccion_busqueda(
@@ -6479,32 +6468,33 @@ async def crear_busqueda_google(
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="busqueda_id_invalid") from exc
 
-    upserted = 0
-    if normalized_items:
-        try:
-            upsert_data = await repo.upsert_prospeccion_resultados(
-                usuario_token=user_token,
-                payload={
-                    "p_busqueda_id": str(busqueda_uuid),
-                    "p_fuente": "google_places",
-                    "p_items": normalized_items,
-                },
-            )
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        upsert_value = _rpc_field(upsert_data, "upsert_resultados_lote", "upserted", "total")
-        try:
-            upserted = int(upsert_value or 0)
-        except (TypeError, ValueError):
-            upserted = len(normalized_items)
+    busqueda_row = await repo.get_prospeccion_busqueda(busqueda_id=busqueda_uuid, select="organizacion_id")
+    organizacion_id = None
+    if busqueda_row:
+        raw_organizacion = busqueda_row.get("organizacion_id")
+        if raw_organizacion:
+            organizacion_id = str(raw_organizacion)
+            job_meta["organizacion_id"] = organizacion_id
 
-    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    job_payload: dict[str, Any] = {
+        "query": payload.query,
+        "lat": payload.lat,
+        "lng": payload.lng,
+        "radio_m": payload.radio_m,
+        "included_types": payload.included_types,
+        "strategy": payload.strategy,
+        "language_code": payload.language_code,
+        "region_code": payload.region_code,
+        "dense_mode": dense_mode,
+    }
+    GOOGLE_SEARCH_JOB_MANAGER.schedule_job(
+        repo=repo,
+        job=GoogleSearchJob(busqueda_id=busqueda_uuid, payload=job_payload, meta=job_meta),
+    )
     return {
         "ok": True,
         "busqueda_id": str(busqueda_uuid),
-        "google_results": len(normalized_items),
-        "upserted": upserted,
-        "preview": preview,
+        "status": "queued",
     }
 
 

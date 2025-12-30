@@ -13,6 +13,7 @@ export type CreateGoogleSearchPayload = {
   strategy?: GoogleSearchStrategy;
   language_code?: string | null;
   region_code?: string | null;
+  dense_mode?: boolean | null;
   meta?: Record<string, unknown> | null;
 };
 
@@ -31,9 +32,7 @@ export type GoogleSearchPreviewItem = {
 export type CreateGoogleSearchResponse = {
   ok: boolean;
   busqueda_id: string;
-  google_results: number;
-  upserted: number;
-  preview: GoogleSearchPreviewItem[];
+  status: "queued";
 };
 
 export type GoogleBusquedaItem = {

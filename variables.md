@@ -142,6 +142,11 @@ API_NEARBY_SEARCH=https://places.googleapis.com/v1/places:searchNearby
 GOOGLE_PLACES_NEARBY_URL=https://places.googleapis.com/v1/places:searchNearby
 GOOGLE_PLACES_TEXT_URL=https://places.googleapis.com/v1/places:searchText
 GOOGLE_PLACES_DETAILS_URL=https://places.googleapis.com/v1/places
+GOOGLE_PLACES_GRID_MAX_TILE_RADIUS_M=1200
+GOOGLE_PLACES_PAUSE_BETWEEN_PAGES=2.0
+GOOGLE_PLACES_DENSE_GRID_MAX_TILE_RADIUS_M=600
+GOOGLE_PLACES_DENSE_PAUSE_BETWEEN_PAGES=0.6
+GOOGLE_PLACES_DENSE_MAX_RESULTS=
 PLACES_FIELD_MASK=places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.primaryTypeDisplayName,places.types,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.googleMapsUri
 PLACES_DETAILS_FIELD_MASK=id,displayName,formattedAddress,location,primaryType,primaryTypeDisplayName,types,rating,userRatingCount,nationalPhoneNumber,internationalPhoneNumber,websiteUri,googleMapsUri,businessStatus,regularOpeningHours,utcOffsetMinutes,currentOpeningHours
 
