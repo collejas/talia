@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from math import asin, cos, radians, sin, sqrt
+from math import asin, ceil, cos, radians, sin, sqrt
 from typing import Any, Literal, Sequence
 
 import httpx
@@ -618,6 +618,9 @@ class GooglePlacesClient:
             tile_radius = min(
                 self.grid_max_tile_radius_m, max(350, int(radius_m / grid_size * 1.3))
             )
+            steps = max(2, ceil(radius_m / tile_radius))
+            dynamic_size = 1 + 2 * steps
+            grid_size = min(dynamic_size, 19)
         return {
             "grid_size": grid_size,
             "tile_radius_m": tile_radius,
