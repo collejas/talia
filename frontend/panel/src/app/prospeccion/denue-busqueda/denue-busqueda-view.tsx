@@ -65,7 +65,6 @@ const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
 const LIST_PAGE_SIZE = 250;
-const MAP_RESULTS_LIMIT = 5000;
 
 const ACTIONS = [
   { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },

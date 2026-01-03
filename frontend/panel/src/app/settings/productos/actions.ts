@@ -1,6 +1,6 @@
 "use server";
 
-import { callCrmApi } from "@/lib/api/crm";
+import { callCrmApi, type CrmResult } from "@/lib/api/crm";
 
 type CrmRow = Record<string, unknown>;
 
@@ -147,4 +147,151 @@ export async function fetchModelosProductos(options?: FetchOptions): Promise<Mod
     limit: options?.limit ? String(options.limit) : undefined,
   });
   return response.map(transformModelo);
+}
+
+type CrmPayload = Record<string, unknown>
+
+function normalizeResponseRow(response: CrmResult<CrmRow>): CrmRow {
+  if (!response.ok) {
+    throw new Error(response.error ?? "Respuesta inválida del CRM");
+  }
+  if (!response.data || typeof response.data !== "object") {
+    throw new Error("Respuesta inválida del CRM");
+  }
+  return response.data as CrmRow;
+}
+
+export type LineaFormInput = {
+  nombre: string
+  descripcion?: string | null
+  activo?: boolean
+  metadata?: Record<string, unknown> | null
+}
+
+export async function createLineaDeNegocio(input: LineaFormInput): Promise<LineaDeNegocio> {
+  const response = await callCrmApi<CrmRow>("/crm/productos/lineas", {
+    method: "POST",
+    body: {
+      nombre: input.nombre,
+      descripcion: input.descripcion ?? null,
+      activo: input.activo ?? true,
+      metadata: input.metadata ?? {},
+    },
+  })
+  const row = normalizeResponseRow(response)
+  return transformLinea(row)
+}
+
+export async function updateLineaDeNegocio(
+  id: string,
+  input: LineaFormInput,
+): Promise<LineaDeNegocio> {
+  if (!id) {
+    throw new Error("Falta el identificador de la línea")
+  }
+  const payload: CrmPayload = {}
+  if (input.nombre) payload.nombre = input.nombre
+  if (input.descripcion !== undefined) payload.descripcion = input.descripcion
+  if (input.activo !== undefined) payload.activo = input.activo
+  if (input.metadata !== undefined) payload.metadata = input.metadata
+  if (!Object.keys(payload).length) {
+    throw new Error("No hay cambios para guardar")
+  }
+  const response = await callCrmApi<CrmRow>(`/crm/productos/lineas/${id}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  const row = normalizeResponseRow(response)
+  return transformLinea(row)
+}
+
+export type FamiliaFormInput = {
+  nombre: string
+  lineaId: string
+  descripcion?: string | null
+  activo?: boolean
+  metadata?: Record<string, unknown> | null
+}
+
+export async function createFamiliaProducto(input: FamiliaFormInput): Promise<FamiliaProducto> {
+  const response = await callCrmApi<CrmRow>("/crm/productos/familias", {
+    method: "POST",
+    body: {
+      nombre: input.nombre,
+      descripcion: input.descripcion ?? null,
+      linea_id: input.lineaId,
+      activo: input.activo ?? true,
+      metadata: input.metadata ?? {},
+    },
+  })
+  const row = normalizeResponseRow(response)
+  return transformFamilia(row)
+}
+
+export async function updateFamiliaProducto(
+  id: string,
+  input: FamiliaFormInput,
+): Promise<FamiliaProducto> {
+  if (!id) {
+    throw new Error("Falta el identificador de la familia")
+  }
+  const payload: CrmPayload = {}
+  if (input.nombre) payload.nombre = input.nombre
+  if (input.descripcion !== undefined) payload.descripcion = input.descripcion
+  if (input.lineaId) payload.linea_id = input.lineaId
+  if (input.activo !== undefined) payload.activo = input.activo
+  if (input.metadata !== undefined) payload.metadata = input.metadata
+  if (!Object.keys(payload).length) {
+    throw new Error("No hay cambios para guardar")
+  }
+  const response = await callCrmApi<CrmRow>(`/crm/productos/familias/${id}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  const row = normalizeResponseRow(response)
+  return transformFamilia(row)
+}
+
+export type ModeloFormInput = {
+  nombre: string
+  descripcion?: string | null
+  activo?: boolean
+  metadata?: Record<string, unknown> | null
+}
+
+export async function createModeloProducto(input: ModeloFormInput): Promise<ModeloProducto> {
+  const response = await callCrmApi<CrmRow>("/crm/productos/modelos", {
+    method: "POST",
+    body: {
+      nombre: input.nombre,
+      descripcion: input.descripcion ?? null,
+      activo: input.activo ?? true,
+      metadata: input.metadata ?? {},
+    },
+  })
+  const row = normalizeResponseRow(response)
+  return transformModelo(row)
+}
+
+export async function updateModeloProducto(
+  id: string,
+  input: ModeloFormInput,
+): Promise<ModeloProducto> {
+  if (!id) {
+    throw new Error("Falta el identificador del modelo")
+  }
+  const payload: CrmPayload = {}
+  if (input.nombre) payload.nombre = input.nombre
+  if (input.descripcion !== undefined) payload.descripcion = input.descripcion
+  if (input.activo !== undefined) payload.activo = input.activo
+  if (input.metadata !== undefined) payload.metadata = input.metadata
+  if (!Object.keys(payload).length) {
+    throw new Error("No hay cambios para guardar")
+  }
+  const response = await callCrmApi<CrmRow>(`/crm/productos/modelos/${id}`, {
+    method: "PATCH",
+    body: payload,
+  })
+  const row = normalizeResponseRow(response)
+  return transformModelo(row)
 }

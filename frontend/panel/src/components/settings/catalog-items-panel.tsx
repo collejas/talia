@@ -42,6 +42,22 @@ import { cn } from "@/lib/utils"
 
 type StatusBanner = { type: "success" | "error"; message: string } | null
 
+type LineaOption = {
+  id: string
+  nombre: string
+}
+
+type FamiliaOption = {
+  id: string
+  nombre: string
+  lineaId: string | null
+}
+
+type ModeloOption = {
+  id: string
+  nombre: string
+}
+
 type CatalogItemFormValues = {
   nombre: string
   slug: string
@@ -55,6 +71,9 @@ type CatalogItemFormValues = {
   activo: boolean
   claveSat: string
   unidadSat: string
+  lineaId: string
+  familiaId: string
+  modeloId: string
 }
 
 const EMPTY_FORM: CatalogItemFormValues = {
@@ -70,9 +89,13 @@ const EMPTY_FORM: CatalogItemFormValues = {
   activo: true,
   claveSat: "",
   unidadSat: "",
+  lineaId: "",
+  familiaId: "",
+  modeloId: "",
 }
 
 const CURRENCY_OPTIONS = ["MXN", "USD", "COP", "CLP", "EUR"]
+const EMPTY_SELECT_VALUE = "__none__"
 
 function formatCurrency(value: number | null | undefined, currency: string): string {
   if (value == null || Number.isNaN(value)) {
@@ -107,6 +130,9 @@ function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
     activo: item.activo,
     claveSat: item.claveSat ?? "",
     unidadSat: item.unidadSat ?? "",
+    lineaId: item.lineaId ?? "",
+    familiaId: item.familiaId ?? "",
+    modeloId: item.modeloId ?? "",
   }
 }
 
@@ -126,6 +152,9 @@ function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogIte
     claveSat: values.claveSat || null,
     unidadSat: values.unidadSat || null,
     metadatos: metadatos ?? {},
+    lineaId: values.lineaId || null,
+    familiaId: values.familiaId || null,
+    modeloId: values.modeloId || null,
   }
 }
 
@@ -145,10 +174,23 @@ function catalogItemToInput(item: CatalogItem): CatalogItemInput {
     claveSat: item.claveSat,
     unidadSat: item.unidadSat,
     metadatos: item.metadatos,
+    lineaId: item.lineaId,
+    familiaId: item.familiaId,
+    modeloId: item.modeloId,
   }
 }
 
-export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[] }) {
+export function CatalogItemsPanel({
+  initialItems,
+  lineas,
+  familias,
+  modelos,
+}: {
+  initialItems: CatalogItem[]
+  lineas: LineaOption[]
+  familias: FamiliaOption[]
+  modelos: ModeloOption[]
+}) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [search, setSearch] = useState("")
   const [includeInactive, setIncludeInactive] = useState(true)
@@ -164,6 +206,17 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
   const monedaWatch = useWatch({ control: form.control, name: "moneda" }) as string | undefined;
   const activoWatch = useWatch({ control: form.control, name: "activo" }) as boolean | undefined;
   const requiereFacturaWatch = useWatch({ control: form.control, name: "requiereFactura" }) as boolean | undefined;
+  const lineaWatch = useWatch({ control: form.control, name: "lineaId" }) ?? ""
+  const familiaWatch = useWatch({ control: form.control, name: "familiaId" }) ?? ""
+  const modeloWatch = useWatch({ control: form.control, name: "modeloId" }) ?? ""
+
+  const filteredFamilias = useMemo(() => {
+    if (!lineaWatch) {
+      return familias
+    }
+    return familias.filter((familia) => familia.lineaId === lineaWatch)
+  }, [familias, lineaWatch])
+
 
   const visibleItems = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -433,11 +486,28 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
                 visibleItems.map((item) => (
                   <TableRow key={item.id} className={!item.activo ? "bg-muted/30" : undefined}>
                     <TableCell>
-                      <div className="font-medium leading-tight">{item.nombre}</div>
-                      <div className="text-muted-foreground text-xs">
-                        {item.descripcionCorta || "Sin descripción"}
-                      </div>
-                    </TableCell>
+                  <div className="font-medium leading-tight">{item.nombre}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {item.descripcionCorta || "Sin descripción"}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    {item.lineaNombre ? (
+                      <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                        Línea: {item.lineaNombre}
+                      </span>
+                    ) : null}
+                    {item.familiaNombre ? (
+                      <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                        Familia: {item.familiaNombre}
+                      </span>
+                    ) : null}
+                    {item.modeloNombre ? (
+                      <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                        Modelo: {item.modeloNombre}
+                      </span>
+                    ) : null}
+                  </div>
+                </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="capitalize">
                         {item.tipo}
@@ -555,6 +625,71 @@ export function CatalogItemsPanel({ initialItems }: { initialItems: CatalogItem[
               <div className="space-y-2">
                 <Label htmlFor="catalog-slug">Slug / código</Label>
                 <Input id="catalog-slug" {...form.register("slug")} placeholder="tal-ia-implementacion" />
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="catalog-linea">Línea de negocio</Label>
+              <Select
+                  value={lineaWatch || EMPTY_SELECT_VALUE}
+                  onValueChange={(value) =>
+                    form.setValue("lineaId", value === EMPTY_SELECT_VALUE ? "" : value)
+                  }
+              >
+                <SelectTrigger id="catalog-linea">
+                  <SelectValue placeholder="Selecciona una línea" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={EMPTY_SELECT_VALUE}>Sin línea</SelectItem>
+                    {lineas.map((linea) => (
+                      <SelectItem key={linea.id} value={linea.id}>
+                        {linea.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            <div className="space-y-2">
+              <Label htmlFor="catalog-familia">Familia</Label>
+              <Select
+                  value={familiaWatch || EMPTY_SELECT_VALUE}
+                  onValueChange={(value) =>
+                    form.setValue("familiaId", value === EMPTY_SELECT_VALUE ? "" : value)
+                  }
+              >
+                <SelectTrigger id="catalog-familia">
+                  <SelectValue placeholder="Selecciona una familia" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={EMPTY_SELECT_VALUE}>Sin familia</SelectItem>
+                    {filteredFamilias.map((familia) => (
+                      <SelectItem key={familia.id} value={familia.id}>
+                        {familia.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            <div className="space-y-2">
+              <Label htmlFor="catalog-modelo">Modelo</Label>
+              <Select
+                  value={modeloWatch || EMPTY_SELECT_VALUE}
+                  onValueChange={(value) =>
+                    form.setValue("modeloId", value === EMPTY_SELECT_VALUE ? "" : value)
+                  }
+              >
+                <SelectTrigger id="catalog-modelo">
+                  <SelectValue placeholder="Selecciona un modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={EMPTY_SELECT_VALUE}>Sin modelo</SelectItem>
+                    {modelos.map((modelo) => (
+                      <SelectItem key={modelo.id} value={modelo.id}>
+                        {modelo.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">

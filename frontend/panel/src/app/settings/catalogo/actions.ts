@@ -29,6 +29,12 @@ export type CatalogItem = {
   updatedBy: string | null;
   creadoEn: string | null;
   actualizadoEn: string | null;
+  lineaId: string | null;
+  familiaId: string | null;
+  modeloId: string | null;
+  lineaNombre: string | null;
+  familiaNombre: string | null;
+  modeloNombre: string | null;
 };
 
 export type CatalogItemInput = {
@@ -46,6 +52,9 @@ export type CatalogItemInput = {
   claveSat?: string | null;
   unidadSat?: string | null;
   metadatos?: Record<string, unknown> | null;
+  lineaId?: string | null;
+  familiaId?: string | null;
+  modeloId?: string | null;
 };
 
 type FetchOptions = {
@@ -75,6 +84,12 @@ type CrmCatalogItem = {
   updated_by: string | null;
   creado_en: string | null;
   actualizado_en: string | null;
+  linea_id: string | null;
+  familia_id: string | null;
+  modelo_id: string | null;
+  linea: { id: string; nombre: string } | null;
+  familia: { id: string; nombre: string } | null;
+  modelo: { id: string; nombre: string } | null;
 };
 
 type CrmCatalogDeleteResponse = {
@@ -174,6 +189,23 @@ function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
     updatedBy: normalizeString(record.updated_by ?? record.updatedBy),
     creadoEn: normalizeString(record.creado_en ?? record.creadoEn),
     actualizadoEn: normalizeString(record.actualizado_en ?? record.actualizadoEn),
+    lineaId: normalizeString(record.linea_id ?? record.lineaId),
+    familiaId: normalizeString(record.familia_id ?? record.familiaId),
+    modeloId: normalizeString(record.modelo_id ?? record.modeloId),
+    lineaNombre: normalizeString(
+      (record.linea && typeof record.linea === "object" ? (record.linea as Record<string, unknown>).nombre : null) ??
+        record.lineaNombre,
+    ),
+    familiaNombre: normalizeString(
+      (record.familia && typeof record.familia === "object"
+        ? (record.familia as Record<string, unknown>).nombre
+        : null) ?? record.familiaNombre,
+    ),
+    modeloNombre: normalizeString(
+      (record.modelo && typeof record.modelo === "object"
+        ? (record.modelo as Record<string, unknown>).nombre
+        : null) ?? record.modeloNombre,
+    ),
   }
 }
 
@@ -204,6 +236,9 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
   if (input.claveSat !== undefined) payload.clave_sat = sanitizeText(input.claveSat)
   if (input.unidadSat !== undefined) payload.unidad_sat = sanitizeText(input.unidadSat)
   if (input.metadatos !== undefined) payload.metadatos = input.metadatos ?? {}
+  if (input.lineaId !== undefined) payload.linea_id = input.lineaId ?? null
+  if (input.familiaId !== undefined) payload.familia_id = input.familiaId ?? null
+  if (input.modeloId !== undefined) payload.modelo_id = input.modeloId ?? null
 
   return payload
 }

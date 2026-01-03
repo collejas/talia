@@ -3094,6 +3094,9 @@ class CRMRepository:
             "order": "nombre.asc",
             "limit": str(max(1, min(limit, 500))),
         }
+        params[
+            "select"
+        ] = "*,linea:lineas_de_negocio(id,nombre),familia:familias_productos(id,nombre),modelo:modelos_productos(id,nombre)"
         if not include_inactive:
             params["activo"] = "eq.true"
         if tipo:
@@ -3189,6 +3192,144 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar modelos: {data!r}")
         return data
+
+    async def create_linea_de_negocio(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/lineas_de_negocio",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("linea_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear línea: {row!r}")
+        return row
+
+    async def update_linea_de_negocio(
+        self,
+        *,
+        organizacion_id: UUID,
+        linea_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{linea_id}"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/lineas_de_negocio",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("linea_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar línea: {row!r}")
+        return row
+
+    async def create_familia_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/familias_productos",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("familia_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear familia: {row!r}")
+        return row
+
+    async def update_familia_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        familia_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{familia_id}"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/familias_productos",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("familia_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar familia: {row!r}")
+        return row
+
+    async def create_modelo_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/modelos_productos",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("modelo_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear modelo: {row!r}")
+        return row
+
+    async def update_modelo_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        modelo_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{modelo_id}"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/modelos_productos",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("modelo_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar modelo: {row!r}")
+        return row
 
     async def create_catalog_item(
         self,

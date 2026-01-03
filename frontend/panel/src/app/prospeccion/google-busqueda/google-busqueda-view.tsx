@@ -380,6 +380,7 @@ export function GoogleBusquedaView() {
   }, [
     activeBusquedaId,
     activeBusqueda?.meta?.status,
+    activeBusqueda?.total_encontrados,
     resultadosCount,
     queuedBusquedaId,
     resultsLoadedForId,

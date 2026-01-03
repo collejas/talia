@@ -3216,6 +3216,12 @@ class CRMCatalogItem(BaseModel):
     updated_by: UUID | None = None
     creado_en: datetime
     actualizado_en: datetime
+    linea_id: UUID | None = None
+    familia_id: UUID | None = None
+    modelo_id: UUID | None = None
+    linea: CRMLineaDeNegocio | None = None
+    familia: CRMFamiliaProducto | None = None
+    modelo: CRMModeloProducto | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -3235,6 +3241,9 @@ class CRMCatalogItemCreate(BaseModel):
     clave_sat: str | None = Field(default=None, max_length=100)
     unidad_sat: str | None = Field(default=None, max_length=100)
     metadatos: dict[str, Any] | None = Field(default_factory=dict)
+    linea_id: UUID | None = None
+    familia_id: UUID | None = None
+    modelo_id: UUID | None = None
 
 
 class CRMCatalogItemUpdate(BaseModel):
@@ -3252,6 +3261,9 @@ class CRMCatalogItemUpdate(BaseModel):
     clave_sat: str | None = Field(default=None, max_length=100)
     unidad_sat: str | None = Field(default=None, max_length=100)
     metadatos: dict[str, Any] | None = None
+    linea_id: UUID | None = None
+    familia_id: UUID | None = None
+    modelo_id: UUID | None = None
 
 
 class CRMCatalogDeleteResponse(BaseModel):
@@ -3288,6 +3300,50 @@ class CRMModeloProducto(BaseModel):
     metadata: dict[str, Any] | None = None
     creado_en: datetime
     actualizado_en: datetime
+
+
+class CRMLineaDeNegocioCreate(BaseModel):
+    nombre: str = Field(..., max_length=255)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    activo: bool = True
+    metadata: dict[str, Any] | None = None
+
+
+class CRMLineaDeNegocioUpdate(BaseModel):
+    nombre: str | None = Field(default=None, max_length=255)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    activo: bool | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class CRMFamiliaProductoCreate(BaseModel):
+    nombre: str = Field(..., max_length=255)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    linea_id: UUID
+    activo: bool = True
+    metadata: dict[str, Any] | None = None
+
+
+class CRMFamiliaProductoUpdate(BaseModel):
+    nombre: str | None = Field(default=None, max_length=255)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    linea_id: UUID | None = None
+    activo: bool | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class CRMModeloProductoCreate(BaseModel):
+    nombre: str = Field(..., max_length=255)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    activo: bool = True
+    metadata: dict[str, Any] | None = None
+
+
+class CRMModeloProductoUpdate(BaseModel):
+    nombre: str | None = Field(default=None, max_length=255)
+    descripcion: str | None = Field(default=None, max_length=2000)
+    activo: bool | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class LeadQuoteItemPayload(BaseModel):
@@ -4470,6 +4526,54 @@ async def list_product_lineas(
     return [CRMLineaDeNegocio.model_validate(row) for row in rows]
 
 
+@router.post(
+    "/productos/lineas",
+    response_model=CRMLineaDeNegocio,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_product_linea(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMLineaDeNegocioCreate,
+) -> CRMLineaDeNegocio:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if payload.metadata is not None:
+        body["metadata"] = payload.metadata
+    try:
+        row = await repo.create_linea_de_negocio(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMLineaDeNegocio.model_validate(row)
+
+
+@router.patch("/productos/lineas/{linea_id}", response_model=CRMLineaDeNegocio)
+async def update_product_linea(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    linea_id: UUID,
+    payload: CRMLineaDeNegocioUpdate,
+) -> CRMLineaDeNegocio:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_linea_de_negocio(
+            organizacion_id=organizacion_id,
+            linea_id=linea_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = "linea_not_found" if "linea_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "linea_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMLineaDeNegocio.model_validate(row)
+
+
 @router.get("/productos/familias", response_model=list[CRMFamiliaProducto])
 async def list_product_familias(
     *,
@@ -4493,6 +4597,52 @@ async def list_product_familias(
     return [CRMFamiliaProducto.model_validate(row) for row in rows]
 
 
+@router.post(
+    "/productos/familias",
+    response_model=CRMFamiliaProducto,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_product_familia(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMFamiliaProductoCreate,
+) -> CRMFamiliaProducto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.create_familia_producto(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMFamiliaProducto.model_validate(row)
+
+
+@router.patch("/productos/familias/{familia_id}", response_model=CRMFamiliaProducto)
+async def update_product_familia(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    familia_id: UUID,
+    payload: CRMFamiliaProductoUpdate,
+) -> CRMFamiliaProducto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_familia_producto(
+            organizacion_id=organizacion_id,
+            familia_id=familia_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = "familia_not_found" if "familia_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "familia_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMFamiliaProducto.model_validate(row)
+
+
 @router.get("/productos/modelos", response_model=list[CRMModeloProducto])
 async def list_product_modelos(
     *,
@@ -4512,6 +4662,52 @@ async def list_product_modelos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMModeloProducto.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/productos/modelos",
+    response_model=CRMModeloProducto,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_product_modelo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMModeloProductoCreate,
+) -> CRMModeloProducto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    try:
+        row = await repo.create_modelo_producto(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMModeloProducto.model_validate(row)
+
+
+@router.patch("/productos/modelos/{modelo_id}", response_model=CRMModeloProducto)
+async def update_product_modelo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    modelo_id: UUID,
+    payload: CRMModeloProductoUpdate,
+) -> CRMModeloProducto:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_modelo_producto(
+            organizacion_id=organizacion_id,
+            modelo_id=modelo_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail = "modelo_not_found" if "modelo_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "modelo_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMModeloProducto.model_validate(row)
 
 
 @router.get("/contacts/search", response_model=CRMContactSearchResponse)

@@ -4,13 +4,23 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { CatalogItemsPanel } from "@/components/settings/catalog-items-panel"
 
 import { fetchCatalogItems } from "./actions"
+import {
+  fetchFamiliasDeProductos,
+  fetchLineasDeNegocio,
+  fetchModelosProductos,
+} from "@/app/settings/productos/actions"
 
 export const metadata: Metadata = {
   title: "Catálogo de productos",
 }
 
 export default async function CatalogSettingsPage() {
-  const items = await fetchCatalogItems({ includeInactive: true })
+  const [items, lineas, familias, modelos] = await Promise.all([
+    fetchCatalogItems({ includeInactive: true }),
+    fetchLineasDeNegocio({ includeInactive: true }),
+    fetchFamiliasDeProductos({ includeInactive: true }),
+    fetchModelosProductos({ includeInactive: true }),
+  ])
 
   return (
     <AppViewLayout title="Settings · Catálogo">
@@ -27,7 +37,16 @@ export default async function CatalogSettingsPage() {
             editar, archivar o eliminar elementos y mantener el inventario sincronizado con lo que ofreces a tus clientes.
           </p>
         </header>
-        <CatalogItemsPanel initialItems={items} />
+        <CatalogItemsPanel
+          initialItems={items}
+          lineas={lineas.map((linea) => ({ id: linea.id, nombre: linea.nombre }))}
+          familias={familias.map((familia) => ({
+            id: familia.id,
+            nombre: familia.nombre,
+            lineaId: familia.lineaId,
+          }))}
+          modelos={modelos.map((modelo) => ({ id: modelo.id, nombre: modelo.nombre }))}
+        />
       </div>
     </AppViewLayout>
   )

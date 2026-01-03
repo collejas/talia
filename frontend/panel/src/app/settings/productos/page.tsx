@@ -1,5 +1,4 @@
 import Link from "next/link"
-import type { Metadata } from "next"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
