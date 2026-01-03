@@ -104,6 +104,11 @@ const NAVIGATION = {
           url: "/settings/catalogo",
           icon: IconBox,
         },
+        {
+          title: "Productos y servicios",
+          url: "/settings/productos",
+          icon: IconHierarchy,
+        },
         { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers },
         { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck },
         { title: "Permisos", url: "/settings/usuarios/permisos", icon: IconShieldLock },
