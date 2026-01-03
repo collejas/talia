@@ -30,7 +30,6 @@ import {
   IconHierarchy,
   IconShieldCheck,
   IconShieldLock,
-  IconBox,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
@@ -98,11 +97,6 @@ const NAVIGATION = {
           title: "Formato de cotización",
           url: "/settings/formato-cotizacion",
           icon: IconFileDescription,
-        },
-        {
-          title: "Catálogo de productos",
-          url: "/settings/catalogo",
-          icon: IconBox,
         },
         {
           title: "Productos y servicios",

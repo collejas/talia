@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { callCrmApi } from "@/lib/api/crm";
 
-const SETTINGS_PATH = "/settings/catalogo";
+const SETTINGS_PATH = "/settings/productos/items";
 const DEFAULT_MONEDA = "MXN";
 const DEFAULT_UNIDAD = "unidad";
 const DEFAULT_TIPO = "servicio";

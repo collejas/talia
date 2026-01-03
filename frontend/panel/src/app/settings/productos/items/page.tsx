@@ -1,13 +1,7 @@
 import Link from "next/link"
 import type { ComponentType } from "react"
 
-import {
-  IconArrowRight,
-  IconBox,
-  IconBuildingFactory,
-  IconHierarchy,
-  IconPhoto,
-} from "@tabler/icons-react"
+import { IconBox, IconBuildingFactory, IconHierarchy } from "@tabler/icons-react"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,12 +24,7 @@ type OverviewCard = {
   icon: ComponentType<{ className?: string }>
 }
 
-function buildOverviewCards(
-  itemsCount: number,
-  lineasCount: number,
-  familiasCount: number,
-  modelosCount: number,
-): OverviewCard[] {
+function buildOverviewCards(lineasCount: number, familiasCount: number, modelosCount: number): OverviewCard[] {
   const formatter = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 })
   return [
     {
@@ -64,43 +53,7 @@ function buildOverviewCards(
       actionText: "Explorar modelos",
       icon: IconBuildingFactory,
     },
-    {
-      title: "Catálogo y precios",
-      description: "Administra productos, servicios e impuestos alineados con tus líneas/familias/modelos.",
-      href: "/settings/catalogo",
-      stat: `${formatter.format(itemsCount)} ítems`,
-      actionText: "Ir al catálogo",
-      icon: IconPhoto,
-    },
   ]
-}
-
-function SummaryCard({
-  title,
-  children,
-  href,
-  action,
-}: {
-  title: string
-  children: React.ReactNode
-  href?: string
-  action?: React.ReactNode
-}) {
-  return (
-    <Card className="flex flex-col gap-3">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">{children}</CardContent>
-      {href && (
-        <CardFooter className="pt-0">
-          <Button size="sm" variant="ghost" className="w-full" asChild>
-            <Link href={href}>{action ?? "Ver detalles"}</Link>
-          </Button>
-        </CardFooter>
-      )}
-    </Card>
-  )
 }
 
 export default async function SettingsProductosItemsPage() {
@@ -110,12 +63,7 @@ export default async function SettingsProductosItemsPage() {
     fetchFamiliasDeProductos({ includeInactive: true }),
     fetchModelosProductos({ includeInactive: true }),
   ])
-  const overviewCards = buildOverviewCards(
-    items.length,
-    lineas.length,
-    familias.length,
-    modelos.length,
-  )
+  const overviewCards = buildOverviewCards(lineas.length, familias.length, modelos.length)
   return (
     <AppViewLayout title="Settings · Productos y servicios">
       <div className="space-y-6 px-4 py-6 lg:px-6">
@@ -151,36 +99,6 @@ export default async function SettingsProductosItemsPage() {
             </CardFooter>
           </Card>
         ))}</div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <SummaryCard
-            title="Relación entre jerarquías"
-            href="/settings/productos/lineas"
-            action={
-              <div className="flex items-center justify-center gap-2">
-                <IconArrowRight className="h-4 w-4" />
-                Ir a la línea/familia/modelo principal
-              </div>
-            }
-          >
-            Asigna cada producto a una línea, familia y modelo para mantener la consistencia. Todas estas
-            relaciones se almacenan en las nuevas tablas `lineas_de_negocio`, `familias_productos` y
-            `modelos_productos`.
-          </SummaryCard>
-          <SummaryCard
-            title="Recursos multimedia (recursos_media)"
-            href="/settings/catalogo"
-            action="Agregar imágenes"
-          >
-            Usa la tabla `recursos_media` para enlazar fotos de portada o galerías a tus productos, familias
-            o modelos. Las URLs se almacenan en Supabase Storage y se pueden referenciar desde cualquier
-            ítem del catálogo.
-          </SummaryCard>
-          <SummaryCard title="Estado del catálogo">
-            {items.length
-              ? "Actualiza tus ítems para reflejar nuevas condiciones comerciales y conecta cada uno con las jerarquías y recursos."
-              : "Crea el primer producto o servicio y asigna línea/familia/modelo para poder utilizarlo en cotizaciones."}
-          </SummaryCard>
-        </div>
         <Separator />
         <CatalogItemsPanel
           initialItems={items}
