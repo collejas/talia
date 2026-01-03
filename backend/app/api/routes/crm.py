@@ -3259,6 +3259,37 @@ class CRMCatalogDeleteResponse(BaseModel):
     hard_deleted: bool = False
 
 
+class CRMLineaDeNegocio(BaseModel):
+    id: UUID
+    nombre: str
+    descripcion: str | None = None
+    activo: bool
+    metadata: dict[str, Any] | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMFamiliaProducto(BaseModel):
+    id: UUID
+    linea_id: UUID | None = None
+    nombre: str
+    descripcion: str | None = None
+    activo: bool
+    metadata: dict[str, Any] | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMModeloProducto(BaseModel):
+    id: UUID
+    nombre: str
+    descripcion: str | None = None
+    activo: bool
+    metadata: dict[str, Any] | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
 class LeadQuoteItemPayload(BaseModel):
     catalog_item_id: UUID | None = None
     titulo: str | None = Field(default=None, max_length=200)
@@ -4416,6 +4447,71 @@ async def delete_catalog_item(
         detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.get("/productos/lineas", response_model=list[CRMLineaDeNegocio])
+async def list_product_lineas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    include_inactive: bool = Query(default=False),
+    search: str | None = Query(default=None, max_length=200),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMLineaDeNegocio]:
+    try:
+        rows = await repo.list_lineas_de_negocio(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            search=search,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMLineaDeNegocio.model_validate(row) for row in rows]
+
+
+@router.get("/productos/familias", response_model=list[CRMFamiliaProducto])
+async def list_product_familias(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    include_inactive: bool = Query(default=False),
+    linea_id: UUID | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=200),
+    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+) -> list[CRMFamiliaProducto]:
+    try:
+        rows = await repo.list_familias_productos(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            linea_id=linea_id,
+            search=search,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMFamiliaProducto.model_validate(row) for row in rows]
+
+
+@router.get("/productos/modelos", response_model=list[CRMModeloProducto])
+async def list_product_modelos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    include_inactive: bool = Query(default=False),
+    search: str | None = Query(default=None, max_length=200),
+    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+) -> list[CRMModeloProducto]:
+    try:
+        rows = await repo.list_modelos_productos(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            search=search,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMModeloProducto.model_validate(row) for row in rows]
 
 
 @router.get("/contacts/search", response_model=CRMContactSearchResponse)

@@ -40,6 +40,15 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _sanitize_search_pattern(value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    return trimmed.replace("%", "").replace("*", "")
+
+
 def _coerce_positive_int(value: Any, default: int = 1) -> int:
     try:
         number = int(value)
@@ -3101,6 +3110,84 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar catálogo: {data!r}")
+        return data
+
+    async def list_lineas_de_negocio(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        search: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if search:
+            sanitized = _sanitize_search_pattern(search)
+            if sanitized:
+                params["or"] = f"(nombre.ilike.*{sanitized}*,descripcion.ilike.*{sanitized}*)"
+        resp = await self._request("GET", "/rest/v1/lineas_de_negocio", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar líneas: {data!r}")
+        return data
+
+    async def list_familias_productos(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        linea_id: UUID | None = None,
+        search: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if linea_id:
+            params["linea_id"] = f"eq.{linea_id}"
+        if search:
+            sanitized = _sanitize_search_pattern(search)
+            if sanitized:
+                params["or"] = f"(nombre.ilike.*{sanitized}*,descripcion.ilike.*{sanitized}*)"
+        resp = await self._request("GET", "/rest/v1/familias_productos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar familias: {data!r}")
+        return data
+
+    async def list_modelos_productos(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        search: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if search:
+            sanitized = _sanitize_search_pattern(search)
+            if sanitized:
+                params["or"] = f"(nombre.ilike.*{sanitized}*,descripcion.ilike.*{sanitized}*)"
+        resp = await self._request("GET", "/rest/v1/modelos_productos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar modelos: {data!r}")
         return data
 
     async def create_catalog_item(
