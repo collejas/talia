@@ -203,6 +203,9 @@ async def try_execute_lead_tool(
             "oportunidad_id": oportunidad_id,
         }
 
+    if tool_name == "restart_conversation_cycle":
+        return await _handle_restart_conversation_cycle(arguments, context)
+
     return None
 
 
@@ -343,6 +346,61 @@ async def _handle_information_email(
         "status": "sent",
         "email": email_value,
         "message_id": message_id,
+    }
+
+
+async def _handle_restart_conversation_cycle(
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+) -> dict[str, Any]:
+    """Crea un nuevo ciclo de conversación cuando el asistente detecta un cambio de tema."""
+    reason = str(arguments.get("reason") or "").strip()
+    channel = context.channel or "messenger"
+    try:
+        ensure_payload = await storage.ensure_conversation_opportunity(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel=channel,
+            force_new_opportunity_on_restart=True,
+            include_restart_metadata=True,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "lead_tools.restart_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "error": str(exc),
+            },
+        )
+        raise ValueError("No fue posible reiniciar la conversación en este momento.") from exc
+
+    restart_created = False
+    restart_sequence = 1
+    oportunidad_id: str | None = None
+    if isinstance(ensure_payload, dict):
+        restart_created = bool(ensure_payload.get("restart_created"))
+        restart_sequence = int(ensure_payload.get("restart_sequence") or 1)
+        oportunidad_id = ensure_payload.get("oportunidad_id")
+    else:
+        oportunidad_id = ensure_payload
+
+    if restart_created:
+        logger.info(
+            "lead_tools.restart_created",
+            extra={
+                "conversation_id": context.conversation_id,
+                "reason": reason,
+                "restart_sequence": restart_sequence,
+            },
+        )
+
+    return {
+        "status": "ok",
+        "restart_created": restart_created,
+        "restart_sequence": restart_sequence,
+        "oportunidad_id": oportunidad_id,
+        "reason": reason,
     }
 
 
