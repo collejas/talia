@@ -4599,6 +4599,19 @@ class CatalogVectorStoreStatus(BaseModel):
     last_query_by: UUID | None = None
     last_query_channel: str | None = None
 
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CatalogVectorStoreAuditEntry(BaseModel):
+    id: UUID
+    tipo: Literal["reindex", "query"]
+    canal: str | None = None
+    usuario_id: UUID | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    creado_en: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
 
 @router.get("/catalog/vector-store/status", response_model=CatalogVectorStoreStatus)
 async def catalog_vector_store_status(
@@ -4626,6 +4639,23 @@ async def catalog_vector_store_status(
         last_query_by=_safe_uuid(query.get("usuario_id")) if query else None,
         last_query_channel=query.get("canal") if query else None,
     )
+
+
+@router.get(
+    "/catalog/vector-store/audit",
+    response_model=list[CatalogVectorStoreAuditEntry],
+)
+async def catalog_vector_store_audit(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> list[CatalogVectorStoreAuditEntry]:
+    rows = await repo.list_catalog_embeddings_audit(
+        organizacion_id=organizacion_id,
+        limit=limit,
+    )
+    return [CatalogVectorStoreAuditEntry.model_validate(row) for row in rows]
 
 
 @router.get("/productos/lineas", response_model=list[CRMLineaDeNegocio])

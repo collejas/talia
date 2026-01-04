@@ -93,3 +93,4 @@ CREATE TABLE public.catalog_document_embeddings (
 - El panel de `settings/productos/items` ahora incluye una tarjeta dedicada a la vector store que muestra la última reindexación y la última consulta registrada en `catalog_embeddings_audit`.
 - El backend expone `/crm/catalog/vector-store/status`, que consulta la tabla de auditoría (últimos eventos de tipo `reindex`/`query`) y devuelve las marcas de tiempo y canales sin compartir UUIDs, para cumplir con la restricción de no mostrar IDs sensibles.
 - Esta tarjeta recuerda al usuario que la vector store se actualiza tras cada edición de líneas/familias/modelos/productos y que la información enriquecida está disponible para las respuestas del asistente.
+- Además, un segundo bloque de auditoría muestra los eventos recientes (estado, canal, descripción) directamente en la interfaz, facilitando seguir la trazabilidad sin salir del panel.

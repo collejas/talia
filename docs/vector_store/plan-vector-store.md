@@ -25,7 +25,7 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 ## 5. Seguridad y datos multi-tenant
 - [x] { } Garantizar que cada documento guarda `organizacion_id` y las consultas siempre se filtran por ese campo.
 - [x] { } Revisar políticas RLS para que sólo usuarios del tenant puedan leer los embeddings.
-- [ ] { } Registrar auditoría (fecha, usuario) cada vez que se reindexa o se consulta la vector store (opcional).
+- [x] { } Registrar auditoría (fecha, usuario) cada vez que se reindexa o se consulta la vector store (opcional).
 
 ## 6. UX del asistente
 - [ ] { } Actualizar los prompts/templates del asistente para mencionar que está consultando la base enriquecida (dar claridad y transparencia).

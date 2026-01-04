@@ -219,6 +219,42 @@ export async function fetchCatalogVectorStoreStatus(): Promise<CatalogVectorStor
   return response.data;
 }
 
+export type CatalogVectorStoreAuditEvent = {
+  id: string;
+  tipo: "reindex" | "query";
+  canal: string | null;
+  usuarioId: string | null;
+  metadata: Record<string, unknown>;
+  creadoEn: string;
+};
+
+export async function fetchCatalogVectorStoreAudit(
+  limit = 6,
+): Promise<CatalogVectorStoreAuditEvent[]> {
+  const response = await callCrmApi<Record<string, unknown>[]>(
+    "/crm/catalog/vector-store/audit",
+    {
+      searchParams: {
+        limit: String(limit),
+      },
+    },
+  );
+  if (!response.ok || !Array.isArray(response.data)) {
+    return [];
+  }
+  return response.data.map((entry) => ({
+    id: String(entry.id ?? ""),
+    tipo: entry.tipo === "reindex" ? "reindex" : "query",
+    canal: typeof entry.canal === "string" ? entry.canal : null,
+    usuarioId: typeof entry.usuario_id === "string" ? entry.usuario_id : null,
+    metadata:
+      entry.metadata && typeof entry.metadata === "object"
+        ? (entry.metadata as Record<string, unknown>)
+        : {},
+    creadoEn: String(entry.creado_en ?? entry.creadoAt ?? ""),
+  }));
+}
+
 type CrmPayload = Record<string, unknown>
 
 function normalizeResponseRow(response: CrmResult<CrmRow>): CrmRow {
