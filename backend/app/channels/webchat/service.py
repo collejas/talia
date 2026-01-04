@@ -11,7 +11,6 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
-from uuid import UUID
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -40,9 +39,8 @@ from app.services import (
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
 from app.services.calendar import CalendarError
+from app.services.catalog_context import build_catalog_context
 from app.services.storage import StorageError
-from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services.catalog_embeddings import CatalogDocumentMatch, CatalogEmbeddingService
 
 from . import schemas
 
@@ -193,84 +191,6 @@ def _resolve_timezone_preference(value: Any) -> str:
 
 def _build_slot_identifier(resource_id: str, slot_start: datetime) -> str:
     return f"{resource_id}:{slot_start.isoformat()}"
-
-
-_catalog_embedding_service: CatalogEmbeddingService | None = None
-
-
-def _get_catalog_embedding_service() -> CatalogEmbeddingService | None:
-    global _catalog_embedding_service
-    if _catalog_embedding_service is not None:
-        return _catalog_embedding_service
-    try:
-        _catalog_embedding_service = CatalogEmbeddingService(CRMRepository())
-    except CRMRepositoryError as exc:
-        logger.debug(
-            "webchat.catalog_embedding_service_unavailable",
-            extra={"error": str(exc)},
-        )
-        return None
-    return _catalog_embedding_service
-
-
-def _summarize_catalog_text(value: str, max_chars: int = 220) -> str:
-    normalized = " ".join(value.split())
-    if len(normalized) <= max_chars:
-        return normalized
-    truncated = normalized[:max_chars]
-    if " " in truncated:
-        truncated = truncated.rsplit(" ", 1)[0]
-    return truncated.rstrip() + "..."
-
-
-def _catalog_match_label(match: CatalogDocumentMatch) -> str:
-    for key in ("nombre", "slug", "tipo"):
-        candidate = match.metadata.get(key)
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
-    if match.entity_id:
-        return str(match.entity_id)
-    return "sin identificador"
-
-
-def _format_catalog_matches(matches: list[CatalogDocumentMatch]) -> str | None:
-    if not matches:
-        return None
-    lines = ["Contexto relevante del catálogo:"]
-    for index, match in enumerate(matches[:3], start=1):
-        label = _catalog_match_label(match)
-        snippet = _summarize_catalog_text(match.contenido)
-        similarity = match.similarity
-        sim_text = f" (sim: {similarity:.3f})" if similarity is not None else ""
-        lines.append(f"{index}. {match.entity_type.title()} {label}{sim_text}: {snippet}")
-    return "\n".join(lines)
-
-
-async def _prepare_catalog_context(
-    organizacion_id: str | None,
-    query: str,
-) -> str | None:
-    if not organizacion_id:
-        return None
-    prompt = query.strip()
-    if not prompt:
-        return None
-    try:
-        org_uuid = UUID(organizacion_id)
-    except ValueError:
-        return None
-    service = _get_catalog_embedding_service()
-    if not service:
-        return None
-    try:
-        matches = await service.query_documents(org_uuid, query=prompt, limit=3)
-    except CRMRepositoryError as exc:
-        logger.debug(
-            "webchat.catalog_context_search_failed",
-            extra={"organizacion_id": organizacion_id, "error": str(exc)},
-        )
-        return None
-    return _format_catalog_matches(matches)
 
 
 async def _resolve_conversation_metadata(conversation_id: str) -> dict[str, Any]:
@@ -2396,7 +2316,7 @@ async def _run_assistant_turn(
                 ],
             }
         )
-    catalog_context = await _prepare_catalog_context(organizacion_id, user_message.content)
+    catalog_context = await build_catalog_context(organizacion_id, user_message.content or "")
     if catalog_context:
         base_input.append(
             {

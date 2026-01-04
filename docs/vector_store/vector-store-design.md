@@ -71,7 +71,7 @@ CREATE TABLE public.catalog_document_embeddings (
 
 4. **Consulta desde el asistente**  
    - El helper (`backend/app/services/catalog_embeddings.py::query_documents`) recibe el prompt del asistente, genera el embedding y llama al RPC `catalog_document_embeddings_search` (ver `supabase/migrations/20280107_120000_catalog_vector_search.sql`) para obtener los fragmentos con orden por similitud.  
-   - En el canal webchat, el resultado se transforma en un mensaje `developer` previo a la entrada del usuario (`backend/app/channels/webchat/service.py::_prepare_catalog_context`), de manera que la conversación recibe contexto enriquecido sin tocar el prompt principal.  
+   - En los canales webchat/messenger/whatsapp, ese resultado se transforma en un mensaje `developer` previo a la entrada del usuario (`backend/app/channels/*/service.py` usando `app.services.catalog_context.build_catalog_context`), de modo que cada conversación recibe contexto enriquecido sin alterar el prompt base.  
    - Se inyectan fragmentos (p. ej. “Modelo X - Familia Y - descripción resumida”) y se anotan referencias (nombre de entidad y tipo) para mantener trazabilidad.  
    - Registrar la consulta en auditoría opcional si se desea seguimiento.
 

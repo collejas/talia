@@ -21,6 +21,7 @@ from app.services import conversation_summary, storage
 from app.services.context_formatter import build_crm_context_lines
 from app.services import openai as openai_service
 from app.services.storage import StorageError
+from app.services.catalog_context import build_catalog_context
 
 logger = get_logger("app.channels.messenger")
 
@@ -96,6 +97,7 @@ def _build_openai_input(
     context_data: dict[str, Any] | None,
     summary_text: str | None,
     summary_created_en: str | None,
+    catalog_context: str | None = None,
 ) -> list[dict[str, Any]]:
     text_parts: list[str] = []
     if text and text.strip():
@@ -127,17 +129,30 @@ def _build_openai_input(
         text_parts.append("")
         text_parts.append(f"{header}: {summary_text}")
 
-    return [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "input_text",
-                    "text": "\n\n".join(text_parts),
-                }
-            ],
-        }
-    ]
+    user_message = {
+        "role": "user",
+        "content": [
+            {
+                "type": "input_text",
+                "text": "\n\n".join(text_parts),
+            }
+        ],
+    }
+    messages: list[dict[str, Any]] = []
+    if catalog_context:
+        messages.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": catalog_context,
+                    }
+                ],
+            }
+        )
+    messages.append(user_message)
+    return messages
 
 
 def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
@@ -366,12 +381,14 @@ async def _handle_message(
         "page_id": payload.recipient_id,
     }
 
+    catalog_context = await build_catalog_context(org_id, payload.text or "")
     initial_input = _build_openai_input(
         text=payload.text,
         attachments=payload.attachments,
         context_data=contact_context,
         summary_text=summary_text,
         summary_created_en=summary_created_en,
+        catalog_context=catalog_context,
     )
 
     request_kwargs: dict[str, Any] = {

@@ -25,6 +25,7 @@ from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
+from app.services.catalog_context import build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 
 from . import schemas
@@ -571,12 +572,14 @@ async def _generate_assistant_reply(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
+    catalog_context = await build_catalog_context(organizacion_hint, message.body or "")
     request_kwargs: dict[str, Any] = {
         "input": _build_openai_input(
             message,
             context_data=context_payload,
             summary_text=summary_text,
             summary_created_en=summary_created_en,
+            catalog_context=catalog_context,
         ),
         "store": True,
         "metadata": metadata_payload,
@@ -724,6 +727,7 @@ def _build_openai_input(
     context_data: dict[str, Any] | None = None,
     summary_text: str | None = None,
     summary_created_en: str | None = None,
+    catalog_context: str | None = None,
 ) -> list[dict[str, Any]]:
     """Normaliza el contenido del mensaje con contexto CRM para la Responses API."""
     text_parts: list[str] = []
@@ -750,17 +754,30 @@ def _build_openai_input(
         text_parts.append("")
         text_parts.append(f"{summary_header}: {summary_text}")
 
-    return [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "input_text",
-                    "text": "\n\n".join(text_parts),
-                }
-            ],
-        }
-    ]
+    user_message = {
+        "role": "user",
+        "content": [
+            {
+                "type": "input_text",
+                "text": "\n\n".join(text_parts),
+            }
+        ],
+    }
+    messages: list[dict[str, Any]] = []
+    if catalog_context:
+        messages.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": catalog_context,
+                    }
+                ],
+            }
+        )
+    messages.append(user_message)
+    return messages
 
 
 def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
