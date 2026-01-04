@@ -503,28 +503,42 @@ export function CatalogItemsPanel({
                 visibleItems.map((item) => (
                   <TableRow key={item.id} className={!item.activo ? "bg-muted/30" : undefined}>
                     <TableCell>
-                  <div className="font-medium leading-tight">{item.nombre}</div>
-                  <div className="text-muted-foreground text-xs">
-                    {item.descripcionCorta || "Sin descripción"}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    {item.lineaNombre ? (
-                      <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                        Línea: {item.lineaNombre}
-                      </span>
-                    ) : null}
-                    {item.familiaNombre ? (
-                      <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                        Familia: {item.familiaNombre}
-                      </span>
-                    ) : null}
-                    {item.modeloNombre ? (
-                      <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                        Modelo: {item.modeloNombre}
-                      </span>
-                    ) : null}
-                  </div>
-                </TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/5">
+                          {item.fotoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.fotoUrl} alt={item.nombre} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                              Sin imagen
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-medium leading-tight">{item.nombre}</div>
+                          <div className="text-muted-foreground text-xs">
+                            {item.descripcionCorta || "Sin descripción"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {item.lineaNombre ? (
+                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                            Línea: {item.lineaNombre}
+                          </span>
+                        ) : null}
+                        {item.familiaNombre ? (
+                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                            Familia: {item.familiaNombre}
+                          </span>
+                        ) : null}
+                        {item.modeloNombre ? (
+                          <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                            Modelo: {item.modeloNombre}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="capitalize">
                         {item.tipo}

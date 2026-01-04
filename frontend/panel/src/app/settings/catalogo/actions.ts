@@ -35,6 +35,7 @@ export type CatalogItem = {
   lineaNombre: string | null;
   familiaNombre: string | null;
   modeloNombre: string | null;
+  fotoUrl: string | null;
 };
 
 export type CatalogItemInput = {
@@ -206,7 +207,32 @@ function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
         ? (record.modelo as Record<string, unknown>).nombre
         : null) ?? record.modeloNombre,
     ),
+    fotoUrl: extractMediaUrl(record.metadatos ?? record.metadatos),
   }
+}
+
+function extractMediaUrl(metadatos: unknown): string | null {
+  if (!metadatos || typeof metadatos !== "object") {
+    return null
+  }
+  const media = (metadatos as Record<string, unknown>).media
+  if (!Array.isArray(media)) {
+    return null
+  }
+  const sorted = [...media].sort((a, b) => {
+    const pa = typeof a === "object" && a && "predeterminada" in a ? (a as Record<string, unknown>).predeterminada : false
+    const pb = typeof b === "object" && b && "predeterminada" in b ? (b as Record<string, unknown>).predeterminada : false
+    return (pb === pa ? 0 : pb ? 1 : -1)
+  })
+  for (const entry of sorted) {
+    if (entry && typeof entry === "object") {
+      const url = (entry as Record<string, unknown>).url
+      if (typeof url === "string" && url.trim()) {
+        return url.trim()
+      }
+    }
+  }
+  return null
 }
 
 function sanitizeText(value: string | null | undefined): string | null {

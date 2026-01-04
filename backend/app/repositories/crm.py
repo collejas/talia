@@ -3096,7 +3096,12 @@ class CRMRepository:
         }
         params[
             "select"
-        ] = "*,linea:lineas_de_negocio(id,nombre),familia:familias_productos(id,nombre),modelo:modelos_productos(id,nombre)"
+        ] = (
+            "*,"
+            "linea:lineas_de_negocio(id,nombre,activo,descripcion,metadata,creado_en,actualizado_en),"
+            "familia:familias_productos(id,linea_id,nombre,descripcion,activo,metadata,creado_en,actualizado_en),"
+            "modelo:modelos_productos(id,nombre,descripcion,activo,metadata,creado_en,actualizado_en)"
+        )
         if not include_inactive:
             params["activo"] = "eq.true"
         if tipo:

@@ -214,11 +214,27 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
                   <Card key={familia.id}>
                     <CardHeader>
                       <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <CardTitle className="text-lg">{familia.nombre}</CardTitle>
-                          <CardDescription>
-                            {familia.descripcion ?? "Sin descripción disponible"}
-                          </CardDescription>
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
+                            {familia.fotoUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={familia.fotoUrl}
+                                alt={familia.nombre}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                Sin imagen
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <CardTitle className="text-lg">{familia.nombre}</CardTitle>
+                            <CardDescription>
+                              {familia.descripcion ?? "Sin descripción disponible"}
+                            </CardDescription>
+                          </div>
                         </div>
                         <Badge variant={familia.activo ? "secondary" : "outline"}>
                           {familia.activo ? "Activa" : "Archivada"}

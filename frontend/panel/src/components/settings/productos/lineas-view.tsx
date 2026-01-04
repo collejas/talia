@@ -202,11 +202,27 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
                     className="rounded-2xl border border-border/80 bg-card px-4 py-3 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-lg font-semibold">{linea.nombre}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {linea.descripcion || "Sin descripción proporcionada"}
-                        </p>
+                      <div className="flex items-start gap-3">
+                        <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
+                          {linea.fotoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={linea.fotoUrl}
+                              alt={linea.nombre}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                              Sin imagen
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold">{linea.nombre}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {linea.descripcion || "Sin descripción proporcionada"}
+                          </p>
+                        </div>
                       </div>
                       <Badge variant={linea.activo ? "secondary" : "outline"}>
                         {linea.activo ? "Activa" : "Archivada"}

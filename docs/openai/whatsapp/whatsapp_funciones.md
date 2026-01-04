@@ -1,28 +1,3 @@
-**TAL-IA · Prompt Conversacional de Whatapp Simplificado**
-Te llamas Tal-IA, especialista en captar clientes, y asesora inteligente creada por Geoactiv.
-Tu función es atraer el interés de prospectos para convertirlos en clientes del sistema Tal-IA, un asistente que automatiza ventas y atención al cliente en WhatsApp, web, teléfono, messenger, instagram y otros canales.
-Hablas con tono humano, directo, cálido y natural.
-Frases cortas. Sin textos largos. Conversación ligera, amable y enfocada en resultados.
-
-Cuando un contacto regrese después de un tiempo o cambie de tema, evita pedir de nuevo datos básicos que ya tenemos. Si es un nuevo proyecto/ciclo, utiliza la función `restart_conversation_cycle` (solo una vez por tema real) para que el equipo humano reciba la notificación del reinicio.
-
-Tu misión principal:
-Antes de pedir nombre o datos, Tu objetivo inicial es que el prospecto piense “esto me interesa, cuéntame más”.
-Ejemplos de hooks (improvisa, varía, no repitas siempre los mismos):
-
-⚠ No pedir nombre en el primer mensaje.
-El nombre se solicita solo después de que el usuario muestre interés o responda positivo.cuando el usuario manda el 
-
-Cuando el usuario responda a tu hook:
-🟢 Si muestra interés → pide nombre con tono suave
-
-🟡 Si responde seco (“hola”, “qué es esto”, “info”) → engancha otra vez
-
-🔴 Si está dudoso → reduce fricción
-
-
-**Funciones del promt**
-
 {
   "name": "set_full_name",
   "description": "Guardar o actualizar el nombre completo del contacto asociado a esta conversación.",
@@ -74,6 +49,7 @@ Cuando el usuario responda a tu hook:
 }
 
 ---
+
 {
   "name": "set_phone_number",
   "description": "Guardar o actualizar el número de teléfono del lead.",
@@ -99,6 +75,7 @@ Cuando el usuario responda a tu hook:
 }
 
 ---
+
 {
   "name": "set_company_name",
   "description": "Guardar o actualizar el nombre de la empresa / razón social del lead.",
@@ -124,6 +101,7 @@ Cuando el usuario responda a tu hook:
 }
 
 ---
+
 {
   "name": "close_lead",
   "description": "Cerrar y consolidar el lead al final de la calificación. Se usa cuando ya tenemos nombre, correo, teléfono y empresa confirmados. También incluye el resumen de la necesidad para el equipo comercial.",
@@ -154,6 +132,7 @@ Cuando el usuario responda a tu hook:
 }
 
 ---
+
 {
   "name": "send_information_email",
   "description": "Enviar al prospecto la información solicitada sobre Tal-IA cuando prefiere recibirla por correo en lugar de agendar demo.",
@@ -235,28 +214,142 @@ Cuando el usuario responda a tu hook:
 }
 
 ---
+
 {
-  "name": "restart_conversation_cycle",
-  "description": "Registrar que un contacto abrió un nuevo tema o reinició la conversación para que se cree una oportunidad separada y el vendedor actual sea notificado.",
+  "name": "list_demo_slots",
+  "description": "Consulta la disponibilidad del calendario para preparar opciones que el prospecto verá en el webchat.",
   "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
       "conversacion_id": {
         "type": "string",
-        "description": "ID único de la conversación actual; permite ligar el reinicio al historial."
+        "description": "Conversación activa asociada al lead."
       },
-      "reason": {
+      "timezone": {
         "type": "string",
-        "description": "Frase corta explicando por qué necesitas crear un ciclo nuevo (ej. 'Quiere evaluar Tal-IA para otra sucursal')."
+        "description": "Zona horaria preferida del prospecto (ej. 'America/Mexico_City')."
+      },
+      "start_date": {
+        "type": "string",
+        "description": "Fecha inicial en formato YYYY-MM-DD. Si se omite, se usa la fecha actual."
+      },
+      "window_days": {
+        "type": "integer",
+        "description": "Cantidad de días a mostrar (máximo 60).",
+        "minimum": 1,
+        "maximum": 60
       }
     },
     "required": [
       "conversacion_id",
-      "reason"
+      "timezone",
+      "start_date",
+      "window_days"
     ],
     "additionalProperties": false
   }
 }
 
 ---
+
+{
+  "name": "schedule_demo",
+  "description": "Confirma una demo en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa donde se registrará la cita."
+      },
+      "slot_id": {
+        "type": "string",
+        "description": "Identificador del slot devuelto por list_demo_slots."
+      },
+      "start_at": {
+        "type": "string",
+        "description": "Fecha y hora del slot en formato ISO 8601 (ej. '2025-03-18T16:00:00-06:00')."
+      },
+      "notes": {
+        "type": "string",
+        "description": "Notas opcionales que el prospecto haya mencionado."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "slot_id",
+      "start_at",
+      "notes"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "reschedule_demo",
+  "description": "Mueve una demo confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa relacionada a la cita."
+      },
+      "booking_id": {
+        "type": "string",
+        "description": "Identificador de la cita confirmada."
+      },
+      "start_at": {
+        "type": "string",
+        "description": "Nuevo horario en formato ISO 8601."
+      },
+      "notes": {
+        "type": "string",
+        "description": "Notas adicionales para el seguimiento."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "booking_id",
+      "start_at",
+      "notes"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "cancel_demo",
+  "description": "Cancela una demo previamente confirmada.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "Conversación activa relacionada a la cita."
+      },
+      "booking_id": {
+        "type": "string",
+        "description": "Identificador de la cita confirmada."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Motivo opcional compartido por el prospecto."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "booking_id",
+      "reason"
+    ],
+    "additionalProperties": false
+  }
+}

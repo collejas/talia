@@ -45,6 +45,30 @@ function normalizeBoolean(value: unknown, fallback = true): boolean {
   return fallback;
 }
 
+function extractMediaUrl(metadata: Record<string, unknown> | null | undefined): string | null {
+  if (!metadata) {
+    return null;
+  }
+  const media = metadata.media;
+  if (!Array.isArray(media)) {
+    return null;
+  }
+  const candidates = [...media].sort((a, b) => {
+    const pa = typeof a === "object" && a && "predeterminada" in a ? Boolean((a as Record<string, unknown>).predeterminada) : false;
+    const pb = typeof b === "object" && b && "predeterminada" in b ? Boolean((b as Record<string, unknown>).predeterminada) : false;
+    return Number(pb) - Number(pa);
+  });
+  for (const entry of candidates) {
+    if (entry && typeof entry === "object") {
+      const url = (entry as Record<string, unknown>).url;
+      if (typeof url === "string" && url.trim()) {
+        return url.trim();
+      }
+    }
+  }
+  return null;
+}
+
 async function fetchCrmRows(path: string, params: Record<string, string | undefined>): Promise<CrmRow[]> {
   const response = await callCrmApi<CrmRow[]>(path, { searchParams: params });
   if (!response.ok || !Array.isArray(response.data)) {
@@ -66,6 +90,7 @@ export type LineaDeNegocio = {
   metadata: Record<string, unknown>;
   creadoEn: string;
   actualizadoEn: string;
+  fotoUrl: string | null;
 };
 
 export type FamiliaProducto = {
@@ -77,6 +102,7 @@ export type FamiliaProducto = {
   metadata: Record<string, unknown>;
   creadoEn: string;
   actualizadoEn: string;
+  fotoUrl: string | null;
 };
 
 export type ModeloProducto = {
@@ -87,38 +113,51 @@ export type ModeloProducto = {
   metadata: Record<string, unknown>;
   creadoEn: string;
   actualizadoEn: string;
+  fotoUrl: string | null;
 };
 
-const transformLinea = (row: CrmRow): LineaDeNegocio => ({
-  id: String(row.id ?? ""),
-  nombre: normalizeString(row.nombre) ?? "Sin nombre",
-  descripcion: normalizeString(row.descripcion),
-  activo: normalizeBoolean(row.activo, true),
-  metadata: normalizeMetadata(row.metadata),
-  creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
-  actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
-});
+const transformLinea = (row: CrmRow): LineaDeNegocio => {
+  const meta = normalizeMetadata(row.metadata);
+  return {
+    id: String(row.id ?? ""),
+    nombre: normalizeString(row.nombre) ?? "Sin nombre",
+    descripcion: normalizeString(row.descripcion),
+    activo: normalizeBoolean(row.activo, true),
+    metadata: meta,
+    creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
+    actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
+    fotoUrl: extractMediaUrl(meta),
+  };
+};
 
-const transformFamilia = (row: CrmRow): FamiliaProducto => ({
-  id: String(row.id ?? ""),
-  lineaId: normalizeString(row.linea_id ?? row.lineaId),
-  nombre: normalizeString(row.nombre) ?? "Sin nombre",
-  descripcion: normalizeString(row.descripcion),
-  activo: normalizeBoolean(row.activo, true),
-  metadata: normalizeMetadata(row.metadata),
-  creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
-  actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
-});
+const transformFamilia = (row: CrmRow): FamiliaProducto => {
+  const meta = normalizeMetadata(row.metadata);
+  return {
+    id: String(row.id ?? ""),
+    lineaId: normalizeString(row.linea_id ?? row.lineaId),
+    nombre: normalizeString(row.nombre) ?? "Sin nombre",
+    descripcion: normalizeString(row.descripcion),
+    activo: normalizeBoolean(row.activo, true),
+    metadata: meta,
+    creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
+    actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
+    fotoUrl: extractMediaUrl(meta),
+  };
+};
 
-const transformModelo = (row: CrmRow): ModeloProducto => ({
-  id: String(row.id ?? ""),
-  nombre: normalizeString(row.nombre) ?? "Sin nombre",
-  descripcion: normalizeString(row.descripcion),
-  activo: normalizeBoolean(row.activo, true),
-  metadata: normalizeMetadata(row.metadata),
-  creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
-  actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
-});
+const transformModelo = (row: CrmRow): ModeloProducto => {
+  const meta = normalizeMetadata(row.metadata);
+  return {
+    id: String(row.id ?? ""),
+    nombre: normalizeString(row.nombre) ?? "Sin nombre",
+    descripcion: normalizeString(row.descripcion),
+    activo: normalizeBoolean(row.activo, true),
+    metadata: meta,
+    creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
+    actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
+    fotoUrl: extractMediaUrl(meta),
+  };
+};
 
 type FetchOptions = {
   includeInactive?: boolean;
