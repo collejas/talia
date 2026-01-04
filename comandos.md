@@ -88,7 +88,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
-codex resume 019b6c48-4e8b-7a81-839c-5debda4d061c
+
 
 codex resume 019b5bc9-5365-7e10-83c1-9d33b44f1f61
 

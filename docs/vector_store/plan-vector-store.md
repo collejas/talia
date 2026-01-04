@@ -3,13 +3,13 @@
 Objetivo: Que el asistente tenga acceso a la información más reciente del catálogo (líneas/familias/modelos/productos/medios) a través de una vector store propia en Supabase, de modo que pueda responder preguntas con contexto sin cargar toda la base en cada prompt.
 
 ## 1. Modelado de documentos
-- [ ] { } Definir qué entidades se indexan (productos, familias, modelos, líneas, recursos) y qué campos clave incluir (nombre, descripción, atributos, relaciones, metadatos).
-- [ ] { } Establecer un esquema de documento para cada tipo (p. ej. incluir fotografía predeterminada, identificadores de jerarquía, precios, estado activo).
-- [ ] { } Crear funciones que transformen filas de `catalog_items`, `familias_productos`, etc., en texto/plano concatenado apto para embedding.
+- [x] { } Definir qué entidades se indexan (productos, familias, modelos, líneas, recursos) y qué campos clave incluir (nombre, descripción, atributos, relaciones, metadatos).
+- [x] { } Establecer un esquema de documento para cada tipo (p. ej. incluir fotografía predeterminada, identificadores de jerarquía, precios, estado activo).
+- [x] { } Crear funciones que transformen filas de `catalog_items`, `familias_productos`, etc., en texto/plano concatenado apto para embedding.
 
 ## 2. Vector store en Supabase
-- [ ] { } Crear tabla `catalog_document_embeddings` (u otro nombre) con columnas: id, organizacion_id, entity_type, entity_id, contenido(texto), embedding(vector), updated_at.
-- [ ] { } Asegurar que la extensión `pgvector` esté habilitada (ya lo está en Supabase) y que la tabla tenga índices `USING ivfflat` o `vector_column storage`.
+- [x] { } Crear tabla `catalog_document_embeddings` (u otro nombre) con columnas: id, organizacion_id, entity_type, entity_id, contenido(texto), embedding(vector), updated_at.
+- [x] { } Asegurar que la extensión `pgvector` esté habilitada (ya lo está en Supabase) y que la tabla tenga índices `USING ivfflat` o `vector_column storage`.
 - [ ] { } Decidir frecuencia de reindexación y qué evento la dispara (webhooks/trigger cuando se editan entidades o tareas programadas).
 
 ## 3. Generación y almacenado de embeddings
