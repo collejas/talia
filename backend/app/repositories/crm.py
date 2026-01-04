@@ -3085,6 +3085,7 @@ class CRMRepository:
     async def list_catalog_items(
         self,
         *,
+        organizacion_id: UUID | None = None,
         include_inactive: bool = False,
         tipo: str | None = None,
         search: str | None = None,
@@ -3102,6 +3103,8 @@ class CRMRepository:
             "familia:familias_productos(id,linea_id,nombre,descripcion,activo,metadata,creado_en,actualizado_en),"
             "modelo:modelos_productos(id,nombre,descripcion,activo,metadata,creado_en,actualizado_en)"
         )
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         if not include_inactive:
             params["activo"] = "eq.true"
         if tipo:
@@ -3197,6 +3200,44 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar modelos: {data!r}")
         return data
+
+    async def list_recursos_media(
+        self,
+        *,
+        organizacion_id: UUID,
+        objeto_type: str | None = None,
+        objeto_ids: Sequence[UUID] | None = None,
+        activo_only: bool = False,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "orden.asc",
+            "limit": str(max(1, min(limit, 1000))),
+        }
+        if objeto_type:
+            params["objeto_type"] = f"eq.{objeto_type}"
+        if objeto_ids:
+            values = ",".join(str(obj_id) for obj_id in objeto_ids)
+            params["objeto_id"] = f"in.({values})"
+        if activo_only:
+            params["activo"] = "eq.true"
+        resp = await self._request("GET", "/rest/v1/recursos_media", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar recursos: {data!r}")
+        return data
+
+    async def upsert_catalog_document_embeddings(self, *, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        await self._request(
+            "POST",
+            "/rest/v1/catalog_document_embeddings",
+            json=rows,
+            params={"on_conflict": "organizacion_id,entity_type,entity_id"},
+            prefer="resolution=merge-duplicates",
+        )
 
     async def create_linea_de_negocio(
         self,

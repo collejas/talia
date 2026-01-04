@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         description="Prefijos de ruta para los que no se registrarán eventos de request.started/completed.",
     )
     openai_api_key: str | None = None
+    embeddings_model: str = Field(
+        default="text-embedding-ada-002",
+        description="Modelo de embeddings que se usa para la vector store.",
+    )
     openai_assistant_id: str | None = None
     # Específico para el webchat (landing). Si no se define, se usa openai_assistant_id.
     openai_webchat_assistant_id: str | None = Field(

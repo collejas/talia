@@ -1,0 +1,463 @@
+"""Servicios para indexar el catálogo en la tabla de embeddings."""
+
+from __future__ import annotations
+
+import json
+from collections import defaultdict
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Any, Mapping, Sequence
+from uuid import UUID
+
+from app.core.config import settings
+from app.core.logging import get_logger
+from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.openai import get_openai_client
+
+logger = get_logger("app.services.catalog_embeddings")
+
+
+def _safe_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _truncate(value: str, max_length: int = 400) -> str:
+    if len(value) <= max_length:
+        return value
+    return value[:max_length].rstrip() + "..."
+
+
+def _metadata_summary(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        try:
+            serialized = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError):
+            serialized = str(value)
+    else:
+        serialized = str(value)
+    return _safe_text(_truncate(serialized))
+
+
+def _serialize_metadata_value(value: Any) -> Any | None:
+    if value is None:
+        return None
+    if isinstance(value, (str, bool, int, float)):
+        if isinstance(value, float) and not (value == value and value != float("inf") and value != float("-inf")):
+            return str(value)
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    try:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _resource_block(resources: Sequence[Mapping[str, Any]]) -> str | None:
+    lines: list[str] = []
+    for resource in resources:
+        label = _safe_text(resource.get("tipo")) or _safe_text(resource.get("objeto_type")) or "Recurso"
+        status = "Activo" if resource.get("activo") else "Inactivo"
+        description = _safe_text(resource.get("descripcion"))
+        url = _safe_text(resource.get("url"))
+        parts = [f"{label.title()} ({status})"]
+        if description:
+            parts.append(description)
+        if url:
+            parts.append(f"URL: {url}")
+        if parts:
+            lines.append(" - ".join(parts))
+    return "\n".join(lines) if lines else None
+
+
+class CatalogEmbeddingService:
+    """Orquesta la creación de embeddings y el upsert en Supabase."""
+
+    def __init__(self, repo: CRMRepository) -> None:
+        self._repo = repo
+        self._client = get_openai_client()
+        self._model = settings.embeddings_model or "text-embedding-ada-002"
+
+    async def reindex_catalog(
+        self,
+        organizacion_id: UUID,
+        *,
+        include_inactive: bool = False,
+        limit: int = 500,
+        resources_limit: int = 1000,
+    ) -> None:
+        """Reindexa todas las entidades relevantes del catálogo por tenant."""
+        logger.info(
+            "vector_store.reindex.start",
+            extra={"organizacion_id": str(organizacion_id), "limit": limit},
+        )
+        resource_rows = await self._repo.list_recursos_media(
+            organizacion_id=organizacion_id, limit=resources_limit
+        )
+        resource_map = self._group_resources(resource_rows)
+
+        total = 0
+
+        lineas = await self._repo.list_lineas_de_negocio(
+            organizacion_id=organizacion_id, include_inactive=include_inactive, limit=limit
+        )
+        for linea in lineas:
+            await self._index_linea(linea, organizacion_id, resource_map)
+            total += 1
+
+        familias = await self._repo.list_familias_productos(
+            organizacion_id=organizacion_id, include_inactive=include_inactive, limit=limit
+        )
+        for familia in familias:
+            await self._index_familia(familia, organizacion_id, resource_map)
+            total += 1
+
+        modelos = await self._repo.list_modelos_productos(
+            organizacion_id=organizacion_id, include_inactive=include_inactive, limit=limit
+        )
+        for modelo in modelos:
+            await self._index_modelo(modelo, organizacion_id, resource_map)
+            total += 1
+
+        catalog_items = await self._repo.list_catalog_items(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+        for item in catalog_items:
+            await self._index_producto(item, organizacion_id, resource_map)
+            total += 1
+
+        logger.info(
+            "vector_store.reindex.complete",
+            extra={"organizacion_id": str(organizacion_id), "processed": total},
+        )
+
+    async def _index_linea(
+        self,
+        row: Mapping[str, Any],
+        organizacion_id: UUID,
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> None:
+        entity_id = row.get("id")
+        if not entity_id:
+            return
+        text = self._build_linea_text(row, resource_map)
+        metadata = {
+            "source": "lineas_de_negocio",
+            "activo": row.get("activo", True),
+        }
+        await self._index_entity(
+            organizacion_id,
+            "linea",
+            entity_id,
+            text,
+            metadata,
+        )
+
+    async def _index_familia(
+        self,
+        row: Mapping[str, Any],
+        organizacion_id: UUID,
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> None:
+        entity_id = row.get("id")
+        if not entity_id:
+            return
+        text = self._build_familia_text(row, resource_map)
+        metadata = {
+            "source": "familias_productos",
+            "linea_id": _serialize_metadata_value(row.get("linea_id")),
+            "activo": row.get("activo", True),
+        }
+        await self._index_entity(
+            organizacion_id,
+            "familia",
+            entity_id,
+            text,
+            metadata,
+        )
+
+    async def _index_modelo(
+        self,
+        row: Mapping[str, Any],
+        organizacion_id: UUID,
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> None:
+        entity_id = row.get("id")
+        if not entity_id:
+            return
+        text = self._build_modelo_text(row, resource_map)
+        metadata = {
+            "source": "modelos_productos",
+            "activo": row.get("activo", True),
+        }
+        await self._index_entity(
+            organizacion_id,
+            "modelo",
+            entity_id,
+            text,
+            metadata,
+        )
+
+    async def _index_producto(
+        self,
+        row: Mapping[str, Any],
+        organizacion_id: UUID,
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> None:
+        entity_id = row.get("id")
+        if not entity_id:
+            return
+        text = self._build_producto_text(row, resource_map)
+        metadata = {
+            "source": "catalog_items",
+            "slug": _serialize_metadata_value(row.get("slug")),
+            "tipo": _serialize_metadata_value(row.get("tipo")),
+            "linea_id": _serialize_metadata_value(row.get("linea_id")),
+            "familia_id": _serialize_metadata_value(row.get("familia_id")),
+            "modelo_id": _serialize_metadata_value(row.get("modelo_id")),
+            "precio_base": _serialize_metadata_value(row.get("precio_base")),
+            "moneda": _serialize_metadata_value(row.get("moneda")),
+            "requiere_factura": _serialize_metadata_value(row.get("requiere_factura")),
+        }
+        resources = self._resources_for("producto", entity_id, resource_map)
+        if resources:
+            ids = [
+                serialized
+                for item in resources
+                if (serialized := _serialize_metadata_value(item.get("id"))) is not None
+            ]
+            if ids:
+                metadata["resource_ids"] = ids
+        await self._index_entity(
+            organizacion_id,
+            "producto",
+            entity_id,
+            text,
+            metadata,
+        )
+
+    async def _index_entity(
+        self,
+        organizacion_id: UUID,
+        entity_type: str,
+        entity_id: Any,
+        contenido: str | None,
+        metadata: Mapping[str, Any] | None,
+    ) -> None:
+        if not contenido:
+            return
+        text = str(contenido).strip()
+        if not text:
+            return
+        embedding = await self._create_embedding(text)
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "entity_type": entity_type,
+            "entity_id": str(entity_id),
+            "contenido": text,
+            "embedding": json.dumps(embedding, separators=(",", ":"), ensure_ascii=False),
+            "metadata": self._clean_metadata(metadata),
+            "actualizado_en": datetime.now(timezone.utc).isoformat(),
+        }
+        await self._repo.upsert_catalog_document_embeddings(rows=[payload])
+
+    async def _create_embedding(self, text: str) -> Sequence[float]:
+        try:
+            response = await self._client.embeddings.acreate(input=text, model=self._model)
+        except Exception as exc:  # pragma: no cover - depende del proveedor externo
+            logger.exception(
+                "vector_store.embedding_failed",
+                extra={"model": self._model, "error": str(exc)},
+            )
+            raise CRMRepositoryError("embedding_error") from exc
+        data = getattr(response, "data", [])
+        if not data or not isinstance(data, Sequence):
+            raise CRMRepositoryError("embedding_missing_data")
+        embedding_entry = data[0]
+        embedding_value = getattr(embedding_entry, "embedding", None)
+        if not isinstance(embedding_value, Sequence):
+            raise CRMRepositoryError("embedding_invalid")
+        return list(embedding_value)
+
+    @staticmethod
+    def _clean_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+        if not metadata:
+            return {}
+        cleaned: dict[str, Any] = {}
+        for key, value in metadata.items():
+            clean_value = _serialize_metadata_value(value)
+            if clean_value is not None:
+                cleaned[str(key)] = clean_value
+        return cleaned
+
+    @staticmethod
+    def _group_resources(
+        rows: Sequence[Mapping[str, Any]]
+    ) -> Mapping[tuple[str, str], list[Mapping[str, Any]]]:
+        grouped: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
+        for entry in rows:
+            objeto_type = _safe_text(entry.get("objeto_type"))
+            objeto_id = entry.get("objeto_id")
+            if not objeto_type or not objeto_id:
+                continue
+            key = (objeto_type, str(objeto_id))
+            grouped[key].append(entry)
+        return grouped
+
+    @staticmethod
+    def _resources_for(
+        objeto_type: str,
+        objeto_id: Any,
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> Sequence[Mapping[str, Any]]:
+        return resource_map.get((objeto_type, str(objeto_id)), [])
+
+    def _build_linea_text(
+        self,
+        row: Mapping[str, Any],
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> str:
+        sections = []
+        name = _safe_text(row.get("nombre"))
+        if name:
+            sections.append(f"Línea de negocio: {name}")
+        description = _safe_text(row.get("descripcion"))
+        if description:
+            sections.append(f"Descripción: {description}")
+        activo = row.get("activo")
+        if activo is not None:
+            sections.append(f"Activo: {'sí' if activo else 'no'}")
+        summary = _metadata_summary(row.get("metadata"))
+        if summary:
+            sections.append(f"Metadata: {summary}")
+        resources = self._resources_for("linea", row.get("id"), resource_map)
+        resource_block = _resource_block(resources)
+        if resource_block:
+            sections.append(f"Recursos relacionados:\n{resource_block}")
+        return "\n".join(sections)
+
+    def _build_familia_text(
+        self,
+        row: Mapping[str, Any],
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> str:
+        sections = []
+        name = _safe_text(row.get("nombre"))
+        if name:
+            sections.append(f"Familia: {name}")
+        description = _safe_text(row.get("descripcion"))
+        if description:
+            sections.append(f"Descripción: {description}")
+        linea_id = row.get("linea_id")
+        if linea_id:
+            sections.append(f"Línea asociada: {linea_id}")
+        activo = row.get("activo")
+        if activo is not None:
+            sections.append(f"Activo: {'sí' if activo else 'no'}")
+        summary = _metadata_summary(row.get("metadata"))
+        if summary:
+            sections.append(f"Metadata: {summary}")
+        resources = self._resources_for("familia", row.get("id"), resource_map)
+        resource_block = _resource_block(resources)
+        if resource_block:
+            sections.append(f"Recursos relacionados:\n{resource_block}")
+        return "\n".join(sections)
+
+    def _build_modelo_text(
+        self,
+        row: Mapping[str, Any],
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> str:
+        sections = []
+        name = _safe_text(row.get("nombre"))
+        if name:
+            sections.append(f"Modelo: {name}")
+        description = _safe_text(row.get("descripcion"))
+        if description:
+            sections.append(f"Descripción: {description}")
+        activo = row.get("activo")
+        if activo is not None:
+            sections.append(f"Activo: {'sí' if activo else 'no'}")
+        summary = _metadata_summary(row.get("metadata"))
+        if summary:
+            sections.append(f"Metadata: {summary}")
+        resources = self._resources_for("modelo", row.get("id"), resource_map)
+        resource_block = _resource_block(resources)
+        if resource_block:
+            sections.append(f"Recursos relacionados:\n{resource_block}")
+        return "\n".join(sections)
+
+    def _build_producto_text(
+        self,
+        row: Mapping[str, Any],
+        resource_map: Mapping[tuple[str, str], Sequence[Mapping[str, Any]]],
+    ) -> str:
+        sections = []
+        nombre = _safe_text(row.get("nombre"))
+        if nombre:
+            sections.append(f"Producto: {nombre}")
+        slug = _safe_text(row.get("slug"))
+        if slug:
+            sections.append(f"Slug: {slug}")
+        tipo = _safe_text(row.get("tipo"))
+        if tipo:
+            sections.append(f"Tipo: {tipo}")
+        short_desc = _safe_text(row.get("descripcion_corta"))
+        if short_desc:
+            sections.append(f"Resumen corto: {short_desc}")
+        long_desc = _safe_text(row.get("descripcion_larga"))
+        if long_desc:
+            sections.append(f"Descripción extendida: {long_desc}")
+        unidad = _safe_text(row.get("unidad"))
+        if unidad:
+            sections.append(f"Unidad: {unidad}")
+        precio = row.get("precio_base")
+        moneda = _safe_text(row.get("moneda"))
+        if precio is not None:
+            price_text = f"{precio}"
+            if moneda:
+                price_text += f" {moneda}"
+            sections.append(f"Precio base: {price_text}")
+        impuestos_summary = _metadata_summary(row.get("impuestos"))
+        if impuestos_summary:
+            sections.append(f"Impuestos: {impuestos_summary}")
+        estado = row.get("activo")
+        if estado is not None:
+            sections.append(f"Activo: {'sí' if estado else 'no'}")
+        requiere_factura = row.get("requiere_factura")
+        if requiere_factura is not None:
+            sections.append(
+                f"Requiere factura: {'sí' if requiere_factura else 'no'}"
+            )
+        linea = row.get("linea") or {}
+        if linea:
+            linea_name = _safe_text(linea.get("nombre"))
+            if linea_name:
+                sections.append(f"Línea de negocio: {linea_name}")
+        familia = row.get("familia") or {}
+        if familia:
+            familia_name = _safe_text(familia.get("nombre"))
+            if familia_name:
+                sections.append(f"Familia: {familia_name}")
+        modelo = row.get("modelo") or {}
+        if modelo:
+            modelo_name = _safe_text(modelo.get("nombre"))
+            if modelo_name:
+                sections.append(f"Modelo: {modelo_name}")
+        metadata = row.get("metadata")
+        if metadata:
+            summary = _safe_text(_truncate(json.dumps(metadata, ensure_ascii=False)))
+            if summary:
+                sections.append(f"Metadata: {summary}")
+        resources = self._resources_for("producto", row.get("id"), resource_map)
+        resource_block = _resource_block(resources)
+        if resource_block:
+            sections.append(f"Recursos asociados:\n{resource_block}")
+        return "\n".join(sections)

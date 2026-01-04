@@ -65,7 +65,7 @@ CREATE TABLE public.catalog_document_embeddings (
    - Al actualizar o insertar, se genera el texto y se hace un `upsert` en `catalog_document_embeddings`, respetando `organizacion_id`.
 
 3. **Jobs de reindexación**  
-   - Scripts tipo `scripts/index_catalog.py --tenant=<org>` recorren todos los productos/entidades y recalculan embeddings.  
+   - Scripts tipo `backend/scripts/index_catalog.py --organizacion-id=<org>` recorren todos los productos/entidades y recalculan embeddings.  
    - Registrar en una tabla de auditoría (por ejemplo `catalog_embeddings_jobs`) quién ejecutó la reindexación y cuándo para rastrear (`docs/plan-vector-store.md:28`).  
    - Estos scripts pueden ejecutarse periódicamente o tras triggers (webhooks/cron) que detecten cambios masivos.
 

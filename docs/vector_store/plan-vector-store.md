@@ -13,9 +13,9 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 - [ ] { } Decidir frecuencia de reindexación y qué evento la dispara (webhooks/trigger cuando se editan entidades o tareas programadas).
 
 ## 3. Generación y almacenado de embeddings
-- [ ] { } Integrar la generación de embeddings (OpenAI `text-embedding-ada-002` o similar) en el backend/edge function.
-- [ ] { } Al guardar o actualizar una entidad (línea, familia, modelo, producto, recurso_media importante), recalcular el embedding y hacer upsert en la tabla vectorial.
-- [ ] { } Implementar scripts o jobs que puedan reindexar todo el catálogo por tenant (p. ej. `python scripts/index_catalog.py --tenant=XYZ`).
+- [x] { } Integrar la generación de embeddings (OpenAI `text-embedding-ada-002` o similar) en el backend/edge function.
+- [x] { } Al guardar o actualizar una entidad (línea, familia, modelo, producto, recurso_media importante), recalcular el embedding y hacer upsert en la tabla vectorial.
+- [x] { } Implementar scripts o jobs que puedan reindexar todo el catálogo por tenant (p. ej. `backend/scripts/index_catalog.py --organizacion-id=<org>`).
 
 ## 4. Consulta desde el asistente
 - [ ] { } Crear un helper (server/edge) que reciba el prompt del asistente, genere embedding de la pregunta y consulte la tabla con `ORDER BY embedding <=> query_embedding LIMIT N` y filtro por organización.
@@ -23,8 +23,8 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 - [ ] { } Asegurar que las respuestas lleven referencias (nombre del producto/servicio y su relación) para poder trazar la fuente.
 
 ## 5. Seguridad y datos multi-tenant
-- [ ] { } Garantizar que cada documento guarda `organizacion_id` y las consultas siempre se filtran por ese campo.
-- [ ] { } Revisar políticas RLS para que sólo usuarios del tenant puedan leer los embeddings.
+- [x] { } Garantizar que cada documento guarda `organizacion_id` y las consultas siempre se filtran por ese campo.
+- [x] { } Revisar políticas RLS para que sólo usuarios del tenant puedan leer los embeddings.
 - [ ] { } Registrar auditoría (fecha, usuario) cada vez que se reindexa o se consulta la vector store (opcional).
 
 ## 6. UX del asistente
