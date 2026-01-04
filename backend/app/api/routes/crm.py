@@ -115,7 +115,7 @@ def _trigger_catalog_reindex(
             extra={"value": organizacion_value},
         )
         return
-    background_tasks.add_task(asyncio.create_task, _run_catalog_reindex(organizacion_id))
+    background_tasks.add_task(_run_catalog_reindex, organizacion_id)
 
 
 def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:

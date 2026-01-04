@@ -461,12 +461,12 @@ async def _handle_message(
             previous_response_id=previous_response_id,
             log=logger,
         )
-        except Exception as exc:  # pragma: no cover - defensivo ante fallos externos
-            logger.exception(
-                "messenger.run_tool_loop_failed",
-                extra={"conversation_id": conversation_id, "error": str(exc)},
-            )
-            reply_text = DEFAULT_FALLBACK
+    except Exception as exc:  # pragma: no cover - defensivo ante fallos externos
+        logger.exception(
+            "messenger.run_tool_loop_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        reply_text = DEFAULT_FALLBACK
     else:
         reply_text = _extract_text_from_response(result.response) or DEFAULT_FALLBACK
 
