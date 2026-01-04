@@ -20,6 +20,12 @@ import {
   createFamiliaProducto,
   updateFamiliaProducto,
 } from "@/app/settings/productos/actions"
+import {
+  MediaEditor,
+  buildMetadataWithMedia,
+  normalizeMediaList,
+  type MediaEntry,
+} from "@/components/settings/productos/media-editor"
 
 type FamiliasViewProps = {
   lineas: LineaDeNegocio[]
@@ -51,6 +57,8 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
   const [isPending, startTransition] = useTransition()
   const form = useForm<FamiliaFormValues>({ defaultValues: FAMILIA_FORM_DEFAULTS })
   const selectedLineaId = useWatch({ control: form.control, name: "lineaId" }) ?? ""
+  const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
+  const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
 
   const lineaMap = useMemo(() => new Map(lineas.map((linea) => [linea.id, linea.nombre])), [lineas])
 
@@ -64,12 +72,20 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
           activo: familia.activo,
         })
         setEditing(familia)
+        const baseMetadata =
+          familia.metadata && typeof familia.metadata === "object"
+            ? JSON.parse(JSON.stringify(familia.metadata))
+            : {}
+        setMetadataSeed(baseMetadata)
+        setMediaItems(normalizeMediaList(baseMetadata))
       } else {
         form.reset({
           ...FAMILIA_FORM_DEFAULTS,
           lineaId: lineas[0]?.id ?? "",
         })
         setEditing(null)
+        setMetadataSeed({})
+        setMediaItems([])
       }
       setSheetOpen(true)
     },
@@ -82,6 +98,8 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
       form.reset(FAMILIA_FORM_DEFAULTS)
       setEditing(null)
       setFeedback(null)
+      setMetadataSeed({})
+      setMediaItems([])
     }, 200)
   }, [form])
 
@@ -103,9 +121,10 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     setFeedback(null)
     setPendingAction("save")
     startTransition(() => {
+      const metadataPayload = buildMetadataWithMedia(metadataSeed, mediaItems)
       const action = editing
-        ? updateFamiliaProducto(editing.id, payload)
-        : createFamiliaProducto(payload)
+        ? updateFamiliaProducto(editing.id, { ...payload, metadata: metadataPayload })
+        : createFamiliaProducto({ ...payload, metadata: metadataPayload })
       action
         .then((result) => {
           setFeedback({
@@ -269,6 +288,12 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
                 {feedback.message}
               </p>
             ) : null}
+            <MediaEditor
+              items={mediaItems}
+              onChange={setMediaItems}
+              title="Imágenes de la familia"
+              description="Agrega fotos representativas y elige cuál se usa por defecto."
+            />
             <SheetFooter className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={closeSheet} type="button">
                 Cancelar

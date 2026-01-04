@@ -118,12 +118,23 @@ export async function callCrmApi<T = unknown>(
     }
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers,
-    cache: "no-store",
-    ...(body ? { body } : {}),
-  });
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      cache: "no-store",
+      ...(body ? { body } : {}),
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? `Error al contactar el CRM (${error.message})`
+          : "Error desconocido al contactar el CRM.",
+    }
+  }
 
   if (!response.ok) {
     return {

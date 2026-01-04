@@ -48,6 +48,11 @@ function normalizeBoolean(value: unknown, fallback = true): boolean {
 async function fetchCrmRows(path: string, params: Record<string, string | undefined>): Promise<CrmRow[]> {
   const response = await callCrmApi<CrmRow[]>(path, { searchParams: params });
   if (!response.ok || !Array.isArray(response.data)) {
+    if (!response.ok) {
+      console.warn(`[crm] ${path} failed`, response.error, response.status);
+    } else {
+      console.warn(`[crm] ${path} returned empty data`);
+    }
     return [];
   }
   return response.data;

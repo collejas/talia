@@ -18,6 +18,12 @@ import {
   createModeloProducto,
   updateModeloProducto,
 } from "@/app/settings/productos/actions"
+import {
+  MediaEditor,
+  buildMetadataWithMedia,
+  normalizeMediaList,
+  type MediaEntry,
+} from "@/components/settings/productos/media-editor"
 
 type ModelosViewProps = {
   modelos: ModeloProducto[]
@@ -58,6 +64,8 @@ export function ModelosView({ modelos }: ModelosViewProps) {
   const [pendingAction, setPendingAction] = useState<"save" | null>(null)
   const [isPending, startTransition] = useTransition()
   const form = useForm<ModeloFormValues>({ defaultValues: MODELO_FORM_DEFAULTS })
+  const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
+  const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
 
   const handleOpenSheet = useCallback(
     (modelo?: ModeloProducto) => {
@@ -68,9 +76,17 @@ export function ModelosView({ modelos }: ModelosViewProps) {
           activo: modelo.activo,
         })
         setEditing(modelo)
+        const baseMetadata =
+          modelo.metadata && typeof modelo.metadata === "object"
+            ? JSON.parse(JSON.stringify(modelo.metadata))
+            : {}
+        setMetadataSeed(baseMetadata)
+        setMediaItems(normalizeMediaList(baseMetadata))
       } else {
         form.reset(MODELO_FORM_DEFAULTS)
         setEditing(null)
+        setMetadataSeed({})
+        setMediaItems([])
       }
       setSheetOpen(true)
     },
@@ -83,6 +99,8 @@ export function ModelosView({ modelos }: ModelosViewProps) {
       form.reset(MODELO_FORM_DEFAULTS)
       setEditing(null)
       setFeedback(null)
+      setMetadataSeed({})
+      setMediaItems([])
     }, 200)
   }, [form])
 
@@ -99,9 +117,10 @@ export function ModelosView({ modelos }: ModelosViewProps) {
     setFeedback(null)
     setPendingAction("save")
     startTransition(() => {
+      const metadataPayload = buildMetadataWithMedia(metadataSeed, mediaItems)
       const action = editing
-        ? updateModeloProducto(editing.id, payload)
-        : createModeloProducto(payload)
+        ? updateModeloProducto(editing.id, { ...payload, metadata: metadataPayload })
+        : createModeloProducto({ ...payload, metadata: metadataPayload })
       action
         .then((result) => {
           setFeedback({
@@ -234,6 +253,12 @@ export function ModelosView({ modelos }: ModelosViewProps) {
                 {feedback.message}
               </p>
             ) : null}
+            <MediaEditor
+              items={mediaItems}
+              onChange={setMediaItems}
+              title="Imágenes del modelo"
+              description="Define qué imágenes acompañan este modelo y cuál debe ser la principal."
+            />
             <SheetFooter className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={closeSheet} type="button">
                 Cancelar

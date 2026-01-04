@@ -39,6 +39,12 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import {
+  MediaEditor,
+  buildMetadataWithMedia,
+  normalizeMediaList,
+  type MediaEntry,
+} from "@/components/settings/productos/media-editor"
 
 type StatusBanner = { type: "success" | "error"; message: string } | null
 
@@ -201,6 +207,8 @@ export function CatalogItemsPanel({
   const [isPending, startTransition] = useTransition()
 
   const form = useForm<CatalogItemFormValues>({ defaultValues: EMPTY_FORM })
+  const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
+  const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
 
   const tipoWatch = useWatch({ control: form.control, name: "tipo" }) as CatalogItemFormValues["tipo"] | undefined;
   const monedaWatch = useWatch({ control: form.control, name: "moneda" }) as string | undefined;
@@ -238,6 +246,8 @@ export function CatalogItemsPanel({
   const resetForm = useCallback(() => {
     form.reset(EMPTY_FORM)
     setEditing(null)
+    setMetadataSeed({})
+    setMediaItems([])
   }, [form])
 
   const openCreateSheet = useCallback(() => {
@@ -249,6 +259,12 @@ export function CatalogItemsPanel({
     (item: CatalogItem) => {
       setEditing(item)
       form.reset(mapItemToFormValues(item))
+      const baseMetadata =
+        item.metadatos && typeof item.metadatos === "object"
+          ? JSON.parse(JSON.stringify(item.metadatos))
+          : {}
+      setMetadataSeed(baseMetadata)
+      setMediaItems(normalizeMediaList(baseMetadata))
       setSheetOpen(true)
     },
     [form],
@@ -277,7 +293,8 @@ export function CatalogItemsPanel({
     setFeedback(null)
     setPendingAction("save")
     startTransition(() => {
-      const payload = formValuesToInput(values, editing?.impuestos, editing?.metadatos)
+      const metadataPayload = buildMetadataWithMedia(metadataSeed, mediaItems)
+      const payload = formValuesToInput(values, editing?.impuestos, metadataPayload)
       const action = editing ? updateCatalogItem(editing.id, payload) : createCatalogItem(payload)
       action
         .then((item) => {
@@ -753,6 +770,12 @@ export function CatalogItemsPanel({
                 </Label>
               </div>
             </div>
+            <MediaEditor
+              items={mediaItems}
+              onChange={setMediaItems}
+              title="Imágenes del producto"
+              description="Agrega imágenes o enlaces de recursos multimedia y selecciona la predeterminada."
+            />
             <SheetFooter className="flex flex-col gap-2 border-t pt-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 {editing ? (

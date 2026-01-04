@@ -18,6 +18,12 @@ import {
   createLineaDeNegocio,
   updateLineaDeNegocio,
 } from "@/app/settings/productos/actions"
+import {
+  MediaEditor,
+  buildMetadataWithMedia,
+  normalizeMediaList,
+  type MediaEntry,
+} from "@/components/settings/productos/media-editor"
 
 type LineasViewProps = {
   lineas: LineaDeNegocio[]
@@ -46,6 +52,8 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
   const [pendingAction, setPendingAction] = useState<"save" | null>(null)
   const [isPending, startTransition] = useTransition()
   const form = useForm<LineaFormValues>({ defaultValues: LINEA_FORM_DEFAULTS })
+  const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
+  const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
 
   const familiasPorLinea = useMemo(() => {
     const map = new Map<string, number>()
@@ -65,9 +73,17 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
           activo: linea.activo,
         })
         setEditing(linea)
+        const baseMetadata =
+          linea.metadata && typeof linea.metadata === "object"
+            ? JSON.parse(JSON.stringify(linea.metadata))
+            : {}
+        setMetadataSeed(baseMetadata)
+        setMediaItems(normalizeMediaList(baseMetadata))
       } else {
         form.reset(LINEA_FORM_DEFAULTS)
         setEditing(null)
+        setMetadataSeed({})
+        setMediaItems([])
       }
       setSheetOpen(true)
     },
@@ -80,6 +96,8 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
       form.reset(LINEA_FORM_DEFAULTS)
       setEditing(null)
       setFeedback(null)
+      setMetadataSeed({})
+      setMediaItems([])
     }, 200)
   }, [form])
 
@@ -96,9 +114,10 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
     setFeedback(null)
     setPendingAction("save")
     startTransition(() => {
+      const metadataPayload = buildMetadataWithMedia(metadataSeed, mediaItems)
       const action = editing
-        ? updateLineaDeNegocio(editing.id, payload)
-        : createLineaDeNegocio(payload)
+        ? updateLineaDeNegocio(editing.id, { ...payload, metadata: metadataPayload })
+        : createLineaDeNegocio({ ...payload, metadata: metadataPayload })
       action
         .then((result) => {
           setFeedback({
@@ -240,6 +259,12 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
                 {feedback.message}
               </p>
             ) : null}
+            <MediaEditor
+              items={mediaItems}
+              onChange={setMediaItems}
+              title="Imágenes de la línea"
+              description="Adjunta imágenes que representen esta línea estratégica y marca una como predeterminada."
+            />
             <SheetFooter className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={closeSheet} type="button">
                 Cancelar
