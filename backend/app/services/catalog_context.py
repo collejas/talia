@@ -44,9 +44,7 @@ def _catalog_match_label(match: CatalogDocumentMatch) -> str:
         candidate = match.metadata.get(key)
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
-    if match.entity_id:
-        return str(match.entity_id)
-    return "sin identificador"
+    return "sin nombre"
 
 
 def _format_catalog_matches(matches: list[CatalogDocumentMatch]) -> str | None:
