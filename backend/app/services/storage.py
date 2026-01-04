@@ -610,6 +610,47 @@ async def upload_logo_asset(*, file: UploadFile, folder: str = "general") -> dic
     }
 
 
+async def upload_media_asset(
+    *,
+    file: UploadFile,
+    folder: str = "general",
+) -> dict[str, str]:
+    """Sube una imagen de catálogo al bucket `recursos` y devuelve metadatos básicos."""
+
+    if not settings.supabase_url:
+        raise StorageError("Supabase no está configurado (SUPABASE_URL)")
+
+    content = await file.read()
+    if not content:
+        raise StorageError("El archivo de recursos está vacío")
+
+    original_name = file.filename or "recurso"
+    safe_name = Path(original_name).name
+    extension = Path(safe_name).suffix or ".png"
+    key = f"{folder}/{uuid4().hex}{extension}"
+
+    repo = CRMRepository()
+    try:
+        public_path = await repo.upload_storage_object(
+            bucket="recursos",
+            object_key=key,
+            content=content,
+            content_type=file.content_type,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    base_url = settings.supabase_url.rstrip("/")
+    public_url = f"{base_url}/storage/v1/object/public/{public_path}"
+
+    return {
+        "url": public_url,
+        "path": public_path,
+        "name": safe_name,
+        "mime": file.content_type or "application/octet-stream",
+    }
+
+
 async def upload_cliente_document(
     *, file: UploadFile, cliente_id: str, document_type: str
 ) -> dict[str, Any]:

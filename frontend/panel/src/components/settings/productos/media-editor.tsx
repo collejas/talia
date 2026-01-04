@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
-import { IconPhotoPlus, IconTrash, IconStar } from "@tabler/icons-react"
+import { type ChangeEvent, useCallback, useMemo, useRef, useState } from "react"
+import { IconTrash, IconStar, IconUpload } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -93,40 +93,59 @@ type MediaEditorProps = {
 }
 
 export function MediaEditor({ items, onChange, title, description }: MediaEditorProps) {
-  const [draftUrl, setDraftUrl] = useState("")
-  const [draftDescripcion, setDraftDescripcion] = useState("")
-  const [draftTipo, setDraftTipo] = useState<(typeof MEDIA_TYPES)[number]["value"]>(DEFAULT_TYPE)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const hasDefault = useMemo(() => items.some((item) => item.predeterminada), [items])
 
-  const resetDraft = useCallback(() => {
-    setDraftUrl("")
-    setDraftDescripcion("")
-    setDraftTipo(DEFAULT_TYPE)
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click()
   }, [])
 
-  const handleAdd = useCallback(() => {
-    const url = draftUrl.trim()
-    if (!url) {
-      return
-    }
-    const nextEntry: MediaEntry = {
-      id: randomId(),
-      url,
-      descripcion: draftDescripcion.trim() || null,
-      tipo: draftTipo,
-      predeterminada: !hasDefault,
-    }
-    const nextItems = [...items, nextEntry]
-    onChange(nextItems)
-    resetDraft()
-  }, [draftDescripcion, draftTipo, draftUrl, hasDefault, items, onChange, resetDraft])
+  const handleFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+      setIsUploading(true)
+      setUploadError(null)
+      try {
+        const form = new FormData()
+        form.append("file", file, file.name)
+        const response = await fetch("/api/settings/media/upload", {
+          method: "POST",
+          body: form,
+        })
+        if (!response.ok) {
+          const data = (await response.json().catch(() => ({}))) as { error?: string }
+          throw new Error(data.error || "upload_failed")
+        }
+        const data = (await response.json()) as { url: string }
+        const nextEntry: MediaEntry = {
+          id: randomId(),
+          url: data.url,
+          descripcion: file.name,
+          tipo: DEFAULT_TYPE,
+          predeterminada: !hasDefault,
+        }
+        onChange([...items, nextEntry])
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "upload_failed")
+      } finally {
+        setIsUploading(false)
+        if (event.target) {
+          event.target.value = ""
+        }
+      }
+    },
+    [hasDefault, items, onChange],
+  )
 
   const handleUpdate = useCallback(
     (id: string, patch: Partial<Omit<MediaEntry, "id">>) => {
-      onChange(
-        items.map((item) => (item.id === id ? { ...item, ...patch, descripcion: patch.descripcion ?? item.descripcion } : item)),
-      )
+    onChange(
+      items.map((item) => (item.id === id ? { ...item, ...patch, descripcion: patch.descripcion ?? item.descripcion } : item)),
+    )
     },
     [items, onChange],
   )
@@ -152,52 +171,26 @@ export function MediaEditor({ items, onChange, title, description }: MediaEditor
 
   return (
     <div className="space-y-3 rounded-2xl border border-dashed border-muted/60 p-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold">{title ?? "Imágenes"}</p>
-          <p className="text-xs text-muted-foreground">{description ?? "Agrega imágenes representativas."}</p>
+          <p className="text-xs text-muted-foreground">{description ?? "Sube imágenes representativas."}</p>
         </div>
-        <Button size="sm" variant="outline" onClick={handleAdd} disabled={!draftUrl.trim()}>
-          <IconPhotoPlus className="me-2 size-4" />
-          Agregar
-        </Button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1">
-          <Label htmlFor="media-url">URL de la imagen</Label>
-          <Input
-            id="media-url"
-            placeholder="https://"
-            value={draftUrl}
-            onChange={(event) => setDraftUrl(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="media-descripcion">Descripción breve</Label>
-          <Textarea
-            id="media-descripcion"
-            placeholder="Uso o contexto"
-            value={draftDescripcion}
-            onChange={(event) => setDraftDescripcion(event.target.value)}
-            rows={1}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="media-tipo">Tipo</Label>
-          <Select value={draftTipo} onValueChange={(value) => setDraftTipo(value as MediaEntry["tipo"])}>
-            <SelectTrigger id="media-tipo">
-              <SelectValue placeholder="Selecciona un tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              {MEDIA_TYPES.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" type="button" onClick={handleUploadClick} disabled={isUploading}>
+            <IconUpload className="me-2 size-4" />
+            {isUploading ? "Subiendo..." : "Agregar imagen"}
+          </Button>
+          {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
         </div>
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-muted/60 py-6 text-center text-sm text-muted-foreground">
           Añade al menos una imagen para que esté disponible en los catálogos.

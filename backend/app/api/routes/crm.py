@@ -4041,6 +4041,12 @@ class CRMLogoAssetList(BaseModel):
     logos: list[CRMLogoAsset]
 
 
+class CRMMediaAssetUpload(BaseModel):
+    url: str
+    path: str
+    bucket: str = Field(default="recursos")
+
+
 @router.get("/cuentas", response_model=CRMAccountsResponse)
 async def list_accounts(
     *,
@@ -4868,6 +4874,32 @@ async def upload_settings_logo(
     if not logo:
         raise HTTPException(status_code=502, detail="logo_save_unexpected_response")
     return logo
+
+
+@router.post("/settings/media/upload", response_model=CRMMediaAssetUpload)
+async def upload_settings_media(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    file: UploadFile = File(...),
+) -> CRMMediaAssetUpload:
+    _ = usuario_id
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="media_file_required")
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="media_invalid_type")
+
+    try:
+        upload = await storage.upload_media_asset(file=file)
+    except StorageError as exc:
+        logger.error(
+            "media_upload_failure",
+            exc_info=exc,
+            extra={"file": file.filename, "organizacion_id": organizacion_id},
+        )
+        raise HTTPException(status_code=502, detail="media_upload_failed") from exc
+
+    return CRMMediaAssetUpload(url=upload["url"], path=upload["path"], bucket="recursos")
 
 
 @router.get("/settings/email-template", response_model=CRMEmailTemplate)

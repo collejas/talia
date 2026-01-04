@@ -6324,6 +6324,15 @@ class CRMRepository:
                 f"Error de red al subir objeto {bucket_name}/{key}: {exc}"
             ) from exc
         if resp.status_code >= 400:
+            logger.error(
+                "storage_upload_error",
+                extra={
+                    "bucket": bucket_name,
+                    "key": key,
+                    "status": resp.status_code,
+                    "body": resp.text,
+                },
+            )
             raise CRMRepositoryError(
                 f"Supabase respondió error {resp.status_code} al subir objeto {bucket_name}/{key}: {resp.text}"
             )
