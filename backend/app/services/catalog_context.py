@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Sequence
 from uuid import UUID
 
 from app.core.logging import get_logger
@@ -9,6 +11,12 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.catalog_embeddings import CatalogDocumentMatch, CatalogEmbeddingService
 
 logger = get_logger("app.services.catalog_context")
+
+
+@dataclass
+class CatalogContext:
+    text: str
+    matches: list[CatalogDocumentMatch]
 
 
 _catalog_embedding_service: CatalogEmbeddingService | None = None
@@ -47,7 +55,7 @@ def _catalog_match_label(match: CatalogDocumentMatch) -> str:
     return "sin nombre"
 
 
-def _format_catalog_matches(matches: list[CatalogDocumentMatch]) -> str | None:
+def _format_catalog_matches(matches: Sequence[CatalogDocumentMatch]) -> str | None:
     if not matches:
         return None
     lines = ["Contexto relevante del catálogo:"]
@@ -60,12 +68,22 @@ def _format_catalog_matches(matches: list[CatalogDocumentMatch]) -> str | None:
     return "\n".join(lines)
 
 
+def _format_catalog_references(matches: Sequence[CatalogDocumentMatch]) -> str | None:
+    if not matches:
+        return None
+    lines = ["Referencias catalogadas:"]
+    for match in matches[:3]:
+        label = _catalog_match_label(match)
+        lines.append(f"- {match.entity_type.title()}: {label}")
+    return "\n".join(lines)
+
+
 async def build_catalog_context(
     organizacion_id: str | None,
     query: str,
     *,
     limit: int = 3,
-) -> str | None:
+) -> CatalogContext | None:
     if not organizacion_id:
         return None
     prompt = query.strip()
@@ -86,4 +104,22 @@ async def build_catalog_context(
             extra={"organizacion_id": organizacion_id, "error": str(exc)},
         )
         return None
-    return _format_catalog_matches(matches)
+    formatted = _format_catalog_matches(matches)
+    if not formatted:
+        return None
+    return CatalogContext(text=formatted, matches=matches)
+
+
+def format_catalog_references(matches: Sequence[CatalogDocumentMatch]) -> str | None:
+    return _format_catalog_references(matches)
+
+
+def append_catalog_references(text: str | None, context: CatalogContext | None) -> str | None:
+    if not context:
+        return text
+    references = _format_catalog_references(context.matches)
+    if not references:
+        return text
+    if text:
+        return f"{text}\n\n{references}".strip()
+    return references

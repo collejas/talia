@@ -39,7 +39,11 @@ from app.services import (
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
 from app.services.calendar import CalendarError
-from app.services.catalog_context import build_catalog_context
+from app.services.catalog_context import (
+    CatalogContext,
+    append_catalog_references,
+    build_catalog_context,
+)
 from app.services.storage import StorageError
 
 from . import schemas
@@ -1898,6 +1902,7 @@ async def handle_message(
         session_id=payload.session_id,
     )
 
+    catalog_context = await build_catalog_context(organizacion_hint, payload.content or "")
     try:
         (
             assistant_reply,
@@ -1915,6 +1920,7 @@ async def handle_message(
             openai_conversation_id=openai_conversation_id,
             previous_response_id=conversation_meta.get("last_response_id"),
             organizacion_id=organizacion_hint,
+            catalog_context=catalog_context,
         )
     except Exception as exc:  # pragma: no cover - se registra y responde fallback
         logger.exception(
@@ -1939,6 +1945,8 @@ async def handle_message(
     if side_effects.get("booking"):
         metadata.booking = side_effects["booking"]
 
+    if assistant_reply and catalog_context:
+        assistant_reply = append_catalog_references(assistant_reply, catalog_context)
     if assistant_reply:
         try:
             message_metadata = {
@@ -2270,6 +2278,7 @@ async def _run_assistant_turn(
     openai_conversation_id: str | None,
     previous_response_id: str | None,
     organizacion_id: str | None = None,
+    catalog_context: CatalogContext | None = None,
 ) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None, dict[str, Any]]:
     """Gestiona la interacción con OpenAI y la resolución de tool calls."""
     metadata_payload = {
@@ -2316,15 +2325,15 @@ async def _run_assistant_turn(
                 ],
             }
         )
-    catalog_context = await build_catalog_context(organizacion_id, user_message.content or "")
-    if catalog_context:
+    catalog_text = catalog_context.text if catalog_context and catalog_context.text else None
+    if catalog_text:
         base_input.append(
             {
                 "role": "developer",
                 "content": [
                     {
                         "type": "input_text",
-                        "text": catalog_context,
+                        "text": catalog_text,
                     }
                 ],
             }

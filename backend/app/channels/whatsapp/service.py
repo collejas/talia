@@ -25,7 +25,7 @@ from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
-from app.services.catalog_context import build_catalog_context
+from app.services.catalog_context import append_catalog_references, build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 
 from . import schemas
@@ -221,6 +221,8 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
+    catalog_context = await build_catalog_context(organizacion_hint, message.body or "")
+
     try:
         assistant_reply = await _generate_assistant_reply(
             message=message,
@@ -228,6 +230,7 @@ async def handle_incoming_message(
             contact_id=contact_id,
             openai_conversation_id=openai_conversation_id,
             previous_response_id=previous_response_id,
+            catalog_context=catalog_context.text if catalog_context else None,
         )
     except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
         logger.exception(
@@ -252,9 +255,13 @@ async def handle_incoming_message(
             response_id=assistant_reply.response_id or previous_response_id,
         )
 
+    final_reply_text = append_catalog_references(assistant_reply.text, catalog_context)
+    if not final_reply_text:
+        final_reply_text = DEFAULT_FALLBACK
+
     send_result = await _send_whatsapp_reply(
         to_number=message.from_number,
-        body=assistant_reply.text,
+        body=final_reply_text,
     )
 
     metadata = {
@@ -271,7 +278,7 @@ async def handle_incoming_message(
             direction="saliente",
             conversation_id=conversation_id,
             contact_id=contact_id,
-            body=assistant_reply.text,
+            body=final_reply_text,
             message_sid=send_result.sid,
             response_id=assistant_reply.response_id,
             metadata=metadata,
@@ -572,7 +579,6 @@ async def _generate_assistant_reply(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
-    catalog_context = await build_catalog_context(organizacion_hint, message.body or "")
     request_kwargs: dict[str, Any] = {
         "input": _build_openai_input(
             message,

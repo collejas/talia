@@ -21,7 +21,7 @@ from app.services import conversation_summary, storage
 from app.services.context_formatter import build_crm_context_lines
 from app.services import openai as openai_service
 from app.services.storage import StorageError
-from app.services.catalog_context import build_catalog_context
+from app.services.catalog_context import append_catalog_references, build_catalog_context
 
 logger = get_logger("app.channels.messenger")
 
@@ -388,7 +388,7 @@ async def _handle_message(
         context_data=contact_context,
         summary_text=summary_text,
         summary_created_en=summary_created_en,
-        catalog_context=catalog_context,
+        catalog_context=catalog_context.text if catalog_context else None,
     )
 
     request_kwargs: dict[str, Any] = {
@@ -461,14 +461,16 @@ async def _handle_message(
             previous_response_id=previous_response_id,
             log=logger,
         )
-    except Exception as exc:  # pragma: no cover - defensivo ante fallos externos
-        logger.exception(
-            "messenger.run_tool_loop_failed",
-            extra={"conversation_id": conversation_id, "error": str(exc)},
-        )
-        reply_text = DEFAULT_FALLBACK
+        except Exception as exc:  # pragma: no cover - defensivo ante fallos externos
+            logger.exception(
+                "messenger.run_tool_loop_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+            reply_text = DEFAULT_FALLBACK
     else:
         reply_text = _extract_text_from_response(result.response) or DEFAULT_FALLBACK
+
+    reply_text = append_catalog_references(reply_text, catalog_context)
 
     if reply_text:
         sent_ok = await _send_messenger_reply(
