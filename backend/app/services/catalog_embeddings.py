@@ -296,7 +296,7 @@ class CatalogEmbeddingService:
 
     async def _create_embedding(self, text: str) -> Sequence[float]:
         try:
-            response = await self._client.embeddings.acreate(input=text, model=self._model)
+            response = await self._client.embeddings.create(input=text, model=self._model)
         except Exception as exc:  # pragma: no cover - depende del proveedor externo
             logger.exception(
                 "vector_store.embedding_failed",
