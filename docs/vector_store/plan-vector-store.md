@@ -18,7 +18,7 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 - [x] { } Implementar scripts o jobs que puedan reindexar todo el catálogo por tenant (p. ej. `backend/scripts/index_catalog.py --organizacion-id=<org>`).
 
 ## 4. Consulta desde el asistente
-- [ ] { } Crear un helper (server/edge) que reciba el prompt del asistente, genere embedding de la pregunta y consulte la tabla con `ORDER BY embedding <=> query_embedding LIMIT N` y filtro por organización.
+- [x] { } Crear un helper (server/edge) que reciba el prompt del asistente, genere embedding de la pregunta y consulte la tabla con `ORDER BY embedding <=> query_embedding LIMIT N` y filtro por organización.
 - [ ] { } Inyectar los fragmentos más relevantes como contexto en el prompt del asistente (p. ej. `contexto` con nombre y resumen de cada documento).
 - [ ] { } Asegurar que las respuestas lleven referencias (nombre del producto/servicio y su relación) para poder trazar la fuente.
 

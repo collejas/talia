@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -73,6 +74,31 @@ def _resource_block(resources: Sequence[Mapping[str, Any]]) -> str | None:
         if parts:
             lines.append(" - ".join(parts))
     return "\n".join(lines) if lines else None
+
+
+@dataclass
+class CatalogDocumentMatch:
+    entity_type: str
+    entity_id: UUID | None
+    contenido: str
+    metadata: dict[str, Any]
+    similarity: float | None
+
+
+def _coerce_uuid(value: Any) -> UUID | None:
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_similarity(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class CatalogEmbeddingService:
@@ -285,6 +311,37 @@ class CatalogEmbeddingService:
         if not isinstance(embedding_value, Sequence):
             raise CRMRepositoryError("embedding_invalid")
         return list(embedding_value)
+
+    async def query_documents(
+        self,
+        organizacion_id: UUID,
+        *,
+        query: str,
+        limit: int = 5,
+    ) -> list[CatalogDocumentMatch]:
+        prompt = query.strip()
+        if not prompt:
+            return []
+        embedding = await self._create_embedding(prompt)
+        rows = await self._repo.search_catalog_document_embeddings(
+            organizacion_id=organizacion_id,
+            embedding=embedding,
+            limit=limit,
+        )
+        matches: list[CatalogDocumentMatch] = []
+        for row in rows:
+            matches.append(
+                CatalogDocumentMatch(
+                    entity_type=str(row.get("entity_type") or ""),
+                    entity_id=_coerce_uuid(row.get("entity_id")),
+                    contenido=str(row.get("contenido") or ""),
+                    metadata=self._clean_metadata(
+                        row.get("metadata") if isinstance(row.get("metadata"), Mapping) else {}
+                    ),
+                    similarity=_coerce_similarity(row.get("similarity")),
+                )
+            )
+        return matches
 
     @staticmethod
     def _clean_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:

@@ -3239,6 +3239,30 @@ class CRMRepository:
             prefer="resolution=merge-duplicates",
         )
 
+    async def search_catalog_document_embeddings(
+        self,
+        *,
+        organizacion_id: UUID,
+        embedding: Sequence[float],
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_embedding": embedding,
+            "p_limit": limit,
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/catalog_document_embeddings_search",
+            json=payload,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada de la búsqueda vectorial: {data!r}"
+            )
+        return data
+
     async def create_linea_de_negocio(
         self,
         *,

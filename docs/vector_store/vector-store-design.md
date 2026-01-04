@@ -70,7 +70,7 @@ CREATE TABLE public.catalog_document_embeddings (
    - Estos scripts pueden ejecutarse periódicamente o tras triggers (webhooks/cron) que detecten cambios masivos.
 
 4. **Consulta desde el asistente**  
-   - El helper recibe el prompt del asistente, genera un embedding de la pregunta y ejecuta `SELECT * FROM catalog_document_embeddings WHERE organizacion_id = $1 ORDER BY embedding <=> $2 LIMIT N`.  
+   - El helper (`backend/app/services/catalog_embeddings.py::query_documents`) recibe el prompt del asistente, genera el embedding y llama al RPC `catalog_document_embeddings_search` (ver `supabase/migrations/20280107_120000_catalog_vector_search.sql`) para obtener los fragmentos con orden por similitud.  
    - Se inyectan fragmentos (p. ej. “Modelo X - Familia Y - descripción resumida”) y se anotan referencias (nombre de entidad y tipo) para mantener trazabilidad.  
    - Registrar la consulta en auditoría opcional si se desea seguimiento.
 
