@@ -28,7 +28,7 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 - [x] { } Registrar auditoría (fecha, usuario) cada vez que se reindexa o se consulta la vector store (opcional).
 
 ## 6. UX del asistente
-- [ ] { } Actualizar los prompts/templates del asistente para mencionar que está consultando la base enriquecida (dar claridad y transparencia).
+- [x] { } Actualizar los prompts/templates del asistente para mencionar que está consultando la base enriquecida (dar claridad y transparencia).
 - [x] { } Notificar en la interfaz/admin cuando la vector store se reindexa (p. ej. card en `settings/productos/items` con datos de auditoría).
 - [ ] { } Añadir enlaces directos desde el asistente a los registros correspondientes (por ID).
 
