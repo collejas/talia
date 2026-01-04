@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Body,
     Depends,
     File,
@@ -57,6 +58,7 @@ from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSea
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.brevo import process_brevo_events
+from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_contact_sender import contact_sender
@@ -75,6 +77,45 @@ QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
+
+
+async def _run_catalog_reindex(organizacion_id: UUID) -> None:
+    """Reindexa por completo la vector store del catálogo para el tenant especificado."""
+    logger.info(
+        "vector_store.reindex.triggered",
+        extra={"organizacion_id": str(organizacion_id)},
+    )
+    try:
+        repo = CRMRepository()
+        service = CatalogEmbeddingService(repo)
+        await service.reindex_catalog(organizacion_id)
+        logger.info(
+            "vector_store.reindex.completed",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
+    except Exception as exc:  # pragma: no cover - logging de errores de servicio externo
+        logger.exception(
+            "vector_store.reindex.failed",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+
+
+def _trigger_catalog_reindex(
+    background_tasks: BackgroundTasks,
+    organizacion_value: Any | None,
+) -> None:
+    """Programa la reindexación completa en segundo plano."""
+    if not organizacion_value:
+        return
+    try:
+        organizacion_id = UUID(str(organizacion_value))
+    except (TypeError, ValueError):
+        logger.warning(
+            "vector_store.reindex.invalid_organizacion_id",
+            extra={"value": organizacion_value},
+        )
+        return
+    background_tasks.add_task(asyncio.create_task, _run_catalog_reindex(organizacion_id))
 
 
 def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:
@@ -4448,6 +4489,7 @@ async def create_catalog_item(
     repo: CRMRepository = Depends(get_repository),
     payload: CRMCatalogItemCreate,
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if usuario_id:
@@ -4457,6 +4499,7 @@ async def create_catalog_item(
         row = await repo.create_catalog_item(payload=body)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMCatalogItem.model_validate(row)
 
 
@@ -4467,6 +4510,7 @@ async def update_catalog_item(
     item_id: UUID,
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMCatalogItemUpdate,
+    background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4479,6 +4523,7 @@ async def update_catalog_item(
         detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMCatalogItem.model_validate(row)
 
 
@@ -4542,6 +4587,7 @@ async def create_product_linea(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: CRMLineaDeNegocioCreate,
+    background_tasks: BackgroundTasks,
 ) -> CRMLineaDeNegocio:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if payload.metadata is not None:
@@ -4553,6 +4599,7 @@ async def create_product_linea(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMLineaDeNegocio.model_validate(row)
 
 
@@ -4563,6 +4610,7 @@ async def update_product_linea(
     organizacion_id: UUID = Depends(require_organizacion_id),
     linea_id: UUID,
     payload: CRMLineaDeNegocioUpdate,
+    background_tasks: BackgroundTasks,
 ) -> CRMLineaDeNegocio:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4577,6 +4625,7 @@ async def update_product_linea(
         detail = "linea_not_found" if "linea_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "linea_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMLineaDeNegocio.model_validate(row)
 
 
@@ -4613,6 +4662,7 @@ async def create_product_familia(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: CRMFamiliaProductoCreate,
+    background_tasks: BackgroundTasks,
 ) -> CRMFamiliaProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
@@ -4622,6 +4672,7 @@ async def create_product_familia(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMFamiliaProducto.model_validate(row)
 
 
@@ -4632,6 +4683,7 @@ async def update_product_familia(
     organizacion_id: UUID = Depends(require_organizacion_id),
     familia_id: UUID,
     payload: CRMFamiliaProductoUpdate,
+    background_tasks: BackgroundTasks,
 ) -> CRMFamiliaProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4646,6 +4698,7 @@ async def update_product_familia(
         detail = "familia_not_found" if "familia_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "familia_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMFamiliaProducto.model_validate(row)
 
 
@@ -4680,6 +4733,7 @@ async def create_product_modelo(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: CRMModeloProductoCreate,
+    background_tasks: BackgroundTasks,
 ) -> CRMModeloProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
@@ -4689,6 +4743,7 @@ async def create_product_modelo(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMModeloProducto.model_validate(row)
 
 
@@ -4699,6 +4754,7 @@ async def update_product_modelo(
     organizacion_id: UUID = Depends(require_organizacion_id),
     modelo_id: UUID,
     payload: CRMModeloProductoUpdate,
+    background_tasks: BackgroundTasks,
 ) -> CRMModeloProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4713,6 +4769,7 @@ async def update_product_modelo(
         detail = "modelo_not_found" if "modelo_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "modelo_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
     return CRMModeloProducto.model_validate(row)
 
 

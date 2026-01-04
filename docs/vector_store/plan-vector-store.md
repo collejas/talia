@@ -10,7 +10,7 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 ## 2. Vector store en Supabase
 - [x] { } Crear tabla `catalog_document_embeddings` (u otro nombre) con columnas: id, organizacion_id, entity_type, entity_id, contenido(texto), embedding(vector), updated_at.
 - [x] { } Asegurar que la extensión `pgvector` esté habilitada (ya lo está en Supabase) y que la tabla tenga índices `USING ivfflat` o `vector_column storage`.
-- [ ] { } Decidir frecuencia de reindexación y qué evento la dispara (webhooks/trigger cuando se editan entidades o tareas programadas).
+- [x] { } Disparar la reindexación cada vez que se crea o edita una familia, línea, modelo o producto para que el embedding esté siempre sincronizado.
 
 ## 3. Generación y almacenado de embeddings
 - [x] { } Integrar la generación de embeddings (OpenAI `text-embedding-ada-002` o similar) en el backend/edge function.
