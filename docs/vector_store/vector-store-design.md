@@ -87,6 +87,7 @@ CREATE TABLE public.catalog_document_embeddings (
 - Actualizar prompts/templates para mencionar que se usa la información enriquecida del catálogo.  
 - El prompt del asistente recuerda mencionar que siempre toma la información más reciente desde la vector store autorizada y evita revelar UUIDs; ofrece enlaces guiados sin mencionar IDs internos.
 - En la interfaz `settings/productos/items`, mostrar estado de la vector store y última reindexación (usa tokens de la tabla de auditoría).  
+- El bloque de referencias del asistente ahora incluye enlaces a la sección exacta del panel (`/settings/productos/...`) usando slugs/nombres y evitando UUID visibles.
 - En las respuestas del asistente, alimentar un bloque “Referencias” con `entity_type`, `entity_id`, `nombre` para que la trazabilidad sea clara.
 
 ## 5. Estado visible en la interfaz

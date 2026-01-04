@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Sequence
+from urllib.parse import quote_plus
 from uuid import UUID
 
 from app.core.logging import get_logger
@@ -69,13 +70,47 @@ def _format_catalog_matches(matches: Sequence[CatalogDocumentMatch]) -> str | No
     return "\n".join(lines)
 
 
+ENTITY_PANEL_PATHS = {
+    "producto": "items",
+    "familia": "familias",
+    "linea": "lineas",
+    "modelo": "modelos",
+}
+
+
+def _catalog_panel_search_term(match: CatalogDocumentMatch) -> str | None:
+    for key in ("slug", "nombre", "tipo"):
+        raw = match.metadata.get(key)
+        if isinstance(raw, str):
+            trimmed = raw.strip()
+            if trimmed:
+                return trimmed
+    return None
+
+
+def _catalog_panel_url(match: CatalogDocumentMatch) -> str | None:
+    path = ENTITY_PANEL_PATHS.get(match.entity_type.lower())
+    if not path:
+        return None
+    search_term = _catalog_panel_search_term(match)
+    base = f"/settings/productos/{path}"
+    if not search_term:
+        return base
+    encoded = quote_plus(search_term)
+    return f"{base}?search={encoded}"
+
+
 def _format_catalog_references(matches: Sequence[CatalogDocumentMatch]) -> str | None:
     if not matches:
         return None
     lines = ["Referencias catalogadas:"]
     for match in matches[:3]:
         label = _catalog_match_label(match)
-        lines.append(f"- {match.entity_type.title()}: {label}")
+        link = _catalog_panel_url(match)
+        if link:
+            lines.append(f"- {match.entity_type.title()}: {label} (ver ficha: {link})")
+        else:
+            lines.append(f"- {match.entity_type.title()}: {label}")
     return "\n".join(lines)
 
 

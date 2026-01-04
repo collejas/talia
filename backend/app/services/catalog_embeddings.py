@@ -177,6 +177,7 @@ class CatalogEmbeddingService:
         metadata = {
             "source": "lineas_de_negocio",
             "activo": row.get("activo", True),
+            "nombre": _serialize_metadata_value(row.get("nombre")),
         }
         await self._index_entity(
             organizacion_id,
@@ -200,6 +201,7 @@ class CatalogEmbeddingService:
             "source": "familias_productos",
             "linea_id": _serialize_metadata_value(row.get("linea_id")),
             "activo": row.get("activo", True),
+            "nombre": _serialize_metadata_value(row.get("nombre")),
         }
         await self._index_entity(
             organizacion_id,
@@ -222,6 +224,7 @@ class CatalogEmbeddingService:
         metadata = {
             "source": "modelos_productos",
             "activo": row.get("activo", True),
+            "nombre": _serialize_metadata_value(row.get("nombre")),
         }
         await self._index_entity(
             organizacion_id,
@@ -251,6 +254,7 @@ class CatalogEmbeddingService:
             "precio_base": _serialize_metadata_value(row.get("precio_base")),
             "moneda": _serialize_metadata_value(row.get("moneda")),
             "requiere_factura": _serialize_metadata_value(row.get("requiere_factura")),
+            "nombre": _serialize_metadata_value(row.get("nombre")),
         }
         resources = self._resources_for("producto", entity_id, resource_map)
         if resources:
