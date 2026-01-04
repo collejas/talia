@@ -3366,6 +3366,7 @@ class CRMModeloProducto(BaseModel):
     metadata: dict[str, Any] | None = None
     creado_en: datetime
     actualizado_en: datetime
+    familia_id: UUID | None = None
 
 
 class CRMLineaDeNegocioCreate(BaseModel):
@@ -3403,6 +3404,7 @@ class CRMModeloProductoCreate(BaseModel):
     descripcion: str | None = Field(default=None, max_length=2000)
     activo: bool = True
     metadata: dict[str, Any] | None = None
+    familia_id: UUID | None = None
 
 
 class CRMModeloProductoUpdate(BaseModel):
@@ -3410,6 +3412,7 @@ class CRMModeloProductoUpdate(BaseModel):
     descripcion: str | None = Field(default=None, max_length=2000)
     activo: bool | None = None
     metadata: dict[str, Any] | None = None
+    familia_id: UUID | None = None
 
 
 class LeadQuoteItemPayload(BaseModel):

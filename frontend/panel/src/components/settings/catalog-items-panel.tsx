@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { useForm, useWatch } from "react-hook-form"
 import {
   IconArchive,
@@ -62,6 +62,7 @@ type FamiliaOption = {
 type ModeloOption = {
   id: string
   nombre: string
+  familiaId: string | null
 }
 
 type CatalogItemFormValues = {
@@ -225,6 +226,32 @@ export function CatalogItemsPanel({
     return familias.filter((familia) => familia.lineaId === lineaWatch)
   }, [familias, lineaWatch])
 
+  const filteredModelos = useMemo(() => {
+    if (!familiaWatch) {
+      return modelos
+    }
+    return modelos.filter((modelo) => modelo.familiaId === familiaWatch)
+  }, [familiaWatch, modelos])
+
+  useEffect(() => {
+    if (!familiaWatch) {
+      return
+    }
+    const familia = familias.find((entry) => entry.id === familiaWatch)
+    if (!familia || (lineaWatch && familia.lineaId !== lineaWatch)) {
+      form.setValue("familiaId", "")
+      form.setValue("modeloId", "")
+    }
+  }, [familiaWatch, familias, lineaWatch, form])
+
+  useEffect(() => {
+    if (!modeloWatch) {
+      return
+    }
+    if (!filteredModelos.some((modelo) => modelo.id === modeloWatch)) {
+      form.setValue("modeloId", "")
+    }
+  }, [filteredModelos, modeloWatch, form])
 
   const visibleItems = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -714,7 +741,7 @@ export function CatalogItemsPanel({
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value={EMPTY_SELECT_VALUE}>Sin modelo</SelectItem>
-                    {modelos.map((modelo) => (
+                    {filteredModelos.map((modelo) => (
                       <SelectItem key={modelo.id} value={modelo.id}>
                         {modelo.nombre}
                       </SelectItem>

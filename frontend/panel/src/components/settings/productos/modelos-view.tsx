@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea"
 
 import {
+  FamiliaProducto,
   ModeloProducto,
   createModeloProducto,
   updateModeloProducto,
@@ -27,18 +28,21 @@ import {
 
 type ModelosViewProps = {
   modelos: ModeloProducto[]
+  familias: FamiliaProducto[]
 }
 
 type ModeloFormValues = {
   nombre: string
   descripcion: string
   activo: boolean
+  familiaId: string
 }
 
 const MODELO_FORM_DEFAULTS: ModeloFormValues = {
   nombre: "",
   descripcion: "",
   activo: true,
+  familiaId: "",
 }
 
 type Feedback = { type: "success" | "error"; message: string }
@@ -56,7 +60,12 @@ function formatDate(value: string): string {
   return formatter.format(parsed)
 }
 
-export function ModelosView({ modelos }: ModelosViewProps) {
+export function ModelosView({ modelos, familias }: ModelosViewProps) {
+  const familiaMap = useMemo(() => {
+    const map = new Map<string, FamiliaProducto>()
+    familias.forEach((familia) => map.set(familia.id, familia))
+    return map
+  }, [familias])
   const [modelosState, setModelosState] = useState(modelos)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<ModeloProducto | null>(null)
@@ -74,6 +83,7 @@ export function ModelosView({ modelos }: ModelosViewProps) {
           nombre: modelo.nombre,
           descripcion: modelo.descripcion ?? "",
           activo: modelo.activo,
+          familiaId: modelo.familiaId ?? "",
         })
         setEditing(modelo)
         const baseMetadata =
@@ -109,6 +119,7 @@ export function ModelosView({ modelos }: ModelosViewProps) {
       nombre: values.nombre.trim(),
       descripcion: values.descripcion.trim() || null,
       activo: values.activo,
+      familiaId: values.familiaId || null,
     }
     if (!payload.nombre) {
       setFeedback({ type: "error", message: "El nombre es obligatorio." })
@@ -219,6 +230,11 @@ export function ModelosView({ modelos }: ModelosViewProps) {
                             <CardDescription>
                               {modelo.descripcion ?? "Sin descripción disponible"}
                             </CardDescription>
+                            {modelo.familiaId ? (
+                              <p className="text-sm text-muted-foreground">
+                                Familia: {familiaMap.get(modelo.familiaId)?.nombre ?? "—"}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                         <Badge variant={modelo.activo ? "secondary" : "outline"}>
@@ -255,6 +271,21 @@ export function ModelosView({ modelos }: ModelosViewProps) {
             <div className="space-y-1">
               <Label htmlFor="modelo-descripcion">Descripción</Label>
               <Textarea id="modelo-descripcion" {...form.register("descripcion")} rows={4} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="modelo-familia">Familia</Label>
+              <select
+                id="modelo-familia"
+                {...form.register("familiaId")}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <option value="">Sin familia</option>
+                {familias.map((familia) => (
+                  <option key={familia.id} value={familia.id}>
+                    {familia.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="modelo-activo" {...form.register("activo")} />

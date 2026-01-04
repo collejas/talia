@@ -114,6 +114,7 @@ export type ModeloProducto = {
   creadoEn: string;
   actualizadoEn: string;
   fotoUrl: string | null;
+  familiaId: string | null;
 };
 
 const transformLinea = (row: CrmRow): LineaDeNegocio => {
@@ -156,6 +157,7 @@ const transformModelo = (row: CrmRow): ModeloProducto => {
     creadoEn: String(row.creado_en ?? row.creadoEn ?? ""),
     actualizadoEn: String(row.actualizado_en ?? row.actualizadoEn ?? ""),
     fotoUrl: extractMediaUrl(meta),
+    familiaId: normalizeString(row.familia_id ?? row.familiaId) ?? null,
   };
 };
 
@@ -363,6 +365,7 @@ export type ModeloFormInput = {
   descripcion?: string | null
   activo?: boolean
   metadata?: Record<string, unknown> | null
+  familiaId?: string | null
 }
 
 export async function createModeloProducto(input: ModeloFormInput): Promise<ModeloProducto> {
@@ -373,6 +376,7 @@ export async function createModeloProducto(input: ModeloFormInput): Promise<Mode
       descripcion: input.descripcion ?? null,
       activo: input.activo ?? true,
       metadata: input.metadata ?? {},
+      familia_id: input.familiaId ?? null,
     },
   })
   const row = normalizeResponseRow(response)
@@ -391,6 +395,7 @@ export async function updateModeloProducto(
   if (input.descripcion !== undefined) payload.descripcion = input.descripcion
   if (input.activo !== undefined) payload.activo = input.activo
   if (input.metadata !== undefined) payload.metadata = input.metadata
+  if (input.familiaId !== undefined) payload.familia_id = input.familiaId
   if (!Object.keys(payload).length) {
     throw new Error("No hay cambios para guardar")
   }
