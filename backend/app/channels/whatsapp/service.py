@@ -221,7 +221,12 @@ async def handle_incoming_message(
     if not openai_conversation_id:
         openai_conversation_id = conversation_meta.get("openai_conversation_id")
 
-    catalog_context = await build_catalog_context(organizacion_hint, message.body or "")
+    catalog_context = await build_catalog_context(
+        organizacion_hint,
+        message.body or "",
+        user_id=message.wa_id or message.from_number,
+        channel="whatsapp",
+    )
 
     try:
         assistant_reply = await _generate_assistant_reply(

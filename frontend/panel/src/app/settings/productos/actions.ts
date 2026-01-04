@@ -193,6 +193,32 @@ export async function fetchModelosProductos(options?: FetchOptions): Promise<Mod
   return response.map(transformModelo);
 }
 
+export type CatalogVectorStoreStatus = {
+  lastReindexAt: string | null;
+  lastReindexBy: string | null;
+  lastReindexChannel: string | null;
+  lastQueryAt: string | null;
+  lastQueryBy: string | null;
+  lastQueryChannel: string | null;
+};
+
+const EMPTY_VECTOR_STORE_STATUS: CatalogVectorStoreStatus = {
+  lastReindexAt: null,
+  lastReindexBy: null,
+  lastReindexChannel: null,
+  lastQueryAt: null,
+  lastQueryBy: null,
+  lastQueryChannel: null,
+};
+
+export async function fetchCatalogVectorStoreStatus(): Promise<CatalogVectorStoreStatus> {
+  const response = await callCrmApi<CatalogVectorStoreStatus>("/crm/catalog/vector-store/status");
+  if (!response.ok) {
+    return EMPTY_VECTOR_STORE_STATUS;
+  }
+  return response.data;
+}
+
 type CrmPayload = Record<string, unknown>
 
 function normalizeResponseRow(response: CrmResult<CrmRow>): CrmRow {

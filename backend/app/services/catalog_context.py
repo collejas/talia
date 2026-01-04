@@ -58,13 +58,14 @@ def _catalog_match_label(match: CatalogDocumentMatch) -> str:
 def _format_catalog_matches(matches: Sequence[CatalogDocumentMatch]) -> str | None:
     if not matches:
         return None
-    lines = ["Contexto relevante del catálogo:"]
+    lines = ["Contexto relevante del catálogo (vector store):"]
     for index, match in enumerate(matches[:3], start=1):
         label = _catalog_match_label(match)
         snippet = _summarize_catalog_text(match.contenido)
         similarity = match.similarity
         sim_text = f" (sim: {similarity:.3f})" if similarity is not None else ""
         lines.append(f"{index}. {match.entity_type.title()} {label}{sim_text}: {snippet}")
+    lines.append("Los fragmentos anteriores se obtienen de la vector store autorizada del catálogo.")
     return "\n".join(lines)
 
 
@@ -83,6 +84,8 @@ async def build_catalog_context(
     query: str,
     *,
     limit: int = 3,
+    user_id: str | None = None,
+    channel: str | None = None,
 ) -> CatalogContext | None:
     if not organizacion_id:
         return None
@@ -97,7 +100,13 @@ async def build_catalog_context(
     if not service:
         return None
     try:
-        matches = await service.query_documents(org_uuid, query=prompt, limit=limit)
+        matches = await service.query_documents(
+            org_uuid,
+            query=prompt,
+            limit=limit,
+            user_id=user_id,
+            channel=channel,
+        )
     except CRMRepositoryError as exc:
         logger.debug(
             "catalog_context.search_failed",

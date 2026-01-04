@@ -73,7 +73,11 @@ CREATE TABLE public.catalog_document_embeddings (
    - El helper (`backend/app/services/catalog_embeddings.py::query_documents`) recibe el prompt del asistente, genera el embedding y llama al RPC `catalog_document_embeddings_search` (ver `supabase/migrations/20280107_120000_catalog_vector_search.sql`) para obtener los fragmentos con orden por similitud.  
    - En los canales webchat/messenger/whatsapp, ese resultado se transforma en un mensaje `developer` previo a la entrada del usuario (`backend/app/channels/*/service.py` usando `app.services.catalog_context.build_catalog_context`), de modo que cada conversación recibe contexto enriquecido sin alterar el prompt base.  
    - Se inyectan fragmentos (p. ej. “Modelo X - Familia Y - descripción resumida”) y se anotan referencias (nombre de entidad y tipo) para mantener trazabilidad sin mencionar UUIDs o identificadores internos.  
-   - Registrar la consulta en auditoría opcional si se desea seguimiento.
+- Registrar la consulta en auditoría opcional si se desea seguimiento.
+
+6. **Disparo automático de reindexación**  
+- Los endpoints CRUD que exponen líneas, familias, modelos y productos ahora llaman a un helper (`_trigger_catalog_reindex`) después de cada creación o edición para garantizar que la vector store se refresca inmediatamente.  
+- El helper ejecuta `CatalogEmbeddingService.reindex_catalog` dentro de `BackgroundTasks`, lo que evita bloquear la respuesta y permite que el proceso de embeddings sea rastreado con logs (`vector_store.reindex.*`).  
 
 5. **Multi-tenant y seguridad**  
    - El helper siempre proporciona `organizacion_id` del usuario logueado; los RPC o funciones supabase aseguran que solo acceden a los vectores de ese tenant.  
@@ -83,3 +87,9 @@ CREATE TABLE public.catalog_document_embeddings (
 - Actualizar prompts/templates para mencionar que se usa la información enriquecida del catálogo.  
 - En la interfaz `settings/productos/items`, mostrar estado de la vector store y última reindexación (usa tokens de la tabla de auditoría).  
 - En las respuestas del asistente, alimentar un bloque “Referencias” con `entity_type`, `entity_id`, `nombre` para que la trazabilidad sea clara.
+
+## 5. Estado visible en la interfaz
+
+- El panel de `settings/productos/items` ahora incluye una tarjeta dedicada a la vector store que muestra la última reindexación y la última consulta registrada en `catalog_embeddings_audit`.
+- El backend expone `/crm/catalog/vector-store/status`, que consulta la tabla de auditoría (últimos eventos de tipo `reindex`/`query`) y devuelve las marcas de tiempo y canales sin compartir UUIDs, para cumplir con la restricción de no mostrar IDs sensibles.
+- Esta tarjeta recuerda al usuario que la vector store se actualiza tras cada edición de líneas/familias/modelos/productos y que la información enriquecida está disponible para las respuestas del asistente.

@@ -1902,7 +1902,12 @@ async def handle_message(
         session_id=payload.session_id,
     )
 
-    catalog_context = await build_catalog_context(organizacion_hint, payload.content or "")
+    catalog_context = await build_catalog_context(
+        organizacion_hint,
+        payload.content or "",
+        user_id=context.contact_id,
+        channel="webchat",
+    )
     try:
         (
             assistant_reply,

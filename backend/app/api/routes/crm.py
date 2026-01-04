@@ -79,30 +79,50 @@ CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
 
 
-async def _run_catalog_reindex(organizacion_id: UUID) -> None:
+async def _run_catalog_reindex(
+    organizacion_id: UUID,
+    *,
+    usuario_id: str | None = None,
+    canal: str | None = None,
+) -> None:
     """Reindexa por completo la vector store del catálogo para el tenant especificado."""
     logger.info(
         "vector_store.reindex.triggered",
         extra={"organizacion_id": str(organizacion_id)},
     )
+    repo = CRMRepository()
+    service = CatalogEmbeddingService(repo)
+    status = "success"
+    error_detail: str | None = None
     try:
-        repo = CRMRepository()
-        service = CatalogEmbeddingService(repo)
         await service.reindex_catalog(organizacion_id)
         logger.info(
             "vector_store.reindex.completed",
             extra={"organizacion_id": str(organizacion_id)},
         )
     except Exception as exc:  # pragma: no cover - logging de errores de servicio externo
+        status = "failed"
+        error_detail = str(exc)
         logger.exception(
             "vector_store.reindex.failed",
             extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+    finally:
+        await service.audit_event(
+            organizacion_id,
+            "reindex",
+            usuario_id=usuario_id,
+            canal=canal,
+            metadata={"status": status, "error": error_detail},
         )
 
 
 def _trigger_catalog_reindex(
     background_tasks: BackgroundTasks,
     organizacion_value: Any | None,
+    *,
+    usuario_id: UUID | None = None,
+    canal: str | None = None,
 ) -> None:
     """Programa la reindexación completa en segundo plano."""
     if not organizacion_value:
@@ -115,7 +135,12 @@ def _trigger_catalog_reindex(
             extra={"value": organizacion_value},
         )
         return
-    background_tasks.add_task(_run_catalog_reindex, organizacion_id)
+    background_tasks.add_task(
+        _run_catalog_reindex,
+        organizacion_id,
+        usuario_id=str(usuario_id) if usuario_id else None,
+        canal=canal,
+    )
 
 
 def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:
@@ -4499,7 +4524,12 @@ async def create_catalog_item(
         row = await repo.create_catalog_item(payload=body)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMCatalogItem.model_validate(row)
 
 
@@ -4523,7 +4553,12 @@ async def update_catalog_item(
         detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMCatalogItem.model_validate(row)
 
 
@@ -4554,6 +4589,43 @@ async def delete_catalog_item(
         detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "catalog_item_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+class CatalogVectorStoreStatus(BaseModel):
+    last_reindex_at: str | None = None
+    last_reindex_by: UUID | None = None
+    last_reindex_channel: str | None = None
+    last_query_at: str | None = None
+    last_query_by: UUID | None = None
+    last_query_channel: str | None = None
+
+
+@router.get("/catalog/vector-store/status", response_model=CatalogVectorStoreStatus)
+async def catalog_vector_store_status(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> CatalogVectorStoreStatus:
+    reindex_rows = await repo.list_catalog_embeddings_audit(
+        organizacion_id=organizacion_id,
+        tipo="reindex",
+        limit=1,
+    )
+    query_rows = await repo.list_catalog_embeddings_audit(
+        organizacion_id=organizacion_id,
+        tipo="query",
+        limit=1,
+    )
+    reindex = reindex_rows[0] if reindex_rows else None
+    query = query_rows[0] if query_rows else None
+    return CatalogVectorStoreStatus(
+        last_reindex_at=reindex.get("creado_en") if reindex else None,
+        last_reindex_by=_safe_uuid(reindex.get("usuario_id")) if reindex else None,
+        last_reindex_channel=reindex.get("canal") if reindex else None,
+        last_query_at=query.get("creado_en") if query else None,
+        last_query_by=_safe_uuid(query.get("usuario_id")) if query else None,
+        last_query_channel=query.get("canal") if query else None,
+    )
 
 
 @router.get("/productos/lineas", response_model=list[CRMLineaDeNegocio])
@@ -4588,6 +4660,7 @@ async def create_product_linea(
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: CRMLineaDeNegocioCreate,
     background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMLineaDeNegocio:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if payload.metadata is not None:
@@ -4599,7 +4672,12 @@ async def create_product_linea(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMLineaDeNegocio.model_validate(row)
 
 
@@ -4611,6 +4689,7 @@ async def update_product_linea(
     linea_id: UUID,
     payload: CRMLineaDeNegocioUpdate,
     background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMLineaDeNegocio:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4625,7 +4704,12 @@ async def update_product_linea(
         detail = "linea_not_found" if "linea_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "linea_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMLineaDeNegocio.model_validate(row)
 
 
@@ -4663,6 +4747,7 @@ async def create_product_familia(
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: CRMFamiliaProductoCreate,
     background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMFamiliaProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
@@ -4672,7 +4757,12 @@ async def create_product_familia(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMFamiliaProducto.model_validate(row)
 
 
@@ -4684,6 +4774,7 @@ async def update_product_familia(
     familia_id: UUID,
     payload: CRMFamiliaProductoUpdate,
     background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMFamiliaProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4698,7 +4789,12 @@ async def update_product_familia(
         detail = "familia_not_found" if "familia_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "familia_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMFamiliaProducto.model_validate(row)
 
 
@@ -4734,6 +4830,7 @@ async def create_product_modelo(
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: CRMModeloProductoCreate,
     background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMModeloProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     try:
@@ -4743,7 +4840,12 @@ async def create_product_modelo(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMModeloProducto.model_validate(row)
 
 
@@ -4755,6 +4857,7 @@ async def update_product_modelo(
     modelo_id: UUID,
     payload: CRMModeloProductoUpdate,
     background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMModeloProducto:
     body = payload.model_dump(mode="json", exclude_unset=True)
     if not body:
@@ -4769,7 +4872,12 @@ async def update_product_modelo(
         detail = "modelo_not_found" if "modelo_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "modelo_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
-    _trigger_catalog_reindex(background_tasks, row.get("organizacion_id"))
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
     return CRMModeloProducto.model_validate(row)
 
 

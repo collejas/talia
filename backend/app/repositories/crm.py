@@ -3263,6 +3263,36 @@ class CRMRepository:
             )
         return data
 
+    async def create_catalog_embeddings_audit(self, *, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        await self._request(
+            "POST",
+            "/rest/v1/catalog_embeddings_audit",
+            json=rows,
+            prefer="return=representation",
+        )
+
+    async def list_catalog_embeddings_audit(
+        self,
+        *,
+        organizacion_id: UUID,
+        tipo: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if tipo:
+            params["tipo"] = f"eq.{tipo}"
+        resp = await self._request("GET", "/rest/v1/catalog_embeddings_audit", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar auditoría vector store: {data!r}")
+        return data
+
     async def create_linea_de_negocio(
         self,
         *,

@@ -381,7 +381,12 @@ async def _handle_message(
         "page_id": payload.recipient_id,
     }
 
-    catalog_context = await build_catalog_context(org_id, payload.text or "")
+    catalog_context = await build_catalog_context(
+        org_id,
+        payload.text or "",
+        user_id=payload.sender_id,
+        channel="messenger",
+    )
     initial_input = _build_openai_input(
         text=payload.text,
         attachments=payload.attachments,

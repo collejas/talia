@@ -29,7 +29,7 @@ Objetivo: Que el asistente tenga acceso a la información más reciente del cat�
 
 ## 6. UX del asistente
 - [ ] { } Actualizar los prompts/templates del asistente para mencionar que está consultando la base enriquecida (dar claridad y transparencia).
-- [ ] { } Notificar en la interfaz/admin cuando la vector store se reindexa (p. ej. card en `settings/productos/items`).
+- [x] { } Notificar en la interfaz/admin cuando la vector store se reindexa (p. ej. card en `settings/productos/items` con datos de auditoría).
 - [ ] { } Añadir enlaces directos desde el asistente a los registros correspondientes (por ID).
 
 Una vez completados estos pasos, el asistente puede responder con información precisa y actualizada usando la vector store alojada sobre Supabase, manteniendo el contexto multitenant y minimizando lo que se envía en cada prompt.

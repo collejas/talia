@@ -7,7 +7,7 @@ import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 from uuid import UUID
 
 from app.core.config import settings
@@ -318,6 +318,8 @@ class CatalogEmbeddingService:
         *,
         query: str,
         limit: int = 5,
+        user_id: str | None = None,
+        channel: str | None = None,
     ) -> list[CatalogDocumentMatch]:
         prompt = query.strip()
         if not prompt:
@@ -341,7 +343,55 @@ class CatalogEmbeddingService:
                     similarity=_coerce_similarity(row.get("similarity")),
                 )
             )
+        await self.audit_event(
+            organizacion_id,
+            "query",
+            usuario_id=user_id,
+            canal=channel,
+            metadata={"query": prompt, "matches": len(matches)},
+        )
         return matches
+
+    async def audit_event(
+        self,
+        organizacion_id: UUID,
+        tipo: Literal["reindex", "query"],
+        *,
+        usuario_id: str | None = None,
+        canal: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        await self._log_audit_event(
+            organizacion_id,
+            tipo,
+            usuario_id=usuario_id,
+            canal=canal,
+            metadata=metadata,
+        )
+
+    async def _log_audit_event(
+        self,
+        organizacion_id: UUID,
+        tipo: Literal["reindex", "query"],
+        *,
+        usuario_id: str | None = None,
+        canal: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "tipo": tipo,
+            "usuario_id": str(usuario_id) if usuario_id else None,
+            "canal": canal,
+            "metadata": self._clean_metadata(metadata) if metadata else {},
+        }
+        try:
+            await self._repo.create_catalog_embeddings_audit(rows=[payload])
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "vector_store.audit_log_failed",
+                extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+            )
 
     @staticmethod
     def _clean_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
