@@ -114,6 +114,16 @@ def format_catalog_references(matches: Sequence[CatalogDocumentMatch]) -> str | 
     return _format_catalog_references(matches)
 
 
+def catalog_reference_payload(context: CatalogContext | None) -> list[dict[str, str]] | None:
+    if not context:
+        return None
+    payload: list[dict[str, str]] = []
+    for match in context.matches[:3]:
+        label = _catalog_match_label(match)
+        payload.append({"entity_type": match.entity_type, "label": label})
+    return payload or None
+
+
 def append_catalog_references(text: str | None, context: CatalogContext | None) -> str | None:
     if not context:
         return text
