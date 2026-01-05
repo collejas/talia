@@ -88,6 +88,8 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+Bien, ahora en la vista: 'settings/productos/modelos' agrega en ultimo lugar el boton: 'Gestionar productos' y quita el boton 'Gestionar modelos y variantes'
+
 codex resume 019b89ad-ee4c-7ad2-b0d9-84e9f71b6306
 
 codex resume 019b5bc9-5365-7e10-83c1-9d33b44f1f61

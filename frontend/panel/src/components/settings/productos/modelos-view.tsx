@@ -10,11 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 
 import {
   FamiliaProducto,
+  LineaDeNegocio,
   ModeloProducto,
   createModeloProducto,
   updateModeloProducto,
@@ -29,6 +31,7 @@ import {
 type ModelosViewProps = {
   modelos: ModeloProducto[]
   familias: FamiliaProducto[]
+  lineas: LineaDeNegocio[]
 }
 
 type ModeloFormValues = {
@@ -50,7 +53,10 @@ type Feedback = { type: "success" | "error"; message: string }
 const formatter = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "America/Mexico_City",
 })
+const ALL_LINEA_OPTION = "__all_lines__"
+const ALL_FAMILIA_OPTION = "__all_families__"
 
 function formatDate(value: string): string {
   const parsed = value ? new Date(value) : null
@@ -60,7 +66,7 @@ function formatDate(value: string): string {
   return formatter.format(parsed)
 }
 
-export function ModelosView({ modelos, familias }: ModelosViewProps) {
+export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
   const familiaMap = useMemo(() => {
     const map = new Map<string, FamiliaProducto>()
     familias.forEach((familia) => map.set(familia.id, familia))
@@ -75,6 +81,8 @@ export function ModelosView({ modelos, familias }: ModelosViewProps) {
   const form = useForm<ModeloFormValues>({ defaultValues: MODELO_FORM_DEFAULTS })
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
+  const [filterLinea, setFilterLinea] = useState("")
+  const [filterFamilia, setFilterFamilia] = useState("")
 
   const handleOpenSheet = useCallback(
     (modelo?: ModeloProducto) => {
@@ -165,6 +173,26 @@ export function ModelosView({ modelos, familias }: ModelosViewProps) {
     return `${modelosState.length} modelos (${activos} activos)`
   }, [modelosState])
 
+  const visibleFamilias = useMemo(() => {
+    if (!filterLinea) {
+      return familias
+    }
+    return familias.filter((familia) => familia.lineaId === filterLinea)
+  }, [familias, filterLinea])
+
+  const filteredModelos = useMemo(() => {
+    return modelosState.filter((modelo) => {
+      if (filterFamilia && modelo.familiaId !== filterFamilia) {
+        return false
+      }
+      if (filterLinea && modelo.familiaId) {
+        const familia = familias.find((entry) => entry.id === modelo.familiaId)
+        return familia?.lineaId === filterLinea
+      }
+      return true
+    })
+  }, [modelosState, filterFamilia, filterLinea, familias])
+
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">
       <header className="space-y-1">
@@ -196,6 +224,49 @@ export function ModelosView({ modelos, familias }: ModelosViewProps) {
                   : "Crea un modelo para reutilizarlo en tus productos."}
               </CardDescription>
             </div>
+            <div className="flex flex-wrap gap-3">
+              <Select
+                value={filterLinea ? filterLinea : ALL_LINEA_OPTION}
+                onValueChange={(value) => {
+                  const normalized = value === ALL_LINEA_OPTION ? "" : value
+                  setFilterLinea(normalized)
+                  if (!normalized) {
+                    setFilterFamilia("")
+                  }
+                }}
+              >
+                <SelectTrigger className="min-w-[200px]">
+                  <SelectValue placeholder="Todas las líneas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_LINEA_OPTION}>Todas las líneas</SelectItem>
+                  {lineas.map((linea) => (
+                    <SelectItem key={linea.id} value={linea.id}>
+                      {linea.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filterFamilia ? filterFamilia : ALL_FAMILIA_OPTION}
+                onValueChange={(value) => {
+                  const normalized = value === ALL_FAMILIA_OPTION ? "" : value
+                  setFilterFamilia(normalized)
+                }}
+              >
+                <SelectTrigger className="min-w-[200px]">
+                  <SelectValue placeholder="Todas las familias" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_FAMILIA_OPTION}>Todas las familias</SelectItem>
+                  {visibleFamilias.map((familia) => (
+                    <SelectItem key={familia.id} value={familia.id}>
+                      {familia.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -206,7 +277,7 @@ export function ModelosView({ modelos, familias }: ModelosViewProps) {
           ) : (
             <ScrollArea className="max-h-[600px] rounded-xl bg-background p-4">
               <div className="space-y-4">
-                {modelosState.map((modelo) => (
+                {filteredModelos.map((modelo) => (
                   <Card key={modelo.id}>
                     <CardHeader>
                       <div className="flex items-center justify-between gap-4">
@@ -259,11 +330,11 @@ export function ModelosView({ modelos, familias }: ModelosViewProps) {
         </CardContent>
       </Card>
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent position="right" size="content">
+        <SheetContent position="right" size="lg" className="h-full max-w-xl">
           <SheetHeader>
             <SheetTitle>{editing ? "Editar modelo" : "Nuevo modelo"}</SheetTitle>
           </SheetHeader>
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4" onSubmit={handleSubmit}>
             <div className="space-y-1">
               <Label htmlFor="modelo-nombre">Nombre</Label>
               <Input id="modelo-nombre" {...form.register("nombre")} autoFocus />

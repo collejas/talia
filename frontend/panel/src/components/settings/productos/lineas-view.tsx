@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -194,7 +193,7 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
               del catálogo.
             </div>
           ) : (
-            <ScrollArea className="max-h-[520px] rounded-xl bg-background p-4">
+            <div className="max-h-[520px] overflow-y-auto rounded-xl bg-background p-4">
               <div className="space-y-4">
                 {lineasState.map((linea) => (
                   <div
@@ -244,7 +243,7 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>

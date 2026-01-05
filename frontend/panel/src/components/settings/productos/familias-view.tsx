@@ -59,8 +59,10 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
   const selectedLineaId = useWatch({ control: form.control, name: "lineaId" }) ?? ""
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
+  const [filterLinea, setFilterLinea] = useState("")
 
   const lineaMap = useMemo(() => new Map(lineas.map((linea) => [linea.id, linea.nombre])), [lineas])
+  const ALL_LINEA_OPTION = "__all__"
 
   const handleOpenSheet = useCallback(
     (familia?: FamiliaProducto) => {
@@ -153,6 +155,13 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     })
   })
 
+  const visibleFamilias = useMemo(() => {
+    if (!filterLinea) {
+      return familiasState
+    }
+    return familiasState.filter((familia) => familia.lineaId === filterLinea)
+  }, [familiasState, filterLinea])
+
   const lineaOptions = useMemo(
     () =>
       lineas.map((linea) => ({
@@ -200,6 +209,35 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
                   : "Crea una familia asignada a una línea existente."}
               </CardDescription>
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenSheet()}
+              disabled={lineas.length === 0}
+            >
+              Nueva familia
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Select
+              value={filterLinea ? filterLinea : ALL_LINEA_OPTION}
+              onValueChange={(value) => {
+                const normalized = value === ALL_LINEA_OPTION ? "" : value
+                setFilterLinea(normalized)
+              }}
+            >
+              <SelectTrigger className="min-w-[220px]">
+                <SelectValue placeholder="Todas las líneas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_LINEA_OPTION}>Todas las líneas</SelectItem>
+                {lineas.map((linea) => (
+                  <SelectItem key={linea.id} value={linea.id}>
+                    {linea.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -210,7 +248,7 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
           ) : (
             <ScrollArea className="max-h-[600px] rounded-xl bg-background p-4">
               <div className="space-y-4">
-                {familiasState.map((familia) => (
+                {visibleFamilias.map((familia) => (
                   <Card key={familia.id}>
                     <CardHeader>
                       <div className="flex items-center justify-between gap-4">
