@@ -195,68 +195,6 @@ export async function fetchModelosProductos(options?: FetchOptions): Promise<Mod
   return response.map(transformModelo);
 }
 
-export type CatalogVectorStoreStatus = {
-  lastReindexAt: string | null;
-  lastReindexBy: string | null;
-  lastReindexChannel: string | null;
-  lastQueryAt: string | null;
-  lastQueryBy: string | null;
-  lastQueryChannel: string | null;
-};
-
-const EMPTY_VECTOR_STORE_STATUS: CatalogVectorStoreStatus = {
-  lastReindexAt: null,
-  lastReindexBy: null,
-  lastReindexChannel: null,
-  lastQueryAt: null,
-  lastQueryBy: null,
-  lastQueryChannel: null,
-};
-
-export async function fetchCatalogVectorStoreStatus(): Promise<CatalogVectorStoreStatus> {
-  const response = await callCrmApi<CatalogVectorStoreStatus>("/crm/catalog/vector-store/status");
-  if (!response.ok) {
-    return EMPTY_VECTOR_STORE_STATUS;
-  }
-  return response.data;
-}
-
-export type CatalogVectorStoreAuditEvent = {
-  id: string;
-  tipo: "reindex" | "query";
-  canal: string | null;
-  usuarioId: string | null;
-  metadata: Record<string, unknown>;
-  creadoEn: string;
-};
-
-export async function fetchCatalogVectorStoreAudit(
-  limit = 6,
-): Promise<CatalogVectorStoreAuditEvent[]> {
-  const response = await callCrmApi<Record<string, unknown>[]>(
-    "/crm/catalog/vector-store/audit",
-    {
-      searchParams: {
-        limit: String(limit),
-      },
-    },
-  );
-  if (!response.ok || !Array.isArray(response.data)) {
-    return [];
-  }
-  return response.data.map((entry) => ({
-    id: String(entry.id ?? ""),
-    tipo: entry.tipo === "reindex" ? "reindex" : "query",
-    canal: typeof entry.canal === "string" ? entry.canal : null,
-    usuarioId: typeof entry.usuario_id === "string" ? entry.usuario_id : null,
-    metadata:
-      entry.metadata && typeof entry.metadata === "object"
-        ? (entry.metadata as Record<string, unknown>)
-        : {},
-    creadoEn: String(entry.creado_en ?? entry.creadoAt ?? ""),
-  }));
-}
-
 type CrmPayload = Record<string, unknown>
 
 function normalizeResponseRow(response: CrmResult<CrmRow>): CrmRow {

@@ -86,13 +86,7 @@ CREATE TABLE public.catalog_document_embeddings (
 ## 4. Punto de contacto con el UX
 - Actualizar prompts/templates para mencionar que se usa la información enriquecida del catálogo.  
 - El prompt del asistente recuerda mencionar que siempre toma la información más reciente desde la vector store autorizada y evita revelar UUIDs; ofrece enlaces guiados sin mencionar IDs internos.
-- En la interfaz `settings/productos/items`, mostrar estado de la vector store y última reindexación (usa tokens de la tabla de auditoría).  
-- El bloque de referencias del asistente ahora incluye enlaces a la sección exacta del panel (`/settings/productos/...`) usando slugs/nombres y evitando UUID visibles.
+- La interfaz `settings/productos/items` ya no muestra una card dedicada a la vector store; en lugar de ello, la información de reindexación se documenta en los registros/auditoría y en el prompt.  
+- El bloque de referencias del asistente ahora describe las líneas/familias/modelos/productos encontrados en lenguaje natural (p.ej. “Líneas disponibles: Turismo, Inmobiliario”) y sugiere buscarlos en el panel cuando sea necesario, sin exponer URLs directas.
+- Las referencias del asistente también deben narrar la jerarquía (líneas primero) y ofrecer ejemplos concretos (tipo, precio, familia) antes de indicar cómo buscar en el panel, manteniendo un flujo natural de líneas → familias/modelos → productos.
 - En las respuestas del asistente, alimentar un bloque “Referencias” con `entity_type`, `entity_id`, `nombre` para que la trazabilidad sea clara.
-
-## 5. Estado visible en la interfaz
-
-- El panel de `settings/productos/items` ahora incluye una tarjeta dedicada a la vector store que muestra la última reindexación y la última consulta registrada en `catalog_embeddings_audit`.
-- El backend expone `/crm/catalog/vector-store/status`, que consulta la tabla de auditoría (últimos eventos de tipo `reindex`/`query`) y devuelve las marcas de tiempo y canales sin compartir UUIDs, para cumplir con la restricción de no mostrar IDs sensibles.
-- Esta tarjeta recuerda al usuario que la vector store se actualiza tras cada edición de líneas/familias/modelos/productos y que la información enriquecida está disponible para las respuestas del asistente.
-- Además, un segundo bloque de auditoría muestra los eventos recientes (estado, canal, descripción) directamente en la interfaz, facilitando seguir la trazabilidad sin salir del panel.

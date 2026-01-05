@@ -100,18 +100,75 @@ def _catalog_panel_url(match: CatalogDocumentMatch) -> str | None:
     return f"{base}?search={encoded}"
 
 
+def _get_metadata_value(match: CatalogDocumentMatch, keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = match.metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, bool):
+            return "sí" if value else "no"
+        if isinstance(value, (int, float)):
+            return str(value)
+    return None
+
+
 def _format_catalog_references(matches: Sequence[CatalogDocumentMatch]) -> str | None:
     if not matches:
         return None
-    lines = ["Referencias catalogadas:"]
-    for match in matches[:3]:
+
+    lineas: list[str] = []
+    familias: list[str] = []
+    modelos: list[str] = []
+    productos: list[str] = []
+
+    for match in matches:
         label = _catalog_match_label(match)
-        link = _catalog_panel_url(match)
-        if link:
-            lines.append(f"- {match.entity_type.title()}: {label} (ver ficha: {link})")
-        else:
-            lines.append(f"- {match.entity_type.title()}: {label}")
-    return "\n".join(lines)
+        entity_type = match.entity_type.lower()
+        if entity_type == "linea":
+            active_value = match.metadata.get("activo")
+            is_active = True if active_value is None else bool(active_value)
+            if not is_active:
+                continue
+            lineas.append(label)
+        elif entity_type == "familia":
+            familia_text = label
+            linea = _get_metadata_value(match, ("linea_id", "linea"))
+            if linea:
+                familia_text += f" de la línea {linea}"
+            familias.append(familia_text)
+        elif entity_type == "modelo":
+            detalles = label
+            modelos.append(f"{detalles}")
+        elif entity_type == "producto":
+            partes: list[str] = [label]
+            tipo = _get_metadata_value(match, ("tipo",))
+            if tipo:
+                partes.append(tipo)
+            precio = _get_metadata_value(match, ("precio_base",))
+            moneda = _get_metadata_value(match, ("moneda",))
+            if precio:
+                precio_text = f"{precio}"
+                if moneda:
+                    precio_text += f" {moneda}"
+                partes.append(f"desde {precio_text}")
+            productos.append(" · ".join(partes))
+
+    if not lineas:
+        return None
+
+    if not (familias or modelos or productos):
+        return f"Líneas disponibles: {', '.join(lineas)}."
+
+    fragments = [f"Líneas disponibles: {', '.join(lineas)}."]
+    if familias:
+        fragments.append(f"Familias destacadas: {', '.join(familias)}.")
+    if modelos:
+        fragments.append(f"Modelos relacionados: {', '.join(modelos)}.")
+    if productos:
+        fragments.append(
+            f"Productos mencionados: {', '.join(productos)}; para explorar sus detalles usa Productos > Ítems."
+        )
+    return " ".join(fragments)
 
 
 async def build_catalog_context(

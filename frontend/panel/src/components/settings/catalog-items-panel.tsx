@@ -103,6 +103,11 @@ const EMPTY_FORM: CatalogItemFormValues = {
 
 const CURRENCY_OPTIONS = ["MXN", "USD", "COP", "CLP", "EUR"]
 const EMPTY_SELECT_VALUE = "__none__"
+const UPDATED_AT_FORMATTER = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "America/Mexico_City",
+})
 
 function formatCurrency(value: number | null | undefined, currency: string): string {
   if (value == null || Number.isNaN(value)) {
@@ -206,6 +211,10 @@ export function CatalogItemsPanel({
   const [feedback, setFeedback] = useState<StatusBanner>(null)
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | "refresh" | "toggle" | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [filterLinea, setFilterLinea] = useState("")
+  const [filterFamilia, setFilterFamilia] = useState("")
+  const [filterModelo, setFilterModelo] = useState("")
+  const ALL_OPTION_VALUE = "__all__"
 
   const form = useForm<CatalogItemFormValues>({ defaultValues: EMPTY_FORM })
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
@@ -253,10 +262,28 @@ export function CatalogItemsPanel({
     }
   }, [filteredModelos, modeloWatch, form])
 
+  useEffect(() => {
+    setFilterFamilia("")
+    setFilterModelo("")
+  }, [filterLinea])
+
+  useEffect(() => {
+    setFilterModelo("")
+  }, [filterFamilia])
+
   const visibleItems = useMemo(() => {
     const query = search.trim().toLowerCase()
     return items.filter((item) => {
       if (!includeInactive && !item.activo) {
+        return false
+      }
+      if (filterLinea && item.lineaId !== filterLinea) {
+        return false
+      }
+      if (filterFamilia && item.familiaId !== filterFamilia) {
+        return false
+      }
+      if (filterModelo && item.modeloId !== filterModelo) {
         return false
       }
       if (!query) {
@@ -265,7 +292,7 @@ export function CatalogItemsPanel({
       const haystack = [item.nombre, item.slug ?? "", item.tipo].join(" ").toLowerCase()
       return haystack.includes(query)
     })
-  }, [items, search, includeInactive])
+  }, [items, search, includeInactive, filterLinea, filterFamilia, filterModelo])
 
   const activeCount = useMemo(() => items.filter((item) => item.activo).length, [items])
   const inactiveCount = items.length - activeCount
@@ -445,7 +472,7 @@ export function CatalogItemsPanel({
     <Card>
       <CardHeader className="gap-4 space-y-0 border-b py-4">
         <div className="flex flex-wrap items-center gap-3">
-          <CardTitle className="text-xl font-semibold">Catálogo interno</CardTitle>
+          <CardTitle className="text-xl font-semibold">Catálogo de productos</CardTitle>
           <Badge variant="outline" className="font-semibold">
             {items.length} ítems ({activeCount} activos · {inactiveCount} archivados)
           </Badge>
@@ -466,8 +493,7 @@ export function CatalogItemsPanel({
               onClick={handleRefresh}
               disabled={isPending && pendingAction === "refresh"}
             >
-              <IconRefresh className={cn("me-2 size-4", isPending && pendingAction === "refresh" && "animate-spin")}
-              />
+              <IconRefresh className={cn("me-2 size-4", isPending && pendingAction === "refresh" && "animate-spin")} />
               Actualizar
             </Button>
             <Button onClick={openCreateSheet} size="sm">
@@ -494,19 +520,113 @@ export function CatalogItemsPanel({
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4 py-6">
-        <div className="flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[200px]">
-            <Label htmlFor="search-items" className="sr-only">
-              Buscar en catálogo
-            </Label>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="search-items" className="sr-only">
+                Buscar en catálogo
+              </Label>
             <Input
               id="search-items"
               placeholder="Buscar por nombre, slug o tipo"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
+            </div>
           </div>
-        </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Línea de negocio
+              </Label>
+              <Select
+                value={filterLinea ? filterLinea : ALL_OPTION_VALUE}
+                onValueChange={(value) => {
+                  const normalized = value === ALL_OPTION_VALUE ? "" : value
+                  setFilterLinea(normalized)
+                  if (!normalized) {
+                    setFilterFamilia("")
+                    setFilterModelo("")
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas las líneas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_OPTION_VALUE}>Todas las líneas</SelectItem>
+                  {lineas.map((linea) => (
+                    <SelectItem key={linea.id} value={linea.id}>
+                      {linea.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Familia
+              </Label>
+              <Select
+                value={filterFamilia ? filterFamilia : ALL_OPTION_VALUE}
+                onValueChange={(value) => {
+                  const normalized = value === ALL_OPTION_VALUE ? "" : value
+                  setFilterFamilia(normalized)
+                  if (!normalized) {
+                    setFilterModelo("")
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas las familias" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_OPTION_VALUE}>Todas las familias</SelectItem>
+                  {familias
+                    .filter((familia) => !filterLinea || familia.lineaId === filterLinea)
+                    .map((familia) => (
+                      <SelectItem key={familia.id} value={familia.id}>
+                        {familia.nombre}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Modelo
+              </Label>
+              <Select
+                value={filterModelo ? filterModelo : ALL_OPTION_VALUE}
+                onValueChange={(value) => {
+                  const normalized = value === ALL_OPTION_VALUE ? "" : value
+                  setFilterModelo(normalized)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los modelos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_OPTION_VALUE}>Todos los modelos</SelectItem>
+                  {modelos
+                    .filter((modelo) => {
+                      if (filterFamilia) {
+                        return modelo.familiaId === filterFamilia
+                      }
+                      if (filterLinea) {
+                        const familia = familias.find((entry) => entry.id === modelo.familiaId)
+                        return familia?.lineaId === filterLinea
+                      }
+                      return true
+                    })
+                    .map((modelo) => (
+                      <SelectItem key={modelo.id} value={modelo.id}>
+                        {modelo.nombre}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
@@ -583,12 +703,7 @@ export function CatalogItemsPanel({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {item.actualizadoEn
-                        ? new Intl.DateTimeFormat("es-MX", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          }).format(new Date(item.actualizadoEn))
-                        : "—"}
+                      {item.actualizadoEn ? UPDATED_AT_FORMATTER.format(new Date(item.actualizadoEn)) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
