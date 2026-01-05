@@ -330,7 +330,7 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
         </CardContent>
       </Card>
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent position="right" size="lg" className="h-full max-w-xl">
+        <SheetContent position="right" size="content" className="h-full max-w-xl">
           <SheetHeader>
             <SheetTitle>{editing ? "Editar modelo" : "Nuevo modelo"}</SheetTitle>
           </SheetHeader>

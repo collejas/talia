@@ -262,15 +262,6 @@ export function CatalogItemsPanel({
     }
   }, [filteredModelos, modeloWatch, form])
 
-  useEffect(() => {
-    setFilterFamilia("")
-    setFilterModelo("")
-  }, [filterLinea])
-
-  useEffect(() => {
-    setFilterModelo("")
-  }, [filterFamilia])
-
   const visibleItems = useMemo(() => {
     const query = search.trim().toLowerCase()
     return items.filter((item) => {

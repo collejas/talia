@@ -260,7 +260,7 @@ async def handle_incoming_message(
             response_id=assistant_reply.response_id or previous_response_id,
         )
 
-    final_reply_text = append_catalog_references(assistant_reply.text, catalog_context)
+    final_reply_text = assistant_reply.text
     if not final_reply_text:
         final_reply_text = DEFAULT_FALLBACK
 
@@ -527,6 +527,7 @@ async def _generate_assistant_reply(
     contact_id: str,
     openai_conversation_id: str | None,
     previous_response_id: str | None,
+    catalog_context: str | None,
 ) -> AssistantReply:
     assistant = registry.resolve_assistant("whatsapp")
     client = openai_service.get_assistant_client()

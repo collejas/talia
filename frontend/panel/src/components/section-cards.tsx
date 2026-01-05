@@ -99,14 +99,14 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Monto estimado</CardDescription>
+          <CardDescription>Visitantes totales</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {formatCurrency(data.montoTotal)}
+            {formatNumber(data.montoTotal)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
               <IconTrendingUp />
-              Top vendedor
+              Top ubicación
             </Badge>
           </CardAction>
         </CardHeader>
@@ -114,7 +114,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             {topVendedorLabel} <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">Vendedores con leads activos</div>
+          <div className="text-muted-foreground">Ubicación con más visitas</div>
         </CardFooter>
       </Card>
     </div>
@@ -124,15 +124,6 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
 function formatNumber(value: number | null | undefined): string {
   if (!value) return "0";
   return new Intl.NumberFormat("es-MX").format(value);
-}
-
-function formatCurrency(value: number | null | undefined): string {
-  if (!value) return "—";
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 function formatPercent(part: number | null | undefined, total: number | null | undefined): string {
