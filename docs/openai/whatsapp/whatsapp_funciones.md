@@ -119,7 +119,7 @@
       },
       "necesidad_proposito": {
         "type": "string",
-        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar gestión de incidencias y comunicación con residentes usando WhatsApp y panel centralizado.'"
+        "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar seguimiento de leads y atención en WhatsApp'."
       }
     },
     "required": [
@@ -217,26 +217,26 @@
 
 {
   "name": "list_demo_slots",
-  "description": "Consulta la disponibilidad del calendario para preparar opciones que el prospecto verá en el webchat.",
+  "description": "Consulta la disponibilidad del calendario para ofrecer al cliente opciones de demo dentro de WhatsApp.",
   "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
       "conversacion_id": {
         "type": "string",
-        "description": "Conversación activa asociada al lead."
+        "description": "La conversación activa donde se debe mostrar la agenda."
       },
       "timezone": {
         "type": "string",
-        "description": "Zona horaria preferida del prospecto (ej. 'America/Mexico_City')."
+        "description": "Zona horaria del prospecto (ej. 'America/Mexico_City') para ajustar las franjas."
       },
       "start_date": {
         "type": "string",
-        "description": "Fecha inicial en formato YYYY-MM-DD. Si se omite, se usa la fecha actual."
+        "description": "Fecha inicial (YYYY-MM-DD). Si se omite, se usa el día actual."
       },
       "window_days": {
         "type": "integer",
-        "description": "Cantidad de días a mostrar (máximo 60).",
+        "description": "Número de días a mostrar (máximo 60).",
         "minimum": 1,
         "maximum": 60
       }
@@ -255,26 +255,26 @@
 
 {
   "name": "schedule_demo",
-  "description": "Confirma una demo en el slot seleccionado; al ejecutarse se envía la invitación por correo y se programa el recordatorio automático.",
+  "description": "Confirma la demo elegida para que se reserve el slot y se envíe el correo/invitación automáticamente.",
   "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
       "conversacion_id": {
         "type": "string",
-        "description": "Conversación activa donde se registrará la cita."
+        "description": "Conversación activa donde se registra la cita."
       },
       "slot_id": {
         "type": "string",
-        "description": "Identificador del slot devuelto por list_demo_slots."
+        "description": "Identificador que regresó `list_demo_slots`."
       },
       "start_at": {
         "type": "string",
-        "description": "Fecha y hora del slot en formato ISO 8601 (ej. '2025-03-18T16:00:00-06:00')."
+        "description": "Fecha y hora en formato ISO 8601 del slot elegido."
       },
       "notes": {
         "type": "string",
-        "description": "Notas opcionales que el prospecto haya mencionado."
+        "description": "Notas del prospecto que quieras guardar junto a la demo."
       }
     },
     "required": [
@@ -291,26 +291,26 @@
 
 {
   "name": "reschedule_demo",
-  "description": "Mueve una demo confirmada a un nuevo horario; el backend rehace la invitación y actualiza recordatorios automáticamente.",
+  "description": "Reprograma una demo ya confirmada cuando el cliente solicita un cambio.",
   "strict": true,
   "parameters": {
     "type": "object",
     "properties": {
       "conversacion_id": {
         "type": "string",
-        "description": "Conversación activa relacionada a la cita."
+        "description": "La conversación vinculada con la demo."
       },
       "booking_id": {
         "type": "string",
-        "description": "Identificador de la cita confirmada."
+        "description": "Identificador de la cita que se moverá."
       },
       "start_at": {
         "type": "string",
-        "description": "Nuevo horario en formato ISO 8601."
+        "description": "Nuevo horario propuesto en ISO 8601."
       },
       "notes": {
         "type": "string",
-        "description": "Notas adicionales para el seguimiento."
+        "description": "Motivo o comentarios para el cambio."
       }
     },
     "required": [
@@ -327,7 +327,7 @@
 
 {
   "name": "cancel_demo",
-  "description": "Cancela una demo previamente confirmada.",
+  "description": "Cancela una demo previamente confirmada cuando el prospecto lo solicita.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -338,7 +338,7 @@
       },
       "booking_id": {
         "type": "string",
-        "description": "Identificador de la cita confirmada."
+        "description": "Identificador de la demo que se cancela."
       },
       "reason": {
         "type": "string",
@@ -348,6 +348,32 @@
     "required": [
       "conversacion_id",
       "booking_id",
+      "reason"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "restart_conversation_cycle",
+  "description": "Registrar que un contacto abrió un nuevo tema o reinició la conversación para que se cree una oportunidad separada y el vendedor actual sea notificado.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual; permite ligar el reinicio al historial."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Frase corta explicando por qué necesitas crear un ciclo nuevo (ej. 'Quiere evaluar Tal-IA para otra sucursal')."
+      }
+    },
+    "required": [
+      "conversacion_id",
       "reason"
     ],
     "additionalProperties": false

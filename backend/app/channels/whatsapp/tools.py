@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 from uuid import UUID
 
 from app.assistants.tool_runtime import ToolRuntimeContext
+from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import send_email, storage
+from app.services.calendar import CalendarError
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
 
@@ -112,6 +114,18 @@ async def execute_tool(
 
     if func == "restart_conversation_cycle":
         return await _handle_restart_cycle(arguments, context)
+
+    if func == "list_demo_slots":
+        return await _handle_list_demo_slots(arguments)
+
+    if func == "schedule_demo":
+        return await _handle_schedule_demo(arguments, context)
+
+    if func == "reschedule_demo":
+        return await _handle_reschedule_demo(arguments, context)
+
+    if func == "cancel_demo":
+        return await _handle_cancel_demo(arguments)
 
     raise ValueError(f"La función '{func}' no está disponible en WhatsApp")
 
@@ -402,6 +416,219 @@ async def _handle_restart_cycle(
         "restart_created": restart_created,
         "restart_sequence": restart_sequence,
         "oportunidad_id": oportunidad_id,
+    }
+
+
+async def _handle_list_demo_slots(arguments: dict[str, Any]) -> dict[str, Any]:
+    resource_id = webchat_service._resolve_calendar_resource_id()
+    timezone_pref = webchat_service._resolve_timezone_preference(arguments.get("timezone"))
+    start_raw = arguments.get("start_date") or arguments.get("window_start")
+    start_date = webchat_service._parse_calendar_date(start_raw)
+    window_days = webchat_service._normalize_window_days(
+        arguments.get("window_days") or arguments.get("days")
+    )
+    end_date = start_date + timedelta(days=window_days - 1)
+    try:
+        availability_raw = await webchat_service.calendar_service.list_slots(
+            resource_id=resource_id,
+            start_date=start_date,
+            end_date=end_date,
+            timezone_hint=timezone_pref,
+            max_days=window_days,
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+
+    slots = [slot for slot in availability_raw.get("slots", []) if slot.get("is_available")]
+    availability_payload = dict(availability_raw)
+    availability_payload["slots"] = slots
+
+    return {
+        "status": "ok",
+        "resource_id": resource_id,
+        "timezone": availability_payload.get("timezone"),
+        "window_start": availability_payload.get("window_start"),
+        "window_end": availability_payload.get("window_end"),
+        "slot_duration_minutes": availability_payload.get("slot_duration_minutes"),
+        "slots": availability_payload["slots"],
+        "_side_effects": {"availability": availability_payload},
+    }
+
+
+async def _handle_schedule_demo(
+    arguments: dict[str, Any], context: ToolRuntimeContext
+) -> dict[str, Any]:
+    resource_id = webchat_service._resolve_calendar_resource_id()
+    slot_id = str(arguments.get("slot_id") or "").strip()
+    start_raw = arguments.get("start_at")
+    if not start_raw and slot_id:
+        _, _, candidate = slot_id.partition(":")
+        if candidate:
+            start_raw = candidate
+    slot_datetime = webchat_service._parse_calendar_datetime(start_raw)
+    hold_minutes = max(1, settings.webchat_calendar_hold_minutes)
+    slot_identifier = slot_id or webchat_service._build_slot_identifier(resource_id, slot_datetime)
+    notes = (arguments.get("notes") or "").strip() or None
+
+    contact = await _resolve_contact(context.contact_id)
+    try:
+        tarjeta_id = await webchat_service._ensure_opportunity_when_contact_ready(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            channel="whatsapp",
+            contact=contact,
+        )
+    except storage.StorageError as exc:
+        logger.exception(
+            "calendar.ensure_opportunity_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+        raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
+
+    metadata_payload: dict[str, Any] = {
+        "slot_id": slot_identifier,
+        "source": "whatsapp",
+        "conversation_id": context.conversation_id,
+        "tarjeta_id": tarjeta_id,
+        "oportunidad_id": tarjeta_id,
+    }
+    organizacion_hint = webchat_service._extract_contact_org(contact)
+    if organizacion_hint:
+        metadata_payload["organizacion_id"] = organizacion_hint
+
+    contact_record = contact
+    confirm_metadata = {
+        "conversation_id": context.conversation_id,
+        "contact_id": context.contact_id,
+        "session_id": context.session_id,
+        "tarjeta_id": tarjeta_id,
+    }
+    contact_org = webchat_service._extract_contact_org(contact_record)
+    if contact_org:
+        confirm_metadata["organizacion_id"] = contact_org
+
+    try:
+        hold = await webchat_service.calendar_service.hold_slot(
+            resource_id=resource_id,
+            slot_start=slot_datetime,
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            tarjeta_id=tarjeta_id,
+            hold_minutes=hold_minutes,
+            metadata=metadata_payload,
+        )
+        booking = await webchat_service.calendar_service.confirm_slot(
+            hold_id=hold.get("hold_id"),
+            notes=notes,
+            metadata=confirm_metadata,
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+
+    booking_response = webchat_service._build_booking_response(booking)
+    booking_response.hold_id = hold.get("hold_id")
+    contact_record = contact
+    await webchat_service._sync_booking_with_opportunity(
+        booking=booking_response,
+        tarjeta_id=tarjeta_id,
+        contact=contact_record,
+        channel="whatsapp",
+    )
+    await webchat_service._send_booking_confirmation_email(
+        booking=booking_response,
+        contact_id=context.contact_id,
+        conversation_id=context.conversation_id,
+        tarjeta_id=tarjeta_id,
+        contact=contact_record,
+    )
+
+    booking_payload = {
+        "booking_id": booking_response.booking_id,
+        "resource_id": booking_response.resource_id,
+        "start_at": booking_response.start_at.isoformat(),
+        "end_at": booking_response.end_at.isoformat() if booking_response.end_at else None,
+        "timezone": booking_response.timezone,
+        "status": booking_response.status,
+        "hold_id": booking_response.hold_id,
+    }
+    return {
+        "status": "ok",
+        **booking_payload,
+        "_side_effects": {"booking": booking_payload},
+    }
+
+
+async def _handle_reschedule_demo(
+    arguments: dict[str, Any], context: ToolRuntimeContext
+) -> dict[str, Any]:
+    booking_id = str(arguments.get("booking_id") or "").strip()
+    if not booking_id:
+        raise ValueError("booking_id requerido para reschedule_demo")
+    new_slot_raw = arguments.get("start_at") or arguments.get("slot_start")
+    new_slot_datetime = webchat_service._parse_calendar_datetime(new_slot_raw)
+    notes = (arguments.get("notes") or "").strip() or None
+    try:
+        booking = await webchat_service.calendar_service.reschedule_booking(
+            booking_id=booking_id,
+            new_slot_start=new_slot_datetime,
+            notes=notes,
+            metadata={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "session_id": context.session_id,
+            },
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+    booking_response = webchat_service._build_booking_response(booking)
+    contact = await _resolve_contact(context.contact_id)
+    await webchat_service._sync_booking_with_opportunity(
+        booking=booking_response,
+        tarjeta_id=booking_response.tarjeta_id,
+        contact=contact,
+        channel="whatsapp",
+    )
+    await webchat_service._send_booking_confirmation_email(
+        booking=booking_response,
+        contact_id=context.contact_id,
+        conversation_id=context.conversation_id,
+        tarjeta_id=booking_response.tarjeta_id,
+        contact=contact,
+    )
+    return {
+        "status": "ok",
+        "booking_id": booking_response.booking_id,
+        "resource_id": booking_response.resource_id,
+        "start_at": booking_response.start_at.isoformat(),
+        "end_at": booking_response.end_at.isoformat() if booking_response.end_at else None,
+        "timezone": booking_response.timezone,
+        "status": booking_response.status,
+        "hold_id": booking_response.hold_id,
+    }
+
+
+async def _handle_cancel_demo(arguments: dict[str, Any]) -> dict[str, Any]:
+    booking_id = str(arguments.get("booking_id") or "").strip()
+    if not booking_id:
+        raise ValueError("booking_id requerido para cancel_demo")
+    reason = (arguments.get("reason") or "").strip() or None
+    try:
+        booking = await webchat_service.calendar_service.cancel_booking(
+            booking_id=booking_id,
+            reason=reason,
+        )
+    except CalendarError as exc:
+        raise ValueError(str(exc)) from exc
+    booking_response = webchat_service._build_booking_response(booking)
+    return {
+        "status": "ok",
+        "booking_id": booking_response.booking_id,
+        "resource_id": booking_response.resource_id,
+        "start_at": booking_response.start_at.isoformat(),
+        "end_at": booking_response.end_at.isoformat() if booking_response.end_at else None,
+        "timezone": booking_response.timezone,
+        "status": booking_response.status,
+        "hold_id": booking_response.hold_id,
     }
 
 
