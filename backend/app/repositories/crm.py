@@ -3129,6 +3129,28 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar catálogo: {data!r}")
         return data
 
+    async def get_catalog_item_by_slug(
+        self,
+        *,
+        organizacion_id: UUID,
+        slug: str,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "slug": f"eq.{slug}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar catálogo: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
+        return row
+
     async def list_lineas_de_negocio(
         self,
         *,
@@ -3226,6 +3248,30 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar esquemas: {data!r}")
         return data
+
+    async def get_product_metadata_scheme(
+        self,
+        *,
+        organizacion_id: UUID,
+        scheme_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{scheme_id}",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/producto_metadata_schemes",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("scheme_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"respuesta inválida al buscar esquema: {row!r}")
+        return row
 
     async def create_product_metadata_scheme(
         self,

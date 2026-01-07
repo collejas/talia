@@ -15,3 +15,16 @@ export type ImporterScheme = {
   description?: string
   fields: ImporterField[]
 }
+
+export type ImporterImportError = {
+  row: number
+  message: string
+  data: Record<string, string> | null
+}
+
+export type ImporterImportSummary = {
+  total: number
+  created: number
+  updated: number
+  errors: ImporterImportError[]
+}

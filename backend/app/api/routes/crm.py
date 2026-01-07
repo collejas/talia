@@ -6,11 +6,15 @@ import asyncio
 import csv
 import io
 import json
+import os
+import re
 import secrets
+import unicodedata
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, Any, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
 from urllib.parse import urlparse
@@ -31,6 +35,10 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
+try:
+    from openpyxl import load_workbook
+except ModuleNotFoundError:  # pragma: no cover
+    load_workbook = None
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
@@ -3384,6 +3392,19 @@ class CRMProductMetadataSchemeUpdate(BaseModel):
     fields: list[CRMProductoMetadataField] | None = None
 
 
+class CRMProductImportRowError(BaseModel):
+    row: int
+    message: str
+    data: dict[str, str] | None = None
+
+
+class CRMProductImportSummary(BaseModel):
+    total: int
+    created: int
+    updated: int
+    errors: list[CRMProductImportRowError] = Field(default_factory=list)
+
+
 class CRMLineaDeNegocio(BaseModel):
     id: UUID
     nombre: str
@@ -4449,6 +4470,210 @@ async def pipeline_delete_opportunity(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/productos/importador/import",
+    response_model=CRMProductImportSummary,
+)
+async def import_product_catalog_items(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    scheme_id: UUID = Form(...),
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMProductImportSummary:
+    try:
+        scheme = await repo.get_product_metadata_scheme(
+            organizacion_id=organizacion_id,
+            scheme_id=scheme_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    scheme_fields = _normalize_scheme_fields(scheme.get("fields"))
+    try:
+        headers_map, rows = await _read_import_rows(file)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+    if not rows:
+        raise HTTPException(status_code=400, detail="empty_file")
+    headers = list(headers_map.keys())
+    field_header_map = _build_field_header_map(headers, scheme_fields)
+
+    lineas_raw = await repo.list_lineas_de_negocio(
+        organizacion_id=organizacion_id,
+        include_inactive=True,
+        limit=1000,
+    )
+    lineas_cache = {
+        _normalize_column_value(str(linea.get("nombre"))): linea
+        for linea in lineas_raw
+        if linea.get("nombre")
+    }
+    familias_cache: dict[tuple[str, str], dict[str, Any]] = {}
+    familias = await repo.list_familias_productos(
+        organizacion_id=organizacion_id,
+        include_inactive=True,
+        limit=1000,
+    )
+    for familia in familias:
+        linea_id = familia.get("linea_id")
+        nombre = familia.get("nombre")
+        if not linea_id or not nombre:
+            continue
+        familias_cache[(str(linea_id), _normalize_column_value(nombre))] = familia
+    modelos_cache: dict[tuple[str, str], dict[str, Any]] = {}
+    modelos_global: dict[str, dict[str, Any]] = {}
+    modelos = await repo.list_modelos_productos(
+        organizacion_id=organizacion_id,
+        include_inactive=True,
+        limit=1000,
+    )
+    for modelo in modelos:
+        familia_id = modelo.get("familia_id")
+        nombre = modelo.get("nombre")
+        if not familia_id or not nombre:
+            continue
+        modelos_cache[(str(familia_id), _normalize_column_value(nombre))] = modelo
+        modelos_global[_normalize_column_value(nombre)] = modelo
+
+    async def ensure_linea(name: str) -> UUID:
+        normalized = _normalize_column_value(name)
+        if not normalized:
+            raise ValueError("Línea vacía")
+        cached = lineas_cache.get(normalized)
+        if cached:
+            return UUID(str(cached["id"]))
+        payload = {"nombre": name, "activo": True}
+        nueva = await repo.create_linea_de_negocio(
+            organizacion_id=organizacion_id,
+            payload=payload,
+        )
+        lineas_cache[_normalize_column_value(str(nueva.get("nombre", name)))] = nueva
+        return UUID(str(nueva["id"]))
+
+    async def ensure_familia(name: str, linea_id: UUID) -> UUID:
+        normalized = _normalize_column_value(name)
+        key = (str(linea_id), normalized)
+        cached = familias_cache.get(key)
+        if cached:
+            return UUID(str(cached["id"]))
+        payload = {"nombre": name, "linea_id": str(linea_id), "activo": True}
+        nueva = await repo.create_familia_producto(
+            organizacion_id=organizacion_id,
+            payload=payload,
+        )
+        familias_cache[key] = nueva
+        return UUID(str(nueva["id"]))
+
+    async def ensure_model(name: str, familia_id: UUID) -> UUID:
+        normalized = _normalize_column_value(name)
+        key = (str(familia_id), normalized)
+        cached = modelos_cache.get(key)
+        if cached:
+            return UUID(str(cached["id"]))
+        global_cached = modelos_global.get(normalized)
+        if global_cached:
+            return UUID(str(global_cached["id"]))
+        payload = {"nombre": name, "familia_id": str(familia_id), "activo": True}
+        nuevo = await repo.create_modelo_producto(
+            organizacion_id=organizacion_id,
+            payload=payload,
+        )
+        modelos_cache[key] = nuevo
+        modelos_global[normalized] = nuevo
+        return UUID(str(nuevo["id"]))
+
+    created = 0
+    updated = 0
+    errors: list[CRMProductImportRowError] = []
+    for index, row in enumerate(rows, start=1):
+        try:
+            nombre = _pick_value(row, BASE_HEADER_CANDIDATES["nombre"])
+            if not nombre:
+                raise ValueError("Falta el nombre del producto.")
+            linea_name = _pick_value(row, BASE_HEADER_CANDIDATES["linea"])
+            if not linea_name:
+                raise ValueError("Falta la línea asociada.")
+            familia_name = _pick_value(row, BASE_HEADER_CANDIDATES["familia"])
+            if not familia_name:
+                raise ValueError("Falta la familia asociada.")
+            modelo_name = _pick_value(row, BASE_HEADER_CANDIDATES["modelo"])
+
+            linea_id = await ensure_linea(linea_name)
+            familia_id = await ensure_familia(familia_name, linea_id)
+            modelo_id = None
+            if modelo_name:
+                modelo_id = await ensure_model(modelo_name, familia_id)
+
+            metadata: dict[str, Any] = {}
+            for field in scheme_fields:
+                header = field_header_map.get(field["id"])
+                if not header:
+                    continue
+                parsed_value = _parse_metadata_value(row.get(header), field["type"])
+                if parsed_value is not None:
+                    metadata[field["id"]] = parsed_value
+            metadata.setdefault("linea", linea_name)
+            metadata.setdefault("familia", familia_name)
+            if modelo_name:
+                metadata.setdefault("modelo", modelo_name)
+            for key, value in row.items():
+                if not value:
+                    continue
+                if key in field_header_map.values() or key in BASE_HEADER_KEYS:
+                    continue
+                metadata[headers_map.get(key, key)] = value
+
+            slug = _slugify(nombre) or f"item-{uuid4().hex}"
+            existing = await repo.get_catalog_item_by_slug(
+                organizacion_id=organizacion_id,
+                slug=slug,
+            )
+            payload: dict[str, Any] = {
+                "nombre": nombre,
+                "slug": slug,
+                "linea_id": str(linea_id),
+                "familia_id": str(familia_id),
+                "activo": True,
+                "tipo": "producto",
+            }
+            payload["organizacion_id"] = str(organizacion_id)
+            if modelo_id:
+                payload["modelo_id"] = str(modelo_id)
+            if metadata:
+                payload["metadatos"] = metadata
+            if existing:
+                await repo.update_catalog_item(
+                    item_id=UUID(str(existing["id"])),
+                    payload=payload,
+                )
+                updated += 1
+            else:
+                await repo.create_catalog_item(payload=payload)
+                created += 1
+        except (ValueError, CRMRepositoryError) as exc:
+            errors.append(
+                CRMProductImportRowError(
+                    row=index,
+                    message=str(exc),
+                    data=_build_error_payload(row, headers_map),
+                )
+            )
+    _trigger_catalog_reindex(
+        background_tasks,
+        organizacion_id,
+        usuario_id=usuario_id,
+        canal="importador",
+    )
+    return CRMProductImportSummary(
+        total=len(rows),
+        created=created,
+        updated=updated,
+        errors=errors,
+    )
+
+
 @router.get(
     "/pipeline/cards/{oportunidad_id}",
     response_model=CRMPipelineCardResponse,
@@ -5142,6 +5367,171 @@ async def delete_product_metadata_scheme(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _normalize_column_value(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFKD", value)
+    filtered = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", filtered).strip().lower()
+
+
+def _slugify(value: str) -> str:
+    text = unicodedata.normalize("NFKD", value or "")
+    slug = "".join(ch if ch.isalnum() else "-" for ch in text.lower())
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    return slug or ""
+
+
+def _parse_metadata_value(raw_value: str | None, field_type: str) -> str | float | bool | None:
+    if not raw_value:
+        return None
+    cleaned = raw_value.strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if field_type == "boolean":
+        if lowered in {"1", "si", "sí", "true", "t", "yes", "y"}:
+            return True
+        if lowered in {"0", "no", "false", "f", "n"}:
+            return False
+        return None
+    if field_type == "number":
+        normalized = cleaned.replace(",", ".")
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
+    return cleaned
+
+
+def _normalize_scheme_fields(raw_fields: Any) -> list[dict[str, Any]]:
+    fields: list[dict[str, Any]] = []
+    if not isinstance(raw_fields, list):
+        return fields
+    for raw in raw_fields:
+        if not isinstance(raw, dict):
+            continue
+        field_id = str(raw.get("id") or raw.get("slug") or "").strip()
+        if not field_id:
+            continue
+        field_type = str(raw.get("type") or "text").strip().lower()
+        if field_type not in {"text", "number", "boolean", "select"}:
+            field_type = "text"
+        label = str(raw.get("label") or raw.get("name") or field_id).strip()
+        fields.append(
+            {
+                "id": field_id,
+                "label": label,
+                "type": field_type,
+                "required": bool(raw.get("required")),
+            }
+        )
+    return fields
+
+
+def _build_field_header_map(
+    headers: list[str], fields: list[dict[str, Any]]
+) -> dict[str, str]:
+    normalized_headers = set(headers)
+    mapping: dict[str, str] = {}
+    for field in fields:
+        for candidate in filter(None, [field.get("id"), field.get("label")]):
+            normalized_candidate = _normalize_column_value(str(candidate))
+            if normalized_candidate in normalized_headers:
+                mapping[field["id"]] = normalized_candidate
+                break
+    return mapping
+
+
+BASE_HEADER_CANDIDATES = {
+    "nombre": ["nombre", "name"],
+    "linea": ["linea", "línea", "line"],
+    "familia": ["familia", "family"],
+    "modelo": ["modelo", "model"],
+}
+
+BASE_HEADER_KEYS = {
+    _normalize_column_value(candidate)
+    for values in BASE_HEADER_CANDIDATES.values()
+    for candidate in values
+    if candidate
+}
+
+
+def _pick_value(row: Mapping[str, str], candidates: list[str]) -> str | None:
+    for candidate in candidates:
+        normalized = _normalize_column_value(candidate)
+        if not normalized:
+            continue
+        value = row.get(normalized)
+        if value:
+            return value
+    return None
+
+
+async def _read_import_rows(
+    file: UploadFile,
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    content = await file.read()
+    filename = file.filename or ""
+    suffix = Path(filename).suffix.lower()
+    headers_map: dict[str, str] = {}
+    rows: list[dict[str, str]] = []
+    if suffix in {".xlsx", ".xls"}:
+        if load_workbook is None:
+            raise RuntimeError("openpyxl_required")
+        workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        try:
+            sheet = workbook.active
+            iterator = sheet.iter_rows(values_only=True)
+            header_row = next(iterator, None)
+            if not header_row:
+                return headers_map, []
+            normalized_headers: list[str] = []
+            for header in header_row:
+                normalized = _normalize_column_value(str(header or ""))
+                if not normalized:
+                    continue
+                normalized_headers.append(normalized)
+                headers_map.setdefault(normalized, str(header or ""))
+            for row in iterator:
+                row_map: dict[str, str] = {}
+                for idx, header in enumerate(normalized_headers):
+                    cell_value = row[idx] if idx < len(row) else None
+                    row_map[header] = str(cell_value).strip() if cell_value is not None else ""
+                if any(value for value in row_map.values()):
+                    rows.append(row_map)
+        finally:
+            workbook.close()
+    else:
+        text = content.decode("utf-8-sig", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        fieldnames = reader.fieldnames or []
+        normalized_headers: list[str] = []
+        for header in fieldnames:
+            normalized = _normalize_column_value(header)
+            if not normalized:
+                continue
+            normalized_headers.append(normalized)
+            headers_map.setdefault(normalized, header or "")
+        for raw_row in reader:
+            row_map: dict[str, str] = {}
+            for header, normalized in zip(fieldnames, normalized_headers):
+                raw_value = raw_row.get(header, "")
+                row_map[normalized] = (raw_value or "").strip()
+            if any(value for value in row_map.values()):
+                rows.append(row_map)
+    return headers_map, rows
+
+
+def _build_error_payload(row: Mapping[str, str], headers_map: dict[str, str]) -> dict[str, str]:
+    return {
+        headers_map.get(key, key): value
+        for key, value in row.items()
+        if value
+    }
 
 
 @router.get("/contacts/search", response_model=CRMContactSearchResponse)

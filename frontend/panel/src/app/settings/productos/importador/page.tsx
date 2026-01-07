@@ -1,5 +1,6 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { ProductMetadataSchemesManager } from "@/components/settings/productos/importador-schemes-manager"
+import { ProductMetadataImporterUploader } from "@/components/settings/productos/importador-importer"
 import { fetchProductMetadataSchemes } from "@/app/settings/productos/importador/actions"
 
 export const dynamic = "force-dynamic"
@@ -19,7 +20,10 @@ export default async function ImportadorPage() {
             luego podrás subir con los datos reales.
           </p>
         </header>
-        <ProductMetadataSchemesManager initialSchemes={schemes} />
+        <div className="space-y-6">
+          <ProductMetadataSchemesManager initialSchemes={schemes} />
+          <ProductMetadataImporterUploader initialSchemes={schemes} />
+        </div>
       </div>
     </AppViewLayout>
   )
