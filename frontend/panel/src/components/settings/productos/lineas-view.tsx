@@ -177,39 +177,36 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
     setSelectedLineas(allLineasSelected ? [] : [...lineasIds])
   }, [allLineasSelected, lineasIds])
 
-  const handleDeleteLinea = useCallback(
-    (linea: LineaDeNegocio) => {
-      if (!window.confirm(`¿Eliminar la línea "${linea.nombre}"? Esta acción no se puede deshacer.`)) {
-        return
-      }
-      setFeedback(null)
-      setPendingAction("delete")
-      startTransition(() => {
-        void (async () => {
-            try {
-              await deleteLineaDeNegocio(linea.id)
-              setLineasState((prev) => prev.filter((item) => item.id !== linea.id))
-              setSelectedLineas((prev) => prev.filter((id) => id !== linea.id))
-              setListFeedback({ type: "success", message: "Línea eliminada correctamente." })
-            } catch (error) {
-              console.error("[lineas] delete failed", error)
-              const message = formatDeleteErrorMessage(
-                error instanceof Error ? error.message : String(error),
-              )
-              setListFeedback({
-                type: "error",
-                message,
-              })
-            } finally {
-              setPendingAction(null)
-            }
-        })()
-      })
-    },
-    [startTransition],
-  )
+  const handleDeleteLinea = (linea: LineaDeNegocio) => {
+    if (!window.confirm(`¿Eliminar la línea "${linea.nombre}"? Esta acción no se puede deshacer.`)) {
+      return
+    }
+    setFeedback(null)
+    setPendingAction("delete")
+    startTransition(() => {
+      void (async () => {
+        try {
+          await deleteLineaDeNegocio(linea.id)
+          setLineasState((prev) => prev.filter((item) => item.id !== linea.id))
+          setSelectedLineas((prev) => prev.filter((id) => id !== linea.id))
+          setListFeedback({ type: "success", message: "Línea eliminada correctamente." })
+        } catch (error) {
+          console.error("[lineas] delete failed", error)
+          const message = formatDeleteErrorMessage(
+            error instanceof Error ? error.message : String(error),
+          )
+          setListFeedback({
+            type: "error",
+            message,
+          })
+        } finally {
+          setPendingAction(null)
+        }
+      })()
+    })
+  }
 
-  const handleBulkDelete = useCallback(() => {
+  const handleBulkDelete = () => {
     if (!selectedLineas.length) {
       return
     }
@@ -266,7 +263,7 @@ export function LineasView({ lineas, familias }: LineasViewProps) {
         }
       })()
     })
-  }, [selectedLineas, startTransition])
+  }
 
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">

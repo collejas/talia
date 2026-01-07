@@ -217,43 +217,40 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
     setSelectedModelos(allModelosSelected ? [] : [...modelosIds])
   }, [allModelosSelected, modelosIds])
 
-  const handleDeleteModelo = useCallback(
-    (modelo: ModeloProducto) => {
-      if (
-        !window.confirm(
-          `¿Eliminar el modelo "${modelo.nombre}"? Esta acción no se puede deshacer.`,
-        )
-      ) {
-        return
-      }
-      setFeedback(null)
-      setPendingAction("delete")
-      startTransition(() => {
-        void (async () => {
-          try {
-            await deleteModeloProducto(modelo.id)
-            setModelosState((prev) => prev.filter((item) => item.id !== modelo.id))
-            setSelectedModelos((prev) => prev.filter((id) => id !== modelo.id))
-            setListFeedback({ type: "success", message: "Modelo eliminado correctamente." })
-          } catch (error) {
-            console.error("[modelos] delete failed", error)
-            const message = formatDeleteErrorMessage(
-              error instanceof Error ? error.message : String(error),
-            )
-            setListFeedback({
-              type: "error",
-              message,
-            })
-          } finally {
-            setPendingAction(null)
-          }
-        })()
-      })
-    },
-    [startTransition],
-  )
+  const handleDeleteModelo = (modelo: ModeloProducto) => {
+    if (
+      !window.confirm(
+        `¿Eliminar el modelo "${modelo.nombre}"? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return
+    }
+    setFeedback(null)
+    setPendingAction("delete")
+    startTransition(() => {
+      void (async () => {
+        try {
+          await deleteModeloProducto(modelo.id)
+          setModelosState((prev) => prev.filter((item) => item.id !== modelo.id))
+          setSelectedModelos((prev) => prev.filter((id) => id !== modelo.id))
+          setListFeedback({ type: "success", message: "Modelo eliminado correctamente." })
+        } catch (error) {
+          console.error("[modelos] delete failed", error)
+          const message = formatDeleteErrorMessage(
+            error instanceof Error ? error.message : String(error),
+          )
+          setListFeedback({
+            type: "error",
+            message,
+          })
+        } finally {
+          setPendingAction(null)
+        }
+      })()
+    })
+  }
 
-  const handleBulkDeleteModelos = useCallback(() => {
+  const handleBulkDeleteModelos = () => {
     if (!selectedModelos.length) {
       return
     }
@@ -310,7 +307,7 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
         }
       })()
     })
-  }, [selectedModelos, startTransition])
+  }
 
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">

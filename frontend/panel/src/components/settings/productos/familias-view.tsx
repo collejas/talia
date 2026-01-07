@@ -186,43 +186,40 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     setSelectedFamilias(allFamiliasSelected ? [] : [...familiasIds])
   }, [allFamiliasSelected, familiasIds])
 
-  const handleDeleteFamilia = useCallback(
-    (familia: FamiliaProducto) => {
-      if (
-        !window.confirm(
-          `¿Eliminar la familia "${familia.nombre}"? Esta acción no se puede deshacer.`,
-        )
-      ) {
-        return
-      }
-      setFeedback(null)
-      setPendingAction("delete")
-      startTransition(() => {
-        void (async () => {
-          try {
-            await deleteFamiliaProducto(familia.id)
-            setFamiliasState((prev) => prev.filter((item) => item.id !== familia.id))
-            setSelectedFamilias((prev) => prev.filter((id) => id !== familia.id))
-            setListFeedback({ type: "success", message: "Familia eliminada correctamente." })
-          } catch (error) {
-            console.error("[familias] delete failed", error)
-            const message = formatDeleteErrorMessage(
-              error instanceof Error ? error.message : String(error),
-            )
-            setListFeedback({
-              type: "error",
-              message,
-            })
-          } finally {
-            setPendingAction(null)
-          }
-        })()
-      })
-    },
-    [startTransition],
-  )
+  const handleDeleteFamilia = (familia: FamiliaProducto) => {
+    if (
+      !window.confirm(
+        `¿Eliminar la familia "${familia.nombre}"? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return
+    }
+    setFeedback(null)
+    setPendingAction("delete")
+    startTransition(() => {
+      void (async () => {
+        try {
+          await deleteFamiliaProducto(familia.id)
+          setFamiliasState((prev) => prev.filter((item) => item.id !== familia.id))
+          setSelectedFamilias((prev) => prev.filter((id) => id !== familia.id))
+          setListFeedback({ type: "success", message: "Familia eliminada correctamente." })
+        } catch (error) {
+          console.error("[familias] delete failed", error)
+          const message = formatDeleteErrorMessage(
+            error instanceof Error ? error.message : String(error),
+          )
+          setListFeedback({
+            type: "error",
+            message,
+          })
+        } finally {
+          setPendingAction(null)
+        }
+      })()
+    })
+  }
 
-  const handleBulkDeleteFamilias = useCallback(() => {
+  const handleBulkDeleteFamilias = () => {
     if (!selectedFamilias.length) {
       return
     }
@@ -279,7 +276,7 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
         }
       })()
     })
-  }, [selectedFamilias, startTransition])
+  }
 
   const lineaOptions = useMemo(
     () =>

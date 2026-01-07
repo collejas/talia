@@ -7,47 +7,49 @@ author: sistema
 # Plan de importación guiada de productos
 
 ## Objetivo
-Crear una experiencia guiada dentro de `settings/productos` para que un vendedor no técnico pueda:
+Diseñar una experiencia guiada dentro de `settings/productos` que permita a un vendedor no técnico:
 
-- definir qué columnas (campos) quiere capturar de sus proyectos inmobiliarios,
-- descargar una plantilla con esos encabezados,
-- subir un archivo Excel/CSV que enlace nombre, línea, familia y los campos definidos,
-- y dejar que el importador genere entradas de `catalog_items` con `metadata` estructurado (modelo opcional).
-
+- definir las columnas (campos) que necesita para su catálogo inmobilario y convertirlas en metadata estructurada.
+- descargar una plantilla CSV/Excel con nombre, línea, familia, modelo (opcional) y los campos personalizados.
+- subir la misma estructura para que el importador cree/actualice los ítems en `catalog_items` con la metadata correcta.
+- contar con una guía de ayuda que explique qué nivel jerárquico se debe borrar primero y cómo mantener los datos consistentes.
 
 ## Checklist de alto nivel
-
-- [ ] Diseñar la tabla/entidad donde guardamos las columnas personalizadas (nombre, tipo, descripción, slug, etc.).
-- [ ] Crear una página en `/settings/productos/importador` que permita:
-  - [ ] listar/especificar los campos que se usarán para metadata,
-  - [ ] guardar esa configuración por organización (podría ser un registro JSON en Supabase),
-  - [ ] descargar una plantilla Excel/CSV con nombre+línea+familia+[campos]
-- [ ] Agregar un flujo de carga que:
-  - [ ] reciba el archivo CSV/Excel,
-  - [ ] valide que nombre, línea y familia estén presentes y que los campos coincidan con la plantilla,
-  - [ ] genere `metadata` agrupando el resto de columnas en un objeto,
-  - [ ] cree/actualice las filas en `catalog_items` (con las relaciones a `lineas_de_negocio`, `familias_productos` y opcionalmente `modelos_productos`),
-  - [ ] exporte un reporte indicando qué filas se crearon, actualizaciones y errores de validación.
-- [ ] Documentar el comportamiento en la nueva guía y en la ruta `docs/Plan importar  productos`.
-- [ ] Notificar al asistente vectorial / sistema de indexación para que consuma esos metadatos (ya cubierto por la carga del JSON).
-
+- [x] Diseñar la tabla de `producto_metadata_schemes` (con `organizacion_id`, `name`, `fields jsonb`, fechas y `payload`).
+- [x] Crear la página `/settings/productos/importador` con:
+  - [x] listado y edición de campos (slugs, etiquetas, tipo, requerido, descripción).
+  - [x] panel donde la tabla muestra columnas base y cualquier campo nuevo, de forma que el usuario vea el efecto de agregar un campo.
+  - [x] generación/descarga de plantilla con los encabezados esperados.
+- [x] Documentar y mostrar la nueva guía de ayuda en `/settings/productos/ayuda` para vendedores que no son programadores (usa `docs/Cliente_inmobiliario` como referencia).
+- [ ] Agregar el flujo de carga que:
+  - [ ] recibe el archivo CSV/Excel y lo valida contra el esquema seleccionado.
+  - [ ] exige nombre, línea y familia, opcionalmente modelo, y convierte las columnas adicionales en `metadata`.
+  - [ ] crea o actualiza filas en `catalog_items` respetando las relaciones jerárquicas de línea > familia > modelo > producto.
+  - [ ] devuelve un reporte con filas creadas, actualizadas y errores de validación.
+- [ ] Notificar al asistente vectorial y a la indexación para que consuman los metadatos recién generados.
 
 ## Detalles de implementación
 
-1. **Persistencia de plantilla**  
-   - Usar tabla nueva (`producto_metadata_schemes` o similar) con columna `organizacion_id`, `name`, `fields jsonb`, `created_at`.
-   - Cada `field` describe `{ id, label, tipo (texto/número/boleano), required }`.
-2. **Generación de plantilla**  
-   - Endpoint GET `/settings/productos/importador/template` que lee el esquema y devuelve CSV/Excel (o el frontend construye el CSV).
-3. **Importador**  
-   - Endpoint POST `/settings/productos/importador` que acepta archivo y esquema id.
-   - Parsear CSV/Excel (puede usar `papaparse` o `xlsx`); validar obligatoriedad.
-   - Si línea/familia/modelo ya existen, vincular por slug o nombre.
-   - Guardar `metadata` con las columnas definidas.
-4. **Feedback al usuario**  
-   - Mensajes en el panel con conteos de creados/actualizados/errores y detalle de filas rechazadas.
-5. **Seguridad**  
-   - El importador debe correr con sesión autenticada y `organizacion_id`.
-6. **Siguientes pasos**  
-   - Ajustar la guía existente para mencionar el importador.
-   - Crear pruebas unitarias para la resolución de esquemas y carga de productos.
+### Persistencia del esquema
+- La tabla `producto_metadata_schemes` ya diseñada sigue siendo la fuente principal. Cada campo describe `{ id, label, type, required, description }` y se guarda por organización con marca de tiempo.
+- Al guardar un esquema, se deben filtrar los campos vacíos (sin `id` ni `label`).
+
+### Interfaz del importador
+- El importador muestra primero los datos básicos (nombre del esquema y descripción).
+- Las tarjetas que describen cada campo están agrupadas arriba, el botón “Agregar campo” y la explicación del funcionamiento están justo antes de la tabla, de modo que el usuario entiende que cada columna nueva se reflejará en la vista previa.
+- La tabla de vista previa siempre muestra los encabezados `nombre`, `linea`, `familia`, `modelo` y los campos personalizados, con una fila de ejemplo resaltando el tipo.
+- Los botones de acción permiten crear/actualizar, eliminar el esquema activo o descargar la plantilla CSV, y ya manejan los errores del backend con mensajes claros.
+
+### Guía para vendedores
+- La nueva página en `/settings/productos/ayuda` describe la jerarquía línea → familia → modelo → producto y ofrece pasos claros (definir esquema, descargar plantilla, llenar datos, subir/importar).
+- Se referencia el repositorio `docs/Cliente_inmobiliario` para mostrar campos típicos (habitaciones, baños, metros cuadrados, servicios) y se incluyen consejos para usuarios sin conocimientos técnicos.
+
+### Importador y validaciones pendientes
+- El backend del CRM necesita un endpoint POST que reciba el archivo y el `scheme_id`, valide tipos y campos obligatorios, y arme el objeto `metadata` para cada fila.
+- Debe garantizarse que los productos heredados respetan la organización y que la metadata generada se indexa en la tienda vectorial.
+- Al final de cada importación debe haber un reporte de filas aceptadas/descartadas con mensajes en español y la opción de descargar los errores.
+
+## Siguientes pasos
+- Implementar el endpoint de upload (CSV/Excel) y conectarlo con la vista `importador`.
+- Añadir traducciones y validaciones adicionales en el backend del CRM para `linea_has_children`, `familia_has_children` y `modelo_has_children`.
+- Extender la documentación del vector store para que aprenda de los nuevos metadatos.

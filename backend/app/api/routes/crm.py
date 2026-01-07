@@ -3352,6 +3352,38 @@ class CRMCatalogDeleteResponse(BaseModel):
     hard_deleted: bool = False
 
 
+# existing classes...
+class CRMProductoMetadataField(BaseModel):
+    id: str
+    label: str
+    type: Literal["text", "number", "boolean", "select"] = "text"
+    required: bool = False
+    description: str | None = None
+    options: list[str] | None = None
+
+
+class CRMProductMetadataScheme(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    name: str
+    description: str | None = None
+    fields: list[CRMProductoMetadataField]
+    created_at: str
+    updated_at: str
+
+
+class CRMProductMetadataSchemeCreate(BaseModel):
+    name: str
+    description: str | None = None
+    fields: list[CRMProductoMetadataField]
+
+
+class CRMProductMetadataSchemeUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    fields: list[CRMProductoMetadataField] | None = None
+
+
 class CRMLineaDeNegocio(BaseModel):
     id: UUID
     nombre: str
@@ -5029,6 +5061,87 @@ async def delete_product_modelo(
         canal="panel",
     )
     return CRMModeloProducto.model_validate(row)
+
+
+@router.get(
+    "/productos/importador/schemes",
+    response_model=list[CRMProductMetadataScheme],
+)
+async def list_product_metadata_schemes(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> list[CRMProductMetadataScheme]:
+    try:
+        rows = await repo.list_product_metadata_schemes(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMProductMetadataScheme.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/productos/importador/schemes",
+    response_model=CRMProductMetadataScheme,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_product_metadata_scheme(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: CRMProductMetadataSchemeCreate,
+) -> CRMProductMetadataScheme:
+    try:
+        row = await repo.create_product_metadata_scheme(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMProductMetadataScheme.model_validate(row)
+
+
+@router.patch("/productos/importador/schemes/{scheme_id}", response_model=CRMProductMetadataScheme)
+async def update_product_metadata_scheme(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    scheme_id: UUID,
+    payload: CRMProductMetadataSchemeUpdate,
+) -> CRMProductMetadataScheme:
+    if not payload.model_dump(exclude_none=True):
+        raise HTTPException(status_code=400, detail="empty_update")
+    try:
+        row = await repo.update_product_metadata_scheme(
+            organizacion_id=organizacion_id,
+            scheme_id=scheme_id,
+            payload=payload.model_dump(mode="json", exclude_none=True),
+        )
+    except CRMRepositoryError as exc:
+        detail = "scheme_not_found" if "scheme_not_found" in str(exc) else str(exc)
+        status_code = 404 if detail == "scheme_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return CRMProductMetadataScheme.model_validate(row)
+
+
+@router.delete(
+    "/productos/importador/schemes/{scheme_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_product_metadata_scheme(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    scheme_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_product_metadata_scheme(
+            organizacion_id=organizacion_id,
+            scheme_id=scheme_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/contacts/search", response_model=CRMContactSearchResponse)

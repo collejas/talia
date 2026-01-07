@@ -3207,6 +3207,89 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar modelos: {data!r}")
         return data
 
+    async def list_product_metadata_schemes(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "name.asc",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/producto_metadata_schemes",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar esquemas: {data!r}")
+        return data
+
+    async def create_product_metadata_scheme(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/producto_metadata_schemes",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("scheme_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear esquema: {row!r}")
+        return row
+
+    async def update_product_metadata_scheme(
+        self,
+        *,
+        organizacion_id: UUID,
+        scheme_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        params = {"id": f"eq.{scheme_id}"}
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/producto_metadata_schemes",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("scheme_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar esquema: {row!r}")
+        return row
+
+    async def delete_product_metadata_scheme(
+        self,
+        *,
+        organizacion_id: UUID,
+        scheme_id: UUID,
+    ) -> None:
+        params = {"id": f"eq.{scheme_id}"}
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/producto_metadata_schemes",
+            params=params,
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
+        if resp.status_code >= 400:
+            raise CRMRepositoryError(f"scheme_delete_failed:{resp.status_code}")
+
     async def list_recursos_media(
         self,
         *,
