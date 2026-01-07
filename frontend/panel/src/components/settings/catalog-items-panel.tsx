@@ -214,6 +214,7 @@ export function CatalogItemsPanel({
   const [filterLinea, setFilterLinea] = useState("")
   const [filterFamilia, setFilterFamilia] = useState("")
   const [filterModelo, setFilterModelo] = useState("")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const ALL_OPTION_VALUE = "__all__"
 
   const form = useForm<CatalogItemFormValues>({ defaultValues: EMPTY_FORM })
@@ -287,6 +288,39 @@ export function CatalogItemsPanel({
 
   const activeCount = useMemo(() => items.filter((item) => item.activo).length, [items])
   const inactiveCount = items.length - activeCount
+  const allVisibleSelected = useMemo(
+    () => visibleItems.length > 0 && visibleItems.every((item) => selectedIds.has(item.id)),
+    [selectedIds, visibleItems],
+  )
+  const someVisibleSelected = useMemo(
+    () => visibleItems.some((item) => selectedIds.has(item.id)),
+    [selectedIds, visibleItems],
+  )
+  const selectAllChecked = allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false
+  const selectedCount = selectedIds.size
+
+  const handleToggleSelection = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(id)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
+  }, [])
+
+  const handleSelectAllChange = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSelectedIds(new Set(visibleItems.map((item) => item.id)))
+        return
+      }
+      setSelectedIds(new Set())
+    },
+    [visibleItems],
+  )
 
   const resetForm = useCallback(() => {
     form.reset(EMPTY_FORM)
@@ -328,6 +362,11 @@ export function CatalogItemsPanel({
 
   const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((item) => item.id !== id))
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }, [])
 
   const handleSubmit = form.handleSubmit((values) => {
@@ -399,7 +438,7 @@ export function CatalogItemsPanel({
     [upsertItem],
   )
 
-  const handleDelete = useCallback(
+const handleDelete = useCallback(
     (item: CatalogItem, hard = false) => {
       const confirmation = hard
         ? window.confirm(
@@ -437,6 +476,43 @@ export function CatalogItemsPanel({
     },
     [removeItem, upsertItem],
   )
+
+  const handleBulkDelete = useCallback(() => {
+    if (!selectedIds.size) {
+      return
+    }
+    const confirmation = window.confirm(
+      "Esta acción eliminará permanentemente los productos seleccionados. ¿Deseas continuar?",
+    )
+    if (!confirmation) {
+      return
+    }
+    const ids = Array.from(selectedIds)
+    setFeedback(null)
+    setPendingAction("delete")
+    startTransition(() => {
+      Promise.all(ids.map((id) => deleteCatalogItem(id, { hard: true })))
+        .then(() => {
+          setItems((prev) => prev.filter((item) => !ids.includes(item.id)))
+          setSelectedIds(new Set())
+          setFeedback({
+            type: "success",
+            message: `${ids.length} producto${ids.length === 1 ? "" : "s"} eliminado${ids.length === 1 ? "" : "s"}.`,
+          })
+        })
+        .catch((error) => {
+          console.error("[catalog] bulk delete failed", error)
+          setFeedback({
+            type: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No se pudo eliminar los productos seleccionados. Intenta de nuevo.",
+          })
+        })
+        .finally(() => setPendingAction(null))
+    })
+  }, [selectedIds, startTransition])
 
   const handleRefresh = useCallback(() => {
     setFeedback(null)
@@ -477,20 +553,29 @@ export function CatalogItemsPanel({
             />
             <label htmlFor="toggle-inactive">Mostrar archivados</label>
           </div>
-          <div className="ms-auto flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isPending && pendingAction === "refresh"}
-            >
-              <IconRefresh className={cn("me-2 size-4", isPending && pendingAction === "refresh" && "animate-spin")} />
-              Actualizar
-            </Button>
-            <Button onClick={openCreateSheet} size="sm">
-              <IconPlus className="me-2 size-4" /> Nuevo producto
-            </Button>
-          </div>
+        <div className="ms-auto flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isPending && pendingAction === "refresh"}
+          >
+            <IconRefresh className={cn("me-2 size-4", isPending && pendingAction === "refresh" && "animate-spin")} />
+            Actualizar
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={!selectedIds.size || (isPending && pendingAction === "delete")}
+            onClick={handleBulkDelete}
+          >
+            <IconTrash className="me-2 size-4" />
+            Eliminar seleccionados
+          </Button>
+          <Button onClick={openCreateSheet} size="sm">
+            <IconPlus className="me-2 size-4" /> Nuevo producto
+          </Button>
+        </div>
         </div>
         {feedback ? (
           <div
@@ -516,13 +601,18 @@ export function CatalogItemsPanel({
               <Label htmlFor="search-items" className="sr-only">
                 Buscar en catálogo
               </Label>
-            <Input
-              id="search-items"
-              placeholder="Buscar por nombre, slug o tipo"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
+              <Input
+                id="search-items"
+                placeholder="Buscar por nombre, slug o tipo"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </div>
+            {selectedCount > 0 ? (
+              <p className="text-xs text-muted-foreground self-center">
+                Seleccionados: <strong>{selectedCount}</strong>
+              </p>
+            ) : null}
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div>
@@ -622,6 +712,13 @@ export function CatalogItemsPanel({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 px-3">
+                  <Checkbox
+                    id="select-all-items"
+                    checked={selectAllChecked}
+                    onCheckedChange={(checked) => handleSelectAllChange(Boolean(checked))}
+                  />
+                </TableHead>
                 <TableHead>Producto / servicio</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Precio base</TableHead>
@@ -633,13 +730,20 @@ export function CatalogItemsPanel({
             <TableBody>
               {visibleItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
                     No encontramos elementos que coincidan con tu búsqueda.
                   </TableCell>
                 </TableRow>
               ) : (
                 visibleItems.map((item) => (
                   <TableRow key={item.id} className={!item.activo ? "bg-muted/30" : undefined}>
+                    <TableCell className="px-3">
+                      <Checkbox
+                        id={`select-item-${item.id}`}
+                        checked={selectedIds.has(item.id)}
+                        onCheckedChange={(checked) => handleToggleSelection(item.id, Boolean(checked))}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/5">
@@ -714,15 +818,6 @@ export function CatalogItemsPanel({
                             <IconCircleCheck className="size-4" />
                           )}
                           <span className="sr-only">{item.activo ? "Archivar" : "Reactivar"}</span>
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => handleDelete(item, true)}
-                          disabled={isPending && pendingAction === "delete"}
-                        >
-                          <IconTrash className="size-4" />
-                          <span className="sr-only">Eliminar</span>
                         </Button>
                       </div>
                     </TableCell>
