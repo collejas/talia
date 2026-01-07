@@ -10,6 +10,7 @@ import {
   IconPlus,
   IconRefresh,
   IconTrash,
+  IconX,
 } from "@tabler/icons-react"
 
 import {
@@ -220,6 +221,8 @@ export function CatalogItemsPanel({
   const form = useForm<CatalogItemFormValues>({ defaultValues: EMPTY_FORM })
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
+  const [newMetadataKey, setNewMetadataKey] = useState("")
+  const [newMetadataValue, setNewMetadataValue] = useState("")
 
   const tipoWatch = useWatch({ control: form.control, name: "tipo" }) as CatalogItemFormValues["tipo"] | undefined;
   const monedaWatch = useWatch({ control: form.control, name: "moneda" }) as string | undefined;
@@ -321,6 +324,37 @@ export function CatalogItemsPanel({
     },
     [visibleItems],
   )
+
+  const metadataEntries = useMemo(
+    () =>
+      Object.entries(metadataSeed).map(([key, value]) => ({
+        key,
+        value: value === null || value === undefined ? "" : String(value),
+      })),
+    [metadataSeed],
+  )
+
+  const handleMetadataFieldChange = useCallback((fieldKey: string, fieldValue: string) => {
+    setMetadataSeed((prev) => ({ ...prev, [fieldKey]: fieldValue }))
+  }, [])
+
+  const handleRemoveMetadataField = useCallback((fieldKey: string) => {
+    setMetadataSeed((prev) => {
+      const next = { ...prev }
+      delete next[fieldKey]
+      return next
+    })
+  }, [])
+
+  const handleAddMetadataField = useCallback(() => {
+    const key = newMetadataKey.trim()
+    if (!key) {
+      return
+    }
+    setMetadataSeed((prev) => ({ ...prev, [key]: newMetadataValue }))
+    setNewMetadataKey("")
+    setNewMetadataValue("")
+  }, [newMetadataKey, newMetadataValue])
 
   const resetForm = useCallback(() => {
     form.reset(EMPTY_FORM)
@@ -1018,6 +1052,76 @@ const handleDelete = useCallback(
               title="Imágenes del producto"
               description="Agrega imágenes o enlaces de recursos multimedia y selecciona la predeterminada."
             />
+            <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Metadata adicional</p>
+                  <p className="text-xs text-muted-foreground">
+                    Ajusta los campos personalizados que se almacenan en el JSON.
+                  </p>
+                </div>
+                <Badge variant="outline">{metadataEntries.length}</Badge>
+              </div>
+              {metadataEntries.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No hay metadata adicional registrada.</p>
+              ) : (
+                <div className="space-y-2">
+                  {metadataEntries.map((entry) => (
+                    <div key={entry.key} className="flex items-stretch gap-2">
+                      <div className="flex min-w-[120px] items-center rounded-md border border-border/70 bg-background/50 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {entry.key}
+                      </div>
+                      <Input
+                        className="flex-1"
+                        value={entry.value}
+                        onChange={(event) => handleMetadataFieldChange(entry.key, event.target.value)}
+                        placeholder="Valor"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveMetadataField(entry.key)}
+                      >
+                        <IconX className="size-4" />
+                        <span className="sr-only">Remover metadata</span>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  placeholder="Clave (ej. habitaciones)"
+                  value={newMetadataKey}
+                  onChange={(event) => setNewMetadataKey(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault()
+                      handleAddMetadataField()
+                    }
+                  }}
+                />
+                <Input
+                  placeholder="Valor"
+                  value={newMetadataValue}
+                  onChange={(event) => setNewMetadataValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault()
+                      handleAddMetadataField()
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddMetadataField}
+                  disabled={!newMetadataKey.trim()}
+                >
+                  Agregar campo
+                </Button>
+              </div>
+            </div>
             <SheetFooter className="flex flex-col gap-2 border-t pt-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 {editing ? (
