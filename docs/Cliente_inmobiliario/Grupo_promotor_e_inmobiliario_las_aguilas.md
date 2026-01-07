@@ -1,0 +1,5 @@
+Grupo Promotor e Inmobiliario Las Aguilas es una empresa líder en el sector inmobiliario en San Luis Potosí. Con una trayectoria de más de 40 años en el mercado, se ha destacado por brindar servicios de alta calidad y excelencia en el desarrollo y venta de proyectos inmobiliarios.
+
+La empresa se especializa en la construcción y promoción de viviendas, ofreciendo diversas opciones para todos los segmentos de mercado, desde viviendas económicas hasta residenciales de lujo. Sus proyectos se caracterizan por contar con diseños modernos, espacios funcionales y acabados de calidad.
+
+Una de las principales fortalezas de Grupo Promotor e Inmobiliario Las Aguilas es su compromiso con la satisfacción del cliente. Su equipo de profesionales altamente capacitados brinda un excelente servicio postventa, garantizando la atención y resolución de cualquier situación que pueda surgir.

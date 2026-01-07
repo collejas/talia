@@ -41,6 +41,9 @@ export default async function SettingsProductosItemsPage() {
           <Button variant="outline" size="sm" asChild>
             <Link href="/settings/productos/modelos">Gestionar modelos y variantes</Link>
           </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/settings/productos/ayuda">Guía para productos complejos</Link>
+          </Button>
         </div>
         <Separator />
         <CatalogItemsPanel
