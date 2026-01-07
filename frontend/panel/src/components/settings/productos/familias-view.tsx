@@ -18,6 +18,7 @@ import {
   FamiliaProducto,
   LineaDeNegocio,
   createFamiliaProducto,
+  deleteFamiliaProducto,
   updateFamiliaProducto,
 } from "@/app/settings/productos/actions"
 import {
@@ -26,6 +27,7 @@ import {
   normalizeMediaList,
   type MediaEntry,
 } from "@/components/settings/productos/media-editor"
+import { formatDeleteErrorMessage } from "@/app/settings/productos/delete-error-messages"
 
 type FamiliasViewProps = {
   lineas: LineaDeNegocio[]
@@ -47,18 +49,21 @@ const FAMILIA_FORM_DEFAULTS: FamiliaFormValues = {
 }
 
 type Feedback = { type: "success" | "error"; message: string }
+type PendingAction = "save" | "delete" | "bulk-delete"
 
 export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
   const [familiasState, setFamiliasState] = useState(familias)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<FamiliaProducto | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const [pendingAction, setPendingAction] = useState<"save" | null>(null)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
   const form = useForm<FamiliaFormValues>({ defaultValues: FAMILIA_FORM_DEFAULTS })
   const selectedLineaId = useWatch({ control: form.control, name: "lineaId" }) ?? ""
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
+  const [selectedFamilias, setSelectedFamilias] = useState<string[]>([])
+  const [listFeedback, setListFeedback] = useState<Feedback | null>(null)
   const [filterLinea, setFilterLinea] = useState("")
 
   const lineaMap = useMemo(() => new Map(lineas.map((linea) => [linea.id, linea.nombre])), [lineas])
@@ -162,6 +167,120 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
     return familiasState.filter((familia) => familia.lineaId === filterLinea)
   }, [familiasState, filterLinea])
 
+  const familiasIds = useMemo(() => familiasState.map((familia) => familia.id), [familiasState])
+  const allFamiliasSelected = familiasIds.length > 0 && selectedFamilias.length === familiasIds.length
+  const selectedFamiliasSet = useMemo(() => new Set(selectedFamilias), [selectedFamilias])
+  const selectedCount = selectedFamilias.length
+  const isProcessing = pendingAction !== null
+
+  const toggleSelectFamilia = useCallback((id: string) => {
+    setSelectedFamilias((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id)
+      }
+      return [...prev, id]
+    })
+  }, [])
+
+  const handleToggleSelectAllFamilias = useCallback(() => {
+    setSelectedFamilias(allFamiliasSelected ? [] : [...familiasIds])
+  }, [allFamiliasSelected, familiasIds])
+
+  const handleDeleteFamilia = useCallback(
+    (familia: FamiliaProducto) => {
+      if (
+        !window.confirm(
+          `¿Eliminar la familia "${familia.nombre}"? Esta acción no se puede deshacer.`,
+        )
+      ) {
+        return
+      }
+      setFeedback(null)
+      setPendingAction("delete")
+      startTransition(() => {
+        void (async () => {
+          try {
+            await deleteFamiliaProducto(familia.id)
+            setFamiliasState((prev) => prev.filter((item) => item.id !== familia.id))
+            setSelectedFamilias((prev) => prev.filter((id) => id !== familia.id))
+            setListFeedback({ type: "success", message: "Familia eliminada correctamente." })
+          } catch (error) {
+            console.error("[familias] delete failed", error)
+            const message = formatDeleteErrorMessage(
+              error instanceof Error ? error.message : String(error),
+            )
+            setListFeedback({
+              type: "error",
+              message,
+            })
+          } finally {
+            setPendingAction(null)
+          }
+        })()
+      })
+    },
+    [startTransition],
+  )
+
+  const handleBulkDeleteFamilias = useCallback(() => {
+    if (!selectedFamilias.length) {
+      return
+    }
+    if (
+      !window.confirm(
+        `Eliminarás ${selectedFamilias.length} familia(s) de productos. ¿Quieres continuar?`,
+      )
+    ) {
+      return
+    }
+    setFeedback(null)
+    setPendingAction("bulk-delete")
+    startTransition(() => {
+      void (async () => {
+        try {
+          const operations = selectedFamilias.map(async (id) => {
+            await deleteFamiliaProducto(id)
+            return id
+          })
+          const results = await Promise.allSettled(operations)
+          const deletedIds = results
+            .filter((res): res is PromiseFulfilledResult<string> => res.status === "fulfilled")
+            .map((res) => res.value)
+          if (deletedIds.length) {
+            const deletedSet = new Set(deletedIds)
+            setFamiliasState((prev) => prev.filter((item) => !deletedSet.has(item.id)))
+            setSelectedFamilias((prev) => prev.filter((id) => !deletedSet.has(id)))
+          }
+          const failed = results.find((res) => res.status === "rejected") as
+            | PromiseRejectedResult
+            | undefined
+          if (failed) {
+            const message = formatDeleteErrorMessage(
+              failed.reason instanceof Error ? failed.reason.message : String(failed.reason),
+            )
+            setListFeedback({ type: "error", message })
+          } else {
+            setListFeedback({
+              type: "success",
+              message: `Se eliminaron ${deletedIds.length} familia(s).`,
+            })
+          }
+        } catch (error) {
+          console.error("[familias] bulk delete failed", error)
+          const message = formatDeleteErrorMessage(
+            error instanceof Error ? error.message : String(error),
+          )
+          setListFeedback({
+            type: "error",
+            message,
+          })
+        } finally {
+          setPendingAction(null)
+        }
+      })()
+    })
+  }, [selectedFamilias, startTransition])
+
   const lineaOptions = useMemo(
     () =>
       lineas.map((linea) => ({
@@ -182,6 +301,17 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
           Agrupa productos dentro de cada línea para aplicar reglas compartidas en cotizaciones.
         </p>
       </header>
+      {listFeedback ? (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            listFeedback.type === "success"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+              : "border-destructive/60 bg-destructive/10 text-destructive-900"
+          }`}
+        >
+          {listFeedback.message}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="text-sm text-muted-foreground">
           <p className="text-xs uppercase tracking-wide">Familias registradas</p>
@@ -209,14 +339,32 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
                   : "Crea una familia asignada a una línea existente."}
               </CardDescription>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleOpenSheet()}
-              disabled={lineas.length === 0}
-            >
-              Nueva familia
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDeleteFamilias}
+                disabled={!selectedCount || isProcessing}
+              >
+                Eliminar seleccionadas ({selectedCount})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleSelectAllFamilias}
+                disabled={!familiasIds.length}
+              >
+                {allFamiliasSelected ? "Deseleccionar todo" : "Seleccionar todo"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleOpenSheet()}
+                disabled={lineas.length === 0}
+              >
+                Nueva familia
+              </Button>
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
             <Select
@@ -253,6 +401,12 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
                     <CardHeader>
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedFamiliasSet.has(familia.id)}
+                            onCheckedChange={() => toggleSelectFamilia(familia.id)}
+                            aria-label={`Seleccionar familia ${familia.nombre}`}
+                            className="mt-1"
+                          />
                           <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
                             {familia.fotoUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -286,9 +440,20 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
                           {lineaMap.get(familia.lineaId ?? "") ?? "Sin línea"}
                         </p>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(familia)}>
-                        Editar familia
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(familia)}>
+                          Editar familia
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteFamilia(familia)}
+                          disabled={isProcessing}
+                          className="text-destructive"
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}

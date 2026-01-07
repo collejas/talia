@@ -261,6 +261,10 @@ BEGIN
     DELETE FROM public.webchat_visitantes             WHERE organizacion_id = target;
     DELETE FROM public.webhooks_entrantes             WHERE organizacion_id = target;
 
+    -- Agenda
+    DELETE FROM public.calendar_slot_holds            WHERE organizacion_id = target;
+    DELETE FROM public.calendar_bookings              WHERE organizacion_id = target;
+
     -- CRM / Cotizaciones / Oportunidades
     DELETE FROM public.cotizacion_items               WHERE organizacion_id = target;
     DELETE FROM public.cotizaciones                   WHERE organizacion_id = target;

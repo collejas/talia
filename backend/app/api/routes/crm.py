@@ -135,12 +135,27 @@ def _trigger_catalog_reindex(
             extra={"value": organizacion_value},
         )
         return
-    background_tasks.add_task(
-        _run_catalog_reindex,
-        organizacion_id,
-        usuario_id=str(usuario_id) if usuario_id else None,
-        canal=canal,
-    )
+        background_tasks.add_task(
+            _run_catalog_reindex,
+            organizacion_id,
+            usuario_id=str(usuario_id) if usuario_id else None,
+            canal=canal,
+        )
+
+
+def _map_delete_exception(
+    exc: CRMRepositoryError,
+    *,
+    not_found_key: str,
+    dependency_key: str,
+    dependency_message: str,
+) -> tuple[str, int]:
+    text = str(exc)
+    if dependency_key in text:
+        return dependency_message, status.HTTP_409_CONFLICT
+    if not_found_key in text:
+        return not_found_key, status.HTTP_404_NOT_FOUND
+    return text, status.HTTP_502_BAD_GATEWAY
 
 
 def _extract_demo_booking_id(metadata: dict[str, Any]) -> str | None:
@@ -4734,6 +4749,40 @@ async def update_product_linea(
             payload=body,
         )
     except CRMRepositoryError as exc:
+        detail, status_code = _map_delete_exception(
+            exc,
+            not_found_key="linea_not_found",
+            dependency_key="linea_has_children",
+            dependency_message=(
+                "Esta línea todavía tiene familias/modelos/productos asociados. "
+                "Elimina primero esos registros antes de borrar la línea."
+            ),
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
+    return CRMLineaDeNegocio.model_validate(row)
+
+
+@router.delete("/productos/lineas/{linea_id}", response_model=CRMLineaDeNegocio)
+async def delete_product_linea(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    linea_id: UUID,
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMLineaDeNegocio:
+    try:
+        row = await repo.delete_linea_de_negocio(
+            organizacion_id=organizacion_id,
+            linea_id=linea_id,
+        )
+    except CRMRepositoryError as exc:
         detail = "linea_not_found" if "linea_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "linea_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
@@ -4819,6 +4868,40 @@ async def update_product_familia(
             payload=body,
         )
     except CRMRepositoryError as exc:
+        detail, status_code = _map_delete_exception(
+            exc,
+            not_found_key="familia_not_found",
+            dependency_key="familia_has_children",
+            dependency_message=(
+                "La familia tiene modelos o productos asociados. Elimina primero los productos "
+                "y luego los modelos antes de borrar la familia."
+            ),
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
+    return CRMFamiliaProducto.model_validate(row)
+
+
+@router.delete("/productos/familias/{familia_id}", response_model=CRMFamiliaProducto)
+async def delete_product_familia(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    familia_id: UUID,
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMFamiliaProducto:
+    try:
+        row = await repo.delete_familia_producto(
+            organizacion_id=organizacion_id,
+            familia_id=familia_id,
+        )
+    except CRMRepositoryError as exc:
         detail = "familia_not_found" if "familia_not_found" in str(exc) else str(exc)
         status_code = 404 if detail == "familia_not_found" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
@@ -4900,6 +4983,40 @@ async def update_product_modelo(
             organizacion_id=organizacion_id,
             modelo_id=modelo_id,
             payload=body,
+        )
+    except CRMRepositoryError as exc:
+        detail, status_code = _map_delete_exception(
+            exc,
+            not_found_key="modelo_not_found",
+            dependency_key="modelo_has_children",
+            dependency_message=(
+                "El modelo tiene productos asociados. Elimina primero los productos antes "
+                "de borrar el modelo."
+            ),
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex(
+        background_tasks,
+        row.get("organizacion_id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
+    return CRMModeloProducto.model_validate(row)
+
+
+@router.delete("/productos/modelos/{modelo_id}", response_model=CRMModeloProducto)
+async def delete_product_modelo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    modelo_id: UUID,
+    background_tasks: BackgroundTasks,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMModeloProducto:
+    try:
+        row = await repo.delete_modelo_producto(
+            organizacion_id=organizacion_id,
+            modelo_id=modelo_id,
         )
     except CRMRepositoryError as exc:
         detail = "modelo_not_found" if "modelo_not_found" in str(exc) else str(exc)

@@ -19,6 +19,7 @@ import {
   LineaDeNegocio,
   ModeloProducto,
   createModeloProducto,
+  deleteModeloProducto,
   updateModeloProducto,
 } from "@/app/settings/productos/actions"
 import {
@@ -27,6 +28,7 @@ import {
   normalizeMediaList,
   type MediaEntry,
 } from "@/components/settings/productos/media-editor"
+import { formatDeleteErrorMessage } from "@/app/settings/productos/delete-error-messages"
 
 type ModelosViewProps = {
   modelos: ModeloProducto[]
@@ -49,6 +51,7 @@ const MODELO_FORM_DEFAULTS: ModeloFormValues = {
 }
 
 type Feedback = { type: "success" | "error"; message: string }
+type PendingAction = "save" | "delete" | "bulk-delete"
 
 const formatter = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -76,11 +79,13 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<ModeloProducto | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const [pendingAction, setPendingAction] = useState<"save" | null>(null)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
   const form = useForm<ModeloFormValues>({ defaultValues: MODELO_FORM_DEFAULTS })
   const [metadataSeed, setMetadataSeed] = useState<Record<string, unknown>>({})
   const [mediaItems, setMediaItems] = useState<MediaEntry[]>([])
+  const [selectedModelos, setSelectedModelos] = useState<string[]>([])
+  const [listFeedback, setListFeedback] = useState<Feedback | null>(null)
   const [filterLinea, setFilterLinea] = useState("")
   const [filterFamilia, setFilterFamilia] = useState("")
 
@@ -193,6 +198,120 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
     })
   }, [modelosState, filterFamilia, filterLinea, familias])
 
+  const modelosIds = useMemo(() => modelosState.map((modelo) => modelo.id), [modelosState])
+  const allModelosSelected = modelosIds.length > 0 && selectedModelos.length === modelosIds.length
+  const selectedModelosSet = useMemo(() => new Set(selectedModelos), [selectedModelos])
+  const selectedCount = selectedModelos.length
+  const isProcessing = pendingAction !== null
+
+  const toggleSelectModelo = useCallback((id: string) => {
+    setSelectedModelos((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id)
+      }
+      return [...prev, id]
+    })
+  }, [])
+
+  const handleToggleSelectAllModelos = useCallback(() => {
+    setSelectedModelos(allModelosSelected ? [] : [...modelosIds])
+  }, [allModelosSelected, modelosIds])
+
+  const handleDeleteModelo = useCallback(
+    (modelo: ModeloProducto) => {
+      if (
+        !window.confirm(
+          `¿Eliminar el modelo "${modelo.nombre}"? Esta acción no se puede deshacer.`,
+        )
+      ) {
+        return
+      }
+      setFeedback(null)
+      setPendingAction("delete")
+      startTransition(() => {
+        void (async () => {
+          try {
+            await deleteModeloProducto(modelo.id)
+            setModelosState((prev) => prev.filter((item) => item.id !== modelo.id))
+            setSelectedModelos((prev) => prev.filter((id) => id !== modelo.id))
+            setListFeedback({ type: "success", message: "Modelo eliminado correctamente." })
+          } catch (error) {
+            console.error("[modelos] delete failed", error)
+            const message = formatDeleteErrorMessage(
+              error instanceof Error ? error.message : String(error),
+            )
+            setListFeedback({
+              type: "error",
+              message,
+            })
+          } finally {
+            setPendingAction(null)
+          }
+        })()
+      })
+    },
+    [startTransition],
+  )
+
+  const handleBulkDeleteModelos = useCallback(() => {
+    if (!selectedModelos.length) {
+      return
+    }
+    if (
+      !window.confirm(
+        `Eliminarás ${selectedModelos.length} modelo(s). ¿Quieres continuar?`,
+      )
+    ) {
+      return
+    }
+    setFeedback(null)
+    setPendingAction("bulk-delete")
+    startTransition(() => {
+      void (async () => {
+        try {
+          const operations = selectedModelos.map(async (id) => {
+            await deleteModeloProducto(id)
+            return id
+          })
+          const results = await Promise.allSettled(operations)
+          const deletedIds = results
+            .filter((res): res is PromiseFulfilledResult<string> => res.status === "fulfilled")
+            .map((res) => res.value)
+          if (deletedIds.length) {
+            const deletedSet = new Set(deletedIds)
+            setModelosState((prev) => prev.filter((item) => !deletedSet.has(item.id)))
+            setSelectedModelos((prev) => prev.filter((id) => !deletedSet.has(id)))
+          }
+          const failed = results.find((res) => res.status === "rejected") as
+            | PromiseRejectedResult
+            | undefined
+          if (failed) {
+            const message = formatDeleteErrorMessage(
+              failed.reason instanceof Error ? failed.reason.message : String(failed.reason),
+            )
+            setListFeedback({ type: "error", message })
+          } else {
+            setListFeedback({
+              type: "success",
+              message: `Se eliminaron ${deletedIds.length} modelo(s).`,
+            })
+          }
+        } catch (error) {
+          console.error("[modelos] bulk delete failed", error)
+          const message = formatDeleteErrorMessage(
+            error instanceof Error ? error.message : String(error),
+          )
+          setListFeedback({
+            type: "error",
+            message,
+          })
+        } finally {
+          setPendingAction(null)
+        }
+      })()
+    })
+  }, [selectedModelos, startTransition])
+
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">
       <header className="space-y-1">
@@ -204,6 +323,17 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
           Establece modelos reutilizables para mantener la consistencia de productos similares.
         </p>
       </header>
+      {listFeedback ? (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            listFeedback.type === "success"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+              : "border-destructive/60 bg-destructive/10 text-destructive-900"
+          }`}
+        >
+          {listFeedback.message}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="text-sm text-muted-foreground">
           <p className="text-xs uppercase tracking-wide">Modelos registrados</p>
@@ -224,49 +354,67 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
                   : "Crea un modelo para reutilizarlo en tus productos."}
               </CardDescription>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Select
-                value={filterLinea ? filterLinea : ALL_LINEA_OPTION}
-                onValueChange={(value) => {
-                  const normalized = value === ALL_LINEA_OPTION ? "" : value
-                  setFilterLinea(normalized)
-                  if (!normalized) {
-                    setFilterFamilia("")
-                  }
-                }}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDeleteModelos}
+                disabled={!selectedCount || isProcessing}
               >
-                <SelectTrigger className="min-w-[200px]">
-                  <SelectValue placeholder="Todas las líneas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_LINEA_OPTION}>Todas las líneas</SelectItem>
-                  {lineas.map((linea) => (
-                    <SelectItem key={linea.id} value={linea.id}>
-                      {linea.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={filterFamilia ? filterFamilia : ALL_FAMILIA_OPTION}
-                onValueChange={(value) => {
-                  const normalized = value === ALL_FAMILIA_OPTION ? "" : value
-                  setFilterFamilia(normalized)
-                }}
+                Eliminar seleccionadas ({selectedCount})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleSelectAllModelos}
+                disabled={!modelosIds.length}
               >
-                <SelectTrigger className="min-w-[200px]">
-                  <SelectValue placeholder="Todas las familias" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_FAMILIA_OPTION}>Todas las familias</SelectItem>
-                  {visibleFamilias.map((familia) => (
-                    <SelectItem key={familia.id} value={familia.id}>
-                      {familia.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {allModelosSelected ? "Deseleccionar todo" : "Seleccionar todo"}
+              </Button>
             </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Select
+              value={filterLinea ? filterLinea : ALL_LINEA_OPTION}
+              onValueChange={(value) => {
+                const normalized = value === ALL_LINEA_OPTION ? "" : value
+                setFilterLinea(normalized)
+                if (!normalized) {
+                  setFilterFamilia("")
+                }
+              }}
+            >
+              <SelectTrigger className="min-w-[200px]">
+                <SelectValue placeholder="Todas las líneas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_LINEA_OPTION}>Todas las líneas</SelectItem>
+                {lineas.map((linea) => (
+                  <SelectItem key={linea.id} value={linea.id}>
+                    {linea.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={filterFamilia ? filterFamilia : ALL_FAMILIA_OPTION}
+              onValueChange={(value) => {
+                const normalized = value === ALL_FAMILIA_OPTION ? "" : value
+                setFilterFamilia(normalized)
+              }}
+            >
+              <SelectTrigger className="min-w-[200px]">
+                <SelectValue placeholder="Todas las familias" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_FAMILIA_OPTION}>Todas las familias</SelectItem>
+                {visibleFamilias.map((familia) => (
+                  <SelectItem key={familia.id} value={familia.id}>
+                    {familia.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -282,6 +430,12 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
                     <CardHeader>
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedModelosSet.has(modelo.id)}
+                            onCheckedChange={() => toggleSelectModelo(modelo.id)}
+                            aria-label={`Seleccionar modelo ${modelo.nombre}`}
+                            className="mt-1"
+                          />
                           <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/10">
                             {modelo.fotoUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -318,9 +472,20 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
                         <p className="text-sm text-muted-foreground">Actualizado</p>
                         <p className="text-base font-medium">{formatDate(modelo.actualizadoEn)}</p>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(modelo)}>
-                        Editar modelo
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenSheet(modelo)}>
+                          Editar modelo
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteModelo(modelo)}
+                          disabled={isProcessing}
+                          className="text-destructive"
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}

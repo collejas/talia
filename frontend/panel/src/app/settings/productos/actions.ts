@@ -344,3 +344,39 @@ export async function updateModeloProducto(
   const row = normalizeResponseRow(response)
   return transformModelo(row)
 }
+
+export async function deleteLineaDeNegocio(id: string): Promise<void> {
+  if (!id) {
+    throw new Error("Falta el identificador de la línea.")
+  }
+  const response = await callCrmApi(`/crm/productos/lineas/${id}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo eliminar la línea.")
+  }
+}
+
+export async function deleteFamiliaProducto(id: string): Promise<void> {
+  if (!id) {
+    throw new Error("Falta el identificador de la familia.")
+  }
+  const response = await callCrmApi(`/crm/productos/familias/${id}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo eliminar la familia.")
+  }
+}
+
+export async function deleteModeloProducto(id: string): Promise<void> {
+  if (!id) {
+    throw new Error("Falta el identificador del modelo.")
+  }
+  const response = await callCrmApi(`/crm/productos/modelos/${id}`, {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo eliminar el modelo.")
+  }
+}

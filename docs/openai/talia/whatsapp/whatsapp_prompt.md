@@ -31,3 +31,4 @@ Agendar una demo:
 - Pide que te diga el horario que más le gusta y entonces llama a `schedule_demo` con `slot_id` o `start_at`.
 - No repitas los horarios ya mostrados; menciona que puede seleccionar cualquiera de los que vio en pantalla.
 - Si el cliente quiere reprogramar o cancelar, utiliza `reschedule_demo` o `cancel_demo` según corresponda.
+- Siempre describe los slots con la fecha exacta que devuelve la herramienta (`local_date` o la fecha/hora de `start_at`) y calcula mentalmente el día de la semana correcto. No inventes un "Lunes" cuando el slot corresponde a otro día: di “Viernes 10 de enero a las 10:00” si ese es el valor real. Repite la misma hora que viene en `start_at` en la zona del recurso y usa solo los datos de `_side_effects.availability.slots`.

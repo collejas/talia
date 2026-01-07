@@ -36,6 +36,7 @@ from app.services import (
     storage,
     webchat_followups,
 )
+from app.channels.webchat import notifications as webchat_notifications
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
 from app.services.calendar import CalendarError
@@ -2525,6 +2526,29 @@ async def _execute_function_call(
             intencion=necesidad,
             siguiente_accion=siguiente_accion,
         )
+        contact_record = await _resolve_contact(context.contact_id)
+        opportunity_id = None
+        try:
+            opportunity_id = await storage.ensure_conversation_opportunity(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                channel="webchat",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "webchat.close_lead.ensure_opportunity_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        await webchat_notifications.notify_sales_rep(
+            context=lead_context,
+            trigger="close_lead",
+            contact=contact_record,
+            opportunity_id=str(opportunity_id) if opportunity_id else None,
+            resumen=necesidad,
+            notes=notes,
+            email=None,
+            extra={"siguiente_accion": siguiente_accion},
+        )
         return {
             "status": "ok",
             "notes": notes,
@@ -2591,6 +2615,27 @@ async def _execute_function_call(
             )
             raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
 
+        contact = await _resolve_contact(context.contact_id)
+        organizacion_hint = _extract_contact_org(contact)
+        hold_metadata = {
+            "slot_id": slot_identifier,
+            "source": "webchat",
+            "conversation_id": context.conversation_id,
+            "tarjeta_id": tarjeta_id,
+            "oportunidad_id": tarjeta_id,
+        }
+        if organizacion_hint:
+            hold_metadata["organizacion_id"] = organizacion_hint
+
+        confirm_metadata = {
+            "conversation_id": context.conversation_id,
+            "contact_id": context.contact_id,
+            "session_id": context.session_id,
+            "tarjeta_id": tarjeta_id,
+        }
+        if organizacion_hint:
+            confirm_metadata["organizacion_id"] = organizacion_hint
+
         try:
             hold = await calendar_service.hold_slot(
                 resource_id=resource_id,
@@ -2599,23 +2644,12 @@ async def _execute_function_call(
                 contact_id=context.contact_id,
                 tarjeta_id=tarjeta_id,
                 hold_minutes=hold_minutes,
-                metadata={
-                    "slot_id": slot_identifier,
-                    "source": "webchat",
-                    "conversation_id": context.conversation_id,
-                    "tarjeta_id": tarjeta_id,
-                    "oportunidad_id": tarjeta_id,
-                },
+                metadata=hold_metadata,
             )
             booking = await calendar_service.confirm_slot(
                 hold_id=hold.get("hold_id"),
                 notes=notes,
-                metadata={
-                    "conversation_id": context.conversation_id,
-                    "contact_id": context.contact_id,
-                    "session_id": context.session_id,
-                    "tarjeta_id": tarjeta_id,
-                },
+                metadata=confirm_metadata,
             )
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc

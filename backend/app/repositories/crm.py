@@ -91,6 +91,12 @@ def _is_jwt_expired_error(error: Exception) -> bool:
     return "JWT expired" in str(error)
 
 
+def _map_fk_delete_error(exc: CRMRepositoryError, detail_key: str) -> CRMRepositoryError:
+    if "violates foreign key constraint" in str(exc).lower():
+        return CRMRepositoryError(detail_key)
+    return exc
+
+
 class CRMRepository:
     """Cliente ligero contra Supabase REST usando service role."""
 
@@ -3339,6 +3345,34 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al actualizar línea: {row!r}")
         return row
 
+    async def delete_linea_de_negocio(
+        self,
+        *,
+        organizacion_id: UUID,
+        linea_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{linea_id}",
+        }
+        try:
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/lineas_de_negocio",
+                params=params,
+                prefer="return=representation",
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raise _map_fk_delete_error(exc, "linea_has_children") from exc
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("linea_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar línea: {row!r}")
+        return row
+
     async def create_familia_producto(
         self,
         *,
@@ -3385,6 +3419,34 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al actualizar familia: {row!r}")
         return row
 
+    async def delete_familia_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        familia_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{familia_id}",
+        }
+        try:
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/familias_productos",
+                params=params,
+                prefer="return=representation",
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raise _map_fk_delete_error(exc, "familia_has_children") from exc
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("familia_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar familia: {row!r}")
+        return row
+
     async def create_modelo_producto(
         self,
         *,
@@ -3429,6 +3491,34 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al actualizar modelo: {row!r}")
+        return row
+
+    async def delete_modelo_producto(
+        self,
+        *,
+        organizacion_id: UUID,
+        modelo_id: UUID,
+    ) -> dict[str, Any]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{modelo_id}",
+        }
+        try:
+            resp = await self._request(
+                "DELETE",
+                "/rest/v1/modelos_productos",
+                params=params,
+                prefer="return=representation",
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raise _map_fk_delete_error(exc, "modelo_has_children") from exc
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("modelo_not_found")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar modelo: {row!r}")
         return row
 
     async def create_catalog_item(
