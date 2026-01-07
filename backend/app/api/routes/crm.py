@@ -4625,7 +4625,8 @@ async def import_product_catalog_items(
                     continue
                 metadata[headers_map.get(key, key)] = value
 
-            slug = _slugify(nombre) or f"item-{uuid4().hex}"
+            provided_slug = _pick_value(row, BASE_HEADER_CANDIDATES["slug"])
+            slug = provided_slug or _slugify(nombre) or f"item-{uuid4().hex}"
             existing = await repo.get_catalog_item_by_slug(
                 organizacion_id=organizacion_id,
                 slug=slug,
@@ -5450,6 +5451,7 @@ BASE_HEADER_CANDIDATES = {
     "linea": ["linea", "línea", "line"],
     "familia": ["familia", "family"],
     "modelo": ["modelo", "model"],
+    "slug": ["slug"],
 }
 
 BASE_HEADER_KEYS = {
