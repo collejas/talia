@@ -127,12 +127,22 @@ class CatalogEmbeddingService:
         )
         resource_map = self._group_resources(resource_rows)
 
+        processed_entity_ids: dict[str, list[str]] = {
+            "linea": [],
+            "familia": [],
+            "modelo": [],
+            "producto": [],
+        }
+
         total = 0
 
         lineas = await self._repo.list_lineas_de_negocio(
             organizacion_id=organizacion_id, include_inactive=include_inactive, limit=limit
         )
         for linea in lineas:
+            entity_id = linea.get("id")
+            if entity_id:
+                processed_entity_ids["linea"].append(str(entity_id))
             await self._index_linea(linea, organizacion_id, resource_map)
             total += 1
 
@@ -140,6 +150,9 @@ class CatalogEmbeddingService:
             organizacion_id=organizacion_id, include_inactive=include_inactive, limit=limit
         )
         for familia in familias:
+            entity_id = familia.get("id")
+            if entity_id:
+                processed_entity_ids["familia"].append(str(entity_id))
             await self._index_familia(familia, organizacion_id, resource_map)
             total += 1
 
@@ -147,6 +160,9 @@ class CatalogEmbeddingService:
             organizacion_id=organizacion_id, include_inactive=include_inactive, limit=limit
         )
         for modelo in modelos:
+            entity_id = modelo.get("id")
+            if entity_id:
+                processed_entity_ids["modelo"].append(str(entity_id))
             await self._index_modelo(modelo, organizacion_id, resource_map)
             total += 1
 
@@ -156,13 +172,31 @@ class CatalogEmbeddingService:
             limit=limit,
         )
         for item in catalog_items:
+            entity_id = item.get("id")
+            if entity_id:
+                processed_entity_ids["producto"].append(str(entity_id))
             await self._index_producto(item, organizacion_id, resource_map)
             total += 1
+
+        await self._cleanup_deleted_entities(organizacion_id, processed_entity_ids)
 
         logger.info(
             "vector_store.reindex.complete",
             extra={"organizacion_id": str(organizacion_id), "processed": total},
         )
+
+    async def _cleanup_deleted_entities(
+        self,
+        organizacion_id: UUID,
+        processed_entity_ids: Mapping[str, Sequence[str]],
+    ) -> None:
+        for entity_type in ("linea", "familia", "modelo", "producto"):
+            entity_ids = processed_entity_ids.get(entity_type) or []
+            await self._repo.delete_catalog_document_embeddings_missing(
+                organizacion_id=organizacion_id,
+                entity_type=entity_type,
+                keep_entity_ids=entity_ids or None,
+            )
 
     async def _index_linea(
         self,

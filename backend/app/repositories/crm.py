@@ -3374,6 +3374,24 @@ class CRMRepository:
             prefer="resolution=merge-duplicates",
         )
 
+    async def delete_catalog_document_embeddings_missing(
+        self,
+        *,
+        organizacion_id: UUID,
+        entity_type: str,
+        keep_entity_ids: Sequence[str] | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_entity_type": entity_type,
+            "p_keep_ids": [str(value) for value in keep_entity_ids] if keep_entity_ids else None,
+        }
+        await self._request(
+            "POST",
+            "/rest/v1/rpc/catalog_document_embeddings_delete_missing",
+            json=payload,
+        )
+
     async def search_catalog_document_embeddings(
         self,
         *,
