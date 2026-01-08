@@ -289,6 +289,7 @@ class CatalogEmbeddingService:
             "moneda": _serialize_metadata_value(row.get("moneda")),
             "requiere_factura": _serialize_metadata_value(row.get("requiere_factura")),
             "nombre": _serialize_metadata_value(row.get("nombre")),
+            "metadata": _serialize_metadata_value(row.get("metadata")),
         }
         resources = self._resources_for("producto", entity_id, resource_map)
         if resources:

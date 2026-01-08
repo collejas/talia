@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Sequence
 from urllib.parse import quote_plus
 from uuid import UUID
 
@@ -48,6 +49,54 @@ def _summarize_catalog_text(value: str, max_chars: int = 220) -> str:
     return truncated.rstrip() + "..."
 
 
+MAX_METADATA_REFERENCE_LINES = 40
+METADATA_KEYS_HIDE = {"linea", "linea_id", "familia", "familia_id"}
+
+
+def _normalize_metadata_display(value: Any) -> str:
+    if isinstance(value, bool):
+        return "sí" if value else "no"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return str(value)
+
+
+def _parse_metadata_dict(raw: Any) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _metadata_entries(raw: Any, *, limit: int | None = None) -> list[str]:
+    parsed = _parse_metadata_dict(raw)
+    if not parsed:
+        return []
+    filtered = [(key, parsed[key]) for key in sorted(parsed) if key not in METADATA_KEYS_HIDE]
+    if not filtered:
+        return []
+    display = filtered if limit is None else filtered[:limit]
+    lines = [f"{key}: {_normalize_metadata_display(value)}" for key, value in display]
+    if limit is not None and len(filtered) > len(display):
+        lines.append(f"...y {len(filtered) - len(display)} datos más")
+    return lines
+
+
+def _metadata_preview(raw: Any) -> str | None:
+    entries = _metadata_entries(raw, limit=3)
+    if not entries:
+        return None
+    return "; ".join(entries)
+
+
 def _catalog_match_label(match: CatalogDocumentMatch) -> str:
     for key in ("nombre", "slug", "tipo"):
         candidate = match.metadata.get(key)
@@ -56,17 +105,68 @@ def _catalog_match_label(match: CatalogDocumentMatch) -> str:
     return "sin nombre"
 
 
+def _catalog_product_summary_parts(match: CatalogDocumentMatch) -> list[str]:
+    parts: list[str] = []
+    tipo = _get_metadata_value(match, ("tipo",))
+    if tipo:
+        parts.append(tipo)
+    precio = _get_metadata_value(match, ("precio_base",))
+    moneda = _get_metadata_value(match, ("moneda",))
+    if precio:
+        precio_text = precio
+        if moneda:
+            precio_text += f" {moneda}"
+        parts.append(f"precio base {precio_text}")
+    requiere_factura = _get_metadata_value(match, ("requiere_factura",))
+    if requiere_factura:
+        parts.append(f"requiere factura {requiere_factura}")
+    return parts
+
+
+def _catalog_product_context_summary(match: CatalogDocumentMatch) -> str:
+    label = _catalog_match_label(match)
+    summary_parts = _catalog_product_summary_parts(match)
+    header = f"Producto {label}"
+    if summary_parts:
+        header += f" ({'; '.join(summary_parts)})"
+    snippet = _summarize_catalog_text(match.contenido)
+    if snippet:
+        header += f" — {snippet}"
+    metadata_preview = _metadata_preview(match.metadata.get("metadata"))
+    if metadata_preview:
+        header += f" — metadata: {metadata_preview}"
+    return header
+
+
+def _catalog_product_reference(match: CatalogDocumentMatch) -> str:
+    label = _catalog_match_label(match)
+    summary_parts = _catalog_product_summary_parts(match)
+    header = label
+    if summary_parts:
+        header += f" ({'; '.join(summary_parts)})"
+    lines: list[str] = [f"- {header}"]
+    snippet = _summarize_catalog_text(match.contenido)
+    if snippet:
+        lines.append(f"  {snippet}")
+    metadata_lines = _metadata_entries(match.metadata.get("metadata"), limit=MAX_METADATA_REFERENCE_LINES)
+    if metadata_lines:
+        lines.append("  Metadatos:")
+        lines.extend(f"    {entry}" for entry in metadata_lines)
+    return "\n".join(lines)
+
+
 def _format_catalog_matches(matches: Sequence[CatalogDocumentMatch]) -> str | None:
-    if not matches:
+    product_matches = [
+        match for match in matches if match.entity_type.lower() == "producto"
+    ]
+    if not product_matches:
         return None
     lines = ["Contexto relevante del catálogo (vector store):"]
-    for index, match in enumerate(matches[:3], start=1):
-        label = _catalog_match_label(match)
-        snippet = _summarize_catalog_text(match.contenido)
-        similarity = match.similarity
-        sim_text = f" (sim: {similarity:.3f})" if similarity is not None else ""
-        lines.append(f"{index}. {match.entity_type.title()} {label}{sim_text}: {snippet}")
-    lines.append("Los fragmentos anteriores se obtienen de la vector store autorizada del catálogo.")
+    for index, match in enumerate(product_matches[:3], start=1):
+        lines.append(f"{index}. {_catalog_product_context_summary(match)}")
+    lines.append(
+        "Uso estos fragmentos del catálogo para responder con los atributos actuales de los productos mencionados."
+    )
     return "\n".join(lines)
 
 
@@ -113,62 +213,18 @@ def _get_metadata_value(match: CatalogDocumentMatch, keys: tuple[str, ...]) -> s
 
 
 def _format_catalog_references(matches: Sequence[CatalogDocumentMatch]) -> str | None:
-    if not matches:
+    product_matches = [
+        match for match in matches if match.entity_type.lower() == "producto"
+    ]
+    if not product_matches:
         return None
-
-    lineas: list[str] = []
-    familias: list[str] = []
-    modelos: list[str] = []
-    productos: list[str] = []
-
-    for match in matches:
-        label = _catalog_match_label(match)
-        entity_type = match.entity_type.lower()
-        if entity_type == "linea":
-            active_value = match.metadata.get("activo")
-            is_active = True if active_value is None else bool(active_value)
-            if not is_active:
-                continue
-            lineas.append(label)
-        elif entity_type == "familia":
-            familia_text = label
-            linea = _get_metadata_value(match, ("linea_id", "linea"))
-            if linea:
-                familia_text += f" de la línea {linea}"
-            familias.append(familia_text)
-        elif entity_type == "modelo":
-            detalles = label
-            modelos.append(f"{detalles}")
-        elif entity_type == "producto":
-            partes: list[str] = [label]
-            tipo = _get_metadata_value(match, ("tipo",))
-            if tipo:
-                partes.append(tipo)
-            precio = _get_metadata_value(match, ("precio_base",))
-            moneda = _get_metadata_value(match, ("moneda",))
-            if precio:
-                precio_text = f"{precio}"
-                if moneda:
-                    precio_text += f" {moneda}"
-                partes.append(f"desde {precio_text}")
-            productos.append(" · ".join(partes))
-
-    if not lineas:
-        return None
-
-    if not (familias or modelos or productos):
-        return f"Líneas disponibles: {', '.join(lineas)}."
-
-    fragments = [f"Líneas disponibles: {', '.join(lineas)}."]
-    if familias:
-        fragments.append(f"Familias destacadas: {', '.join(familias)}.")
-    if modelos:
-        fragments.append(f"Modelos relacionados: {', '.join(modelos)}.")
-    if productos:
-        fragments.append(
-            f"Productos mencionados: {', '.join(productos)}; para explorar sus detalles usa Productos > Ítems."
-        )
-    return " ".join(fragments)
+    fragments: list[str] = [
+        "Datos completos del catálogo para los productos que estás consultando:"
+    ]
+    for match in product_matches[:3]:
+        fragments.append(_catalog_product_reference(match))
+    fragments.append("Visita Productos > Ítems si necesitas la ficha completa en el panel.")
+    return "\n".join(fragments)
 
 
 async def build_catalog_context(
