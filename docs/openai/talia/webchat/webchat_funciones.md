@@ -337,3 +337,37 @@
     "additionalProperties": false
   }
 }
+
+---
+
+{
+  "name": "fetch_catalog_item_details",
+  "description": "Busca en la vector store interna y retorna el registro completo con metadata de un prototipo o fraccionamiento.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "organizacion_id": {
+        "type": "string",
+        "description": "ID de la organización que se usa en el contexto del chat."
+      },
+      "query": {
+        "type": "string",
+        "description": "Nombre del prototipo o fraccionamiento que desean conocer."
+      },
+      "detail_level": {
+        "type": "string",
+        "description": "Nivel de detalle solicitado; usa el valor 'metadata' para obtener cada campo del metadata.",
+        "enum": ["metadata", "overview"]
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Cantidad máxima de coincidencias a devolver (1-5).",
+        "minimum": 1,
+        "maximum": 5
+      }
+    },
+    "required": ["organizacion_id", "query", "detail_level"],
+    "additionalProperties": false
+  }
+}

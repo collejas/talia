@@ -87,6 +87,16 @@ CURRENCY_QUANTUM = Decimal("0.01")
 MAX_PROSPECCION_BATCH = 500
 
 
+class CatalogItemDetailsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    organizacion_id: str = Field(..., min_length=1, description="UUID de la organización.")
+    query: str = Field(..., min_length=1, description="Nombre del prototipo o fraccionamiento.")
+    detail_level: Literal["metadata", "overview"] = Field(
+        "metadata", description="Nivel de detalle requerido (metadata vs overview)."
+    )
+    limit: int = Field(1, ge=1, le=5, description="Máximo de coincidencias devueltas (1-5).")
+
+
 async def _run_catalog_reindex(
     organizacion_id: UUID,
     *,
@@ -149,6 +159,90 @@ def _trigger_catalog_reindex(
         usuario_id=str(usuario_id) if usuario_id else None,
         canal=canal,
     )
+
+
+@router.post("/catalog/item-details")
+async def fetch_catalog_item_details(
+    payload: CatalogItemDetailsRequest,
+) -> dict[str, Any]:
+    try:
+        organizacion_uuid = UUID(payload.organizacion_id)
+    except ValueError:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="organizacion_id inválido.",
+        )
+
+    repo = CRMRepository()
+    service = CatalogEmbeddingService(repo)
+    try:
+        matches = await service.query_documents(
+            organizacion_uuid,
+            query=payload.query,
+            limit=payload.limit,
+        )
+    except CRMRepositoryError as exc:
+        logger.exception(
+            "catalog.item_details_search_failed",
+            extra={"organizacion_id": payload.organizacion_id, "error": str(exc)},
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail="No se pudo consultar la vector store del catálogo.",
+        ) from exc
+
+    if not matches:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="No se encontraron coincidencias para la consulta.",
+        )
+
+    items: list[dict[str, Any]] = []
+    for match in matches:
+        slug = match.metadata.get("slug")
+        item_data: dict[str, Any] | None = None
+        if isinstance(slug, str) and slug.strip():
+            try:
+                item_data = await repo.get_catalog_item_by_slug(
+                    organizacion_id=organizacion_uuid,
+                    slug=slug.strip(),
+                )
+            except CRMRepositoryError as exc:
+                logger.warning(
+                    "catalog.item_lookup_failed",
+                    extra={
+                        "organizacion_id": payload.organizacion_id,
+                        "slug": slug,
+                        "error": str(exc),
+                    },
+                )
+        metadata_value = (
+            item_data.get("metadata")
+            if item_data and item_data.get("metadata")
+            else item_data.get("metadatos")
+            if item_data
+            else None
+        )
+        metadata = metadata_value if metadata_value else match.metadata
+        items.append(
+            {
+                "nombre": item_data.get("nombre") if item_data else match.metadata.get("nombre"),
+                "slug": item_data.get("slug") if item_data else match.metadata.get("slug"),
+                "tipo": item_data.get("tipo") if item_data else match.metadata.get("tipo"),
+                "unidad": item_data.get("unidad") if item_data else None,
+                "precio_base": item_data.get("precio_base") if item_data else None,
+                "moneda": item_data.get("moneda") if item_data else match.metadata.get("moneda"),
+                "activo": item_data.get("activo") if item_data else match.metadata.get("activo"),
+                "metadata": metadata,
+                "similarity": match.similarity,
+            }
+        )
+
+    return {
+        "items": items,
+        "detail_level": payload.detail_level,
+        "source": "vector_store_supabase",
+    }
 
 
 def _map_delete_exception(
