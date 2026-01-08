@@ -599,7 +599,7 @@ class CatalogEmbeddingService:
                 sections.append(f"Modelo: {modelo_name}")
         metadata = row.get("metadata")
         if metadata:
-            summary = _safe_text(_truncate(json.dumps(metadata, ensure_ascii=False)))
+            summary = _safe_text(json.dumps(metadata, ensure_ascii=False))
             if summary:
                 sections.append(f"Metadata: {summary}")
         resources = self._resources_for("producto", row.get("id"), resource_map)

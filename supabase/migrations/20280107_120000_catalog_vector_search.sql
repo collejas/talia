@@ -3,7 +3,7 @@ BEGIN;
 CREATE OR REPLACE FUNCTION public.catalog_document_embeddings_search(
   p_organizacion_id uuid,
   p_embedding vector,
-  p_limit integer DEFAULT 5
+  p_limit integer DEFAULT 20
 )
 RETURNS TABLE (
   id uuid,

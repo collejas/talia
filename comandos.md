@@ -88,6 +88,10 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+codex resume 019b9e77-2a84-72d2-b6ed-a4c89b1b0609
+
+en la tabla o tablas que creamos catalog_document_embeddings, catalog_embeddings_audit;  o en  en donde se hace las busquedas mi asistente?
+
 codex resume 019b991d-b4f6-7fd1-b21c-9aecf6191147
 
 codex resume 019b89ad-ee4c-7ad2-b0d9-84e9f71b6306

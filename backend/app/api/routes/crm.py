@@ -161,6 +161,52 @@ def _trigger_catalog_reindex(
     )
 
 
+def _normalize_metadata_value(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, Mapping):
+        return {str(key): val for key, val in value.items() if val is not None}
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, Mapping):
+            return {str(key): val for key, val in parsed.items() if val is not None}
+    return None
+
+
+def _extract_metadata_from_content(content: str) -> dict[str, Any] | None:
+    if not content:
+        return None
+    marker = "Metadata:"
+    index = content.find(marker)
+    if index == -1:
+        return None
+    start = content.find("{", index + len(marker))
+    if start == -1:
+        return None
+    depth = 0
+    end = None
+    for pos in range(start, len(content)):
+        char = content[pos]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                end = pos + 1
+                break
+    if end is None:
+        return None
+    snippet = content[start:end]
+    try:
+        metadata = json.loads(snippet)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(metadata, Mapping):
+        return {str(key): val for key, val in metadata.items() if val is not None}
+    return None
+
+
 @router.post("/catalog/item-details")
 async def fetch_catalog_item_details(
     payload: CatalogItemDetailsRequest,
@@ -223,7 +269,19 @@ async def fetch_catalog_item_details(
             if item_data
             else None
         )
-        metadata = metadata_value if metadata_value else match.metadata
+        content_metadata = _extract_metadata_from_content(match.contenido)
+        normalized_metadata = _normalize_metadata_value(metadata_value)
+        normalized_match = _normalize_metadata_value(match.metadata)
+        merged_metadata: dict[str, Any] = {}
+        if normalized_match:
+            merged_metadata.update(normalized_match)
+        if normalized_metadata:
+            merged_metadata.update(normalized_metadata)
+        if content_metadata:
+            merged_metadata.update(content_metadata)
+        metadata = merged_metadata or (
+            metadata_value if isinstance(metadata_value, Mapping) else match.metadata
+        )
         items.append(
             {
                 "nombre": item_data.get("nombre") if item_data else match.metadata.get("nombre"),
