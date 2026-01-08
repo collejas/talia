@@ -67,6 +67,7 @@ from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.brevo import process_brevo_events
 from app.services.catalog_embeddings import CatalogEmbeddingService
+from app.services.catalog_fraccionamientos import list_catalog_fraccionamientos as list_fraccionamientos
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_contact_sender import contact_sender
@@ -3635,6 +3636,17 @@ class CRMModeloProductoUpdate(BaseModel):
     familia_id: UUID | None = None
 
 
+class CRMCatalogFraccionamiento(BaseModel):
+    nombre: str
+    descripcion: str | None = None
+    segmento: str | None = None
+    linea: str | None = None
+    activo: bool
+    prototipos: list[str] = Field(default_factory=list)
+
+
+
+
 class LeadQuoteItemPayload(BaseModel):
     catalog_item_id: UUID | None = None
     titulo: str | None = Field(default=None, max_length=200)
@@ -5084,6 +5096,29 @@ async def catalog_vector_store_audit(
         limit=limit,
     )
     return [CatalogVectorStoreAuditEntry.model_validate(row) for row in rows]
+
+
+@router.get(
+    "/catalog/fraccionamientos",
+    response_model=list[CRMCatalogFraccionamiento],
+)
+async def catalog_fraccionamientos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    include_inactive: bool = Query(default=False),
+    prototipos_limit: Annotated[int, Query(ge=1, le=20)] = 6,
+) -> list[CRMCatalogFraccionamiento]:
+    try:
+        rows = await list_fraccionamientos(
+            repo,
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            prototipos_limit=prototipos_limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMCatalogFraccionamiento.model_validate(row) for row in rows]
 
 
 @router.get("/productos/lineas", response_model=list[CRMLineaDeNegocio])

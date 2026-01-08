@@ -341,6 +341,36 @@
 ---
 
 {
+  "name": "list_catalog_fraccionamientos",
+  "description": "Devuelve el listado de fraccionamientos activos con zona/segmento y algunos prototipos representativos.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "organizacion_id": {
+        "type": "string",
+        "description": "ID de la organización cuyo catálogo queremos listar."
+      },
+      "include_inactive": {
+        "type": "boolean",
+        "description": "Incluir fraccionamientos inactivos en la lista.",
+        "default": false
+      },
+      "prototipos_limit": {
+        "type": "integer",
+        "description": "Cuántos prototipos representar por fraccionamiento (1-20).",
+        "minimum": 1,
+        "maximum": 20
+      }
+    },
+    "required": ["organizacion_id"],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
   "name": "fetch_catalog_item_details",
   "description": "Busca en la vector store interna y retorna el registro completo con metadata de un prototipo o fraccionamiento.",
   "strict": false,

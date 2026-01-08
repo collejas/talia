@@ -391,7 +391,9 @@ export function FamiliasView({ lineas, familias }: FamiliasViewProps) {
               Una familia necesita una línea. Crea primero una línea para poder asignarla.
             </div>
           ) : (
-            <ScrollArea className="max-h-[600px] rounded-xl bg-background p-4">
+            <ScrollArea
+              className="h-[min(60vh,600px)] max-h-[600px] rounded-xl bg-background p-4"
+            >
               <div className="space-y-4">
                 {visibleFamilias.map((familia) => (
                   <Card key={familia.id}>

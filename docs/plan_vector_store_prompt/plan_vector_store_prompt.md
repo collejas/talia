@@ -17,11 +17,12 @@ Permitir que el prompt que ejecuta Tal-IA consulte directamente la vector store 
 
 3. **Ajustar backend si es necesario** [x]
    - [x] Implementar la nueva ruta/tool que envía la query al vector store (puede ser un nuevo endpoint en `api/catalog` o reinvocar `build_catalog_context` con parámetros ajustados).
+   - [x] Crear un endpoint y función dedicada para listar los fraccionamientos activos, de modo que el prompt tenga una fuente confiable para ese listado general.
    - [x] Asegurar que la herramienta no repite los pasos de inyección de contexto para que el prompt tenga control total sobre qué usar.
 
 4. **Probar end-to-end** [ ]
-   - [ ] Validar en webchat que al pedir “detalles completos de Terrace” el prompt usa la tool, reproduce cada campo de metadata y conserva la narrativa R.E.A.
-   - [ ] Verificar que las respuestas generales siguen usando el builder de context actual y no la herramienta directa.
+   - [ ] Validar en webchat que al pedir “detalles completos de Terrace” el prompt usa `fetch_catalog_item_details`, reproduce cada campo de metadata y conserva la narrativa R.E.A.
+   - [ ] Verificar que la nueva función `list_catalog_fraccionamientos` devuelve todos los desarrollos activos y que el prompt la usa para la pregunta “¿qué fraccionamientos tienen?” antes de listar modelos.
 
 5. **Documentar cambios** [x]
    - [x] Actualizar `docs/openai/talia/webchat/webchat_prompt.md` con referencias al uso de la tool.
