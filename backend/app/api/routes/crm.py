@@ -143,12 +143,12 @@ def _trigger_catalog_reindex(
             extra={"value": organizacion_value},
         )
         return
-        background_tasks.add_task(
-            _run_catalog_reindex,
-            organizacion_id,
-            usuario_id=str(usuario_id) if usuario_id else None,
-            canal=canal,
-        )
+    background_tasks.add_task(
+        _run_catalog_reindex,
+        organizacion_id,
+        usuario_id=str(usuario_id) if usuario_id else None,
+        canal=canal,
+    )
 
 
 def _map_delete_exception(
