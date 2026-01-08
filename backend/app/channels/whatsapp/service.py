@@ -25,7 +25,7 @@ from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
-from app.services.catalog_context import append_catalog_references, build_catalog_context
+from app.services.catalog_context import build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 
 from . import schemas

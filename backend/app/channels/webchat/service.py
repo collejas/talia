@@ -42,7 +42,6 @@ from app.services import openai as openai_service
 from app.services.calendar import CalendarError
 from app.services.catalog_context import (
     CatalogContext,
-    append_catalog_references,
     build_catalog_context,
 )
 from app.services.storage import StorageError
@@ -1951,8 +1950,6 @@ async def handle_message(
     if side_effects.get("booking"):
         metadata.booking = side_effects["booking"]
 
-    if assistant_reply and catalog_context:
-        assistant_reply = append_catalog_references(assistant_reply, catalog_context)
     if assistant_reply:
         try:
             message_metadata = {

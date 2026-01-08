@@ -21,7 +21,7 @@ from app.services import conversation_summary, storage
 from app.services.context_formatter import build_crm_context_lines
 from app.services import openai as openai_service
 from app.services.storage import StorageError
-from app.services.catalog_context import append_catalog_references, build_catalog_context
+from app.services.catalog_context import build_catalog_context
 
 logger = get_logger("app.channels.messenger")
 
@@ -474,8 +474,6 @@ async def _handle_message(
         reply_text = DEFAULT_FALLBACK
     else:
         reply_text = _extract_text_from_response(result.response) or DEFAULT_FALLBACK
-
-    reply_text = append_catalog_references(reply_text, catalog_context)
 
     if reply_text:
         sent_ok = await _send_messenger_reply(
