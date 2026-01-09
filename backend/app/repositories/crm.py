@@ -1524,6 +1524,7 @@ class CRMRepository:
         trigger: str,
         metadata: dict[str, Any] | None = None,
         notification_sid: str | None = None,
+        canal: str | None = None,
     ) -> None:
         await self._insert_assignment_audit(
             organizacion_id=organizacion_id,
@@ -1534,6 +1535,7 @@ class CRMRepository:
             trigger=trigger,
             metadata=metadata,
             notification_sid=notification_sid,
+            canal=canal,
         )
 
     async def _insert_assignment_audit(
@@ -1547,6 +1549,7 @@ class CRMRepository:
         trigger: str,
         metadata: dict[str, Any] | None,
         notification_sid: str | None = None,
+        canal: str | None = None,
     ) -> None:
         payload: dict[str, Any] = {
             "organizacion_id": str(organizacion_id),
@@ -1562,9 +1565,11 @@ class CRMRepository:
             payload["contacto_id"] = str(contact_id)
         if notification_sid:
             payload["notificacion_message_sid"] = notification_sid
+        if canal:
+            payload["canal"] = canal
         await self._request(
             "POST",
-            "/rest/v1/asignaciones_vendedores_whatsapp",
+            "/rest/v1/asignaciones_vendedores",
             json=payload,
             prefer="return=minimal",
         )
@@ -1632,7 +1637,7 @@ class CRMRepository:
             params["organizacion_id"] = f"in.({org_values})"
         resp = await self._request(
             "GET",
-            "/rest/v1/asignaciones_vendedores_whatsapp",
+            "/rest/v1/asignaciones_vendedores",
             params=params,
         )
         data = resp.json() or []
@@ -1666,7 +1671,7 @@ class CRMRepository:
             payload["metadata"] = metadata
         await self._request(
             "PATCH",
-            "/rest/v1/asignaciones_vendedores_whatsapp",
+            "/rest/v1/asignaciones_vendedores",
             params=params,
             json=payload,
             prefer="return=minimal",
@@ -4254,7 +4259,7 @@ class CRMRepository:
         }
         resp = await self._request(
             "GET",
-            "/rest/v1/v_asignaciones_vendedores_whatsapp",
+            "/rest/v1/v_asignaciones_vendedores",
             params=params,
         )
         data = resp.json() or []

@@ -265,6 +265,7 @@ async def notify_sales_rep(
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
                 notification_sid=send_result.sid,
+                canal="webchat",
             )
     except (CRMRepositoryError, ValueError) as exc:
         logger.warning(

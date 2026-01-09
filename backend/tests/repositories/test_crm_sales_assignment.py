@@ -57,7 +57,7 @@ async def test_assign_sales_rep_if_needed_updates_when_missing(
             assert method == "PATCH"
             assert params is not None and "id" in params
             assert json == {"asignado_a_usuario_id": str(rep_id)}
-        elif path == "/rest/v1/asignaciones_vendedores_whatsapp":
+        elif path == "/rest/v1/asignaciones_vendedores":
             assert method == "POST"
             assert json and json.get("oportunidad_id")
         else:

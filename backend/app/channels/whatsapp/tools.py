@@ -839,6 +839,7 @@ async def _notify_sales_rep(
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
                 notification_sid=send_result.sid,
+                canal="whatsapp",
             )
     except (ValueError, CRMRepositoryError) as exc:
         logger.warning(

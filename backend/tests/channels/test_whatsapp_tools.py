@@ -87,6 +87,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     assert sent["template_vars"]["2"] == "Lead Demo"
     assert sent["template_vars"]["6"] == "+529991112233"
     assert "information_email" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
+    assert dummy_repo.audit_calls[-1]["canal"] == "whatsapp"
 
 
 @pytest.mark.asyncio

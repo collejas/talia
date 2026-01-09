@@ -22,7 +22,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 ## 3. Persistencia y auditoría de asignaciones
 - [x] (Opcional) Crear tabla `asignaciones_ventas` con `conversation_id`, `oportunidad_id`, `usuario_id`, `asignado_en`.
 - [x] Registrar cada asignación (aunque se repita el mismo vendedor) para auditoría y métricas.
-- [x] Crear la vista `v_asignaciones_vendedores_whatsapp` para combinar conversación, contacto y vendedor.
+- [x] Crear la vista `v_asignaciones_vendedores` para combinar conversación, contacto y vendedor.
 - [x] Registrar el acuse del vendedor (botón “Aceptar”): guardar `notificacion_message_sid`, `aceptado_en`, `aceptado_por_usuario_id` y el canal (`aceptado_via`) para medir el SLA de respuesta.
 
 ## 4. Notificación cuando el bot completa calificación
@@ -99,7 +99,7 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 
 - {x} Notificaciones y auditoría
   - {x} Crear un trigger `restart_conversation` para `_notify_sales_rep`, reutilizando el vendedor previo.
-  - {x} Registrar ese trigger en `asignaciones_vendedores_whatsapp` para tener evidencia del nuevo ciclo.
+  - {x} Registrar ese trigger en `asignaciones_vendedores`, dejando anotado el canal (`canal = 'whatsapp'` o `canal = 'webchat'`) para tener evidencia del nuevo ciclo.
 
 - {x} Prompt y tools
   - {x} Añadir una tool (o argumento) que permita al asistente solicitar la creación de una nueva oportunidad cuando detecte un reinicio real.
