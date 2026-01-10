@@ -2705,6 +2705,34 @@ async def _execute_function_call(
             tarjeta_id=tarjeta_id,
             contact=contact,
         )
+        try:
+            await webchat_notifications.notify_sales_rep(
+                context=context,
+                trigger="booking_confirmed",
+                contact=contact,
+                opportunity_id=str(tarjeta_id),
+                resumen="Cita agendada",
+                notes=(
+                    f"Cita confirmada para {booking_response.start_at.isoformat()} "
+                    f"(booking {booking_response.booking_id})."
+                ),
+                email=contact.get("correo"),
+                extra={
+                    "booking_id": booking_response.booking_id,
+                    "slot_start": booking_response.start_at.isoformat(),
+                    "slot_end": booking_response.end_at.isoformat()
+                    if booking_response.end_at
+                    else None,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "webchat.booking_notify_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "tarjeta_id": tarjeta_id,
+                },
+            )
 
         booking_payload = {
             "booking_id": booking_response.booking_id,

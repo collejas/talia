@@ -3,18 +3,21 @@ curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
   -X POST https://content.twilio.com/v1/Content \
   -H "Content-Type: application/json" \
   -d '{
-    "friendly_name": "nuevo_lead_boton_aceptar",
+    "friendly_name": "cita_vendedor",
     "language": "es",
     "types": {
-      "twilio/text": {
-        "body": "👋 Hola {{1}}, tienes un nuevo lead asignado.\n\n🧑‍💼 Prospecto: {{2}}\n🏢 Empresa: {{3}}\n📝 Resumen: {{4}}\n✅ Próximo paso: {{5}}\n📞 Contacto: {{6}}\n\nSaludos, Tal-IA",
-        "actions": [
-          {
-            "id": "boton_aceptar",
-            "title": "Aceptar",
-            "type": "URL"
-          }
-        ]
+      "twilio/quick-reply": {
+        "actions": [{"id": "Confirmar", "title": "Confirmar"}],
+        "body": "Hola {{1}}, tu cliente {{2}} tiene cita agendada:\n\n📅 Fecha: {{3}}\n🕒 Hora: {{4}}\n🏡 Modelo: {{5}}\n📍 Ubicación: {{6}}\n☎️ Contacto: {{7}}\n\nConfirma si todo está listo y, si necesitas apoyo, responde aquí.",
+        "variables": {
+          "1": "Nombre vendedor",
+          "2": "Nombre cliente",
+          "3": "Fecha",
+          "4": "Hora",
+          "5": "Modelo",
+          "6": "Ubicación",
+          "7": "Teléfono"
+        }
       }
     }
   }'
@@ -22,18 +25,18 @@ curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
 
 # solicitar la revisión a WhatsApp
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X POST https://content.twilio.com/v1/Content/HX651f408612e52264a3f12b772461340b/ApprovalRequests/whatsapp \
+  -X POST https://content.twilio.com/v1/Content/HX631a650d5232ea74f5bb4d02f3b0a89a/ApprovalRequests/whatsapp \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "nuevo_lead_quick_reply",
+    "name": "cita_vendedor",
     "category": "UTILITY"
   }'
 
 # Ver aprobacion
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X GET https://content.twilio.com/v1/Content/HX464b6e47f985053d5933d0d88f8d09a1/ApprovalRequests
+  -X GET https://content.twilio.com/v1/Content/HXafdb8d049417c519f591cfd8a6f4ed04/ApprovalRequests
 
 # Ver como quedo la plantilla:
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X GET https://content.twilio.com/v1/Content/HX464b6e47f985053d5933d0d88f8d09a1
+  -X GET https://content.twilio.com/v1/Content/HX9175333a30544c6f01cff0530a3e7362
 

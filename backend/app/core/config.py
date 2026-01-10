@@ -323,6 +323,14 @@ class Settings(BaseSettings):
             "TALIA_WHATSAPP_SALES_TEMPLATE_SID",
         ),
     )
+    whatsapp_sales_appointment_template_sid: str | None = Field(
+        default=None,
+        description="Content SID de la plantilla de WhatsApp para notificar a vendedores sobre citas agendadas.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_SALES_APPOINTMENT_TEMPLATE_SID",
+            "TALIA_WHATSAPP_SALES_APPOINTMENT_TEMPLATE_SID",
+        ),
+    )
     webchat_sales_template_sid: str | None = Field(
         default=None,
         description="Content SID de la plantilla para notificar a vendedores cuando el lead viene del webchat.",

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.channels.whatsapp import service as whatsapp_service
@@ -28,6 +30,70 @@ def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
         return None
     email = str(contact.get("correo") or "").strip()
     return email or None
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _format_booking_datetime(value: datetime | None) -> tuple[str, str]:
+    if not value:
+        return "Pendiente", "Pendiente"
+    tz_name = settings.webchat_calendar_timezone or "UTC"
+    try:
+        target_tz = ZoneInfo(tz_name)
+    except Exception:
+        target_tz = timezone.utc
+    localized = value.astimezone(target_tz)
+    return localized.strftime("%d/%m/%Y"), localized.strftime("%H:%M")
+
+
+def _extract_contact_location(contact: dict[str, Any]) -> str:
+    raw_data = contact.get("contacto_datos") or {}
+    if isinstance(raw_data, str):
+        try:
+            raw_data = json.loads(raw_data)
+        except json.JSONDecodeError:
+            raw_data = {}
+    ubicacion = raw_data.get("ubicacion") or {}
+    if isinstance(ubicacion, str):
+        try:
+            ubicacion = json.loads(ubicacion)
+        except json.JSONDecodeError:
+            ubicacion = {}
+    parts: list[str] = []
+    for field in ("nom_mun", "nom_ent"):
+        candidate = ubicacion.get(field)
+        if isinstance(candidate, str):
+            candidate = candidate.strip()
+        if candidate:
+            parts.append(candidate)
+    if not parts:
+        fallback = raw_data.get("formatted_address") or raw_data.get("direccion")
+        if fallback:
+            parts.append(str(fallback).strip())
+    if not parts:
+        return "Pendiente de confirmación"
+    return ", ".join(parts)
+
+
+def _extract_model_description(contact: dict[str, Any]) -> str:
+    for key in ("notes", "necesidad_proposito"):
+        candidate = contact.get(key)
+        if isinstance(candidate, str):
+            cleaned = candidate.strip()
+            if cleaned:
+                return cleaned.split("\n", 1)[0]
+    return "Modelo pendiente"
 
 
 def _compose_sales_notification_message(
@@ -83,6 +149,30 @@ def _build_template_variables(
         "3": company or "Sin empresa",
         "4": summary,
         "5": phone or "N/D",
+    }
+
+
+def _build_booking_template_variables(
+    *,
+    contact: dict[str, Any],
+    seller_name: str,
+    extra: dict[str, Any] | None,
+) -> dict[str, str]:
+    slot_iso = (extra or {}).get("slot_start")
+    date_text, time_text = _format_booking_datetime(_parse_iso_datetime(slot_iso))
+    client_name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
+    model = _extract_model_description(contact)
+    location = _extract_contact_location(contact)
+    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
+
+    return {
+        "1": seller_name,
+        "2": client_name,
+        "3": date_text,
+        "4": time_text,
+        "5": model,
+        "6": location,
+        "7": phone,
     }
 
 
@@ -198,15 +288,29 @@ async def notify_sales_rep(
         email=email,
     )
 
-    template_sid = settings.webchat_sales_template_sid or settings.whatsapp_sales_template_sid
-    template_vars = None
-    if template_sid:
-        template_vars = _build_template_variables(
+    appointment_template_sid = settings.whatsapp_sales_appointment_template_sid
+    fallback_template_sid = (
+        settings.webchat_sales_template_sid or settings.whatsapp_sales_template_sid
+    )
+
+    template_sid: str | None = None
+    template_vars: dict[str, str] | None = None
+    if trigger == "booking_confirmed" and appointment_template_sid:
+        template_sid = appointment_template_sid
+        template_vars = _build_booking_template_variables(
             contact=contact_record,
-            resumen=resumen,
-            notes=notes,
             seller_name=seller_name,
+            extra=extra,
         )
+    else:
+        template_sid = fallback_template_sid
+        if template_sid:
+            template_vars = _build_template_variables(
+                contact=contact_record,
+                resumen=resumen,
+                notes=notes,
+                seller_name=seller_name,
+            )
 
     try:
         send_result = await whatsapp_service.send_manual_message(
