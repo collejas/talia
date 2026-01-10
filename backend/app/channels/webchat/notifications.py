@@ -198,7 +198,7 @@ async def notify_sales_rep(
         email=email,
     )
 
-    template_sid = settings.webchat_sales_template_sid
+    template_sid = settings.webchat_sales_template_sid or settings.whatsapp_sales_template_sid
     template_vars = None
     if template_sid:
         template_vars = _build_template_variables(

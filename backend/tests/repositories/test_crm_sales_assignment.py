@@ -60,6 +60,7 @@ async def test_assign_sales_rep_if_needed_updates_when_missing(
         elif path == "/rest/v1/asignaciones_vendedores":
             assert method == "POST"
             assert json and json.get("oportunidad_id")
+            assert json.get("canal") == "assistant"
         else:
             pytest.fail(f"Unexpected path {path}")
         return SimpleNamespace(status_code=200, json=lambda: [])

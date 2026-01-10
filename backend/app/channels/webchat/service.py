@@ -2565,6 +2565,15 @@ async def _execute_function_call(
                 "webchat.close_lead.ensure_opportunity_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
+        if not contact_record:
+            try:
+                convo_meta = await storage.fetch_conversation(context.conversation_id)
+            except StorageError:
+                convo_meta = {}
+            resolved_contact_id = str(convo_meta.get("contact_id") or "").strip()
+            if resolved_contact_id and resolved_contact_id != context.contact_id:
+                contact_record = await _resolve_contact(resolved_contact_id)
+                context.contact_id = resolved_contact_id
         await webchat_notifications.notify_sales_rep(
             context=lead_context,
             trigger="close_lead",

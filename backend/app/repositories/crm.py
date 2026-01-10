@@ -1138,6 +1138,7 @@ class CRMRepository:
                 contact_id=str(contacto_id),
                 contact_ready=contact_ready,
                 require_contact_ready=require_contact_ready,
+                channel=canal,
             )
             return result_id, False, restart_sequence
 
@@ -1201,6 +1202,7 @@ class CRMRepository:
                 contact_id=str(contacto_id),
                 contact_ready=contact_ready,
                 require_contact_ready=require_contact_ready,
+                channel=canal,
             )
             return result_id, False, restart_sequence
 
@@ -1313,6 +1315,7 @@ class CRMRepository:
                 contact_id=str(contacto_id),
                 contact_ready=contact_ready,
                 require_contact_ready=require_contact_ready,
+                channel=canal,
             )
 
         if parent_row and assigned_user_id:
@@ -1430,6 +1433,7 @@ class CRMRepository:
         contact_id: str | None = None,
         contact_ready: bool | None = None,
         require_contact_ready: bool = False,
+        channel: str | None = None,
     ) -> UUID | None:
         """Asigna un vendedor round-robin cuando la oportunidad aún no tiene dueño."""
         if current_assignee:
@@ -1474,6 +1478,7 @@ class CRMRepository:
                 "usuario_id": str(candidate["usuario_id"]),
             },
         )
+        assignment_channel = (channel or "").strip() or "assistant"
         await self._insert_assignment_audit(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
@@ -1482,6 +1487,7 @@ class CRMRepository:
             contact_id=contact_id,
             trigger="auto_assign",
             metadata={"source": "round_robin"},
+            canal=assignment_channel,
         )
         return candidate["usuario_id"]
 
