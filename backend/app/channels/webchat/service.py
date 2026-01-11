@@ -38,6 +38,7 @@ from app.services import (
     storage,
     webchat_followups,
 )
+from app.services.time_utils import get_current_time_reference
 from app.channels.webchat import notifications as webchat_notifications
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
@@ -2342,6 +2343,21 @@ async def _run_assistant_turn(
 
     has_attachments = bool(user_message.attachments)
     base_input: list[dict[str, Any]] = []
+    base_input.append(
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Fecha y hora del servidor: "
+                        + get_current_time_reference()
+                        + " Si el usuario pregunta por la fecha actual, responde con esta información."
+                    ),
+                }
+            ],
+        }
+    )
     if not has_attachments:
         base_input.append(
             {

@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.services import conversation_summary, storage
 from app.services.context_formatter import build_crm_context_lines
+from app.services.time_utils import get_current_time_reference
 from app.services import openai as openai_service
 from app.services.storage import StorageError
 from app.services.catalog_context import build_catalog_context
@@ -394,6 +395,22 @@ async def _handle_message(
         summary_text=summary_text,
         summary_created_en=summary_created_en,
         catalog_context=catalog_context.text if catalog_context else None,
+    )
+    initial_input.insert(
+        0,
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Fecha y hora del servidor: "
+                        + get_current_time_reference()
+                        + " Si el usuario pregunta por la fecha actual, responde con esta información."
+                    ),
+                }
+            ],
+        },
     )
 
     request_kwargs: dict[str, Any] = {

@@ -27,6 +27,7 @@ from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 from app.services.catalog_context import build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
+from app.services.time_utils import get_current_time_reference
 
 from . import schemas
 
@@ -585,14 +586,31 @@ async def _generate_assistant_reply(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
+    initial_input = _build_openai_input(
+        message,
+        context_data=context_payload,
+        summary_text=summary_text,
+        summary_created_en=summary_created_en,
+        catalog_context=catalog_context,
+    )
+    initial_input.insert(
+        0,
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Fecha y hora del servidor: "
+                        + get_current_time_reference()
+                        + " Si el usuario pregunta por la fecha actual, responde con esta información."
+                    ),
+                }
+            ],
+        },
+    )
     request_kwargs: dict[str, Any] = {
-        "input": _build_openai_input(
-            message,
-            context_data=context_payload,
-            summary_text=summary_text,
-            summary_created_en=summary_created_en,
-            catalog_context=catalog_context,
-        ),
+        "input": initial_input,
         "store": True,
         "metadata": metadata_payload,
     }

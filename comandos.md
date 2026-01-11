@@ -89,8 +89,6 @@ sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
 
-codex resume 019ba4c1-04a3-7a20-b798-3f87e07129d3
-
 codex resume 019ba37d-32a4-7ef0-b2c4-225d5fd13a65
 
 codex resume 019b9e77-2a84-72d2-b6ed-a4c89b1b0609
