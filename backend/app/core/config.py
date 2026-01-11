@@ -295,7 +295,7 @@ class Settings(BaseSettings):
             "WHATSAPP_INACTIVITY_MINUTES",
             "TALIA_WHATSAPP_INACTIVITY_MINUTES",
         ),
-        ge=1,
+        ge=2,
     )
     whatsapp_reengage_minutes: int = Field(
         default=30,
@@ -304,7 +304,7 @@ class Settings(BaseSettings):
             "WHATSAPP_REENGAGE_MINUTES",
             "TALIA_WHATSAPP_REENGAGE_MINUTES",
         ),
-        ge=5,
+        ge=3,
     )
     whatsapp_escalate_minutes: int = Field(
         default=120,
@@ -313,7 +313,7 @@ class Settings(BaseSettings):
             "WHATSAPP_ESCALATE_MINUTES",
             "TALIA_WHATSAPP_ESCALATE_MINUTES",
         ),
-        ge=15,
+        ge=5,
     )
     whatsapp_sales_template_sid: str | None = Field(
         default=None,

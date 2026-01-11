@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.assistants.tool_runtime import ToolRuntimeContext
 from app.channels.webchat import service as webchat_service
@@ -541,6 +542,32 @@ async def _handle_schedule_demo(
         tarjeta_id=tarjeta_id,
         contact=contact_record,
     )
+    try:
+        await _notify_sales_rep(
+            context=context,
+            trigger="booking_confirmed",
+            contact=contact_record,
+            opportunity_id=tarjeta_id,
+            resumen="Cita agendada",
+            notes=(
+                f"Cita confirmada para {booking_response.start_at.isoformat()} "
+                f"(booking {booking_response.booking_id})."
+            ),
+            email=contact_record.get("correo"),
+            extra={
+                "booking_id": booking_response.booking_id,
+                "slot_start": booking_response.start_at.isoformat(),
+                "slot_end": booking_response.end_at.isoformat() if booking_response.end_at else None,
+            },
+        )
+    except Exception:
+        logger.warning(
+            "whatsapp.booking_notify_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+            },
+        )
 
     booking_payload = {
         "booking_id": booking_response.booking_id,
@@ -595,6 +622,29 @@ async def _handle_reschedule_demo(
         tarjeta_id=booking_response.tarjeta_id,
         contact=contact,
     )
+    try:
+        await _notify_sales_rep(
+            context=context,
+            trigger="booking_confirmed",
+            contact=contact,
+            opportunity_id=booking_response.tarjeta_id,
+            resumen="Cita agendada",
+            notes=f"Cita confirmada para {booking_response.start_at.isoformat()} (booking {booking_response.booking_id}).",
+            email=contact.get("correo"),
+            extra={
+                "booking_id": booking_response.booking_id,
+                "slot_start": booking_response.start_at.isoformat(),
+                "slot_end": booking_response.end_at.isoformat() if booking_response.end_at else None,
+            },
+        )
+    except Exception:
+        logger.warning(
+            "whatsapp.booking_notify_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+            },
+        )
     return {
         "status": "ok",
         "booking_id": booking_response.booking_id,
@@ -765,16 +815,26 @@ async def _notify_sales_rep(
         email=email,
         extra=extra,
     )
-    template_sid = settings.whatsapp_sales_template_sid
-    template_vars = None
-    if template_sid:
-        template_vars = _build_sales_template_variables(
+    appointment_template = settings.whatsapp_sales_appointment_template_sid
+    template_sid: str | None = None
+    template_vars: dict[str, str] | None = None
+    if trigger == "booking_confirmed" and appointment_template:
+        template_sid = appointment_template
+        template_vars = _build_booking_template_variables(
             contact=contact_record,
-            resumen=resumen,
-            notes=notes,
-            extra=extra,
             seller_name=seller_name,
+            extra=extra,
         )
+    else:
+        template_sid = settings.whatsapp_sales_template_sid
+        if template_sid:
+            template_vars = _build_sales_template_variables(
+                contact=contact_record,
+                resumen=resumen,
+                notes=notes,
+                extra=extra,
+                seller_name=seller_name,
+            )
 
     try:
         from app.channels.whatsapp import service as whatsapp_service
@@ -891,6 +951,8 @@ def _compose_sales_notification_message(
             lines.append(f"Correo confirmado para envío: {email}")
     elif trigger == "close_lead":
         lines.append("Acción: completó la calificación del asistente.")
+    elif trigger == "booking_confirmed":
+        lines.append("Acción: agendó una cita.")
 
     if resumen:
         lines.append(f"Necesidad: {resumen}")
@@ -926,4 +988,91 @@ def _build_sales_template_variables(
         "4": summary_text,
         "5": next_action or "Contacta y confirma próximos pasos.",
         "6": phone or "N/D",
+    }
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _format_booking_datetime(value: datetime | None) -> tuple[str, str]:
+    if not value:
+        return "Pendiente", "Pendiente"
+    tz_name = settings.webchat_calendar_timezone or "UTC"
+    try:
+        target_tz = ZoneInfo(tz_name)
+    except Exception:
+        target_tz = timezone.utc
+    localized = value.astimezone(target_tz)
+    return localized.strftime("%d/%m/%Y"), localized.strftime("%H:%M")
+
+
+def _extract_contact_location(contact: dict[str, Any]) -> str:
+    raw_data = contact.get("contacto_datos") or {}
+    if isinstance(raw_data, str):
+        try:
+            raw_data = json.loads(raw_data)
+        except json.JSONDecodeError:
+            raw_data = {}
+    ubicacion = raw_data.get("ubicacion") or {}
+    if isinstance(ubicacion, str):
+        try:
+            ubicacion = json.loads(ubicacion)
+        except json.JSONDecodeError:
+            ubicacion = {}
+    parts: list[str] = []
+    for field in ("nom_mun", "nom_ent"):
+        candidate = ubicacion.get(field)
+        if isinstance(candidate, str):
+            candidate = candidate.strip()
+        if candidate:
+            parts.append(candidate)
+    if not parts:
+        fallback = raw_data.get("formatted_address") or raw_data.get("direccion")
+        if fallback:
+            parts.append(str(fallback).strip())
+    if not parts:
+        return "Pendiente de confirmación"
+    return ", ".join(parts)
+
+
+def _extract_model_description(contact: dict[str, Any]) -> str:
+    for key in ("notes", "necesidad_proposito"):
+        candidate = contact.get(key)
+        if isinstance(candidate, str):
+            cleaned = candidate.strip()
+            if cleaned:
+                return cleaned.split("\n", 1)[0]
+    return "Modelo pendiente"
+
+
+def _build_booking_template_variables(
+    *,
+    contact: dict[str, Any],
+    seller_name: str,
+    extra: dict[str, Any] | None,
+) -> dict[str, str]:
+    slot_iso = (extra or {}).get("slot_start")
+    date_text, time_text = _format_booking_datetime(_parse_iso_datetime(slot_iso))
+    client_name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
+    model = _extract_model_description(contact)
+    location = _extract_contact_location(contact)
+    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
+    return {
+        "1": seller_name,
+        "2": client_name,
+        "3": date_text,
+        "4": time_text,
+        "5": model,
+        "6": location,
+        "7": phone,
     }
