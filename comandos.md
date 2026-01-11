@@ -187,24 +187,25 @@ Usa el script `backend/scripts/backup_db.py`, que ya carga `backend/.env` o `.en
 
 - Respaldo completo (datos + esquema) **y** roles/permisos:
   ```bash
-  cd ~/talia
-  poetry run python backend/scripts/backup_db.py --output-dir backups
+  cd /var/www/talia/backend
+  poetry run python scripts/backup_db.py --output-dir ../backups
   ```
 - Sólo dump completo y de esquema (sin roles globales):
   ```bash
-  cd ~/talia
-  poetry run python backend/scripts/backup_db.py --output-dir backups --no-globals
+  cd /var/www/talia/backend
+  poetry run python scripts/backup_db.py --output-dir backups --no-globals
   ```
 - Sólo roles/permisos globales (se creará también un `.sql` de esquema en la misma carpeta, puedes ignorarlo si no lo necesitas):
   ```bash
-  cd ~/talia
-  poetry run python backend/scripts/backup_db.py --mode schema --globals --output-dir backups
+  cd /var/www/talia/backend
+  poetry run python scripts/backup_db.py --mode schema --globals --output-dir ../backups
   ```
 - Sólo dump completo:
   ```bash
-  cd ~/talia
-  poetry run python backend/scripts/backup_db.py --mode full --no-globals --output-dir backups
+  cd /var/www/talia/backend
+  poetry run python scripts/backup_db.py --mode full --no-globals --output-dir ../backups
   ```
+
 
 Dentro de cada carpeta verás los archivos `<prefijo>_<timestamp>_{full.dump|schema.sql|globals.sql}`.
 
