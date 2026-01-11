@@ -126,7 +126,7 @@ async def execute_tool(
         return await _handle_reschedule_demo(arguments, context)
 
     if func == "cancel_demo":
-        return await _handle_cancel_demo(arguments)
+        return await _handle_cancel_demo(arguments, context)
 
     raise ValueError(f"La función '{func}' no está disponible en WhatsApp")
 
@@ -527,6 +527,8 @@ async def _handle_schedule_demo(
         raise ValueError(str(exc)) from exc
 
     booking_response = webchat_service._build_booking_response(booking)
+    contact = await _resolve_contact(context.contact_id)
+    contact = await _resolve_contact(context.contact_id)
     booking_response.hold_id = hold.get("hold_id")
     contact_record = contact
     await webchat_service._sync_booking_with_opportunity(
@@ -657,7 +659,7 @@ async def _handle_reschedule_demo(
     }
 
 
-async def _handle_cancel_demo(arguments: dict[str, Any]) -> dict[str, Any]:
+async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeContext) -> dict[str, Any]:
     booking_id = str(arguments.get("booking_id") or "").strip()
     if not booking_id:
         raise ValueError("booking_id requerido para cancel_demo")
@@ -670,6 +672,41 @@ async def _handle_cancel_demo(arguments: dict[str, Any]) -> dict[str, Any]:
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
     booking_response = webchat_service._build_booking_response(booking)
+    contact_record = await _resolve_contact(context.contact_id)
+    logger.info(
+        "whatsapp.cancel_notify.start",
+        extra={
+            "conversation_id": context.conversation_id,
+            "contact_id": context.contact_id,
+            "booking_id": booking_response.booking_id,
+            "reason": reason,
+        },
+    )
+    try:
+        await _notify_sales_rep(
+            context=context,
+            trigger="booking_canceled",
+            contact=contact_record,
+            opportunity_id=None,
+            resumen="Cita cancelada",
+            notes=reason,
+            email=contact_record.get("correo") if contact_record else None,
+            extra={
+                "booking_id": booking_response.booking_id,
+                "slot_start": booking_response.start_at.isoformat(),
+                "slot_end": booking_response.end_at.isoformat() if booking_response.end_at else None,
+                "reason": reason or "Sin motivo",
+            },
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.cancel_notify_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "error": str(exc),
+            },
+        )
     return {
         "status": "ok",
         "booking_id": booking_response.booking_id,
@@ -816,6 +853,7 @@ async def _notify_sales_rep(
         extra=extra,
     )
     appointment_template = settings.whatsapp_sales_appointment_template_sid
+    cancel_template = settings.whatsapp_sales_cancel_appointment_template_sid
     template_sid: str | None = None
     template_vars: dict[str, str] | None = None
     if trigger == "booking_confirmed" and appointment_template:
@@ -825,7 +863,24 @@ async def _notify_sales_rep(
             seller_name=seller_name,
             extra=extra,
         )
+    elif trigger == "booking_canceled" and cancel_template:
+        template_sid = cancel_template
+        template_vars = _build_booking_template_variables(
+            contact=contact_record,
+            seller_name=seller_name,
+            extra=extra,
+        )
     else:
+        if trigger == "booking_canceled":
+            logger.info(
+                "whatsapp.notify_sales.cancel_template_missing",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "contact_id": context.contact_id,
+                    "trigger": trigger,
+                    "seller_id": seller_id,
+                },
+            )
         template_sid = settings.whatsapp_sales_template_sid
         if template_sid:
             template_vars = _build_sales_template_variables(
@@ -835,6 +890,18 @@ async def _notify_sales_rep(
                 extra=extra,
                 seller_name=seller_name,
             )
+
+    logger.info(
+        "whatsapp.notify_sales.pre_send",
+        extra={
+            "conversation_id": context.conversation_id,
+            "trigger": trigger,
+            "seller_id": seller_id,
+            "seller_phone": seller_phone,
+            "template_sid": template_sid,
+            "template_vars": template_vars,
+        },
+    )
 
     try:
         from app.channels.whatsapp import service as whatsapp_service
@@ -866,6 +933,18 @@ async def _notify_sales_rep(
             },
         )
         return
+
+    logger.info(
+        "whatsapp.notify_sales.result",
+        extra={
+            "conversation_id": context.conversation_id,
+            "trigger": trigger,
+            "template_sid": template_sid,
+            "message_sid": send_result.sid,
+            "status": send_result.status,
+            "seller_id": seller_id,
+        },
+    )
 
     notifications[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
@@ -953,6 +1032,11 @@ def _compose_sales_notification_message(
         lines.append("Acción: completó la calificación del asistente.")
     elif trigger == "booking_confirmed":
         lines.append("Acción: agendó una cita.")
+    elif trigger == "booking_canceled":
+        lines.append("Acción: canceló la cita.")
+        reason = (extra or {}).get("reason")
+        if reason:
+            lines.append(f"Motivo: {reason}")
 
     if resumen:
         lines.append(f"Necesidad: {resumen}")
@@ -1067,6 +1151,7 @@ def _build_booking_template_variables(
     model = _extract_model_description(contact)
     location = _extract_contact_location(contact)
     phone = str(contact.get("telefono_e164") or contact.get("telefono") or "N/D").strip() or "N/D"
+    reason = str((extra or {}).get("reason") or "").strip() or "Sin motivo especificado"
     return {
         "1": seller_name,
         "2": client_name,
@@ -1075,4 +1160,5 @@ def _build_booking_template_variables(
         "5": model,
         "6": location,
         "7": phone,
+        "8": reason,
     }

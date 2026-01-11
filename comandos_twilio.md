@@ -38,5 +38,5 @@ curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
 
 # Ver como quedo la plantilla:
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X GET https://content.twilio.com/v1/Content/HX9175333a30544c6f01cff0530a3e7362
+  -X GET https://content.twilio.com/v1/Content/HX6b7e9ec9e7407b27afc087636ff0cb1d
 

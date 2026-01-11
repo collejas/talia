@@ -2833,6 +2833,32 @@ async def _execute_function_call(
             "end_at": booking.get("end_at"),
             "status": booking.get("status"),
         }
+        contact = await _resolve_contact(context.contact_id)
+        try:
+            await webchat_notifications.notify_sales_rep(
+                context=context,
+                trigger="booking_canceled",
+                contact=contact,
+                opportunity_id=None,
+                resumen="Cita cancelada",
+                notes=reason,
+                email=contact.get("correo") if contact else None,
+                extra={
+                    "booking_id": booking_payload["booking_id"],
+                    "slot_start": booking_payload["start_at"],
+                    "slot_end": booking_payload["end_at"],
+                    "reason": reason,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "webchat.cancel_notify_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "booking_id": booking_payload["booking_id"],
+                    "error": str(exc),
+                },
+            )
         return {
             "status": "ok",
             **booking_payload,
