@@ -137,6 +137,8 @@ async def _process_conversation(
     if not contact or not contact.get("telefono_e164"):
         return
 
+    contact_complete = bool(contact.get("notes")) and bool(contact.get("necesidad_proposito"))
+
     try:
         oportunidad_id = await storage.ensure_conversation_opportunity(
             conversation_id=convo_id,
@@ -206,7 +208,7 @@ async def _process_conversation(
         )
         return
 
-    if should_reengage:
+    if should_reengage and not contact_complete:
         await _send_reengage_message(
             conversation_id=str(convo_id),
             contact=contact,
