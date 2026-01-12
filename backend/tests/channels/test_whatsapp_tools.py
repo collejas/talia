@@ -85,7 +85,11 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     assert sent["template_sid"] == "HXexample"
     assert sent["template_vars"]["1"] == "Seller Demo"
     assert sent["template_vars"]["2"] == "Lead Demo"
-    assert sent["template_vars"]["6"] == "+529991112233"
+    assert sent["template_vars"]["3"] == "Automatizar atención"
+    assert sent["template_vars"]["4"] == "demo"
+    assert sent["template_vars"]["5"] == "+529991112233"
+    assert sent["template_vars"]["6"] == "lead@example.com"
+    assert sent["template_vars"]["7"] == "Demo SA"
     assert "information_email" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
     assert dummy_repo.audit_calls[-1]["canal"] == "whatsapp"
 

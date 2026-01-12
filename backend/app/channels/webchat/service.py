@@ -2624,6 +2624,9 @@ async def _execute_function_call(
             if resolved_contact_id and resolved_contact_id != context.contact_id:
                 contact_record = await _resolve_contact(resolved_contact_id)
                 context.contact_id = resolved_contact_id
+        contact_email = (
+            str(contact_record.get("correo") or "").strip() if contact_record else ""
+        )
         await webchat_notifications.notify_sales_rep(
             context=lead_context,
             trigger="close_lead",
@@ -2631,7 +2634,7 @@ async def _execute_function_call(
             opportunity_id=str(opportunity_id) if opportunity_id else None,
             resumen=necesidad,
             notes=notes,
-            email=None,
+            email=contact_email or None,
             extra={"siguiente_accion": siguiente_accion},
         )
         return {

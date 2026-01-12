@@ -884,12 +884,13 @@ async def _notify_sales_rep(
         template_sid = settings.whatsapp_sales_template_sid
         if template_sid:
             template_vars = _build_sales_template_variables(
-                contact=contact_record,
-                resumen=resumen,
-                notes=notes,
-                extra=extra,
-                seller_name=seller_name,
-            )
+            contact=contact_record,
+            resumen=resumen,
+            notes=notes,
+            extra=extra,
+            seller_name=seller_name,
+            email=email,
+        )
 
     logger.info(
         "whatsapp.notify_sales.pre_send",
@@ -1057,21 +1058,26 @@ def _build_sales_template_variables(
     notes: str | None,
     extra: dict[str, Any] | None,
     seller_name: str,
+    email: str | None,
 ) -> dict[str, str]:
     """Mapea los valores dinámicos a las variables esperadas por la plantilla."""
     name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
     company = str(contact.get("company_name") or "").strip()
     summary_text = resumen or notes or "Pendiente de detalle"
     next_action = str((extra or {}).get("siguiente_accion") or "").strip()
-    phone = str(contact.get("telefono_e164") or "").strip()
+    phone = str(
+        contact.get("telefono_e164") or contact.get("telefono") or ""
+    ).strip()
+    email_value = str(email or contact.get("correo") or "").strip()
 
     return {
         "1": seller_name,
         "2": name,
-        "3": company or "Sin empresa",
-        "4": summary_text,
-        "5": next_action or "Contacta y confirma próximos pasos.",
-        "6": phone or "N/D",
+        "3": summary_text,
+        "4": next_action or "Contacta y confirma próximos pasos.",
+        "5": phone or "N/D",
+        "6": email_value or "N/D",
+        "7": company or "Sin empresa",
     }
 
 

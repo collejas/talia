@@ -138,17 +138,23 @@ def _build_template_variables(
     resumen: str | None,
     notes: str | None,
     seller_name: str,
+    email: str | None,
+    extra: dict[str, Any] | None,
 ) -> dict[str, str]:
     name = str(contact.get("nombre_completo") or "").strip() or "Prospecto Tal-IA"
     summary = resumen or notes or "Pendiente de detalle"
-    phone = str(contact.get("telefono_e164") or "").strip()
+    next_action = str((extra or {}).get("siguiente_accion") or "").strip()
+    phone = str(contact.get("telefono_e164") or contact.get("telefono") or "").strip()
     company = str(contact.get("company_name") or "").strip()
+    email_value = str(email or contact.get("correo") or "").strip()
     return {
         "1": seller_name,
         "2": name,
-        "3": company or "Sin empresa",
-        "4": summary,
+        "3": summary,
+        "4": next_action or "Contacta y confirma próximos pasos.",
         "5": phone or "N/D",
+        "6": email_value or "N/D",
+        "7": company or "Sin empresa",
     }
 
 
@@ -310,6 +316,8 @@ async def notify_sales_rep(
                 resumen=resumen,
                 notes=notes,
                 seller_name=seller_name,
+                email=email,
+                extra=extra,
             )
 
     try:

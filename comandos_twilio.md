@@ -34,9 +34,10 @@ curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
 
 # Ver aprobacion
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X GET https://content.twilio.com/v1/Content/HX731d197157d1ffa10be2682461ce49ba/ApprovalRequests
+  -X GET https://content.twilio.com/v1/Content/HX13d4db774bbe3ee0e4db57ec06ce3398/ApprovalRequests
 
 # Ver como quedo la plantilla:
 curl -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
-  -X GET https://content.twilio.com/v1/Content/HX6b7e9ec9e7407b27afc087636ff0cb1d
+  -X GET https://content.twilio.com/v1/Content/HX13d4db774bbe3ee0e4db57ec06ce3398
+
 
