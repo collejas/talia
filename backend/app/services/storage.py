@@ -14,6 +14,7 @@ from fastapi import UploadFile
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.phone_utils import normalize_phone
 
 logger = get_logger(__name__)
 
@@ -892,6 +893,9 @@ async def update_contact(contact_id: str, patch: dict[str, Any]) -> dict[str, An
     """Actualiza campos del contacto indicado y devuelve la fila resultante."""
     if not patch:
         raise StorageError("No se proporcionaron datos para actualizar el contacto")
+    phone_value = patch.get("telefono_e164")
+    if phone_value is not None:
+        patch["telefono_e164"] = normalize_phone(phone_value)
     repo = CRMRepository()
     try:
         row = await repo.update_contact_by_id(contact_id=contact_id, patch=patch)

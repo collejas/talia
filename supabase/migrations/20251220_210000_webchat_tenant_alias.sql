@@ -158,7 +158,10 @@ BEGIN
         RETURNING id INTO v_contact_id;
 
         INSERT INTO public.identidades_canal (contacto_id, canal, id_externo, metadatos, organizacion_id)
-        VALUES (v_contact_id, 'webchat', p_session_id, COALESCE(p_metadata, '{}'::jsonb), v_org);
+        VALUES (v_contact_id, 'webchat', p_session_id, COALESCE(p_metadata, '{}'::jsonb), v_org)
+        ON CONFLICT (organizacion_id, canal, id_externo) DO UPDATE
+        SET contacto_id = EXCLUDED.contacto_id,
+            metadatos = EXCLUDED.metadatos;
     END IF;
 
     IF COALESCE(p_author, 'user') = 'user' THEN

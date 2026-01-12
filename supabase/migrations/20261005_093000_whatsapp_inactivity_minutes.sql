@@ -69,6 +69,11 @@ DECLARE
     v_metadata jsonb := COALESCE(p_metadata, '{}'::jsonb);
     v_existing record;
     v_webhook_id uuid;
+    v_phone_digits text := regexp_replace(COALESCE(p_phone_e164, ''), '[^0-9]', '', 'g');
+    v_phone_e164 text := NULL;
+    v_country_code text := '52';
+    v_mobile_prefix text := '1';
+    v_rest text;
 BEGIN
     IF p_webhook_payload IS NOT NULL THEN
         INSERT INTO public.webhooks_entrantes (canal, id_solicitud, carga, processed_ok)
@@ -89,6 +94,21 @@ BEGIN
         RAISE EXCEPTION 'conversation_id requerido para mensajes salientes';
     END IF;
 
+    IF v_phone_digits LIKE '00%' THEN
+        v_phone_digits := substring(v_phone_digits FROM 3);
+    END IF;
+    IF v_phone_digits <> '' THEN
+        IF v_phone_digits LIKE v_country_code || '%' THEN
+            v_rest := substring(v_phone_digits FROM length(v_country_code) + 1);
+            IF NOT v_rest LIKE v_mobile_prefix || '%' THEN
+                v_phone_digits := v_country_code || v_mobile_prefix || v_rest;
+            END IF;
+        ELSIF length(v_phone_digits) = 10 THEN
+            v_phone_digits := v_country_code || v_mobile_prefix || v_phone_digits;
+        END IF;
+        v_phone_e164 := '+' || v_phone_digits;
+    END IF;
+
     IF p_message_sid IS NOT NULL THEN
         SELECT m.conversacion_id, m.id, c.contacto_id, c.conversacion_openai_id
           INTO v_existing
@@ -106,6 +126,16 @@ BEGIN
             END IF;
             RETURN;
         END IF;
+    END IF;
+
+    IF v_phone_digits <> '' THEN
+        IF v_phone_digits LIKE '00%' THEN
+            v_phone_digits := substring(v_phone_digits FROM 3);
+        END IF;
+        v_phone_e164 := CASE
+            WHEN v_phone_digits <> '' THEN '+' || v_phone_digits
+            ELSE NULL
+        END;
     END IF;
 
     IF p_contact_id IS NOT NULL THEN
@@ -139,11 +169,11 @@ BEGIN
          LIMIT 1;
     END IF;
 
-    IF v_contact_id IS NULL AND COALESCE(p_phone_e164, '') <> '' THEN
+    IF v_contact_id IS NULL AND v_phone_digits <> '' THEN
         SELECT id
           INTO v_contact_id
           FROM public.contactos
-         WHERE telefono_e164 = p_phone_e164
+         WHERE regexp_replace(COALESCE(telefono_e164, ''), '[^0-9]', '', 'g') = v_phone_digits
          LIMIT 1;
     END IF;
 
@@ -151,7 +181,7 @@ BEGIN
         INSERT INTO public.contactos (nombre_completo, telefono_e164, origen, contacto_datos)
         VALUES (
             COALESCE(NULLIF(p_profile_name, ''), 'Visitante WhatsApp'),
-            NULLIF(p_phone_e164, ''),
+            v_phone_e164,
             'whatsapp',
             jsonb_build_object('wa_id', p_whatsapp_id, 'profile_name', p_profile_name)
         )
@@ -164,7 +194,7 @@ BEGIN
             v_contact_id,
             'whatsapp',
             p_whatsapp_id,
-            jsonb_build_object('telefono', p_phone_e164, 'profile_name', p_profile_name)
+            jsonb_build_object('telefono', v_phone_e164, 'profile_name', p_profile_name)
         )
         ON CONFLICT (canal, id_externo) DO UPDATE
         SET contacto_id = EXCLUDED.contacto_id,
