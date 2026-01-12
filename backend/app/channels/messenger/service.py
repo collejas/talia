@@ -389,12 +389,26 @@ async def _handle_message(
         user_id=payload.sender_id,
         channel="messenger",
     )
-    booking_context_text = await build_booking_context_message(
-        contact_id=contact_id,
-        conversation_id=conversation_id,
-        channel="messenger",
-        contact=None,
-    )
+    booking_context_text = None
+    try:
+        booking_context_text = await build_booking_context_message(
+            contact_id=contact_id,
+            conversation_id=conversation_id,
+            channel="messenger",
+            contact=None,
+        )
+    except Exception as exc:
+        logger.warning(
+            "messenger.booking_context_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
+    if booking_context_text:
+        contact_context = contact_context or {}
+        contact_context["booking_context"] = booking_context_text
     initial_input = _build_openai_input(
         text=payload.text,
         attachments=payload.attachments,

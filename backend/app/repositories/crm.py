@@ -4345,6 +4345,52 @@ class CRMRepository:
             return None
         return row
 
+    async def get_calendar_booking_by_conversation(
+        self,
+        *,
+        conversation_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "conversacion_id": f"eq.{conversation_id}",
+            "select": "id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+            "order": "start_at.desc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/calendar_bookings", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
+    async def get_calendar_booking_by_contact(
+        self,
+        *,
+        contact_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "contact_id": f"eq.{contact_id}",
+            "select": "id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+            "order": "start_at.desc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/calendar_bookings", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        if not isinstance(row, dict):
+            return None
+        return row
+
     async def update_calendar_booking_metadata(
         self,
         *,

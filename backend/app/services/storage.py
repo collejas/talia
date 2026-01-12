@@ -1458,6 +1458,36 @@ async def fetch_calendar_booking(booking_id: str) -> dict[str, Any] | None:
         raise StorageError(str(exc)) from exc
 
 
+async def fetch_calendar_booking_by_conversation(conversation_id: str) -> dict[str, Any] | None:
+    """Busca la cita asociada a la conversación dada."""
+    if not conversation_id:
+        return None
+    try:
+        conv_uuid = UUID(str(conversation_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("calendar_booking_invalid_conversation_id") from exc
+    repo = CRMRepository()
+    try:
+        return await repo.get_calendar_booking_by_conversation(conversation_id=conv_uuid)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
+async def fetch_calendar_booking_by_contact(contact_id: str) -> dict[str, Any] | None:
+    """Busca la cita asociada al contacto dado."""
+    if not contact_id:
+        return None
+    try:
+        contact_uuid = UUID(str(contact_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("calendar_booking_invalid_contact_id") from exc
+    repo = CRMRepository()
+    try:
+        return await repo.get_calendar_booking_by_contact(contact_id=contact_uuid)
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+
 async def capture_opportunity_if_ready(
     *,
     conversation_id: str,

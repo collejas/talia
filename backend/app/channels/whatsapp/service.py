@@ -229,12 +229,23 @@ async def handle_incoming_message(
         user_id=message.wa_id or message.from_number,
         channel="whatsapp",
     )
-    booking_context_text = await build_booking_context_message(
-        contact_id=contact_id,
-        conversation_id=conversation_id,
-        channel="whatsapp",
-        contact=contact_record,
-    )
+    booking_context_text = None
+    try:
+        booking_context_text = await build_booking_context_message(
+            contact_id=contact_id,
+            conversation_id=conversation_id,
+            channel="whatsapp",
+            contact=contact_record,
+        )
+    except Exception as exc:
+        logger.warning(
+            "whatsapp.booking_context_failed",
+            extra={
+                "conversation_id": conversation_id,
+                "contact_id": contact_id,
+                "error": str(exc),
+            },
+        )
 
     try:
         assistant_reply = await _generate_assistant_reply(
@@ -594,6 +605,10 @@ async def _generate_assistant_reply(
             "whatsapp.conversation_summary_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
+
+    if booking_context:
+        context_payload = context_payload or {}
+        context_payload["booking_context"] = booking_context
 
     initial_input = _build_openai_input(
         message,

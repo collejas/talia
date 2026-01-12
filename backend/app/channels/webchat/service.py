@@ -1940,12 +1940,23 @@ async def handle_message(
         user_id=context.contact_id,
         channel="webchat",
     )
-    booking_context_text = await build_booking_context_message(
-        contact_id=context.contact_id,
-        conversation_id=context.conversation_id,
-        channel="webchat",
-        contact=contact,
-    )
+    booking_context_text = None
+    try:
+        booking_context_text = await build_booking_context_message(
+            contact_id=context.contact_id,
+            conversation_id=context.conversation_id,
+            channel="webchat",
+            contact=contact,
+        )
+    except Exception as exc:
+        logger.warning(
+            "webchat.booking_context_failed",
+            extra={
+                "conversation_id": context.conversation_id,
+                "contact_id": context.contact_id,
+                "error": str(exc),
+            },
+        )
     try:
         (
             assistant_reply,
@@ -2384,6 +2395,8 @@ async def _run_assistant_turn(
             }
         )
     if booking_context:
+        context_payload = context_payload or {}
+        context_payload["booking_context"] = booking_context
         base_input.append(
             {
                 "role": "developer",

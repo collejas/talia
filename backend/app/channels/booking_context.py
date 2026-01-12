@@ -110,6 +110,8 @@ async def _resolve_booking_detail(
             extra={"conversation_id": conversation_id, "contact_id": contact_id},
         )
         return None
+    booking_row: dict[str, Any] | None = None
+    demo_metadata: dict[str, Any] | None = None
     try:
         demo_metadata = await storage.fetch_demo_booking_metadata(
             oportunidad_id=opportunity_id,
@@ -125,43 +127,90 @@ async def _resolve_booking_detail(
                 "error": str(exc),
             },
         )
-        return None
-    if not demo_metadata:
-        logger.debug(
-            "booking_context.demo_metadata_empty",
-            extra={"opportunity_id": opportunity_id, "contact_id": contact_id},
-        )
-        return None
-    booking_id = str(demo_metadata.get("demo_booking_id") or "").strip()
-    if not booking_id:
-        return None
-    try:
-        booking_row = await storage.fetch_calendar_booking(booking_id)
-    except StorageError as exc:
-        logger.debug(
-            "booking_context.calendar_lookup_failed",
-            extra={
-                "conversation_id": conversation_id,
-                "booking_id": booking_id,
-                "error": str(exc),
-            },
-        )
-        return None
+    else:
+        if demo_metadata:
+            booking_id = str(demo_metadata.get("demo_booking_id") or "").strip()
+            if booking_id:
+                try:
+                    booking_row = await storage.fetch_calendar_booking(booking_id)
+                except StorageError as exc:
+                    logger.debug(
+                        "booking_context.calendar_lookup_failed",
+                        extra={
+                            "conversation_id": conversation_id,
+                            "booking_id": booking_id,
+                            "error": str(exc),
+                        },
+                    )
+                else:
+                    if not booking_row:
+                        logger.debug(
+                            "booking_context.calendar_row_missing",
+                            extra={"booking_id": booking_id},
+                        )
+
+    if not booking_row:
+        try:
+            booking_row = await storage.fetch_calendar_booking_by_conversation(conversation_id)
+        except StorageError as exc:
+            logger.debug(
+                "booking_context.calendar_conversation_missing",
+                extra={
+                    "conversation_id": conversation_id,
+                    "contact_id": contact_id,
+                    "error": str(exc),
+                },
+            )
+        else:
+            if booking_row:
+                logger.debug(
+                    "booking_context.calendar_fallback_used",
+                    extra={
+                        "conversation_id": conversation_id,
+                        "contact_id": contact_id,
+                        "booking_id": booking_row.get("id"),
+                    },
+                )
+    if not booking_row and contact_id:
+        try:
+            booking_row = await storage.fetch_calendar_booking_by_contact(contact_id)
+        except StorageError as exc:
+            logger.debug(
+                "booking_context.calendar_contact_missing",
+                extra={
+                    "contact_id": contact_id,
+                    "conversation_id": conversation_id,
+                    "error": str(exc),
+                },
+            )
+        else:
+            if booking_row:
+                logger.debug(
+                    "booking_context.calendar_contact_used",
+                    extra={
+                        "contact_id": contact_id,
+                        "conversation_id": conversation_id,
+                        "booking_id": booking_row.get("id"),
+                    },
+                )
     if not booking_row:
         logger.debug(
-            "booking_context.calendar_row_missing",
-            extra={"booking_id": booking_id},
+            "booking_context.no_booking_found",
+            extra={"conversation_id": conversation_id, "contact_id": contact_id},
         )
         return None
     status_value = str(booking_row.get("status") or "").strip().lower()
     if status_value in CANCELLED_STATUSES:
         return None
-    scheduled_raw = booking_row.get("start_at") or demo_metadata.get("demo_scheduled_at")
+    scheduled_raw = booking_row.get("start_at") or (demo_metadata.get("demo_scheduled_at") if demo_metadata else None)
+    booking_id_value = str(
+        booking_row.get("id") or booking_row.get("booking_id") or ""
+    ).strip()
     start_at = _parse_iso_datetime(scheduled_raw)
     if not start_at:
         logger.debug(
             "booking_context.start_at_missing",
-            extra={"booking_id": booking_id},
+            extra={"booking_id": booking_id_value},
         )
         return None
     logger.info(
@@ -169,12 +218,12 @@ async def _resolve_booking_detail(
         extra={
             "conversation_id": conversation_id,
             "contact_id": contact_id,
-            "booking_id": booking_id,
+            "booking_id": booking_id_value,
             "start_at": start_at.isoformat(),
         },
     )
     return {
-        "booking_id": booking_id,
+        "booking_id": booking_id_value,
         "start_at": start_at,
         "timezone": booking_row.get("timezone"),
         "resource_id": booking_row.get("resource_id"),

@@ -12,7 +12,8 @@ def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
     opportunity = context_data.get("opportunity") if context_data else None
     contact_lines = _build_contact_context_lines(contact)
     opportunity_lines = _build_opportunity_context_lines(opportunity)
-    if not contact_lines and not opportunity_lines:
+    booking_context = context_data.get("booking_context") if context_data else None
+    if not contact_lines and not opportunity_lines and not booking_context:
         return []
 
     lines: list[str] = ["Contexto CRM:"]
@@ -23,6 +24,11 @@ def build_crm_context_lines(context_data: dict[str, Any] | None) -> list[str]:
             lines.append("")
         lines.append("Oportunidad vinculada:")
         lines.extend(opportunity_lines)
+    if booking_context:
+        if contact_lines or opportunity_lines:
+            lines.append("")
+        lines.append("Contexto de agenda:")
+        lines.append(f"- {_safe_text(booking_context)}")
     return lines
 
 
