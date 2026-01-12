@@ -1359,6 +1359,38 @@ async def record_demo_booking_metadata(
     log_event(logger, "demo_booking.metadata_updated", **log_context)
 
 
+async def fetch_demo_booking_metadata(
+    *,
+    oportunidad_id: str,
+    organizacion_id: str,
+) -> dict[str, Any] | None:
+    """Obtiene la metadata de la etapa stage_prep.demo para la oportunidad."""
+    try:
+        org_uuid = UUID(str(organizacion_id))
+        opp_uuid = UUID(str(oportunidad_id))
+    except (TypeError, ValueError) as exc:
+        raise StorageError("opportunity_stage_invalid_id") from exc
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        raise StorageError(str(exc)) from exc
+
+    if not opportunity:
+        return None
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    stage_prep = _ensure_dict(metadata.get("stage_prep"))
+    demo_prep = _ensure_dict(stage_prep.get("demo"))
+    if not demo_prep:
+        return None
+    return {k: v for k, v in demo_prep.items() if v is not None}
+
+
 async def fetch_opportunity_contact(
     *,
     oportunidad_id: str,

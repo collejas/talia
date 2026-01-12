@@ -14,6 +14,7 @@ import httpx
 from app.assistants import registry
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
 from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.channels.booking_context import build_booking_context_message
 from app.assistants.tools import lead as lead_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
@@ -388,6 +389,12 @@ async def _handle_message(
         user_id=payload.sender_id,
         channel="messenger",
     )
+    booking_context_text = await build_booking_context_message(
+        contact_id=contact_id,
+        conversation_id=conversation_id,
+        channel="messenger",
+        contact=None,
+    )
     initial_input = _build_openai_input(
         text=payload.text,
         attachments=payload.attachments,
@@ -412,6 +419,19 @@ async def _handle_message(
             ],
         },
     )
+    if booking_context_text:
+        initial_input.insert(
+            1,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": booking_context_text,
+                    }
+                ],
+            },
+        )
 
     request_kwargs: dict[str, Any] = {
         "input": initial_input,

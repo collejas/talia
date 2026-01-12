@@ -26,6 +26,7 @@ from app.assistants.runtime import (
     build_prompt_payload as build_assistant_prompt_payload,
 )
 from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+from app.channels.booking_context import build_booking_context_message
 from app.assistants.tools import lead as lead_tools
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
@@ -1939,6 +1940,12 @@ async def handle_message(
         user_id=context.contact_id,
         channel="webchat",
     )
+    booking_context_text = await build_booking_context_message(
+        contact_id=context.contact_id,
+        conversation_id=context.conversation_id,
+        channel="webchat",
+        contact=contact,
+    )
     try:
         (
             assistant_reply,
@@ -1957,6 +1964,7 @@ async def handle_message(
             previous_response_id=conversation_meta.get("last_response_id"),
             organizacion_id=organizacion_hint,
             catalog_context=catalog_context,
+            booking_context=booking_context_text,
         )
     except Exception as exc:  # pragma: no cover - se registra y responde fallback
         logger.exception(
@@ -2313,6 +2321,7 @@ async def _run_assistant_turn(
     previous_response_id: str | None,
     organizacion_id: str | None = None,
     catalog_context: CatalogContext | None = None,
+    booking_context: str | None = None,
 ) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None, dict[str, Any]]:
     """Gestiona la interacción con OpenAI y la resolución de tool calls."""
     metadata_payload = {
@@ -2370,6 +2379,18 @@ async def _run_assistant_turn(
                             "Si el usuario no menciona explícitamente archivos, responde sin "
                             "inventarlos."
                         ),
+                    }
+                ],
+            }
+        )
+    if booking_context:
+        base_input.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": booking_context,
                     }
                 ],
             }

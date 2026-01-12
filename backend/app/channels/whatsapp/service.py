@@ -25,6 +25,7 @@ from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
+from app.channels.booking_context import build_booking_context_message
 from app.services.catalog_context import build_catalog_context
 from app.services.prospeccion_auto_promoter import auto_promote_prospecto
 from app.services.time_utils import get_current_time_reference
@@ -228,6 +229,12 @@ async def handle_incoming_message(
         user_id=message.wa_id or message.from_number,
         channel="whatsapp",
     )
+    booking_context_text = await build_booking_context_message(
+        contact_id=contact_id,
+        conversation_id=conversation_id,
+        channel="whatsapp",
+        contact=contact_record,
+    )
 
     try:
         assistant_reply = await _generate_assistant_reply(
@@ -237,6 +244,7 @@ async def handle_incoming_message(
             openai_conversation_id=openai_conversation_id,
             previous_response_id=previous_response_id,
             catalog_context=catalog_context.text if catalog_context else None,
+            booking_context=booking_context_text,
         )
     except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
         logger.exception(
@@ -529,6 +537,7 @@ async def _generate_assistant_reply(
     openai_conversation_id: str | None,
     previous_response_id: str | None,
     catalog_context: str | None,
+    booking_context: str | None,
 ) -> AssistantReply:
     assistant = registry.resolve_assistant("whatsapp")
     client = openai_service.get_assistant_client()
@@ -609,6 +618,19 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    if booking_context:
+        initial_input.insert(
+            1,
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": booking_context,
+                    }
+                ],
+            },
+        )
     request_kwargs: dict[str, Any] = {
         "input": initial_input,
         "store": True,
