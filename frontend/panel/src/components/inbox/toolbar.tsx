@@ -38,38 +38,32 @@ export function InboxToolbar({ summary, channelFilter, onChannelFilterChange }: 
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold">Bandeja de entrada</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {total} conversaciones · {unread} sin leer · {awaiting} en seguimiento
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {CHANNEL_FILTER_OPTIONS.map((option) => {
-              const active = channelFilter === option.id;
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={getChannelFilterButtonClass(active)}
-                  onClick={() =>
-                    onChannelFilterChange?.(active ? null : option.id)
-                  }
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm">
-            <IconPlus className="mr-2 size-4" />
-            Nuevo mensaje
-          </Button>
-        </div>
+        <Button size="sm">
+          <IconPlus className="mr-2 size-4" />
+          Nuevo mensaje
+        </Button>
       </div>
-      <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:items-center">
+      <div className="flex flex-wrap items-center gap-3">
+        <select
+          className="h-9 w-40 rounded-md border border-muted-foreground/40 bg-background px-3 text-xs uppercase tracking-wider text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50"
+          value={channelFilter ?? ""}
+          onChange={(event) =>
+            onChannelFilterChange?.(event.target.value ? event.target.value : null)
+          }
+        >
+          {CHANNEL_FILTER_OPTIONS.map((option) => (
+            <option key={option.label} value={option.id ?? ""}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <Tabs defaultValue="all" className="w-full lg:w-auto">
           <TabsList className="grid h-auto grid-cols-2 gap-1 bg-muted/60 p-1 sm:grid-cols-4">
             <TabsTrigger value="all" className="flex items-center gap-2">
@@ -90,7 +84,7 @@ export function InboxToolbar({ summary, channelFilter, onChannelFilterChange }: 
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <div className="flex w-full items-center gap-2 lg:ml-auto lg:w-72">
+        <div className="flex flex-1 items-center gap-2 lg:flex-none">
           <IconSearch className="size-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por contacto, asunto o etiqueta"
