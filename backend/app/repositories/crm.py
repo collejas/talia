@@ -124,7 +124,7 @@ class CRMRepository:
             "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
-            "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado)",
+            "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164,company_name,notes,necesidad_proposito,estado,captura_estado,organizacion_id)",
             "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre,telefono,correo)",
         ]
     )
@@ -2339,14 +2339,19 @@ class CRMRepository:
                 row = data
             else:
                 row = None
-            if isinstance(row, dict):
-                message_id = row.get("id")
+        if isinstance(row, dict):
+            message_id = row.get("id")
         payload: dict[str, Any] = {
             "proveedor": provider,
             "evento": event,
             "codigo_error": error_code,
             "payload_crudo": raw_payload or {},
         }
+        if not message_id:
+            logger.warning(
+                "crm.delivery_event_missing_message_id",
+                extra={"message_sid": message_sid, "event": event, "provider": provider},
+            )
         if message_id:
             payload["mensaje_id"] = message_id
         if provider_timestamp:

@@ -313,7 +313,7 @@ class Settings(BaseSettings):
             "WHATSAPP_ESCALATE_MINUTES",
             "TALIA_WHATSAPP_ESCALATE_MINUTES",
         ),
-        ge=5,
+        ge=4,
     )
     whatsapp_sales_template_sid: str | None = Field(
         default=None,

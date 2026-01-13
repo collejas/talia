@@ -89,7 +89,7 @@ sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
 
-codex resume 019ba37d-32a4-7ef0-b2c4-225d5fd13a65
+codex resume 019bb280-f26a-7a71-9034-ea258a99959f
 
 codex resume 019b9e77-2a84-72d2-b6ed-a4c89b1b0609
 
@@ -125,7 +125,7 @@ sudo chown -R www-data:www-data /var/www/talia
 sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
 
-sudo journalctl -u talia-api.service -n 60 -l --no-pager
+sudo journalctl -u talia-api.service -n 50 -l --no-pager
 
 # Dejar git GLOBL
 git config --global user.name collejas
