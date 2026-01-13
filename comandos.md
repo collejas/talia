@@ -143,7 +143,7 @@ http://127.0.0.1:3000/dashboard
 http://127.0.0.1:3000/auth/login
 
 # Entarada a Ser
-ssh-copy-id jorge T@67.205.156.148
+ssh jorge T@67.205.156.148
 
 curl -X POST "https://graph.facebook.com/v17.0/691881910681610/subscribed_apps" \
        -d "subscribed_fields=messages,message_reads,message_deliveries" \

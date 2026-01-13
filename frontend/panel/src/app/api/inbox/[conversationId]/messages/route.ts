@@ -4,14 +4,22 @@ import { fetchLatestMessages } from "@/lib/inbox/messages-server";
 import { extractConversationIdFromPath } from "@/lib/inbox/backend";
 
 type RouteContext = {
-  params?: {
+  params?: Promise<{
     conversationId?: string;
-  };
+  }>;
 };
 
 export async function GET(request: Request, context: unknown) {
   const routeContext = context as RouteContext;
-  let conversationId = routeContext.params?.conversationId?.trim() ?? null;
+  let conversationId: string | null = null;
+  if (routeContext.params) {
+    try {
+      const params = await routeContext.params;
+      conversationId = params?.conversationId?.trim() ?? null;
+    } catch {
+      // ignore and fall back to path parsing
+    }
+  }
   if (!conversationId) {
     conversationId = extractConversationIdFromPath(request.url)?.trim() ?? null;
   }
