@@ -1034,7 +1034,7 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
-        min_restart_sequence: int = 2,
+        min_restart_sequence: int = 1,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
         payload = {

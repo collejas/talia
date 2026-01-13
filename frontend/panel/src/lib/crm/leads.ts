@@ -21,6 +21,17 @@ type CRMLeadsResponse = {
   offset: number;
 };
 
+type LeadRestartCycleDetail = {
+  oportunidad_id: string | null;
+  restart_sequence: number;
+  monto_estimado: number | null;
+  etapa_id: string | null;
+  estado: string | null;
+  asignado_a_usuario_id: string | null;
+  actualizado_en: string | null;
+  creado_en: string | null;
+};
+
 type CRMLeadRestartStat = {
   contacto_id: string;
   contacto_nombre: string | null;
@@ -38,6 +49,10 @@ type CRMLeadRestartStat = {
   vendedor_id: string | null;
   vendedor_nombre: string | null;
   actualizado_en: string;
+  primer_ciclo_en: string | null;
+  ultimo_reinicio_en: string | null;
+  ciclos_detalle: LeadRestartCycleDetail[] | null;
+  reengage_attempts: number;
 };
 
 export type CrmLeadsPayload = {
@@ -94,7 +109,7 @@ export async function loadCrmLeads(): Promise<CrmLeadsPayload> {
 export async function loadLeadRestartStats(
   options: LoadLeadRestartStatsOptions = {},
 ): Promise<LeadRestartStatsPayload> {
-  const minRestartSequence = Math.max(1, options.minRestartSequence ?? 2);
+  const minRestartSequence = Math.max(1, options.minRestartSequence ?? 1);
 
   const response = await callCrmApi<CRMLeadRestartStat[]>("/crm/leads/restarts", {
     searchParams: {
@@ -151,9 +166,12 @@ function formatSellerName(stat: CRMLeadRestartStat): string {
 }
 
 function formatRestartStatus(stat: CRMLeadRestartStat): string {
-  const ciclos = stat.total_ciclos || 0;
-  const cicloActual = stat.ciclo_actual || 0;
-  return `Reinicio #${cicloActual} · ${ciclos} ciclos`;
+  const attempts = Number(stat.reengage_attempts) || 0;
+  if (attempts <= 0) {
+    return "Sin reenganches";
+  }
+  const cicloActual = Number(stat.ciclo_actual) || 1;
+  return `Reinicio #${cicloActual} · ${attempts} reenganche${attempts === 1 ? "" : "s"}`;
 }
 
 function formatStageLabel(stat: CRMLeadRestartStat): string {

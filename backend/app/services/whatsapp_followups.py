@@ -321,6 +321,8 @@ async def _send_reengage_message(
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "attempts": attempt_count,
     }
+    restart_sequence_value = int(metadata.get("restart_sequence") or 1)
+    metadata["restart_sequence"] = restart_sequence_value
     metadata["whatsapp_followup"] = followup_meta
     try:
         await repo.update_opportunity(
@@ -335,29 +337,30 @@ async def _send_reengage_message(
         )
         return
 
-    if attempt_count >= 2:
-        restart_sequence_value = int(metadata.get("restart_sequence") or 0)
-        if restart_sequence_value < 2:
-            metadata["restart_sequence"] = 2
+    if attempt_count >= 1:
+        contact_id_value = str(contact.get("id") or contact.get("contacto_id") or contact_id)
+        try:
+            await storage.ensure_conversation_opportunity(
+                conversation_id=conversation_id,
+                contact_id=contact_id_value,
+                channel="whatsapp",
+                force_new_opportunity_on_restart=True,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.followup.ensure_restart_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
+        else:
             try:
-                await repo.update_opportunity(
-                    organizacion_id=org_id,
-                    oportunidad_id=opportunity_id,
-                    payload={"metadata": metadata},
+                await storage.update_conversation(
+                    conversation_id, {"restart_sequence": metadata["restart_sequence"]}
                 )
-            except CRMRepositoryError as exc:
+            except StorageError as exc:
                 logger.warning(
-                    "whatsapp.followup.restart_sequence_update_failed",
+                    "whatsapp.followup.conversation_restart_update_failed",
                     extra={"conversation_id": conversation_id, "error": str(exc)},
                 )
-            else:
-                try:
-                    await storage.update_conversation(conversation_id, {"restart_sequence": 2})
-                except StorageError as exc:
-                    logger.warning(
-                        "whatsapp.followup.conversation_restart_update_failed",
-                        extra={"conversation_id": conversation_id, "error": str(exc)},
-                    )
 
 
 async def _escalate_to_sales(

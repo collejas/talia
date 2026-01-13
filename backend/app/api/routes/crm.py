@@ -4193,6 +4193,7 @@ class CRMContactRestartStat(BaseModel):
     primer_ciclo_en: datetime | None = None
     ultimo_reinicio_en: datetime | None = None
     ciclos_detalle: list[dict[str, Any]] | None = None
+    reengage_attempts: int = 0
 
 
 class CRMPipelineTopSeller(BaseModel):
@@ -10082,7 +10083,7 @@ async def list_lead_restart_stats(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    min_restart_sequence: Annotated[int, Query(ge=1, le=100)] = 2,
+    min_restart_sequence: Annotated[int, Query(ge=1, le=100)] = 1,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> list[CRMContactRestartStat]:
     try:

@@ -71,6 +71,7 @@ type CRMLeadRestartStat = {
   primer_ciclo_en: string | null;
   ultimo_reinicio_en: string | null;
   ciclos_detalle: LeadRestartCycleDetail[] | null;
+  reengage_attempts: number;
 };
 
 type LeadRestartCycleDetail = {
@@ -91,7 +92,7 @@ export type RestartKpis = {
 };
 
 const DEFAULT_LIMIT = 200;
-const DEFAULT_RESTART_MIN_SEQUENCE = 2;
+const DEFAULT_RESTART_MIN_SEQUENCE = 1;
 const DEFAULT_RESTART_LIMIT = 200;
 const EMPTY_CARDS: LeadCards = {
   total: 0,
@@ -208,9 +209,12 @@ function formatSellerName(stat: CRMLeadRestartStat): string {
 }
 
 function formatRestartStatus(stat: CRMLeadRestartStat): string {
+  const attempts = Number(stat.reengage_attempts) || 0;
+  if (attempts <= 0) {
+    return "Sin reenganches";
+  }
   const cicloActual = Number(stat.ciclo_actual) || 1;
-  const totalCiclos = Number(stat.total_ciclos) || cicloActual;
-  return `Reinicio #${cicloActual} · ${totalCiclos} ciclos`;
+  return `Reinicio #${cicloActual} · ${attempts} reenganche${attempts === 1 ? "" : "s"}`;
 }
 
 function formatStageLabel(stat: CRMLeadRestartStat): string {
