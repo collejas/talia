@@ -3,8 +3,6 @@
 import * as React from "react";
 import {
   IconCircleFilled,
-  IconDots,
-  IconFilter,
   IconRobot,
   IconRobotOff,
 } from "@tabler/icons-react";
@@ -1195,13 +1193,6 @@ export function InboxSplitView({ threads, channelFilter }: InboxSplitViewProps) 
                       {manualToggling ? "Pausando…" : "Pausar asistente"}
                     </>
                   )}
-                </Button>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <IconFilter className="size-4" /> Actualizar estado
-                </Button>
-                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
-                  <IconDots className="size-4" />
-                  <span className="sr-only">Acciones rápidas</span>
                 </Button>
               </div>
             </header>
