@@ -1142,35 +1142,18 @@ export function InboxSplitView({ threads, channelFilter }: InboxSplitViewProps) 
       <section className="flex h-[calc(100vh-13rem)] min-h-[320px] flex-1 flex-col overflow-hidden rounded-lg border bg-card">
         {selectedThread ? (
           <>
-            <header className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
-              <div className="space-y-1">
+            <header className="flex items-center justify-between gap-4 border-b px-5 py-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-lg font-semibold">{selectedThread.contactoNombre}</h3>
-                {selectedThread.restartSequence > 1 ? (
-                  <Badge variant="secondary" className="text-[11px] uppercase">
-                    {`Conversación reiniciada (ciclo #${selectedThread.restartSequence})`}
-                  </Badge>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge
-                    variant="outline"
-                    className={`uppercase ${getChannelBadgeClass(selectedThread.canal)}`}
-                  >
-                    {selectedThread.canal}
-                  </Badge>
-                  {selectedThread.contactoCorreo ? <span>{selectedThread.contactoCorreo}</span> : null}
-                  {selectedThread.contactoTelefono ? <span>{selectedThread.contactoTelefono}</span> : null}
-                  {selectedThread.asignadoNombre ? (
-                    <span className="font-medium text-foreground">Asignado a {selectedThread.asignadoNombre}</span>
-                  ) : null}
-                </div>
-                {selectedThread.tags.length ? (
-                  <div className="flex flex-wrap gap-1">
-                    {selectedThread.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
+                <span
+                  className={`text-[10px] uppercase tracking-[0.3em] rounded-full border px-3 py-1 ${getChannelBadgeClass(
+                    selectedThread.canal,
+                  )}`}
+                >
+                  {selectedThread.canal}
+                </span>
+                {selectedThread.contactoTelefono ? (
+                  <span className="text-xs text-muted-foreground">{selectedThread.contactoTelefono}</span>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
