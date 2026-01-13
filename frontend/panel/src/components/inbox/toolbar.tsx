@@ -8,11 +8,29 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import type { InboxSummary } from "@/lib/inbox/data";
 
+const CHANNEL_FILTER_OPTIONS = [
+  { id: null, label: "Todos" },
+  { id: "whatsapp", label: "WhatsApp" },
+  { id: "messenger", label: "Messenger" },
+  { id: "webchat", label: "Webchat" },
+];
+
+function getChannelFilterButtonClass(active: boolean): string {
+  return [
+    "text-[10px] uppercase tracking-wide rounded-full border px-3 py-1 transition",
+    active
+      ? "bg-primary text-primary-foreground border-primary"
+      : "bg-muted/10 text-muted-foreground border-muted-foreground/40",
+  ].join(" ");
+}
+
 type InboxToolbarProps = {
   summary: InboxSummary;
+  channelFilter?: string | null;
+  onChannelFilterChange?: (value: string | null) => void;
 };
 
-export function InboxToolbar({ summary }: InboxToolbarProps) {
+export function InboxToolbar({ summary, channelFilter, onChannelFilterChange }: InboxToolbarProps) {
   const total = summary.total ?? 0;
   const unread = summary.unread ?? 0;
   const awaiting = summary.awaiting ?? 0;
@@ -26,6 +44,23 @@ export function InboxToolbar({ summary }: InboxToolbarProps) {
           <p className="text-sm text-muted-foreground">
             {total} conversaciones · {unread} sin leer · {awaiting} en seguimiento
           </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CHANNEL_FILTER_OPTIONS.map((option) => {
+              const active = channelFilter === option.id;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={getChannelFilterButtonClass(active)}
+                  onClick={() =>
+                    onChannelFilterChange?.(active ? null : option.id)
+                  }
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm">

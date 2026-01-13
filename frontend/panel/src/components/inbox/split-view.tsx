@@ -7,14 +7,12 @@ import {
   IconFilter,
   IconRobot,
   IconRobotOff,
-  IconSearch,
 } from "@tabler/icons-react";
 
 import type { InboxThread, InboxMessage } from "@/lib/inbox/data";
 import type { InboxAttachment } from "@/lib/inbox/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { InboxComposer } from "@/components/inbox/composer";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
@@ -450,9 +448,10 @@ function resolveHumanAuthorName(
 }
 type InboxSplitViewProps = {
   threads: InboxThread[];
+  channelFilter?: string | null;
 };
 
-export function InboxSplitView({ threads }: InboxSplitViewProps) {
+export function InboxSplitView({ threads, channelFilter }: InboxSplitViewProps) {
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -608,20 +607,26 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   }, [selectedId, threadItems]);
 
   const filteredThreads = React.useMemo(() => {
-    if (!searchTerm) return threadItems;
     const term = searchTerm.toLowerCase();
-    return threadItems.filter((thread) => {
-      const haystack = [
-        thread.contactoNombre,
-        thread.canal,
-        thread.preview,
-        thread.tags.join(" "),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(term);
-    });
-  }, [threadItems, searchTerm]);
+    const normalizedFilter = channelFilter ? channelFilter.toLowerCase() : null;
+    return threadItems
+      .filter((thread) => {
+        if (!normalizedFilter) return true;
+        return (thread.canal ?? "").toLowerCase() === normalizedFilter;
+      })
+      .filter((thread) => {
+        if (!term) return true;
+        const haystack = [
+          thread.contactoNombre,
+          thread.canal,
+          thread.preview,
+          thread.tags.join(" "),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(term);
+      });
+  }, [threadItems, searchTerm, channelFilter]);
 
   const selectedThread = React.useMemo(() => {
     if (!selectedId) {
@@ -1070,27 +1075,6 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
   return (
     <div className="flex gap-4">
       <aside className="flex h-[calc(100vh-13rem)] min-h-[320px] w-[320px] flex-col overflow-hidden rounded-lg border bg-card">
-        <div className="border-b px-4 py-3">
-          <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-            <IconSearch className="size-4" />
-            <Input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar chats"
-              className="h-8 flex-1 border-0 bg-transparent px-0 text-sm focus-visible:ring-0"
-              aria-label="Buscar chats"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-sm font-semibold uppercase text-muted-foreground">Conversaciones</h3>
-          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
-            <IconDots className="size-4" />
-            <span className="sr-only">Acciones de bandeja</span>
-          </Button>
-        </div>
-
         <div className="flex-1 overflow-y-auto">
           {filteredThreads.length ? (
             <ul className="divide-y">

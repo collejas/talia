@@ -1,8 +1,7 @@
 import type { CSSProperties } from "react"
 
 import { AppSidebar } from "@/components/AppSidebar"
-import { InboxSplitView } from "@/components/inbox/split-view"
-import { InboxToolbar } from "@/components/inbox/toolbar"
+import { InboxWorkspace } from "@/components/inbox/workspace"
 import { SessionRecovery } from "@/components/session-recovery"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -43,10 +42,7 @@ export default async function Page() {
                 </div>
               ) : null}
               <div className="px-4 lg:px-6">
-                <InboxToolbar summary={inboxData.summary} />
-              </div>
-              <div className="px-4 lg:px-6">
-                <InboxSplitView threads={inboxData.threads} />
+                <InboxWorkspace summary={inboxData.summary} threads={inboxData.threads} />
               </div>
             </div>
           </div>
