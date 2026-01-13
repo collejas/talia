@@ -21,6 +21,18 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 const THREADS_REFRESH_INTERVAL_MS = 1600;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
 
+const CHANNEL_BADGE_STYLES: Record<string, string> = {
+  whatsapp: "bg-emerald-500/10 text-emerald-700 border-emerald-500/40",
+  messenger: "bg-sky-500/10 text-sky-700 border-sky-500/40",
+  webchat: "bg-violet-500/10 text-violet-700 border-violet-500/40",
+  default: "bg-muted-foreground/10 text-muted-foreground border-muted-foreground/30",
+};
+
+function getChannelBadgeClass(channel: string | null | undefined): string {
+  const key = (channel ?? "").toLowerCase();
+  return CHANNEL_BADGE_STYLES[key] ?? CHANNEL_BADGE_STYLES.default;
+}
+
 const SERVER_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   hour: "2-digit",
   minute: "2-digit",
@@ -1089,6 +1101,7 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                 const formattedTime = formatShortTimeLabel(displayTime, isHydrated);
                 const restartSequence = Math.max(1, thread.restartSequence ?? 1);
                 const isRestart = restartSequence > 1;
+                const channelBadgeClass = getChannelBadgeClass(thread.canal);
                 return (
                   <li key={thread.id}>
                     <button
@@ -1114,7 +1127,9 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                         <span className="text-xs text-muted-foreground">{formattedTime}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline" className="uppercase">{thread.canal}</Badge>
+                        <Badge variant="outline" className={`uppercase ${channelBadgeClass}`}>
+                          {thread.canal}
+                        </Badge>
                         {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                       </div>
                       <p className="line-clamp-2 text-xs text-muted-foreground">
@@ -1154,7 +1169,12 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                   </Badge>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline" className="uppercase">{selectedThread.canal}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`uppercase ${getChannelBadgeClass(selectedThread.canal)}`}
+                  >
+                    {selectedThread.canal}
+                  </Badge>
                   {selectedThread.contactoCorreo ? <span>{selectedThread.contactoCorreo}</span> : null}
                   {selectedThread.contactoTelefono ? <span>{selectedThread.contactoTelefono}</span> : null}
                   {selectedThread.asignadoNombre ? (
