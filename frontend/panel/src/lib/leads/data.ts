@@ -213,8 +213,7 @@ function formatRestartStatus(stat: CRMLeadRestartStat): string {
   if (attempts <= 0) {
     return "Sin reenganches";
   }
-  const cicloActual = Number(stat.ciclo_actual) || 1;
-  return `Reinicio #${cicloActual} · ${attempts} reenganche${attempts === 1 ? "" : "s"}`;
+  return `${attempts} reenganche${attempts === 1 ? "" : "s"}`;
 }
 
 function formatStageLabel(stat: CRMLeadRestartStat): string {
