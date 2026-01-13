@@ -3830,6 +3830,7 @@ class CRMInboxThread(BaseModel):
     last_message_at: datetime | None = None
     messages: list[dict[str, Any]] | None = None
     total_rows: int | None = None
+    reengage_attempts: int | None = None
 
 
 class CRMInboxMessage(BaseModel):

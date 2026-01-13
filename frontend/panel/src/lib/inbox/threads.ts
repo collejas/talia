@@ -3,10 +3,10 @@ import type { InboxThread, InboxThreadRow } from "@/lib/inbox/types";
 
 export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
   if (!payload || !payload.length) return [];
-  return payload.map((row) => {
-    const messages = mapMessagesFromRaw(row.messages);
-    return {
-      id: row.conversacion_id,
+    return payload.map((row) => {
+      const messages = mapMessagesFromRaw(row.messages);
+      return {
+        id: row.conversacion_id,
       contactoId: row.contacto_id,
       contactoNombre: row.contacto_nombre?.trim() || "Contacto sin nombre",
       contactoCorreo: row.contacto_correo,
@@ -29,6 +29,7 @@ export function mapThreads(payload?: InboxThreadRow[] | null): InboxThread[] {
       restartSequence: row.restart_sequence ?? 1,
       conversationHistory: row.conversation_history?.filter((id): id is string => Boolean(id && id.length)) ??
         (row.conversacion_id ? [row.conversacion_id] : []),
-    };
-  });
+      reengageAttempts: row.reengage_attempts ? Math.max(0, row.reengage_attempts) : 0,
+      };
+    });
 }

@@ -1097,15 +1097,20 @@ export function InboxSplitView({ threads }: InboxSplitViewProps) {
                       className={`flex w-full flex-col gap-1 px-4 py-3 text-left transition ${isActive ? "bg-primary/10" : "hover:bg-muted"}`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{thread.contactoNombre}</span>
-                          {isRestart ? (
-                            <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
-                              {`Reinicio #${restartSequence}`}
-                            </Badge>
-                          ) : null}
-                          {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
-                        </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{thread.contactoNombre}</span>
+                  {isRestart ? (
+                    <Badge variant="secondary" className="text-[10px] uppercase tracking-tight">
+                      {`Reinicio #${restartSequence}`}
+                    </Badge>
+                  ) : null}
+                  {thread.reengageAttempts > 0 ? (
+                    <Badge variant="destructive" className="text-[10px] uppercase tracking-tight">
+                      {`${thread.reengageAttempts} reenganche${thread.reengageAttempts === 1 ? "" : "s"}`}
+                    </Badge>
+                  ) : null}
+                  {unread ? <IconCircleFilled className="size-2 fill-primary" /> : null}
+                </div>
                         <span className="text-xs text-muted-foreground">{formattedTime}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">

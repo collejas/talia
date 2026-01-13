@@ -35,6 +35,7 @@ export type InboxThreadRow = {
   last_message_at: string | null;
   messages: unknown;
   total_rows: number;
+  reengage_attempts?: number | null;
 };
 
 export type InboxAttachment = {
@@ -93,6 +94,7 @@ export type InboxThread = {
   parentOpportunityId: string | null;
   restartSequence: number;
   conversationHistory: string[];
+  reengageAttempts: number;
 };
 
 export type InboxPayload = {
