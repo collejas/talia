@@ -228,6 +228,7 @@ async def _process_conversation(
     if should_reengage and not contact_complete:
         await _send_reengage_message(
             conversation_id=str(convo_id),
+            contact_id=str(contact_id),
             contact=contact,
             followup_meta=followup_meta,
             metadata=metadata,
@@ -253,6 +254,7 @@ async def _process_conversation(
 async def _send_reengage_message(
     *,
     conversation_id: str,
+    contact_id: str,
     contact: dict[str, Any],
     followup_meta: dict[str, Any],
     metadata: dict[str, Any],
@@ -331,6 +333,31 @@ async def _send_reengage_message(
             "whatsapp.followup.reengage_metadata_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
+        return
+
+    if attempt_count >= 2:
+        restart_sequence_value = int(metadata.get("restart_sequence") or 0)
+        if restart_sequence_value < 2:
+            metadata["restart_sequence"] = 2
+            try:
+                await repo.update_opportunity(
+                    organizacion_id=org_id,
+                    oportunidad_id=opportunity_id,
+                    payload={"metadata": metadata},
+                )
+            except CRMRepositoryError as exc:
+                logger.warning(
+                    "whatsapp.followup.restart_sequence_update_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
+            else:
+                try:
+                    await storage.update_conversation(conversation_id, {"restart_sequence": 2})
+                except StorageError as exc:
+                    logger.warning(
+                        "whatsapp.followup.conversation_restart_update_failed",
+                        extra={"conversation_id": conversation_id, "error": str(exc)},
+                    )
 
 
 async def _escalate_to_sales(
