@@ -84,9 +84,9 @@ export function InboxToolbar({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-col gap-1">
+          <div className="flex items-center">
             <select
-              className="h-9 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50"
+              className="h-8 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
               value={channelFilterValue}
               onChange={(event) => onChannelFilterValueChange?.(event.target.value)}
             >
@@ -98,9 +98,9 @@ export function InboxToolbar({
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex items-center">
             <select
-              className="h-9 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50"
+              className="h-8 w-[4.8rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
               value={dateFilterValue}
               onChange={(event) => onDateFilterValueChange?.(event.target.value)}
             >
@@ -112,9 +112,9 @@ export function InboxToolbar({
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex items-center">
             <select
-              className="h-9 w-[5.6rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50"
+              className="h-8 w-[5.6rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
               value={reengageFilter}
               onChange={(event) => onReengageFilterChange?.(event.target.value)}
             >
@@ -126,9 +126,9 @@ export function InboxToolbar({
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex items-center">
             <select
-              className="h-9 w-[5rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50"
+              className="h-8 w-[5rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
               value={stateFilter}
               onChange={(event) => setStateFilter(event.target.value)}
             >
@@ -144,7 +144,7 @@ export function InboxToolbar({
             <IconSearch className="size-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por contacto, asunto o etiqueta"
-              className="h-9 w-32"
+              className="h-8 w-32 leading-none"
             />
           </div>
         </div>
