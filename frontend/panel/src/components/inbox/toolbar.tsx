@@ -1,6 +1,6 @@
 "use client";
 
-import { IconFilter, IconPlus, IconSearch } from "@tabler/icons-react";
+import { IconPlus, IconSearch } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,10 +63,6 @@ export function InboxToolbar({ summary, channelFilter, onChannelFilterChange }: 
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <IconFilter className="mr-2 size-4" />
-            Filtros
-          </Button>
           <Button size="sm">
             <IconPlus className="mr-2 size-4" />
             Nuevo mensaje
