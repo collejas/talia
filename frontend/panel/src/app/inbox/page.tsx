@@ -42,7 +42,11 @@ export default async function Page() {
                 </div>
               ) : null}
               <div className="px-4 lg:px-6">
-                <InboxWorkspace summary={inboxData.summary} threads={inboxData.threads} />
+                <InboxWorkspace
+                  summary={inboxData.summary}
+                  threads={inboxData.threads}
+                  reengageTagOptions={inboxData.reengageTags}
+                />
               </div>
             </div>
           </div>

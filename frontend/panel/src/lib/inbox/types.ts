@@ -101,5 +101,6 @@ export type InboxPayload = {
   summary: InboxSummary;
   threads: InboxThread[];
   totalThreads: number;
+  reengageTags: string[];
   errors: string[];
 };

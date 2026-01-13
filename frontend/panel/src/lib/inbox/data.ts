@@ -2,7 +2,12 @@
 
 import { callCrmApi } from "@/lib/api/crm";
 import { mapThreads } from "@/lib/inbox/threads";
-import type { InboxSummary, InboxPayload, InboxThreadRow } from "@/lib/inbox/types";
+import type {
+  InboxSummary,
+  InboxPayload,
+  InboxThread,
+  InboxThreadRow,
+} from "@/lib/inbox/types";
 
 type InboxResumenResponse = {
   total?: number;
@@ -25,18 +30,79 @@ const FOLDER_LABELS: Record<string, string> = {
   closed: "Cerrados",
 };
 
+type CrmTagRow = {
+  nombre?: string | null;
+};
+
+const REENGAGE_TAG_KEYWORDS = [
+  "reeng",
+  "reenganch",
+  "reinici",
+  "reinicio",
+  "reinicios",
+  "restart",
+  "reintento",
+  "reintentos",
+  "followup",
+];
+
+function normalizeForMatching(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+}
+
+function matchesReengageTag(value: string | null | undefined): boolean {
+  const normalized = normalizeForMatching(value);
+  if (!normalized.length) {
+    return false;
+  }
+  return REENGAGE_TAG_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
+function gatherReengageTagsFromNames(
+  names: Iterable<string | null | undefined>,
+): string[] {
+  const seen = new Set<string>();
+  for (const raw of names) {
+    const trimmed = raw?.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (matchesReengageTag(trimmed)) {
+      seen.add(trimmed);
+    }
+  }
+  return Array.from(seen);
+}
+
+function gatherReengageTagsFromThreads(threads: InboxThread[]): string[] {
+  const seen = new Set<string>();
+  for (const thread of threads) {
+    for (const tag of gatherReengageTagsFromNames(thread.tags)) {
+      seen.add(tag);
+    }
+  }
+  return Array.from(seen);
+}
+
 export async function loadInboxData(): Promise<InboxPayload> {
-  const [resumen, threads] = await Promise.all([
+  const [resumen, threads, tags] = await Promise.all([
     callCrmApi<InboxResumenResponse>("/crm/inbox/summary", { withUserToken: true }),
     callCrmApi<InboxThreadRow[]>("/crm/inbox/threads", {
       withUserToken: true,
       searchParams: { limit: "25", message_limit: "20" },
     }),
+    callCrmApi<CrmTagRow[]>("/crm/tags", { withUserToken: true }),
   ]);
 
   const errors: string[] = [];
   if (!resumen.ok) errors.push(resumen.error);
   if (!threads.ok) errors.push(threads.error);
+  if (!tags.ok) errors.push(tags.error);
 
   const summary = mapSummary(resumen.ok ? resumen.data : undefined);
   const mappedThreads = mapThreads(threads.ok ? threads.data : undefined);
@@ -45,10 +111,19 @@ export async function loadInboxData(): Promise<InboxPayload> {
       ? threads.data[0].total_rows ?? threads.data.length
       : 0;
 
+  const reengageTagsFromApi = tags.ok
+    ? gatherReengageTagsFromNames(tags.data.map((entry) => entry.nombre))
+    : [];
+  const reengageTagsFromThreads = gatherReengageTagsFromThreads(mappedThreads);
+  const reengageTags = Array.from(
+    new Set([...reengageTagsFromApi, ...reengageTagsFromThreads]),
+  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
   return {
     summary,
     threads: mappedThreads,
     totalThreads,
+    reengageTags,
     errors: Array.from(new Set(errors)),
   };
 }

@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InboxComposer } from "@/components/inbox/composer";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import type { DateFilterOption } from "@/components/inbox/toolbar";
+import { matchesReengageFilter } from "@/lib/inbox/reengage-filter";
 
 const THREADS_REFRESH_INTERVAL_MS = 1600;
 const MESSAGES_REFRESH_INTERVAL_MS = 1500;
@@ -51,6 +53,54 @@ const CLIENT_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+const MILLISECONDS_IN_A_DAY = 24 * 60 * 60 * 1000;
+
+function parseThreadTimestamp(thread: InboxThread): Date | null {
+  const candidate = thread.previewAt ?? thread.ultimoMensajeEn ?? thread.iniciadoEn;
+  if (!candidate) {
+    return null;
+  }
+  const date = new Date(candidate);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isSameDay(candidate: Date, reference: Date): boolean {
+  return (
+    candidate.getFullYear() === reference.getFullYear() &&
+    candidate.getMonth() === reference.getMonth() &&
+    candidate.getDate() === reference.getDate()
+  );
+}
+
+function matchesDateFilter(thread: InboxThread, option: DateFilterOption): boolean {
+  if (option === "all") {
+    return true;
+  }
+  const timestamp = parseThreadTimestamp(thread);
+  if (!timestamp) {
+    return false;
+  }
+  const now = new Date();
+  if (option === "today") {
+    return isSameDay(timestamp, now);
+  }
+  if (option === "yesterday") {
+    const yesterday = new Date(now.getTime() - MILLISECONDS_IN_A_DAY);
+    return isSameDay(timestamp, yesterday);
+  }
+  if (option === "last_week") {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return timestamp >= weekAgo;
+  }
+  if (option === "last_month") {
+    const monthAgo = new Date(now);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    return timestamp >= monthAgo;
+  }
+  return true;
+}
 
 type ReplyMetadata = {
   manual_mode?: boolean;
@@ -447,9 +497,16 @@ function resolveHumanAuthorName(
 type InboxSplitViewProps = {
   threads: InboxThread[];
   channelFilter?: string | null;
+  dateFilter: DateFilterOption;
+  reengageFilter: string;
 };
 
-export function InboxSplitView({ threads, channelFilter }: InboxSplitViewProps) {
+export function InboxSplitView({
+  threads,
+  channelFilter,
+  dateFilter,
+  reengageFilter,
+}: InboxSplitViewProps) {
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -612,6 +669,8 @@ export function InboxSplitView({ threads, channelFilter }: InboxSplitViewProps) 
         if (!normalizedFilter) return true;
         return (thread.canal ?? "").toLowerCase() === normalizedFilter;
       })
+      .filter((thread) => matchesDateFilter(thread, dateFilter))
+      .filter((thread) => matchesReengageFilter(thread, reengageFilter))
       .filter((thread) => {
         if (!term) return true;
         const haystack = [
@@ -624,7 +683,7 @@ export function InboxSplitView({ threads, channelFilter }: InboxSplitViewProps) 
           .toLowerCase();
         return haystack.includes(term);
       });
-  }, [threadItems, searchTerm, channelFilter]);
+  }, [threadItems, searchTerm, channelFilter, dateFilter, reengageFilter]);
 
   const selectedThread = React.useMemo(() => {
     if (!selectedId) {
