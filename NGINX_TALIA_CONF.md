@@ -211,7 +211,7 @@ server {
         proxy_set_header Host $host;
     }
 
-    location ~* ^/(auth|dashboard|crm|contactos|leads|visitas|inbox|embudo|agenda|vista-1|mapa-de-conversion|vista-2|settings|prospeccion|portal|clientes)(/.*)?$ {
+    location ~* ^/(auth|dashboard|crm|contactos|leads|visitas|inbox|embudo|agenda|propuesta|mapa-de-conversion|vista-2|settings|prospeccion|portal|clientes)(/.*)?$ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

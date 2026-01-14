@@ -1,0 +1,284 @@
+ "use client"
+
+import { useCallback, useState } from "react"
+
+import { AppViewLayout } from "@/components/layouts/app-view-layout"
+
+const columnHeaders = [
+  "Plan mensual 0%",
+  "Plan trimestral 10%",
+  "Plan semestral 15%",
+  "Precio mínimo anual objetivo 20%",
+]
+
+const rentaRows = [
+  {
+    label: "",
+    srLabel: "Opciones de pago",
+    cells: [
+      "12 pagos de: $4,166.67",
+      "4 pagos de: $11,764.71",
+      "2 pagos de: $22,222.22",
+      "Pago único de: $40,000.00",
+    ],
+  },
+  {
+    label: "Pago anual total",
+    cells: ["$50,000.04", "$47,058.84", "$44,444.44", "Pago único de: $40,000.00"],
+  },
+]
+
+const configuracionRows = [
+  {
+    label: "",
+    srLabel: "Opciones de pago",
+    cells: [
+      "12 pagos de: $10,312.50",
+      "4 pagos de: $29,117.65",
+      "2 pagos de: $55,000.00",
+      "Pago único de: $99,000.00",
+    ],
+  },
+  {
+    label: "Pago anual total",
+    cells: ["$123,750.00", "$116,470.59", "$110,000.00", "Pago único de: $99,000.00"],
+  },
+]
+
+export default function Page() {
+  const [expanded, setExpanded] = useState(false)
+  const [mvpOpen, setMvpOpen] = useState(false)
+  const today = new Date().toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+  const handlePrint = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.print()
+    }
+  }, [])
+  return (
+    <AppViewLayout title="Propuesta económica · Gran Peñón">
+      <div className="space-y-8 px-4 pb-8 lg:px-6">
+        <section className="rounded-2xl border border-border/60 bg-surface-alt p-6 shadow-sm">
+          <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
+            Gran Peñón · Residencial llave en mano
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold text-foreground">
+            Propuesta Tal-IA
+          </h1>
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            {[
+              {
+                caption: "Asistente multicanal",
+                title: "Atiende prospectos y clientes en todos los canales",
+                description:
+                  "WhatsApp, webchat y otros canales comparten contexto para dar una experiencia fluida.",
+              },
+              {
+                caption: "Marketing integrado",
+                title: "Orquesta campañas proactivas",
+                description:
+                  "Automatiza contenidos, notificaciones y flujos segmentados sin salir de Tal-IA.",
+              },
+              {
+                caption: "CRM personalizado",
+                title: "Centraliza contactos y oportunidades",
+                description:
+                  "Mantiene el historial, métricas y reglas de negocio para alimentar al asistente y al equipo.",
+              },
+              {
+                caption: "Prospección",
+                title: "Generación de contactos y leads",
+                description:
+                  "Búsquedas configuradas generan prospectos que nutren al asistente y al CRM en tiempo real.",
+              },
+            ].map((item) => (
+              <article
+                key={item.title}
+                className="rounded-2xl border border-border/50 bg-gradient-to-r from-emerald-50 via-white to-white/80 p-4 shadow-sm"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700">
+                  {item.caption}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">{item.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-6 text-base text-muted-foreground">
+            El sistema Tal-IA se configura a la medida del flujo de ventas, marketing y
+            operaciones de Gran Peñón. Todos los montos indicados son más IVA y pueden
+            combinarse según el nivel de compromiso anual.
+          </p>
+        </section>
+
+        <section className="rounded-2xl border border-border/60 bg-white p-6 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="flex w-full items-center justify-between text-left text-sm font-semibold text-foreground"
+          >
+            <span>Propuesta económica</span>
+            <span className="text-xs text-muted-foreground">
+              {expanded ? "Cerrar" : "Abrir"}
+            </span>
+          </button>
+          {expanded && (
+            <div className="mt-6 space-y-8">
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Precio renta
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Renta mensual por aplicación (más IVA)
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-border/40">
+                  <table className="w-full min-w-[480px] border-collapse text-sm">
+                    <thead className="bg-muted/10 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Concepto</th>
+                        {columnHeaders.map((header) => (
+                          <th key={header} className="px-4 py-3 text-left">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {rentaRows.map((row) => (
+                        <tr key={row.label || row.srLabel} className="even:bg-muted/5">
+                          <td className="px-4 py-4 font-medium text-foreground">
+                            {row.label ? (
+                              row.label
+                            ) : (
+                              <span className="sr-only">{row.srLabel}</span>
+                            )}
+                          </td>
+                          {row.cells.map((cell, index) => (
+                            <td key={`${row.label}-${index}`} className="px-4 py-4 text-foreground">
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Configuración
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Costos de configuración, programación y puesta en marcha (más IVA)
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-border/40">
+                  <table className="w-full min-w-[480px] border-collapse text-sm">
+                    <thead className="bg-muted/10 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Concepto</th>
+                        {columnHeaders.map((header) => (
+                          <th key={`config-${header}`} className="px-4 py-3 text-left">
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {configuracionRows.map((row) => (
+                        <tr key={row.label || row.srLabel} className="even:bg-muted/5">
+                          <td className="px-4 py-4 font-medium text-foreground">
+                            {row.label ? (
+                              row.label
+                            ) : (
+                              <span className="sr-only">{row.srLabel}</span>
+                            )}
+                          </td>
+                          {row.cells.map((cell, index) => (
+                            <td key={`${row.label}-${index}`} className="px-4 py-4 text-foreground">
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  La configuración incluye workshops de discovery, ajuste de workflows y
+                  la parametrización de reglas de negocio para los tres módulos mencionados.
+                  El pago aquí refleja la inversión única necesaria para que el sistema esté
+                  plenamente operativo.
+                </p>
+              </section>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-border/60 bg-white p-6 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMvpOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between text-left text-sm font-semibold text-foreground"
+          >
+            <span>MVP · Despliegue inicial</span>
+            <span className="text-xs text-muted-foreground">
+              {mvpOpen ? "Cerrar" : "Ver detalles"}
+            </span>
+          </button>
+          {mvpOpen && (
+            <div className="mt-6 space-y-4 text-sm text-muted-foreground">
+              <p>
+                El MVP comprende las piezas mínimas para arrancar Tal-IA en Gran Peñón:
+              </p>
+              <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
+                <li>
+                  <strong>Asistente multicanal:</strong> entrenamiento con esquemas de conversación,
+                  respuestas preaprobadas y conexión a WhatsApp + webchat.
+                </li>
+                <li>
+                  <strong>Marketing multicanal:</strong> plantillas y automatizaciones para campañas
+                  activas + seguimiento automático de respuestas.
+                </li>
+                <li>
+                  <strong>CRM personalizado:</strong> flujo de ventas, sincronización de contactos y
+                  seguimiento de oportunidades en un tablero único.
+                </li>
+              </ul>
+              <p>
+                Tiempos de entrega aproximados: una vez que Gran Peñón provea toda la información
+                solicitada (flujos, contactos clave, contenidos y aprobaciones) estimamos
+                un despliegue en <strong>4 semanas</strong>. Si surgen contratiempos con la entrega
+                de datos, el plazo puede extenderse.
+              </p>
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                Vigencia de propuesta: 20 días naturales
+              </p>
+            </div>
+          )}
+        </section>
+
+        <section className="border-t border-border/40 px-4 py-6 text-sm text-muted-foreground">
+          <p>Fecha: {today}</p>
+          <p className="mt-1">Jorge Torre · Geoactiv S.A. de C.V.</p>
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="rounded-full border border-emerald-400 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100"
+            >
+              Exportar a PDF
+            </button>
+          </div>
+        </section>
+      </div>
+    </AppViewLayout>
+  )
+}

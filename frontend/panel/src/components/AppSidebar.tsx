@@ -117,7 +117,7 @@ const NAVIGATION = {
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder },
-    { title: "Visita 1", url: "/vista-1", icon: IconLayoutGrid },
+    { title: "Propuesta", url: "/propuesta", icon: IconLayoutGrid },
     { title: "Visita 2", url: "/vista-2", icon: IconLayoutKanban },
     { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
   ],
