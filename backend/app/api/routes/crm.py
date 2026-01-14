@@ -2531,7 +2531,10 @@ async def _auto_move_opportunity_to_won(
         await repo.update_opportunity(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
-            payload={"etapa_id": str(won_stage["id"])},
+            payload={
+                "etapa_id": str(won_stage["id"]),
+                "estado": "ganada",
+            },
         )
         await repo.append_stage_history(
             organizacion_id=organizacion_id,
