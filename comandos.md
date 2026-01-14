@@ -88,6 +88,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+
 codex resume 019bb984-1f7e-7943-9ac3-6d312c3b3523
 Reinicio #1 · 2 reenganches
 codex resume 019bb280-f26a-7a71-9034-ea258a99959f
@@ -144,7 +145,7 @@ http://127.0.0.1:3000/dashboard
 http://127.0.0.1:3000/auth/login
 
 # Entarada a Ser
-ssh jorge T@67.205.156.148
+ssh jorge T@67.205.156.148 port: 2222
 
 curl -X POST "https://graph.facebook.com/v17.0/691881910681610/subscribed_apps" \
        -d "subscribed_fields=messages,message_reads,message_deliveries" \

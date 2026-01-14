@@ -1,4 +1,4 @@
- "use client"
+"use client"
 
 import { useCallback, useState } from "react"
 
@@ -62,12 +62,12 @@ export default function Page() {
     <AppViewLayout title="Propuesta económica · Gran Peñón">
       <div className="propuesta-print space-y-8 px-4 pb-8 lg:px-6">
         <section className="rounded-2xl border border-border/60 bg-surface-alt p-6 shadow-sm">
-          <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
-            Gran Peñón · Residencial llave en mano
-          </p>
           <h1 className="mt-2 text-3xl font-semibold text-foreground">
-            Propuesta Tal-IA
+            Propuesta sistema Tal-IA *SaaS
           </h1>
+          <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground">
+            <span className="font-semibold underline text-foreground">DESARROLLADORA EL PEÑON</span>
+          </p>
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
               {
@@ -111,6 +111,11 @@ export default function Page() {
             El sistema Tal-IA se configura a la medida del flujo de ventas, marketing y
             operaciones de Gran Peñón. Todos los montos indicados son más IVA y pueden
             combinarse según el nivel de compromiso anual.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Tal-IA se entrega como SaaS (software como servicio), lo que permite acceder
+            al sistema sin inversión en infraestructura física y recibir soporte y mejoras
+            continuas desde la nube.
           </p>
         </section>
 
@@ -251,6 +256,9 @@ export default function Page() {
                   <strong>CRM personalizado:</strong> flujo de ventas, sincronización de contactos y
                   seguimiento de oportunidades en un tablero único.
                 </li>
+                <li>
+                  <strong>Contidad de usuarios:</strong> 50 usuarios incluidos en el lanzamiento.
+                </li>
               </ul>
               <p>
                 Tiempos de entrega aproximados: una vez que Gran Peñón provea toda la información
@@ -266,11 +274,35 @@ export default function Page() {
         </section>
 
         <section className="border-t border-border/40 px-4 py-6 text-sm text-muted-foreground">
-          <p>Fecha: {today}</p>
-          <p className="mt-1">Jorge Torre · Sistema Tal-IA</p>
-          <p className="mt-4">Cel: 4441302811</p>
-          <p className="mt-1">administracion@geoactiv.mx</p>
-          <p className="mt-1">Web: https://geoactiv.mx/</p>
+          <div className="space-y-1">
+            <p>Fecha: {today}</p>
+            <p>Jorge Torre · Sistema Tal-IA*</p>
+          </div>
+          <div className="mt-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p>Cel: 4441302811</p>
+              <p>Email: administracion@geoactiv.mx</p>
+              <p>
+                Web:{" "}
+                <a
+                  href="https://geoactiv.mx/"
+                  className="text-foreground underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  https://geoactiv.mx/
+                </a>
+              </p>
+            </div>
+            <a
+              href="https://talia.mx/"
+              className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Web: https://talia.mx/
+            </a>
+          </div>
           <div className="mt-5 flex justify-end">
             <button
               type="button"
@@ -280,6 +312,9 @@ export default function Page() {
               Exportar a PDF
             </button>
           </div>
+          <p className="mt-2 text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground">
+            *SaaS (Software como servicio): plataforma en la nube con actualizaciones y soporte continuo.
+          </p>
         </section>
         <style jsx global>{`
           @media print {
