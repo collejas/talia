@@ -329,9 +329,24 @@ export default function Page() {
               position: relative;
               left: 0;
               top: 0;
+              width: 100%;
+            }
+            .propuesta-print section,
+            .propuesta-print table {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .propuesta-print table {
+              border-collapse: collapse;
+            }
+            .propuesta-print table,
+            .propuesta-print section {
+              page-break-after: avoid !important;
+              break-after: avoid !important;
             }
             @page {
-              margin: 0;
+              size: auto;
+              margin: 1.5cm;
             }
           }
         `}</style>
