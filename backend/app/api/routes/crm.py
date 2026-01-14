@@ -10671,6 +10671,21 @@ def _extract_contract_value_from_metadata(row: dict[str, Any]) -> float | None:
     return None
 
 
+def _extract_closed_date_from_metadata(row: dict[str, Any]) -> datetime | None:
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    stage_prep = _ensure_dict(metadata.get("stage_prep"), default={})
+    for prep in stage_prep.values():
+        if not isinstance(prep, dict):
+            continue
+        close_date = _clean_text(prep.get("close_date"))
+        if not close_date:
+            continue
+        parsed = _parse_datetime(close_date)
+        if parsed:
+            return parsed
+    return None
+
+
 def _build_pipeline_chart(
     rows: list[dict[str, Any]], days_range: int
 ) -> list[CRMPipelineChartPoint]:
@@ -10695,7 +10710,7 @@ def _build_pipeline_chart(
             if bucket:
                 bucket.nuevos += 1
         estado = (row.get("estado") or "").lower()
-        cerrado_at = _parse_datetime(row.get("cerrado_en"))
+        cerrado_at = _parse_datetime(row.get("cerrado_en")) or _extract_closed_date_from_metadata(row)
         if not cerrado_at:
             continue
         bucket = buckets.get(cerrado_at.date())
