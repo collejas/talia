@@ -8917,9 +8917,17 @@ async def crear_prospecto_manual(
     """Crea un prospecto manual etiquetado como fuente usuario."""
 
     data = _build_manual_prospecto_payload(payload)
+    manual_user_id = _jwt_verify_and_sub(user_token)
+    user_id: UUID | None = None
+    if manual_user_id:
+        try:
+            user_id = UUID(manual_user_id)
+        except ValueError:
+            user_id = None
     try:
         prospecto = await repo.create_prospecto_manual(
             usuario_token=user_token,
+            usuario_id=user_id,
             payload=data,
         )
     except CRMRepositoryError as exc:

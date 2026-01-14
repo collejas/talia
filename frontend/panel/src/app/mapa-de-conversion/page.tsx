@@ -3,7 +3,6 @@ import type { GeoJSON as GeoJSONType } from "geojson";
 import type { VisibilityState } from "@tanstack/react-table";
 
 import { AppSidebar } from "@/components/AppSidebar";
-import { SectionCards } from "@/components/section-cards";
 import { SessionRecovery } from "@/components/session-recovery";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -13,7 +12,6 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DemografiaControls } from "@/components/mapa-conversion/controls";
 import { MapaConversionTableClient } from "@/components/mapa-conversion/table.client";
-import type { LeadCards } from "@/lib/leads/data";
 import { LocationComparisonChartClient } from "@/components/mapa-conversion/location-comparison-chart.client";
 import { VisitsDataTable } from "@/components/visitas/visits-data-table";
 import { loadDemografiaData } from "@/lib/mapa-conversion/api";
@@ -23,6 +21,7 @@ import {
   orderStageKeys,
 } from "@/lib/mapa-conversion/stages";
 import { loadVisitsData } from "@/lib/visitas/data";
+import { MapKpis } from "@/components/mapa-conversion/map-kpis";
 
 export const dynamic = "force-dynamic";
 
@@ -32,62 +31,67 @@ const DEFAULT_CHANNELS = ["webchat", "whatsapp", "voz"] as const;
 type ChannelKey = (typeof DEFAULT_CHANNELS)[number];
 type ColorMode = "sequential" | "channel";
 
+const STAGE_LABELS: Record<string, string> = {
+  captado: "Captado",
+  precalificado: "Precalificado",
+  demo: "Demo agendada",
+  negociacion: "Negociación",
+  cerrado_ganado: "Cerrado (ganado)",
+  cerrado_perdido: "Cerrado (perdido)",
+};
+
 function selectTopLocation(dataset: DemografiaDataset) {
-  if (!dataset.length) {
-    return { name: "—", leads_total: 0, total_visitas: 0 } as DemografiaDataset[number];
-  }
+  if (!dataset.length) return null;
   return [...dataset].sort((a, b) => (b.total_visitas ?? 0) - (a.total_visitas ?? 0))[0];
 }
 
-function buildCardsData(
-  summaryTotals: Record<string, number>,
-  visitantesTotals: { con_chat: number; total: number },
-  dataset: DemografiaDataset,
-): LeadCards {
-  const topUbicacion = selectTopLocation(dataset);
+function combineChannelTotals(entry: DemografiaDataset[number]) {
+  const combined = new Map<string, number>();
+  const leadsPorCanal = entry.leads_totales_por_canal || {};
+  const visitantesPorCanal = entry.visitantes_totales_por_canal || {};
+  for (const [channel, total] of Object.entries(leadsPorCanal)) {
+    combined.set(channel || "desconocido", (combined.get(channel || "desconocido") ?? 0) + (total ?? 0));
+  }
+  for (const [channel, total] of Object.entries(visitantesPorCanal)) {
+    const key = channel || "desconocido";
+    combined.set(key, (combined.get(key) ?? 0) + (total ?? 0));
+  }
+  return combined;
+}
 
+function getLocationChannelLeader(entry: DemografiaDataset[number]) {
+  const combined = combineChannelTotals(entry);
+  const top = Array.from(combined.entries()).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0];
+  const label = top?.[0] ?? "";
   return {
-    total: summaryTotals.total ?? 0,
-    abiertas: summaryTotals.abiertas ?? 0,
-    ganadas: summaryTotals.ganadas ?? 0,
-    perdidas: summaryTotals.perdidas ?? 0,
-    nuevas: summaryTotals.total ?? 0,
-    montoTotal: visitantesTotals.total ?? 0,
-    topVendedor: {
-      nombre: topUbicacion.name,
-      total: topUbicacion.total_visitas ?? 0,
-    },
+    name: label ? formatChannelLabel(label) : "",
+    total: top?.[1] ?? 0,
   };
 }
 
-function buildTableData(dataset: Awaited<ReturnType<typeof loadDemografiaData>>["map"]["dataset"]) {
-  const stageLabels: Record<string, string> = {
-    captado: "Captado",
-    precalificado: "Precalificado",
-    demo: "Demo agendada",
-    negociacion: "Negociación",
-    cerrado_ganado: "Cerrado (ganado)",
-    cerrado_perdido: "Cerrado (perdido)",
-  }
+function getLocationStageLeader(entry: DemografiaDataset[number]) {
+  const stages = entry.etapas_totales || {};
+  const topStage = Object.entries(stages).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))[0];
+  const key = topStage?.[0] ?? "";
+  return {
+    name: key ? STAGE_LABELS[key] ?? key : "",
+    total: topStage?.[1] ?? 0,
+  };
+}
+
+function buildTableData(dataset: DemografiaDataset) {
 
   return dataset.map((entry, index) => {
     const leadsPorCanal = entry.leads_totales_por_canal || {}
     const visitantesPorCanal = entry.visitantes_totales_por_canal || {}
-    const combinados = new Map<string, number>()
-    for (const [channel, total] of Object.entries(leadsPorCanal)) {
-      combinados.set(channel || "desconocido", (combinados.get(channel || "desconocido") ?? 0) + (total ?? 0))
-    }
-    for (const [channel, total] of Object.entries(visitantesPorCanal)) {
-      const key = channel || "desconocido"
-      combinados.set(key, (combinados.get(key) ?? 0) + (total ?? 0))
-    }
+    const combinados = combineChannelTotals(entry)
     const canalPrincipal =
       Array.from(combinados.entries())
         .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin canal"
     const canalLabel = formatChannelLabel(canalPrincipal)
     const etapaPrincipalRaw = Object.entries(entry.etapas_totales || {})
       .sort(([, totalA], [, totalB]) => (totalB ?? 0) - (totalA ?? 0))[0]?.[0] ?? "sin etapa"
-    const etapaPrincipal = stageLabels[etapaPrincipalRaw] ?? etapaPrincipalRaw
+    const etapaPrincipal = STAGE_LABELS[etapaPrincipalRaw] ?? etapaPrincipalRaw
     const totalVisitas = entry.total_visitas ?? 0
     const visitantesTotal = entry.visitantes_total ?? 0
     const hasDatos = Boolean(entry.has_data && totalVisitas > 0)
@@ -265,22 +269,6 @@ export default async function Page({
     );
   }
 
-  const cardsData = demografiaResponse
-    ? buildCardsData(
-        demografiaResponse.summary.leads.totals,
-        demografiaResponse.summary.visitantes.totals,
-        demografiaResponse.map.dataset,
-      )
-    : {
-        total: 0,
-        abiertas: 0,
-        ganadas: 0,
-        perdidas: 0,
-        nuevas: 0,
-        montoTotal: 0,
-        topVendedor: { nombre: "—", total: 0 },
-      };
-
   const tableData = demografiaResponse ? buildTableData(demografiaResponse.map.dataset) : [];
   const metricColumns = METRIC_COLUMNS;
   const metricColumnsVisibility = buildInitialVisibility(metricColumns);
@@ -309,6 +297,27 @@ export default async function Page({
         return acc;
       }, createEmptyStageTotals(stageKeys))
     : createEmptyStageTotals(stageKeys);
+  const leadsTotal = demografiaResponse?.summary.leads.totals.total ?? 0;
+  const visitantesTotal = demografiaResponse?.summary.visitantes.totals.total ?? 0;
+  const topLocation = demografiaResponse ? selectTopLocation(demografiaResponse.map.dataset) : null;
+  const topLocationName = topLocation?.name ?? "Sin datos";
+  const topLocationLeads = topLocation?.leads_total ?? 0;
+  const topLocationVisits = topLocation?.total_visitas ?? 0;
+  const locationChannelLeader = topLocation ? getLocationChannelLeader(topLocation) : { name: "", total: 0 };
+  const locationStageLeader = topLocation ? getLocationStageLeader(topLocation) : { name: "", total: 0 };
+  const nivelLabel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
+  const mapKpisData = {
+    nivelLabel,
+    leadsTotal,
+    visitasTotales: visitantesTotal,
+    topLocationName,
+    topLocationLeads,
+    topLocationVisits,
+    channelLeader: locationChannelLeader.name,
+    channelLeaderValue: locationChannelLeader.total,
+    stageLeader: locationStageLeader.name,
+    stageLeaderValue: locationStageLeader.total,
+  };
   const mapShape = (() => {
     const raw = demografiaResponse?.map.geojson;
     if (!raw || typeof raw !== "object") return null;
@@ -341,7 +350,7 @@ export default async function Page({
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <SectionCards data={cardsData} />
+              <MapKpis {...mapKpisData} />
               <DemografiaControls
                 nivel={nivel}
                 canales={canalesSelected}

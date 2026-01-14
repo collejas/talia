@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Mapping
 from datetime import datetime, timezone, timedelta
 from typing import Any
 from uuid import UUID
@@ -16,6 +17,8 @@ from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import send_email, storage
 from app.services.calendar import CalendarError
+from app.services.catalog_embeddings import CatalogEmbeddingService
+from app.services.catalog_fraccionamientos import list_catalog_fraccionamientos
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
 
@@ -127,6 +130,150 @@ async def execute_tool(
 
     if func == "cancel_demo":
         return await _handle_cancel_demo(arguments, context)
+
+    if func == "list_catalog_fraccionamientos":
+        org_value = arguments.get("organizacion_id")
+        if not org_value:
+            contact = await _resolve_contact(context.contact_id)
+            org_value = webchat_service._extract_contact_org(contact)
+        if not org_value:
+            raise ValueError("organizacion_id requerido para listar fraccionamientos")
+        resolved = webchat_service._resolve_org_uuid(org_value)
+        if not resolved:
+            raise ValueError("organizacion_id inválido")
+        org_uuid = UUID(resolved)
+
+        include_inactive_raw = arguments.get("include_inactive")
+        if isinstance(include_inactive_raw, str):
+            include_inactive = include_inactive_raw.strip().lower() in {
+                "1",
+                "true",
+                "sí",
+                "si",
+                "yes",
+            }
+        else:
+            include_inactive = bool(include_inactive_raw)
+
+        prototipos_limit_raw = arguments.get("prototipos_limit")
+        try:
+            prototipos_limit = int(prototipos_limit_raw)
+        except (TypeError, ValueError):
+            prototipos_limit = 6
+        prototipos_limit = max(1, min(20, prototipos_limit))
+
+        repo = CRMRepository()
+        try:
+            rows = await list_catalog_fraccionamientos(
+                repo,
+                organizacion_id=org_uuid,
+                include_inactive=include_inactive,
+                prototipos_limit=prototipos_limit,
+            )
+        except CRMRepositoryError as exc:
+            raise ValueError(str(exc)) from exc
+        return {"status": "ok", "fraccionamientos": rows}
+
+    if func == "fetch_catalog_item_details":
+        org_value = arguments.get("organizacion_id")
+        if not org_value:
+            contact = await _resolve_contact(context.contact_id)
+            org_value = webchat_service._extract_contact_org(contact)
+        if not org_value:
+            raise ValueError("organizacion_id requerido para fetch_catalog_item_details")
+        resolved = webchat_service._resolve_org_uuid(org_value)
+        if not resolved:
+            raise ValueError("organizacion_id inválido")
+        org_uuid = UUID(resolved)
+
+        query = str(arguments.get("query") or "").strip()
+        if not query:
+            raise ValueError("query requerido para fetch_catalog_item_details")
+        detail_level = str(arguments.get("detail_level") or "metadata").strip()
+        if detail_level not in {"metadata", "overview"}:
+            raise ValueError("detail_level inválido")
+        limit_raw = arguments.get("limit")
+        try:
+            limit = int(limit_raw)
+        except (TypeError, ValueError):
+            limit = 1
+        limit = max(1, min(5, limit))
+
+        repo = CRMRepository()
+        service = CatalogEmbeddingService(repo)
+        try:
+            matches = await service.query_documents(
+                org_uuid,
+                query=query,
+                limit=limit,
+            )
+        except CRMRepositoryError as exc:
+            raise ValueError(str(exc)) from exc
+
+        items: list[dict[str, Any]] = []
+        for match in matches:
+            slug = match.metadata.get("slug")
+            item_data: dict[str, Any] | None = None
+            if isinstance(slug, str) and slug.strip():
+                try:
+                    item_data = await repo.get_catalog_item_by_slug(
+                        organizacion_id=org_uuid,
+                        slug=slug.strip(),
+                    )
+                except CRMRepositoryError as exc:
+                    logger.warning(
+                        "catalog.item_lookup_failed",
+                        extra={
+                            "organizacion_id": str(org_uuid),
+                            "slug": slug,
+                            "error": str(exc),
+                        },
+                    )
+            metadata_value = (
+                item_data.get("metadata")
+                if item_data and item_data.get("metadata")
+                else item_data.get("metadatos")
+                if item_data
+                else None
+            )
+            content_metadata = webchat_service._extract_metadata_from_content(match.contenido)
+            normalized_metadata = webchat_service._normalize_metadata_value(metadata_value)
+            normalized_match = webchat_service._normalize_metadata_value(match.metadata)
+            merged_metadata: dict[str, Any] = {}
+            if normalized_match:
+                merged_metadata.update(normalized_match)
+            if normalized_metadata:
+                merged_metadata.update(normalized_metadata)
+            if content_metadata:
+                merged_metadata.update(content_metadata)
+            metadata: dict[str, Any] | None
+            if merged_metadata:
+                metadata = merged_metadata
+            else:
+                metadata = (
+                    metadata_value
+                    if isinstance(metadata_value, Mapping)
+                    else match.metadata
+                )
+            items.append(
+                {
+                    "nombre": item_data.get("nombre") if item_data else match.metadata.get("nombre"),
+                    "slug": item_data.get("slug") if item_data else match.metadata.get("slug"),
+                    "tipo": item_data.get("tipo") if item_data else match.metadata.get("tipo"),
+                    "unidad": item_data.get("unidad") if item_data else None,
+                    "precio_base": item_data.get("precio_base") if item_data else None,
+                    "moneda": item_data.get("moneda") if item_data else match.metadata.get("moneda"),
+                    "activo": item_data.get("activo") if item_data else match.metadata.get("activo"),
+                    "metadata": metadata,
+                    "similarity": match.similarity,
+                }
+            )
+        return {
+            "status": "ok",
+            "items": items,
+            "detail_level": detail_level,
+            "source": "vector_store_supabase",
+        }
 
     raise ValueError(f"La función '{func}' no está disponible en WhatsApp")
 

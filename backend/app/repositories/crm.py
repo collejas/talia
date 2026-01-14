@@ -5004,14 +5004,21 @@ class CRMRepository:
         *,
         usuario_token: str,
         payload: dict[str, Any],
+        usuario_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Inserta un prospecto manual etiquetado como fuente usuario."""
+
+        body = dict(payload)
+        if usuario_id:
+            org_id = await self._get_usuario_organizacion_id(usuario_id=usuario_id)
+            if org_id:
+                body.setdefault("organizacion_id", str(org_id))
 
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/prospeccion_prospectos",
             token=usuario_token,
-            json=[payload],
+            json=[body],
             prefer="return=representation",
         )
         data = resp.json() or []
@@ -6850,4 +6857,26 @@ class CRMRepository:
                 f"Supabase respondió error {resp.status_code} en {path}: {resp.text}"
             )
         return resp
+
+    async def _get_usuario_organizacion_id(
+        self,
+        *,
+        usuario_id: UUID,
+    ) -> UUID | None:
+        params = {
+            "id": f"eq.{usuario_id}",
+            "select": "organizacion_id",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        org_value = data[0].get("organizacion_id")
+        if not org_value:
+            return None
+        try:
+            return UUID(str(org_value))
+        except (TypeError, ValueError):
+            return None
 logger = get_logger("app.repositories.crm")
