@@ -269,8 +269,13 @@ function calculateRestartKpis(stats: CRMLeadRestartStat[]): RestartKpis {
     totalAmount += Number(stat.monto_total ?? 0);
 
     for (const cycle of cycles) {
-      const estado = cycle.estado?.toLowerCase() ?? "";
-      if (estado.includes("ganado") || estado.includes("demo") || estado.includes("agend")) {
+      const estado = (cycle.estado ?? "").toLowerCase();
+      if (
+        estado.includes("ganado") ||
+        estado.includes("ganada") ||
+        estado.includes("demo") ||
+        estado.includes("agend")
+      ) {
         successfulCycles += 1;
       }
     }
