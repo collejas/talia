@@ -60,7 +60,7 @@ export default function Page() {
   }, [])
   return (
     <AppViewLayout title="Propuesta económica · Gran Peñón">
-      <div className="space-y-8 px-4 pb-8 lg:px-6">
+      <div className="propuesta-print space-y-8 px-4 pb-8 lg:px-6">
         <section className="rounded-2xl border border-border/60 bg-surface-alt p-6 shadow-sm">
           <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
             Gran Peñón · Residencial llave en mano
@@ -267,7 +267,10 @@ export default function Page() {
 
         <section className="border-t border-border/40 px-4 py-6 text-sm text-muted-foreground">
           <p>Fecha: {today}</p>
-          <p className="mt-1">Jorge Torre · Geoactiv S.A. de C.V.</p>
+          <p className="mt-1">Jorge Torre · Sistema Tal-IA</p>
+          <p className="mt-4">Cel: 4441302811</p>
+          <p className="mt-1">administracion@geoactiv.mx</p>
+          <p className="mt-1">Web: https://geoactiv.mx/</p>
           <div className="mt-5 flex justify-end">
             <button
               type="button"
@@ -278,6 +281,25 @@ export default function Page() {
             </button>
           </div>
         </section>
+        <style jsx global>{`
+          @media print {
+            body * {
+              visibility: hidden !important;
+            }
+            .propuesta-print,
+            .propuesta-print * {
+              visibility: visible !important;
+            }
+            .propuesta-print {
+              position: relative;
+              left: 0;
+              top: 0;
+            }
+            @page {
+              margin: 0;
+            }
+          }
+        `}</style>
       </div>
     </AppViewLayout>
   )
