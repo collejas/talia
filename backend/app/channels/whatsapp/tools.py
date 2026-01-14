@@ -1094,6 +1094,34 @@ async def _notify_sales_rep(
         },
     )
 
+    if send_result.sid:
+        try:
+            await storage.register_whatsapp_message(
+                direction="saliente",
+                wa_id=None,
+                phone_e164=seller_phone,
+                body=message_body if not template_sid else None,
+                message_sid=send_result.sid,
+                metadata={
+                    "trigger": trigger,
+                    "template_sid": template_sid,
+                    "sender": "sales_notification",
+                },
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                organizacion_id=str(org_id),
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.notify_sales.metadata_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "trigger": trigger,
+                    "error": str(exc),
+                    "message_sid": send_result.sid,
+                },
+            )
+
     notifications[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "conversation_id": context.conversation_id,
