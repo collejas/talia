@@ -10615,8 +10615,14 @@ def _build_pipeline_cards(rows: list[dict[str, Any]]) -> CRMPipelineCards:
         else:
             abiertas += 1
         monto = row.get("monto_estimado")
-        if isinstance(monto, (int, float)):
-            monto_total += float(monto)
+        etapa = row.get("etapa") or {}
+        stage_category = (etapa.get("categoria") or row.get("estado") or "abierta").lower()
+        if stage_category == "ganada" or estado == "ganada":
+            closed_amount = _extract_contract_value_from_metadata(row) or (
+                float(monto) if isinstance(monto, (int, float)) else None
+            )
+            if closed_amount is not None:
+                monto_total += closed_amount
         created_at = _parse_datetime(row.get("creado_en"))
         if created_at and created_at >= nuevas_threshold:
             nuevas += 1
@@ -10647,6 +10653,22 @@ def _build_pipeline_cards(rows: list[dict[str, Any]]) -> CRMPipelineCards:
         monto_total=monto_total,
         top_vendedor=top_vendedor,
     )
+
+
+def _extract_contract_value_from_metadata(row: dict[str, Any]) -> float | None:
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    stage_prep = _ensure_dict(metadata.get("stage_prep"), default={})
+    for prep in stage_prep.values():
+        if not isinstance(prep, dict):
+            continue
+        value = prep.get("contract_value")
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _build_pipeline_chart(

@@ -99,14 +99,14 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Visitantes totales</CardDescription>
+          <CardDescription>Valor ganado</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
             {formatNumber(data.montoTotal)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
               <IconTrendingUp />
-              Top ubicación
+              Cotizaciones aceptadas
             </Badge>
           </CardAction>
         </CardHeader>
@@ -114,7 +114,7 @@ export function SectionCards({ data = DEFAULT_LEAD_CARDS }: SectionCardsProps) {
           <div className="line-clamp-1 flex gap-2 font-medium">
             {topVendedorLabel} <IconTrendingUp className="size-4" />
           </div>
-          <div className="text-muted-foreground">Ubicación con más visitas</div>
+          <div className="text-muted-foreground">Vendedor con más cierres</div>
         </CardFooter>
       </Card>
     </div>
