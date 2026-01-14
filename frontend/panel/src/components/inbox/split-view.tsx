@@ -509,7 +509,7 @@ export function InboxSplitView({
 }: InboxSplitViewProps) {
   const [threadItems, setThreadItems] = React.useState<InboxThread[]>(threads);
   const [selectedId, setSelectedId] = React.useState<string | null>(threads[0]?.id ?? null);
-  const [searchTerm, setSearchTerm] = React.useState("");
+  const [searchTerm] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
   const [manualToggling, setManualToggling] = React.useState(false);
