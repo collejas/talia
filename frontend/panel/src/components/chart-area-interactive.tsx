@@ -201,7 +201,10 @@ export function ChartAreaInteractive({ data = [] }: ChartAreaInteractiveProps) {
         </CardAction>
       </CardHeader>
       <CardContent className="px-0 pb-0">
-        <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+        <ChartContainer
+          config={chartConfig}
+          className="h-[220px] min-h-[200px] w-full"
+        >
           <AreaChart
             accessibilityLayer
             data={filteredData}
