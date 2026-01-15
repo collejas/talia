@@ -47,6 +47,12 @@ const configuracionRows = [
 export default function Page() {
   const [expanded, setExpanded] = useState(false)
   const [mvpOpen, setMvpOpen] = useState(false)
+  const [recipientEmail, setRecipientEmail] = useState("")
+  const [messageBody, setMessageBody] = useState(
+    "Adjunto encontrarás la propuesta Tal-IA para Gran Peñón.",
+  )
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailFeedback, setEmailFeedback] = useState<string | null>(null)
   const today = useMemo(
     () =>
       new Date().toLocaleDateString("es-MX", {
@@ -63,6 +69,39 @@ export default function Page() {
     }
     window.open("/api/propuesta/tal-ia/pdf", "_blank")
   }, [])
+  const handleSendEmail = useCallback(async () => {
+    if (!recipientEmail.trim()) {
+      setEmailFeedback("Ingresa un correo válido para enviar la propuesta.")
+      return
+    }
+    setSendingEmail(true)
+    setEmailFeedback(null)
+    try {
+      const response = await fetch("/api/propuesta/tal-ia/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipients: [recipientEmail.trim()],
+          subject: "Propuesta Tal-IA · Gran Peñón",
+          message: messageBody.trim(),
+        }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        const error = payload?.detail || payload?.error || "No se pudo enviar el correo."
+        throw new Error(error)
+      }
+      setEmailFeedback("Propuesta enviada correctamente.")
+    } catch (error) {
+      setEmailFeedback(
+        error instanceof Error ? error.message : "Hubo un error enviando el correo.",
+      )
+    } finally {
+      setSendingEmail(false)
+    }
+  }, [recipientEmail, messageBody])
   return (
     <AppViewLayout title="Propuesta" contentClassName="max-w-full">
       <div className="propuesta-print space-y-8 px-4 pb-8 lg:px-6">
@@ -249,7 +288,7 @@ export default function Page() {
                   <strong>CRM personalizado:</strong> flujo de ventas, sincronización de contactos y
                   seguimiento de oportunidades en un tablero único.
                 </li>
-                <li>* Contidad de Usuarios 50</li>
+                <li>Contidad de Usuarios 50</li>
               </ul>
               <p>
                 Tiempos de entrega aproximados: una vez que Gran Peñón provea toda la información
@@ -305,14 +344,49 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <div className="mt-6 flex justify-end">
-            <button
-              type="button"
-              onClick={handleExport}
-              className="rounded-full border border-emerald-400 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100"
-            >
-              Exportar a PDF
-            </button>
+          <div className="mt-6 flex flex-col gap-6">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleExport}
+                className="rounded-full border border-emerald-400 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100"
+              >
+                Exportar a PDF
+              </button>
+            </div>
+            <div className="rounded-2xl border border-border/60 bg-surface p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Enviar por correo
+              </p>
+              <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+                <input
+                  type="email"
+                  placeholder="Correo del destinatario"
+                  value={recipientEmail}
+                  onChange={(event) => setRecipientEmail(event.target.value)}
+                  className="flex-1 rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendEmail}
+                  disabled={sendingEmail}
+                  className="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {sendingEmail ? "Enviando…" : "Enviar propuesta"}
+                </button>
+              </div>
+              <textarea
+                rows={2}
+                value={messageBody}
+                onChange={(event) => setMessageBody(event.target.value)}
+                className="mt-3 w-full rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+              />
+              {emailFeedback && (
+                <p className="mt-2 text-xs font-medium text-emerald-700">
+                  {emailFeedback}
+                </p>
+              )}
+            </div>
           </div>
           <p className="mt-2 text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground">
             *SaaS (Software como servicio): plataforma en la nube con actualizaciones y soporte continuo.
