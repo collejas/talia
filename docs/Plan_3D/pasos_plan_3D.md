@@ -1,23 +1,23 @@
 # Pasos para ejecutar el plan 3D
 
-1. [ ] **Definir catálogo de tipos de propiedad**
-   - [ ] Crear tabla `propiedad_tipos` (nombre, descripción, color por defecto, metadata) si se requiere flexibilidad.
-   - [ ] Registrar tipos iniciales: lote, casa, departamento, local comercial, oficina, consultorio.
+1. [x] **Definir catálogo de tipos de propiedad**
+   - [x] Crear tabla `propiedad_tipos` (nombre, descripción, color por defecto, metadata) si se requiere flexibilidad.
+   - [x] Registrar tipos iniciales: lote, casa, departamento, local comercial, oficina, consultorio.
 
-2. [ ] **Diseñar las tablas espaciales**
-   - [ ] Crear tabla principal `propiedades` con FK a `organizaciones`, `tipo_id`, `status`, `precio`, `metadata`, `height`, `min_height`, `nivel`, `geom geometry(PolygonZ,4326)` y timestamps.
-   - [ ] Opcional: crear tablas auxiliares `niveles` y `departamentos` si los edificios requieren más detalle (cada nivel->varios departamentos).
-   - [ ] Añadir índices GIST sobre `geom` y columnas clave (`organizacion_id`, `status`, `tipo_id`).
+2. [x] **Diseñar las tablas espaciales**
+   - [x] Crear tabla principal `propiedades` con FK a `organizaciones`, `tipo_id`, `status`, `precio`, `metadata`, `height`, `min_height`, `nivel`, `geom geometry(PolygonZ,4326)` y timestamps.
+   - [x] Opcional: crear tablas auxiliares `niveles` y `departamentos` si los edificios requieren más detalle (cada nivel->varios departamentos).
+   - [x] Añadir índices GIST sobre `geom` y columnas clave (`organizacion_id`, `status`, `tipo_id`).
 
-3. [ ] **Configurar estado y triggers**
-   - [ ] Crear tipos enumerados o check constraints para `status` (disponible/apartado/vendido) y `nivel`.
-   - [ ] Implementar triggers que actualicen `geom` cuando se cambien coordenadas o se inserten puntos aislados (lat/lng).
-   - [ ] Registrar triggers que mantengan timestamps (`creado_en`, `actualizado_en`).
+3. [x] **Configurar estado y triggers**
+   - [x] Crear tipos enumerados o check constraints para `status` (disponible/apartado/vendido) y `nivel`.
+   - [x] Implementar triggers que actualicen `geom` cuando se cambien coordenadas o se inserten puntos aislados (lat/lng).
+   - [x] Registrar triggers que mantengan timestamps (`creado_en`, `actualizado_en`).
 
-4. [ ] **Exponer GeoJSON a través de RPC / endpoint**
-   - [ ] Crear función RPC `crm_propiedades_geojson(p_organizacion uuid, p_level int DEFAULT NULL, p_tipo uuid DEFAULT NULL)` que retorne `FeatureCollection`.
-   - [ ] Incluir en cada feature `properties` con `status`, `tipo_nombre`, `color`, `height`, `levels`, `nivel`, `precio`.
-   - [ ] Filtrar por tenant y por parámetros opcionales (nivel/tipo) para alimentar la vista.
+4. [x] **Exponer GeoJSON a través de RPC / endpoint**
+   - [x] Crear función RPC `crm_propiedades_geojson(p_organizacion uuid, p_level int DEFAULT NULL, p_tipo uuid DEFAULT NULL)` que retorne `FeatureCollection`.
+   - [x] Incluir en cada feature `properties` con `status`, `tipo_nombre`, `color`, `height`, `levels`, `nivel`, `precio`.
+   - [x] Filtrar por tenant y por parámetros opcionales (nivel/tipo) para alimentar la vista.
 
 5. [ ] **Construir la capa Leaflet + OSMBuildings**
    - [ ] Inicializar `L.map` con tiles base y centrar en zona del cliente.
