@@ -1157,6 +1157,18 @@ class ConversationReplyPayload(BaseModel):
     )
 
 
+class GeoJSONFeature(BaseModel):
+    type: Literal["Feature"]
+    id: UUID
+    geometry: dict[str, Any]
+    properties: dict[str, Any]
+
+
+class GeoJSONFeatureCollection(BaseModel):
+    type: Literal["FeatureCollection"]
+    features: list[GeoJSONFeature]
+
+
 def get_repository() -> CRMRepository:
     try:
         return CRMRepository()
@@ -10527,6 +10539,29 @@ async def demografia_geo_paises(
         logger.exception("crm.demografia.geo.world_missing")
         raise HTTPException(status_code=500, detail="geojson_missing") from exc
     return {"ok": True, "geojson": geojson}
+
+
+@router.get("/propiedades/geojson", response_model=GeoJSONFeatureCollection)
+async def propiedades_geojson(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    nivel: Annotated[int | None, Query(gt=0)] = None,
+    tipo_id: UUID | None = Query(default=None),
+) -> GeoJSONFeatureCollection:
+    try:
+        payload = await repo.get_propiedades_geojson(
+            organizacion_id=organizacion_id,
+            nivel=nivel,
+            tipo_id=tipo_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        return GeoJSONFeatureCollection(**payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"geojson_invalid:{exc}") from exc
 
 
 def _build_pipeline_overview(

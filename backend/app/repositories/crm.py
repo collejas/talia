@@ -199,6 +199,23 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar cuentas: {data!r}")
         return data
 
+    async def get_propiedades_geojson(
+        self,
+        *,
+        organizacion_id: UUID,
+        nivel: int | None = None,
+        tipo_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"p_organizacion": str(organizacion_id)}
+        if nivel is not None:
+            payload["p_nivel"] = nivel
+        if tipo_id is not None:
+            payload["p_tipo"] = str(tipo_id)
+        result = await self._rpc("crm_propiedades_geojson", payload)
+        if not isinstance(result, dict):
+            raise CRMRepositoryError("crm_propiedades_geojson_invalid_response")
+        return result
+
     async def create_account(
         self,
         *,
