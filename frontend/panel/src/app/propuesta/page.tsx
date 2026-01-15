@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useState } from "react"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
@@ -14,7 +15,6 @@ const columnHeaders = [
 const rentaRows = [
   {
     label: "",
-    srLabel: "Opciones de pago",
     cells: [
       "12 pagos de: $4,166.67",
       "4 pagos de: $11,764.71",
@@ -31,7 +31,6 @@ const rentaRows = [
 const configuracionRows = [
   {
     label: "",
-    srLabel: "Opciones de pago",
     cells: [
       "12 pagos de: $10,312.50",
       "4 pagos de: $29,117.65",
@@ -53,20 +52,21 @@ export default function Page() {
     month: "long",
     day: "numeric",
   })
-  const handlePrint = useCallback(() => {
-    if (typeof window !== "undefined") {
-      window.print()
+  const handleExport = useCallback(() => {
+    if (typeof window === "undefined") {
+      return
     }
+    window.open("/api/propuesta/tal-ia/pdf", "_blank")
   }, [])
   return (
-    <AppViewLayout title="Propuesta económica · Gran Peñón">
+    <AppViewLayout title="Propuesta" contentClassName="max-w-full">
       <div className="propuesta-print space-y-8 px-4 pb-8 lg:px-6">
         <section className="rounded-2xl border border-border/60 bg-surface-alt p-6 shadow-sm">
           <h1 className="mt-2 text-3xl font-semibold text-foreground">
             Propuesta sistema Tal-IA *SaaS
           </h1>
-          <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground">
-            <span className="font-semibold underline text-foreground">DESARROLLADORA EL PEÑON</span>
+          <p className="mt-1 text-sm uppercase tracking-[0.3em] font-semibold text-foreground underline">
+            DESARROLLADORA EL PEÑON
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
@@ -155,14 +155,8 @@ export default function Page() {
                     </thead>
                     <tbody className="divide-y divide-border/40">
                       {rentaRows.map((row) => (
-                        <tr key={row.label || row.srLabel} className="even:bg-muted/5">
-                          <td className="px-4 py-4 font-medium text-foreground">
-                            {row.label ? (
-                              row.label
-                            ) : (
-                              <span className="sr-only">{row.srLabel}</span>
-                            )}
-                          </td>
+                        <tr key={row.label || JSON.stringify(row.cells)} className="even:bg-muted/5">
+                          <td className="px-4 py-4 font-medium text-foreground">{row.label}</td>
                           {row.cells.map((cell, index) => (
                             <td key={`${row.label}-${index}`} className="px-4 py-4 text-foreground">
                               {cell}
@@ -198,14 +192,8 @@ export default function Page() {
                     </thead>
                     <tbody className="divide-y divide-border/40">
                       {configuracionRows.map((row) => (
-                        <tr key={row.label || row.srLabel} className="even:bg-muted/5">
-                          <td className="px-4 py-4 font-medium text-foreground">
-                            {row.label ? (
-                              row.label
-                            ) : (
-                              <span className="sr-only">{row.srLabel}</span>
-                            )}
-                          </td>
+                        <tr key={row.label || JSON.stringify(row.cells)} className="even:bg-muted/5">
+                          <td className="px-4 py-4 font-medium text-foreground">{row.label}</td>
                           {row.cells.map((cell, index) => (
                             <td key={`${row.label}-${index}`} className="px-4 py-4 text-foreground">
                               {cell}
@@ -256,9 +244,7 @@ export default function Page() {
                   <strong>CRM personalizado:</strong> flujo de ventas, sincronización de contactos y
                   seguimiento de oportunidades en un tablero único.
                 </li>
-                <li>
-                  <strong>Contidad de usuarios:</strong> 50 usuarios incluidos en el lanzamiento.
-                </li>
+                <li>* Contidad de Usuarios 50</li>
               </ul>
               <p>
                 Tiempos de entrega aproximados: una vez que Gran Peñón provea toda la información
@@ -278,8 +264,8 @@ export default function Page() {
             <p>Fecha: {today}</p>
             <p>Jorge Torre · Sistema Tal-IA*</p>
           </div>
-          <div className="mt-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
+          <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1 text-sm text-muted-foreground">
               <p>Cel: 4441302811</p>
               <p>Email: administracion@geoactiv.mx</p>
               <p>
@@ -294,19 +280,28 @@ export default function Page() {
                 </a>
               </p>
             </div>
-            <a
-              href="https://talia.mx/"
-              className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Web: https://talia.mx/
-            </a>
+            <div className="flex flex-col items-end gap-3">
+              <a
+                href="https://talia.mx/"
+                className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Web: https://talia.mx/
+              </a>
+              <Image
+                src="/QR_Lia.png"
+                alt="QR Tal-IA"
+                width={120}
+                height={120}
+                className="h-auto w-[120px]"
+              />
+            </div>
           </div>
-          <div className="mt-5 flex justify-end">
+          <div className="mt-6 flex justify-end">
             <button
               type="button"
-              onClick={handlePrint}
+              onClick={handleExport}
               className="rounded-full border border-emerald-400 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100"
             >
               Exportar a PDF
