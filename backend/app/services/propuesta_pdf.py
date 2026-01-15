@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Sequence
+from base64 import b64encode
 
 from weasyprint import HTML as WeasyHTML
 
@@ -43,6 +45,19 @@ CARD_BLOCKS = [
 ]
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+QR_IMAGE_PATH = REPO_ROOT / "QR_Lia.png"
+
+
+def _load_qr_image_data_url() -> str:
+    if not QR_IMAGE_PATH.exists():
+        return ""
+    encoded = b64encode(QR_IMAGE_PATH.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+
+
 def _render_rows(rows: Sequence[tuple[str, Sequence[str]]]) -> str:
     row_html = []
     for label, cells in rows:
@@ -71,6 +86,12 @@ def _build_html() -> str:
     renta_rows = _render_rows(RENTA_ROWS)
     config_rows = _render_rows(CONFIGURACION_ROWS)
     cards = _render_cards()
+    qr_data_url = _load_qr_image_data_url()
+    qr_html = (
+        f'<div class="qr"><img src="{qr_data_url}" alt="QR Tal-IA" /></div>'
+        if qr_data_url
+        else ""
+    )
     return f"""
 <!doctype html>
 <html lang="es">
@@ -193,12 +214,28 @@ def _build_html() -> str:
       font-size: 11px;
       color: #475467;
     }}
-    .footer .contact {{
+    .footer-content {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 32px;
       margin-top: 12px;
+    }}
+    .footer .contact {{
+      color: #475467;
     }}
     .footer .contact a {{
       color: #047857;
       text-decoration: none;
+      word-break: break-all;
+    }}
+    .qr {{
+      width: 96px;
+      flex-shrink: 0;
+    }}
+    .qr img {{
+      width: 100%;
+      display: block;
     }}
   </style>
 </head>
@@ -276,11 +313,14 @@ def _build_html() -> str:
     <div class="section footer">
       <p>Fecha: {datetime.now(timezone.utc):%d de %B de %Y}</p>
       <p>Jorge Torre · Sistema Tal-IA*</p>
-      <div class="contact">
-        <p>Cel: 4441302811</p>
-        <p>Email: administracion@geoactiv.mx</p>
-        <p>Web: <a href="https://geoactiv.mx/">https://geoactiv.mx/</a></p>
-        <p>Web: <a href="https://talia.mx/">https://talia.mx/</a></p>
+      <div class="footer-content">
+        <div class="contact">
+          <p>Cel: 4441302811</p>
+          <p>Email: administracion@geoactiv.mx</p>
+          <p>Web: <a href="https://geoactiv.mx/">https://geoactiv.mx/</a></p>
+          <p>Web: <a href="https://talia.mx/">https://talia.mx/</a></p>
+        </div>
+        {qr_html}
       </div>
       <p class="intro" style="margin-top:12px;">
         *SaaS (Software como servicio): plataforma en la nube con actualizaciones y soporte continuo.

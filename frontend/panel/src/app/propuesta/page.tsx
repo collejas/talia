@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 
@@ -47,11 +47,16 @@ const configuracionRows = [
 export default function Page() {
   const [expanded, setExpanded] = useState(false)
   const [mvpOpen, setMvpOpen] = useState(false)
-  const today = new Date().toLocaleDateString("es-MX", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
+  const today = useMemo(
+    () =>
+      new Date().toLocaleDateString("es-MX", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        timeZone: "America/Mexico_City",
+      }),
+    [],
+  )
   const handleExport = useCallback(() => {
     if (typeof window === "undefined") {
       return
@@ -280,7 +285,7 @@ export default function Page() {
                 </a>
               </p>
             </div>
-            <div className="flex flex-col items-end gap-3">
+            <div className="flex flex-row items-center justify-end gap-4">
               <a
                 href="https://talia.mx/"
                 className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700"
@@ -289,13 +294,15 @@ export default function Page() {
               >
                 Web: https://talia.mx/
               </a>
-              <Image
-                src="/QR_Lia.png"
-                alt="QR Tal-IA"
-                width={120}
-                height={120}
-                className="h-auto w-[120px]"
-              />
+              <div className="relative h-[90px] w-[90px]">
+                <Image
+                  src="/QR_Lia.png"
+                  alt="QR Tal-IA"
+                  fill
+                  sizes="90px"
+                  className="h-auto w-auto"
+                />
+              </div>
             </div>
           </div>
           <div className="mt-6 flex justify-end">
