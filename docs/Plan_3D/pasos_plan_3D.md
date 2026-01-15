@@ -19,7 +19,7 @@
    - [x] Incluir en cada feature `properties` con `status`, `tipo_nombre`, `color`, `height`, `levels`, `nivel`, `precio`.
    - [x] Filtrar por tenant y por parámetros opcionales (nivel/tipo) para alimentar la vista.
 
-5. [ ] **Construir la capa Leaflet + OSMBuildings**
+5. [x] **Construir la capa Leaflet + OSMBuildings**
    - [ ] Inicializar `L.map` con tiles base y centrar en zona del cliente.
    - [ ] Cargar GeoJSON desde la función/endpoint y pasar a `OSMBuildings` con `height`, `minHeight`, `wallColor`.
    - [ ] Crear controles para seleccionar nivel y tipo, filtrando la capa o recargando los features.
