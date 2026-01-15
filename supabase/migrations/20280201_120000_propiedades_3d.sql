@@ -24,6 +24,22 @@ CREATE TABLE IF NOT EXISTS public.propiedad_tipos (
     actualizado_en timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.propiedad_tipos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY propiedad_tipos_admin_all
+    ON public.propiedad_tipos
+    FOR ALL
+    TO authenticated
+    USING (public.es_admin(auth.uid()))
+    WITH CHECK (public.es_admin(auth.uid()));
+
+CREATE POLICY propiedad_tipos_member_org
+    ON public.propiedad_tipos
+    FOR ALL
+    TO authenticated
+    USING (organizacion_id = public.usuario_organizacion_id(auth.uid()))
+    WITH CHECK (organizacion_id = public.usuario_organizacion_id(auth.uid()));
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.propiedad_tipos WHERE nombre = 'lote') THEN
@@ -76,6 +92,22 @@ CREATE INDEX IF NOT EXISTS ix_propiedades_organizacion_status ON public.propieda
 CREATE INDEX IF NOT EXISTS ix_propiedades_tipo ON public.propiedades (tipo_id);
 CREATE INDEX IF NOT EXISTS ix_propiedades_geom ON public.propiedades USING gist (geom);
 
+ALTER TABLE public.propiedades ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY propiedades_admin_all
+    ON public.propiedades
+    FOR ALL
+    TO authenticated
+    USING (public.es_admin(auth.uid()))
+    WITH CHECK (public.es_admin(auth.uid()));
+
+CREATE POLICY propiedades_member_org
+    ON public.propiedades
+    FOR ALL
+    TO authenticated
+    USING (organizacion_id = public.usuario_organizacion_id(auth.uid()))
+    WITH CHECK (organizacion_id = public.usuario_organizacion_id(auth.uid()));
+
 CREATE TABLE IF NOT EXISTS public.propiedad_niveles (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     propiedad_id uuid NOT NULL REFERENCES public.propiedades(id) ON DELETE CASCADE,
@@ -92,6 +124,22 @@ CREATE TABLE IF NOT EXISTS public.propiedad_niveles (
 CREATE INDEX IF NOT EXISTS ix_propiedad_niveles_propiedad ON public.propiedad_niveles (propiedad_id, nivel);
 CREATE INDEX IF NOT EXISTS ix_propiedad_niveles_geom ON public.propiedad_niveles USING gist (geom);
 
+ALTER TABLE public.propiedad_niveles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY propiedad_niveles_admin_all
+    ON public.propiedad_niveles
+    FOR ALL
+    TO authenticated
+    USING (public.es_admin(auth.uid()))
+    WITH CHECK (public.es_admin(auth.uid()));
+
+CREATE POLICY propiedad_niveles_member_org
+    ON public.propiedad_niveles
+    FOR ALL
+    TO authenticated
+    USING (exists (select 1 from public.propiedades p where p.id = propiedad_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())))
+    WITH CHECK (exists (select 1 from public.propiedades p where p.id = propiedad_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())));
+
 CREATE TABLE IF NOT EXISTS public.propiedad_departamentos (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     nivel_id uuid NOT NULL REFERENCES public.propiedad_niveles(id) ON DELETE CASCADE,
@@ -107,6 +155,22 @@ CREATE TABLE IF NOT EXISTS public.propiedad_departamentos (
 
 CREATE INDEX IF NOT EXISTS ix_propiedad_departamentos_nivel ON public.propiedad_departamentos (nivel_id, status);
 CREATE INDEX IF NOT EXISTS ix_propiedad_departamentos_geom ON public.propiedad_departamentos USING gist (geom);
+
+ALTER TABLE public.propiedad_departamentos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY propiedad_departamentos_admin_all
+    ON public.propiedad_departamentos
+    FOR ALL
+    TO authenticated
+    USING (public.es_admin(auth.uid()))
+    WITH CHECK (public.es_admin(auth.uid()));
+
+CREATE POLICY propiedad_departamentos_member_org
+    ON public.propiedad_departamentos
+    FOR ALL
+    TO authenticated
+    USING (exists (select 1 from public.propiedad_niveles n join public.propiedades p on p.id = n.propiedad_id where n.id = nivel_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())))
+    WITH CHECK (exists (select 1 from public.propiedad_niveles n join public.propiedades p on p.id = n.propiedad_id where n.id = nivel_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())));
 
 DO $$
 BEGIN
