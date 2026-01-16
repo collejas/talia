@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Geometry } from "geojson";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
@@ -30,6 +31,84 @@ type PropiedadFormProps = {
 };
 
 const EMPTY = "";
+
+type MaybePosition = readonly [number, number] | readonly [number, number, number];
+
+function formatCoordinate(position: readonly number[]): string | null {
+  const [lng, lat, z] = position;
+  if (typeof lng !== "number" || typeof lat !== "number") {
+    return null;
+  }
+  const elevation = typeof z === "number" ? z : 0;
+  return `${lng} ${lat} ${elevation}`;
+}
+
+function geojsonToMultiPolygonZ(value: string): string | null {
+  let geometry: Geometry;
+  try {
+    geometry = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!geometry || typeof geometry !== "object") {
+    return null;
+  }
+  const coordinates =
+    geometry.type === "Polygon"
+      ? (geometry.coordinates as MaybePosition[][])
+      : geometry.type === "MultiPolygon"
+      ? (geometry.coordinates as MaybePosition[][][])
+      : null;
+  if (!Array.isArray(coordinates) || coordinates.length === 0) {
+    return null;
+  }
+  const polygonParts: string[] = [];
+  for (const polygon of coordinates) {
+    if (!Array.isArray(polygon) || polygon.length === 0) {
+      continue;
+    }
+    const ringParts: string[] = [];
+    for (const ring of polygon) {
+      if (!Array.isArray(ring) || ring.length === 0) {
+        continue;
+      }
+      const coords = ring
+        .map((position) => formatCoordinate(position))
+        .filter((coord): coord is string => typeof coord === "string");
+      if (!coords.length) continue;
+      ringParts.push(`(${coords.join(",")})`);
+    }
+    if (!ringParts.length) {
+      continue;
+    }
+    polygonParts.push(`(${ringParts.join(",")})`);
+  }
+  if (!polygonParts.length) {
+    return null;
+  }
+  return `SRID=4326;MULTIPOLYGONZ(${polygonParts.join(",")})`;
+}
+
+const parseDecimalValue = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseIntegerValue = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return Math.trunc(parsed);
+};
 
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
@@ -62,10 +141,77 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setIsSaving(true);
     setStatusMessage(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      setStatusMessage("La propiedad se guardó de forma simulada. Implementa el endpoint cuando esté listo.");
-    } catch {
-      setStatusMessage("Hubo un problema al guardar la propiedad.");
+      const trimmedName = formValues.nombre.trim();
+      if (!trimmedName) {
+        setStatusMessage("Ingresa el nombre de la propiedad.");
+        return;
+      }
+      if (!formValues.tipoId) {
+        setStatusMessage("Selecciona un tipo de propiedad.");
+        return;
+      }
+
+      const geometryWkt = formValues.geom ? geojsonToMultiPolygonZ(formValues.geom) : null;
+      if (!geometryWkt) {
+        setStatusMessage("Dibuja un polígono válido antes de guardar.");
+        return;
+      }
+
+      const payload: Record<string, unknown> = {
+        nombre: trimmedName,
+        tipo_id: formValues.tipoId,
+        status: "disponible",
+        geom: geometryWkt,
+        metadata: {},
+      };
+
+      if (formValues.descripcion.trim()) {
+        payload.descripcion = formValues.descripcion.trim();
+      }
+      const precio = parseDecimalValue(formValues.precio);
+      if (precio !== undefined) payload.precio = precio;
+      const nivel = parseIntegerValue(formValues.nivel);
+      if (nivel !== undefined) payload.nivel = nivel;
+      const height = parseDecimalValue(formValues.height);
+      if (height !== undefined) payload.height = height;
+      const minHeight = parseDecimalValue(formValues.minHeight);
+      if (minHeight !== undefined) payload.min_height = minHeight;
+      const levels = parseIntegerValue(formValues.levels);
+      if (levels !== undefined) payload.levels = levels;
+
+      if (formValues.estadoCve.trim()) payload.estado_cve = formValues.estadoCve.trim();
+      if (formValues.municipioCve.trim()) payload.municipio_cve = formValues.municipioCve.trim();
+      if (formValues.codigoPostal.trim()) payload.codigo_postal = formValues.codigoPostal.trim();
+      if (formValues.colonia.trim()) payload.colonia = formValues.colonia.trim();
+
+      if (formValues.lineaId) payload.linea_id = formValues.lineaId;
+      if (formValues.familiaId) payload.familia_id = formValues.familiaId;
+      if (formValues.modeloId) payload.modelo_id = formValues.modeloId;
+
+      const response = await fetch("/api/crm/propiedades", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const responseBody = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (responseBody as { error?: string }).error || "No se pudo guardar la propiedad.",
+        );
+      }
+
+      const createdId = (responseBody as { propiedad?: { id?: string } }).propiedad?.id;
+      setStatusMessage(
+        createdId
+          ? `Propiedad registrada correctamente (${createdId}).`
+          : "Propiedad registrada correctamente.",
+      );
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Hubo un problema al guardar la propiedad.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -102,11 +248,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                     Tipo
                   </Label>
                   <Select
-                    className="text-sm"
                     onValueChange={(value) => handleChange("tipoId", value)}
                     value={formValues.tipoId || EMPTY}
                   >
-                    <SelectTrigger id="propiedad-tipo">
+                    <SelectTrigger id="propiedad-tipo" className="text-sm">
                       <SelectValue placeholder="Selecciona un tipo" />
                     </SelectTrigger>
                     <SelectContent className="text-xs">
@@ -261,12 +406,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                       Línea
                     </Label>
                     <Select
-                      className="text-sm"
-                      id="propiedad-linea"
                       value={formValues.lineaId || EMPTY}
                       onValueChange={(value) => handleChange("lineaId", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="propiedad-linea" className="text-sm">
                         <SelectValue placeholder="Sin línea" />
                       </SelectTrigger>
                       <SelectContent className="text-xs">
@@ -283,12 +426,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                       Familia
                     </Label>
                     <Select
-                      className="text-sm"
-                      id="propiedad-familia"
                       value={formValues.familiaId || EMPTY}
                       onValueChange={(value) => handleChange("familiaId", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="propiedad-familia" className="text-sm">
                         <SelectValue placeholder="Sin familia" />
                       </SelectTrigger>
                       <SelectContent className="text-xs">
@@ -305,12 +446,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                       Modelo
                     </Label>
                     <Select
-                      className="text-sm"
-                      id="propiedad-modelo"
                       value={formValues.modeloId || EMPTY}
                       onValueChange={(value) => handleChange("modeloId", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="propiedad-modelo" className="text-sm">
                         <SelectValue placeholder="Sin modelo" />
                       </SelectTrigger>
                       <SelectContent className="text-xs">

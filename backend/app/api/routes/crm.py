@@ -1169,6 +1169,49 @@ class GeoJSONFeatureCollection(BaseModel):
     features: list[GeoJSONFeature]
 
 
+class PropiedadStatus(str, Enum):
+    disponible = "disponible"
+    apartado = "apartado"
+    vendido = "vendido"
+    reservado = "reservado"
+
+
+class PropiedadCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=1)
+    tipo_id: UUID
+    geom: str = Field(..., min_length=1)
+    status: PropiedadStatus = PropiedadStatus.disponible
+    descripcion: str | None = None
+    precio: Decimal | None = None
+    nivel: int | None = None
+    height: Decimal | None = None
+    min_height: Decimal | None = None
+    levels: int | None = None
+    area_m2: Decimal | None = None
+    pais_codigo: str = Field("MX", min_length=1, max_length=3)
+    estado_cve: str | None = None
+    municipio_cve: str | None = None
+    codigo_postal: str | None = None
+    colonia: str | None = None
+    linea_id: UUID | None = None
+    familia_id: UUID | None = None
+    modelo_id: UUID | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @field_validator("geom")
+    def ensure_geo_with_srid(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("geom_required")
+        upper = trimmed.upper()
+        if not upper.startswith("SRID="):
+            return f"SRID=4326;{trimmed}"
+        if upper.startswith("SRID=4326;"):
+            return trimmed
+        return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
+
+
 def get_repository() -> CRMRepository:
     try:
         return CRMRepository()
@@ -1227,6 +1270,12 @@ def _single_related(value: Any) -> Any:
     if isinstance(value, list):
         return value[0] if value else None
     return value
+
+
+def _decimal_to_number(value: Decimal | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
 
 
 def _cliente_select_clause() -> str:
@@ -10562,6 +10611,59 @@ async def propiedades_geojson(
         return GeoJSONFeatureCollection(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"geojson_invalid:{exc}") from exc
+
+
+@router.post("/propiedades")
+async def crear_propiedad(
+    *,
+    payload: PropiedadCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    body: dict[str, Any] = {
+        "nombre": payload.nombre.strip(),
+        "tipo_id": str(payload.tipo_id),
+        "status": payload.status.value,
+        "geom": payload.geom.strip(),
+        "metadata": metadata,
+        "pais_codigo": payload.pais_codigo.strip().upper(),
+    }
+    if payload.descripcion:
+        body["descripcion"] = payload.descripcion.strip()
+    if payload.precio is not None:
+        body["precio"] = _decimal_to_number(payload.precio)
+    if payload.nivel is not None:
+        body["nivel"] = payload.nivel
+    if payload.height is not None:
+        body["height"] = _decimal_to_number(payload.height)
+    if payload.min_height is not None:
+        body["min_height"] = _decimal_to_number(payload.min_height)
+    if payload.levels is not None:
+        body["levels"] = payload.levels
+    if payload.area_m2 is not None:
+        body["area_m2"] = _decimal_to_number(payload.area_m2)
+    if payload.estado_cve:
+        body["estado_cve"] = payload.estado_cve.strip()
+    if payload.municipio_cve:
+        body["municipio_cve"] = payload.municipio_cve.strip()
+    if payload.codigo_postal:
+        body["codigo_postal"] = payload.codigo_postal.strip()
+    if payload.colonia:
+        body["colonia"] = payload.colonia.strip()
+    if payload.linea_id:
+        body["linea_id"] = str(payload.linea_id)
+    if payload.familia_id:
+        body["familia_id"] = str(payload.familia_id)
+    if payload.modelo_id:
+        body["modelo_id"] = str(payload.modelo_id)
+
+    try:
+        record = await repo.create_propiedad(organizacion_id=organizacion_id, payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "propiedad": record}
 
 
 def _build_pipeline_overview(

@@ -216,6 +216,28 @@ class CRMRepository:
             raise CRMRepositoryError("crm_propiedades_geojson_invalid_response")
         return result
 
+    async def create_propiedad(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/propiedades",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("crm_propiedad_creation_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"crm_propiedad_invalid_response:{row!r}")
+        return row
+
     async def create_account(
         self,
         *,

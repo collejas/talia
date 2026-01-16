@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { useEffect, useRef } from "react";
+
 type PropiedadGeomEditorProps = {
   value: string;
   onGeometryChange: (geojson?: string) => void;
@@ -10,15 +11,18 @@ type PropiedadGeomEditorProps = {
 
 export function PropiedadGeomEditor({ value, onGeometryChange }: PropiedadGeomEditorProps) {
   const mapEl = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<LeafletModule.Map | null>(null);
-  const layerRef = useRef<LeafletModule.FeatureGroup | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layerRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
     import("leaflet").then(async (leafletModule) => {
       if (cancelled || !mapEl.current) return;
       await import("leaflet-draw");
-      const L = leafletModule as typeof import("leaflet");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const L = leafletModule as any;
       const map = L.map(mapEl.current, {
         center: [19.4326, -99.1332],
         zoom: 5,
@@ -30,8 +34,7 @@ export function PropiedadGeomEditor({ value, onGeometryChange }: PropiedadGeomEd
       }).addTo(map);
       const featureGroup = L.featureGroup().addTo(map);
       layerRef.current = featureGroup;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const control = new (L as any).Control.Draw({
+      const control = new L.Control.Draw({
         draw: {
           polyline: false,
           rectangle: false,
