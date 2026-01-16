@@ -26,19 +26,41 @@ CREATE TABLE IF NOT EXISTS public.propiedad_tipos (
 
 ALTER TABLE public.propiedad_tipos ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY propiedad_tipos_admin_all
-    ON public.propiedad_tipos
-    FOR ALL
-    TO authenticated
-    USING (public.es_admin(auth.uid()))
-    WITH CHECK (public.es_admin(auth.uid()));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedad_tipos_admin_all'
+          AND polrelid = 'public.propiedad_tipos'::regclass
+    ) THEN
+        CREATE POLICY propiedad_tipos_admin_all
+            ON public.propiedad_tipos
+            FOR ALL
+            TO authenticated
+            USING (public.es_admin(auth.uid()))
+            WITH CHECK (public.es_admin(auth.uid()));
+    END IF;
+END;
+$$;
 
-CREATE POLICY propiedad_tipos_member_org
-    ON public.propiedad_tipos
-    FOR ALL
-    TO authenticated
-    USING (organizacion_id = public.usuario_organizacion_id(auth.uid()))
-    WITH CHECK (organizacion_id = public.usuario_organizacion_id(auth.uid()));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedad_tipos_member_org'
+          AND polrelid = 'public.propiedad_tipos'::regclass
+    ) THEN
+        CREATE POLICY propiedad_tipos_member_org
+            ON public.propiedad_tipos
+            FOR ALL
+            TO authenticated
+            USING (organizacion_id = public.usuario_organizacion_id(auth.uid()))
+            WITH CHECK (organizacion_id = public.usuario_organizacion_id(auth.uid()));
+    END IF;
+END;
+$$;
 
 DO $$
 BEGIN
@@ -94,19 +116,41 @@ CREATE INDEX IF NOT EXISTS ix_propiedades_geom ON public.propiedades USING gist 
 
 ALTER TABLE public.propiedades ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY propiedades_admin_all
-    ON public.propiedades
-    FOR ALL
-    TO authenticated
-    USING (public.es_admin(auth.uid()))
-    WITH CHECK (public.es_admin(auth.uid()));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedades_admin_all'
+          AND polrelid = 'public.propiedades'::regclass
+    ) THEN
+        CREATE POLICY propiedades_admin_all
+            ON public.propiedades
+            FOR ALL
+            TO authenticated
+            USING (public.es_admin(auth.uid()))
+            WITH CHECK (public.es_admin(auth.uid()));
+    END IF;
+END;
+$$;
 
-CREATE POLICY propiedades_member_org
-    ON public.propiedades
-    FOR ALL
-    TO authenticated
-    USING (organizacion_id = public.usuario_organizacion_id(auth.uid()))
-    WITH CHECK (organizacion_id = public.usuario_organizacion_id(auth.uid()));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedades_member_org'
+          AND polrelid = 'public.propiedades'::regclass
+    ) THEN
+        CREATE POLICY propiedades_member_org
+            ON public.propiedades
+            FOR ALL
+            TO authenticated
+            USING (organizacion_id = public.usuario_organizacion_id(auth.uid()))
+            WITH CHECK (organizacion_id = public.usuario_organizacion_id(auth.uid()));
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.propiedad_niveles (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -126,19 +170,41 @@ CREATE INDEX IF NOT EXISTS ix_propiedad_niveles_geom ON public.propiedad_niveles
 
 ALTER TABLE public.propiedad_niveles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY propiedad_niveles_admin_all
-    ON public.propiedad_niveles
-    FOR ALL
-    TO authenticated
-    USING (public.es_admin(auth.uid()))
-    WITH CHECK (public.es_admin(auth.uid()));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedad_niveles_admin_all'
+          AND polrelid = 'public.propiedad_niveles'::regclass
+    ) THEN
+        CREATE POLICY propiedad_niveles_admin_all
+            ON public.propiedad_niveles
+            FOR ALL
+            TO authenticated
+            USING (public.es_admin(auth.uid()))
+            WITH CHECK (public.es_admin(auth.uid()));
+    END IF;
+END;
+$$;
 
-CREATE POLICY propiedad_niveles_member_org
-    ON public.propiedad_niveles
-    FOR ALL
-    TO authenticated
-    USING (exists (select 1 from public.propiedades p where p.id = propiedad_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())))
-    WITH CHECK (exists (select 1 from public.propiedades p where p.id = propiedad_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedad_niveles_member_org'
+          AND polrelid = 'public.propiedad_niveles'::regclass
+    ) THEN
+        CREATE POLICY propiedad_niveles_member_org
+            ON public.propiedad_niveles
+            FOR ALL
+            TO authenticated
+            USING (exists (select 1 from public.propiedades p where p.id = propiedad_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())))
+            WITH CHECK (exists (select 1 from public.propiedades p where p.id = propiedad_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())));
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.propiedad_departamentos (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -158,19 +224,41 @@ CREATE INDEX IF NOT EXISTS ix_propiedad_departamentos_geom ON public.propiedad_d
 
 ALTER TABLE public.propiedad_departamentos ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY propiedad_departamentos_admin_all
-    ON public.propiedad_departamentos
-    FOR ALL
-    TO authenticated
-    USING (public.es_admin(auth.uid()))
-    WITH CHECK (public.es_admin(auth.uid()));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedad_departamentos_admin_all'
+          AND polrelid = 'public.propiedad_departamentos'::regclass
+    ) THEN
+        CREATE POLICY propiedad_departamentos_admin_all
+            ON public.propiedad_departamentos
+            FOR ALL
+            TO authenticated
+            USING (public.es_admin(auth.uid()))
+            WITH CHECK (public.es_admin(auth.uid()));
+    END IF;
+END;
+$$;
 
-CREATE POLICY propiedad_departamentos_member_org
-    ON public.propiedad_departamentos
-    FOR ALL
-    TO authenticated
-    USING (exists (select 1 from public.propiedad_niveles n join public.propiedades p on p.id = n.propiedad_id where n.id = nivel_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())))
-    WITH CHECK (exists (select 1 from public.propiedad_niveles n join public.propiedades p on p.id = n.propiedad_id where n.id = nivel_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_policy
+        WHERE polname = 'propiedad_departamentos_member_org'
+          AND polrelid = 'public.propiedad_departamentos'::regclass
+    ) THEN
+        CREATE POLICY propiedad_departamentos_member_org
+            ON public.propiedad_departamentos
+            FOR ALL
+            TO authenticated
+            USING (exists (select 1 from public.propiedad_niveles n join public.propiedades p on p.id = n.propiedad_id where n.id = nivel_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())))
+            WITH CHECK (exists (select 1 from public.propiedad_niveles n join public.propiedades p on p.id = n.propiedad_id where n.id = nivel_id and p.organizacion_id = public.usuario_organizacion_id(auth.uid())));
+    END IF;
+END;
+$$;
 
 DO $$
 BEGIN
@@ -230,27 +318,32 @@ SELECT jsonb_build_object(
 FROM (
     SELECT jsonb_build_object(
         'type', 'Feature',
-        'id', p.id,
-        'geometry', ST_AsGeoJSON(p.geom)::jsonb,
+        'id', u.id,
+        'geometry', ST_AsGeoJSON(u.geom)::jsonb,
         'properties', jsonb_build_object(
-            'nombre', p.nombre,
-            'status', p.status,
+            'nombre', u.nombre,
+            'unidad', u.unidad,
+            'status', u.status,
             'tipo', pt.nombre,
             'tipo_color', pt.color,
-            'nivel', p.nivel,
-            'height', p.height,
-            'min_height', p.min_height,
-            'levels', p.levels,
-            'precio', p.precio,
-            'area_m2', p.area_m2,
-            'metadata', p.metadata
+            'nivel', c.nivel,
+            'desarrollo_id', d.id,
+            'capa_id', c.id,
+            'precio', u.precio,
+            'area_m2', u.area_m2,
+            'metadata', u.metadata,
+            'linea_id', u.linea_id,
+            'familia_id', u.familia_id,
+            'modelo_id', u.modelo_id
         )
     ) AS feature
-    FROM public.propiedades p
-    JOIN public.propiedad_tipos pt ON pt.id = p.tipo_id
-    WHERE p.organizacion_id = p_organizacion
-      AND (p_nivel IS NULL OR p.nivel = p_nivel)
-      AND (p_tipo IS NULL OR p.tipo_id = p_tipo)
+    FROM public.propiedad_unidades u
+    JOIN public.propiedad_capas c ON c.id = u.nivel_id
+    JOIN public.propiedad_desarrollos d ON d.id = COALESCE(u.desarrollo_id, c.desarrollo_id)
+    LEFT JOIN public.propiedad_tipos pt ON pt.id = u.tipo_id
+    WHERE d.organizacion_id = p_organizacion
+      AND (p_nivel IS NULL OR c.nivel = p_nivel)
+      AND (p_tipo IS NULL OR u.tipo_id = p_tipo)
 ) q;
 $$;
 
