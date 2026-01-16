@@ -18,7 +18,7 @@ Construir una pantalla de propiedades inmobiliarias que combine un mapa nacional
    - Opcional: incluir resumen (por ejemplo, casas disponibles por nivel) para panel lateral.
 
 3. **Frontend Leaflet + Mapbox**
-   - Iniciar con Leaflet mostrando todo México coloreado por el estado general de ventas (disponibles/apartados/vendidos) con popups que resumen los tres estados cuando se pasa el cursor por el país.
+   - Iniciar con Leaflet mostrando todo México coloreado por el estado general de ventas (disponibles/apartados/vendidos) con popups que resumen los tres estados cuando se pasa el cursor por el país; considera reutilizar los JSONB/servicios que ya alimentan `/mapa-de-conversion` para los datos por nivel.
    - Al hacer clic en México se resaltan los tres estados (Playa del Carmen, Guadalajara, Los Cabos) y el hover cambia para mostrar datos consolidados de cada estado.
    - Cuando se hace clic en un estado, Leaflet muestra los municipios coloreados donde hay desarrollos; el hover brinda los datos consolidados del municipio correspondiente.
    - Al clicar un municipio, se muestran marcadores puntuales con la ubicación de cada desarrollo; el hover en el marcador revela la información de ese proyecto.

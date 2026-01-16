@@ -13,6 +13,45 @@ const STATUS_COLORS = {
 const DEFAULT_CENTER = [19.4326, -99.1332];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
+function resolveRegionKey(feature) {
+  if (!feature || typeof feature !== "object") {
+    return "";
+  }
+  const props = feature.properties || {};
+  const candidates = [
+    props.dataset_key,
+    props.cvegeo,
+    props.cve_ent,
+    props.cve_entidad,
+    props.iso_a2,
+    props.ISO_A2,
+    props.iso_a3,
+    props.ISO_A3,
+    props.id,
+    props.name,
+  ];
+  const value = candidates.find(
+    (candidate) => typeof candidate === "string" && candidate.trim().length,
+  );
+  if (!value) return "";
+  return value.trim().toUpperCase();
+}
+
+function normalizeValue(value) {
+  if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
+    return 0;
+  }
+  return value;
+}
+
+function buildChoroplethColor(value, max = 5000) {
+  const clamped = Math.min(normalizeValue(value), max);
+  const ratio = max > 0 ? clamped / max : 0;
+  const hue = 130 - ratio * 80;
+  const light = 70 - ratio * 20;
+  return `hsl(${hue}, 70%, ${light}%)`;
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -23,7 +62,7 @@ export function PropertyMap() {
   const [tipos, setTipos] = useState([]);
   const [nivelFilter, setNivelFilter] = useState("");
   const [tipoFilter, setTipoFilter] = useState("");
-  const [viewMode, setViewMode] = useState("3d");
+  const [viewMode] = useState("3d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -32,6 +71,15 @@ export function PropertyMap() {
   const [pitch, setPitch] = useState(45);
   const [bearing, setBearing] = useState(0);
   const selectedIdRef = useRef(selectedId);
+  const hierarchyLayerRef = useRef(null);
+  const markersLayerRef = useRef(null);
+  const [mapLevel, setMapLevel] = useState("pais");
+  const [demografiaGeojson, setDemografiaGeojson] = useState(null);
+  const [demografiaDataset, setDemografiaDataset] = useState([]);
+  const [selectedStateKey, setSelectedStateKey] = useState(null);
+  const [selectedMunicipioKey, setSelectedMunicipioKey] = useState(null);
+  const [hoveredRegionKey, setHoveredRegionKey] = useState(null);
+  const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -91,6 +139,136 @@ export function PropertyMap() {
     [getFeatureColor],
   );
 
+  const datasetMap = useMemo(() => {
+    const map = new Map();
+    for (const entry of demografiaDataset) {
+      if (!entry || !entry.key) continue;
+      map.set(entry.key.toString().toUpperCase(), entry);
+    }
+    return map;
+  }, [demografiaDataset]);
+
+  const mapLevelLabel = mapLevel === "pais" ? "México" : mapLevel === "estado" ? "Estado" : "Municipio";
+  const currentDatasetEntry =
+    mapLevel === "estado"
+      ? datasetMap.get((selectedStateKey ?? "").toString().toUpperCase())
+      : mapLevel === "municipio"
+      ? datasetMap.get((selectedMunicipioKey ?? "").toString().toUpperCase())
+      : null;
+  const levelSummaryLabel = currentDatasetEntry
+    ? `${currentDatasetEntry.name} · ${currentDatasetEntry.total_visitas ?? 0} visitas`
+    : mapLevel === "pais"
+    ? "México"
+    : "Selecciona un polígono";
+
+  const applyRegionStyle = useCallback(
+    (layerInstance, feature) => {
+      if (!layerInstance?.setStyle) return;
+      const key = resolveRegionKey(feature);
+      const entry = datasetMap.get(key);
+      const total =
+        (entry?.total_visitas ?? 0) +
+        (entry?.leads_total ?? 0) +
+        (entry?.visitantes_total ?? 0);
+      const color = buildChoroplethColor(total);
+      const isActive =
+        (mapLevel === "estado" && selectedStateKey === key) ||
+        (mapLevel === "municipio" && selectedMunicipioKey === key);
+      layerInstance.setStyle({
+        color: "#0f172a",
+        weight: isActive ? 3 : 1,
+        fillColor: color,
+        fillOpacity: hoveredRegionKey === key ? 0.85 : 0.6,
+      });
+    },
+    [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
+  );
+
+  const handleRegionClick = useCallback(
+    (feature) => {
+      const key = resolveRegionKey(feature);
+      if (!key) return;
+      if (mapLevel === "pais") {
+        setMapLevel("estado");
+        setSelectedStateKey(null);
+        setSelectedMunicipioKey(null);
+      } else if (mapLevel === "estado") {
+        setSelectedStateKey(key);
+        setSelectedMunicipioKey(null);
+        setMapLevel("municipio");
+      } else if (mapLevel === "municipio") {
+        setSelectedMunicipioKey(key);
+      }
+    },
+    [mapLevel],
+  );
+
+  const handleRegionHover = useCallback((feature) => {
+    const key = resolveRegionKey(feature);
+    setHoveredRegionKey(key);
+  }, []);
+
+  const handleRegionOut = useCallback(() => {
+    setHoveredRegionKey(null);
+  }, []);
+
+  const applyRegionStyleRef = useRef(applyRegionStyle);
+  useEffect(() => {
+    applyRegionStyleRef.current = applyRegionStyle;
+  }, [applyRegionStyle]);
+
+  const handleRegionClickRef = useRef(handleRegionClick);
+  useEffect(() => {
+    handleRegionClickRef.current = handleRegionClick;
+  }, [handleRegionClick]);
+
+  const handleRegionHoverRef = useRef(handleRegionHover);
+  useEffect(() => {
+    handleRegionHoverRef.current = handleRegionHover;
+  }, [handleRegionHover]);
+
+  const handleRegionOutRef = useRef(handleRegionOut);
+  useEffect(() => {
+    handleRegionOutRef.current = handleRegionOut;
+  }, [handleRegionOut]);
+
+  const handleBackLevel = useCallback(() => {
+    if (mapLevel === "municipio") {
+      setMapLevel("estado");
+      setSelectedMunicipioKey(null);
+      return;
+    }
+    if (mapLevel === "estado") {
+      setMapLevel("pais");
+      setSelectedStateKey(null);
+    }
+  }, [mapLevel]);
+
+  const fetchDemografiaLevel = useCallback(async (nivel, estadoKey) => {
+    try {
+      if (typeof window === "undefined") {
+        return;
+      }
+      const url = new URL("/api/crm/demografia/mapa", window.location.origin);
+      url.searchParams.set("nivel", nivel);
+      if (nivel === "municipio" && estadoKey) {
+        url.searchParams.set("estado", estadoKey);
+      }
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("No se pudo cargar el mapa demográfico");
+      }
+      const payload = await response.json();
+      if (!payload?.ok) {
+        throw new Error(payload?.error || "Demografía respondió error");
+      }
+      setDemografiaDataset(payload.dataset ?? []);
+      setDemografiaGeojson(payload.geojson ?? null);
+    } catch (err) {
+      console.error("Error cargando el mapa demográfico:", err);
+    }
+  }, []);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -149,11 +327,94 @@ export function PropertyMap() {
     layerRef.current = layer;
     layer.addTo(map);
 
+    const hierarchyLayer = leaflet.geoJSON([], {
+      onEachFeature: (feature, layerInstance) => {
+        layerInstance.on("click", () => handleRegionClickRef.current?.(feature));
+        layerInstance.on("mouseover", () => handleRegionHoverRef.current?.(feature));
+        layerInstance.on("mouseout", () => handleRegionOutRef.current?.());
+        applyRegionStyleRef.current?.(layerInstance, feature);
+      },
+    });
+    hierarchyLayerRef.current = hierarchyLayer;
+    hierarchyLayer.addTo(map);
+
+    const markersLayer = leaflet.layerGroup();
+    markersLayerRef.current = markersLayer;
+    markersLayer.addTo(map);
+
     return () => {
       map.remove();
       layerRef.current?.clearLayers();
     };
   }, [leaflet, applyLayerStyle]);
+
+  useEffect(() => {
+    const estadoKey = mapLevel === "municipio" ? selectedStateKey : undefined;
+    fetchDemografiaLevel(mapLevel, estadoKey);
+  }, [fetchDemografiaLevel, mapLevel, selectedStateKey]);
+
+  useEffect(() => {
+    if (!hierarchyLayerRef.current || !demografiaGeojson) {
+      return;
+    }
+    hierarchyLayerRef.current.clearLayers();
+    hierarchyLayerRef.current.addData(demografiaGeojson);
+    if (!leaflet || !mapInstanceRef.current) {
+      return;
+    }
+    try {
+      const bounds = leaflet.geoJSON(demografiaGeojson).getBounds();
+      if (bounds.isValid()) {
+        mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 7 });
+      }
+    } catch {
+      // ignore invalid bounds
+    }
+  }, [demografiaGeojson, leaflet]);
+
+  useEffect(() => {
+    if (!hierarchyLayerRef.current) {
+      return;
+    }
+    hierarchyLayerRef.current.eachLayer((layer) => {
+      if (layer.feature) {
+        applyRegionStyleRef.current?.(layer, layer.feature);
+      }
+    });
+  }, [mapLevel, hoveredRegionKey, selectedMunicipioKey, selectedStateKey]);
+
+  useEffect(() => {
+    if (!markersLayerRef.current || !leaflet) {
+      return;
+    }
+    markersLayerRef.current.clearLayers();
+    if (mapLevel !== "municipio") {
+      return;
+    }
+    for (const feature of filteredFeatures) {
+      const bounds = leaflet.geoJSON(feature).getBounds();
+      if (!bounds.isValid()) {
+        continue;
+      }
+      const center = bounds.getCenter();
+      const color = getFeatureColor(feature);
+      const marker = leaflet.circleMarker(center, {
+        radius: 6,
+        color,
+        fillColor: color,
+        fillOpacity: 0.9,
+        weight: 2,
+      });
+      marker.bindTooltip(
+        `${feature.properties?.nombre ?? "Propiedad"} - ${feature.properties?.status ?? ""}`,
+      );
+      marker.on("click", () => {
+        setSelectedId(String(feature.id ?? ""));
+        setActiveMarkerFeature(feature);
+      });
+      markersLayerRef.current.addLayer(marker);
+    }
+  }, [filteredFeatures, leaflet, mapLevel, getFeatureColor]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -327,7 +588,7 @@ export function PropertyMap() {
 
   const zoomToFeature = useCallback(
     (feature) => {
-      if (!mapInstanceRef.current || !leaflet) {
+      if (!mapInstanceRef.current || !leaflet || !mapContainerRef.current) {
         return;
       }
       const bounds = leaflet.geoJSON(feature).getBounds();
@@ -337,18 +598,6 @@ export function PropertyMap() {
     },
     [leaflet],
   );
-
-  const centerAllFeatures = useCallback(() => {
-    if (!mapInstanceRef.current || !leaflet || !filteredFeatures.length) {
-      return;
-    }
-    const bounds = leaflet
-      .geoJSON({ type: "FeatureCollection", features: filteredFeatures })
-      .getBounds();
-    if (bounds.isValid()) {
-      mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
-    }
-  }, [filteredFeatures, leaflet]);
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -388,41 +637,31 @@ export function PropertyMap() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-            <button
-              type="button"
-              className={`rounded-md px-3 py-1 ${
-                viewMode === "3d"
-                  ? "border border-slate-900 bg-slate-900 text-white"
-                  : "border border-slate-200 bg-white text-slate-700"
-              }`}
-              onClick={() => setViewMode("3d")}
-            >
-              3D
-            </button>
-            <button
-              type="button"
-              className={`rounded-md px-3 py-1 ${
-                viewMode === "planta"
-                  ? "border border-slate-900 bg-slate-900 text-white"
-                  : "border border-slate-200 bg-white text-slate-700"
-              }`}
-              onClick={() => setViewMode("planta")}
-            >
-              Planta
-            </button>
-            <button
-              type="button"
-              className={`rounded-md px-3 py-1 border ${
-                filteredFeatures.length && leaflet
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-slate-100 text-slate-400"
-              }`}
-              disabled={!filteredFeatures.length || !leaflet}
-              onClick={centerAllFeatures}
-            >
-              Centrar todo
-            </button>
+          <div className="text-xs text-slate-500">Explore los niveles y seleccione un desarrollo.</div>
+          <div className="space-y-1 text-xs text-slate-500">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-[0.65rem]">
+                {`Nivel: ${mapLevelLabel}`}
+              </span>
+              <button
+                type="button"
+                onClick={handleBackLevel}
+                disabled={mapLevel === "pais"}
+                className={`rounded border px-2 py-1 text-[0.65rem] ${
+                  mapLevel === "pais"
+                    ? "border-slate-200 text-slate-400"
+                    : "border-slate-900 text-slate-900"
+                }`}
+              >
+                Volver
+              </button>
+            </div>
+            <div>{levelSummaryLabel}</div>
+            {activeMarkerFeature && (
+              <div className="text-[0.65rem] text-slate-600">
+                Desarrollo seleccionado: {activeMarkerFeature.properties?.nombre}
+              </div>
+            )}
           </div>
           {osmbReady && (
             <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
