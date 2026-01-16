@@ -28,6 +28,7 @@ import {
   IconUsersGroup,
   IconBriefcase,
   IconHierarchy,
+  IconBuilding,
   IconShieldCheck,
   IconShieldLock,
 } from "@tabler/icons-react"
@@ -102,6 +103,11 @@ const NAVIGATION = {
           title: "Productos y servicios",
           url: "/settings/productos",
           icon: IconHierarchy,
+        },
+        {
+          title: "Propiedades",
+          url: "/settings/propiedades",
+          icon: IconBuilding,
         },
         { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers },
         { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck },
