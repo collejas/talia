@@ -31,8 +31,6 @@ Estos desarrollos pueden ser:
 
 
 
-plano 1 tabla: propiedad_desarrollos
-plano 2 tabla: propiedad_capas
-plano 3 tabla: propiedad_unidades
+
 
 
