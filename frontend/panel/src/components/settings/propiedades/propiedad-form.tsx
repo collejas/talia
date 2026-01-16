@@ -85,6 +85,104 @@ type DesarrolloNode = {
   capas: CapaNode[];
 };
 
+type GeometryTarget = {
+  type: "desarrollo";
+  id: string;
+  label: string;
+};
+
+type GeoJsonGeometry = {
+  type: string;
+  coordinates: unknown;
+};
+
+type Point3DZ = [number, number, number];
+type Ring3DZ = Point3DZ[];
+type Polygon3DZ = Ring3DZ[];
+type MultiPolygon3DZ = Polygon3DZ[];
+
+function ensureArray(value: unknown): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error("La geometría no tiene el formato esperado.");
+  }
+  return value;
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Number(value);
+  if (!Number.isNaN(parsed)) {
+    return parsed;
+  }
+  throw new Error("Coordenada inválida en la geometría.");
+}
+
+function ensurePoint(coords: unknown): Point3DZ {
+  const array = ensureArray(coords);
+  if (array.length < 2) {
+    throw new Error("Se requieren al menos X e Y en cada punto.");
+  }
+  const x = toNumber(array[0]);
+  const y = toNumber(array[1]);
+  const z = array.length >= 3 ? toNumber(array[2]) : 0;
+  return [x, y, z];
+}
+
+function ensureRing(coords: unknown): Ring3DZ {
+  const array = ensureArray(coords);
+  if (!array.length) {
+    throw new Error("Un anillo no puede estar vacío.");
+  }
+  return array.map(ensurePoint);
+}
+
+function ensurePolygon(coords: unknown): Polygon3DZ {
+  const array = ensureArray(coords);
+  if (!array.length) {
+    throw new Error("El polígono debe tener al menos un anillo.");
+  }
+  return array.map(ensureRing);
+}
+
+function ensureMultiPolygon(geometry: GeoJsonGeometry): MultiPolygon3DZ {
+  const type = geometry.type?.toLowerCase();
+  if (type === "polygon") {
+    return [ensurePolygon(geometry.coordinates)];
+  }
+  if (type === "multipolygon") {
+    const array = ensureArray(geometry.coordinates);
+    return array.map(ensurePolygon);
+  }
+  throw new Error("Solo se permite dibujar polígonos o multipolígonos.");
+}
+
+function formatMultiPolygonWkt(multiPolygon: MultiPolygon3DZ): string {
+  const polygons = multiPolygon
+    .map((polygon) => {
+      const rings = polygon
+        .map((ring) => {
+          const coordinates = ring
+            .map(([x, y, z]) => `${x} ${y} ${z}`)
+            .join(", ");
+          return `(${coordinates})`;
+        })
+        .join(", ");
+      return `(${rings})`;
+    })
+    .join(", ");
+  if (!polygons.length) {
+    throw new Error("La geometría debe contener al menos un polígono.");
+  }
+  return `SRID=4326;MULTIPOLYGON Z (${polygons})`;
+}
+
+function geoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry): string {
+  const normalized = ensureMultiPolygon(geometry);
+  return formatMultiPolygonWkt(normalized);
+}
+
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
     nombre: "",
@@ -104,6 +202,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     geom: "",
   });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [geometryTarget, setGeometryTarget] = useState<GeometryTarget | null>(null);
+  const [geometryStatusMessage, setGeometryStatusMessage] = useState<string | null>(null);
+  const [geometryError, setGeometryError] = useState<string | null>(null);
+  const [isSavingGeometry, setIsSavingGeometry] = useState(false);
   void lineas;
   void familias;
   void modelos;
@@ -151,6 +253,20 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const handleNodeAction = useCallback((message: string) => {
     setStatusMessage(message);
+  }, []);
+
+  const handleSelectGeometryTarget = useCallback((desarrollo: DesarrolloNode) => {
+    setGeometryTarget({
+      type: "desarrollo",
+      id: desarrollo.id,
+      label: desarrollo.nombre,
+    });
+    setFormValues((prev) => ({
+      ...prev,
+      geom: desarrollo.geom ? JSON.stringify(desarrollo.geom) : "",
+    }));
+    setGeometryError(null);
+    setGeometryStatusMessage(null);
   }, []);
 
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
@@ -203,6 +319,20 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   useEffect(() => {
     loadHierarchy();
   }, [loadHierarchy]);
+
+  useEffect(() => {
+    if (!geometryTarget) {
+      return;
+    }
+    const selected = hierarchy.find((node) => node.id === geometryTarget.id);
+    if (!selected) {
+      return;
+    }
+    setFormValues((prev) => ({
+      ...prev,
+      geom: selected.geom ? JSON.stringify(selected.geom) : "",
+    }));
+  }, [geometryTarget, hierarchy]);
 
   useEffect(() => {
     let mounted = true;
@@ -348,6 +478,62 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     resetDesarrolloForm,
   ]);
 
+  const handleSaveGeometry = useCallback(async () => {
+    if (!geometryTarget) {
+      setGeometryError("Selecciona un desarrollo antes de guardar.");
+      return;
+    }
+    if (!formValues.geom) {
+      setGeometryError("Dibuja un polígono válido antes de guardar.");
+      return;
+    }
+    let parsed: GeoJsonGeometry;
+    try {
+      parsed = JSON.parse(formValues.geom);
+    } catch {
+      setGeometryError("La geometría no tiene un formato válido.");
+      return;
+    }
+    let wkt: string;
+    try {
+      wkt = geoJsonToMultiPolygonZWkt(parsed);
+    } catch (error) {
+      setGeometryError(
+        error instanceof Error ? error.message : "El polígono generado no es válido.",
+      );
+      return;
+    }
+    setIsSavingGeometry(true);
+    setGeometryError(null);
+    setGeometryStatusMessage("Guardando polígono…");
+    try {
+      const response = await fetch(`/api/crm/propiedad-desarrollos/${geometryTarget.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ geom: wkt }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (body as { error?: string }).error || "No se pudo guardar el polígono.",
+        );
+      }
+      handleNodeAction(`Polígono guardado para ${geometryTarget.label}.`);
+      setGeometryStatusMessage("Polígono guardado correctamente.");
+      setGeometryError(null);
+      await loadHierarchy();
+    } catch (error) {
+      setGeometryStatusMessage(null);
+      setGeometryError(
+        error instanceof Error ? error.message : "Error desconocido al guardar la geometría.",
+      );
+    } finally {
+      setIsSavingGeometry(false);
+    }
+  }, [formValues.geom, geometryTarget, handleNodeAction, loadHierarchy]);
+
   const STATUS_COLOR: Record<string, string> = {
     disponible: "text-emerald-600",
     apartado: "text-amber-500",
@@ -422,14 +608,21 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <p className="text-base font-semibold">{desarrollo.nombre}</p>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{desarrollo.tipo}</p>
         </div>
-        <div className="flex gap-1">
-          <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Nueva capa para ${desarrollo.nombre}`)}>
-            Nueva capa
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => openEditDesarrollo(desarrollo)}>
-            Editar
-          </Button>
-        </div>
+      <div className="flex gap-1">
+        <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Nueva capa para ${desarrollo.nombre}`)}>
+          Nueva capa
+        </Button>
+        <Button
+          variant={geometryTarget?.id === desarrollo.id ? "secondary" : "outline"}
+          size="sm"
+          onClick={() => handleSelectGeometryTarget(desarrollo)}
+        >
+          Editar polígono
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => openEditDesarrollo(desarrollo)}>
+          Editar
+        </Button>
+      </div>
       </div>
       <div className="space-y-2">
         {desarrollo.capas?.length ? desarrollo.capas.map(renderCapa) : <p className="text-[0.6rem] text-slate-400">Sin capas aún</p>}
@@ -483,21 +676,48 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
       <section className="lg:flex-1">
         <Card className="h-full flex flex-col">
-          <CardHeader>
-            <CardTitle>Mapa y capas</CardTitle>
-            <CardDescription className="text-xs">
-              El panel derecho es el canvas de capas: dibuja, edita y visualiza la geometría antes de
-              publicarla.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 flex-1">
-            <PropiedadGeomEditor value={formValues.geom} onGeometryChange={handleGeometryChange} />
+      <CardHeader>
+        <CardTitle>Mapa y capas</CardTitle>
+        <CardDescription className="text-xs">
+          El panel derecho es el canvas de capas: dibuja, edita y visualiza la geometría antes de
+          publicarla.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 flex-1">
+        <PropiedadGeomEditor value={formValues.geom} onGeometryChange={handleGeometryChange} />
+        <div className="space-y-2">
+          {geometryTarget ? (
             <p className="text-[0.65rem] text-slate-500">
-              Usa los controles para añadir o ajustar la capa y revisar la forma antes de guardar.
+              Dibujando el polígono del desarrollo <strong>{geometryTarget.label}</strong>. Finaliza
+              el trazo y pulsa Guardar para publicarlo.
             </p>
-          </CardContent>
-        </Card>
-      </section>
+          ) : (
+            <p className="text-[0.65rem] text-slate-500">
+              Selecciona un desarrollo y haz clic en “Editar polígono” para comenzar a dibujar.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleSaveGeometry}
+              disabled={!geometryTarget || !formValues.geom || isSavingGeometry}
+            >
+              {isSavingGeometry ? "Guardando…" : "Guardar polígono del desarrollo"}
+            </Button>
+            {geometryStatusMessage && (
+              <span className="text-[0.65rem] text-emerald-600">{geometryStatusMessage}</span>
+            )}
+          </div>
+          {geometryError && (
+            <p className="text-[0.65rem] text-rose-500">{geometryError}</p>
+          )}
+        </div>
+        <p className="text-[0.65rem] text-slate-500">
+          Usa los controles para añadir o ajustar la capa y revisar la forma antes de guardar.
+        </p>
+      </CardContent>
+    </Card>
+  </section>
 
       <Dialog
         open={isDesarrolloModalOpen}
