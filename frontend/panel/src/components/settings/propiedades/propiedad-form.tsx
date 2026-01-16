@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { Geometry } from "geojson";
 
 import { Button } from "@/components/ui/button";
@@ -32,15 +32,30 @@ type PropiedadFormProps = {
 
 const EMPTY = "";
 
-type MaybePosition = readonly [number, number] | readonly [number, number, number];
+type MaybePosition =
+  | readonly [number, number]
+  | readonly [number, number, number]
+  | { lat: number; lng: number; altitude?: number; alt?: number };
 
-function formatCoordinate(position: readonly number[]): string | null {
-  const [lng, lat, z] = position;
-  if (typeof lng !== "number" || typeof lat !== "number") {
-    return null;
+function formatCoordinate(position: MaybePosition): string | null {
+  if (Array.isArray(position)) {
+    const [lng, lat, z] = position;
+    if (typeof lng !== "number" || typeof lat !== "number") {
+      return null;
+    }
+    const elevation = typeof z === "number" ? z : 0;
+    return `${lng} ${lat} ${elevation}`;
   }
-  const elevation = typeof z === "number" ? z : 0;
-  return `${lng} ${lat} ${elevation}`;
+  if (position && typeof position === "object" && "lng" in position && "lat" in position) {
+    const lng = Number(position.lng);
+    const lat = Number(position.lat);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+      return null;
+    }
+    const elevation = typeof position.altitude === "number" ? position.altitude : position.alt ?? 0;
+    return `${lng} ${lat} ${elevation}`;
+  }
+  return null;
 }
 
 function geojsonToMultiPolygonZ(value: string): string | null {
@@ -53,17 +68,17 @@ function geojsonToMultiPolygonZ(value: string): string | null {
   if (!geometry || typeof geometry !== "object") {
     return null;
   }
-  const coordinates =
+  const polygons =
     geometry.type === "Polygon"
-      ? (geometry.coordinates as MaybePosition[][])
+      ? [(geometry.coordinates as MaybePosition[][])]
       : geometry.type === "MultiPolygon"
       ? (geometry.coordinates as MaybePosition[][][])
       : null;
-  if (!Array.isArray(coordinates) || coordinates.length === 0) {
+  if (!Array.isArray(polygons) || polygons.length === 0) {
     return null;
   }
   const polygonParts: string[] = [];
-  for (const polygon of coordinates) {
+  for (const polygon of polygons) {
     if (!Array.isArray(polygon) || polygon.length === 0) {
       continue;
     }
@@ -135,6 +150,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const handleChange = (field: keyof typeof formValues, value: string) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   };
+  const handleGeometryChange = useCallback((value?: string) => {
+    setFormValues((prev) => ({ ...prev, geom: value ?? "" }));
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -485,10 +503,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 flex-1">
-            <PropiedadGeomEditor
-              value={formValues.geom}
-              onGeometryChange={(value) => handleChange("geom", value ?? "")}
-            />
+            <PropiedadGeomEditor value={formValues.geom} onGeometryChange={handleGeometryChange} />
             <p className="text-[0.65rem] text-slate-500">
               Usa los controles para añadir o ajustar la capa y revisar la forma antes de guardar.
             </p>

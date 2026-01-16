@@ -10613,6 +10613,18 @@ async def propiedades_geojson(
         raise HTTPException(status_code=502, detail=f"geojson_invalid:{exc}") from exc
 
 
+@router.get("/propiedades/tipos")
+async def propiedades_tipos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> list[dict[str, Any]]:
+    try:
+        return await repo.list_propiedad_tipos(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.post("/propiedades")
 async def crear_propiedad(
     *,

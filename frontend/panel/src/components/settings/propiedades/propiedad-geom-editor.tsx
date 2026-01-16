@@ -15,8 +15,16 @@ export function PropiedadGeomEditor({ value, onGeometryChange }: PropiedadGeomEd
   const mapRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layerRef = useRef<any>(null);
+  const onGeometryChangeRef = useRef(onGeometryChange);
 
   useEffect(() => {
+    onGeometryChangeRef.current = onGeometryChange;
+  }, [onGeometryChange]);
+
+  useEffect(() => {
+    if (mapRef.current) {
+      return;
+    }
     let cancelled = false;
     import("leaflet").then(async (leafletModule) => {
       if (cancelled || !mapEl.current) return;
@@ -53,39 +61,45 @@ export function PropiedadGeomEditor({ value, onGeometryChange }: PropiedadGeomEd
       map.addControl(control);
       map.invalidateSize();
 
-      const updateGeometry = () => {
-        const geojson = featureGroup.toGeoJSON();
-        const geometry =
-          geojson.features.length > 0 ? JSON.stringify(geojson.features[0].geometry) : "";
-        onGeometryChange(geometry || undefined);
+      const captureGeometry = () => {
+        const layerGroup = layerRef.current;
+        if (!layerGroup) {
+          onGeometryChangeRef.current?.(undefined);
+          return;
+        }
+        const geojson = layerGroup.toGeoJSON();
+        if (!geojson || !Array.isArray(geojson.features) || !geojson.features.length) {
+          onGeometryChangeRef.current?.(undefined);
+          return;
+        }
+        const geometry = geojson.features[0].geometry;
+        if (!geometry || typeof geometry !== "object") {
+          onGeometryChangeRef.current?.(undefined);
+          return;
+        }
+        onGeometryChangeRef.current?.(JSON.stringify(geometry));
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map.on("draw:created", (event: any) => {
         featureGroup.clearLayers();
         featureGroup.addLayer(event.layer);
-        updateGeometry();
+        captureGeometry();
       });
-      map.on("draw:edited", () => {
-        updateGeometry();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      map.on("draw:edited", (event: any) => {
+        featureGroup.clearLayers();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        event.layers.eachLayer((layer: any) => {
+          featureGroup.addLayer(layer);
+        });
+        captureGeometry();
       });
       map.on("draw:deleted", () => {
-        updateGeometry();
+        featureGroup.clearLayers();
+        captureGeometry();
       });
 
-      if (value) {
-        try {
-          const parsed = JSON.parse(value);
-          featureGroup.clearLayers();
-          featureGroup.addData({ type: "Feature", geometry: parsed });
-          const bounds = featureGroup.getBounds();
-          if (bounds.isValid()) {
-            map.fitBounds(bounds);
-          }
-        } catch {
-          // ignore invalid geometry
-        }
-      }
     });
     return () => {
       cancelled = true;
@@ -93,7 +107,7 @@ export function PropiedadGeomEditor({ value, onGeometryChange }: PropiedadGeomEd
         mapRef.current.remove();
       }
     };
-  }, [value, onGeometryChange]);
+  }, []);
 
   useEffect(() => {
     if (!value || !layerRef.current || !mapRef.current) {

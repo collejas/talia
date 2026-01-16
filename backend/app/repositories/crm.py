@@ -238,6 +238,35 @@ class CRMRepository:
             raise CRMRepositoryError(f"crm_propiedad_invalid_response:{row!r}")
         return row
 
+    async def list_propiedad_tipos(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_tipos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "nombre.asc",
+                "select": "id,nombre,descripcion,color",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("propiedad_tipos_invalid_response")
+        return [
+            {
+                "id": str(row.get("id")) if row.get("id") else "",
+                "nombre": str(row.get("nombre") or "Sin nombre"),
+                "descripcion": row.get("descripcion"),
+                "color": str(row.get("color") or "#95A5A6"),
+            }
+            for row in data
+            if isinstance(row, dict)
+        ]
+
     async def create_account(
         self,
         *,
