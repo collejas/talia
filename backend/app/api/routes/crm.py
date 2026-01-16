@@ -1176,6 +1176,26 @@ class PropiedadStatus(str, Enum):
     reservado = "reservado"
 
 
+class PropiedadDesarrolloTipo(str, Enum):
+    horizontal = "horizontal"
+    vertical = "vertical"
+
+
+class PropiedadDesarrolloCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=1)
+    tipo: PropiedadDesarrolloTipo = PropiedadDesarrolloTipo.horizontal
+    descripcion: str | None = None
+    geom: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    pais_codigo: str | None = Field("MX", min_length=1, max_length=3)
+    estado_cve: str | None = None
+    municipio_cve: str | None = None
+    codigo_postal: str | None = None
+    colonia: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
 class PropiedadCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1)
@@ -10635,6 +10655,48 @@ async def propiedades_hierarquia(
         return await repo.get_propiedad_hierarquia(organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/propiedad-desarrollos")
+async def crear_propiedad_desarrollo(
+    *,
+    payload: PropiedadDesarrolloCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    body: dict[str, Any] = {
+        "nombre": payload.nombre.strip(),
+        "tipo": payload.tipo.value,
+        "status": payload.status.value,
+        "metadata": metadata,
+    }
+    if payload.descripcion:
+        body["descripcion"] = payload.descripcion.strip()
+    if payload.geom:
+        body["geom"] = payload.geom.strip()
+    else:
+        body["geom"] = "SRID=4326;MULTIPOLYGON Z EMPTY"
+    if payload.pais_codigo:
+        body["pais_codigo"] = payload.pais_codigo.strip().upper()
+    if payload.estado_cve:
+        body["estado_cve"] = payload.estado_cve.strip()
+    if payload.municipio_cve:
+        body["municipio_cve"] = payload.municipio_cve.strip()
+    if payload.codigo_postal:
+        body["codigo_postal"] = payload.codigo_postal.strip()
+    if payload.colonia:
+        body["colonia"] = payload.colonia.strip()
+
+    try:
+        record = await repo.create_propiedad_desarrollo(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "desarrollo": record}
 
 
 @router.post("/propiedades")
