@@ -76,6 +76,7 @@ export function PropertyMap() {
   const [mapLevel, setMapLevel] = useState("pais");
   const [demografiaGeojson, setDemografiaGeojson] = useState(null);
   const [demografiaDataset, setDemografiaDataset] = useState([]);
+  const [demografiaLevel, setDemografiaLevel] = useState("pais");
   const [selectedStateKey, setSelectedStateKey] = useState(null);
   const [selectedMunicipioKey, setSelectedMunicipioKey] = useState(null);
   const [hoveredRegionKey, setHoveredRegionKey] = useState(null);
@@ -254,16 +255,23 @@ export function PropertyMap() {
       if (nivel === "municipio" && estadoKey) {
         url.searchParams.set("estado", estadoKey);
       }
-      const response = await fetch(url.toString(), { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("No se pudo cargar el mapa demográfico");
-      }
+    const response = await fetch(url.toString(), {
+      cache: "no-store",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      console.error("demografia mapa error", response.status, body);
+      throw new Error(body?.error ?? "No se pudo cargar el mapa demográfico");
+    }
       const payload = await response.json();
       if (!payload?.ok) {
         throw new Error(payload?.error || "Demografía respondió error");
       }
       setDemografiaDataset(payload.dataset ?? []);
       setDemografiaGeojson(payload.geojson ?? null);
+      setDemografiaLevel(nivel);
     } catch (err) {
       console.error("Error cargando el mapa demográfico:", err);
     }
@@ -355,18 +363,18 @@ export function PropertyMap() {
 
   const filteredDemografiaGeojson = useMemo(() => {
     if (!demografiaGeojson) return null;
-    const features = (demografiaGeojson.features || []).filter((feature) => {
-      const key = resolveRegionKey(feature);
-      if (!key) return false;
-      const props = feature.properties || {};
-      const countries = [props.iso_a3, props.ISO_A3, props.iso_a2, props.ISO_A2];
-      const isMexico = countries.some((item) => typeof item === "string" && item.toUpperCase() === "MEX");
-      if (!isMexico) return false;
-      return datasetMap.has(key);
-    });
+    if (demografiaLevel !== mapLevel) return null;
+    let features = demografiaGeojson.features || [];
+    if (mapLevel === "pais") {
+      features = features.filter((feature) => {
+        const props = feature.properties || {};
+        const countries = [props.iso_a3, props.ISO_A3, props.iso_a2, props.ISO_A2];
+        return countries.some((item) => typeof item === "string" && item.toUpperCase() === "MEX");
+      });
+    }
     if (!features.length) return null;
     return { ...demografiaGeojson, features };
-  }, [demografiaGeojson, datasetMap]);
+  }, [demografiaGeojson, mapLevel]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current || !filteredDemografiaGeojson) {
