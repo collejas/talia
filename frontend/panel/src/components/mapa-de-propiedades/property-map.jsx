@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import L from "leaflet";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 
 const STATUS_COLORS = {
@@ -28,6 +27,9 @@ export function PropertyMap() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [leaflet, setLeaflet] = useState(null);
+  const [osmbReady, setOsmbReady] = useState(false);
+  const selectedIdRef = useRef(selectedId);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -58,21 +60,65 @@ export function PropertyMap() {
   }, [features, nivelFilter, tipoFilter]);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapInstanceRef.current) {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  const getFeatureColor = useCallback((feature) => {
+    const props = feature?.properties;
+    if (!props) {
+      return "#95A5A6";
+    }
+    return props.wallColor ?? STATUS_COLORS[props.status ?? ""] ?? "#95A5A6";
+  }, []);
+
+  const applyLayerStyle = useCallback(
+    (layerInstance, feature) => {
+      const props = feature?.properties;
+      if (!props) {
+        return;
+      }
+      const color = getFeatureColor(feature);
+      const isSelected = String(feature.id ?? "") === selectedIdRef.current;
+      layerInstance.setStyle({
+        color,
+        weight: isSelected ? 4 : 2,
+        fillColor: color,
+        fillOpacity: isSelected ? 0.55 : 0.45,
+      });
+    },
+    [getFeatureColor],
+  );
+
+
+  useEffect(() => {
+    let cancelled = false;
+    import("leaflet")
+      .then((mod) => {
+        if (cancelled) return;
+        setLeaflet(mod?.default ?? mod);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current || !leaflet) {
       return;
     }
-    const map = L.map(mapContainerRef.current, {
+    const map = leaflet.map(mapContainerRef.current, {
       center: DEFAULT_CENTER,
       zoom: 16,
       zoomControl: true,
       preferCanvas: true,
     });
     mapInstanceRef.current = map;
-    L.tileLayer(TILE_SOURCE, {
+    leaflet.tileLayer(TILE_SOURCE, {
       attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
-    const layer = L.geoJSON([], {
+    const layer = leaflet.geoJSON([], {
       style: () => ({
         color: "#000000",
         weight: 2,
@@ -89,6 +135,13 @@ export function PropertyMap() {
             setSelectedId(String(feature?.id ?? ""));
           }
         });
+        layerInstance.on("mouseover", () => {
+          const highlightWeight = (layerInstance.options?.weight ?? 2) + 2;
+          layerInstance.setStyle({ weight: highlightWeight, fillOpacity: 0.7 });
+        });
+        layerInstance.on("mouseout", () => {
+          applyLayerStyle(layerInstance, feature);
+        });
       },
     });
     layerRef.current = layer;
@@ -98,7 +151,7 @@ export function PropertyMap() {
       map.remove();
       layerRef.current?.clearLayers();
     };
-  }, []);
+  }, [leaflet, applyLayerStyle]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -106,25 +159,27 @@ export function PropertyMap() {
     }
     let cancelled = false;
     import("osmbuildings/dist/OSMBuildings-Leaflet.js").then(() => {
-      if (cancelled || !mapInstanceRef.current) {
-        return;
-      }
-      const globalContext = typeof window !== "undefined" ? window : globalThis;
-      const constructor = globalContext.OSMBuildings;
-      if (!constructor) {
-        return;
-      }
-      const osmb = new constructor(mapInstanceRef.current, {
-        position: "bottomright",
-        minZoom: 15,
-        maxZoom: 21,
-      });
-      osmb.hide();
+        if (cancelled || !mapInstanceRef.current) {
+          return;
+        }
+        const globalContext = typeof window !== "undefined" ? window : globalThis;
+        const constructor = globalContext.OSMBuildings;
+        if (!constructor) {
+          return;
+        }
+        const osmb = new constructor(mapInstanceRef.current, {
+          position: "bottomright",
+          minZoom: 15,
+          maxZoom: 21,
+        });
+        osmb.hide();
       osmbRef.current = osmb;
+      setOsmbReady(true);
     });
     return () => {
       cancelled = true;
       osmbRef.current?.hide();
+      setOsmbReady(false);
     };
   }, []);
 
@@ -206,7 +261,7 @@ export function PropertyMap() {
   }, []);
 
   useEffect(() => {
-    if (!osmbRef.current || !layerRef.current) {
+    if (!layerRef.current) {
       return;
     }
     const processed = filteredFeatures.map((feature) => {
@@ -217,52 +272,63 @@ export function PropertyMap() {
           ...feature.properties,
           wallColor: baseColor,
           roofColor: baseColor,
+          height: Number(feature.properties?.height ?? 0),
+          min_height: Number(feature.properties?.min_height ?? 0),
+          levels: Number(feature.properties?.levels ?? 0),
         },
       };
     });
 
     const payload = { type: "FeatureCollection", features: processed };
-    osmbRef.current.setData(payload);
-    if (viewMode === "3d") {
-      osmbRef.current.show();
-    } else {
-      osmbRef.current.hide();
+    if (osmbReady && osmbRef.current) {
+      osmbRef.current.setData(payload);
+      if (viewMode === "3d") {
+        osmbRef.current.show();
+      } else {
+        osmbRef.current.hide();
+      }
     }
 
     layerRef.current.clearLayers();
     layerRef.current.addData(payload);
     layerRef.current.eachLayer((layer) => {
-      const props = layer.feature?.properties;
-      if (props) {
-        const color = props.wallColor ?? "#000000";
-        if (layer.setStyle) {
-          layer.setStyle({
-            color,
-            weight: selectedId === String(layer.feature?.id) ? 4 : 2,
-            fillColor: color,
-            fillOpacity: selectedId === String(layer.feature?.id) ? 0.55 : 0.45,
-          });
-        }
+      if (layer.feature) {
+        applyLayerStyle(layer, layer.feature);
       }
     });
 
-    if (processed.length && mapInstanceRef.current) {
-      const bounds = L.geoJSON(payload).getBounds();
+    if (processed.length && mapInstanceRef.current && leaflet) {
+      const bounds = leaflet.geoJSON(payload).getBounds();
       if (bounds.isValid()) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
       }
     }
-  }, [filteredFeatures, viewMode, selectedId]);
+  }, [filteredFeatures, viewMode, selectedId, leaflet, applyLayerStyle, osmbReady]);
 
-  const zoomToFeature = (feature) => {
-    if (!mapInstanceRef.current) {
+  const zoomToFeature = useCallback(
+    (feature) => {
+      if (!mapInstanceRef.current || !leaflet) {
+        return;
+      }
+      const bounds = leaflet.geoJSON(feature).getBounds();
+      if (bounds.isValid()) {
+        mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 19 });
+      }
+    },
+    [leaflet],
+  );
+
+  const centerAllFeatures = useCallback(() => {
+    if (!mapInstanceRef.current || !leaflet || !filteredFeatures.length) {
       return;
     }
-    const bounds = L.geoJSON(feature).getBounds();
+    const bounds = leaflet
+      .geoJSON({ type: "FeatureCollection", features: filteredFeatures })
+      .getBounds();
     if (bounds.isValid()) {
-      mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 19 });
+      mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
     }
-  };
+  }, [filteredFeatures, leaflet]);
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -324,6 +390,18 @@ export function PropertyMap() {
               onClick={() => setViewMode("planta")}
             >
               Planta
+            </button>
+            <button
+              type="button"
+              className={`rounded-md px-3 py-1 border ${
+                filteredFeatures.length && leaflet
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-slate-100 text-slate-400"
+              }`}
+              disabled={!filteredFeatures.length || !leaflet}
+              onClick={centerAllFeatures}
+            >
+              Centrar todo
             </button>
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-300">
