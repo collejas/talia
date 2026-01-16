@@ -353,24 +353,39 @@ export function PropertyMap() {
     fetchDemografiaLevel(mapLevel, estadoKey);
   }, [fetchDemografiaLevel, mapLevel, selectedStateKey]);
 
+  const filteredDemografiaGeojson = useMemo(() => {
+    if (!demografiaGeojson) return null;
+    const features = (demografiaGeojson.features || []).filter((feature) => {
+      const key = resolveRegionKey(feature);
+      if (!key) return false;
+      const props = feature.properties || {};
+      const countries = [props.iso_a3, props.ISO_A3, props.iso_a2, props.ISO_A2];
+      const isMexico = countries.some((item) => typeof item === "string" && item.toUpperCase() === "MEX");
+      if (!isMexico) return false;
+      return datasetMap.has(key);
+    });
+    if (!features.length) return null;
+    return { ...demografiaGeojson, features };
+  }, [demografiaGeojson, datasetMap]);
+
   useEffect(() => {
-    if (!hierarchyLayerRef.current || !demografiaGeojson) {
+    if (!hierarchyLayerRef.current || !filteredDemografiaGeojson) {
       return;
     }
     hierarchyLayerRef.current.clearLayers();
-    hierarchyLayerRef.current.addData(demografiaGeojson);
+    hierarchyLayerRef.current.addData(filteredDemografiaGeojson);
     if (!leaflet || !mapInstanceRef.current) {
       return;
     }
     try {
-      const bounds = leaflet.geoJSON(demografiaGeojson).getBounds();
+      const bounds = leaflet.geoJSON(filteredDemografiaGeojson).getBounds();
       if (bounds.isValid()) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 7 });
       }
     } catch {
       // ignore invalid bounds
     }
-  }, [demografiaGeojson, leaflet]);
+  }, [filteredDemografiaGeojson, leaflet]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
