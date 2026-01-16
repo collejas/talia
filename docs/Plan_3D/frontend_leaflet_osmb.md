@@ -1,30 +1,26 @@
-# Integración Leaflet → Mapbox para el cliente inmobiliario
+# Integración Leaflet → Mapbox para la experiencia inmobiliaria
 
-Este documento describe cómo implementar el flujo jerárquico descrito en el plan maestro: Leaflet gestiona la navegación México → estado → municipio → desarrollos, y Mapbox GL solo arranca cuando se solicita el modelo 3D de un marcador.
+Este documento complementa el plan maestro y describe cómo debe comportarse el frontend: Leaflet controla la navegación jerárquica México → estados → municipios → desarrollos, y Mapbox GL solo aparece al pedir el modelo 3D de un marcador o al cerrar la pantalla de creación.
 
-- Antes de mostrarse el mapa, poblar cada ficha de desarrollo con los nuevos campos geográficos (`pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`) y con las referencias opcionales a la jerarquía (`linea_nombre`, `familia_nombre`, `modelo_nombre`) que ahora expone `crm_propiedades_geojson`. Esa metadata alimenta la lista lateral y permite filtrar por estado/municipio o por la línea/familia de catálogo sin mezclar los catálogos tradicionales.
+## 1. Flujo nacional jerárquico
+- Leaflet inicia centrado en México con un GeoJSON simplificado que representa el país completo. Solo México está coloreado (verde/amarillo/rojo según el consolidado global). El tooltip/hover muestra los totales (`disponibles`, `apartados`, `vendidos`) y un mensaje “haz clic para ver los estados con desarrollos”.
+- Al hacer clic, Leaflet resalta únicamente los tres estados que tienen proyectos (Playa del Carmen, Guadalajara, Los Cabos). El hover por estado muestra los datos consolidados del estado y el tooltip debe avisar “haz clic para ver los municipios que tienen desarrollos”.
+- Clicar un estado carga su GeoJSON municipal (reusando los JSONB del backend) y colorea únicamente los municipios con proyectos. El panel lateral actualiza la lista de desarrollos por estado y se habilita el botón “centrar todo”.
+- Al seleccionar un municipio se agregan marcadores por desarrollo. Cada marcador tiene `bindTooltip` con nombre/estatus/precio y `bindPopup` con un botón “Ver en Mapbox”. El panel lateral muestra una card por desarrollo con acciones (“centrar marcador”, “ver en Mapbox”).
+- Mantener un stack de niveles (México → Estado → Municipio → Desarrollo) con breadcrumb y control “volver” y “centrar todo” para no perder la navegación. Los estados/municipios sin desarrollos se muestran en gris o con baja opacidad.
 
-## 1. Hoja de ruta general
-- Leaflet debe cargar un GeoJSON simplificado de México con `status` agregado (totales de disponibles/apartados/vendidos). El hover sobre el país muestra el consolidado global en un popup o tooltip.
-- Hacer clic en México colorea los tres estados (Playa del Carmen, Guadalajara, Los Cabos) y habilita el hover específico de cada uno.
-- Cuando el usuario selecciona un estado, Leaflet carga el GeoJSON de municipios, colorea los que tienen proyectos y cambia los popups para mostrar los datos consolidados del municipio.
-- Al hacer clic en un municipio se muestran marcadores por desarrollo; cada marcador muestra su información al pasar el cursor y el panel lateral lista las ubicaciones.
-- El click en un marcador dispara la transición a Mapbox (satélite + extrusiones) para mostrar el modelo 3D y las métricas detalladas del desarrollo.
+## 2. Panel lateral, filtros y datos
+- El panel lateral (o drawer) muestra:
+  1. Totales globales y filtros (tipo de propiedad, rango de precio, nivel/altura).
+  2. Lista de desarrollos del nivel activo con botones para centrar o abrir Mapbox.
+  3. Indicadores de línea/familia/modelo (tomados de las propiedades asociadas).
+- Los filtros aplican tanto a Leaflet como a Mapbox (cuando se abre). Si se filtra por tipo, el tooltip y la lista deben reflejar el color correcto.
+- Los datos que alimentan la vista (totales por país, estado, municipio) provienen del RPC `crm_propiedades_geojson` y de los archivos JSONB del backend (`backend/app/data/geo`), garantizando que solo se coloreen las regiones con datos.
+- El botón “centrar todo” vuelve México y borra los marcadores de niveles inferiores sin recargar la página.
 
-## 2. Leaflet nacional / estados / municipios
-- Inicializar `L.map` centrado en México con tiles libres (OpenStreetMap) y una capa base `L.geoJSON` con los polígonos del país.
-- Agregar una `L.control` para la leyenda y un `popup` global que se actualice con `mouseover`.
-- Manejar niveles (`nivel`, `estado`, `municipio`) guardando el estado actual en un stack para poder navegar hacia atrás.
-- Para cada nivel, recalcular el GeoJSON (filtros por estado/municipio) y llamar a `layer.setStyle` para aplicar los colores del `status`.
-
-## 3. Transición a municipios y desarrollos
-- Cuando se selecciona un estado, cargar su archivo municipal y usar `setStyle` para resaltar los municipios con desarrollos (`feature.properties.tiene_proyectos`).
-- Añadir `mouseover` para mostrar un popup con los totales del municipio y `click` para filtrar la capa de desarrollos.
-- Mostrar marcadores `L.marker` por cada desarrollo (`punto_geometrico`) y usar `bindTooltip`/`bindPopup` con la información relevante. Cada marcador debe almacenar el ID de la propiedad para poder luego invocar Mapbox.
-- Mantener un panel lateral (o drawer) que liste los desarrollos del municipio con links “Ver en detalle Mapbox”.
-
-## 4. Mapbox de detalle 3D
-- El momento en que el usuario pulsa un marcador se activa Mapbox GL:
+## 3. Transición Mapbox 3D
+- La versión 3D se abre únicamente cuando el usuario presiona “Ver en Mapbox” en un marcador o en la lista lateral. Leaflet se oculta y Mapbox GL se monta en el mismo contenedor.
+- Configuración recomendada:
   ```ts
   const mapbox = new mapboxgl.Map({
     container: "mapbox-container",
@@ -35,15 +31,18 @@ Este documento describe cómo implementar el flujo jerárquico descrito en el pl
     bearing: 0,
   });
   ```
-- Agregar la fuente GeoJSON con el desarrollo seleccionado y configurar una capa `fill-extrusion` con `height`, `base` y `color` usando los atributos del RPC.
-- Mostrar un popup/en sidebar con los detalles exactos (precio, status, amenidades) y un botón “Volver al mapa nacional” que destruya Mapbox y restaure Leaflet.
-- Controlar el consumo de tiles: Mapbox solo carga cuando el usuario entra al detalle; una vez terminado, la instancia se destruye o se oculta para no consumir recursos adicionales.
+- Agregar una fuente GeoJSON con `height`, `min_height`, `levels`, `status`, `linea_nombre` y usar una capa `fill-extrusion` con `color` según el `status`.
+- Mostrar un panel con info extendida (precio, status, amenidades, niveles, referencia a línea/modelo) y un botón “volver al mapa nacional” que destruye la instancia Mapbox y reestablece Leaflet.
+- Para no sobrepasar el límite de Mapbox, la instancia se crea bajo demanda y se destruye al salir, además de que solo se activa para los marcadores de los tres estados clave.
 
-## 5. Comunicación y UX
-- Mostrar indicadores de navegación (“Selecciona un estado”, “Elige un municipio”, “Sigue al desarrollo”) y breadcrumbs.
-- El hover en Lidaflet y el panel lateral debe mostrar el mismo color/estado que se pase a Mapbox para mantener consistencia.
-- Incluir un control “Centrar todo” en Leaflet/Toggles para reiniciar el stack de navegación sin perder filtros aplicados.
+## 4. Vista de creación/edición (settings/propiedades)
+- `/settings/propiedades` debe estar visible en el sidebar bajo la sección de `settings` como un botón “Propiedades”.
+- El layout debe imitar un editor de capas: el formulario de “Datos generales” se ubica a la izquierda (Texto más compacto, márgenes reducidos) y el mapa con `leaflet-draw` a la derecha ocupando el alto completo del contenedor.
+- El formulario incluye nombre, tipo, jerarquía geográfica (país/estado/municipio/código postal/colonia), precio, status, height, levels, metadata y referencias a `linea/familia/modelo`. El mapa permite dibujar y editar polígonos, realiza zoom a la geometría registrada y tiene botones para guardar, limpiar y centrar.
+- Reutilizar los JSONB de país/estado/municipio en los selects para garantizar que la creación de propiedades se sincronice con la jerarquía del mapa nacional.
+- El editor debe inicializar Leaflet en modo dibujo, mostrando los controles de `leaflet-draw` y el `featureGroup` actual para permitir re-edición. Si la geometría es demasiado pequeña, mostrar un warning y sugerir repetir la captura.
 
-## 6. Extensiones futuras
-1. Guardar el historial de clicks (estado/municipio/desarrollo) para análitica interna.
-2. Usar un proxy/caché de tiles Mapbox si el volumen de tráfico aumenta.
+## 5. Consideraciones y extensiones
+- Mantener separados los módulos de producto tradicional (`settings/productos`) y propiedades inmobiliarias, pero permitir que las propiedades lean información de líneas/familias/modelos para plantillas.
+- Documentar la ruta completa (RPC → Leaflet → Mapbox) y capacitar al cliente con un mensaje que explique los colores, los filtros y qué ocurre al pasar de Leaflet a Mapbox.
+- Preparar un mecanismo ligero de refresh (polling o WebSockets) para que los estados reflejen los cambios de ventas sin recargar todo el mapa. También preparar una caché de tiles Mapbox para reducir consumo si el tráfico aumenta.

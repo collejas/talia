@@ -1,48 +1,42 @@
 # Pasos para ejecutar el plan 3D
 
-1. [x] **Definir catálogo de tipos de propiedad**
-   - [x] Crear tabla `propiedad_tipos` (nombre, descripción, color por defecto, metadata) si se requiere flexibilidad.
-   - [x] Registrar tipos iniciales: lote, casa, departamento, local comercial, oficina, consultorio.
+1. [x] **Catalogar tipos y estados**
+   - [x] Crear el enum `propiedad_status` (disponible/apartado/vendido/reservado) y registrar los tipos (`lote`, `casa`, `departamento`, `local comercial`, `oficina`, `consultorio`, etc.).
+   - [x] Definir la tabla `propiedad_tipos` (si se desea flexibilidad) y los colores base por `status`.
 
-2. [x] **Diseñar las tablas espaciales**
-   - [x] Crear tabla principal `propiedades` con FK a `organizaciones`, `tipo_id`, `status`, `precio`, `metadata`, `height`, `min_height`, `nivel`, `geom geometry(PolygonZ,4326)` y timestamps.
-   - [x] Opcional: crear tablas auxiliares `niveles` y `departamentos` para modelar edificios con múltiples niveles y unidades.
-   - [x] Añadir índices GIST sobre `geom` y columnas clave (`organizacion_id`, `status`, `tipo_id`) para acelerar filtros espaciales y por estatus.
+2. [x] **Diseñar la base espacial**
+   - [x] Crear `propiedades` con `organizacion_id`, `tipo_id`, `status`, `precio`, `height`, `min_height`, `levels`, `metadata` y `geom geometry(PolygonZ,4326)`.
+   - [x] Añadir índices GiST y RLS por organización.
+   - [x] Considerar tablas auxiliares `propiedad_niveles`/`propiedad_departamentos` si se necesita desglosar edificios.
 
-3. [x] **Configurar estado y triggers**
-   - [x] Crear el enum `propiedad_status` y los check constraints necesarios (`disponible`, `apartado`, `vendido`, `reservado`).
-   - [x] Implementar triggers que mantengan `actualizado_en` y `geom` sincronizados cuando cambian coordenadas o atributos espaciales.
-   - [x] Crear políticas RLS por organización/estado y habilitar `propiedades`, `propiedad_niveles` y `propiedad_departamentos`.
+3. [x] **Exponer GeoJSON**
+   - [x] Crear RPC/endpoint `crm_propiedades_geojson(...)` que filtre por organización, estado, municipio y tipo, devolviendo `FeatureCollection` con todos los `properties` necesarios (color, alturas, referencias a línea/familia/modelo).
+   - [x] Añadir proxy Next.js `/api/crm/propiedades/geojson` para consumir esa función y manejar filtros de UI.
 
-4. [x] **Exponer GeoJSON a través de RPC / endpoint**
-   - [x] Crear la función `crm_propiedades_geojson(p_organizacion uuid, p_nivel integer DEFAULT NULL, p_tipo uuid DEFAULT NULL)` que retorna un `FeatureCollection`.
-   - [x] Asegurar que cada feature aporte `properties` con `status`, `tipo_nombre`, `color`, `height`, `min_height`, `levels`, `precio` y metadata útil.
-   - [x] Crear el proxy Next.js `/api/crm/propiedades/geojson` que invoque dicho RPC y maneje filtros por nivel/tipo.
+4. [ ] **Enriquecer propiedades con jerarquía geográfica**
+   - [ ] Extender `propiedades` con `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`.
+   - [ ] Crear selects que reutilicen los JSONB/servicios existentes (`backend/app/data/geo`, `leads_geo`) para popular estados/municipios.
+   - [ ] Verificar que `propiedades` pueda referenciar `linea_id`, `familia_id`, `modelo_id` sin acoplarse a `settings/productos`.
 
-5. [ ] **Enriquecer propiedades con referencias geográficas y jerárquicas**
-   - [ ] Modificar la tabla `propiedades` para incluir `pais_codigo`, `estado_cve`/`municipio_cve`, `codigo_postal`, `colonia` y las claves opcionales `linea_id`, `familia_id`, `modelo_id`.
-   - [ ] Crear índices y RLS que filtren por organización y mantengan consistencia entre los nuevos campos geo.
-   - [ ] Documentar que el módulo inmobiliario sigue separado de `/settings/productos`, pero puede consumir líneas/familias/modelos como plantillas sin afectar la lógica del catálogo general.
-   - [ ] Validar que los JSON de `backend/app/data/geo` y los servicios `leads_geo` puedan resolver estados/municipios para alimentar los selects de la UI.
+5. [ ] **Implementar flujo Leaflet jerárquico + Mapbox**
+   - [ ] Leaflet inicia con México coloreado por el consolidado global; el hover muestra totales y el clic abre el nivel de estados restringidos a los tres con desarrollos.
+   - [ ] Clicar un estado muestra municipios activos coloreados y actualiza el panel lateral con desarrollos disponibles.
+   - [ ] En el nivel de municipios se agregan marcadores y tooltips; cada click agrega el botón “ver en Mapbox” y mantiene el stack de navegación con “centrar todo”.
+   - [ ] Al seleccionar un marcador, se instancia Mapbox GL con `satellite-v9`, `pitch`, `fill-extrusion` y se destruye al regresar.
 
-6. [ ] **Implementar flujo Leaflet jerárquico + transición Mapbox**
-   - [ ] Inicializar Leaflet centrado en México y colorear el país entero según el consolidado nacional; el hover sobre el país debe mostrar los totales globales de disponibles/apartados/vendidos.
-   - [ ] Al clicar México, resaltar los tres estados clave y cambiar el hover para presentar los datos consolidados del estado bajo el cursor.
-   - [ ] Cuando se selecciona un estado, pintar sus municipios con desarrollos; el hover por municipio debe mostrar sus métricas particulares.
-   - [ ] Al escoger un municipio, dibujar marcadores por desarrollo; el hover debe mostrar la info de ventas/estado para ese punto.
-   - [ ] Añadir un panel lateral que liste los desarrollos del municipio, con botones “centrar marcador” y “ver en detalle Mapbox”.
-   - [ ] Al hacer clic en un marcador, activar la vista Mapbox con `mapbox://styles/mapbox/satellite-v9`, pitch/bearing elevados y `fill-extrusion-height` alimentado por `height/min_height/levels`.
+6. [ ] **Diseñar la vista de creación/edición en settings**
+   - [ ] Añadir `/settings/propiedades` en el sidebar (al lado de `settings/productos`) con el botón “Propiedades”.
+   - [ ] Diseñar layout tipo editor de capas: formulario compacto a la izquierda y mapa Leaflet + `leaflet-draw` a la derecha, misma altura.
+   - [ ] El formulario incluye datos generales, jerarquía país/estado/municipio/código postal/colonia, referencias a línea/familia/modelo, altura/levels/status y controles guardar/limpiar/centrar.
+   - [ ] El mapa permite dibujar/editar polígonos, mantiene el `featureGroup`, y si ya existe la geometría la carga para seguir editando.
 
-7. [ ] **Sincronizar estados y UX**
-   - [ ] Ofrecer filtros de precio, tipo y nivel en el panel y reflejarlos tanto en Leaflet como en la vista Mapbox.
-   - [ ] Implementar un mecanismo ligero de refresco (polling o WebSockets) para mantener actualizados los estados.
-   - [ ] Asegurar que la transición Leaflet → Mapbox comunica al usuario el cambio de vista (mensajes, loaders, breadcrumbs).
+7. [ ] **UX, filtros y documentación**
+   - [ ] Añadir panel lateral con lista de desarrollos (por municipio/estado) que permita centrar y saltar a Mapbox.
+   - [ ] Incluir filtros por tipo, nivel y rango de precio que afecten Leaflet y el detalle Mapbox.
+   - [ ] Preparar mensaje o loader para comunicar al usuario cuándo el mapa pasa de Leaflet a Mapbox.
+   - [ ] Documentar el plan maestro, los endpoints usados y el flujo de navegación para el cliente.
 
-8. [ ] **Pruebas y métricas**
-   - [ ] Poblar la base con datos de muestra (30 desarrollos distribuidos en los tres estados) y validar que la vista Mapbox muestra correctamente los volúmenes.
-   - [ ] Probar consultas espaciales críticas (`ST_Intersects`, `ST_DWithin`) y los filtros por estado/tipo para evitar regressiones.
-   - [ ] Ejecutar QA visual: México coloreado → estado → municipio → marcador → Mapbox; verificar colores/alturas y el tiempo de transición.
-
-9. [ ] **Documentar y entregar**
-   - [ ] Registrar en el plan maestro cada salto (país, estado, municipio, marcador, Mapbox) y los endpoints usados.
-   - [ ] Generar la guía para el cliente explicando cómo leer los colores, filtrar desarrollos y abrir la vista 3D.
+8. [ ] **Validación y pruebas**
+   - [ ] Población de muestra (30 polígonos) con datos exagerados (polígonos grandes) para comprobar colores y visibilidad.
+   - [ ] Probar queries espaciales (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`) y filtros por `status`/`tipo`.
+   - [ ] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado.

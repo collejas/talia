@@ -374,7 +374,7 @@ export function PropertyMap() {
     }
     if (!features.length) return null;
     return { ...demografiaGeojson, features };
-  }, [demografiaGeojson, mapLevel]);
+  }, [demografiaGeojson, mapLevel, demografiaLevel]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current || !filteredDemografiaGeojson) {

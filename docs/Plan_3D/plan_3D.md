@@ -1,51 +1,39 @@
 # Plan Maestro 3D Leaflet + Mapbox detalle
 
 ## Objetivo
-Construir una pantalla de propiedades inmobiliarias que combine un mapa nacional con Leaflet y una vista de detalle en Mapbox (con pitch/tilt y estilo satélite) para cada desarrollo, de manera que cada lote, casa o departamento se represente como un volumen geoespacial poligonal con escalas de color por estado (disponible/apartado/vendido) y niveles para edificios.
+Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la navegación país → estado → municipio → desarrollo y Mapbox se active exclusivamente al seleccionar un marcados para mostrar el volumen 3D. Cada polígono debe reflejar el `status` (disponible/apartado/vendido) con una escala de colores consistente y los datos del cliente inmobiliario (10 desarrollos por ubicación, 30 en total) deben poder seguirse desde la vista nacional hasta el nivel de propiedad.
 
-## Componentes principales
-1. **Modelo espacial en Postgres/PostGIS**
-   - Crear tablas `propiedades`, `niveles` y `departamentos` (o un solo catálogo donde cada unidad lleva `nivel` y `status`).
-   - Cada fila mantiene `geom geometry(PolygonZ,4326)` o `geometry(MultiPolygon,4326)` para definir la huella del volumen.
-   - Columnas adicionales: `status` (enum), `tipo` (lote/casa/departamento/local/oficina/consultorio), `precio`, `metadata`, `height`, `min_height`, `level` y `organizacion_id`.
-   - Opcionalmente crear catálogo `propiedad_tipos` con `id`, `nombre`, `descripcion` y `color` predeterminado, y referenciarlo desde `propiedades.tipo_id`.
-   - Triggers/funciones para mantener la `geom` sincronizada cuando se actualicen coordenadas.
-   - Vista/RPC que retorna GeoJSON (FeatureCollection) con `properties.status`, `height`, `levels`, `nivel`, `color`.
+## Modelo de datos espacial
+- **Tabla `propiedades`**: incluye `organizacion_id`, `tipo_id`, `status`, `precio`, `height`, `min_height`, `levels`, `metadata`, `geom geometry(PolygonZ,4326)` y los campos geográficos jerárquicos (`pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`). Cada registro también debe poder ligarse opcionalmente a `linea_id`, `familia_id`, `modelo_id`.
+- **Catálogos auxiliares**: mantener las tablas de líneas, familias y modelos existentes para ofrecer plantillas a las propiedades, pero el módulo inmobiliario debe permanecer separado de `/settings/productos` para respetar una arquitectura multi-negocio (las propiedades son “productos” con atributos especiales, pero no se mezclan las tablas de inventario tradicionales con los mapas).
+- **Estados y RLS**: crear `propiedad_status` enum (`disponible`, `apartado`, `vendido`, `reservado`) y políticas de RLS basadas en `organizacion_id` y `status`. `propiedades`, `propiedad_niveles` y `propiedad_departamentos` deben tener filtros activos por tenant.
+- **RPC/Endpoint GeoJSON**: `crm_propiedades_geojson(p_organizacion uuid, p_estado_cve text DEFAULT NULL, p_municipio_cve text DEFAULT NULL, p_tipo uuid DEFAULT NULL)` devuelve `FeatureCollection` con `properties` extendidas (`status`, `tipo_nombre`, `color`, `height`, `min_height`, `levels`, `linea_nombre`, `familia_nombre`, `modelo_nombre`, `resumen`). Solo expone la geometría de los estados/municipios que tienen desarrollos activos.
 
-2. **Endpoint / RPC**
-   - Crear función RPC `crm_propiedades_geojson(p_organizacion uuid, p_level int DEFAULT NULL)` que retorna los volúmenes filtrados por tenant y/o nivel.
-   - El endpoint debe calcular color basado en `status` y exportar `properties` relevantes (`status`, `precio`, `level`, `propiedad_id`).
-   - Opcional: incluir resumen (por ejemplo, casas disponibles por nivel) para panel lateral.
+## Leaflet jerárquico (México → estados → municipios → marcadores)
+- Leaflet arranca centrado en México y colorea el país con el consolidado global. Al pasar el cursor sobre México se muestran los totales (disponibles/apartados/vendidos) y un mensaje como “haz clic para ver los estados clave”.
+- Hacer clic en México activa el siguiente nivel: se resalta únicamente los tres estados con desarrollos (Playa del Carmen, Guadalajara, Los Cabos), se vuelve a calcular el popup por hover, y se colorean los estados según el `status` consolidado por estado. Se apoya en los JSONB de `backend/app/data/geo` para obtener poligonos de los estados.
+- Clicar un estado carga sus municipios coloreados únicamente si tienen desarrollos. Cada municipio habilitado muestra un tooltip con métricas propias y el panel lateral se actualiza para listar los proyectos del estado.
+- Seleccionar un municipio agrega marcadores `L.marker` por desarrollo y muestra un panel de lista con acciones (“centrar marcador”, “ver en Mapbox”). Cada marcador usa `bindTooltip`/`bindPopup` para información inmediata del proyecto.
+- El stack de navegación permite volver al nivel anterior y un control “centrar todo” restablece México sin perder filtros. Se debe conservar el color para los estados/municipios que no tienen desarrollos (grises o transparentes) para que no distraigan.
 
-3. **Frontend Leaflet + Mapbox**
-   - Iniciar con Leaflet mostrando todo México coloreado por el estado general de ventas (disponibles/apartados/vendidos) con popups que resumen los tres estados cuando se pasa el cursor por el país; considera reutilizar los JSONB/servicios que ya alimentan `/mapa-de-conversion` para los datos por nivel.
-   - Al hacer clic en México se resaltan los tres estados (Playa del Carmen, Guadalajara, Los Cabos) y el hover cambia para mostrar datos consolidados de cada estado.
-   - Cuando se hace clic en un estado, Leaflet muestra los municipios coloreados donde hay desarrollos; el hover brinda los datos consolidados del municipio correspondiente.
-   - Al clicar un municipio, se muestran marcadores puntuales con la ubicación de cada desarrollo; el hover en el marcador revela la información de ese proyecto.
-   - Al seleccionar un marcador se dispara la transición a Mapbox: el viewer satélite (`mapbox://styles/mapbox/satellite-v9`) con pitch/bearing y `fill-extrusion-height` muestra el modelo 3D del desarrollo, usando los mismos datos de altura (`height`, `min_height`, `levels`).
-   - Mantener un botón “volver al mapa nacional” y un panel secundario con la lista de desarrollos disponibles para facilitar la navegación entre Leaflet y Mapbox.
+## Transición a Mapbox 3D
+- Cuando el usuario pulsa “ver en Mapbox” en un marcador, Leaflet se oculta y se instancia Mapbox GL con `mapbox://styles/mapbox/satellite-v9`, `pitch 60`, `bearing 0`, `zoom 18` y el centro en el desarrollo seleccionado, minimizando el uso de tiles cargando solo bajo demanda. La instancia se destruye al regresar a Leaflet para evitar gasto excesivo de tiles.
+- Se agrega una capa `fill-extrusion` o similar con `height`, `min_height` y `levels`. El color sigue la misma escala (verde/amarillo/rojo) para mantener consistencia visual. Popup/panel muestra detalles (precio, status, amenities, niveles) y un botón “volver al mapa nacional”.
+- Mapbox también puede usar los datos de `linea/familia/modelo` para contextualizar el desarrollo con la plantilla que le corresponde.
 
-4. **Estado por color**
-   - Mapa de colores (verde/disponible, amarillo/apartado, rojo/vendido).
-   - Practicar con `OSMBuildings.setColor(feature, statusColor[status])` o en `properties` y un `style` global.
-   - Actualizar colores sin recargar (p. ej., `osmb.refresh()` tras un cambio de estado).
+## Vista de creación/edición de propiedades (settings)
+- En `/settings/propiedades` se añade una pantalla tipo “editor de capas”: formulario de datos generales (colapsado/compacto) a la izquierda y mapa de Leaflet + `leaflet-draw` a la derecha, ocupando toda la altura del contenedor (igual que en QGIS/ArcMap).
+- El formulario incluye campos esenciales (nombre, tipo, matriz de país/estado/municipio/código postal/colonia, precio, status, altura, niveles, metadata, referencia a línea/familia/modelo) y controles para guardar, limpiar, centrar y validar la geometría.
+- El mapa muestra el polígono actual (si existe) y permite crear/editar con los controles de `leaflet-draw`. Al guardar, la geometría se guarda como GeoJSON en backend y se asocia al resto de atributos.
+- Se reutilizan los archivos JSONB de país/estado/municipio para alimentar los selects y mantener la jerarquía, de modo que la creación de propiedades se vuelve guiada y visual.
 
-5. **Interactividad y UX**
-   - Panel lateral con lista de propiedades y filtros (tipo, nivel, rango de precios).
-   - Al seleccionar una propiedad, centrar y mostrar popup/tooltip con detalles (precio, contacto, link a CRM).
-   - Control para alternar la vista “en planta” vs “3D extruído” (mostrando los polígonos con Leaflet GeoJSON simple o la capa de OSMBuildings).
-   - Destacar íconos/colores diferentes según el `tipo` para dar contexto inmediato (por ejemplo, icono de edificio para departamentos, de casa para residencias, etc.).
-
-6. **Siguientes pasos**
- 1. Definir tablas en SQL y migraciones necesarias con RLS y `organizacion_id`.
-     - Incluir catálogo `propiedad_tipos` (o datos fijos si se prefiere) para referenciar cada tipo: lote, casa, departamento, local comercial, oficina, consultorio, etc.
- 2. Crear función RPC/endpoint que devuelva GeoJSON con propiedades y niveles.
- 3. Desarrollar componente híbrido donde Leaflet controla país/estado/municipio y Mapbox GL renderiza el detalle satélite/3D al seleccionar un desarrollo.
- 4. Probar con datos de muestra y validar desempeño (GIST, volúmenes, triggers) así como el plan de cache o uso de tiles Mapbox antes de subirlo a producción.
+## Flujo multi-negocio y separación de capas
+- La solución inmobiliaria se mantiene como un módulo con su propia capa espacial, pero permite referenciar líneas/familias/modelos sin mezclar la lógica de `/settings/productos`. En paralelo, `/settings/productos` sigue manejando productos no espaciales.
+- Documentar el flujo que conecta `settings/productos` con `settings/propiedades` si se decide compartir plantillas; pero dejar claro que la gestión de polígonos y mapas permanece en el módulo inmobiliario.
+- Para soportar nuevas ubicaciones de desarrollos se puede extender el RPC y JSONB para cargar nuevos estados/municipios y el conjunto de 30 desarrollos (10 por cada ubicación) se mantiene limitado a esos territorios para reducir carga de Mapbox.
 
 ## Riesgos y consideraciones
-- Leaflet será la vista ortogonal nacional (país/estado/municipio); la sensación 3D solo se obtiene dentro de Mapbox, así que hay que indicar claramente la transición cuando se toca un marcador.
-- Mapbox tiene límite de tiles gratuito, por eso la vista satélite debe limitarse a zonas específicas y usar cache/proxy si hay necesidad de reducir consumo.
-- Controlar la cantidad de polígonos (usar `ST_Simplify` si hay mucha geometría) y mantener índices GIST actualizados.
-- Asegurar que los colores reflejen siempre el `status`: sincronizar cambios de estado desde el CRM/ventas al mapa (WebSockets o polling mínimo).
-- Mantener separado el módulo inmobiliario del catálogo general de `/settings/productos`: las propiedades usan sus propios campos geo y opcionalmente hacen referencia a líneas/familias/modelos como plantillas, pero no deben forzar que productos tradicionales dependan de la lógica de mapas o geocodificación.
+- Leaflet es la vista ortogonal nacional; la sensación 3D solo se logra con Mapbox así que debe haber indicadores (mensajes, loaders) que comuniquen la transición al usuario.
+- Mapbox tiene límite gratuito de tiles, por lo tanto el uso debe concentrarse en las zonas con desarrollos y destruir la instancia cuando no se use. Considerar cache/capacidad de tiles si el tráfico aumenta.
+- Validar los polígonos creados para evitar vertices innecesarios, mantener índices GiST actualizados y usar `ST_Simplify` cuando haya geometrías complejas.
+- El módulo inmobiliario debe filtrar solo los estados/municipios con desarrollos; los demás se muestran en gris para evitar colorear países o estados sin datos, y se deben recalcular los totales al actualizar un estado.
