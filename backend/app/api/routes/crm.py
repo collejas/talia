@@ -10625,6 +10625,18 @@ async def propiedades_tipos(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.get("/propiedades/hierarquia")
+async def propiedades_hierarquia(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        return await repo.get_propiedad_hierarquia(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.post("/propiedades")
 async def crear_propiedad(
     *,
