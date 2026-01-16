@@ -1,7 +1,7 @@
-# Plan Maestro 3D Leaflet + OSMBuildings
+# Plan Maestro 3D Leaflet + Mapbox detalle
 
 ## Objetivo
-Construir una pantalla de propiedades inmobiliarias donde cada lote, casa o departamento se represente como un volumen geoespacial poligonal con escalas de color por estado (disponible/apartado/vendido) y niveles para edificios, usando Leaflet como base del mapa y OSMBuildings para la presentación 3D.
+Construir una pantalla de propiedades inmobiliarias que combine un mapa nacional con Leaflet y una vista de detalle en Mapbox (con pitch/tilt y estilo satélite) para cada desarrollo, de manera que cada lote, casa o departamento se represente como un volumen geoespacial poligonal con escalas de color por estado (disponible/apartado/vendido) y niveles para edificios.
 
 ## Componentes principales
 1. **Modelo espacial en Postgres/PostGIS**
@@ -17,12 +17,13 @@ Construir una pantalla de propiedades inmobiliarias donde cada lote, casa o depa
    - El endpoint debe calcular color basado en `status` y exportar `properties` relevantes (`status`, `precio`, `level`, `propiedad_id`).
    - Opcional: incluir resumen (por ejemplo, casas disponibles por nivel) para panel lateral.
 
-3. **Frontend Leaflet**
-   - Usar `L.map` tradicional con tile base (Mapbox, OSM, etc.).
-   - Cargar GeoJSON desde el endpoint y alimentarlo a `OSMBuildings`.
-   - Configurar `OSMBuildings` con `height`, `minHeight`, `color`, `levels` y `zoom`/`pitch` para obtener vista lateral.
-   - Añadir controles: selector de niveles, leyenda de estado, tooltip/popup con detalles.
-   - Incluir filtro por `tipo` (lote, casa, departamento, oficina, consultorio, local comercial) y actualizar leyenda del mapa de acuerdo al tipo seleccionado.
+3. **Frontend Leaflet + Mapbox**
+   - Iniciar con Leaflet mostrando todo México coloreado por el estado general de ventas (disponibles/apartados/vendidos) con popups que resumen los tres estados cuando se pasa el cursor por el país.
+   - Al hacer clic en México se resaltan los tres estados (Playa del Carmen, Guadalajara, Los Cabos) y el hover cambia para mostrar datos consolidados de cada estado.
+   - Cuando se hace clic en un estado, Leaflet muestra los municipios coloreados donde hay desarrollos; el hover brinda los datos consolidados del municipio correspondiente.
+   - Al clicar un municipio, se muestran marcadores puntuales con la ubicación de cada desarrollo; el hover en el marcador revela la información de ese proyecto.
+   - Al seleccionar un marcador se dispara la transición a Mapbox: el viewer satélite (`mapbox://styles/mapbox/satellite-v9`) con pitch/bearing y `fill-extrusion-height` muestra el modelo 3D del desarrollo, usando los mismos datos de altura (`height`, `min_height`, `levels`).
+   - Mantener un botón “volver al mapa nacional” y un panel secundario con la lista de desarrollos disponibles para facilitar la navegación entre Leaflet y Mapbox.
 
 4. **Estado por color**
    - Mapa de colores (verde/disponible, amarillo/apartado, rojo/vendido).
@@ -39,10 +40,11 @@ Construir una pantalla de propiedades inmobiliarias donde cada lote, casa o depa
  1. Definir tablas en SQL y migraciones necesarias con RLS y `organizacion_id`.
      - Incluir catálogo `propiedad_tipos` (o datos fijos si se prefiere) para referenciar cada tipo: lote, casa, departamento, local comercial, oficina, consultorio, etc.
  2. Crear función RPC/endpoint que devuelva GeoJSON con propiedades y niveles.
- 3. Desarrollar componente Leaflet/OSMBuildings que consuma ese GeoJSON y permita cambiar niveles y estados.
- 4. Probar con datos de muestra y validar desempeño (GIST, volúmenes, triggers).
+ 3. Desarrollar componente híbrido donde Leaflet controla país/estado/municipio y Mapbox GL renderiza el detalle satélite/3D al seleccionar un desarrollo.
+ 4. Probar con datos de muestra y validar desempeño (GIST, volúmenes, triggers) así como el plan de cache o uso de tiles Mapbox antes de subirlo a producción.
 
 ## Riesgos y consideraciones
-- Leaflet no inclina el mapa; OSMBuildings simula el volumen, pero considera usar Mapbox/Deck.gl para una experiencia más inmersiva si se requieren rotaciones múltiples.
+- Leaflet será la vista ortogonal nacional (país/estado/municipio); la sensación 3D solo se obtiene dentro de Mapbox, así que hay que indicar claramente la transición cuando se toca un marcador.
+- Mapbox tiene límite de tiles gratuito, por eso la vista satélite debe limitarse a zonas específicas y usar cache/proxy si hay necesidad de reducir consumo.
 - Controlar la cantidad de polígonos (usar `ST_Simplify` si hay mucha geometría) y mantener índices GIST actualizados.
 - Asegurar que los colores reflejen siempre el `status`: sincronizar cambios de estado desde el CRM/ventas al mapa (WebSockets o polling mínimo).

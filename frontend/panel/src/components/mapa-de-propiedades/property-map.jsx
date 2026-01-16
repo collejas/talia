@@ -29,6 +29,8 @@ export function PropertyMap() {
   const [selectedId, setSelectedId] = useState(null);
   const [leaflet, setLeaflet] = useState(null);
   const [osmbReady, setOsmbReady] = useState(false);
+  const [pitch, setPitch] = useState(45);
+  const [bearing, setBearing] = useState(0);
   const selectedIdRef = useRef(selectedId);
 
   const nivelOptions = useMemo(() => {
@@ -173,8 +175,8 @@ export function PropertyMap() {
           maxZoom: 21,
         });
         osmb.hide();
-      osmbRef.current = osmb;
-      setOsmbReady(true);
+        osmbRef.current = osmb;
+        setOsmbReady(true);
     });
     return () => {
       cancelled = true;
@@ -182,6 +184,24 @@ export function PropertyMap() {
       setOsmbReady(false);
     };
   }, []);
+
+  useEffect(() => {
+    if (!osmbReady || !osmbRef.current) {
+      return;
+    }
+    try {
+      if (typeof osmbRef.current.setPitch === "function") {
+        osmbRef.current.setPitch(pitch);
+      }
+      if (typeof osmbRef.current.setRotation === "function") {
+        osmbRef.current.setRotation(bearing);
+      } else if (typeof osmbRef.current.setAzimuth === "function") {
+        osmbRef.current.setAzimuth(bearing);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [bearing, osmbReady, pitch]);
 
   useEffect(() => {
     if (!osmbRef.current) {
@@ -404,6 +424,34 @@ export function PropertyMap() {
               Centrar todo
             </button>
           </div>
+          {osmbReady && (
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-[0.65rem]">Pitch 3D</span>
+                <span className="text-[0.65rem] font-mono">{pitch}°</span>
+              </div>
+              <input
+                className="h-2 w-full appearance-none rounded-full bg-slate-200 accent-slate-900"
+                type="range"
+                min="0"
+                max="75"
+                value={pitch}
+                onChange={(event) => setPitch(Number(event.target.value))}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-[0.65rem]">Rotación</span>
+                <span className="text-[0.65rem] font-mono">{bearing}°</span>
+              </div>
+              <input
+                className="h-2 w-full appearance-none rounded-full bg-slate-200 accent-slate-900"
+                type="range"
+                min="-180"
+                max="180"
+                value={bearing}
+                onChange={(event) => setBearing(Number(event.target.value))}
+              />
+            </div>
+          )}
           <div className="text-sm text-slate-500 dark:text-slate-300">
             {loading
               ? "Cargando propiedades..."
