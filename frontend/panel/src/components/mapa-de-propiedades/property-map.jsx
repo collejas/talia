@@ -729,11 +729,25 @@ export function PropertyMap() {
               }
               const active = String(feature.id ?? "") === selectedId;
               const baseColor = props.tipo_color || STATUS_COLORS[props.status || ""] || "#888";
+              const catalogLabel = [
+                props.linea_nombre ? `Línea ${props.linea_nombre}` : null,
+                props.familia_nombre ? `Familia ${props.familia_nombre}` : null,
+                props.modelo_nombre ? `Modelo ${props.modelo_nombre}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              const locationLabel = [
+                props.estado_cve ? `Estado ${props.estado_cve}` : null,
+                props.municipio_cve ? `Municipio ${props.municipio_cve}` : null,
+                props.colonia ? props.colonia : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <button
                   key={feature.id ?? JSON.stringify(props)}
                   type="button"
-                  className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
+                  className={`flex w-full items-start justify-between rounded-md px-3 py-2 text-left text-sm ${
                     active
                       ? "border border-slate-900 bg-slate-900 text-white"
                       : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
@@ -743,11 +757,22 @@ export function PropertyMap() {
                     zoomToFeature(feature);
                   }}
                 >
-                  <div>
+                  <div className="flex flex-col gap-0.5">
                     <div className="font-semibold">{props.nombre || "Propiedad"}</div>
                     <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
                       {props.status?.toUpperCase() || "Estado desconocido"}
                     </div>
+                    {catalogLabel && (
+                      <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
+                        {catalogLabel}
+                      </div>
+                    )}
+                    {locationLabel && (
+                      <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
+                        {locationLabel}
+                        {props.codigo_postal ? ` · CP ${props.codigo_postal}` : ""}
+                      </div>
+                    )}
                   </div>
                   <span
                     className="h-4 w-4 rounded-full border border-slate-300"

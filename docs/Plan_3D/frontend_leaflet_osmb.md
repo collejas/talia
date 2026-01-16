@@ -2,6 +2,8 @@
 
 Este documento describe cómo implementar el flujo jerárquico descrito en el plan maestro: Leaflet gestiona la navegación México → estado → municipio → desarrollos, y Mapbox GL solo arranca cuando se solicita el modelo 3D de un marcador.
 
+- Antes de mostrarse el mapa, poblar cada ficha de desarrollo con los nuevos campos geográficos (`pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`) y con las referencias opcionales a la jerarquía (`linea_nombre`, `familia_nombre`, `modelo_nombre`) que ahora expone `crm_propiedades_geojson`. Esa metadata alimenta la lista lateral y permite filtrar por estado/municipio o por la línea/familia de catálogo sin mezclar los catálogos tradicionales.
+
 ## 1. Hoja de ruta general
 - Leaflet debe cargar un GeoJSON simplificado de México con `status` agregado (totales de disponibles/apartados/vendidos). El hover sobre el país muestra el consolidado global en un popup o tooltip.
 - Hacer clic en México colorea los tres estados (Playa del Carmen, Guadalajara, Los Cabos) y habilita el hover específico de cada uno.
