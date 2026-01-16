@@ -10693,6 +10693,66 @@ async def crear_propiedad_desarrollo(
     return {"ok": True, "desarrollo": record}
 
 
+@router.patch("/propiedad-desarrollos/{desarrollo_id}")
+async def editar_propiedad_desarrollo(
+    *,
+    desarrollo_id: UUID,
+    payload: PropiedadDesarrolloUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    if not any(
+        getattr(payload, field) is not None
+        for field in (
+            "nombre",
+            "descripcion",
+            "tipo",
+            "geom",
+            "status",
+            "pais_codigo",
+            "estado_cve",
+            "municipio_cve",
+            "codigo_postal",
+            "colonia",
+            "metadata",
+        )
+    ):
+        raise HTTPException(status_code=400, detail="at_least_one_field_required")
+    body: dict[str, Any] = {}
+    if payload.nombre:
+        body["nombre"] = payload.nombre.strip()
+    if payload.descripcion is not None:
+        body["descripcion"] = payload.descripcion.strip() or None
+    if payload.tipo:
+        body["tipo"] = payload.tipo.value
+    if payload.status:
+        body["status"] = payload.status.value
+    if payload.geom:
+        body["geom"] = payload.geom.strip()
+    if payload.pais_codigo:
+        body["pais_codigo"] = payload.pais_codigo.strip().upper()
+    if payload.estado_cve:
+        body["estado_cve"] = payload.estado_cve.strip()
+    if payload.municipio_cve:
+        body["municipio_cve"] = payload.municipio_cve.strip()
+    if payload.codigo_postal:
+        body["codigo_postal"] = payload.codigo_postal.strip()
+    if payload.colonia:
+        body["colonia"] = payload.colonia.strip()
+    if payload.metadata:
+        body["metadata"] = payload.metadata
+    try:
+        record = await repo.update_propiedad_desarrollo(
+            organizacion_id=organizacion_id,
+            desarrollo_id=desarrollo_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "desarrollo": record}
+
+
 @router.post("/propiedades")
 async def crear_propiedad(
     *,
@@ -12159,3 +12219,30 @@ def _tablero_id_from_row(row: dict[str, Any]) -> str | None:
     if tablero_from_column:
         return tablero_from_column
     return _tablero_id_from_metadata({"tablero_id": row.get("tablero_id")})
+class PropiedadDesarrolloUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str | None = None
+    descripcion: str | None = None
+    tipo: PropiedadDesarrolloTipo | None = None
+    geom: str | None = None
+    status: PropiedadStatus | None = None
+    pais_codigo: str | None = None
+    estado_cve: str | None = None
+    municipio_cve: str | None = None
+    codigo_postal: str | None = None
+    colonia: str | None = None
+    metadata: dict[str, Any] | None = None
+
+    @field_validator("geom")
+    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("geom_required")
+        upper = trimmed.upper()
+        if not upper.startswith("SRID="):
+            return f"SRID=4326;{trimmed}"
+        if upper.startswith("SRID=4326;"):
+            return trimmed
+        return f"SRID=4326;{trimmed.split(';', 1)[-1]}"

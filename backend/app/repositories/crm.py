@@ -289,6 +289,29 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_desarrollo_invalid_response:{row!r}")
         return row
 
+    async def update_propiedad_desarrollo(
+        self,
+        *,
+        organizacion_id: UUID,
+        desarrollo_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/propiedad_desarrollos?id=eq.{desarrollo_id}",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_desarrollo_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_desarrollo_update_invalid_response:{row!r}")
+        return row
+
     async def list_propiedad_tipos(
         self,
         *,

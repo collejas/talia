@@ -74,6 +74,7 @@ type DesarrolloNode = {
   nombre: string;
   tipo: string;
   status: string | null;
+  descripcion?: string | null;
   pais_codigo: string | null;
   estado_cve: string | null;
   municipio_cve: string | null;
@@ -121,6 +122,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     municipioCve: "",
     codigoPostal: "",
   });
+  const [editingDesarrolloId, setEditingDesarrolloId] = useState<string | null>(null);
   const [isSubmittingDesarrollo, setIsSubmittingDesarrollo] = useState(false);
   const [desarrolloFormError, setDesarrolloFormError] = useState<string | null>(null);
 
@@ -131,7 +133,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     [],
   );
 
-  const resetDesarrolloForm = useCallback(() => {
+  const resetDesarrolloForm = useCallback((keepEditing = false) => {
     setDesarrolloForm({
       nombre: "",
       descripcion: "",
@@ -142,6 +144,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       codigoPostal: "",
     });
     setDesarrolloFormError(null);
+    if (!keepEditing) {
+      setEditingDesarrolloId(null);
+    }
   }, []);
 
   const handleNodeAction = useCallback((message: string) => {
@@ -179,6 +184,20 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     } finally {
       setIsHierarchyLoading(false);
     }
+  }, []);
+
+  const openEditDesarrollo = useCallback((desarrollo: DesarrolloNode) => {
+    setEditingDesarrolloId(desarrollo.id);
+    setDesarrolloForm({
+      nombre: desarrollo.nombre,
+      descripcion: desarrollo.descripcion ?? "",
+      tipo: desarrollo.tipo || "horizontal",
+      paisCodigo: desarrollo.pais_codigo || "MX",
+      estadoCve: desarrollo.estado_cve || "",
+      municipioCve: desarrollo.municipio_cve || "",
+      codigoPostal: desarrollo.codigo_postal || "",
+    });
+    setIsDesarrolloModalOpen(true);
   }, []);
 
   useEffect(() => {
@@ -265,7 +284,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     };
   }, [desarrolloForm.estadoCve]);
 
-  const handleCreateDesarrollo = useCallback(async () => {
+  const isEditingDesarrollo = Boolean(editingDesarrolloId);
+
+  const handleSaveDesarrollo = useCallback(async () => {
     if (!desarrolloForm.nombre.trim()) {
       setDesarrolloFormError("Ingresa el nombre del desarrollo.");
       return;
@@ -285,20 +306,28 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (desarrolloForm.codigoPostal?.trim()) {
         payload.codigo_postal = desarrolloForm.codigoPostal.trim();
       }
-      const response = await fetch("/api/crm/propiedad-desarrollos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        isEditingDesarrollo
+          ? `/api/crm/propiedad-desarrollos/${editingDesarrolloId}`
+          : "/api/crm/propiedad-desarrollos",
+        {
+          method: isEditingDesarrollo ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(
           (body as { error?: string }).error || "No se pudo guardar el desarrollo.",
         );
       }
-      handleNodeAction("Desarrollo guardado con éxito.");
+      handleNodeAction(
+        isEditingDesarrollo
+          ? "Desarrollo actualizado con éxito."
+          : "Desarrollo guardado con éxito.",
+      );
       resetDesarrolloForm();
       setIsDesarrolloModalOpen(false);
       loadHierarchy();
@@ -310,7 +339,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     } finally {
       setIsSubmittingDesarrollo(false);
     }
-  }, [desarrolloForm, handleNodeAction, loadHierarchy, resetDesarrolloForm]);
+  }, [
+    desarrolloForm,
+    editingDesarrolloId,
+    handleNodeAction,
+    isEditingDesarrollo,
+    loadHierarchy,
+    resetDesarrolloForm,
+  ]);
 
   const STATUS_COLOR: Record<string, string> = {
     disponible: "text-emerald-600",
@@ -390,7 +426,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Nueva capa para ${desarrollo.nombre}`)}>
             Nueva capa
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar desarrollo ${desarrollo.nombre}`)}>
+          <Button variant="ghost" size="sm" onClick={() => openEditDesarrollo(desarrollo)}>
             Editar
           </Button>
         </div>
@@ -463,10 +499,18 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         </Card>
       </section>
 
-      <Dialog open={isDesarrolloModalOpen} onOpenChange={(open) => setIsDesarrolloModalOpen(open)}>
+      <Dialog
+        open={isDesarrolloModalOpen}
+        onOpenChange={(open) => {
+          setIsDesarrolloModalOpen(open);
+          if (!open) {
+            resetDesarrolloForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nuevo desarrollo</DialogTitle>
+            <DialogTitle>{isEditingDesarrollo ? "Editar desarrollo" : "Nuevo desarrollo"}</DialogTitle>
             <DialogDescription>
               Define los metadatos del desarrollo antes de dibujar el plano correspondiente.
             </DialogDescription>
@@ -575,10 +619,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             </Button>
             <Button
               size="sm"
-              onClick={handleCreateDesarrollo}
+              onClick={handleSaveDesarrollo}
               disabled={isSubmittingDesarrollo}
             >
-              {isSubmittingDesarrollo ? "Guardando…" : "Guardar desarrollo"}
+              {isSubmittingDesarrollo
+                ? isEditingDesarrollo
+                  ? "Actualizando…"
+                  : "Guardando…"
+                : isEditingDesarrollo
+                  ? "Actualizar desarrollo"
+                  : "Guardar desarrollo"}
             </Button>
           </DialogFooter>
         </DialogContent>
