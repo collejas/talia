@@ -140,7 +140,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         throw new Error("Respuesta inválida para la jerarquía.");
       }
       setHierarchy(
-        data.features.filter((feature): feature is DesarrolloNode => feature && typeof feature === "object"),
+        data.features.filter(
+          (feature: unknown): feature is DesarrolloNode => !!feature && typeof feature === "object",
+        ),
       );
       setHierarchyError(null);
     } catch (error) {
@@ -222,10 +224,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         <span className={getStatusLabelClass(unidad.status)}>{unidad.status ?? "sin status"}</span>
       </div>
       <div className="flex gap-1">
-        <Button variant="ghost" size="xs" onClick={() => handleNodeAction(`Editar unidad ${unidad.unidad}`)}>
+        <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar unidad ${unidad.unidad}`)}>
           Editar
         </Button>
-        <Button variant="ghost" size="xs" onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad}`)}>
+        <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad}`)}>
           Eliminar
         </Button>
       </div>
@@ -244,10 +246,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           </p>
         </div>
         <div className="flex gap-1">
-          <Button variant="outline" size="xs" onClick={() => handleNodeAction(`Agregar unidad al nivel ${capa.nombre}`)}>
+          <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Agregar unidad al nivel ${capa.nombre}`)}>
             Nueva unidad
           </Button>
-          <Button variant="ghost" size="xs" onClick={() => handleNodeAction(`Editar nivel ${capa.nombre}`)}>
+          <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar nivel ${capa.nombre}`)}>
             Editar
           </Button>
         </div>
@@ -270,10 +272,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{desarrollo.tipo}</p>
         </div>
         <div className="flex gap-1">
-          <Button variant="outline" size="xs" onClick={() => handleNodeAction(`Nueva capa para ${desarrollo.nombre}`)}>
+          <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Nueva capa para ${desarrollo.nombre}`)}>
             Nueva capa
           </Button>
-          <Button variant="ghost" size="xs" onClick={() => handleNodeAction(`Editar desarrollo ${desarrollo.nombre}`)}>
+          <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar desarrollo ${desarrollo.nombre}`)}>
             Editar
           </Button>
         </div>
