@@ -3,7 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { PropiedadGeomEditor } from "@/components/settings/propiedades/propiedad-geom-editor";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 type CatalogOption = {
   id: string;
@@ -87,6 +99,31 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setFormValues((prev) => ({ ...prev, geom: value ?? "" }));
   }, []);
 
+  const [isDesarrolloModalOpen, setIsDesarrolloModalOpen] = useState(false);
+  const [desarrolloForm, setDesarrolloForm] = useState({
+    nombre: "",
+    descripcion: "",
+    tipo: "horizontal",
+  });
+  const [isSubmittingDesarrollo, setIsSubmittingDesarrollo] = useState(false);
+  const [desarrolloFormError, setDesarrolloFormError] = useState<string | null>(null);
+
+  const handleDesarrolloField = useCallback(
+    (field: keyof typeof desarrolloForm, value: string) => {
+      setDesarrolloForm((prev) => ({ ...prev, [field]: value }));
+    },
+    [],
+  );
+
+  const resetDesarrolloForm = useCallback(() => {
+    setDesarrolloForm({ nombre: "", descripcion: "", tipo: "horizontal" });
+    setDesarrolloFormError(null);
+  }, []);
+
+  const handleNodeAction = useCallback((message: string) => {
+    setStatusMessage(message);
+  }, []);
+
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
@@ -119,9 +156,44 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     loadHierarchy();
   }, [loadHierarchy]);
 
-  const handleNodeAction = useCallback((message: string) => {
-    setStatusMessage(message);
-  }, []);
+  const handleCreateDesarrollo = useCallback(async () => {
+    if (!desarrolloForm.nombre.trim()) {
+      setDesarrolloFormError("Ingresa el nombre del desarrollo.");
+      return;
+    }
+    setIsSubmittingDesarrollo(true);
+    setDesarrolloFormError(null);
+    try {
+      const response = await fetch("/api/crm/propiedad-desarrollos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nombre: desarrolloForm.nombre.trim(),
+          descripcion: desarrolloForm.descripcion.trim() || null,
+          tipo: desarrolloForm.tipo,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (body as { error?: string }).error || "No se pudo guardar el desarrollo.",
+        );
+      }
+      handleNodeAction("Desarrollo guardado con éxito.");
+      resetDesarrolloForm();
+      setIsDesarrolloModalOpen(false);
+      loadHierarchy();
+    } catch (error) {
+      console.error("Falló la creación del desarrollo:", error);
+      setDesarrolloFormError(
+        error instanceof Error ? error.message : "Error desconocido al guardar.",
+      );
+    } finally {
+      setIsSubmittingDesarrollo(false);
+    }
+  }, [desarrolloForm, handleNodeAction, loadHierarchy, resetDesarrolloForm]);
 
   const STATUS_COLOR: Record<string, string> = {
     disponible: "text-emerald-600",
@@ -228,7 +300,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleNodeAction("Abrir popup para nuevo desarrollo")}>
+              <Button variant="outline" size="sm" onClick={() => setIsDesarrolloModalOpen(true)}>
                 Nuevo desarrollo
               </Button>
               <Button size="sm" onClick={loadHierarchy} disabled={isHierarchyLoading}>
@@ -252,9 +324,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 <p className="text-[0.7rem] text-slate-400">No hay desarrollos registrados aún.</p>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </section>
+        </CardContent>
+      </Card>
+    </section>
 
       <section className="lg:flex-1">
         <Card className="h-full flex flex-col">
@@ -273,6 +345,67 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           </CardContent>
         </Card>
       </section>
+
+      <Dialog open={isDesarrolloModalOpen} onOpenChange={(open) => setIsDesarrolloModalOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo desarrollo</DialogTitle>
+            <DialogDescription>
+              Define los metadatos del desarrollo antes de dibujar el plano correspondiente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Nombre</Label>
+              <Input
+                value={desarrolloForm.nombre}
+                onChange={(event) => handleDesarrolloField("nombre", event.target.value)}
+                placeholder="Ej. Torre Miramar"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Tipo de desarrollo</Label>
+              <RadioGroup
+                value={desarrolloForm.tipo}
+                onValueChange={(value) => handleDesarrolloField("tipo", value)}
+                className="flex gap-2"
+              >
+                <RadioGroupItem value="horizontal">Horizontal</RadioGroupItem>
+                <RadioGroupItem value="vertical">Vertical</RadioGroupItem>
+              </RadioGroup>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Descripción</Label>
+              <Textarea
+                value={desarrolloForm.descripcion}
+                onChange={(event) => handleDesarrolloField("descripcion", event.target.value)}
+                className="text-sm"
+              />
+            </div>
+            {desarrolloFormError && (
+              <p className="text-xs text-rose-500">{desarrolloFormError}</p>
+            )}
+          </div>
+          <DialogFooter className="flex gap-2 pt-4">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsDesarrolloModalOpen(false);
+                resetDesarrolloForm();
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCreateDesarrollo}
+              disabled={isSubmittingDesarrollo}
+            >
+              {isSubmittingDesarrollo ? "Guardando…" : "Guardar desarrollo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
