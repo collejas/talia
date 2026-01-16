@@ -1,59 +1,47 @@
-# Integración Leaflet + OSMBuildings
+# Integración Leaflet → Mapbox para el cliente inmobiliario
 
-Este documento describe paso a paso cómo consumir el RPC `crm_propiedades_geojson` y representar los volúmenes en el mapa con filtros por tipo/nivel, leyenda de estados y toggle planta/3D.
+Este documento describe cómo implementar el flujo jerárquico descrito en el plan maestro: Leaflet gestiona la navegación México → estado → municipio → desarrollos, y Mapbox GL solo arranca cuando se solicita el modelo 3D de un marcador.
 
-## 1. Configuración base
-- Añadir los scripts/css de Leaflet y OSMBuildings en la página (o usar un bundle con `npm install leaflet osmbuildings`).
-- Inicializar el mapa (`L.map('map')`) con tile base (Mapbox/OSM) y setear `view` al área del desarrollo.
-- Crear capa de OSMBuildings:
-  ```js
-  const osmb = new OSMBuildings(map, {
-    minZoom: 15,
-    maxZoom: 21,
-    position: 'bottomright',
+## 1. Hoja de ruta general
+- Leaflet debe cargar un GeoJSON simplificado de México con `status` agregado (totales de disponibles/apartados/vendidos). El hover sobre el país muestra el consolidado global en un popup o tooltip.
+- Hacer clic en México colorea los tres estados (Playa del Carmen, Guadalajara, Los Cabos) y habilita el hover específico de cada uno.
+- Cuando el usuario selecciona un estado, Leaflet carga el GeoJSON de municipios, colorea los que tienen proyectos y cambia los popups para mostrar los datos consolidados del municipio.
+- Al hacer clic en un municipio se muestran marcadores por desarrollo; cada marcador muestra su información al pasar el cursor y el panel lateral lista las ubicaciones.
+- El click en un marcador dispara la transición a Mapbox (satélite + extrusiones) para mostrar el modelo 3D y las métricas detalladas del desarrollo.
+
+## 2. Leaflet nacional / estados / municipios
+- Inicializar `L.map` centrado en México con tiles libres (OpenStreetMap) y una capa base `L.geoJSON` con los polígonos del país.
+- Agregar una `L.control` para la leyenda y un `popup` global que se actualice con `mouseover`.
+- Manejar niveles (`nivel`, `estado`, `municipio`) guardando el estado actual en un stack para poder navegar hacia atrás.
+- Para cada nivel, recalcular el GeoJSON (filtros por estado/municipio) y llamar a `layer.setStyle` para aplicar los colores del `status`.
+
+## 3. Transición a municipios y desarrollos
+- Cuando se selecciona un estado, cargar su archivo municipal y usar `setStyle` para resaltar los municipios con desarrollos (`feature.properties.tiene_proyectos`).
+- Añadir `mouseover` para mostrar un popup con los totales del municipio y `click` para filtrar la capa de desarrollos.
+- Mostrar marcadores `L.marker` por cada desarrollo (`punto_geometrico`) y usar `bindTooltip`/`bindPopup` con la información relevante. Cada marcador debe almacenar el ID de la propiedad para poder luego invocar Mapbox.
+- Mantener un panel lateral (o drawer) que liste los desarrollos del municipio con links “Ver en detalle Mapbox”.
+
+## 4. Mapbox de detalle 3D
+- El momento en que el usuario pulsa un marcador se activa Mapbox GL:
+  ```ts
+  const mapbox = new mapboxgl.Map({
+    container: "mapbox-container",
+    style: "mapbox://styles/mapbox/satellite-v9",
+    center: [lng, lat],
+    zoom: 18,
+    pitch: 60,
+    bearing: 0,
   });
   ```
+- Agregar la fuente GeoJSON con el desarrollo seleccionado y configurar una capa `fill-extrusion` con `height`, `base` y `color` usando los atributos del RPC.
+- Mostrar un popup/en sidebar con los detalles exactos (precio, status, amenidades) y un botón “Volver al mapa nacional” que destruya Mapbox y restaure Leaflet.
+- Controlar el consumo de tiles: Mapbox solo carga cuando el usuario entra al detalle; una vez terminado, la instancia se destruye o se oculta para no consumir recursos adicionales.
 
-## 2. Consumir GeoJSON del backend
-- Disparar `fetch('/api/crm/propiedades/geojson?nivel=&tipo_id=')` o directamente `fetch('/crm/propiedades/geojson?nivel=&tipo_id=')` desde el backend que invoque `crm_propiedades_geojson`.
-- Parsear el `FeatureCollection` y aplicar `osmb.setData(data); osmb.show();`.
-- Cada `feature` debe tener en `properties` el color y estado. Un ejemplo de transformador:
-  ```js
-  const statusColor = {
-    disponible: '#2ECC71',
-    apartado: '#F1C40F',
-    vendido: '#E74C3C',
-    reservado: '#9B59B6',
-  };
+## 5. Comunicación y UX
+- Mostrar indicadores de navegación (“Selecciona un estado”, “Elige un municipio”, “Sigue al desarrollo”) y breadcrumbs.
+- El hover en Lidaflet y el panel lateral debe mostrar el mismo color/estado que se pase a Mapbox para mantener consistencia.
+- Incluir un control “Centrar todo” en Leaflet/Toggles para reiniciar el stack de navegación sin perder filtros aplicados.
 
-  const data = response.features.map(feature => {
-    feature.properties.wallColor = statusColor[feature.properties.status] ?? '#95A5A6';
-    feature.properties.roofColor = feature.properties.wallColor;
-    return feature;
-  });
-  osmb.setData({ type: 'FeatureCollection', features: data });
-  ```
-
-## 3. Controles de nivel/tipo
-- Mantener selects o chips de `nivel`/`tipo`. Cada cambio debe reconsultar el RPC con parámetros (`?p_nivel=2&p_tipo=<uuid>`).
-- Alternativamente filtrar el GeoJSON en el cliente usando `feature.properties.nivel === nivelSeleccionado`.
-- Actualizar la leyenda y el panel lateral con el tipo y su color base (`propiedad_tipos.color`).
-
-## 4. Toggle planta / 3D
-- Crear una capa Leaflet `L.geoJSON` adicional con los polígonos planos.
-- Controlar su visibilidad (mostrar solo cuando el toggle “planta” esté activo).
-- Mantener OSMBuildings visible cuando la opción “3D” esté activa; al hacer toggle, ocultar/mostrar con `osmb.hide()` / `osmb.show()`.
-
-## 5. Interactividad y UI
-- Asociar `onEachFeature` en la capa plana para bind popups (nombre, precio, status, tipo).
-- Al hacer click en un volumen de OSMBuildings, centrar el mapa y abrir el popup correspondiente.
-- Panel lateral: mostrar lista de propiedades con su estado y un botón “centro en mapa”.
-
-## 6. Actualización dinámica
-- Implementar polling ligero (ej. cada 30 s) o eventos vía WebSocket para reconsultar `crm_propiedades_geojson` y refrescar el volumen.
-- Si se recibe un cambio de estado, ejecutar `osmb.setColor(feature, newColor)` y `osmb.refresh()`.
-
-## 7. Siguientes acciones
-1. Crear endpoint Next.js/Backend que invoque el RPC y recorte los parámetros query.
-2. Consumir ese endpoint desde el componente del mapa.
-3. Agregar estilos y panel lateral en la UI del cliente inmobiliario (botones de filtro, leyenda, toggle).
+## 6. Extensiones futuras
+1. Guardar el historial de clicks (estado/municipio/desarrollo) para análitica interna.
+2. Usar un proxy/caché de tiles Mapbox si el volumen de tráfico aumenta.

@@ -6,35 +6,37 @@
 
 2. [x] **Diseñar las tablas espaciales**
    - [x] Crear tabla principal `propiedades` con FK a `organizaciones`, `tipo_id`, `status`, `precio`, `metadata`, `height`, `min_height`, `nivel`, `geom geometry(PolygonZ,4326)` y timestamps.
-   - [x] Opcional: crear tablas auxiliares `niveles` y `departamentos` si los edificios requieren más detalle (cada nivel->varios departamentos).
-   - [x] Añadir índices GIST sobre `geom` y columnas clave (`organizacion_id`, `status`, `tipo_id`).
+   - [x] Opcional: crear tablas auxiliares `niveles` y `departamentos` para modelar edificios con múltiples niveles y unidades.
+   - [x] Añadir índices GIST sobre `geom` y columnas clave (`organizacion_id`, `status`, `tipo_id`) para acelerar filtros espaciales y por estatus.
 
 3. [x] **Configurar estado y triggers**
-   - [x] Crear tipos enumerados o check constraints para `status` (disponible/apartado/vendido) y `nivel`.
-   - [x] Implementar triggers que actualicen `geom` cuando se cambien coordenadas o se inserten puntos aislados (lat/lng).
-   - [x] Registrar triggers que mantengan timestamps (`creado_en`, `actualizado_en`).
+   - [x] Crear el enum `propiedad_status` y los check constraints necesarios (`disponible`, `apartado`, `vendido`, `reservado`).
+   - [x] Implementar triggers que mantengan `actualizado_en` y `geom` sincronizados cuando cambian coordenadas o atributos espaciales.
+   - [x] Crear políticas RLS por organización/estado y habilitar `propiedades`, `propiedad_niveles` y `propiedad_departamentos`.
 
 4. [x] **Exponer GeoJSON a través de RPC / endpoint**
-   - [x] Crear función RPC `crm_propiedades_geojson(p_organizacion uuid, p_level int DEFAULT NULL, p_tipo uuid DEFAULT NULL)` que retorne `FeatureCollection`.
-   - [x] Incluir en cada feature `properties` con `status`, `tipo_nombre`, `color`, `height`, `levels`, `nivel`, `precio`.
-   - [x] Filtrar por tenant y por parámetros opcionales (nivel/tipo) para alimentar la vista.
+   - [x] Crear la función `crm_propiedades_geojson(p_organizacion uuid, p_nivel integer DEFAULT NULL, p_tipo uuid DEFAULT NULL)` que retorna un `FeatureCollection`.
+   - [x] Asegurar que cada feature aporte `properties` con `status`, `tipo_nombre`, `color`, `height`, `min_height`, `levels`, `precio` y metadata útil.
+   - [x] Crear el proxy Next.js `/api/crm/propiedades/geojson` que invoque dicho RPC y maneje filtros por nivel/tipo.
 
-5. [x] **Construir la capa Leaflet + OSMBuildings**
-   - [ ] Inicializar `L.map` con tiles base y centrar en zona del cliente.
-   - [ ] Cargar GeoJSON desde la función/endpoint y pasar a `OSMBuildings` con `height`, `minHeight`, `wallColor`.
-   - [ ] Crear controles para seleccionar nivel y tipo, filtrando la capa o recargando los features.
-   - [ ] Añadir leyenda de colores y un panel lateral que liste propiedades con su status y precio.
+5. [ ] **Implementar flujo Leaflet jerárquico + transición Mapbox**
+   - [ ] Inicializar Leaflet centrado en México y colorear el país entero según el consolidado nacional; el hover sobre el país debe mostrar los totales globales de disponibles/apartados/vendidos.
+   - [ ] Al clicar México, resaltar los tres estados clave y cambiar el hover para presentar los datos consolidados del estado bajo el cursor.
+   - [ ] Cuando se selecciona un estado, pintar sus municipios con desarrollos; el hover por municipio debe mostrar sus métricas particulares.
+   - [ ] Al escoger un municipio, dibujar marcadores por desarrollo; el hover debe mostrar la info de ventas/estado para ese punto.
+   - [ ] Añadir un panel lateral que liste los desarrollos del municipio, con botones “centrar marcador” y “ver en detalle Mapbox”.
+   - [ ] Al hacer clic en un marcador, activar la vista Mapbox con `mapbox://styles/mapbox/satellite-v9`, pitch/bearing elevados y `fill-extrusion-height` alimentado por `height/min_height/levels`.
 
 6. [ ] **Sincronizar estados y UX**
-   - [ ] Crear acción en UI/backend que actualice el `status` y los colores sin recargar (websocket/polling breve).
-   - [ ] Ofrecer toggle entre vista “planta” (GeoJSON simple) y vista 3D (`OSMBuildings`).
-   - [ ] Agregar filtros para rangos de precio/medida y resaltado al seleccionar un polígono (tooltip/popover).
+   - [ ] Ofrecer filtros de precio, tipo y nivel en el panel y reflejarlos tanto en Leaflet como en la vista Mapbox.
+   - [ ] Implementar un mecanismo ligero de refresco (polling o WebSockets) para mantener actualizados los estados.
+   - [ ] Asegurar que la transición Leaflet → Mapbox comunica al usuario el cambio de vista (mensajes, loaders, breadcrumbs).
 
 7. [ ] **Pruebas y métricas**
-   - [ ] Poblar la tabla con datos de muestra (varios lotes, casas y departamentos con diferentes estados y niveles).
-   - [ ] Validar rendimiento de consultas espaciales (`ST_Distance`, `ST_Within`) y revisar índices GIST.
-   - [ ] Ejecutar QA visual (Leaflet + OSMBuildings), validando colores, niveles y selección interactiva.
+   - [ ] Poblar la base con datos de muestra (30 desarrollos distribuidos en los tres estados) y validar que la vista Mapbox muestra correctamente los volúmenes.
+   - [ ] Probar consultas espaciales críticas (`ST_Intersects`, `ST_DWithin`) y los filtros por estado/tipo para evitar regressiones.
+   - [ ] Ejecutar QA visual: México coloreado → estado → municipio → marcador → Mapbox; verificar colores/alturas y el tiempo de transición.
 
 8. [ ] **Documentar y entregar**
-   - [ ] Describir en el plan maestro cómo se conectan las piezas y documentar los endpoints y triggers generados.
-   - [ ] Preparar guía de uso para el cliente (cómo cambiar estados, agregar nuevas propiedades, filtrar por nivel).
+   - [ ] Registrar en el plan maestro cada salto (país, estado, municipio, marcador, Mapbox) y los endpoints usados.
+   - [ ] Generar la guía para el cliente explicando cómo leer los colores, filtrar desarrollos y abrir la vista 3D.
