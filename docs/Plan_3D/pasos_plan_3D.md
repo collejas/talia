@@ -7,7 +7,7 @@
 2. [x] **Diseñar la base espacial**
    - [x] Crear `propiedades` con `organizacion_id`, `tipo_id`, `status`, `precio`, `height`, `min_height`, `levels`, `metadata` y `geom geometry(PolygonZ,4326)`.
    - [x] Añadir índices GiST y RLS por organización.
-   - [x] Considerar tablas auxiliares `propiedad_niveles`/`propiedad_departamentos` si se necesita desglosar edificios.
+- [x] Considerar tablas auxiliares `propiedad_capas`/`propiedad_unidades` si se necesita desglosar edificios.
 
 3. [x] **Exponer GeoJSON**
    - [x] Crear RPC/endpoint `crm_propiedades_geojson(...)` que filtre por organización, estado, municipio y tipo, devolviendo `FeatureCollection` con todos los `properties` necesarios (color, alturas, referencias a línea/familia/modelo).
