@@ -16,10 +16,22 @@ import { PropiedadGeomEditor } from "@/components/settings/propiedades/propiedad
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type CatalogOption = {
   id: string;
   nombre: string;
+};
+
+type LocationOption = {
+  value: string;
+  label: string;
 };
 
 type PropiedadTipo = {
@@ -104,6 +116,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     nombre: "",
     descripcion: "",
     tipo: "horizontal",
+    paisCodigo: "MX",
+    estadoCve: "",
+    municipioCve: "",
+    codigoPostal: "",
   });
   const [isSubmittingDesarrollo, setIsSubmittingDesarrollo] = useState(false);
   const [desarrolloFormError, setDesarrolloFormError] = useState<string | null>(null);
@@ -116,7 +132,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   );
 
   const resetDesarrolloForm = useCallback(() => {
-    setDesarrolloForm({ nombre: "", descripcion: "", tipo: "horizontal" });
+    setDesarrolloForm({
+      nombre: "",
+      descripcion: "",
+      tipo: "horizontal",
+      paisCodigo: "MX",
+      estadoCve: "",
+      municipioCve: "",
+      codigoPostal: "",
+    });
     setDesarrolloFormError(null);
   }, []);
 
@@ -127,6 +151,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
+  const [estadoOptions, setEstadoOptions] = useState<LocationOption[]>([]);
+  const [municipioOptions, setMunicipioOptions] = useState<LocationOption[]>([]);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const loadHierarchy = useCallback(async () => {
     setIsHierarchyLoading(true);
@@ -158,6 +185,86 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     loadHierarchy();
   }, [loadHierarchy]);
 
+  useEffect(() => {
+    let mounted = true;
+    setLocationError(null);
+    fetch("/api/crm/demografia/geo/estados")
+      .then((response) => response.json())
+      .then((body) => {
+        const features = body?.geojson?.features;
+        if (!Array.isArray(features)) {
+          throw new Error("No fue posible cargar los estados.");
+        }
+        const options = features
+          .map((feature) => {
+            const props = feature?.properties || {};
+            const value =
+              String(props.cve_ent || props.CVE_ENT || props.cveent || "").padStart(2, "0");
+            const label = props.nom_ent || props.NOM_ENT || props.name;
+            if (!value || !label) return null;
+            return { value, label: String(label) };
+          })
+          .filter((value): value is LocationOption => Boolean(value));
+        if (mounted) {
+          setEstadoOptions(options);
+        }
+      })
+      .catch((error) => {
+        console.error("Error cargando estados:", error);
+        if (mounted) {
+          setLocationError(error instanceof Error ? error.message : "Error cargando estados.");
+          setEstadoOptions([]);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!desarrolloForm.estadoCve) {
+      setMunicipioOptions([]);
+      return;
+    }
+    let mounted = true;
+    setLocationError(null);
+    fetch(
+      `/api/crm/demografia/geo/municipios/${encodeURIComponent(
+        desarrolloForm.estadoCve,
+      )}`,
+    )
+      .then((response) => response.json())
+      .then((body) => {
+        const features = body?.geojson?.features;
+        if (!Array.isArray(features)) {
+          throw new Error("No fue posible cargar los municipios.");
+        }
+        const options = features
+          .map((feature) => {
+            const props = feature?.properties || {};
+            const value =
+              String(props.cve_mun || props.CVE_MUN || props.cvemun || "").padStart(3, "0");
+            const label = props.nom_mun || props.NOM_MUN || props.name;
+            if (!value || !label) return null;
+            return { value, label: String(label) };
+          })
+          .filter((value): value is LocationOption => Boolean(value));
+        if (mounted) {
+          setMunicipioOptions(options);
+        }
+      })
+      .catch((error) => {
+        console.error("Error cargando municipios:", error);
+        if (mounted) {
+          setLocationError(error instanceof Error ? error.message : "Error cargando municipios.");
+          setMunicipioOptions([]);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [desarrolloForm.estadoCve]);
+
   const handleCreateDesarrollo = useCallback(async () => {
     if (!desarrolloForm.nombre.trim()) {
       setDesarrolloFormError("Ingresa el nombre del desarrollo.");
@@ -166,16 +273,24 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setIsSubmittingDesarrollo(true);
     setDesarrolloFormError(null);
     try {
+      const payload: Record<string, string | null> = {
+        nombre: desarrolloForm.nombre.trim(),
+        descripcion: desarrolloForm.descripcion.trim() || null,
+        tipo: desarrolloForm.tipo,
+      };
+      const paisCodigo = desarrolloForm.paisCodigo?.trim().toUpperCase();
+      if (paisCodigo) payload.pais_codigo = paisCodigo;
+      if (desarrolloForm.estadoCve) payload.estado_cve = desarrolloForm.estadoCve;
+      if (desarrolloForm.municipioCve) payload.municipio_cve = desarrolloForm.municipioCve;
+      if (desarrolloForm.codigoPostal?.trim()) {
+        payload.codigo_postal = desarrolloForm.codigoPostal.trim();
+      }
       const response = await fetch("/api/crm/propiedad-desarrollos", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          nombre: desarrolloForm.nombre.trim(),
-          descripcion: desarrolloForm.descripcion.trim() || null,
-          tipo: desarrolloForm.tipo,
-        }),
+        body: JSON.stringify(payload),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -376,6 +491,66 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 <RadioGroupItem value="vertical">Vertical</RadioGroupItem>
               </RadioGroup>
             </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">País</Label>
+                <Input
+                  value={desarrolloForm.paisCodigo}
+                  onChange={(event) =>
+                    handleDesarrolloField("paisCodigo", event.target.value.toUpperCase())
+                  }
+                  placeholder="MX"
+                  maxLength={3}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Código postal</Label>
+                <Input
+                  value={desarrolloForm.codigoPostal}
+                  onChange={(event) => handleDesarrolloField("codigoPostal", event.target.value)}
+                  placeholder="Ej. 01210"
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Estado</Label>
+                <Select
+                  value={desarrolloForm.estadoCve || undefined}
+                  onValueChange={(value) => handleDesarrolloField("estadoCve", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {estadoOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Municipio</Label>
+                <Select
+                  value={desarrolloForm.municipioCve || undefined}
+                  onValueChange={(value) => handleDesarrolloField("municipioCve", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un municipio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {municipioOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {locationError && <p className="text-xs text-rose-500">{locationError}</p>}
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Descripción</Label>
               <Textarea
