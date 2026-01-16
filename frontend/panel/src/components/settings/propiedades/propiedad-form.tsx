@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Geometry } from "geojson";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,59 @@ type PropiedadFormProps = {
   tipos: PropiedadTipo[];
 };
 
+type RegionOption = {
+  value: string;
+  label: string;
+};
+
+function extractGeojsonFeatures(payload: unknown): unknown[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+  const data = payload as Record<string, unknown>;
+  const geojsonCandidate = data.geojson ?? data;
+  if (typeof geojsonCandidate !== "object" || geojsonCandidate === null) {
+    return [];
+  }
+  const features = (geojsonCandidate as Record<string, unknown>)?.features;
+  if (Array.isArray(features)) {
+    return features;
+  }
+  return [];
+}
+
+function buildRegionOptions(features: unknown[], codeKey: string, nameKey: string): RegionOption[] {
+  const optionsMap = new Map<string, RegionOption>();
+  for (const feature of features) {
+    if (!feature || typeof feature !== "object") continue;
+    const props = (feature as Record<string, unknown>).properties;
+    if (!props || typeof props !== "object") continue;
+    const codeValue = props[codeKey];
+    const nameValue = props[nameKey];
+    const code =
+      typeof codeValue === "string"
+        ? codeValue.trim()
+        : typeof codeValue === "number"
+        ? String(codeValue)
+        : "";
+    const name =
+      typeof nameValue === "string"
+        ? nameValue.trim()
+        : typeof nameValue === "number"
+        ? String(nameValue)
+        : "";
+    if (!code || !name || optionsMap.has(code)) continue;
+    optionsMap.set(code, { value: code, label: name });
+  }
+  const options = [...optionsMap.values()];
+  options.sort((a, b) =>
+    a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+  );
+  return options;
+}
+
 const EMPTY = "";
+const DEFAULT_MAP_LEVEL = 2; // map stack level that represents "municipio" (Plan 3D stack)
 
 type MaybePosition =
   | readonly [number, number]
@@ -131,7 +183,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     descripcion: "",
     tipoId: "",
     precio: "",
-    nivel: "",
     height: "",
     minHeight: "",
     levels: "",
@@ -146,13 +197,85 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [estadoOptions, setEstadoOptions] = useState<RegionOption[]>([]);
+  const [municipioOptions, setMunicipioOptions] = useState<RegionOption[]>([]);
+  const [isLoadingEstados, setIsLoadingEstados] = useState(false);
+  const [isLoadingMunicipios, setIsLoadingMunicipios] = useState(false);
 
-  const handleChange = (field: keyof typeof formValues, value: string) => {
+  const handleChange = useCallback((field: keyof typeof formValues, value: string) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
-  };
+  }, []);
   const handleGeometryChange = useCallback((value?: string) => {
     setFormValues((prev) => ({ ...prev, geom: value ?? "" }));
   }, []);
+
+  const handleEstadoSelect = useCallback(
+    (value: string) => {
+      handleChange("estadoCve", value);
+      handleChange("municipioCve", "");
+    },
+    [handleChange],
+  );
+
+  const loadEstadoOptions = useCallback(async () => {
+    setIsLoadingEstados(true);
+    try {
+      const response = await fetch("/api/crm/demografia/geo/estados");
+      if (!response.ok) {
+        throw new Error("No fue posible cargar los estados.");
+      }
+      const body = await response.json().catch(() => ({}));
+      const features = extractGeojsonFeatures(body);
+      setEstadoOptions(buildRegionOptions(features, "cve_ent", "nom_ent"));
+    } catch (error) {
+      console.error("Error al cargar estados:", error);
+      setEstadoOptions([]);
+    } finally {
+      setIsLoadingEstados(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEstadoOptions();
+  }, [loadEstadoOptions]);
+
+  useEffect(() => {
+    if (!formValues.estadoCve) {
+      setMunicipioOptions([]);
+      setIsLoadingMunicipios(false);
+      return;
+    }
+    let cancelled = false;
+    const fetchMunicipios = async () => {
+      setIsLoadingMunicipios(true);
+      try {
+        const response = await fetch(
+          `/api/crm/demografia/geo/municipios/${encodeURIComponent(formValues.estadoCve)}`,
+        );
+        if (!response.ok) {
+          throw new Error("No fue posible cargar los municipios.");
+        }
+        const body = await response.json().catch(() => ({}));
+        const features = extractGeojsonFeatures(body);
+        if (!cancelled) {
+          setMunicipioOptions(buildRegionOptions(features, "cve_mun", "nom_mun"));
+        }
+      } catch (error) {
+        console.error("Error al cargar municipios:", error);
+        if (!cancelled) {
+          setMunicipioOptions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingMunicipios(false);
+        }
+      }
+    };
+    fetchMunicipios();
+    return () => {
+      cancelled = true;
+    };
+  }, [formValues.estadoCve]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -188,8 +311,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       }
       const precio = parseDecimalValue(formValues.precio);
       if (precio !== undefined) payload.precio = precio;
-      const nivel = parseIntegerValue(formValues.nivel);
-      if (nivel !== undefined) payload.nivel = nivel;
+      payload.nivel = DEFAULT_MAP_LEVEL;
       const height = parseDecimalValue(formValues.height);
       if (height !== undefined) payload.height = height;
       const minHeight = parseDecimalValue(formValues.minHeight);
@@ -309,18 +431,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                       onChange={(event) => handleChange("precio", event.target.value)}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="propiedad-nivel" className="text-[0.65rem]">
-                      Nivel
-                    </Label>
-                    <Input
-                      className="text-sm"
-                      type="number"
-                      id="propiedad-nivel"
-                      value={formValues.nivel}
-                      onChange={(event) => handleChange("nivel", event.target.value)}
-                    />
-                  </div>
                   <div className="grid gap-2 md:grid-cols-2">
                     <div className="space-y-1">
                       <Label htmlFor="propiedad-height" className="text-[0.65rem]">
@@ -371,23 +481,76 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                     <Label htmlFor="propiedad-estado" className="text-[0.65rem]">
                       Estado (INEGI)
                     </Label>
-                    <Input
-                      className="text-sm"
-                      id="propiedad-estado"
-                      value={formValues.estadoCve}
-                      onChange={(event) => handleChange("estadoCve", event.target.value)}
-                    />
+                    <Select
+                      value={formValues.estadoCve || EMPTY}
+                      onValueChange={handleEstadoSelect}
+                    >
+                      <SelectTrigger
+                        id="propiedad-estado"
+                        className="text-sm"
+                        disabled={isLoadingEstados}
+                      >
+                        <SelectValue
+                          placeholder={
+                            isLoadingEstados ? "Cargando estados…" : "Selecciona un estado"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="text-xs">
+                        {estadoOptions.length ? (
+                          estadoOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem disabled value="estado-empty">
+                            {isLoadingEstados ? "Cargando…" : "Sin estados disponibles"}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="propiedad-municipio" className="text-[0.65rem]">
                       Municipio (INEGI)
                     </Label>
-                    <Input
-                      className="text-sm"
-                      id="propiedad-municipio"
-                      value={formValues.municipioCve}
-                      onChange={(event) => handleChange("municipioCve", event.target.value)}
-                    />
+                    <Select
+                      value={formValues.municipioCve || EMPTY}
+                      onValueChange={(value) => handleChange("municipioCve", value)}
+                      disabled={!formValues.estadoCve || isLoadingMunicipios}
+                    >
+                      <SelectTrigger
+                        id="propiedad-municipio"
+                        className="text-sm"
+                        disabled={!formValues.estadoCve || isLoadingMunicipios}
+                      >
+                        <SelectValue
+                          placeholder={
+                            !formValues.estadoCve
+                              ? "Selecciona un estado primero"
+                              : isLoadingMunicipios
+                              ? "Cargando municipios…"
+                              : "Selecciona un municipio"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="text-xs">
+                        {municipioOptions.length ? (
+                          municipioOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem disabled value="municipio-empty">
+                            {isLoadingMunicipios
+                              ? "Cargando…"
+                              : "Selecciona un estado con municipios"}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="propiedad-codigo-postal" className="text-[0.65rem]">
