@@ -19,7 +19,13 @@
    - [x] Asegurar que cada feature aporte `properties` con `status`, `tipo_nombre`, `color`, `height`, `min_height`, `levels`, `precio` y metadata útil.
    - [x] Crear el proxy Next.js `/api/crm/propiedades/geojson` que invoque dicho RPC y maneje filtros por nivel/tipo.
 
-5. [ ] **Implementar flujo Leaflet jerárquico + transición Mapbox**
+5. [ ] **Enriquecer propiedades con referencias geográficas y jerárquicas**
+   - [ ] Modificar la tabla `propiedades` para incluir `pais_codigo`, `estado_cve`/`municipio_cve`, `codigo_postal`, `colonia` y las claves opcionales `linea_id`, `familia_id`, `modelo_id`.
+   - [ ] Crear índices y RLS que filtren por organización y mantengan consistencia entre los nuevos campos geo.
+   - [ ] Documentar que el módulo inmobiliario sigue separado de `/settings/productos`, pero puede consumir líneas/familias/modelos como plantillas sin afectar la lógica del catálogo general.
+   - [ ] Validar que los JSON de `backend/app/data/geo` y los servicios `leads_geo` puedan resolver estados/municipios para alimentar los selects de la UI.
+
+6. [ ] **Implementar flujo Leaflet jerárquico + transición Mapbox**
    - [ ] Inicializar Leaflet centrado en México y colorear el país entero según el consolidado nacional; el hover sobre el país debe mostrar los totales globales de disponibles/apartados/vendidos.
    - [ ] Al clicar México, resaltar los tres estados clave y cambiar el hover para presentar los datos consolidados del estado bajo el cursor.
    - [ ] Cuando se selecciona un estado, pintar sus municipios con desarrollos; el hover por municipio debe mostrar sus métricas particulares.
@@ -27,16 +33,16 @@
    - [ ] Añadir un panel lateral que liste los desarrollos del municipio, con botones “centrar marcador” y “ver en detalle Mapbox”.
    - [ ] Al hacer clic en un marcador, activar la vista Mapbox con `mapbox://styles/mapbox/satellite-v9`, pitch/bearing elevados y `fill-extrusion-height` alimentado por `height/min_height/levels`.
 
-6. [ ] **Sincronizar estados y UX**
+7. [ ] **Sincronizar estados y UX**
    - [ ] Ofrecer filtros de precio, tipo y nivel en el panel y reflejarlos tanto en Leaflet como en la vista Mapbox.
    - [ ] Implementar un mecanismo ligero de refresco (polling o WebSockets) para mantener actualizados los estados.
    - [ ] Asegurar que la transición Leaflet → Mapbox comunica al usuario el cambio de vista (mensajes, loaders, breadcrumbs).
 
-7. [ ] **Pruebas y métricas**
+8. [ ] **Pruebas y métricas**
    - [ ] Poblar la base con datos de muestra (30 desarrollos distribuidos en los tres estados) y validar que la vista Mapbox muestra correctamente los volúmenes.
    - [ ] Probar consultas espaciales críticas (`ST_Intersects`, `ST_DWithin`) y los filtros por estado/tipo para evitar regressiones.
    - [ ] Ejecutar QA visual: México coloreado → estado → municipio → marcador → Mapbox; verificar colores/alturas y el tiempo de transición.
 
-8. [ ] **Documentar y entregar**
+9. [ ] **Documentar y entregar**
    - [ ] Registrar en el plan maestro cada salto (país, estado, municipio, marcador, Mapbox) y los endpoints usados.
    - [ ] Generar la guía para el cliente explicando cómo leer los colores, filtrar desarrollos y abrir la vista 3D.

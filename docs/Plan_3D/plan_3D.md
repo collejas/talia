@@ -48,3 +48,4 @@ Construir una pantalla de propiedades inmobiliarias que combine un mapa nacional
 - Mapbox tiene límite de tiles gratuito, por eso la vista satélite debe limitarse a zonas específicas y usar cache/proxy si hay necesidad de reducir consumo.
 - Controlar la cantidad de polígonos (usar `ST_Simplify` si hay mucha geometría) y mantener índices GIST actualizados.
 - Asegurar que los colores reflejen siempre el `status`: sincronizar cambios de estado desde el CRM/ventas al mapa (WebSockets o polling mínimo).
+- Mantener separado el módulo inmobiliario del catálogo general de `/settings/productos`: las propiedades usan sus propios campos geo y opcionalmente hacen referencia a líneas/familias/modelos como plantillas, pero no deben forzar que productos tradicionales dependan de la lógica de mapas o geocodificación.
