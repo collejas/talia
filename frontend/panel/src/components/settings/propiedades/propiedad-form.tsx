@@ -85,11 +85,9 @@ type DesarrolloNode = {
   capas: CapaNode[];
 };
 
-type GeometryTarget = {
-  type: "desarrollo";
-  id: string;
-  label: string;
-};
+type GeometryTarget =
+  | { type: "desarrollo"; id: string; label: string }
+  | { type: "capa"; id: string; label: string; desarrolloId: string; nivel: number | null };
 
 type GeoFeature = {
   id: string;
@@ -189,6 +187,34 @@ function geoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry): string {
   return formatMultiPolygonWkt(normalized);
 }
 
+function formatPolygonWkt(polygon: Polygon3DZ): string {
+  const rings = polygon
+    .map((ring) => {
+      const coordinates = ring.map(([x, y, z]) => `${x} ${y} ${z}`).join(", ");
+      return `(${coordinates})`;
+    })
+    .join(", ");
+  if (!rings.length) {
+    throw new Error("El polígono debe contener al menos un anillo.");
+  }
+  return `SRID=4326;POLYGON Z (${rings})`;
+}
+
+function geoJsonToPolygonZWkt(geometry: GeoJsonGeometry): string {
+  const type = geometry.type?.toLowerCase();
+  if (type === "polygon") {
+    return formatPolygonWkt(ensurePolygon(geometry.coordinates));
+  }
+  if (type === "multipolygon") {
+    const array = ensureArray(geometry.coordinates);
+    if (!array.length) {
+      throw new Error("El polígon debe contener al menos un polígono.");
+    }
+    return formatPolygonWkt(ensurePolygon(array[0]));
+  }
+  throw new Error("Solo se pueden guardar polígonos.");
+}
+
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
     nombre: "",
@@ -212,6 +238,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [geometryStatusMessage, setGeometryStatusMessage] = useState<string | null>(null);
   const [geometryError, setGeometryError] = useState<string | null>(null);
   const [isSavingGeometry, setIsSavingGeometry] = useState(false);
+  const [isCapaModalOpen, setIsCapaModalOpen] = useState(false);
+  const [creatingCapaFor, setCreatingCapaFor] = useState<DesarrolloNode | null>(null);
+  const [capaForm, setCapaForm] = useState({
+    nombre: "",
+    nivel: "",
+    altura: "",
+    descripcion: "",
+  });
+  const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
+  const [capaFormError, setCapaFormError] = useState<string | null>(null);
   void lineas;
   void familias;
   void modelos;
@@ -261,18 +297,73 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setStatusMessage(message);
   }, []);
 
-  const handleSelectGeometryTarget = useCallback((desarrollo: DesarrolloNode) => {
-    setGeometryTarget({
-      type: "desarrollo",
-      id: desarrollo.id,
-      label: desarrollo.nombre,
+  const handleSelectGeometryTarget = useCallback(
+    (target: GeometryTarget, geometry?: GeoJsonGeometry) => {
+      setGeometryTarget(target);
+      setFormValues((prev) => ({
+        ...prev,
+        geom: geometry ? JSON.stringify(geometry) : "",
+      }));
+      setGeometryError(null);
+      setGeometryStatusMessage(null);
+    },
+    [],
+  );
+
+  const handleSelectDesarrolloGeometry = useCallback(
+    (desarrollo: DesarrolloNode) => {
+      handleSelectGeometryTarget(
+        { type: "desarrollo", id: desarrollo.id, label: desarrollo.nombre },
+        desarrollo.geom,
+      );
+    },
+    [handleSelectGeometryTarget],
+  );
+
+  const handleSelectCapaGeometry = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode) => {
+      handleSelectGeometryTarget(
+        {
+          type: "capa",
+          id: capa.id,
+          label: capa.nombre || `Nivel ${capa.nivel ?? "?"}`,
+          desarrolloId: desarrollo.id,
+          nivel: capa.nivel ?? null,
+        },
+        capa.geom,
+      );
+    },
+    [handleSelectGeometryTarget],
+  );
+
+  const handleCapaField = useCallback(
+    (field: keyof typeof capaForm, value: string) => {
+      setCapaForm((prev) => ({ ...prev, [field]: value }));
+    },
+    [setCapaForm],
+  );
+
+  const resetCapaForm = useCallback(() => {
+    setCapaForm({
+      nombre: "",
+      nivel: "",
+      altura: "",
+      descripcion: "",
     });
-    setFormValues((prev) => ({
-      ...prev,
-      geom: desarrollo.geom ? JSON.stringify(desarrollo.geom) : "",
-    }));
-    setGeometryError(null);
-    setGeometryStatusMessage(null);
+    setCapaFormError(null);
+    setCreatingCapaFor(null);
+  }, []);
+
+  const openCapaModal = useCallback((desarrollo: DesarrolloNode) => {
+    setCreatingCapaFor(desarrollo);
+    setCapaForm({
+      nombre: "",
+      nivel: "",
+      altura: "",
+      descripcion: "",
+    });
+    setCapaFormError(null);
+    setIsCapaModalOpen(true);
   }, []);
 
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
@@ -285,16 +376,31 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const hierarchyFeatures = useMemo(() => {
     const features: GeoFeature[] = [];
     hierarchy.forEach((desarrollo) => {
-      if (!desarrollo.geom?.type || !desarrollo.geom?.coordinates) {
-        return;
+      if (desarrollo.geom?.type && desarrollo.geom?.coordinates) {
+        features.push({
+          id: desarrollo.id,
+          geometry: desarrollo.geom,
+          properties: {
+            nombre: desarrollo.nombre,
+            tipo: desarrollo.tipo,
+            layerType: "desarrollo",
+          },
+        });
       }
-      features.push({
-        id: desarrollo.id,
-        geometry: desarrollo.geom,
-        properties: {
-          nombre: desarrollo.nombre,
-          tipo: desarrollo.tipo,
-        },
+      desarrollo.capas?.forEach((capa) => {
+        if (!capa.geom?.type || !capa.geom?.coordinates) {
+          return;
+        }
+        features.push({
+          id: capa.id,
+          geometry: capa.geom,
+          properties: {
+            nombre: capa.nombre || `Nivel ${capa.nivel ?? "?"}`,
+            layerType: "capa",
+            nivel: capa.nivel,
+            desarrolloId: desarrollo.id,
+          },
+        });
       });
     });
     return features;
@@ -348,13 +454,25 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     if (!geometryTarget) {
       return;
     }
-    const selected = hierarchy.find((node) => node.id === geometryTarget.id);
-    if (!selected) {
+    if (geometryTarget.type === "desarrollo") {
+      const selected = hierarchy.find((node) => node.id === geometryTarget.id);
+      if (!selected) {
+        return;
+      }
+      setFormValues((prev) => ({
+        ...prev,
+        geom: selected.geom ? JSON.stringify(selected.geom) : "",
+      }));
+      return;
+    }
+    const desarrollo = hierarchy.find((node) => node.id === geometryTarget.desarrolloId);
+    const capa = desarrollo?.capas?.find((node) => node.id === geometryTarget.id);
+    if (!capa) {
       return;
     }
     setFormValues((prev) => ({
       ...prev,
-      geom: selected.geom ? JSON.stringify(selected.geom) : "",
+      geom: capa.geom ? JSON.stringify(capa.geom) : "",
     }));
   }, [geometryTarget, hierarchy]);
 
@@ -502,9 +620,91 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     resetDesarrolloForm,
   ]);
 
+  const handleCreateCapa = useCallback(async () => {
+    if (!creatingCapaFor) {
+      setCapaFormError("Selecciona el desarrollo que recibirá la capa.");
+      return;
+    }
+    const nivelValue = capaForm.nivel.trim();
+    if (!nivelValue) {
+      setCapaFormError("El nivel es obligatorio.");
+      return;
+    }
+    const nivel = Number.parseInt(nivelValue, 10);
+    if (Number.isNaN(nivel)) {
+      setCapaFormError("Ingresa un nivel válido.");
+      return;
+    }
+    setIsSubmittingCapa(true);
+    setCapaFormError(null);
+    try {
+      const payload: Record<string, unknown> = {
+        desarrollo_id: creatingCapaFor.id,
+        nivel,
+        geom: "SRID=4326;POLYGON Z EMPTY",
+      };
+      if (capaForm.nombre.trim()) {
+        payload.nombre = capaForm.nombre.trim();
+      }
+      if (capaForm.descripcion.trim()) {
+        payload.descripcion = capaForm.descripcion.trim();
+      }
+      if (capaForm.altura.trim()) {
+        const altura = Number(capaForm.altura);
+        if (!Number.isNaN(altura)) {
+          payload.altura = altura;
+        }
+      }
+      const response = await fetch("/api/crm/propiedad-capas", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (body as { error?: string }).error || "No se pudo guardar la capa.",
+        );
+      }
+      const savedCapa = (body as { capa?: { id?: string; nombre?: string; nivel?: number; desarrollo_id?: string } })
+        .capa;
+      handleNodeAction("Capa creada con éxito.");
+      resetCapaForm();
+      setIsCapaModalOpen(false);
+      await loadHierarchy();
+      if (savedCapa?.id) {
+        handleSelectGeometryTarget(
+          {
+            type: "capa",
+            id: savedCapa.id,
+            label: savedCapa.nombre || `Nivel ${savedCapa.nivel ?? nivel}`,
+            desarrolloId: savedCapa.desarrollo_id || creatingCapaFor.id,
+            nivel: savedCapa.nivel ?? nivel,
+          },
+          undefined,
+        );
+      }
+    } catch (error) {
+      setCapaFormError(
+        error instanceof Error ? error.message : "Error desconocido al guardar la capa.",
+      );
+    } finally {
+      setIsSubmittingCapa(false);
+    }
+  }, [
+    capaForm,
+    creatingCapaFor,
+    handleNodeAction,
+    handleSelectGeometryTarget,
+    loadHierarchy,
+    resetCapaForm,
+  ]);
+
   const handleSaveGeometry = useCallback(async () => {
     if (!geometryTarget) {
-      setGeometryError("Selecciona un desarrollo antes de guardar.");
+      setGeometryError("Selecciona el desarrollo o capa correspondiente.");
       return;
     }
     if (!formValues.geom) {
@@ -521,7 +721,10 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     const normalizedValue = JSON.stringify(parsed);
     let wkt: string;
     try {
-      wkt = geoJsonToMultiPolygonZWkt(parsed);
+      wkt =
+        geometryTarget.type === "desarrollo"
+          ? geoJsonToMultiPolygonZWkt(parsed)
+          : geoJsonToPolygonZWkt(parsed);
     } catch (error) {
       setGeometryError(
         error instanceof Error ? error.message : "El polígono generado no es válido.",
@@ -533,7 +736,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setGeometryError(null);
     setGeometryStatusMessage("Guardando polígono…");
     try {
-      const response = await fetch(`/api/crm/propiedad-desarrollos/${geometryTarget.id}`, {
+      const endpoint =
+        geometryTarget.type === "desarrollo"
+          ? `/api/crm/propiedad-desarrollos/${geometryTarget.id}`
+          : `/api/crm/propiedad-capas/${geometryTarget.id}`;
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -546,8 +753,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           (body as { error?: string }).error || "No se pudo guardar el polígono.",
         );
       }
-      handleNodeAction(`Polígono guardado para ${geometryTarget.label}.`);
-      setGeometryStatusMessage("Polígono guardado correctamente.");
+      handleNodeAction(
+        geometryTarget.type === "desarrollo"
+          ? `Polígono guardado para ${geometryTarget.label}.`
+          : `Polígono guardado para ${geometryTarget.label}.`,
+      );
+      setGeometryStatusMessage(
+        geometryTarget.type === "desarrollo"
+          ? "Polígono del desarrollo guardado correctamente."
+          : "Polígono de la capa guardado correctamente.",
+      );
       setGeometryError(null);
       await loadHierarchy();
     } catch (error) {
@@ -597,7 +812,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     </div>
   );
 
-  const renderCapa = (capa: CapaNode) => (
+  const renderCapa = (desarrollo: DesarrolloNode, capa: CapaNode) => (
     <div key={capa.id} className="space-y-2 rounded border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -611,6 +826,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         <div className="flex gap-1">
           <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Agregar unidad al nivel ${capa.nombre}`)}>
             Nueva unidad
+          </Button>
+          <Button
+            variant={
+              geometryTarget?.type === "capa" && geometryTarget.id === capa.id ? "secondary" : "outline"
+            }
+            size="sm"
+            onClick={() => handleSelectCapaGeometry(desarrollo, capa)}
+          >
+            Editar polígono
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar nivel ${capa.nombre}`)}>
             Editar
@@ -634,24 +858,24 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <p className="text-base font-semibold">{desarrollo.nombre}</p>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{desarrollo.tipo}</p>
         </div>
-      <div className="flex gap-1">
-        <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Nueva capa para ${desarrollo.nombre}`)}>
-          Nueva capa
-        </Button>
-        <Button
-          variant={geometryTarget?.id === desarrollo.id ? "secondary" : "outline"}
-          size="sm"
-          onClick={() => handleSelectGeometryTarget(desarrollo)}
-        >
-          Editar polígono
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => openEditDesarrollo(desarrollo)}>
-          Editar
-        </Button>
-      </div>
+        <div className="flex gap-1">
+          <Button variant="outline" size="sm" onClick={() => openCapaModal(desarrollo)}>
+            Nueva capa
+          </Button>
+          <Button
+            variant={geometryTarget?.id === desarrollo.id ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => handleSelectDesarrolloGeometry(desarrollo)}
+          >
+            Editar polígono
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => openEditDesarrollo(desarrollo)}>
+            Editar
+          </Button>
+        </div>
       </div>
       <div className="space-y-2">
-        {desarrollo.capas?.length ? desarrollo.capas.map(renderCapa) : <p className="text-[0.6rem] text-slate-400">Sin capas aún</p>}
+        {desarrollo.capas?.length ? desarrollo.capas.map((capa) => renderCapa(desarrollo, capa)) : <p className="text-[0.6rem] text-slate-400">Sin capas aún</p>}
       </div>
       <div className="flex items-center justify-between text-xs text-slate-500">
         <span>{desarrollo.capas?.length ?? 0} capas</span>
@@ -717,24 +941,31 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               highlightId={geometryTarget?.id ?? undefined}
             />
         <div className="space-y-2">
-          {geometryTarget ? (
-            <p className="text-[0.65rem] text-slate-500">
-              Dibujando el polígono del desarrollo <strong>{geometryTarget.label}</strong>. Finaliza
-              el trazo y pulsa Guardar para publicarlo.
-            </p>
-          ) : (
-            <p className="text-[0.65rem] text-slate-500">
-              Selecciona un desarrollo y haz clic en “Editar polígono” para comenzar a dibujar.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              onClick={handleSaveGeometry}
-              disabled={!geometryTarget || !formValues.geom || isSavingGeometry}
-            >
-              {isSavingGeometry ? "Guardando…" : "Guardar polígono del desarrollo"}
-            </Button>
+            {geometryTarget ? (
+              <p className="text-[0.65rem] text-slate-500">
+                Dibujando el polígono de
+                {geometryTarget.type === "capa" ? " la capa " : " el desarrollo "}
+                <strong>{geometryTarget.label}</strong>. Finaliza el trazo y pulsa Guardar para
+                publicarlo.
+              </p>
+            ) : (
+              <p className="text-[0.65rem] text-slate-500">
+                Selecciona un desarrollo o una capa y haz clic en “Editar polígono” para comenzar a
+                dibujar.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={handleSaveGeometry}
+                disabled={!geometryTarget || !formValues.geom || isSavingGeometry}
+              >
+                {isSavingGeometry
+                  ? "Guardando…"
+                  : geometryTarget?.type === "capa"
+                    ? "Guardar polígono de la capa"
+                    : "Guardar polígono del desarrollo"}
+              </Button>
             {geometryStatusMessage && (
               <span className="text-[0.65rem] text-emerald-600">{geometryStatusMessage}</span>
             )}
@@ -880,6 +1111,83 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 : isEditingDesarrollo
                   ? "Actualizar desarrollo"
                   : "Guardar desarrollo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isCapaModalOpen}
+        onOpenChange={(open) => {
+          setIsCapaModalOpen(open);
+          if (!open) {
+            resetCapaForm();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Crear capa para {creatingCapaFor ? `"${creatingCapaFor.nombre}"` : "este desarrollo"}
+            </DialogTitle>
+            <DialogDescription>
+              Define nivel, altura y descripción antes de dibujar el polígono que
+              representa este plano intermedio en el mapa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Nombre de la capa</Label>
+              <Input
+                value={capaForm.nombre}
+                onChange={(event) => handleCapaField("nombre", event.target.value)}
+                placeholder="Ej. Planta baja, Manzana A"
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Nivel</Label>
+                <Input
+                  value={capaForm.nivel}
+                  onChange={(event) => handleCapaField("nivel", event.target.value)}
+                  placeholder="Ej. 1"
+                  type="number"
+                  min={0}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Altura (m)</Label>
+                <Input
+                  value={capaForm.altura}
+                  onChange={(event) => handleCapaField("altura", event.target.value)}
+                  placeholder="Ej. 3.5"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Descripción</Label>
+              <Textarea
+                value={capaForm.descripcion}
+                onChange={(event) => handleCapaField("descripcion", event.target.value)}
+                className="text-sm"
+              />
+            </div>
+            {capaFormError && <p className="text-xs text-rose-500">{capaFormError}</p>}
+          </div>
+          <DialogFooter className="flex gap-2 pt-4">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsCapaModalOpen(false);
+                resetCapaForm();
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleCreateCapa} disabled={isSubmittingCapa}>
+              {isSubmittingCapa ? "Guardando…" : "Guardar capa"}
             </Button>
           </DialogFooter>
         </DialogContent>

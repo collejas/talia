@@ -1226,6 +1226,51 @@ class PropiedadUnidadCreateRequest(BaseModel):
         return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
 
 
+class PropiedadCapaCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    desarrollo_id: UUID
+    nivel: int = Field(..., ge=0)
+    nombre: str | None = None
+    descripcion: str | None = None
+    altura: Decimal | None = None
+    geom: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @field_validator("geom", mode="before")
+    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        upper = trimmed.upper()
+        if upper.startswith("SRID="):
+            return trimmed
+        return f"SRID=4326;{trimmed}"
+
+
+class PropiedadCapaUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str | None = None
+    descripcion: str | None = None
+    nivel: int | None = None
+    altura: Decimal | None = None
+    geom: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @field_validator("geom", mode="before")
+    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        upper = trimmed.upper()
+        if upper.startswith("SRID="):
+            return trimmed
+        return f"SRID=4326;{trimmed}"
+
+
 def get_repository() -> CRMRepository:
     try:
         return CRMRepository()
@@ -10751,6 +10796,85 @@ async def editar_propiedad_desarrollo(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "desarrollo": record}
+
+
+@router.post("/propiedad-capas")
+async def crear_propiedad_capa(
+    *,
+    payload: PropiedadCapaCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    body: dict[str, Any] = {
+        "desarrollo_id": str(payload.desarrollo_id),
+        "nivel": payload.nivel,
+        "metadata": metadata,
+    }
+    if payload.nombre:
+        body["nombre"] = payload.nombre.strip()
+    if payload.descripcion:
+        body["descripcion"] = payload.descripcion.strip()
+    if payload.altura is not None:
+        body["altura"] = _decimal_to_number(payload.altura)
+    if payload.geom:
+        body["geom"] = payload.geom.strip()
+    else:
+        body["geom"] = "SRID=4326;POLYGON Z EMPTY"
+    try:
+        record = await repo.create_propiedad_capa(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "capa": record}
+
+
+@router.patch("/propiedad-capas/{capa_id}")
+async def editar_propiedad_capa(
+    *,
+    capa_id: UUID,
+    payload: PropiedadCapaUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    if not any(
+        getattr(payload, field) is not None
+        for field in (
+            "nombre",
+            "descripcion",
+            "nivel",
+            "altura",
+            "geom",
+            "metadata",
+        )
+    ):
+        raise HTTPException(status_code=400, detail="at_least_one_field_required")
+    body: dict[str, Any] = {}
+    if payload.nombre is not None:
+        body["nombre"] = payload.nombre.strip() or None
+    if payload.descripcion is not None:
+        body["descripcion"] = payload.descripcion.strip() or None
+    if payload.nivel is not None:
+        body["nivel"] = payload.nivel
+    if payload.altura is not None:
+        body["altura"] = _decimal_to_number(payload.altura)
+    if payload.geom:
+        body["geom"] = payload.geom.strip()
+    if payload.metadata:
+        body["metadata"] = payload.metadata
+    try:
+        record = await repo.update_propiedad_capa(
+            organizacion_id=organizacion_id,
+            capa_id=capa_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "capa": record}
 
 
 @router.post("/propiedades")
