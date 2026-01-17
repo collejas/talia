@@ -1179,12 +1179,19 @@ class PropiedadStatus(str, Enum):
 class PropiedadDesarrolloTipo(str, Enum):
     horizontal = "horizontal"
     vertical = "vertical"
+    mixto = "mixto"
 
 
 class PropiedadPoligonoTarget(str, Enum):
     desarrollo = "desarrollo"
     capa = "capa"
     unidad = "unidad"
+    mix = "mix"
+
+
+class PropiedadDesarrolloModo(str, Enum):
+    horizontal = "horizontal"
+    vertical = "vertical"
 
 
 class PropiedadDesarrolloCreateRequest(BaseModel):
@@ -1198,6 +1205,33 @@ class PropiedadDesarrolloCreateRequest(BaseModel):
     municipio_cve: str | None = None
     codigo_postal: str | None = None
     colonia: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class PropiedadDesarrolloMixCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=1)
+    tipo: PropiedadDesarrolloTipo = PropiedadDesarrolloTipo.mixto
+    descripcion: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    pais_codigo: str | None = Field(default="MX", min_length=1, max_length=3)
+    estado_cve: str | None = None
+    municipio_cve: str | None = None
+    codigo_postal: str | None = None
+    colonia: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class PropiedadDesarrolloMixItemCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mix_id: UUID
+    desarrollo_id: UUID
+    nombre: str = Field(..., min_length=1)
+    modo: PropiedadDesarrolloModo
+    descripcion: str | None = None
+    nivel: int | None = Field(default=None, ge=0)
+    altura: Decimal | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
 
@@ -10823,6 +10857,74 @@ async def editar_propiedad_desarrollo(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "desarrollo": record}
+
+
+@router.post("/propiedad-desarrollos-mix")
+async def crear_propiedad_desarrollo_mix(
+    *,
+    payload: PropiedadDesarrolloMixCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    body: dict[str, Any] = {
+        "nombre": payload.nombre.strip(),
+        "tipo": payload.tipo.value,
+        "status": payload.status.value,
+        "metadata": metadata,
+    }
+    if payload.descripcion:
+        body["descripcion"] = payload.descripcion.strip()
+    if payload.pais_codigo:
+        body["pais_codigo"] = payload.pais_codigo.strip().upper()
+    if payload.estado_cve:
+        body["estado_cve"] = payload.estado_cve.strip()
+    if payload.municipio_cve:
+        body["municipio_cve"] = payload.municipio_cve.strip()
+    if payload.codigo_postal:
+        body["codigo_postal"] = payload.codigo_postal.strip()
+    if payload.colonia:
+        body["colonia"] = payload.colonia.strip()
+    try:
+        record = await repo.create_propiedad_desarrollo_mix(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "mix": record}
+
+
+@router.post("/propiedad-desarrollos-mix-items")
+async def crear_propiedad_desarrollo_mix_item(
+    *,
+    payload: PropiedadDesarrolloMixItemCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    body: dict[str, Any] = {
+        "mix_id": str(payload.mix_id),
+        "desarrollo_id": str(payload.desarrollo_id),
+        "nombre": payload.nombre.strip(),
+        "modo": payload.modo.value,
+        "status": payload.status.value,
+        "metadata": metadata,
+    }
+    if payload.descripcion:
+        body["descripcion"] = payload.descripcion.strip()
+    if payload.nivel is not None:
+        body["nivel"] = payload.nivel
+    if payload.altura is not None:
+        body["altura"] = _decimal_to_number(payload.altura)
+    try:
+        record = await repo.create_propiedad_desarrollo_mix_item(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "item": record}
 
 
 @router.post("/propiedad-capas")
