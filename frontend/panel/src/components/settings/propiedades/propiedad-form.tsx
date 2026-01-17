@@ -1,6 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconMinus,
+  IconPlus,
+  IconMapPin,
+  IconPencil,
+} from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
 import {
@@ -23,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type CatalogOption = {
   id: string;
@@ -489,6 +498,28 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     },
     [],
   );
+
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const [capaPlusTarget, setCapaPlusTarget] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode } | null>(null);
+
+  const handleCapaPlusChoice = useCallback(
+    (option: "caracteristicas" | "poligono") => {
+      if (!capaPlusTarget) {
+        return;
+      }
+      if (option === "caracteristicas") {
+        openUnidadModal(capaPlusTarget.desarrollo, capaPlusTarget.capa);
+      } else {
+        handleSelectCapaGeometry(capaPlusTarget.desarrollo, capaPlusTarget.capa);
+      }
+      setCapaPlusTarget(null);
+    },
+    [capaPlusTarget, handleSelectCapaGeometry, openUnidadModal],
+  );
+
+  const toggleNodeExpansion = useCallback((id: string) => {
+    setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
 
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
@@ -1119,122 +1150,211 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     return STATUS_COLOR[status.toLowerCase()] ?? "text-slate-500";
   };
 
-  const renderUnidad = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => (
-    <div
-      key={unidad.id}
-      className="flex items-center justify-between rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-[0.7rem]"
-    >
-      <div>
-        <p className="text-xs font-medium">{unidad.unidad || "Sin unidad"}</p>
-        <p className="text-[0.6rem] text-slate-500">
-          {unidad.precio ? `$${unidad.precio.toLocaleString("es-MX")}` : "Precio pendiente"}
-        </p>
-      </div>
-      <div className="text-right text-[0.65rem] font-semibold tracking-wide">
-        <span className={getStatusLabelClass(unidad.status)}>{unidad.status ?? "sin status"}</span>
-      </div>
-      <div className="flex gap-1">
-        <Button
-          variant={
-            geometryTarget?.type === "unidad" && geometryTarget.id === unidad.id
-              ? "secondary"
-              : "outline"
-          }
-          size="sm"
-          onClick={() => handleSelectUnidadGeometry(desarrollo, capa, unidad)}
-        >
-          Editar polígono
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => openEditUnidadModal(desarrollo, capa, unidad)}>
-          Editar
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad}`)}>
-          Eliminar
-        </Button>
-      </div>
-    </div>
-  );
-
-  const renderCapa = (desarrollo: DesarrolloNode, capa: CapaNode) => (
-    <div key={capa.id} className="space-y-2 rounded border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
+  const renderUnidadRow = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
+    const priceLabel = unidad.precio
+      ? `$${unidad.precio.toLocaleString("es-MX")}`
+      : "Precio pendiente";
+    return (
+      <div
+        key={unidad.id}
+        className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50/70 px-3 py-2 text-[0.7rem]"
+      >
         <div>
-          <p className="text-sm font-semibold">
-            {capa.nombre || `Nivel ${capa.nivel ?? "?"}`}
-          </p>
-          <p className="text-xs text-slate-500">
-            Altura {capa.altura ?? "—"} m
-          </p>
+          <p className="text-xs font-semibold">{unidad.unidad || "Unidad sin clave"}</p>
+          <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
+            <span>{priceLabel}</span>
+            <span className={`font-semibold tracking-wide ${getStatusLabelClass(unidad.status)}`}>
+              {unidad.status ?? "sin status"}
+            </span>
+          </div>
         </div>
-        <div className="flex gap-1">
-          <Button variant="outline" size="sm" onClick={() => openUnidadModal(desarrollo, capa)}>
-            Nueva unidad
+        <div className="flex items-center gap-1 text-slate-500">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => handleSelectUnidadGeometry(desarrollo, capa, unidad)}
+            aria-label="Editar polígono de la unidad"
+          >
+            <IconMapPin className="size-4" />
           </Button>
           <Button
-            variant={
-              geometryTarget?.type === "capa" && geometryTarget.id === capa.id ? "secondary" : "outline"
-            }
-            size="sm"
-            onClick={() => handleSelectCapaGeometry(desarrollo, capa)}
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => openEditUnidadModal(desarrollo, capa, unidad)}
+            aria-label="Editar unidad"
           >
-            Editar polígono
+            <IconPencil className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => openEditCapaModal(desarrollo, capa)}>
-            Editar
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad || unidad.id}`)}
+            aria-label="Eliminar unidad"
+          >
+            <IconMinus className="size-4" />
           </Button>
-          {desarrollo.tipo === "vertical" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => openCapaModal(desarrollo, capa)}
-            >
-              Duplicar nivel
-            </Button>
-          )}
         </div>
       </div>
-      <div className="space-y-1">
-        {capa.unidades?.length ? (
-          capa.unidades.map((unidad) => renderUnidad(desarrollo, capa, unidad))
-        ) : (
-          <p className="text-[0.6rem] text-slate-400">Sin unidades aún</p>
+    );
+  };
+
+  const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
+    const isExpanded = expandedNodes[capa.id] ?? false;
+    const capaLabel = capa.nombre || `Nivel ${capa.nivel ?? "?"}`;
+    return (
+      <div key={capa.id} className="space-y-2">
+        <div className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white/70 px-3 py-2 text-[0.75rem]">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => toggleNodeExpansion(capa.id)}
+              aria-label={isExpanded ? "Ocultar unidades" : "Mostrar unidades"}
+            >
+              {isExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
+            </Button>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">{capaLabel}</p>
+              <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
+                <span className={`${getStatusLabelClass(capa.status)} font-semibold tracking-wide`}>
+                  {capa.status ?? "sin status"}
+                </span>
+                <span>Altura {capa.altura ?? "—"} m</span>
+                <span>{capa.unidades?.length ?? 0} unidades</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-slate-500">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setCapaPlusTarget({ desarrollo, capa })}
+              aria-label="Agregar características o polígono"
+            >
+              <IconPlus className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => openEditCapaModal(desarrollo, capa)}
+              aria-label="Editar capa"
+            >
+              <IconPencil className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleNodeAction(`Eliminar capa ${capaLabel}`)}
+              aria-label="Eliminar capa"
+            >
+              <IconMinus className="size-4" />
+            </Button>
+          </div>
+        </div>
+        {isExpanded && (
+          <div className="space-y-2 border-l border-dashed border-slate-200 pl-6">
+            {capa.unidades?.length ? (
+              capa.unidades.map((unidad) => renderUnidadRow(desarrollo, capa, unidad))
+            ) : (
+              <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
+            )}
+          </div>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderDesarrollo = (desarrollo: DesarrolloNode) => (
-    <div key={desarrollo.id} className="space-y-3 rounded border border-slate-200 bg-slate-50/40 p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-base font-semibold">{desarrollo.nombre}</p>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{desarrollo.tipo}</p>
+  const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
+    const isExpanded = expandedNodes[desarrollo.id] ?? true;
+    const totalUnidades =
+      desarrollo.capas?.reduce((count, capa) => count + (capa.unidades?.length ?? 0), 0) ?? 0;
+    return (
+      <div key={desarrollo.id} className="space-y-2">
+        <div className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50/60 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => toggleNodeExpansion(desarrollo.id)}
+              aria-label={isExpanded ? "Ocultar capas" : "Mostrar capas"}
+            >
+              {isExpanded ? (
+                <IconChevronDown className="size-4" />
+              ) : (
+                <IconChevronRight className="size-4" />
+              )}
+            </Button>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">{desarrollo.nombre}</p>
+              <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
+                <span className="uppercase tracking-[0.3em]">{desarrollo.tipo || "horizontal"}</span>
+                <span className={`${getStatusLabelClass(desarrollo.status)} font-semibold tracking-wide`}>
+                  {desarrollo.status ?? "sin status"}
+                </span>
+                <span>{desarrollo.capas?.length ?? 0} capas</span>
+                <span>{totalUnidades} unidades</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-slate-500">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => openCapaModal(desarrollo)}
+              aria-label="Agregar capa"
+            >
+              <IconPlus className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleSelectDesarrolloGeometry(desarrollo)}
+              aria-label="Editar polígono del desarrollo"
+            >
+              <IconMapPin className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => openEditDesarrollo(desarrollo)}
+              aria-label="Editar desarrollo"
+            >
+              <IconPencil className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleNodeAction(`Eliminar desarrollo ${desarrollo.nombre}`)}
+              aria-label="Eliminar desarrollo"
+            >
+              <IconMinus className="size-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-1">
-          <Button variant="outline" size="sm" onClick={() => openCapaModal(desarrollo)}>
-            Nueva capa
-          </Button>
-          <Button
-            variant={geometryTarget?.id === desarrollo.id ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => handleSelectDesarrolloGeometry(desarrollo)}
-          >
-            Editar polígono
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => openEditDesarrollo(desarrollo)}>
-            Editar
-          </Button>
-        </div>
+        {isExpanded && (
+          <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
+            {desarrollo.capas?.length ? (
+              desarrollo.capas.map((capa) => renderCapaNode(desarrollo, capa))
+            ) : (
+              <p className="text-[0.65rem] text-slate-400">Sin capas aún</p>
+            )}
+          </div>
+        )}
       </div>
-      <div className="space-y-2">
-        {desarrollo.capas?.length ? desarrollo.capas.map((capa) => renderCapa(desarrollo, capa)) : <p className="text-[0.6rem] text-slate-400">Sin capas aún</p>}
-      </div>
-      <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>{desarrollo.capas?.length ?? 0} capas</span>
-        <span>{desarrollo.capas?.reduce((count, capa) => count + (capa.unidades?.length ?? 0), 0)} unidades</span>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -1259,22 +1379,24 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <CardContent className="space-y-3 text-xs">
             <div className="space-y-1 text-[0.7rem] text-slate-500">
               <p>La jerarquía se ordena de mayor a menor: desarrollo → capa/nivel → unidad.</p>
-              <p>Abre un popup para cada nodo antes de dibujar su correspondiente polígono en el mapa.</p>
+              <p>Usa el árbol para inspeccionar cada nodo, elige los iconos pequeños para acciones rápidas y mantiene el foco en el polígono correspondiente.</p>
             </div>
             {statusMessage && <span className="text-xs text-slate-500">{statusMessage}</span>}
             {hierarchyError && <span className="text-xs text-rose-500">{hierarchyError}</span>}
-            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
-              {isHierarchyLoading ? (
-                <p className="text-[0.7rem] text-slate-400">Cargando jerarquía...</p>
-              ) : hierarchy.length ? (
-                hierarchy.map(renderDesarrollo)
-              ) : (
-                <p className="text-[0.7rem] text-slate-400">No hay desarrollos registrados aún.</p>
-              )}
-            </div>
-        </CardContent>
-      </Card>
-    </section>
+            <ScrollArea className="max-h-[520px] rounded-xl border border-slate-200 bg-white/60">
+              <div className="space-y-3 p-2">
+                {isHierarchyLoading ? (
+                  <p className="text-[0.7rem] text-slate-400">Cargando jerarquía...</p>
+                ) : hierarchy.length ? (
+                  hierarchy.map(renderDesarrolloNode)
+                ) : (
+                  <p className="text-[0.7rem] text-slate-400">No hay desarrollos registrados aún.</p>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </section>
 
       <section className="lg:flex-1">
         <Card className="h-full flex flex-col">
@@ -1336,6 +1458,53 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       </CardContent>
     </Card>
   </section>
+
+      <Dialog
+        open={Boolean(capaPlusTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCapaPlusTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {capaPlusTarget?.capa.nombre
+                ? `¿Qué deseas hacer con ${capaPlusTarget.capa.nombre}?`
+                : "¿Qué deseas hacer con esta capa?"}
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona si quieres agregar las características de unidad o preparar el polígono actual.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => handleCapaPlusChoice("caracteristicas")}
+            >
+              Agregar características
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => handleCapaPlusChoice("poligono")}
+            >
+              Dibujar o actualizar polígono
+            </Button>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setCapaPlusTarget(null)}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isDesarrolloModalOpen}
