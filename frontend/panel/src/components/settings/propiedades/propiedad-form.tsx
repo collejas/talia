@@ -67,6 +67,7 @@ type CapaNode = {
   metadata: Record<string, unknown>;
   geom: { type: string; coordinates: unknown };
   unidades: UnidadNode[];
+  descripcion?: string | null;
 };
 
 type DesarrolloNode = {
@@ -215,6 +216,35 @@ function geoJsonToPolygonZWkt(geometry: GeoJsonGeometry): string {
   throw new Error("Solo se pueden guardar polígonos.");
 }
 
+function geoJsonToWkt(geometry: GeoJsonGeometry): string {
+  const type = geometry.type?.toLowerCase();
+  if (type === "polygon") {
+    return geoJsonToPolygonZWkt(geometry);
+  }
+  if (type === "multipolygon") {
+    return geoJsonToMultiPolygonZWkt(geometry);
+  }
+  throw new Error("Solo se pueden guardar polígonos o multipolígonos.");
+}
+
+function offsetCoordinates(value: unknown, offset: number): unknown {
+  if (!Array.isArray(value)) return value;
+  const first = value[0];
+  if (typeof first === "number") {
+    const point = [...(value as number[])];
+    point[2] = (point[2] ?? 0) + offset;
+    return point;
+  }
+  return value.map((item) => offsetCoordinates(item, offset));
+}
+
+function offsetGeoJsonGeometry(geometry: GeoJsonGeometry, offset: number): GeoJsonGeometry {
+  return {
+    ...geometry,
+    coordinates: offsetCoordinates(geometry.coordinates, offset),
+  };
+}
+
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
     nombre: "",
@@ -245,7 +275,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     nivel: "",
     altura: "",
     descripcion: "",
+    copias: "1",
   });
+  const [duplicatingCapa, setDuplicatingCapa] = useState<CapaNode | null>(null);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
   const [capaFormError, setCapaFormError] = useState<string | null>(null);
   void lineas;
@@ -349,22 +381,34 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       nivel: "",
       altura: "",
       descripcion: "",
+      copias: "1",
     });
     setCapaFormError(null);
     setCreatingCapaFor(null);
+    setDuplicatingCapa(null);
   }, []);
 
-  const openCapaModal = useCallback((desarrollo: DesarrolloNode) => {
-    setCreatingCapaFor(desarrollo);
-    setCapaForm({
-      nombre: "",
-      nivel: "",
-      altura: "",
-      descripcion: "",
-    });
-    setCapaFormError(null);
-    setIsCapaModalOpen(true);
-  }, []);
+  const openCapaModal = useCallback(
+    (desarrollo: DesarrolloNode, duplicateFrom?: CapaNode) => {
+      setCreatingCapaFor(desarrollo);
+      setDuplicatingCapa(duplicateFrom ?? null);
+      setCapaForm({
+        nombre: duplicateFrom
+          ? `${duplicateFrom.nombre || `Nivel ${duplicateFrom.nivel ?? "?"}`} copia`
+          : "",
+        nivel: duplicateFrom && duplicateFrom.nivel != null ? String(duplicateFrom.nivel + 1) : "",
+        altura: duplicateFrom && duplicateFrom.altura != null ? String(duplicateFrom.altura) : "",
+        descripcion: duplicateFrom?.descripcion || "",
+        copias: "1",
+      });
+      setCapaFormError(null);
+      setIsCapaModalOpen(true);
+      if (duplicateFrom) {
+        handleSelectCapaGeometry(desarrollo, duplicateFrom);
+      }
+    },
+    [handleSelectCapaGeometry],
+  );
 
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
@@ -625,9 +669,33 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setCapaFormError("Selecciona el desarrollo que recibirá la capa.");
       return;
     }
+    let baseGeometry: GeoJsonGeometry | null = null;
+    if (duplicatingCapa) {
+      const capaGeometry = duplicatingCapa.geom as GeoJsonGeometry;
+      if (!capaGeometry.type || !Array.isArray(capaGeometry.coordinates)) {
+        setCapaFormError("El nivel seleccionado no tiene un polígono válido para copiar.");
+        return;
+      }
+      baseGeometry = capaGeometry;
+    } else {
+      if (!formValues.geom) {
+        setCapaFormError("Dibuja el polígono que se almacenará.");
+        return;
+      }
+      try {
+        baseGeometry = JSON.parse(formValues.geom);
+      } catch {
+        setCapaFormError("La geometría no tiene un formato válido.");
+        return;
+      }
+    }
+    if (!baseGeometry) {
+      setCapaFormError("No se encontró una geometría válida.");
+      return;
+    }
     const isVertical = creatingCapaFor.tipo === "vertical";
-    let nivel: number;
-    if (isVertical) {
+    let nivel = 0;
+    if (isVertical && !duplicatingCapa) {
       const nivelValue = capaForm.nivel.trim();
       if (!nivelValue) {
         setCapaFormError("El nivel es obligatorio para desarrollos verticales.");
@@ -638,56 +706,86 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         setCapaFormError("Ingresa un nivel válido.");
         return;
       }
-    } else {
-      nivel = 0;
     }
+    const alturaValue =
+      capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))
+        ? Number(capaForm.altura)
+        : undefined;
+    if (duplicatingCapa && isVertical && (!alturaValue || Number.isNaN(alturaValue))) {
+      setCapaFormError("Define la altura de cada nivel para duplicar correctamente.");
+      return;
+    }
+    const copies = duplicatingCapa
+      ? Math.max(1, Number.parseInt(capaForm.copias, 10) || 1)
+      : 1;
     setIsSubmittingCapa(true);
     setCapaFormError(null);
     try {
-      const payload: Record<string, unknown> = {
-        desarrollo_id: creatingCapaFor.id,
-        nivel,
-        geom: "SRID=4326;POLYGON Z EMPTY",
-      };
-      if (capaForm.nombre.trim()) {
-        payload.nombre = capaForm.nombre.trim();
-      }
-      if (capaForm.descripcion.trim()) {
-        payload.descripcion = capaForm.descripcion.trim();
-      }
-      if (isVertical && capaForm.altura.trim()) {
-        const altura = Number(capaForm.altura);
-        if (!Number.isNaN(altura)) {
-          payload.altura = altura;
+      let lastCreatedLabel: string | null = null;
+      let lastCreatedId: string | null = null;
+      for (let index = 0; index < copies; index += 1) {
+        const currentLevel = isVertical
+          ? duplicatingCapa
+            ? (duplicatingCapa.nivel ?? 0) + index + 1
+            : nivel
+          : 0;
+        const baseCopy = JSON.parse(JSON.stringify(baseGeometry));
+        const geometryForLevel =
+          duplicatingCapa && alturaValue
+            ? offsetGeoJsonGeometry(baseCopy, alturaValue * (index + 1))
+            : baseCopy;
+        const payload: Record<string, unknown> = {
+          desarrollo_id: creatingCapaFor.id,
+          nivel: currentLevel,
+          geom: geoJsonToWkt(geometryForLevel),
+        };
+        if (capaForm.nombre.trim()) {
+          payload.nombre = capaForm.nombre.trim();
+        }
+        if (capaForm.descripcion.trim()) {
+          payload.descripcion = capaForm.descripcion.trim();
+        }
+        if (isVertical && alturaValue) {
+          payload.altura = alturaValue;
+        }
+        const response = await fetch("/api/crm/propiedad-capas", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            (body as { error?: string }).error || "No se pudo guardar la capa.",
+          );
+        }
+        const savedCapa = (body as { capa?: { id?: string; nombre?: string; nivel?: number; desarrollo_id?: string } })
+          .capa;
+        if (savedCapa?.id) {
+          lastCreatedId = savedCapa.id;
+          lastCreatedLabel = savedCapa.nombre || `Nivel ${savedCapa.nivel ?? currentLevel}`;
         }
       }
-      const response = await fetch("/api/crm/propiedad-capas", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(
-          (body as { error?: string }).error || "No se pudo guardar la capa.",
-        );
-      }
-      const savedCapa = (body as { capa?: { id?: string; nombre?: string; nivel?: number; desarrollo_id?: string } })
-        .capa;
-      handleNodeAction("Capa creada con éxito.");
+      handleNodeAction(
+        duplicatingCapa
+          ? `Se duplicaron ${copies} nivel(es) a partir de ${duplicatingCapa.nombre}.`
+          : "Capa creada con éxito.",
+      );
       resetCapaForm();
       setIsCapaModalOpen(false);
       await loadHierarchy();
-      if (savedCapa?.id) {
+      if (lastCreatedId && lastCreatedLabel) {
         handleSelectGeometryTarget(
           {
             type: "capa",
-            id: savedCapa.id,
-            label: savedCapa.nombre || `Nivel ${savedCapa.nivel ?? nivel}`,
-            desarrolloId: savedCapa.desarrollo_id || creatingCapaFor.id,
-            nivel: savedCapa.nivel ?? nivel,
+            id: lastCreatedId,
+            label: lastCreatedLabel,
+            desarrolloId: creatingCapaFor.id,
+            nivel: duplicatingCapa
+              ? (duplicatingCapa.nivel ?? 0) + copies
+              : nivel,
           },
           undefined,
         );
@@ -702,6 +800,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   }, [
     capaForm,
     creatingCapaFor,
+    duplicatingCapa,
+    formValues.geom,
     handleNodeAction,
     handleSelectGeometryTarget,
     loadHierarchy,
@@ -845,6 +945,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar nivel ${capa.nombre}`)}>
             Editar
           </Button>
+          {desarrollo.tipo === "vertical" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => openCapaModal(desarrollo, capa)}
+            >
+              Duplicar nivel
+            </Button>
+          )}
         </div>
       </div>
       <div className="space-y-1">
@@ -1131,13 +1240,20 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         }}
       >
         <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogHeader>
             <DialogTitle>
-              Crear capa para {creatingCapaFor ? `"${creatingCapaFor.nombre}"` : "este desarrollo"}
+              {duplicatingCapa ? "Duplicar capa" : "Crear capa"} para{" "}
+              {creatingCapaFor ? `"${creatingCapaFor.nombre}"` : "este desarrollo"}
             </DialogTitle>
             <DialogDescription>
-              Define nivel, altura y descripción antes de dibujar el polígono que
-              representa este plano intermedio en el mapa.
+              {duplicatingCapa ? (
+                <>
+                  Se copiará la geometría del nivel <strong>{duplicatingCapa.nombre}</strong>,
+                  puedes ajustar los metadatos antes de guardar el nuevo plano.
+                </>
+              ) : (
+                "Define nivel, altura y descripción antes de dibujar el polígono que representa este plano intermedio en el mapa."
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1150,19 +1266,23 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               />
             </div>
             {creatingCapaFor?.tipo === "vertical" && (
-              <div className="grid gap-3 md:grid-cols-2">
+              <>
+                {!duplicatingCapa && (
+                  <div className="space-y-1">
+                    <Label className="text-[0.7rem]">Nivel</Label>
+                    <Input
+                      value={capaForm.nivel}
+                      onChange={(event) => handleCapaField("nivel", event.target.value)}
+                      placeholder="Ej. 1"
+                      type="number"
+                      min={0}
+                    />
+                  </div>
+                )}
                 <div className="space-y-1">
-                  <Label className="text-[0.7rem]">Nivel</Label>
-                  <Input
-                    value={capaForm.nivel}
-                    onChange={(event) => handleCapaField("nivel", event.target.value)}
-                    placeholder="Ej. 1"
-                    type="number"
-                    min={0}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[0.7rem]">Altura (m)</Label>
+                  <Label className="text-[0.7rem]">
+                    Altura por nivel (m)
+                  </Label>
                   <Input
                     value={capaForm.altura}
                     onChange={(event) => handleCapaField("altura", event.target.value)}
@@ -1172,7 +1292,19 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                     min={0}
                   />
                 </div>
-              </div>
+                {duplicatingCapa && (
+                  <div className="space-y-1">
+                    <Label className="text-[0.7rem]">Niveles a generar</Label>
+                    <Input
+                      value={capaForm.copias}
+                      onChange={(event) => handleCapaField("copias", event.target.value)}
+                      placeholder="Ej. 3"
+                      type="number"
+                      min={1}
+                    />
+                  </div>
+                )}
+              </>
             )}
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Descripción</Label>
