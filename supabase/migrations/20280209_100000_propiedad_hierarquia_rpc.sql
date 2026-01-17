@@ -20,7 +20,18 @@ SELECT jsonb_build_object(
         'codigo_postal', d.codigo_postal,
         'colonia', d.colonia,
         'metadata', d.metadata,
-        'geom', ST_AsGeoJSON(d.geom)::jsonb,
+        'poligono_id', (
+            SELECT pp.id
+            FROM public.propiedad_poligonos pp
+            WHERE pp.target_type = 'desarrollo' AND pp.target_id = d.id
+            LIMIT 1
+        ),
+        'geom', (
+            SELECT ST_AsGeoJSON(pp.geom)::jsonb
+            FROM public.propiedad_poligonos pp
+            WHERE pp.target_type = 'desarrollo' AND pp.target_id = d.id
+            LIMIT 1
+        ),
         'capas', (
             SELECT COALESCE(jsonb_agg(
                 jsonb_build_object(
@@ -30,7 +41,18 @@ SELECT jsonb_build_object(
                     'altura', c.altura,
                     'status', c.metadata ->> 'status',
                     'metadata', c.metadata,
-                    'geom', ST_AsGeoJSON(c.geom)::jsonb,
+                    'poligono_id', (
+                        SELECT pp.id
+                        FROM public.propiedad_poligonos pp
+                        WHERE pp.target_type = 'capa' AND pp.target_id = c.id
+                        LIMIT 1
+                    ),
+                    'geom', (
+                        SELECT ST_AsGeoJSON(pp.geom)::jsonb
+                        FROM public.propiedad_poligonos pp
+                        WHERE pp.target_type = 'capa' AND pp.target_id = c.id
+                        LIMIT 1
+                    ),
                     'unidades', (
                         SELECT COALESCE(jsonb_agg(
                             jsonb_build_object(
@@ -40,7 +62,18 @@ SELECT jsonb_build_object(
                                 'precio', u.precio,
                                 'area_m2', u.area_m2,
                                 'metadata', u.metadata,
-                                'geom', ST_AsGeoJSON(u.geom)::jsonb
+                                'poligono_id', (
+                                    SELECT pp.id
+                                    FROM public.propiedad_poligonos pp
+                                    WHERE pp.target_type = 'unidad' AND pp.target_id = u.id
+                                    LIMIT 1
+                                ),
+                                'geom', (
+                                    SELECT ST_AsGeoJSON(pp.geom)::jsonb
+                                    FROM public.propiedad_poligonos pp
+                                    WHERE pp.target_type = 'unidad' AND pp.target_id = u.id
+                                    LIMIT 1
+                                )
                             )
                             ORDER BY u.unidad
                         ), '[]'::jsonb)

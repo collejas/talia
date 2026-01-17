@@ -55,6 +55,7 @@ type UnidadNode = {
   precio: number | null;
   area_m2: number | null;
   metadata: Record<string, unknown>;
+  poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
 };
 
@@ -65,6 +66,7 @@ type CapaNode = {
   altura: number | null;
   status: string | null;
   metadata: Record<string, unknown>;
+  poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
   unidades: UnidadNode[];
   descripcion?: string | null;
@@ -82,6 +84,7 @@ type DesarrolloNode = {
   codigo_postal: string | null;
   colonia: string | null;
   metadata: Record<string, unknown>;
+  poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
   capas: CapaNode[];
 };
@@ -100,8 +103,9 @@ type UnidadFormState = {
 };
 
 type GeometryTarget =
-  | { type: "desarrollo"; id: string; label: string }
-  | { type: "capa"; id: string; label: string; desarrolloId: string; nivel: number | null };
+  | { type: "desarrollo"; id: string; label: string; poligonoId?: string | null }
+  | { type: "capa"; id: string; label: string; desarrolloId: string; nivel: number | null; poligonoId?: string | null }
+  | { type: "unidad"; id: string; label: string; desarrolloId: string; capaId: string; nivel: number | null; poligonoId?: string | null };
 
 type GeoFeature = {
   id: string;
@@ -229,35 +233,6 @@ function geoJsonToPolygonZWkt(geometry: GeoJsonGeometry): string {
   throw new Error("Solo se pueden guardar polígonos.");
 }
 
-function geoJsonToWkt(geometry: GeoJsonGeometry): string {
-  const type = geometry.type?.toLowerCase();
-  if (type === "polygon") {
-    return geoJsonToPolygonZWkt(geometry);
-  }
-  if (type === "multipolygon") {
-    return geoJsonToMultiPolygonZWkt(geometry);
-  }
-  throw new Error("Solo se pueden guardar polígonos o multipolígonos.");
-}
-
-function offsetCoordinates(value: unknown, offset: number): unknown {
-  if (!Array.isArray(value)) return value;
-  const first = value[0];
-  if (typeof first === "number") {
-    const point = [...(value as number[])];
-    point[2] = (point[2] ?? 0) + offset;
-    return point;
-  }
-  return value.map((item) => offsetCoordinates(item, offset));
-}
-
-function offsetGeoJsonGeometry(geometry: GeoJsonGeometry, offset: number): GeoJsonGeometry {
-  return {
-    ...geometry,
-    coordinates: offsetCoordinates(geometry.coordinates, offset),
-  };
-}
-
 const UNIDAD_STATUS_OPTIONS = [
   { value: "disponible", label: "Disponible" },
   { value: "apartado", label: "Apartado" },
@@ -383,7 +358,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const handleSelectDesarrolloGeometry = useCallback(
     (desarrollo: DesarrolloNode) => {
       handleSelectGeometryTarget(
-        { type: "desarrollo", id: desarrollo.id, label: desarrollo.nombre },
+        {
+          type: "desarrollo",
+          id: desarrollo.id,
+          label: desarrollo.nombre,
+          poligonoId: desarrollo.poligono_id ?? null,
+        },
         desarrollo.geom,
       );
     },
@@ -399,8 +379,27 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           label: capa.nombre || `Nivel ${capa.nivel ?? "?"}`,
           desarrolloId: desarrollo.id,
           nivel: capa.nivel ?? null,
+          poligonoId: capa.poligono_id ?? null,
         },
         capa.geom,
+      );
+    },
+    [handleSelectGeometryTarget],
+  );
+
+  const handleSelectUnidadGeometry = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
+      handleSelectGeometryTarget(
+        {
+          type: "unidad",
+          id: unidad.id,
+          label: unidad.unidad || `Unidad ${unidad.id.slice(0, 4)}`,
+          desarrolloId: desarrollo.id,
+          capaId: capa.id,
+          nivel: capa.nivel ?? null,
+          poligonoId: unidad.poligono_id ?? null,
+        },
+        unidad.geom,
       );
     },
     [handleSelectGeometryTarget],
@@ -606,14 +605,27 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       return;
     }
     const desarrollo = hierarchy.find((node) => node.id === geometryTarget.desarrolloId);
-    const capa = desarrollo?.capas?.find((node) => node.id === geometryTarget.id);
-    if (!capa) {
+    if (!desarrollo) {
       return;
     }
-    setFormValues((prev) => ({
-      ...prev,
-      geom: capa.geom ? JSON.stringify(capa.geom) : "",
-    }));
+    if (geometryTarget.type === "capa") {
+      const capa = desarrollo.capas?.find((node) => node.id === geometryTarget.id);
+      if (!capa) return;
+      setFormValues((prev) => ({
+        ...prev,
+        geom: capa.geom ? JSON.stringify(capa.geom) : "",
+      }));
+      return;
+    }
+    if (geometryTarget.type === "unidad") {
+      const capa = desarrollo.capas?.find((node) => node.id === geometryTarget.capaId);
+      const unidad = capa?.unidades?.find((node) => node.id === geometryTarget.id);
+      if (!unidad) return;
+      setFormValues((prev) => ({
+        ...prev,
+        geom: unidad.geom ? JSON.stringify(unidad.geom) : "",
+      }));
+    }
   }, [geometryTarget, hierarchy]);
 
   useEffect(() => {
@@ -765,52 +777,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setCapaFormError("Selecciona el desarrollo que recibirá la capa.");
       return;
     }
-    const isVertical = creatingCapaFor.tipo === "vertical";
-    const isDuplicating = Boolean(duplicatingCapa);
-    const isEditing = Boolean(editingCapa);
-    if (!isDuplicating && !isEditing && !formValues.geom) {
-      setCapaFormError("Dibuja el polígono que se almacenará.");
-      return;
-    }
-    let baseGeometry: GeoJsonGeometry | null = null;
-    if (isDuplicating && duplicatingCapa) {
-      const capaGeometry = duplicatingCapa.geom as GeoJsonGeometry;
-      if (!capaGeometry.type || !Array.isArray(capaGeometry.coordinates)) {
-        setCapaFormError("El nivel seleccionado no tiene un polígono válido para copiar.");
-        return;
-      }
-      baseGeometry = capaGeometry;
-    }
-    if (!baseGeometry && !isEditing) {
-      try {
-        baseGeometry = JSON.parse(formValues.geom);
-      } catch {
-        setCapaFormError("La geometría no tiene un formato válido.");
-        return;
-      }
-    }
-    const nivelValue = capaForm.nivel.trim();
-    let nivel = 0;
-    if (isVertical && !isDuplicating && !isEditing) {
-      if (!nivelValue) {
-        setCapaFormError("El nivel es obligatorio para desarrollos verticales.");
-        return;
-      }
-      nivel = Number.parseInt(nivelValue, 10);
-      if (Number.isNaN(nivel)) {
-        setCapaFormError("Ingresa un nivel válido.");
-        return;
-      }
-    }
-    const alturaValue =
-      capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))
-        ? Number(capaForm.altura)
-        : undefined;
-    if (isDuplicating && isVertical && (!alturaValue || Number.isNaN(alturaValue))) {
-      setCapaFormError("Define la altura de cada nivel para duplicar correctamente.");
-      return;
-    }
-    if (isEditing && editingCapa) {
+    if (editingCapa) {
       const payload: Record<string, unknown> = {};
       if (capaForm.nombre.trim()) {
         payload.nombre = capaForm.nombre.trim();
@@ -818,14 +785,18 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (capaForm.descripcion.trim()) {
         payload.descripcion = capaForm.descripcion.trim();
       }
-      if (nivelValue) {
-        const parsedNivel = Number.parseInt(nivelValue, 10);
+      if (capaForm.nivel.trim()) {
+        const parsedNivel = Number.parseInt(capaForm.nivel, 10);
         if (!Number.isNaN(parsedNivel)) {
           payload.nivel = parsedNivel;
         }
       }
-      if (isVertical && alturaValue !== undefined) {
-        payload.altura = alturaValue;
+      if (capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))) {
+        payload.altura = Number(capaForm.altura);
+      }
+      if (!Object.keys(payload).length) {
+        setCapaFormError("Actualiza al menos un campo antes de guardar.");
+        return;
       }
       setIsSubmittingCapa(true);
       setCapaFormError(null);
@@ -856,10 +827,28 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       }
       return;
     }
-    if (!baseGeometry) {
-      setCapaFormError("No se encontró una geometría válida.");
-      return;
+    const isVertical = creatingCapaFor.tipo === "vertical";
+    const isDuplicating = Boolean(duplicatingCapa);
+    if (!isVertical && capaForm.nivel?.trim()) {
+      // ensure nivel stays consistent even if provided accidentally
     }
+    let nivel = 0;
+    if (isVertical && !isDuplicating) {
+      const nivelValue = capaForm.nivel.trim();
+      if (!nivelValue) {
+        setCapaFormError("El nivel es obligatorio para desarrollos verticales.");
+        return;
+      }
+      nivel = Number.parseInt(nivelValue, 10);
+      if (Number.isNaN(nivel)) {
+        setCapaFormError("Ingresa un nivel válido.");
+        return;
+      }
+    }
+    const alturaValue =
+      capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))
+        ? Number(capaForm.altura)
+        : undefined;
     const copies = isDuplicating
       ? Math.max(1, Number.parseInt(capaForm.copias, 10) || 1)
       : 1;
@@ -874,15 +863,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             ? (duplicatingCapa?.nivel ?? 0) + index + 1
             : nivel
           : 0;
-        const baseCopy = JSON.parse(JSON.stringify(baseGeometry));
-        const geometryForLevel =
-          isDuplicating && alturaValue
-            ? offsetGeoJsonGeometry(baseCopy, alturaValue * (index + 1))
-            : baseCopy;
         const payload: Record<string, unknown> = {
           desarrollo_id: creatingCapaFor.id,
           nivel: currentLevel,
-          geom: geoJsonToWkt(geometryForLevel),
         };
         if (capaForm.nombre.trim()) {
           payload.nombre = capaForm.nombre.trim();
@@ -931,6 +914,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             nivel: isDuplicating
               ? (duplicatingCapa?.nivel ?? 0) + copies
               : nivel,
+            poligonoId: null,
           },
           undefined,
         );
@@ -947,7 +931,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     creatingCapaFor,
     duplicatingCapa,
     editingCapa,
-    formValues.geom,
     handleNodeAction,
     handleSelectGeometryTarget,
     loadHierarchy,
@@ -967,26 +950,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setUnidadFormError("Selecciona el tipo de propiedad.");
       return;
     }
-    if (!formValues.geom) {
-      setUnidadFormError("Dibuja el polígono que representa la unidad.");
-      return;
-    }
-    let parsed: GeoJsonGeometry;
-    try {
-      parsed = JSON.parse(formValues.geom);
-    } catch {
-      setUnidadFormError("La geometría no tiene un formato válido.");
-      return;
-    }
-    let wkt: string;
-    try {
-      wkt = geoJsonToPolygonZWkt(parsed);
-    } catch (error) {
-      setUnidadFormError(
-        error instanceof Error ? error.message : "El polígono generado no es válido.",
-      );
-      return;
-    }
     const unidadKey = unidadForm.unidad.trim();
     const nombreValue = unidadForm.nombre.trim() || unidadKey;
     const payload: Record<string, unknown> = {
@@ -996,7 +959,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       nivel_id: creatingUnidadFor.capa.id,
       desarrollo_id: creatingUnidadFor.desarrollo.id,
       status: unidadForm.status,
-      geom: wkt,
     };
     if (unidadForm.descripcion.trim()) {
       payload.descripcion = unidadForm.descripcion.trim();
@@ -1043,7 +1005,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         );
       }
       handleNodeAction("Unidad creada con éxito.");
-      setFormValues((prev) => ({ ...prev, geom: "" }));
       setCreatingUnidadFor(null);
       resetUnidadForm();
       setIsUnidadModalOpen(false);
@@ -1057,7 +1018,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     }
   }, [
     creatingUnidadFor,
-    formValues.geom,
     handleNodeAction,
     loadHierarchy,
     resetUnidadForm,
@@ -1066,7 +1026,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   const handleSaveGeometry = useCallback(async () => {
     if (!geometryTarget) {
-      setGeometryError("Selecciona el desarrollo o capa correspondiente.");
+      setGeometryError("Selecciona el desarrollo, capa o unidad correspondiente.");
       return;
     }
     if (!formValues.geom) {
@@ -1098,16 +1058,23 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setGeometryError(null);
     setGeometryStatusMessage("Guardando polígono…");
     try {
-      const endpoint =
-        geometryTarget.type === "desarrollo"
-          ? `/api/crm/propiedad-desarrollos/${geometryTarget.id}`
-          : `/api/crm/propiedad-capas/${geometryTarget.id}`;
+      const isUpdate = Boolean(geometryTarget.poligonoId);
+      const endpoint = isUpdate
+        ? `/api/crm/propiedad-poligonos/${geometryTarget.poligonoId}`
+        : "/api/crm/propiedad-poligonos";
+      const payload: Record<string, unknown> = isUpdate
+        ? { geom: wkt }
+        : {
+            target_type: geometryTarget.type,
+            target_id: geometryTarget.id,
+            geom: wkt,
+          };
       const response = await fetch(endpoint, {
-        method: "PATCH",
+        method: isUpdate ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ geom: wkt }),
+        body: JSON.stringify(payload),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -1115,16 +1082,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           (body as { error?: string }).error || "No se pudo guardar el polígono.",
         );
       }
-      handleNodeAction(
-        geometryTarget.type === "desarrollo"
-          ? `Polígono guardado para ${geometryTarget.label}.`
-          : `Polígono guardado para ${geometryTarget.label}.`,
-      );
-      setGeometryStatusMessage(
-        geometryTarget.type === "desarrollo"
-          ? "Polígono del desarrollo guardado correctamente."
-          : "Polígono de la capa guardado correctamente.",
-      );
+      const returnedPoligono = (body as { poligono?: { id?: string } }).poligono;
+      if (!geometryTarget.poligonoId && returnedPoligono?.id) {
+        setGeometryTarget((prev) =>
+          prev ? { ...prev, poligonoId: returnedPoligono.id } : prev,
+        );
+      }
+      handleNodeAction(`Polígono guardado para ${geometryTarget.label}.`);
+      setGeometryStatusMessage("Polígono guardado correctamente.");
       setGeometryError(null);
       await loadHierarchy();
     } catch (error) {
@@ -1149,7 +1114,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     return STATUS_COLOR[status.toLowerCase()] ?? "text-slate-500";
   };
 
-  const renderUnidad = (unidad: UnidadNode) => (
+  const renderUnidad = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => (
     <div
       key={unidad.id}
       className="flex items-center justify-between rounded border border-slate-200 bg-slate-50/60 px-3 py-2 text-[0.7rem]"
@@ -1164,6 +1129,17 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         <span className={getStatusLabelClass(unidad.status)}>{unidad.status ?? "sin status"}</span>
       </div>
       <div className="flex gap-1">
+        <Button
+          variant={
+            geometryTarget?.type === "unidad" && geometryTarget.id === unidad.id
+              ? "secondary"
+              : "outline"
+          }
+          size="sm"
+          onClick={() => handleSelectUnidadGeometry(desarrollo, capa, unidad)}
+        >
+          Editar polígono
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar unidad ${unidad.unidad}`)}>
           Editar
         </Button>
@@ -1315,7 +1291,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             {geometryTarget ? (
               <p className="text-[0.65rem] text-slate-500">
                 Dibujando el polígono de
-                {geometryTarget.type === "capa" ? " la capa " : " el desarrollo "}
+                {geometryTarget.type === "unidad"
+                  ? " la unidad "
+                  : geometryTarget.type === "capa"
+                    ? " la capa "
+                    : " el desarrollo "}
                 <strong>{geometryTarget.label}</strong>. Finaliza el trazo y pulsa Guardar para
                 publicarlo.
               </p>

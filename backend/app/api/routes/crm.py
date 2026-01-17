@@ -1192,7 +1192,6 @@ class PropiedadDesarrolloCreateRequest(BaseModel):
     nombre: str = Field(..., min_length=1)
     tipo: PropiedadDesarrolloTipo = PropiedadDesarrolloTipo.horizontal
     descripcion: str | None = None
-    geom: str | None = None
     status: PropiedadStatus = PropiedadStatus.disponible
     pais_codigo: str | None = Field("MX", min_length=1, max_length=3)
     estado_cve: str | None = None
@@ -1209,7 +1208,6 @@ class PropiedadUnidadCreateRequest(BaseModel):
     tipo_id: UUID
     nivel_id: UUID
     desarrollo_id: UUID | None = None
-    geom: str = Field(..., min_length=1)
     status: PropiedadStatus = PropiedadStatus.disponible
     descripcion: str | None = None
     precio: Decimal | None = None
@@ -1218,18 +1216,6 @@ class PropiedadUnidadCreateRequest(BaseModel):
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
-
-    @field_validator("geom")
-    def ensure_geo_with_srid(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("geom_required")
-        upper = trimmed.upper()
-        if not upper.startswith("SRID="):
-            return f"SRID=4326;{trimmed}"
-        if upper.startswith("SRID=4326;"):
-            return trimmed
-        return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
 
 
 class PropiedadCapaCreateRequest(BaseModel):
@@ -1261,7 +1247,6 @@ class PropiedadCapaUpdateRequest(BaseModel):
     descripcion: str | None = None
     nivel: int | None = None
     altura: Decimal | None = None
-    geom: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
 
@@ -10760,10 +10745,6 @@ async def crear_propiedad_desarrollo(
     }
     if payload.descripcion:
         body["descripcion"] = payload.descripcion.strip()
-    if payload.geom:
-        body["geom"] = payload.geom.strip()
-    else:
-        body["geom"] = "SRID=4326;MULTIPOLYGON Z EMPTY"
     if payload.pais_codigo:
         body["pais_codigo"] = payload.pais_codigo.strip().upper()
     if payload.estado_cve:
@@ -10820,8 +10801,6 @@ async def editar_propiedad_desarrollo(
         body["tipo"] = payload.tipo.value
     if payload.status:
         body["status"] = payload.status.value
-    if payload.geom:
-        body["geom"] = payload.geom.strip()
     if payload.pais_codigo:
         body["pais_codigo"] = payload.pais_codigo.strip().upper()
     if payload.estado_cve:
@@ -10865,10 +10844,6 @@ async def crear_propiedad_capa(
         body["descripcion"] = payload.descripcion.strip()
     if payload.altura is not None:
         body["altura"] = _decimal_to_number(payload.altura)
-    if payload.geom:
-        body["geom"] = payload.geom.strip()
-    else:
-        body["geom"] = "SRID=4326;POLYGON Z EMPTY"
     try:
         record = await repo.create_propiedad_capa(
             organizacion_id=organizacion_id,
@@ -10895,7 +10870,6 @@ async def editar_propiedad_capa(
             "descripcion",
             "nivel",
             "altura",
-            "geom",
             "metadata",
         )
     ):
@@ -10909,8 +10883,6 @@ async def editar_propiedad_capa(
         body["nivel"] = payload.nivel
     if payload.altura is not None:
         body["altura"] = _decimal_to_number(payload.altura)
-    if payload.geom:
-        body["geom"] = payload.geom.strip()
     if payload.metadata:
         body["metadata"] = payload.metadata
     try:
@@ -11012,7 +10984,6 @@ async def crear_propiedad(
         "tipo_id": str(payload.tipo_id),
         "nivel_id": str(payload.nivel_id),
         "status": payload.status.value,
-        "geom": payload.geom.strip(),
         "metadata": metadata,
     }
     if payload.descripcion:
@@ -12469,7 +12440,6 @@ class PropiedadDesarrolloUpdateRequest(BaseModel):
     nombre: str | None = None
     descripcion: str | None = None
     tipo: PropiedadDesarrolloTipo | None = None
-    geom: str | None = None
     status: PropiedadStatus | None = None
     pais_codigo: str | None = None
     estado_cve: str | None = None
@@ -12477,17 +12447,3 @@ class PropiedadDesarrolloUpdateRequest(BaseModel):
     codigo_postal: str | None = None
     colonia: str | None = None
     metadata: dict[str, Any] | None = None
-
-    @field_validator("geom")
-    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("geom_required")
-        upper = trimmed.upper()
-        if not upper.startswith("SRID="):
-            return f"SRID=4326;{trimmed}"
-        if upper.startswith("SRID=4326;"):
-            return trimmed
-        return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
