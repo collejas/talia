@@ -102,6 +102,15 @@ type DesarrolloNode = {
   poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
   capas: CapaNode[];
+  items?: MixItem[];
+};
+
+type MixItem = {
+  id: string;
+  modo: "horizontal" | "vertical";
+  status: string | null;
+  metadata: Record<string, unknown>;
+  desarrollo_id: string;
 };
 
 type UnidadFormState = {
@@ -302,10 +311,45 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [editingDesarrolloId, setEditingDesarrolloId] = useState<string | null>(null);
   const [isSubmittingDesarrollo, setIsSubmittingDesarrollo] = useState(false);
   const [desarrolloFormError, setDesarrolloFormError] = useState<string | null>(null);
+  const [isMixModalOpen, setIsMixModalOpen] = useState(false);
+  const [mixForm, setMixForm] = useState({
+    nombre: "",
+    descripcion: "",
+    paisCodigo: "MX",
+    estadoCve: "",
+    municipioCve: "",
+    codigoPostal: "",
+    colonia: "",
+  });
+  const [mixFormError, setMixFormError] = useState<string | null>(null);
+  const [isMixItemModalOpen, setIsMixItemModalOpen] = useState(false);
+  const [mixItemForm, setMixItemForm] = useState({
+    desarrolloId: "",
+    modo: "horizontal",
+    nombre: "",
+  });
+  const [mixItemError, setMixItemError] = useState<string | null>(null);
+  const [activeMixId, setActiveMixId] = useState<string | null>(null);
+  const [isSubmittingMix, setIsSubmittingMix] = useState(false);
+  const [isSubmittingMixItem, setIsSubmittingMixItem] = useState(false);
 
   const handleDesarrolloField = useCallback(
     (field: keyof typeof desarrolloForm, value: string) => {
       setDesarrolloForm((prev) => ({ ...prev, [field]: value }));
+    },
+    [],
+  );
+
+  const handleMixField = useCallback(
+    (field: keyof typeof mixForm, value: string) => {
+      setMixForm((prev) => ({ ...prev, [field]: value }));
+    },
+    [],
+  );
+
+  const handleMixItemField = useCallback(
+    (field: keyof typeof mixItemForm, value: string) => {
+      setMixItemForm((prev) => ({ ...prev, [field]: value }));
     },
     [],
   );
@@ -324,6 +368,47 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     if (!keepEditing) {
       setEditingDesarrolloId(null);
     }
+  }, []);
+
+  const openDesarrolloModal = useCallback(
+    (tipo: "horizontal" | "vertical") => {
+      setEditingDesarrolloId(null);
+      setDesarrolloForm({
+        nombre: "",
+        descripcion: "",
+        tipo,
+        paisCodigo: "MX",
+        estadoCve: "",
+        municipioCve: "",
+        codigoPostal: "",
+      });
+      setDesarrolloFormError(null);
+      setIsDesarrolloModalOpen(true);
+    },
+    [],
+  );
+
+  const resetMixForm = useCallback(() => {
+    setMixForm({
+      nombre: "",
+      descripcion: "",
+      paisCodigo: "MX",
+      estadoCve: "",
+      municipioCve: "",
+      codigoPostal: "",
+      colonia: "",
+    });
+    setMixFormError(null);
+  }, []);
+
+  const resetMixItemForm = useCallback(() => {
+    setMixItemForm({
+      desarrolloId: "",
+      modo: "horizontal",
+      nombre: "",
+    });
+    setMixItemError(null);
+    setActiveMixId(null);
   }, []);
 
   const handleNodeAction = useCallback((message: string) => {
@@ -563,6 +648,56 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [estadoOptions, setEstadoOptions] = useState<LocationOption[]>([]);
   const [municipioOptions, setMunicipioOptions] = useState<LocationOption[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  const desarrolloMap = useMemo(() => {
+    const map = new Map<string, DesarrolloNode>();
+    hierarchy.forEach((node) => map.set(node.id, node));
+    return map;
+  }, [hierarchy]);
+
+  const handleFocusDesarrolloById = useCallback(
+    (id: string) => {
+      const desarrollo = desarrolloMap.get(id);
+      if (desarrollo) {
+        handleSelectDesarrolloGeometry(desarrollo);
+        setExpandedNodes((prev) => ({ ...prev, [desarrollo.id]: true }));
+      }
+    },
+    [desarrolloMap, handleSelectDesarrolloGeometry],
+  );
+
+  const mixChildIds = useMemo(() => {
+    const ids = new Set<string>();
+    hierarchy.forEach((node) => {
+      node.items?.forEach((item) => {
+        ids.add(item.desarrollo_id);
+      });
+    });
+    return ids;
+  }, [hierarchy]);
+
+  const rootDevelopments = useMemo(() => {
+    return hierarchy.filter((node) => !mixChildIds.has(node.id));
+  }, [hierarchy, mixChildIds]);
+
+  const availableChildDevelopments = useMemo(() => {
+    return hierarchy.filter((node) => node.tipo !== "mixto" && !mixChildIds.has(node.id));
+  }, [hierarchy, mixChildIds]);
+
+  const openMixItemModal = useCallback(
+    (mixId: string) => {
+      setActiveMixId(mixId);
+      resetMixItemForm();
+      const first = availableChildDevelopments[0];
+      setMixItemForm((prev) => ({
+        ...prev,
+        desarrolloId: first?.id ?? "",
+      }));
+      setIsMixItemModalOpen(true);
+      setMixItemError(null);
+    },
+    [availableChildDevelopments, resetMixItemForm],
+  );
 
   const hierarchyFeatures = useMemo(() => {
     const features: GeoFeature[] = [];
@@ -1099,6 +1234,85 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     unidadForm,
   ]);
 
+  const handleCreateMix = useCallback(async () => {
+    if (!mixForm.nombre.trim()) {
+      setMixFormError("Ingresa el nombre del desarrollo mixto.");
+      return;
+    }
+    setIsSubmittingMix(true);
+    setMixFormError(null);
+    try {
+      const payload: Record<string, unknown> = {
+        nombre: mixForm.nombre.trim(),
+        descripcion: mixForm.descripcion?.trim() || null,
+        tipo: "mixto",
+        status: "disponible",
+      };
+      if (mixForm.paisCodigo) payload.pais_codigo = mixForm.paisCodigo.trim().toUpperCase();
+      if (mixForm.estadoCve) payload.estado_cve = mixForm.estadoCve.trim();
+      if (mixForm.municipioCve) payload.municipio_cve = mixForm.municipioCve.trim();
+      if (mixForm.codigoPostal) payload.codigo_postal = mixForm.codigoPostal.trim();
+      if (mixForm.colonia) payload.colonia = mixForm.colonia.trim();
+      const response = await fetch("/api/crm/propiedad-desarrollos-mix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((body as { error?: string }).error || "No se pudo crear el mix.");
+      }
+      setStatusMessage("Desarrollo mixto creado.");
+      resetMixForm();
+      setIsMixModalOpen(false);
+      await loadHierarchy();
+    } catch (error) {
+      setMixFormError(error instanceof Error ? error.message : "Error desconocido al crear el mix.");
+    } finally {
+      setIsSubmittingMix(false);
+    }
+  }, [loadHierarchy, mixForm, resetMixForm]);
+
+  const handleCreateMixItem = useCallback(async () => {
+    if (!activeMixId) {
+      setMixItemError("Selecciona primero el desarrollo mixto.");
+      return;
+    }
+    if (!mixItemForm.desarrolloId) {
+      setMixItemError("Selecciona un desarrollo para la sección.");
+      return;
+    }
+    setIsSubmittingMixItem(true);
+    setMixItemError(null);
+    try {
+      const response = await fetch("/api/crm/propiedad-desarrollos-mix-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mix_id: activeMixId,
+          desarrollo_id: mixItemForm.desarrolloId,
+          nombre: mixItemForm.nombre.trim() || undefined,
+          modo: mixItemForm.modo,
+          status: "disponible",
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((body as { error?: string }).error || "No se pudo agregar la sección.");
+      }
+      setStatusMessage("Sección agregada al desarrollo mixto.");
+      resetMixItemForm();
+      setIsMixItemModalOpen(false);
+      await loadHierarchy();
+    } catch (error) {
+      setMixItemError(
+        error instanceof Error ? error.message : "Error desconocido al crear la sección.",
+      );
+    } finally {
+      setIsSubmittingMixItem(false);
+    }
+  }, [activeMixId, loadHierarchy, mixItemForm.desarrolloId, mixItemForm.modo, mixItemForm.nombre, resetMixItemForm]);
+
   const handleSaveGeometry = useCallback(async () => {
     if (!geometryTarget) {
       setGeometryError("Selecciona el desarrollo, capa o unidad correspondiente.");
@@ -1184,6 +1398,52 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const getStatusLabelClass = (status: string | null) => {
     if (!status) return "text-slate-500";
     return STATUS_COLOR[status.toLowerCase()] ?? "text-slate-500";
+  };
+
+  const renderMixItems = (mix: DesarrolloNode) => {
+    if (!mix.items?.length) {
+      return <p className="text-[0.65rem] text-slate-400">No se han definido secciones aún.</p>;
+    }
+    return (
+      <div className="space-y-2">
+        {mix.items.map((item) => {
+          const child = desarrolloMap.get(item.desarrollo_id);
+          return (
+            <div
+              key={item.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50/70 px-3 py-2 text-[0.65rem]"
+            >
+              <div className="space-y-1">
+                <p className="text-xs font-semibold">
+                  {child?.nombre || `Desarrollo ${item.desarrollo_id.slice(0, 4)}`}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-slate-500">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6rem] text-slate-600">
+                    {item.modo.toUpperCase()}
+                  </span>
+                  <span className={`font-semibold tracking-wide ${getStatusLabelClass(item.status)}`}>
+                    {item.status ?? "sin status"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-1">
+                {child && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => handleFocusDesarrolloById(child.id)}
+                    aria-label={`Abrir desarrollo ${child.nombre}`}
+                  >
+                    <IconMapPin className="size-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const renderPolygonInfo = (geom?: { type: string; coordinates: unknown }, poligonoId?: string | null) => (
@@ -1439,6 +1699,25 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
             "Sin capas registradas",
           )}
         </div>
+        {desarrollo.tipo === "mixto" && (
+          <div className="space-y-1 border-t border-dashed border-slate-200 px-3 pt-2 pb-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[0.65rem] text-slate-500">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-600">Secciones mixtas</span>
+                <span className="text-slate-400">{desarrollo.items?.length ?? 0}</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => openMixItemModal(desarrollo.id)}
+              >
+                Agregar sección
+              </Button>
+            </div>
+            {renderMixItems(desarrollo)}
+          </div>
+        )}
         {isExpanded && (
           <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
             {desarrollo.capas?.length ? (
@@ -1458,14 +1737,20 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
         <Card className="h-full space-y-4">
           <CardHeader>
             <div>
-              <CardTitle className="text-lg">Jerarquía de desarrollos</CardTitle>
+              <CardTitle className="text-lg">Creación de desarrollos</CardTitle>
               <CardDescription className="text-xs">
                 Crea o edita la ficha de cada desarrollo, sus capas y sus unidades antes de dibujar la geometría.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setIsDesarrolloModalOpen(true)}>
-                Nuevo desarrollo
+              <Button variant="outline" size="sm" onClick={() => openDesarrolloModal("horizontal")}>
+                Horizontal
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openDesarrolloModal("vertical")}>
+                Vertical
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIsMixModalOpen(true)}>
+                Mixto
               </Button>
               <Button size="sm" onClick={loadHierarchy} disabled={isHierarchyLoading}>
                 {isHierarchyLoading ? "Actualizando…" : "Actualizar"}
@@ -1483,8 +1768,8 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
               <div className="space-y-3 p-2">
                 {isHierarchyLoading ? (
                   <p className="text-[0.7rem] text-slate-400">Cargando jerarquía...</p>
-                ) : hierarchy.length ? (
-                  hierarchy.map(renderDesarrolloNode)
+                ) : rootDevelopments.length ? (
+                  rootDevelopments.map(renderDesarrolloNode)
                 ) : (
                   <p className="text-[0.7rem] text-slate-400">No hay desarrollos registrados aún.</p>
                 )}
@@ -1633,14 +1918,19 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
             </div>
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Tipo de desarrollo</Label>
-              <RadioGroup
-                value={desarrolloForm.tipo}
-                onValueChange={(value) => handleDesarrolloField("tipo", value)}
-                className="flex gap-2"
-              >
-                <RadioGroupItem value="horizontal">Horizontal</RadioGroupItem>
-                <RadioGroupItem value="vertical">Vertical</RadioGroupItem>
-              </RadioGroup>
+              <div className="flex items-center gap-2">
+                <RadioGroup
+                  value={desarrolloForm.tipo}
+                  onValueChange={(value) => handleDesarrolloField("tipo", value)}
+                  className="flex gap-2"
+                >
+                  <RadioGroupItem value="horizontal">Horizontal</RadioGroupItem>
+                  <RadioGroupItem value="vertical">Vertical</RadioGroupItem>
+                </RadioGroup>
+                <Button variant="ghost" size="sm" onClick={() => setIsMixModalOpen(true)}>
+                  Mixto
+                </Button>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
@@ -1736,6 +2026,189 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                 : isEditingDesarrollo
                   ? "Actualizar desarrollo"
                   : "Guardar desarrollo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isMixModalOpen}
+        onOpenChange={(open) => {
+          setIsMixModalOpen(open);
+          if (!open) {
+            resetMixForm();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo desarrollo mixto</DialogTitle>
+            <DialogDescription>
+              Define el contenedor mixto antes de agregar secciones horizontales o verticales.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Nombre</Label>
+              <Input
+                value={mixForm.nombre}
+                onChange={(event) => handleMixField("nombre", event.target.value)}
+                placeholder="Desarrollo mixto"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Descripción</Label>
+              <Textarea
+                value={mixForm.descripcion}
+                onChange={(event) => handleMixField("descripcion", event.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Estado</Label>
+                <Select
+                  value={mixForm.estadoCve || undefined}
+                  onValueChange={(value) => handleMixField("estadoCve", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {estadoOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Municipio</Label>
+                <Select
+                  value={mixForm.municipioCve || undefined}
+                  onValueChange={(value) => handleMixField("municipioCve", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un municipio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {municipioOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Código postal</Label>
+                <Input
+                  value={mixForm.codigoPostal}
+                  onChange={(event) => handleMixField("codigoPostal", event.target.value)}
+                  placeholder="Ej. 11540"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Colonia</Label>
+                <Input
+                  value={mixForm.colonia}
+                  onChange={(event) => handleMixField("colonia", event.target.value)}
+                />
+              </div>
+            </div>
+            {mixFormError && <p className="text-xs text-rose-500">{mixFormError}</p>}
+          </div>
+          <DialogFooter className="flex gap-2 pt-4">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsMixModalOpen(false);
+                resetMixForm();
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleCreateMix} disabled={isSubmittingMix}>
+              {isSubmittingMix ? "Creando…" : "Guardar mixto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isMixItemModalOpen}
+        onOpenChange={(open) => {
+          setIsMixItemModalOpen(open);
+          if (!open) {
+            resetMixItemForm();
+            setActiveMixId(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva sección del mixto</DialogTitle>
+            <DialogDescription>
+              Vincula un desarrollo horizontal o vertical y define el modo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Desarrollo</Label>
+              <Select
+                value={mixItemForm.desarrolloId || undefined}
+                onValueChange={(value) => handleMixItemField("desarrolloId", value)}
+              >
+                <SelectTrigger size="sm">
+                  <SelectValue placeholder={availableChildDevelopments.length ? "Selecciona un desarrollo" : "No hay desarrollos disponibles"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableChildDevelopments.map((node) => (
+                    <SelectItem key={node.id} value={node.id}>
+                      {node.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Modo</Label>
+              <Select
+                value={mixItemForm.modo}
+                onValueChange={(value) => handleMixItemField("modo", value)}
+              >
+                <SelectTrigger size="sm">
+                  <SelectValue placeholder="Selecciona un modo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="horizontal">Horizontal</SelectItem>
+                  <SelectItem value="vertical">Vertical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Nombre opcional</Label>
+              <Input
+                value={mixItemForm.nombre}
+                onChange={(event) => handleMixItemField("nombre", event.target.value)}
+                placeholder="Título interno"
+              />
+            </div>
+            {mixItemError && <p className="text-xs text-rose-500">{mixItemError}</p>}
+          </div>
+          <DialogFooter className="flex gap-2 pt-4">
+            <Button variant="ghost" onClick={() => setIsMixItemModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCreateMixItem}
+              disabled={!availableChildDevelopments.length || isSubmittingMixItem}
+            >
+              {isSubmittingMixItem ? "Guardando…" : "Agregar sección"}
             </Button>
           </DialogFooter>
         </DialogContent>

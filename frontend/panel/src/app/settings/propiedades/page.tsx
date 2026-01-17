@@ -39,18 +39,8 @@ export default async function SettingsPropiedadesPage() {
 
   return (
     <AppViewLayout title="Settings · Propiedades inmobiliarias">
-      <div className="space-y-6 px-4 py-6 lg:px-6">
-        <header className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Settings
-          </p>
-          <h1 className="text-2xl font-semibold">Propiedades</h1>
-          <p className="text-sm text-muted-foreground">
-            Captura la información básica, ubicación y plantillas jerárquicas antes de publicar un
-            desarrollo en el mapa y en los reportes demográficos.
-          </p>
-        </header>
-        <section className="space-y-4">
+      <div className="px-4 py-0 lg:px-6">
+        <section className="space-y-0">
           <PropiedadForm lineas={lineas} familias={familias} modelos={modelos} tipos={tipos} />
         </section>
       </div>
