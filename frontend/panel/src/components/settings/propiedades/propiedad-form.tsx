@@ -1186,6 +1186,36 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     return STATUS_COLOR[status.toLowerCase()] ?? "text-slate-500";
   };
 
+  const renderPolygonInfo = (geom?: { type: string; coordinates: unknown }, poligonoId?: string | null) => (
+    <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
+      <IconMapPin className="size-4 text-slate-400" />
+      <span>{geom?.type ? "Polígono guardado" : "Sin polígono"}</span>
+      {poligonoId && (
+        <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[0.6rem] text-slate-400">
+          {poligonoId.slice(0, 6)}
+        </span>
+      )}
+    </div>
+  );
+
+  const renderRelatedList = (label: string, items: string[], emptyLabel: string) => (
+    <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
+      <span className="font-semibold text-slate-600">{label}:</span>
+      {items.length ? (
+        items.map((item) => (
+          <span
+            key={`${label}-${item}`}
+            className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6rem] text-slate-600"
+          >
+            {item}
+          </span>
+        ))
+      ) : (
+        <span className="text-slate-400">{emptyLabel}</span>
+      )}
+    </div>
+  );
+
   const renderUnidadRow = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
     const priceLabel = unidad.precio
       ? `$${unidad.precio.toLocaleString("es-MX")}`
@@ -1244,11 +1274,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             <IconMinus className="size-4" />
           </Button>
         </div>
+        <div className="space-y-1 pt-1 text-[0.65rem]">
+          {renderPolygonInfo(unidad.geom, unidad.poligono_id)}
+        </div>
       </div>
     );
   };
 
-  const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
+const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
     const isExpanded = expandedNodes[capa.id] ?? false;
     const capaLabel = capa.nombre || `Nivel ${capa.nivel ?? "?"}`;
     return (
@@ -1305,6 +1338,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             </Button>
           </div>
         </div>
+        <div className="space-y-1 px-3 pb-2 text-[0.65rem]">
+          {renderPolygonInfo(capa.geom, capa.poligono_id)}
+          {renderRelatedList(
+            "Unidades",
+            capa.unidades?.map((unidad) => unidad.unidad || "Unidad sin clave") ?? [],
+            "Sin unidades registradas",
+          )}
+        </div>
         {isExpanded && (
           <div className="space-y-2 border-l border-dashed border-slate-200 pl-6">
             {capa.unidades?.length ? (
@@ -1318,7 +1359,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     );
   };
 
-  const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
+const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
     const isExpanded = expandedNodes[desarrollo.id] ?? true;
     const totalUnidades =
       desarrollo.capas?.reduce((count, capa) => count + (capa.unidades?.length ?? 0), 0) ?? 0;
@@ -1389,6 +1430,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               <IconMinus className="size-4" />
             </Button>
           </div>
+        </div>
+        <div className="space-y-1 px-3 pb-2 text-[0.65rem]">
+          {renderPolygonInfo(desarrollo.geom, desarrollo.poligono_id)}
+          {renderRelatedList(
+            "Capas",
+            desarrollo.capas?.map((capa) => capa.nombre || `Nivel ${capa.nivel ?? "?"}`) ?? [],
+            "Sin capas registradas",
+          )}
         </div>
         {isExpanded && (
           <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
