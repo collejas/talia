@@ -1043,10 +1043,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     const normalizedValue = JSON.stringify(parsed);
     let wkt: string;
     try {
-      wkt =
-        geometryTarget.type === "desarrollo"
-          ? geoJsonToMultiPolygonZWkt(parsed)
-          : geoJsonToPolygonZWkt(parsed);
+      wkt = geoJsonToMultiPolygonZWkt(parsed);
     } catch (error) {
       setGeometryError(
         error instanceof Error ? error.message : "El polígono generado no es válido.",

@@ -229,7 +229,7 @@ class CRMRepository:
         organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"organizacion_id": str(organizacion_id), **payload}
+        body = {**payload}
         resp = await self._request(
             "POST",
             "/rest/v1/propiedades",
@@ -251,7 +251,7 @@ class CRMRepository:
         organizacion_id: UUID,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        body = {"organizacion_id": str(organizacion_id), **payload}
+        body = {**payload}
         resp = await self._request(
             "POST",
             "/rest/v1/propiedad_unidades",
