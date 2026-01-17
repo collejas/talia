@@ -46,3 +46,9 @@ Este documento complementa el plan maestro y describe cómo debe comportarse el 
 - Mantener separados los módulos de producto tradicional (`settings/productos`) y propiedades inmobiliarias, pero permitir que las propiedades lean información de líneas/familias/modelos para plantillas.
 - Documentar la ruta completa (RPC → Leaflet → Mapbox) y capacitar al cliente con un mensaje que explique los colores, los filtros y qué ocurre al pasar de Leaflet a Mapbox.
 - Preparar un mecanismo ligero de refresh (polling o WebSockets) para que los estados reflejen los cambios de ventas sin recargar todo el mapa. También preparar una caché de tiles Mapbox para reducir consumo si el tráfico aumenta.
+
+## Registro de avances
+
+- Diseñamos el panel de creación para que la jerarquía de desarrollos/capas/unidades se muestre como un árbol desplegable con acciones mínimas (agregar/editar/eliminar) y con prompts separados para atributos y polígonos.
+- El backend ahora responde en `/api/crm/propiedad-desarrollos`, `/api/crm/propiedad-capas` y `/api/crm/propiedad-unidades` utilizando las nuevas tablas jerárquicas, mientras que el frontend carga los polígonos existentes al abrir la edición y permite dibujar cada nivel desde el mapa.
+- Registramos que el mapa Leaflet sigue usando el RPC `crm_propiedades_geojson` (extendido para la jerarquía) y que Mapbox solo se activa tras seleccionar un marcador, manteniendo los filtros de color/status y la transición controlada.

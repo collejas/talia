@@ -40,3 +40,9 @@
    - [ ] Población de muestra (30 polígonos) con datos exagerados (polígonos grandes) para comprobar colores y visibilidad.
    - [ ] Probar queries espaciales (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`) y filtros por `status`/`tipo`.
    - [ ] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado.
+
+# Registro de avances
+
+- Marcamos como completados los pasos 1 a 3 del plan porque ya existen `propiedad_tipos`, las tablas espaciales jerárquicas (`propiedad_desarrollos`, `propiedad_capas`, `propiedad_unidades`), y el RPC/API `/api/crm/propiedades/geojson` que alimenta el mapa.
+- Rediseñamos el flujo de `settings/propiedades` para manejar la creación jerárquica (desarrollo → capa → unidad) primero en atributos y luego en geometrías, reflejándolo en la vista tipo árbol y en el backend (nuevos endpoints/migraciones).
+- Actualizamos los catálogos, migraciones y políticas para que `organizacion_id`, `status`, `nivel`, `altura` y `geom` de la jerarquía final (propiedad_unidades) estén alineados con la experiencia inmobiliaria y podamos mostrar inventario reactivo sin depender de la tabla `propiedades`.

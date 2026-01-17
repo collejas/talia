@@ -40,3 +40,9 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 - Mapbox tiene límite gratuito de tiles, por lo tanto el uso debe concentrarse en las zonas con desarrollos y destruir la instancia cuando no se use. Considerar cache/capacidad de tiles si el tráfico aumenta.
 - Validar los polígonos creados para evitar vertices innecesarios, mantener índices GiST actualizados y usar `ST_Simplify` cuando haya geometrías complejas.
 - El módulo inmobiliario debe filtrar solo los estados/municipios con desarrollos; los demás se muestran en gris para evitar colorear países o estados sin datos, y se deben recalcular los totales al actualizar un estado.
+
+## Registro de avances
+
+- Reescribimos la jerarquía espacial para que `propiedad_desarrollos`, `propiedad_capas` y `propiedad_unidades` representen los niveles maestros del plan 3D y eliminamos la tabla `propiedades` para evitar duplicidad; todo el inventario final vive ahora en `propiedad_unidades`.
+- Ajustamos la vista de `/settings/propiedades` para forzar la creación de características antes de los polígonos y para visualizar la jerarquía como árbol desplegable, con APIs que crean o editan cada nodo y asociaciones geométricas separadas.
+- Ejecutamos las migraciones necesarias (renombrado de tablas, eliminación de columnas geom, nuevas políticas, RPC de jerarquía) y alineamos el backend/frontend para que usen los nuevos nombres (`propiedad_desarrollos`, `propiedad_capas`, `propiedad_unidades`) y respeten el multitenant (`organizacion_id`).
