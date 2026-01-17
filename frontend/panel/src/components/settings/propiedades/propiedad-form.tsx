@@ -1190,7 +1190,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       </div>
       <div className="space-y-1">
         {capa.unidades?.length ? (
-          capa.unidades.map(renderUnidad)
+          capa.unidades.map((unidad) => renderUnidad(desarrollo, capa, unidad))
         ) : (
           <p className="text-[0.6rem] text-slate-400">Sin unidades aún</p>
         )}
