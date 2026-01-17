@@ -500,23 +500,52 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   );
 
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
-  const [capaPlusTarget, setCapaPlusTarget] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode } | null>(null);
+  type TreeActionTarget =
+    | { type: "desarrollo"; desarrollo: DesarrolloNode }
+    | { type: "capa"; desarrollo: DesarrolloNode; capa: CapaNode }
+    | { type: "unidad"; desarrollo: DesarrolloNode; capa: CapaNode; unidad: UnidadNode };
+  const [treePlusTarget, setTreePlusTarget] = useState<TreeActionTarget | null>(null);
 
-  const handleCapaPlusChoice = useCallback(
+  const handleTreePlusChoice = useCallback(
     (option: "caracteristicas" | "poligono") => {
-      if (!capaPlusTarget) {
+      if (!treePlusTarget) {
         return;
       }
-      if (option === "caracteristicas") {
-        openUnidadModal(capaPlusTarget.desarrollo, capaPlusTarget.capa);
+      if (treePlusTarget.type === "capa") {
+        if (option === "caracteristicas") {
+          openUnidadModal(treePlusTarget.desarrollo, treePlusTarget.capa);
+        } else {
+          handleSelectCapaGeometry(treePlusTarget.desarrollo, treePlusTarget.capa);
+        }
+      } else if (treePlusTarget.type === "desarrollo") {
+        if (option === "caracteristicas") {
+          openCapaModal(treePlusTarget.desarrollo);
+        } else {
+          handleSelectDesarrolloGeometry(treePlusTarget.desarrollo);
+        }
       } else {
-        handleSelectCapaGeometry(capaPlusTarget.desarrollo, capaPlusTarget.capa);
+        if (option === "caracteristicas") {
+          openEditUnidadModal(treePlusTarget.desarrollo, treePlusTarget.capa, treePlusTarget.unidad);
+        } else {
+          handleSelectUnidadGeometry(
+            treePlusTarget.desarrollo,
+            treePlusTarget.capa,
+            treePlusTarget.unidad,
+          );
+        }
       }
-      setCapaPlusTarget(null);
+      setTreePlusTarget(null);
     },
-    [capaPlusTarget, handleSelectCapaGeometry, openUnidadModal],
+    [
+      handleSelectCapaGeometry,
+      handleSelectDesarrolloGeometry,
+      handleSelectUnidadGeometry,
+      openCapaModal,
+      openEditUnidadModal,
+      openUnidadModal,
+      treePlusTarget,
+    ],
   );
-
   const toggleNodeExpansion = useCallback((id: string) => {
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
@@ -1173,6 +1202,17 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             type="button"
             variant="ghost"
             size="icon-sm"
+            onClick={() =>
+              setTreePlusTarget({ type: "unidad", desarrollo, capa, unidad })
+            }
+            aria-label="Agregar características o polígono de la unidad"
+          >
+            <IconPlus className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => handleSelectUnidadGeometry(desarrollo, capa, unidad)}
             aria-label="Editar polígono de la unidad"
           >
@@ -1233,7 +1273,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => setCapaPlusTarget({ desarrollo, capa })}
+              onClick={() => setTreePlusTarget({ type: "capa", desarrollo, capa })}
               aria-label="Agregar características o polígono"
             >
               <IconPlus className="size-4" />
@@ -1309,8 +1349,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => openCapaModal(desarrollo)}
-              aria-label="Agregar capa"
+              onClick={() => setTreePlusTarget({ type: "desarrollo", desarrollo })}
+              aria-label="Agregar características o polígono"
             >
               <IconPlus className="size-4" />
             </Button>
@@ -1460,22 +1500,26 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   </section>
 
       <Dialog
-        open={Boolean(capaPlusTarget)}
+        open={Boolean(treePlusTarget)}
         onOpenChange={(open) => {
           if (!open) {
-            setCapaPlusTarget(null);
+            setTreePlusTarget(null);
           }
         }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {capaPlusTarget?.capa.nombre
-                ? `¿Qué deseas hacer con ${capaPlusTarget.capa.nombre}?`
-                : "¿Qué deseas hacer con esta capa?"}
+              {treePlusTarget
+                ? treePlusTarget.type === "desarrollo"
+                  ? `¿Qué deseas hacer con ${treePlusTarget.desarrollo.nombre}?`
+                  : treePlusTarget.type === "capa"
+                    ? `¿Qué deseas hacer con ${treePlusTarget.capa.nombre ?? "esta capa"}?`
+                    : `¿Qué deseas hacer con ${treePlusTarget.unidad.unidad || "esta unidad"}?`
+                : "¿Qué deseas hacer?"}
             </DialogTitle>
             <DialogDescription>
-              Selecciona si quieres agregar las características de unidad o preparar el polígono actual.
+              Elige si quieres agregar/editar las características dependientes o preparar el polígono.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 pt-2">
@@ -1484,7 +1528,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               variant="outline"
               size="sm"
               className="w-full justify-start"
-              onClick={() => handleCapaPlusChoice("caracteristicas")}
+              onClick={() => handleTreePlusChoice("caracteristicas")}
             >
               Agregar características
             </Button>
@@ -1493,13 +1537,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               variant="outline"
               size="sm"
               className="w-full justify-start"
-              onClick={() => handleCapaPlusChoice("poligono")}
+              onClick={() => handleTreePlusChoice("poligono")}
             >
               Dibujar o actualizar polígono
             </Button>
           </div>
           <DialogFooter className="pt-4">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setCapaPlusTarget(null)}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setTreePlusTarget(null)}>
               Cancelar
             </Button>
           </DialogFooter>
