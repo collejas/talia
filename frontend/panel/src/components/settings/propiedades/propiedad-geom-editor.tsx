@@ -161,10 +161,15 @@ export function PropiedadGeomEditor({
     overlayRef.current.setStyle((geoFeature: any) => {
       const props = geoFeature.properties as Record<string, unknown> | undefined;
       const highlight = Boolean(props?.__highlight);
-      const layerType = props?.layerType === "capa" ? "capa" : "desarrollo";
-      const baseColor = layerType === "capa" ? "#f97316" : "#8b5cf6";
-      const highlightColor = layerType === "capa" ? "#d97706" : "#2563eb";
-      const color = highlight ? highlightColor : baseColor;
+      const layerType =
+        typeof props?.layerType === "string" ? props.layerType : "desarrollo";
+      const colorScheme =
+        layerType === "capa"
+          ? { base: "#f97316", highlight: "#d97706" }
+          : layerType === "unidad"
+            ? { base: "#0ea5e9", highlight: "#06b6d4" }
+            : { base: "#8b5cf6", highlight: "#2563eb" };
+      const color = highlight ? colorScheme.highlight : colorScheme.base;
       return {
         weight: highlight ? 3 : 1.5,
         color,

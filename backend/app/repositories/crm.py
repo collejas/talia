@@ -289,6 +289,78 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_desarrollo_invalid_response:{row!r}")
         return row
 
+    async def create_propiedad_poligono(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/propiedad_poligonos",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_poligono_creation_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_poligono_invalid_response:{row!r}")
+        return row
+
+    async def update_propiedad_poligono(
+        self,
+        *,
+        organizacion_id: UUID,
+        poligono_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/propiedad_poligonos?id=eq.{poligono_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_poligono_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_poligono_invalid_update_response:{row!r}")
+        return row
+
+    async def get_propiedad_poligono(
+        self,
+        *,
+        organizacion_id: UUID,
+        target_type: str,
+        target_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_poligonos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "target_type": f"eq.{target_type}",
+                "target_id": f"eq.{target_id}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("propiedad_poligono_invalid_response")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_poligono_invalid_response:{row!r}")
+        return row
+
     async def create_propiedad_capa(
         self,
         *,

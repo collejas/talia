@@ -86,6 +86,19 @@ type DesarrolloNode = {
   capas: CapaNode[];
 };
 
+type UnidadFormState = {
+  unidad: string;
+  nombre: string;
+  tipoId: string;
+  status: UnidadStatus;
+  precio: string;
+  area: string;
+  lineaId: string;
+  familiaId: string;
+  modeloId: string;
+  descripcion: string;
+};
+
 type GeometryTarget =
   | { type: "desarrollo"; id: string; label: string }
   | { type: "capa"; id: string; label: string; desarrolloId: string; nivel: number | null };
@@ -245,6 +258,14 @@ function offsetGeoJsonGeometry(geometry: GeoJsonGeometry, offset: number): GeoJs
   };
 }
 
+const UNIDAD_STATUS_OPTIONS = [
+  { value: "disponible", label: "Disponible" },
+  { value: "apartado", label: "Apartado" },
+  { value: "vendido", label: "Vendido" },
+  { value: "reservado", label: "Reservado" },
+] as const;
+type UnidadStatus = (typeof UNIDAD_STATUS_OPTIONS)[number]["value"];
+
 export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFormProps) {
   const [formValues, setFormValues] = useState({
     nombre: "",
@@ -277,14 +298,30 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     descripcion: "",
     copias: "1",
   });
+  const createUnidadFormDefaults = useCallback(
+    (): UnidadFormState => ({
+      unidad: "",
+      nombre: "",
+      tipoId: tipos[0]?.id ?? "",
+      status: "disponible",
+      precio: "",
+      area: "",
+      lineaId: lineas[0]?.id ?? "",
+      familiaId: familias[0]?.id ?? "",
+      modeloId: modelos[0]?.id ?? "",
+      descripcion: "",
+    }),
+    [familias, lineas, modelos, tipos],
+  );
+  const [unidadForm, setUnidadForm] = useState<UnidadFormState>(createUnidadFormDefaults);
+  const [isUnidadModalOpen, setIsUnidadModalOpen] = useState(false);
+  const [creatingUnidadFor, setCreatingUnidadFor] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode } | null>(null);
+  const [unidadFormError, setUnidadFormError] = useState<string | null>(null);
+  const [isSubmittingUnidad, setIsSubmittingUnidad] = useState(false);
   const [duplicatingCapa, setDuplicatingCapa] = useState<CapaNode | null>(null);
   const [editingCapa, setEditingCapa] = useState<CapaNode | null>(null);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
   const [capaFormError, setCapaFormError] = useState<string | null>(null);
-  void lineas;
-  void familias;
-  void modelos;
-  void tipos;
   const handleGeometryChange = useCallback((value?: string) => {
     setFormValues((prev) => ({ ...prev, geom: value ?? "" }));
   }, []);
@@ -376,6 +413,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     [setCapaForm],
   );
 
+  const handleUnidadField = useCallback(
+    (field: keyof UnidadFormState, value: string) => {
+      setUnidadForm((prev) => ({ ...prev, [field]: value }));
+    },
+    [],
+  );
+
   const resetCapaForm = useCallback(() => {
     setCapaForm({
       nombre: "",
@@ -389,6 +433,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setDuplicatingCapa(null);
     setEditingCapa(null);
   }, []);
+
+  const resetUnidadForm = useCallback(() => {
+    setUnidadForm(createUnidadFormDefaults());
+    setUnidadFormError(null);
+  }, [createUnidadFormDefaults]);
 
   const openCapaModal = useCallback(
     (desarrollo: DesarrolloNode, duplicateFrom?: CapaNode) => {
@@ -411,6 +460,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       }
     },
     [handleSelectCapaGeometry],
+  );
+
+  const openUnidadModal = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode) => {
+      setCreatingUnidadFor({ desarrollo, capa });
+      resetUnidadForm();
+      setIsUnidadModalOpen(true);
+    },
+    [resetUnidadForm],
   );
 
   const openEditCapaModal = useCallback(
@@ -465,6 +523,23 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             nivel: capa.nivel,
             desarrolloId: desarrollo.id,
           },
+        });
+        capa.unidades?.forEach((unidad) => {
+          if (!unidad.geom?.type || !unidad.geom?.coordinates) {
+            return;
+          }
+          features.push({
+            id: unidad.id,
+            geometry: unidad.geom,
+            properties: {
+              nombre: unidad.unidad || "Unidad",
+              layerType: "unidad",
+              nivel: capa.nivel,
+              desarrolloId: desarrollo.id,
+              capaId: capa.id,
+              status: unidad.status,
+            },
+          });
         });
       });
     });
@@ -879,6 +954,116 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     resetCapaForm,
   ]);
 
+  const handleCreateUnidad = useCallback(async () => {
+    if (!creatingUnidadFor) {
+      setUnidadFormError("Selecciona el nivel donde registrar la unidad.");
+      return;
+    }
+    if (!unidadForm.unidad.trim()) {
+      setUnidadFormError("Define una clave o nombre corto para la unidad.");
+      return;
+    }
+    if (!unidadForm.tipoId) {
+      setUnidadFormError("Selecciona el tipo de propiedad.");
+      return;
+    }
+    if (!formValues.geom) {
+      setUnidadFormError("Dibuja el polígono que representa la unidad.");
+      return;
+    }
+    let parsed: GeoJsonGeometry;
+    try {
+      parsed = JSON.parse(formValues.geom);
+    } catch {
+      setUnidadFormError("La geometría no tiene un formato válido.");
+      return;
+    }
+    let wkt: string;
+    try {
+      wkt = geoJsonToPolygonZWkt(parsed);
+    } catch (error) {
+      setUnidadFormError(
+        error instanceof Error ? error.message : "El polígono generado no es válido.",
+      );
+      return;
+    }
+    const unidadKey = unidadForm.unidad.trim();
+    const nombreValue = unidadForm.nombre.trim() || unidadKey;
+    const payload: Record<string, unknown> = {
+      unidad: unidadKey,
+      nombre: nombreValue,
+      tipo_id: unidadForm.tipoId,
+      nivel_id: creatingUnidadFor.capa.id,
+      desarrollo_id: creatingUnidadFor.desarrollo.id,
+      status: unidadForm.status,
+      geom: wkt,
+    };
+    if (unidadForm.descripcion.trim()) {
+      payload.descripcion = unidadForm.descripcion.trim();
+    }
+    if (unidadForm.precio.trim()) {
+      const precioValue = Number(unidadForm.precio);
+      if (Number.isNaN(precioValue)) {
+        setUnidadFormError("Ingresa un precio válido.");
+        return;
+      }
+      payload.precio = precioValue;
+    }
+    if (unidadForm.area.trim()) {
+      const areaValue = Number(unidadForm.area);
+      if (Number.isNaN(areaValue)) {
+        setUnidadFormError("Ingresa un área en m² válida.");
+        return;
+      }
+      payload.area_m2 = areaValue;
+    }
+    if (unidadForm.lineaId) {
+      payload.linea_id = unidadForm.lineaId;
+    }
+    if (unidadForm.familiaId) {
+      payload.familia_id = unidadForm.familiaId;
+    }
+    if (unidadForm.modeloId) {
+      payload.modelo_id = unidadForm.modeloId;
+    }
+    setIsSubmittingUnidad(true);
+    setUnidadFormError(null);
+    try {
+      const response = await fetch("/api/crm/propiedades", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (body as { error?: string }).error || "No se pudo guardar la unidad.",
+        );
+      }
+      handleNodeAction("Unidad creada con éxito.");
+      setFormValues((prev) => ({ ...prev, geom: "" }));
+      setCreatingUnidadFor(null);
+      resetUnidadForm();
+      setIsUnidadModalOpen(false);
+      await loadHierarchy();
+    } catch (error) {
+      setUnidadFormError(
+        error instanceof Error ? error.message : "Error desconocido al guardar la unidad.",
+      );
+    } finally {
+      setIsSubmittingUnidad(false);
+    }
+  }, [
+    creatingUnidadFor,
+    formValues.geom,
+    handleNodeAction,
+    loadHierarchy,
+    resetUnidadForm,
+    unidadForm,
+  ]);
+
   const handleSaveGeometry = useCallback(async () => {
     if (!geometryTarget) {
       setGeometryError("Selecciona el desarrollo o capa correspondiente.");
@@ -1001,7 +1186,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           </p>
         </div>
         <div className="flex gap-1">
-          <Button variant="outline" size="sm" onClick={() => handleNodeAction(`Agregar unidad al nivel ${capa.nombre}`)}>
+          <Button variant="outline" size="sm" onClick={() => openUnidadModal(desarrollo, capa)}>
             Nueva unidad
           </Button>
           <Button
@@ -1411,6 +1596,196 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 : editingCapa
                   ? "Actualizar capa"
                   : "Guardar capa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isUnidadModalOpen}
+        onOpenChange={(open) => {
+          setIsUnidadModalOpen(open);
+          if (!open) {
+            resetUnidadForm();
+            setCreatingUnidadFor(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear unidad para {creatingUnidadFor ? `"${creatingUnidadFor.capa.nombre || `Nivel ${creatingUnidadFor.capa.nivel ?? "?"}`}"` : "este nivel"}</DialogTitle>
+            <DialogDescription>
+              Captura el inventario comercial y dibuja el polígono correspondiente antes de guardar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Clave de unidad</Label>
+                <Input
+                  value={unidadForm.unidad}
+                  onChange={(event) => handleUnidadField("unidad", event.target.value)}
+                  placeholder="Ej. A101"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Nombre comercial</Label>
+                <Input
+                  value={unidadForm.nombre}
+                  onChange={(event) => handleUnidadField("nombre", event.target.value)}
+                  placeholder="Ej. Departamento A"
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Tipo comercial</Label>
+                <Select
+                  value={unidadForm.tipoId || undefined}
+                  onValueChange={(value) => handleUnidadField("tipoId", value)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tipos.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Status</Label>
+                <Select
+                  value={unidadForm.status}
+                  onValueChange={(value) => handleUnidadField("status", value as UnidadStatus)}
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIDAD_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Precio</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={unidadForm.precio}
+                  onChange={(event) => handleUnidadField("precio", event.target.value)}
+                  placeholder="Ej. 3500000"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Área (m²)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={unidadForm.area}
+                  onChange={(event) => handleUnidadField("area", event.target.value)}
+                  placeholder="Ej. 90"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Línea de negocio</Label>
+                <Select
+                  value={unidadForm.lineaId || "__none"}
+                  onValueChange={(value) =>
+                    handleUnidadField("lineaId", value === "__none" ? "" : value)
+                  }
+                >
+                <SelectTrigger size="sm">
+                  <SelectValue placeholder="Selecciona una línea (opcional)" />
+                </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sin línea</SelectItem>
+                    {lineas.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Familia</Label>
+                <Select
+                  value={unidadForm.familiaId || "__none"}
+                  onValueChange={(value) =>
+                    handleUnidadField("familiaId", value === "__none" ? "" : value)
+                  }
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona una familia (opcional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sin familia</SelectItem>
+                    {familias.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[0.7rem]">Modelo</Label>
+                <Select
+                  value={unidadForm.modeloId || "__none"}
+                  onValueChange={(value) =>
+                    handleUnidadField("modeloId", value === "__none" ? "" : value)
+                  }
+                >
+                  <SelectTrigger size="sm">
+                    <SelectValue placeholder="Selecciona un modelo (opcional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sin modelo</SelectItem>
+                    {modelos.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[0.7rem]">Descripción</Label>
+              <Textarea
+                value={unidadForm.descripcion}
+                onChange={(event) => handleUnidadField("descripcion", event.target.value)}
+                className="text-sm"
+              />
+            </div>
+            {unidadFormError && <p className="text-xs text-rose-500">{unidadFormError}</p>}
+          </div>
+          <DialogFooter className="flex gap-2 pt-4">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsUnidadModalOpen(false);
+                resetUnidadForm();
+                setCreatingUnidadFor(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleCreateUnidad} disabled={isSubmittingUnidad}>
+              {isSubmittingUnidad ? "Guardando…" : "Guardar unidad"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1181,6 +1181,12 @@ class PropiedadDesarrolloTipo(str, Enum):
     vertical = "vertical"
 
 
+class PropiedadPoligonoTarget(str, Enum):
+    desarrollo = "desarrollo"
+    capa = "capa"
+    unidad = "unidad"
+
+
 class PropiedadDesarrolloCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1)
@@ -1257,6 +1263,48 @@ class PropiedadCapaUpdateRequest(BaseModel):
     altura: Decimal | None = None
     geom: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class PropiedadPoligonoCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_type: PropiedadPoligonoTarget
+    target_id: UUID
+    geom: str = Field(..., min_length=1)
+    status: PropiedadStatus = PropiedadStatus.disponible
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @field_validator("geom")
+    def ensure_geo_with_srid(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("geom_required")
+        upper = trimmed.upper()
+        if not upper.startswith("SRID="):
+            return f"SRID=4326;{trimmed}"
+        if upper.startswith("SRID=4326;"):
+            return trimmed
+        return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
+
+
+class PropiedadPoligonoUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    geom: str | None = None
+    status: PropiedadStatus | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @field_validator("geom")
+    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        upper = trimmed.upper()
+        if not upper.startswith("SRID="):
+            return f"SRID=4326;{trimmed}"
+        if upper.startswith("SRID=4326;"):
+            return trimmed
+        return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
 
     @field_validator("geom", mode="before")
     def ensure_geo_with_srid(cls, value: str | None) -> str | None:
@@ -10875,6 +10923,79 @@ async def editar_propiedad_capa(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "capa": record}
+
+
+@router.post("/propiedad-poligonos")
+async def crear_propiedad_poligono(
+    *,
+    payload: PropiedadPoligonoCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "target_type": payload.target_type.value,
+        "target_id": str(payload.target_id),
+        "geom": payload.geom.strip(),
+        "status": payload.status.value,
+        "metadata": payload.metadata or {},
+    }
+    try:
+        record = await repo.create_propiedad_poligono(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "poligono": record}
+
+
+@router.patch("/propiedad-poligonos/{poligono_id}")
+async def editar_propiedad_poligono(
+    *,
+    poligono_id: UUID,
+    payload: PropiedadPoligonoUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    if payload.geom is None and not payload.status and not (payload.metadata):
+        raise HTTPException(status_code=400, detail="at_least_one_field_required")
+    body: dict[str, Any] = {}
+    if payload.geom is not None:
+        body["geom"] = payload.geom.strip()
+    if payload.status:
+        body["status"] = payload.status.value
+    if payload.metadata:
+        body["metadata"] = payload.metadata
+    try:
+        record = await repo.update_propiedad_poligono(
+            organizacion_id=organizacion_id,
+            poligono_id=poligono_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, "poligono": record}
+
+
+@router.get("/propiedad-poligonos")
+async def obtener_propiedad_poligono(
+    *,
+    target_type: PropiedadPoligonoTarget = Query(...),
+    target_id: UUID = Query(...),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        record = await repo.get_propiedad_poligono(
+            organizacion_id=organizacion_id,
+            target_type=target_type.value,
+            target_id=target_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "poligono": record}
 
 
 @router.post("/propiedades")
