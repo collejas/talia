@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { PropiedadGeomEditor } from "@/components/settings/propiedades/propiedad-geom-editor";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -911,6 +910,50 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       mounted = false;
     };
   }, [desarrolloForm.estadoCve]);
+
+  useEffect(() => {
+    if (!mixForm.estadoCve) {
+      setMunicipioOptions([]);
+      return;
+    }
+    let mounted = true;
+    setLocationError(null);
+    fetch(
+      `/api/crm/demografia/geo/municipios/${encodeURIComponent(
+        mixForm.estadoCve,
+      )}`,
+    )
+      .then((response) => response.json())
+      .then((body) => {
+        const features = body?.geojson?.features;
+        if (!Array.isArray(features)) {
+          throw new Error("No fue posible cargar los municipios.");
+        }
+        const options = features
+          .map((feature) => {
+            const props = feature?.properties || {};
+            const value =
+              String(props.cve_mun || props.CVE_MUN || props.cvemun || "").padStart(3, "0");
+            const label = props.nom_mun || props.NOM_MUN || props.name;
+            if (!value || !label) return null;
+            return { value, label: String(label) };
+          })
+          .filter((value): value is LocationOption => Boolean(value));
+        if (mounted) {
+          setMunicipioOptions(options);
+        }
+      })
+      .catch((error) => {
+        console.error("Error cargando municipios:", error);
+        if (mounted) {
+          setLocationError(error instanceof Error ? error.message : "Error cargando municipios.");
+          setMunicipioOptions([]);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [mixForm.estadoCve]);
 
   const isEditingDesarrollo = Boolean(editingDesarrolloId);
 
@@ -1902,7 +1945,11 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{isEditingDesarrollo ? "Editar desarrollo" : "Nuevo desarrollo"}</DialogTitle>
+            <DialogTitle>
+              {isEditingDesarrollo
+                ? "Editar desarrollo"
+                : `Nuevo desarrollo ${desarrolloForm.tipo}`}
+            </DialogTitle>
             <DialogDescription>
               Define los metadatos del desarrollo antes de dibujar el plano correspondiente.
             </DialogDescription>
@@ -1916,21 +1963,8 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                 placeholder="Ej. Torre Miramar"
               />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[0.7rem]">Tipo de desarrollo</Label>
-              <div className="flex items-center gap-2">
-                <RadioGroup
-                  value={desarrolloForm.tipo}
-                  onValueChange={(value) => handleDesarrolloField("tipo", value)}
-                  className="flex gap-2"
-                >
-                  <RadioGroupItem value="horizontal">Horizontal</RadioGroupItem>
-                  <RadioGroupItem value="vertical">Vertical</RadioGroupItem>
-                </RadioGroup>
-                <Button variant="ghost" size="sm" onClick={() => setIsMixModalOpen(true)}>
-                  Mixto
-                </Button>
-              </div>
+            <div className="text-xs font-medium uppercase tracking-[0.4em] text-slate-500">
+              {desarrolloForm.tipo}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
@@ -1964,8 +1998,11 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                     <SelectValue placeholder="Selecciona un estado" />
                   </SelectTrigger>
                   <SelectContent>
-                    {estadoOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
+                  {estadoOptions.map((option, index) => (
+                    <SelectItem
+                      key={`${option.value}-${option.label}-${index}`}
+                      value={option.value}
+                    >
                         {option.label}
                       </SelectItem>
                     ))}
@@ -1982,8 +2019,11 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                     <SelectValue placeholder="Selecciona un municipio" />
                   </SelectTrigger>
                   <SelectContent>
-                    {municipioOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
+                  {municipioOptions.map((option, index) => (
+                    <SelectItem
+                      key={`${option.value}-${option.label}-${index}`}
+                      value={option.value}
+                    >
                         {option.label}
                       </SelectItem>
                     ))}
@@ -2075,14 +2115,17 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                     <SelectValue placeholder="Selecciona un estado" />
                   </SelectTrigger>
                   <SelectContent>
-                    {estadoOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  {estadoOptions.map((option, index) => (
+                    <SelectItem
+                      key={`${option.value}-${option.label}-${index}`}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
               <div className="space-y-1">
                 <Label className="text-[0.7rem]">Municipio</Label>
                 <Select
@@ -2093,11 +2136,14 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                     <SelectValue placeholder="Selecciona un municipio" />
                   </SelectTrigger>
                   <SelectContent>
-                    {municipioOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                  {municipioOptions.map((option, index) => (
+                    <SelectItem
+                      key={`${option.value}-${option.label}-${index}`}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </SelectItem>
+                  ))}
                   </SelectContent>
                 </Select>
               </div>
