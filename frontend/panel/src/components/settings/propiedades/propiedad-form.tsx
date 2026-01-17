@@ -57,6 +57,12 @@ type UnidadNode = {
   metadata: Record<string, unknown>;
   poligono_id?: string | null;
   geom: { type: string; coordinates: unknown };
+  nombre?: string | null;
+  tipo_id?: string | null;
+  linea_id?: string | null;
+  familia_id?: string | null;
+  modelo_id?: string | null;
+  descripcion?: string | null;
 };
 
 type CapaNode = {
@@ -205,34 +211,6 @@ function geoJsonToMultiPolygonZWkt(geometry: GeoJsonGeometry): string {
   return formatMultiPolygonWkt(normalized);
 }
 
-function formatPolygonWkt(polygon: Polygon3DZ): string {
-  const rings = polygon
-    .map((ring) => {
-      const coordinates = ring.map(([x, y, z]) => `${x} ${y} ${z}`).join(", ");
-      return `(${coordinates})`;
-    })
-    .join(", ");
-  if (!rings.length) {
-    throw new Error("El polígono debe contener al menos un anillo.");
-  }
-  return `SRID=4326;POLYGON Z (${rings})`;
-}
-
-function geoJsonToPolygonZWkt(geometry: GeoJsonGeometry): string {
-  const type = geometry.type?.toLowerCase();
-  if (type === "polygon") {
-    return formatPolygonWkt(ensurePolygon(geometry.coordinates));
-  }
-  if (type === "multipolygon") {
-    const array = ensureArray(geometry.coordinates);
-    if (!array.length) {
-      throw new Error("El polígon debe contener al menos un polígono.");
-    }
-    return formatPolygonWkt(ensurePolygon(array[0]));
-  }
-  throw new Error("Solo se pueden guardar polígonos.");
-}
-
 const UNIDAD_STATUS_OPTIONS = [
   { value: "disponible", label: "Disponible" },
   { value: "apartado", label: "Apartado" },
@@ -293,6 +271,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [creatingUnidadFor, setCreatingUnidadFor] = useState<{ desarrollo: DesarrolloNode; capa: CapaNode } | null>(null);
   const [unidadFormError, setUnidadFormError] = useState<string | null>(null);
   const [isSubmittingUnidad, setIsSubmittingUnidad] = useState(false);
+  const [editingUnidad, setEditingUnidad] = useState<UnidadNode | null>(null);
   const [duplicatingCapa, setDuplicatingCapa] = useState<CapaNode | null>(null);
   const [editingCapa, setEditingCapa] = useState<CapaNode | null>(null);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
@@ -436,6 +415,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const resetUnidadForm = useCallback(() => {
     setUnidadForm(createUnidadFormDefaults());
     setUnidadFormError(null);
+    setEditingUnidad(null);
   }, [createUnidadFormDefaults]);
 
   const openCapaModal = useCallback(
@@ -468,6 +448,28 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setIsUnidadModalOpen(true);
     },
     [resetUnidadForm],
+  );
+
+  const openEditUnidadModal = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
+      setCreatingUnidadFor({ desarrollo, capa });
+      setEditingUnidad(unidad);
+      setUnidadForm({
+        unidad: unidad.unidad || "",
+        nombre: unidad.nombre || unidad.unidad,
+        tipoId: unidad.tipo_id || tipos[0]?.id || "",
+        status: (unidad.status || "disponible") as UnidadStatus,
+        precio: unidad.precio != null ? String(unidad.precio) : "",
+        area: unidad.area_m2 != null ? String(unidad.area_m2) : "",
+        lineaId: unidad.linea_id || "",
+        familiaId: unidad.familia_id || "",
+        modeloId: unidad.modelo_id || "",
+        descripcion: unidad.descripcion || "",
+      });
+      setUnidadFormError(null);
+      setIsUnidadModalOpen(true);
+    },
+    [tipos],
   );
 
   const openEditCapaModal = useCallback(
@@ -988,11 +990,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     if (unidadForm.modeloId) {
       payload.modelo_id = unidadForm.modeloId;
     }
+    const isEditingUnidad = Boolean(editingUnidad);
     setIsSubmittingUnidad(true);
     setUnidadFormError(null);
     try {
-      const response = await fetch("/api/crm/propiedades", {
-        method: "POST",
+      const endpoint = isEditingUnidad
+        ? `/api/crm/propiedad-unidades/${editingUnidad?.id}`
+        : "/api/crm/propiedades";
+      const method = isEditingUnidad ? "PATCH" : "POST";
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
@@ -1004,7 +1011,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           (body as { error?: string }).error || "No se pudo guardar la unidad.",
         );
       }
-      handleNodeAction("Unidad creada con éxito.");
+      handleNodeAction(isEditingUnidad ? "Unidad actualizada con éxito." : "Unidad creada con éxito.");
       setCreatingUnidadFor(null);
       resetUnidadForm();
       setIsUnidadModalOpen(false);
@@ -1020,6 +1027,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     creatingUnidadFor,
     handleNodeAction,
     loadHierarchy,
+    editingUnidad,
     resetUnidadForm,
     unidadForm,
   ]);
@@ -1137,7 +1145,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         >
           Editar polígono
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar unidad ${unidad.unidad}`)}>
+        <Button variant="ghost" size="sm" onClick={() => openEditUnidadModal(desarrollo, capa, unidad)}>
           Editar
         </Button>
         <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad}`)}>
@@ -1589,9 +1597,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Crear unidad para {creatingUnidadFor ? `"${creatingUnidadFor.capa.nombre || `Nivel ${creatingUnidadFor.capa.nivel ?? "?"}`}"` : "este nivel"}</DialogTitle>
+            <DialogTitle>
+              {editingUnidad ? "Editar unidad" : "Crear unidad"} para{" "}
+              {creatingUnidadFor ? `"${creatingUnidadFor.capa.nombre || `Nivel ${creatingUnidadFor.capa.nivel ?? "?"}`}"` : "este nivel"}
+            </DialogTitle>
             <DialogDescription>
-              Captura el inventario comercial y dibuja el polígono correspondiente antes de guardar.
+              {editingUnidad
+                ? "Actualiza los datos comerciales de esta unidad y guarda el resultado."
+                : "Captura el inventario comercial y dibuja el polígono correspondiente antes de guardar."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
