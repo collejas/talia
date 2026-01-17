@@ -278,6 +278,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     copias: "1",
   });
   const [duplicatingCapa, setDuplicatingCapa] = useState<CapaNode | null>(null);
+  const [editingCapa, setEditingCapa] = useState<CapaNode | null>(null);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
   const [capaFormError, setCapaFormError] = useState<string | null>(null);
   void lineas;
@@ -386,6 +387,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setCapaFormError(null);
     setCreatingCapaFor(null);
     setDuplicatingCapa(null);
+    setEditingCapa(null);
   }, []);
 
   const openCapaModal = useCallback(
@@ -402,12 +404,31 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         copias: "1",
       });
       setCapaFormError(null);
+      setEditingCapa(null);
       setIsCapaModalOpen(true);
       if (duplicateFrom) {
         handleSelectCapaGeometry(desarrollo, duplicateFrom);
       }
     },
     [handleSelectCapaGeometry],
+  );
+
+  const openEditCapaModal = useCallback(
+    (desarrollo: DesarrolloNode, capa: CapaNode) => {
+      setCreatingCapaFor(desarrollo);
+      setDuplicatingCapa(null);
+      setEditingCapa(capa);
+      setCapaForm({
+        nombre: capa.nombre || "",
+        nivel: capa.nivel != null ? String(capa.nivel) : "",
+        altura: capa.altura != null ? String(capa.altura) : "",
+        descripcion: capa.descripcion || "",
+        copias: "1",
+      });
+      setCapaFormError(null);
+      setIsCapaModalOpen(true);
+    },
+    [],
   );
 
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
@@ -669,19 +690,23 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setCapaFormError("Selecciona el desarrollo que recibirá la capa.");
       return;
     }
+    const isVertical = creatingCapaFor.tipo === "vertical";
+    const isDuplicating = Boolean(duplicatingCapa);
+    const isEditing = Boolean(editingCapa);
+    if (!isDuplicating && !isEditing && !formValues.geom) {
+      setCapaFormError("Dibuja el polígono que se almacenará.");
+      return;
+    }
     let baseGeometry: GeoJsonGeometry | null = null;
-    if (duplicatingCapa) {
+    if (isDuplicating && duplicatingCapa) {
       const capaGeometry = duplicatingCapa.geom as GeoJsonGeometry;
       if (!capaGeometry.type || !Array.isArray(capaGeometry.coordinates)) {
         setCapaFormError("El nivel seleccionado no tiene un polígono válido para copiar.");
         return;
       }
       baseGeometry = capaGeometry;
-    } else {
-      if (!formValues.geom) {
-        setCapaFormError("Dibuja el polígono que se almacenará.");
-        return;
-      }
+    }
+    if (!baseGeometry && !isEditing) {
       try {
         baseGeometry = JSON.parse(formValues.geom);
       } catch {
@@ -689,14 +714,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         return;
       }
     }
-    if (!baseGeometry) {
-      setCapaFormError("No se encontró una geometría válida.");
-      return;
-    }
-    const isVertical = creatingCapaFor.tipo === "vertical";
+    const nivelValue = capaForm.nivel.trim();
     let nivel = 0;
-    if (isVertical && !duplicatingCapa) {
-      const nivelValue = capaForm.nivel.trim();
+    if (isVertical && !isDuplicating && !isEditing) {
       if (!nivelValue) {
         setCapaFormError("El nivel es obligatorio para desarrollos verticales.");
         return;
@@ -711,11 +731,61 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       capaForm.altura.trim() && !Number.isNaN(Number(capaForm.altura))
         ? Number(capaForm.altura)
         : undefined;
-    if (duplicatingCapa && isVertical && (!alturaValue || Number.isNaN(alturaValue))) {
+    if (isDuplicating && isVertical && (!alturaValue || Number.isNaN(alturaValue))) {
       setCapaFormError("Define la altura de cada nivel para duplicar correctamente.");
       return;
     }
-    const copies = duplicatingCapa
+    if (isEditing && editingCapa) {
+      const payload: Record<string, unknown> = {};
+      if (capaForm.nombre.trim()) {
+        payload.nombre = capaForm.nombre.trim();
+      }
+      if (capaForm.descripcion.trim()) {
+        payload.descripcion = capaForm.descripcion.trim();
+      }
+      if (nivelValue) {
+        const parsedNivel = Number.parseInt(nivelValue, 10);
+        if (!Number.isNaN(parsedNivel)) {
+          payload.nivel = parsedNivel;
+        }
+      }
+      if (isVertical && alturaValue !== undefined) {
+        payload.altura = alturaValue;
+      }
+      setIsSubmittingCapa(true);
+      setCapaFormError(null);
+      try {
+        const response = await fetch(`/api/crm/propiedad-capas/${editingCapa.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            (body as { error?: string }).error || "No se pudo actualizar la capa.",
+          );
+        }
+        handleNodeAction("Capa actualizada con éxito.");
+        resetCapaForm();
+        setIsCapaModalOpen(false);
+        await loadHierarchy();
+      } catch (error) {
+        setCapaFormError(
+          error instanceof Error ? error.message : "Error desconocido al guardar la capa.",
+        );
+      } finally {
+        setIsSubmittingCapa(false);
+      }
+      return;
+    }
+    if (!baseGeometry) {
+      setCapaFormError("No se encontró una geometría válida.");
+      return;
+    }
+    const copies = isDuplicating
       ? Math.max(1, Number.parseInt(capaForm.copias, 10) || 1)
       : 1;
     setIsSubmittingCapa(true);
@@ -725,13 +795,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       let lastCreatedId: string | null = null;
       for (let index = 0; index < copies; index += 1) {
         const currentLevel = isVertical
-          ? duplicatingCapa
-            ? (duplicatingCapa.nivel ?? 0) + index + 1
+          ? isDuplicating
+            ? (duplicatingCapa?.nivel ?? 0) + index + 1
             : nivel
           : 0;
         const baseCopy = JSON.parse(JSON.stringify(baseGeometry));
         const geometryForLevel =
-          duplicatingCapa && alturaValue
+          isDuplicating && alturaValue
             ? offsetGeoJsonGeometry(baseCopy, alturaValue * (index + 1))
             : baseCopy;
         const payload: Record<string, unknown> = {
@@ -769,8 +839,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         }
       }
       handleNodeAction(
-        duplicatingCapa
-          ? `Se duplicaron ${copies} nivel(es) a partir de ${duplicatingCapa.nombre}.`
+        isDuplicating
+          ? `Se duplicaron ${copies} nivel(es) a partir de ${duplicatingCapa?.nombre}.`
           : "Capa creada con éxito.",
       );
       resetCapaForm();
@@ -783,8 +853,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             id: lastCreatedId,
             label: lastCreatedLabel,
             desarrolloId: creatingCapaFor.id,
-            nivel: duplicatingCapa
-              ? (duplicatingCapa.nivel ?? 0) + copies
+            nivel: isDuplicating
+              ? (duplicatingCapa?.nivel ?? 0) + copies
               : nivel,
           },
           undefined,
@@ -801,6 +871,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     capaForm,
     creatingCapaFor,
     duplicatingCapa,
+    editingCapa,
     formValues.geom,
     handleNodeAction,
     handleSelectGeometryTarget,
@@ -942,7 +1013,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           >
             Editar polígono
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleNodeAction(`Editar nivel ${capa.nombre}`)}>
+          <Button variant="ghost" size="sm" onClick={() => openEditCapaModal(desarrollo, capa)}>
             Editar
           </Button>
           {desarrollo.tipo === "vertical" && (
@@ -1242,11 +1313,17 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         <DialogContent className="max-w-md">
         <DialogHeader>
             <DialogTitle>
-              {duplicatingCapa ? "Duplicar capa" : "Crear capa"} para{" "}
-              {creatingCapaFor ? `"${creatingCapaFor.nombre}"` : "este desarrollo"}
+              {editingCapa
+                ? "Editar capa"
+                : duplicatingCapa
+                  ? "Duplicar capa"
+                  : "Crear capa"}{" "}
+              para {creatingCapaFor ? `"${creatingCapaFor.nombre}"` : "este desarrollo"}
             </DialogTitle>
             <DialogDescription>
-              {duplicatingCapa ? (
+              {editingCapa ? (
+                "Actualiza los metadatos de esta capa. La geometría se edita desde el mapa."
+              ) : duplicatingCapa ? (
                 <>
                   Se copiará la geometría del nivel <strong>{duplicatingCapa.nombre}</strong>,
                   puedes ajustar los metadatos antes de guardar el nuevo plano.
@@ -1327,7 +1404,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               Cancelar
             </Button>
             <Button size="sm" onClick={handleCreateCapa} disabled={isSubmittingCapa}>
-              {isSubmittingCapa ? "Guardando…" : "Guardar capa"}
+              {isSubmittingCapa
+                ? editingCapa
+                  ? "Actualizando…"
+                  : "Guardando…"
+                : editingCapa
+                  ? "Actualizar capa"
+                  : "Guardar capa"}
             </Button>
           </DialogFooter>
         </DialogContent>
