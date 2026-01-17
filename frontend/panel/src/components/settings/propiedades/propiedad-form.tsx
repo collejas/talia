@@ -625,15 +625,21 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setCapaFormError("Selecciona el desarrollo que recibirá la capa.");
       return;
     }
-    const nivelValue = capaForm.nivel.trim();
-    if (!nivelValue) {
-      setCapaFormError("El nivel es obligatorio.");
-      return;
-    }
-    const nivel = Number.parseInt(nivelValue, 10);
-    if (Number.isNaN(nivel)) {
-      setCapaFormError("Ingresa un nivel válido.");
-      return;
+    const isVertical = creatingCapaFor.tipo === "vertical";
+    let nivel: number;
+    if (isVertical) {
+      const nivelValue = capaForm.nivel.trim();
+      if (!nivelValue) {
+        setCapaFormError("El nivel es obligatorio para desarrollos verticales.");
+        return;
+      }
+      nivel = Number.parseInt(nivelValue, 10);
+      if (Number.isNaN(nivel)) {
+        setCapaFormError("Ingresa un nivel válido.");
+        return;
+      }
+    } else {
+      nivel = 0;
     }
     setIsSubmittingCapa(true);
     setCapaFormError(null);
@@ -649,7 +655,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       if (capaForm.descripcion.trim()) {
         payload.descripcion = capaForm.descripcion.trim();
       }
-      if (capaForm.altura.trim()) {
+      if (isVertical && capaForm.altura.trim()) {
         const altura = Number(capaForm.altura);
         if (!Number.isNaN(altura)) {
           payload.altura = altura;
@@ -1143,29 +1149,31 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 placeholder="Ej. Planta baja, Manzana A"
               />
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-[0.7rem]">Nivel</Label>
-                <Input
-                  value={capaForm.nivel}
-                  onChange={(event) => handleCapaField("nivel", event.target.value)}
-                  placeholder="Ej. 1"
-                  type="number"
-                  min={0}
-                />
+            {creatingCapaFor?.tipo === "vertical" && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-[0.7rem]">Nivel</Label>
+                  <Input
+                    value={capaForm.nivel}
+                    onChange={(event) => handleCapaField("nivel", event.target.value)}
+                    placeholder="Ej. 1"
+                    type="number"
+                    min={0}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[0.7rem]">Altura (m)</Label>
+                  <Input
+                    value={capaForm.altura}
+                    onChange={(event) => handleCapaField("altura", event.target.value)}
+                    placeholder="Ej. 3.5"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-[0.7rem]">Altura (m)</Label>
-                <Input
-                  value={capaForm.altura}
-                  onChange={(event) => handleCapaField("altura", event.target.value)}
-                  placeholder="Ej. 3.5"
-                  type="number"
-                  step="0.01"
-                  min={0}
-                />
-              </div>
-            </div>
+            )}
             <div className="space-y-1">
               <Label className="text-[0.7rem]">Descripción</Label>
               <Textarea
