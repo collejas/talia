@@ -550,6 +550,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const getTreePrimaryActionLabel = (target: TreeActionTarget | null) => {
+    if (!target) return "Agregar características";
+    if (target.type === "desarrollo") return "Agregar capa";
+    if (target.type === "capa") return "Agregar unidad";
+    return "Editar unidad";
+  };
+
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
@@ -1530,7 +1537,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               className="w-full justify-start"
               onClick={() => handleTreePlusChoice("caracteristicas")}
             >
-              Agregar características
+              {getTreePrimaryActionLabel(treePlusTarget)}
             </Button>
             <Button
               type="button"
