@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
 import {
@@ -89,6 +89,12 @@ type GeometryTarget = {
   type: "desarrollo";
   id: string;
   label: string;
+};
+
+type GeoFeature = {
+  id: string;
+  geometry: { type: string; coordinates: unknown };
+  properties?: Record<string, unknown>;
 };
 
 type GeoJsonGeometry = {
@@ -275,6 +281,24 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [estadoOptions, setEstadoOptions] = useState<LocationOption[]>([]);
   const [municipioOptions, setMunicipioOptions] = useState<LocationOption[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  const hierarchyFeatures = useMemo(() => {
+    const features: GeoFeature[] = [];
+    hierarchy.forEach((desarrollo) => {
+      if (!desarrollo.geom?.type || !desarrollo.geom?.coordinates) {
+        return;
+      }
+      features.push({
+        id: desarrollo.id,
+        geometry: desarrollo.geom,
+        properties: {
+          nombre: desarrollo.nombre,
+          tipo: desarrollo.tipo,
+        },
+      });
+    });
+    return features;
+  }, [hierarchy]);
 
   const loadHierarchy = useCallback(async () => {
     setIsHierarchyLoading(true);
@@ -494,6 +518,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       setGeometryError("La geometría no tiene un formato válido.");
       return;
     }
+    const normalizedValue = JSON.stringify(parsed);
     let wkt: string;
     try {
       wkt = geoJsonToMultiPolygonZWkt(parsed);
@@ -503,6 +528,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
       );
       return;
     }
+    setFormValues((prev) => ({ ...prev, geom: normalizedValue }));
     setIsSavingGeometry(true);
     setGeometryError(null);
     setGeometryStatusMessage("Guardando polígono…");
@@ -684,7 +710,12 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 flex-1">
-        <PropiedadGeomEditor value={formValues.geom} onGeometryChange={handleGeometryChange} />
+            <PropiedadGeomEditor
+              value={formValues.geom}
+              onGeometryChange={handleGeometryChange}
+              features={hierarchyFeatures}
+              highlightId={geometryTarget?.id ?? undefined}
+            />
         <div className="space-y-2">
           {geometryTarget ? (
             <p className="text-[0.65rem] text-slate-500">
