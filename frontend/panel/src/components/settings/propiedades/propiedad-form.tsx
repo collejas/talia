@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  IconBuilding,
   IconChevronDown,
   IconChevronRight,
+  IconLayersSelected,
   IconMinus,
   IconPlus,
   IconMapPin,
   IconPencil,
+  IconSquares,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from "@/components/ui/card";
@@ -645,7 +648,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
   const [estadoOptions, setEstadoOptions] = useState<LocationOption[]>([]);
-  const [municipioOptions, setMunicipioOptions] = useState<LocationOption[]>([]);
+  const [desarrolloMunicipioOptions, setDesarrolloMunicipioOptions] = useState<LocationOption[]>([]);
+  const [mixMunicipioOptions, setMixMunicipioOptions] = useState<LocationOption[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const desarrolloMap = useMemo(() => {
@@ -869,7 +873,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   useEffect(() => {
     if (!desarrolloForm.estadoCve) {
-      setMunicipioOptions([]);
+      setDesarrolloMunicipioOptions([]);
       return;
     }
     let mounted = true;
@@ -896,14 +900,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           })
           .filter((value): value is LocationOption => Boolean(value));
         if (mounted) {
-          setMunicipioOptions(options);
+          setDesarrolloMunicipioOptions(options);
         }
       })
       .catch((error) => {
         console.error("Error cargando municipios:", error);
         if (mounted) {
           setLocationError(error instanceof Error ? error.message : "Error cargando municipios.");
-          setMunicipioOptions([]);
+          setDesarrolloMunicipioOptions([]);
         }
       });
     return () => {
@@ -913,7 +917,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
 
   useEffect(() => {
     if (!mixForm.estadoCve) {
-      setMunicipioOptions([]);
+      setMixMunicipioOptions([]);
       return;
     }
     let mounted = true;
@@ -940,14 +944,14 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
           })
           .filter((value): value is LocationOption => Boolean(value));
         if (mounted) {
-          setMunicipioOptions(options);
+          setMixMunicipioOptions(options);
         }
       })
       .catch((error) => {
         console.error("Error cargando municipios:", error);
         if (mounted) {
           setLocationError(error instanceof Error ? error.message : "Error cargando municipios.");
-          setMunicipioOptions([]);
+          setMixMunicipioOptions([]);
         }
       });
     return () => {
@@ -1489,107 +1493,89 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     );
   };
 
-  const renderPolygonInfo = (geom?: { type: string; coordinates: unknown }, poligonoId?: string | null) => (
+  const renderPolygonInfo = (geom?: { type: string; coordinates: unknown }) => (
     <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
       <IconMapPin className="size-4 text-slate-400" />
       <span>{geom?.type ? "Polígono guardado" : "Sin polígono"}</span>
-      {poligonoId && (
-        <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[0.6rem] text-slate-400">
-          {poligonoId.slice(0, 6)}
-        </span>
-      )}
     </div>
   );
 
-  const renderRelatedList = (label: string, items: string[], emptyLabel: string) => (
-    <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
-      <span className="font-semibold text-slate-600">{label}:</span>
-      {items.length ? (
-        items.map((item) => (
-          <span
-            key={`${label}-${item}`}
-            className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6rem] text-slate-600"
-          >
-            {item}
-          </span>
-        ))
-      ) : (
-        <span className="text-slate-400">{emptyLabel}</span>
-      )}
+  const PolygonContainer = ({
+    geom,
+    children,
+  }: {
+    geom?: { type: string; coordinates: unknown };
+    children?: ReactNode;
+  }) => (
+    <div className="space-y-2 rounded border border-dashed border-slate-200 bg-slate-50/80 p-2">
+      {renderPolygonInfo(geom)}
+      {children}
     </div>
   );
 
   const renderUnidadRow = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
-    const priceLabel = unidad.precio
-      ? `$${unidad.precio.toLocaleString("es-MX")}`
-      : "Precio pendiente";
     return (
-      <div
-        key={unidad.id}
-        className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-slate-50/70 px-3 py-2 text-[0.7rem]"
-      >
-        <div>
-          <p className="text-xs font-semibold">{unidad.unidad || "Unidad sin clave"}</p>
-          <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
-            <span>{priceLabel}</span>
-            <span className={`font-semibold tracking-wide ${getStatusLabelClass(unidad.status)}`}>
-              {unidad.status ?? "sin status"}
-            </span>
+      <div key={unidad.id} className="space-y-1 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
+        <div className="flex items-center justify-between gap-3 text-[0.75rem]">
+          <div className="flex items-center gap-2">
+            <IconSquares className="size-4 text-slate-400" />
+            <div className="flex flex-col">
+              <span className="font-semibold">{unidad.unidad || "Unidad sin clave"}</span>
+              <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">
+                unidad
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-slate-500">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTreePlusTarget({ type: "unidad", desarrollo, capa, unidad })}
+              aria-label="Agregar características o polígono de la unidad"
+            >
+              <IconPlus className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleSelectUnidadGeometry(desarrollo, capa, unidad)}
+              aria-label="Editar polígono de la unidad"
+            >
+              <IconMapPin className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => openEditUnidadModal(desarrollo, capa, unidad)}
+              aria-label="Editar unidad"
+            >
+              <IconPencil className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad || unidad.id}`)}
+              aria-label="Eliminar unidad"
+            >
+              <IconMinus className="size-4" />
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-slate-500">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() =>
-              setTreePlusTarget({ type: "unidad", desarrollo, capa, unidad })
-            }
-            aria-label="Agregar características o polígono de la unidad"
-          >
-            <IconPlus className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => handleSelectUnidadGeometry(desarrollo, capa, unidad)}
-            aria-label="Editar polígono de la unidad"
-          >
-            <IconMapPin className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => openEditUnidadModal(desarrollo, capa, unidad)}
-            aria-label="Editar unidad"
-          >
-            <IconPencil className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad || unidad.id}`)}
-            aria-label="Eliminar unidad"
-          >
-            <IconMinus className="size-4" />
-          </Button>
-        </div>
-        <div className="space-y-1 pt-1 text-[0.65rem]">
-          {renderPolygonInfo(unidad.geom, unidad.poligono_id)}
-        </div>
+        <PolygonContainer geom={unidad.geom} />
       </div>
     );
   };
 
-const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
+  const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
     const isExpanded = expandedNodes[capa.id] ?? false;
     const capaLabel = capa.nombre || `Nivel ${capa.nivel ?? "?"}`;
     return (
-      <div key={capa.id} className="space-y-2">
-        <div className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white/70 px-3 py-2 text-[0.75rem]">
+      <div key={capa.id} className="space-y-2 border-b border-dashed border-slate-200 pb-3 last:border-b-0">
+        <div className="flex items-center justify-between gap-3 text-[0.75rem]">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -1600,14 +1586,11 @@ const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
             >
               {isExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
             </Button>
-            <div className="space-y-1">
-              <p className="text-sm font-semibold">{capaLabel}</p>
-              <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
-                <span className={`${getStatusLabelClass(capa.status)} font-semibold tracking-wide`}>
-                  {capa.status ?? "sin status"}
-                </span>
-                <span>Altura {capa.altura ?? "—"} m</span>
-                <span>{capa.unidades?.length ?? 0} unidades</span>
+            <div className="flex items-center gap-2">
+              <IconLayersSelected className="size-4 text-slate-400" />
+              <div className="flex flex-col">
+                <span className="font-semibold">{capaLabel}</span>
+                <span className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">capa</span>
               </div>
             </div>
           </div>
@@ -1641,34 +1624,26 @@ const renderCapaNode = (desarrollo: DesarrolloNode, capa: CapaNode) => {
             </Button>
           </div>
         </div>
-        <div className="space-y-1 px-3 pb-2 text-[0.65rem]">
-          {renderPolygonInfo(capa.geom, capa.poligono_id)}
-          {renderRelatedList(
-            "Unidades",
-            capa.unidades?.map((unidad) => unidad.unidad || "Unidad sin clave") ?? [],
-            "Sin unidades registradas",
-          )}
-        </div>
         {isExpanded && (
-          <div className="space-y-2 border-l border-dashed border-slate-200 pl-6">
-            {capa.unidades?.length ? (
-              capa.unidades.map((unidad) => renderUnidadRow(desarrollo, capa, unidad))
-            ) : (
-              <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
-            )}
-          </div>
+          <PolygonContainer geom={capa.geom}>
+            <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
+              {capa.unidades?.length ? (
+                capa.unidades.map((unidad) => renderUnidadRow(desarrollo, capa, unidad))
+              ) : (
+                <p className="text-[0.65rem] text-slate-400">Sin unidades aún</p>
+              )}
+            </div>
+          </PolygonContainer>
         )}
       </div>
     );
   };
 
-const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
+  const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
     const isExpanded = expandedNodes[desarrollo.id] ?? true;
-    const totalUnidades =
-      desarrollo.capas?.reduce((count, capa) => count + (capa.unidades?.length ?? 0), 0) ?? 0;
     return (
-      <div key={desarrollo.id} className="space-y-2">
-        <div className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50/60 px-3 py-2">
+      <div key={desarrollo.id} className="space-y-2 border-b border-dashed border-slate-200 pb-4 last:border-b-0">
+        <div className="flex items-center justify-between gap-3 text-[0.85rem]">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -1677,21 +1652,15 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
               onClick={() => toggleNodeExpansion(desarrollo.id)}
               aria-label={isExpanded ? "Ocultar capas" : "Mostrar capas"}
             >
-              {isExpanded ? (
-                <IconChevronDown className="size-4" />
-              ) : (
-                <IconChevronRight className="size-4" />
-              )}
+              {isExpanded ? <IconChevronDown className="size-4" /> : <IconChevronRight className="size-4" />}
             </Button>
-            <div className="space-y-1">
-              <p className="text-sm font-semibold">{desarrollo.nombre}</p>
-              <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-slate-500">
-                <span className="uppercase tracking-[0.3em]">{desarrollo.tipo || "horizontal"}</span>
-                <span className={`${getStatusLabelClass(desarrollo.status)} font-semibold tracking-wide`}>
-                  {desarrollo.status ?? "sin status"}
+            <div className="flex items-center gap-2">
+              <IconBuilding className="size-4 text-slate-400" />
+              <div className="flex flex-col">
+                <span className="font-semibold">{desarrollo.nombre}</span>
+                <span className="text-[0.6rem] uppercase tracking-[0.3em] text-slate-400">
+                  {desarrollo.tipo || "horizontal"}
                 </span>
-                <span>{desarrollo.capas?.length ?? 0} capas</span>
-                <span>{totalUnidades} unidades</span>
               </div>
             </div>
           </div>
@@ -1734,41 +1703,32 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
             </Button>
           </div>
         </div>
-        <div className="space-y-1 px-3 pb-2 text-[0.65rem]">
-          {renderPolygonInfo(desarrollo.geom, desarrollo.poligono_id)}
-          {renderRelatedList(
-            "Capas",
-            desarrollo.capas?.map((capa) => capa.nombre || `Nivel ${capa.nivel ?? "?"}`) ?? [],
-            "Sin capas registradas",
-          )}
-        </div>
-        {desarrollo.tipo === "mixto" && (
-          <div className="space-y-1 border-t border-dashed border-slate-200 px-3 pt-2 pb-1">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[0.65rem] text-slate-500">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-slate-600">Secciones mixtas</span>
-                <span className="text-slate-400">{desarrollo.items?.length ?? 0}</span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => openMixItemModal(desarrollo.id)}
-              >
-                Agregar sección
-              </Button>
-            </div>
-            {renderMixItems(desarrollo)}
-          </div>
-        )}
         {isExpanded && (
-          <div className="space-y-2 border-l border-dashed border-slate-200 pl-5">
-            {desarrollo.capas?.length ? (
-              desarrollo.capas.map((capa) => renderCapaNode(desarrollo, capa))
-            ) : (
-              <p className="text-[0.65rem] text-slate-400">Sin capas aún</p>
+          <PolygonContainer geom={desarrollo.geom}>
+            {desarrollo.tipo === "mixto" && (
+              <div className="space-y-1 text-[0.65rem] text-slate-400">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-600">Secciones mixtas</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openMixItemModal(desarrollo.id)}
+                  >
+                    Agregar sección
+                  </Button>
+                </div>
+                {renderMixItems(desarrollo)}
+              </div>
             )}
-          </div>
+            <div className="space-y-3 border-l border-dashed border-slate-200 pl-5">
+              {desarrollo.capas?.length ? (
+                desarrollo.capas.map((capa) => renderCapaNode(desarrollo, capa))
+              ) : (
+                <p className="text-[0.65rem] text-slate-400">Sin capas aún</p>
+              )}
+            </div>
+          </PolygonContainer>
         )}
       </div>
     );
@@ -1777,15 +1737,15 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <section className="lg:w-[420px]">
-        <Card className="h-full space-y-4">
-          <CardHeader>
+        <div className="flex h-full flex-col gap-3 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-lg">Creación de desarrollos</CardTitle>
-              <CardDescription className="text-xs">
+              <p className="text-lg font-semibold text-slate-900">Creación de desarrollos</p>
+              <p className="text-xs text-slate-500">
                 Crea o edita la ficha de cada desarrollo, sus capas y sus unidades antes de dibujar la geometría.
-              </CardDescription>
+              </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => openDesarrolloModal("horizontal")}>
                 Horizontal
               </Button>
@@ -1799,27 +1759,25 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                 {isHierarchyLoading ? "Actualizando…" : "Actualizar"}
               </Button>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3 text-xs">
-            <div className="space-y-1 text-[0.7rem] text-slate-500">
-              <p>La jerarquía se ordena de mayor a menor: desarrollo → capa/nivel → unidad.</p>
-              <p>Usa el árbol para inspeccionar cada nodo, elige los iconos pequeños para acciones rápidas y mantiene el foco en el polígono correspondiente.</p>
+          </div>
+          <div className="space-y-1 text-[0.7rem] text-slate-500">
+            <p>La jerarquía se ordena de mayor a menor: desarrollo → capa/nivel → unidad.</p>
+            <p>Usa el árbol para inspeccionar cada nodo, elige los iconos pequeños para acciones rápidas y mantén el foco en el polígono correspondiente.</p>
+          </div>
+          {statusMessage && <span className="text-xs text-slate-500">{statusMessage}</span>}
+          {hierarchyError && <span className="text-xs text-rose-500">{hierarchyError}</span>}
+          <ScrollArea className="max-h-[520px] rounded-xl border border-slate-200 bg-white/60">
+            <div className="space-y-3 p-2">
+              {isHierarchyLoading ? (
+                <p className="text-[0.7rem] text-slate-400">Cargando jerarquía...</p>
+              ) : rootDevelopments.length ? (
+                rootDevelopments.map(renderDesarrolloNode)
+              ) : (
+                <p className="text-[0.7rem] text-slate-400">No hay desarrollos registrados aún.</p>
+              )}
             </div>
-            {statusMessage && <span className="text-xs text-slate-500">{statusMessage}</span>}
-            {hierarchyError && <span className="text-xs text-rose-500">{hierarchyError}</span>}
-            <ScrollArea className="max-h-[520px] rounded-xl border border-slate-200 bg-white/60">
-              <div className="space-y-3 p-2">
-                {isHierarchyLoading ? (
-                  <p className="text-[0.7rem] text-slate-400">Cargando jerarquía...</p>
-                ) : rootDevelopments.length ? (
-                  rootDevelopments.map(renderDesarrolloNode)
-                ) : (
-                  <p className="text-[0.7rem] text-slate-400">No hay desarrollos registrados aún.</p>
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+          </ScrollArea>
+        </div>
       </section>
 
       <section className="lg:flex-1">
@@ -2019,11 +1977,11 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                     <SelectValue placeholder="Selecciona un municipio" />
                   </SelectTrigger>
                   <SelectContent>
-                  {municipioOptions.map((option, index) => (
-                    <SelectItem
-                      key={`${option.value}-${option.label}-${index}`}
-                      value={option.value}
-                    >
+                    {desarrolloMunicipioOptions.map((option, index) => (
+                      <SelectItem
+                        key={`${option.value}-${option.label}-${index}`}
+                        value={option.value}
+                      >
                         {option.label}
                       </SelectItem>
                     ))}
@@ -2136,14 +2094,14 @@ const renderDesarrolloNode = (desarrollo: DesarrolloNode) => {
                     <SelectValue placeholder="Selecciona un municipio" />
                   </SelectTrigger>
                   <SelectContent>
-                  {municipioOptions.map((option, index) => (
-                    <SelectItem
-                      key={`${option.value}-${option.label}-${index}`}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                    {mixMunicipioOptions.map((option, index) => (
+                      <SelectItem
+                        key={`${option.value}-${option.label}-${index}`}
+                        value={option.value}
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
