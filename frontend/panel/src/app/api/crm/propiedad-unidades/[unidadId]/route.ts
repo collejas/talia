@@ -6,11 +6,11 @@ import { callCrmApi } from "@/lib/api/crm";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ poligonoId: string }> },
+  { params }: { params: Promise<{ unidadId: string }> },
 ) {
-  const { poligonoId } = await params;
+  const { unidadId } = await params;
   const body = await request.json().catch(() => ({}));
-  const response = await callCrmApi(`/crm/propiedad-poligonos/${poligonoId}`, {
+  const response = await callCrmApi(`/crm/propiedad-unidades/${unidadId}`, {
     method: "PATCH",
     body,
     withUserToken: true,
@@ -23,10 +23,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ poligonoId: string }> },
+  { params }: { params: Promise<{ unidadId: string }> },
 ) {
-  const { poligonoId } = await params;
-  const response = await callCrmApi(`/crm/propiedad-poligonos/${poligonoId}`, {
+  const { unidadId } = await params;
+  const response = await callCrmApi(`/crm/propiedad-unidades/${unidadId}`, {
     method: "DELETE",
     withUserToken: true,
   });

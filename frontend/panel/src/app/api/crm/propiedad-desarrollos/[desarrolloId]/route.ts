@@ -25,3 +25,18 @@ export async function PATCH(
   }
   return NextResponse.json(response.data ?? {});
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ desarrolloId: string }> },
+) {
+  const { desarrolloId } = await params;
+  const response = await callCrmApi(`/crm/propiedad-desarrollos/${desarrolloId}`, {
+    method: "DELETE",
+    withUserToken: true,
+  });
+  if (!response.ok) {
+    return NextResponse.json({ error: response.error }, { status: response.status ?? 500 });
+  }
+  return NextResponse.json(response.data ?? {});
+}

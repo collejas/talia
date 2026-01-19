@@ -1338,6 +1338,151 @@ class PropiedadPoligonoUpdateRequest(BaseModel):
         return f"SRID=4326;{trimmed}"
 
 
+def _format_coordinate(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Coordenada inválida en la geometría.") from exc
+    text = f"{number:.8f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _format_point(point: Sequence[Any]) -> str:
+    if len(point) < 2:
+        raise ValueError("Cada punto debe tener al menos dos coordenadas.")
+    return " ".join(_format_coordinate(coord) for coord in point)
+
+
+def _format_ring(ring: Sequence[Sequence[Any]]) -> str:
+    if not ring:
+        raise ValueError("Un anillo no puede estar vacío.")
+    return "(" + ", ".join(_format_point(point) for point in ring) + ")"
+
+
+def _format_polygon(polygon: Sequence[Sequence[Sequence[Any]]]) -> str:
+    if not polygon:
+        raise ValueError("Un polígono debe tener al menos un anillo.")
+    return "(" + ", ".join(_format_ring(ring) for ring in polygon) + ")"
+
+
+def _format_multipolygon(multipolygon: Sequence[Sequence[Sequence[Sequence[Any]]]]) -> str:
+    if not multipolygon:
+        raise ValueError("Un multipolígono debe contener al menos un polígono.")
+    return "(" + ", ".join(_format_polygon(polygon) for polygon in multipolygon) + ")"
+
+
+def _geometry_coordinates_to_wkt(geom_type: str, coords: Any) -> str:
+    if geom_type == "POLYGON":
+        return _format_polygon(coords)  # type: ignore[arg-type]
+    if geom_type == "MULTIPOLYGON":
+        return _format_multipolygon(coords)  # type: ignore[arg-type]
+    raise ValueError("Solo se permiten polígonos o multipolígonos.")
+
+
+def _normalize_geometry_input(value: str | Mapping[str, Any] | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        upper = trimmed.upper()
+        if upper.startswith("SRID="):
+            if upper.startswith("SRID=4326;"):
+                return trimmed
+            return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
+        return f"SRID=4326;{trimmed}"
+
+    geometry = value
+    if geometry.get("type", "").upper() == "FEATURE" and isinstance(geometry.get("geometry"), Mapping):
+        geometry = geometry["geometry"]
+    geom_type = str(geometry.get("type") or "").strip().upper()
+    coords = geometry.get("coordinates")
+    if not geom_type or coords is None:
+        raise ValueError("La geometría debe incluir tipo y coordenadas.")
+    body = _geometry_coordinates_to_wkt(geom_type, coords)
+    return f"SRID=4326;{geom_type} {body}"
+
+
+class ImportUnidad(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    unidad: str = Field(..., min_length=1)
+    nombre: str | None = None
+    tipo_id: UUID | None = None
+    tipo_nombre: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    descripcion: str | None = None
+    precio: Decimal | None = None
+    area_m2: Decimal | None = None
+    linea_id: UUID | None = None
+    familia_id: UUID | None = None
+    modelo_id: UUID | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+    poligono: str | dict[str, Any] | None = None
+
+
+class ImportCapa(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nivel: int = Field(..., ge=0)
+    nombre: str | None = None
+    descripcion: str | None = None
+    altura: Decimal | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+    poligono: str | dict[str, Any] | None = None
+    unidades: list[ImportUnidad] | None = None
+
+
+class ImportDesarrollo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=1)
+    tipo: PropiedadDesarrolloTipo = PropiedadDesarrolloTipo.horizontal
+    descripcion: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    pais_codigo: str | None = Field(default="MX", min_length=1, max_length=3)
+    estado_cve: str | None = None
+    municipio_cve: str | None = None
+    codigo_postal: str | None = None
+    colonia: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+    poligono: str | dict[str, Any] | None = None
+    capas: list[ImportCapa] | None = None
+
+
+class ImportDesarrolloMixtoItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    modo: PropiedadDesarrolloModo
+    descripcion: str | None = None
+    nivel: int | None = Field(default=None, ge=0)
+    altura: Decimal | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+    desarrollo: ImportDesarrollo
+
+
+class ImportDesarrolloMixto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=1)
+    descripcion: str | None = None
+    status: PropiedadStatus = PropiedadStatus.disponible
+    pais_codigo: str | None = Field(default="MX", min_length=1, max_length=3)
+    estado_cve: str | None = None
+    municipio_cve: str | None = None
+    codigo_postal: str | None = None
+    colonia: str | None = None
+    metadata: dict[str, Any] | None = Field(default_factory=dict)
+    poligono: str | dict[str, Any] | None = None
+    items: list[ImportDesarrolloMixtoItem] = Field(default_factory=list)
+
+
+class ImportPropiedadesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    desarrollos: list[ImportDesarrollo] | None = None
+    mixtos: list[ImportDesarrolloMixto] | None = None
+
+
 def get_repository() -> CRMRepository:
     try:
         return CRMRepository()
@@ -10859,6 +11004,23 @@ async def editar_propiedad_desarrollo(
     return {"ok": True, "desarrollo": record}
 
 
+@router.delete("/propiedad-desarrollos/{desarrollo_id}")
+async def eliminar_propiedad_desarrollo(
+    *,
+    desarrollo_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        record = await repo.delete_propiedad_desarrollo(
+            organizacion_id=organizacion_id,
+            desarrollo_id=desarrollo_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "desarrollo": record}
+
+
 @router.post("/propiedad-desarrollos-mix")
 async def crear_propiedad_desarrollo_mix(
     *,
@@ -10999,6 +11161,23 @@ async def editar_propiedad_capa(
     return {"ok": True, "capa": record}
 
 
+@router.delete("/propiedad-capas/{capa_id}")
+async def eliminar_propiedad_capa(
+    *,
+    capa_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        record = await repo.delete_propiedad_capa(
+            organizacion_id=organizacion_id,
+            capa_id=capa_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "capa": record}
+
+
 @router.post("/propiedad-poligonos")
 async def crear_propiedad_poligono(
     *,
@@ -11050,6 +11229,23 @@ async def editar_propiedad_poligono(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    return {"ok": True, "poligono": record}
+
+
+@router.delete("/propiedad-poligonos/{poligono_id}")
+async def eliminar_propiedad_poligono(
+    *,
+    poligono_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        record = await repo.delete_propiedad_poligono(
+            organizacion_id=organizacion_id,
+            poligono_id=poligono_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "poligono": record}
 
 
@@ -11109,6 +11305,571 @@ async def crear_propiedad(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"ok": True, "unidad": record}
+
+
+@router.patch("/propiedad-unidades/{unidad_id}")
+async def editar_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    metadata = _normalize_metadata_value(payload.metadata) or {}
+    body: dict[str, Any] = {
+        "unidad": payload.unidad.strip(),
+        "nombre": (payload.nombre or payload.unidad).strip(),
+        "tipo_id": str(payload.tipo_id),
+        "nivel_id": str(payload.nivel_id),
+        "status": payload.status.value,
+        "metadata": metadata,
+    }
+    if payload.descripcion:
+        body["descripcion"] = payload.descripcion.strip()
+    if payload.precio is not None:
+        body["precio"] = _decimal_to_number(payload.precio)
+    if payload.area_m2 is not None:
+        body["area_m2"] = _decimal_to_number(payload.area_m2)
+    if payload.linea_id:
+        body["linea_id"] = str(payload.linea_id)
+    if payload.familia_id:
+        body["familia_id"] = str(payload.familia_id)
+    if payload.modelo_id:
+        body["modelo_id"] = str(payload.modelo_id)
+    if payload.desarrollo_id:
+        body["desarrollo_id"] = str(payload.desarrollo_id)
+
+    try:
+        record = await repo.update_propiedad_unidad(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "unidad": record}
+
+
+@router.delete("/propiedad-unidades/{unidad_id}")
+async def eliminar_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        record = await repo.delete_propiedad_unidad(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "unidad": record}
+
+
+@router.post("/propiedades/importar")
+async def importar_propiedades(
+    *,
+    payload: ImportPropiedadesRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        result = await _process_import_request(payload, repo, organizacion_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, **result}
+
+
+@router.post("/propiedades/importar/csv")
+async def importar_propiedades_csv(
+    *,
+    file: UploadFile = File(...),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    try:
+        raw = await file.read()
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="El archivo CSV debe estar en UTF-8.") from None
+
+    try:
+        payload = _csv_to_import_request(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        result = await _process_import_request(payload, repo, organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"ok": True, **result}
+
+
+async def _process_import_request(
+    payload: ImportPropiedadesRequest,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> dict[str, list[dict[str, Any]]]:
+    tipo_lookup = await _build_tipo_lookup(repo, organizacion_id)
+    desarrollos: list[dict[str, Any]] = []
+    mixtos: list[dict[str, Any]] = []
+    for desarrollo in payload.desarrollos or []:
+        desarrollos.append(await _import_desarrollo_tree(repo, organizacion_id, desarrollo, tipo_lookup))
+    for mixto in payload.mixtos or []:
+        mixtos.append(await _import_desarrollo_mixto(repo, organizacion_id, mixto, tipo_lookup))
+    return {"desarrollos": desarrollos, "mixtos": mixtos}
+
+
+def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
+    reader = csv.DictReader(io.StringIO(content), skipinitialspace=True)
+    if not reader.fieldnames:
+        raise ValueError("El CSV está vacío.")
+
+    groups: dict[str, dict[str, Any]] = {}
+    for line, raw in enumerate(reader, start=1):
+        row = {key: (value or "") for key, value in raw.items()}
+        entidad = _strip_value(row.get("entidad") or row.get("tipo_entidad"))
+        if not entidad:
+            continue
+        entidad = entidad.lower()
+        if entidad not in {"desarrollo", "capa", "unidad"}:
+            raise ValueError(f"La entidad '{entidad}' en la línea {line} no es válida.")
+        group_key = _strip_value(row.get("grupo")) or _strip_value(row.get("nombre")) or f"fila-{line}"
+        if not group_key:
+            raise ValueError(f"Necesitas un identificador de grupo en la línea {line}.")
+        group = groups.setdefault(
+            group_key,
+            {
+                "desarrollo": None,
+                "capas": [],
+                "capas_lookup": {},
+            },
+        )
+
+        if entidad == "desarrollo":
+            if group["desarrollo"] is not None:
+                raise ValueError(f"Hay varios desarrollos para el grupo '{group_key}'.")
+            group["desarrollo"] = ImportDesarrollo(
+                nombre=_require_value(row.get("nombre"), "nombre", line),
+                tipo=_parse_desarrollo_tipo(row.get("tipo")),
+                status=_parse_status_value(row.get("status")),
+                pais_codigo=_strip_value(row.get("pais_codigo")) or "MX",
+                estado_cve=_strip_value(row.get("estado_cve")),
+                municipio_cve=_strip_value(row.get("municipio_cve")),
+                codigo_postal=_strip_value(row.get("codigo_postal")),
+                colonia=_strip_value(row.get("colonia")),
+                descripcion=_strip_value(row.get("descripcion")),
+                metadata=_parse_metadata(row.get("metadata")),
+                poligono=_parse_geometry_value(row.get("poligono")),
+            )
+            continue
+
+        if group["desarrollo"] is None and entidad != "desarrollo":
+            raise ValueError(f"Debe definir un desarrollo antes de las filas de '{entidad}' (línea {line}).")
+
+        if entidad == "capa":
+            nivel = _parse_integer(row.get("nivel"), "nivel", line)
+            capa = ImportCapa(
+                nivel=nivel,
+                nombre=_strip_value(row.get("nombre")),
+                descripcion=_strip_value(row.get("descripcion")),
+                altura=_parse_decimal(row.get("altura")),
+                status=_parse_status_value(row.get("status")),
+                metadata=_parse_metadata(row.get("metadata")),
+                poligono=_parse_geometry_value(row.get("poligono")),
+            )
+            group["capas"].append(capa)
+            group["capas_lookup"][(group_key, nivel)] = capa
+            if capa.nombre:
+                group["capas_lookup"][(group_key, capa.nombre.strip().lower())] = capa
+            continue
+
+        if entidad == "unidad":
+            capa_nivel = _parse_integer(row.get("capa_nivel"), "capa_nivel", line)
+            capa = group["capas_lookup"].get((group_key, capa_nivel))
+            if capa is None:
+                raise ValueError(f"No se encontró la capa de nivel {capa_nivel} para la unidad en la línea {line}.")
+            unidad = ImportUnidad(
+                unidad=_require_value(row.get("unidad"), "unidad", line),
+                nombre=_strip_value(row.get("nombre")) or _strip_value(row.get("unidad")) or "",
+                tipo_id=_parse_uuid_value(row.get("tipo_id")),
+                tipo_nombre=_strip_value(row.get("tipo_nombre")),
+                status=_parse_status_value(row.get("status")),
+                descripcion=_strip_value(row.get("descripcion")),
+                precio=_parse_decimal(row.get("precio")),
+                area_m2=_parse_decimal(row.get("area_m2")),
+                linea_id=_parse_uuid_value(row.get("linea_id")),
+                familia_id=_parse_uuid_value(row.get("familia_id")),
+                modelo_id=_parse_uuid_value(row.get("modelo_id")),
+                metadata=_parse_metadata(row.get("metadata")),
+                poligono=_parse_geometry_value(row.get("poligono")),
+            )
+            capa.unidades = capa.unidades or []
+            capa.unidades.append(unidad)
+            continue
+
+    desarrollos = []
+    for group in groups.values():
+        desarrollo: ImportDesarrollo | None = group["desarrollo"]
+        if not desarrollo:
+            continue
+        if group["capas"]:
+            desarrollo.capas = group["capas"]
+        desarrollos.append(desarrollo)
+
+    if not desarrollos:
+        raise ValueError("El CSV debe contener al menos un desarrollo.")
+
+    return ImportPropiedadesRequest(desarrollos=desarrollos, mixtos=[])
+
+
+def _strip_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _require_value(value: Any, field: str, line: int) -> str:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        raise ValueError(f"El campo '{field}' es obligatorio en la línea {line}.")
+    return trimmed
+
+
+def _parse_integer(value: Any, field: str, line: int) -> int:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        raise ValueError(f"'{field}' es obligatorio y debe ser un número entero (línea {line}).")
+    try:
+        return int(trimmed)
+    except ValueError as exc:
+        raise ValueError(f"'{field}' debe ser un entero válido en la línea {line}.") from exc
+
+
+def _parse_decimal(value: Any) -> Decimal | None:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return None
+    try:
+        return Decimal(trimmed)
+    except InvalidOperation as exc:
+        raise ValueError(f"El valor '{trimmed}' no es un número válido.") from exc
+
+
+def _parse_status_value(value: Any) -> PropiedadStatus:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return PropiedadStatus.disponible
+    try:
+        return PropiedadStatus(trimmed.lower())
+    except ValueError as exc:
+        raise ValueError(f"Estado '{trimmed}' inválido. Usa disponible/apartado/vendido/reservado.") from exc
+
+
+def _parse_desarrollo_tipo(value: Any) -> PropiedadDesarrolloTipo:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return PropiedadDesarrolloTipo.horizontal
+    try:
+        return PropiedadDesarrolloTipo(trimmed.lower())
+    except ValueError as exc:
+        raise ValueError("Tipo de desarrollo inválido. Usa horizontal, vertical o mixto.") from exc
+
+
+def _parse_geometry_value(value: Any) -> str | dict[str, Any] | None:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return None
+    if trimmed.startswith("{") or trimmed.startswith("["):
+        try:
+            parsed = json.loads(trimmed)
+        except json.JSONDecodeError as exc:
+            raise ValueError("La geometría debe ser GeoJSON válido o WKT.") from exc
+        if isinstance(parsed, (dict, list)):
+            return parsed
+    return trimmed
+
+
+def _parse_metadata(value: Any) -> dict[str, Any] | None:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return None
+    try:
+        parsed = json.loads(trimmed)
+    except json.JSONDecodeError as exc:
+        raise ValueError("El metadata debe estar en formato JSON válido.") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("El metadata debe contener un objeto JSON.")
+    return parsed
+
+
+def _parse_uuid_value(value: Any) -> UUID | None:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return None
+    try:
+        return UUID(trimmed)
+    except ValueError:
+        return None
+
+
+
+async def _import_desarrollo_tree(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    desarrollo: ImportDesarrollo,
+    tipo_lookup: dict[str, str],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "nombre": desarrollo.nombre.strip(),
+        "tipo": desarrollo.tipo.value,
+        "status": desarrollo.status.value,
+        "metadata": _coerce_metadata(desarrollo.metadata),
+    }
+    if desarrollo.descripcion:
+        payload["descripcion"] = desarrollo.descripcion.strip()
+    if desarrollo.pais_codigo:
+        payload["pais_codigo"] = desarrollo.pais_codigo.strip()
+    if desarrollo.estado_cve:
+        payload["estado_cve"] = desarrollo.estado_cve.strip()
+    if desarrollo.municipio_cve:
+        payload["municipio_cve"] = desarrollo.municipio_cve.strip()
+    if desarrollo.codigo_postal:
+        payload["codigo_postal"] = desarrollo.codigo_postal.strip()
+    if desarrollo.colonia:
+        payload["colonia"] = desarrollo.colonia.strip()
+
+    record = await repo.create_propiedad_desarrollo(organizacion_id=organizacion_id, payload=payload)
+    summary: dict[str, Any] = {"id": record["id"], "nombre": record["nombre"], "tipo": record["tipo"]}
+
+    desarrollo_poligono = await _create_poligono_if_present(
+        repo,
+        organizacion_id,
+        PropiedadPoligonoTarget.desarrollo,
+        record["id"],
+        desarrollo.poligono,
+        desarrollo.status,
+        desarrollo.metadata,
+    )
+    if desarrollo_poligono:
+        summary["poligono_id"] = desarrollo_poligono["id"]
+
+    if desarrollo.capas:
+        summary["capas"] = []
+        for capa in desarrollo.capas:
+            capa_payload: dict[str, Any] = {
+                "desarrollo_id": record["id"],
+                "nivel": capa.nivel,
+                "metadata": _coerce_metadata(capa.metadata),
+            }
+            if capa.nombre:
+                capa_payload["nombre"] = capa.nombre.strip()
+            if capa.descripcion:
+                capa_payload["descripcion"] = capa.descripcion.strip()
+            if capa.altura is not None:
+                capa_payload["altura"] = _decimal_to_number(capa.altura)
+
+            capa_record = await repo.create_propiedad_capa(
+                organizacion_id=organizacion_id,
+                payload=capa_payload,
+            )
+            capa_summary: dict[str, Any] = {
+                "id": capa_record["id"],
+                "nivel": capa_record.get("nivel"),
+                "nombre": capa_record.get("nombre"),
+            }
+
+            capa_poligono = await _create_poligono_if_present(
+                repo,
+                organizacion_id,
+                PropiedadPoligonoTarget.capa,
+                capa_record["id"],
+                capa.poligono,
+                capa.status,
+                capa.metadata,
+            )
+            if capa_poligono:
+                capa_summary["poligono_id"] = capa_poligono["id"]
+
+            if capa.unidades:
+                capa_summary["unidades"] = []
+                for unidad in capa.unidades:
+                    tipo_id = _resolve_tipo_id(unidad.tipo_id, unidad.tipo_nombre, tipo_lookup)
+                    unidad_payload: dict[str, Any] = {
+                        "unidad": unidad.unidad.strip(),
+                        "nombre": (unidad.nombre or unidad.unidad).strip(),
+                        "tipo_id": tipo_id,
+                        "nivel_id": capa_record["id"],
+                        "desarrollo_id": record["id"],
+                        "status": unidad.status.value,
+                        "metadata": _coerce_metadata(unidad.metadata),
+                    }
+                    if unidad.descripcion:
+                        unidad_payload["descripcion"] = unidad.descripcion.strip()
+                    if unidad.precio is not None:
+                        unidad_payload["precio"] = _decimal_to_number(unidad.precio)
+                    if unidad.area_m2 is not None:
+                        unidad_payload["area_m2"] = _decimal_to_number(unidad.area_m2)
+                    if unidad.linea_id:
+                        unidad_payload["linea_id"] = str(unidad.linea_id)
+                    if unidad.familia_id:
+                        unidad_payload["familia_id"] = str(unidad.familia_id)
+                    if unidad.modelo_id:
+                        unidad_payload["modelo_id"] = str(unidad.modelo_id)
+
+                    unidad_record = await repo.create_propiedad_unidad(
+                        organizacion_id=organizacion_id,
+                        payload=unidad_payload,
+                    )
+                    unidad_summary: dict[str, Any] = {
+                        "id": unidad_record["id"],
+                        "unidad": unidad_record["unidad"],
+                    }
+
+                    unidad_poligono = await _create_poligono_if_present(
+                        repo,
+                        organizacion_id,
+                        PropiedadPoligonoTarget.unidad,
+                        unidad_record["id"],
+                        unidad.poligono,
+                        unidad.status,
+                        unidad.metadata,
+                    )
+                    if unidad_poligono:
+                        unidad_summary["poligono_id"] = unidad_poligono["id"]
+
+                    capa_summary["unidades"].append(unidad_summary)
+
+            summary["capas"].append(capa_summary)
+
+    return summary
+
+
+async def _import_desarrollo_mixto(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    mixto: ImportDesarrolloMixto,
+    tipo_lookup: dict[str, str],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "nombre": mixto.nombre.strip(),
+        "descripcion": mixto.descripcion.strip() if mixto.descripcion else None,
+        "status": mixto.status.value,
+        "metadata": _coerce_metadata(mixto.metadata),
+    }
+    if mixto.pais_codigo:
+        payload["pais_codigo"] = mixto.pais_codigo.strip()
+    if mixto.estado_cve:
+        payload["estado_cve"] = mixto.estado_cve.strip()
+    if mixto.municipio_cve:
+        payload["municipio_cve"] = mixto.municipio_cve.strip()
+    if mixto.codigo_postal:
+        payload["codigo_postal"] = mixto.codigo_postal.strip()
+    if mixto.colonia:
+        payload["colonia"] = mixto.colonia.strip()
+
+    record = await repo.create_propiedad_desarrollo_mix(
+        organizacion_id=organizacion_id,
+        payload=payload,
+    )
+    summary: dict[str, Any] = {"id": record["id"], "nombre": record["nombre"], "items": []}
+
+    mix_poligono = await _create_poligono_if_present(
+        repo,
+        organizacion_id,
+        PropiedadPoligonoTarget.mix,
+        record["id"],
+        mixto.poligono,
+        mixto.status,
+        mixto.metadata,
+    )
+    if mix_poligono:
+        summary["poligono_id"] = mix_poligono["id"]
+
+    for item in mixto.items:
+        child = await _import_desarrollo_tree(repo, organizacion_id, item.desarrollo, tipo_lookup)
+        mixto_payload: dict[str, Any] = {
+            "mix_id": record["id"],
+            "desarrollo_id": child["id"],
+            "nombre": item.desarrollo.nombre.strip(),
+            "modo": item.modo.value,
+            "status": item.status.value,
+            "metadata": _coerce_metadata(item.metadata),
+        }
+        if item.descripcion:
+            mixto_payload["descripcion"] = item.descripcion.strip()
+        if item.nivel is not None:
+            mixto_payload["nivel"] = item.nivel
+        if item.altura is not None:
+            mixto_payload["altura"] = _decimal_to_number(item.altura)
+
+        item_record = await repo.create_propiedad_desarrollo_mix_item(
+            organizacion_id=organizacion_id,
+            payload=mixto_payload,
+        )
+        summary["items"].append(
+            {
+                "id": item_record["id"],
+                "modo": item.modo.value,
+                "desarrollo": child,
+            }
+        )
+
+    return summary
+
+
+async def _create_poligono_if_present(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    target_type: PropiedadPoligonoTarget,
+    target_id: str,
+    geometry: str | Mapping[str, Any] | None,
+    status: PropiedadStatus,
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    geom = _normalize_geometry_input(geometry)
+    if geom is None:
+        return None
+    payload: dict[str, Any] = {
+        "target_type": target_type.value,
+        "target_id": target_id,
+        "geom": geom,
+        "status": status.value,
+        "metadata": _coerce_metadata(metadata),
+    }
+    return await repo.create_propiedad_poligono(organizacion_id=organizacion_id, payload=payload)
+
+
+def _resolve_tipo_id(
+    tipo_id: UUID | None,
+    tipo_nombre: str | None,
+    lookup: dict[str, str],
+) -> str:
+    if tipo_id:
+        return str(tipo_id)
+    if tipo_nombre:
+        key = tipo_nombre.strip().lower()
+        if not key:
+            raise ValueError("El nombre del tipo no puede estar vacío.")
+        match = lookup.get(key)
+        if not match:
+            raise ValueError(f"No existe el tipo de propiedad '{tipo_nombre}'.")
+        return match
+    raise ValueError("Cada unidad requiere un tipo_id o tipo_nombre.")
+
+
+async def _build_tipo_lookup(repo: CRMRepository, organizacion_id: UUID) -> dict[str, str]:
+    rows = await repo.list_propiedad_tipos(organizacion_id=organizacion_id)
+    return {row["nombre"].strip().lower(): row["id"] for row in rows if row.get("id")}
+
+
+def _coerce_metadata(value: dict[str, Any] | None) -> dict[str, Any]:
+    return _normalize_metadata_value(value) or {}
 
 
 def _build_pipeline_overview(

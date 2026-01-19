@@ -142,9 +142,10 @@ git clone <https://github.com/collejas/buscador.git> /var/www/
         talia/buscador
 https://github.com/collejas/buscador.git
 
+TU_puTA_mADRE_479156376421_8NbukI5vDpp0We1Ufhdfy%^$%^$VDFGdff
+
 npm run dev
-http://127.0.0.1:3000/dashboard
-http://127.0.0.1:3000/auth/login
+- Local:         http://localhost:3000
 
 # Entarada a Ser
 ssh jorge T@67.205.156.148 port: 2222

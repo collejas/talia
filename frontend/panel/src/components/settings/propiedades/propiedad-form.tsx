@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   IconBuilding,
   IconChevronDown,
@@ -143,6 +143,8 @@ type GeoJsonGeometry = {
   type: string;
   coordinates: unknown;
 };
+
+type ImportStatus = "idle" | "submitting" | "success";
 
 type Point3DZ = [number, number, number];
 type Ring3DZ = Point3DZ[];
@@ -417,6 +419,85 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     setStatusMessage(message);
   }, []);
 
+  const loadHierarchy = useCallback(async () => {
+    setIsHierarchyLoading(true);
+    try {
+      const response = await fetch("/api/crm/propiedades/hierarquia");
+      if (!response.ok) {
+        throw new Error("No fue posible cargar la jerarquía.");
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!Array.isArray(data.features)) {
+        throw new Error("Respuesta inválida para la jerarquía.");
+      }
+      setHierarchy(
+        data.features.filter(
+          (feature: unknown): feature is DesarrolloNode => !!feature && typeof feature === "object",
+        ),
+      );
+      setHierarchyError(null);
+    } catch (error) {
+      console.error("Error cargando jerarquía:", error);
+      setHierarchy([]);
+      setHierarchyError(error instanceof Error ? error.message : "Error desconocido.");
+    } finally {
+      setIsHierarchyLoading(false);
+    }
+  }, []);
+
+  const handleDeleteNode = useCallback(
+    async (target: {
+      type: "desarrollo" | "capa" | "unidad";
+      id: string;
+      label: string;
+      poligonoId?: string | null;
+    }) => {
+      if (!target.id) {
+        return;
+      }
+      const typeLabel = target.type === "unidad" ? "unidad" : target.type === "capa" ? "capa" : "desarrollo";
+      const confirmMessage = `Eliminarás el ${typeLabel} "${target.label}" y sus datos asociados. ¿Quieres continuar?`;
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+      setIsDeletingNode(true);
+      try {
+        if (target.poligonoId) {
+          const polygonResponse = await fetch(`/api/crm/propiedad-poligonos/${target.poligonoId}`, {
+            method: "DELETE",
+          });
+          if (!polygonResponse.ok) {
+            const payload = await polygonResponse.json().catch(() => null);
+            throw new Error(
+              payload?.error || "No fue posible eliminar el polígono asociado.",
+            );
+          }
+        }
+        const endpoint =
+          target.type === "desarrollo"
+            ? `/api/crm/propiedad-desarrollos/${target.id}`
+            : target.type === "capa"
+              ? `/api/crm/propiedad-capas/${target.id}`
+              : `/api/crm/propiedad-unidades/${target.id}`;
+        const response = await fetch(endpoint, { method: "DELETE" });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(
+            payload?.error || "No fue posible eliminar el nodo seleccionado.",
+          );
+        }
+        handleNodeAction(`${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} eliminado con éxito.`);
+        await loadHierarchy();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Error desconocido al eliminar.";
+        handleNodeAction(message);
+      } finally {
+        setIsDeletingNode(false);
+      }
+    },
+    [handleNodeAction, loadHierarchy],
+  );
+
   const handleSelectGeometryTarget = useCallback(
     (target: GeometryTarget, geometry?: GeoJsonGeometry) => {
       setGeometryTarget(target);
@@ -651,6 +732,13 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [desarrolloMunicipioOptions, setDesarrolloMunicipioOptions] = useState<LocationOption[]>([]);
   const [mixMunicipioOptions, setMixMunicipioOptions] = useState<LocationOption[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [isDeletingNode, setIsDeletingNode] = useState(false);
 
   const desarrolloMap = useMemo(() => {
     const map = new Map<string, DesarrolloNode>();
@@ -752,31 +840,58 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     return features;
   }, [hierarchy]);
 
-  const loadHierarchy = useCallback(async () => {
-    setIsHierarchyLoading(true);
-    try {
-      const response = await fetch("/api/crm/propiedades/hierarquia");
-      if (!response.ok) {
-        throw new Error("No fue posible cargar la jerarquía.");
-      }
-      const data = await response.json().catch(() => ({}));
-      if (!Array.isArray(data.features)) {
-        throw new Error("Respuesta inválida para la jerarquía.");
-      }
-      setHierarchy(
-        data.features.filter(
-          (feature: unknown): feature is DesarrolloNode => !!feature && typeof feature === "object",
-        ),
-      );
-      setHierarchyError(null);
-    } catch (error) {
-      console.error("Error cargando jerarquía:", error);
-      setHierarchy([]);
-      setHierarchyError(error instanceof Error ? error.message : "Error desconocido.");
-    } finally {
-      setIsHierarchyLoading(false);
+  const handleImportFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null;
+    if (!file) {
+      setImportFile(null);
+      setImportFileName(null);
+      return;
     }
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setImportError("Solo se aceptan archivos CSV.");
+      setImportFile(null);
+      setImportFileName(null);
+      return;
+    }
+    setImportFile(file);
+    setImportFileName(file.name);
+    setImportStatus("idle");
+    setImportError(null);
+    setImportResult(null);
   }, []);
+
+  const handleRunImport = useCallback(async () => {
+    if (!importFile) {
+      setImportError("Selecciona un archivo CSV antes de importar.");
+      return;
+    }
+
+    setImportStatus("submitting");
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      const response = await fetch("/api/crm/propiedades/importar/csv", {
+        method: "POST",
+        body: formData,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.error || "No fue posible importar el CSV.");
+      }
+      setImportStatus("success");
+      setImportResult("Importación completada. Actualizando la jerarquía…");
+      setImportFile(null);
+      setImportFileName(null);
+      await loadHierarchy();
+    } catch (error) {
+      setImportStatus("idle");
+      setImportError(
+        error instanceof Error ? error.message : "Error desconocido durante la importación.",
+      );
+    }
+  }, [importFile, loadHierarchy]);
 
   const openEditDesarrollo = useCallback((desarrollo: DesarrolloNode) => {
     setEditingDesarrolloId(desarrollo.id);
@@ -1558,8 +1673,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => handleNodeAction(`Eliminar unidad ${unidad.unidad || unidad.id}`)}
+              onClick={() =>
+                handleDeleteNode({
+                  type: "unidad",
+                  id: unidad.id,
+                  label: unidad.unidad || unidad.nombre || "unidad",
+                  poligonoId: unidad.poligono_id ?? null,
+                })
+              }
               aria-label="Eliminar unidad"
+              disabled={isDeletingNode}
             >
               <IconMinus className="size-4" />
             </Button>
@@ -1617,8 +1740,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => handleNodeAction(`Eliminar capa ${capaLabel}`)}
+              onClick={() =>
+                handleDeleteNode({
+                  type: "capa",
+                  id: capa.id,
+                  label: capaLabel,
+                  poligonoId: capa.poligono_id ?? null,
+                })
+              }
               aria-label="Eliminar capa"
+              disabled={isDeletingNode}
             >
               <IconMinus className="size-4" />
             </Button>
@@ -1696,8 +1827,16 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => handleNodeAction(`Eliminar desarrollo ${desarrollo.nombre}`)}
+              onClick={() =>
+                handleDeleteNode({
+                  type: "desarrollo",
+                  id: desarrollo.id,
+                  label: desarrollo.nombre,
+                  poligonoId: desarrollo.poligono_id ?? null,
+                })
+              }
               aria-label="Eliminar desarrollo"
+              disabled={isDeletingNode}
             >
               <IconMinus className="size-4" />
             </Button>
@@ -1754,6 +1893,9 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               </Button>
               <Button variant="outline" size="sm" onClick={() => setIsMixModalOpen(true)}>
                 Mixto
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setIsImportModalOpen(true)}>
+                Importar CSV
               </Button>
               <Button size="sm" onClick={loadHierarchy} disabled={isHierarchyLoading}>
                 {isHierarchyLoading ? "Actualizando…" : "Actualizar"}
@@ -1888,9 +2030,71 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
             <Button type="button" variant="ghost" size="sm" onClick={() => setTreePlusTarget(null)}>
               Cancelar
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog
+    open={isImportModalOpen}
+    onOpenChange={(open) => {
+      setIsImportModalOpen(open);
+      if (!open) {
+        setImportFile(null);
+        setImportFileName(null);
+        setImportStatus("idle");
+        setImportError(null);
+        setImportResult(null);
+      }
+    }}
+  >
+    <DialogContent className="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>Importar propiedades</DialogTitle>
+        <DialogDescription>
+          Carga un CSV con la jerarquía de desarrollos, capas y unidades. Consulta{" "}
+          <span className="font-semibold text-slate-700">docs/Plan_3D/propiedades_importador.md</span>{" "}
+          para el formato y los ejemplos de geometrías.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-3 pt-2">
+        <div className="space-y-1">
+          <Label className="text-[0.7rem]">Archivo CSV</Label>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="text-xs text-slate-500"
+            onChange={handleImportFileChange}
+          />
+          {importFileName && (
+            <p className="text-[0.65rem] text-slate-500">Archivo listo: {importFileName}</p>
+          )}
+        </div>
+        <p className="text-[0.65rem] text-slate-500">
+          Carga un CSV siguiendo el formato descrito en{" "}
+          <span className="font-semibold text-slate-700">docs/Plan_3D/propiedades_importador.md</span>.
+          El archivo debe incluir columnas como <code>entidad</code>, <code>grupo</code>,{' '}
+          <code>nombre</code>, <code>nivel</code>, <code>unidad</code>, <code>tipo_nombre</code> y{' '}
+          <code>poligono</code>; el backend transformará cada fila en la jerarquía adecuada.
+        </p>
+        {importError && <p className="text-xs text-rose-500">{importError}</p>}
+        {importStatus === "success" && importResult && (
+          <p className="text-xs text-emerald-600">{importResult}</p>
+        )}
+      </div>
+      <DialogFooter className="flex gap-2 pt-4">
+        <Button variant="ghost" size="sm" onClick={() => setIsImportModalOpen(false)}>
+          Cerrar
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleRunImport}
+          disabled={!importFile || importStatus === "submitting"}
+        >
+          {importStatus === "submitting" ? "Importando…" : "Importar CSV"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 
       <Dialog
         open={isDesarrolloModalOpen}

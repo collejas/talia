@@ -267,6 +267,112 @@ class CRMRepository:
             raise CRMRepositoryError(f"crm_propiedad_unidad_invalid_response:{row!r}")
         return row
 
+    async def update_propiedad_unidad(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/propiedad_unidades?id=eq.{unidad_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_unidad_update_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_unidad_invalid_update_response:{row!r}")
+        return row
+
+    async def delete_propiedad_unidad(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/propiedad_unidades",
+            params={"id": f"eq.{unidad_id}"},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_unidad_delete_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_unidad_invalid_delete_response:{row!r}")
+        return row
+
+    async def delete_propiedad_capa(
+        self,
+        *,
+        organizacion_id: UUID,
+        capa_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/propiedad_capas",
+            params={"id": f"eq.{capa_id}"},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_capa_delete_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_capa_invalid_delete_response:{row!r}")
+        return row
+
+    async def delete_propiedad_desarrollo(
+        self,
+        *,
+        organizacion_id: UUID,
+        desarrollo_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/propiedad_desarrollos",
+            params={"id": f"eq.{desarrollo_id}"},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_desarrollo_delete_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_desarrollo_invalid_delete_response:{row!r}")
+        return row
+
+    async def delete_propiedad_poligono(
+        self,
+        *,
+        organizacion_id: UUID,
+        poligono_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            "/rest/v1/propiedad_poligonos",
+            params={"id": f"eq.{poligono_id}"},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("propiedad_poligono_delete_failed")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_poligono_invalid_delete_response:{row!r}")
+        return row
+
     async def create_propiedad_desarrollo(
         self,
         *,

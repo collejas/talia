@@ -20,3 +20,18 @@ export async function PATCH(
   }
   return NextResponse.json(response.data ?? {});
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ capaId: string }> },
+) {
+  const { capaId } = await params;
+  const response = await callCrmApi(`/crm/propiedad-capas/${capaId}`, {
+    method: "DELETE",
+    withUserToken: true,
+  });
+  if (!response.ok) {
+    return NextResponse.json({ error: response.error }, { status: response.status ?? 500 });
+  }
+  return NextResponse.json(response.data ?? {});
+}
