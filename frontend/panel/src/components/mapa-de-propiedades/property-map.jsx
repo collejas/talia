@@ -184,6 +184,8 @@ export function PropertyMap() {
   const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
   const [mapboxActive, setMapboxActive] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
+  const [expandedDevIds, setExpandedDevIds] = useState(() => new Set());
+  const [expandedCapas, setExpandedCapas] = useState(new Set());
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   const logMapboxEvent = useCallback((payload, label = "event") => {
@@ -1357,42 +1359,89 @@ const closeMapbox = useCallback(() => {
               className="h-full overflow-y-auto px-3 py-2"
               style={{ maxHeight: "calc(100vh - 360px)", minHeight: 260 }}
             >
-              <ul className="space-y-3">
-                {hierarchyTree.map((dev) => (
-                  <li key={dev.id} className="rounded border border-slate-100 bg-slate-50/80">
-                    <div className="px-3 py-2 text-sm font-semibold text-slate-700">{dev.name}</div>
-                    <ul className="space-y-2 border-t border-slate-100 px-3 pt-2">
-                      {dev.capas.map((capa) => (
-                        <li key={capa.id} className="space-y-1">
-                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                            {capa.name}
-                          </div>
-                          <div className="space-y-1 pl-3">
-                            {capa.units.map((unit) => (
-                              <button
-                                key={unit.id}
-                                type="button"
-                                onClick={() => handleUnitSelect(unit)}
-                                className={`flex items-center gap-2 rounded-md border px-2 py-1 text-xs transition ${
-                                  selectedId === String(unit.id)
-                                    ? "border-slate-800 bg-slate-900 text-white"
-                                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
-                                }`}
-                              >
-                                <span
-                                  className="h-3 w-3 rounded-full border"
-                                  style={{ backgroundColor: unit.color, borderColor: unit.color }}
-                                />
-                                <span className="font-semibold">{unit.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-2">
+                {hierarchyTree.map((dev) => {
+                  const devExpanded = expandedDevIds.has(dev.id);
+                  return (
+                    <div key={dev.id} className="border-b border-slate-100 pb-2 last:border-0">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between text-left font-semibold text-slate-700"
+                        onClick={() =>
+                          setExpandedDevIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(dev.id)) {
+                              next.delete(dev.id);
+                            } else {
+                              next.add(dev.id);
+                            }
+                            return next;
+                          })
+                        }
+                      >
+                        <span>{dev.name}</span>
+                        <span className="text-xs text-slate-400">{devExpanded ? "-" : "+"}</span>
+                      </button>
+                      {devExpanded && (
+                        <div className="mt-1 space-y-3 pl-4 text-xs text-slate-600">
+                          {dev.capas.map((capa) => {
+                            const capaExpanded = expandedCapas.has(capa.id);
+                            return (
+                              <div key={capa.id} className="border-t border-slate-100 pt-2">
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center justify-between text-left font-semibold uppercase tracking-[0.2em]"
+                                  onClick={() =>
+                                    setExpandedCapas((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(capa.id)) {
+                                        next.delete(capa.id);
+                                      } else {
+                                        next.add(capa.id);
+                                      }
+                                      return next;
+                                    })
+                                  }
+                                >
+                                  <span>{capa.name}</span>
+                                  <span className="text-[0.6rem] text-slate-400">
+                                    {capaExpanded ? "-" : "+"}
+                                  </span>
+                                </button>
+                                {capaExpanded && (
+                                  <div className="mt-1 space-y-1 pl-3 text-[0.8rem]">
+                                    {capa.units.map((unit) => (
+                                      <button
+                                        key={unit.id}
+                                        type="button"
+                                        onClick={() => handleUnitSelect(unit)}
+                                        className={`flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-slate-700 transition ${
+                                          selectedId === String(unit.id)
+                                            ? "border-slate-900 bg-slate-900 text-white"
+                                            : "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-100"
+                                        }`}
+                                      >
+                                        <span
+                                          className="h-2.5 w-2.5 rounded-full border"
+                                          style={{
+                                            backgroundColor: unit.color,
+                                            borderColor: unit.color,
+                                          }}
+                                        />
+                                        <span className="font-semibold">{unit.name}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
