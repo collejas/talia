@@ -20,7 +20,13 @@ export async function GET(request: Request) {
   });
 
   if (!response.ok) {
-    return NextResponse.json({ error: response.error }, { status: response.status ?? 500 });
+    console.error("crm.demografia.mapa filtered response", response.status, response.error);
+    return NextResponse.json({
+      ok: false,
+      error: response.error,
+      dataset: [],
+      geojson: { type: "FeatureCollection", features: [] },
+    });
   }
 
   return NextResponse.json(response.data);

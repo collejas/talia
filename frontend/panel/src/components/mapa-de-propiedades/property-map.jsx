@@ -86,6 +86,14 @@ function getGeometryBounds(geometry) {
   return { minLng, minLat, maxLng, maxLat };
 }
 
+function getFeatureCenter(feature) {
+  const bounds = getGeometryBounds(feature?.geometry);
+  if (!bounds) {
+    return null;
+  }
+  return [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2];
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -104,7 +112,7 @@ export function PropertyMap() {
   const [selectedId, setSelectedId] = useState(null);
   const [leaflet, setLeaflet] = useState(null);
   const [osmbReady, setOsmbReady] = useState(false);
-  const [pitch, setPitch] = useState(45);
+  const [pitch, setPitch] = useState(60);
   const [bearing, setBearing] = useState(0);
   const selectedIdRef = useRef(selectedId);
   const hierarchyLayerRef = useRef(null);
@@ -210,6 +218,14 @@ export function PropertyMap() {
       };
       source.setData(payload);
       const bounds = getGeometryBounds(feature.geometry);
+      const applyCamera = () => {
+        try {
+          map.setPitch(pitch);
+          map.setBearing(bearing);
+        } catch {
+          /* ignore */
+        }
+      };
       const applyFit = () => {
         if (bounds && map.isStyleLoaded()) {
           map.fitBounds(
@@ -219,6 +235,7 @@ export function PropertyMap() {
             ],
             { padding: 40, maxZoom: 19 },
           );
+          applyCamera();
         }
       };
       if (bounds && map.isStyleLoaded()) {
@@ -229,6 +246,7 @@ export function PropertyMap() {
           ],
           { padding: 30, maxZoom: 19 },
         );
+        applyCamera();
       } else {
         map.once("styledata", applyFit);
         map.once("idle", applyFit);
@@ -243,7 +261,7 @@ export function PropertyMap() {
       );
       return true;
     },
-    [logMapboxEvent, mapboxActive],
+    [logMapboxEvent, mapboxActive, pitch, bearing],
   );
 
   useEffect(() => {
@@ -468,6 +486,7 @@ const handleRegionClick = useCallback(
       if (!feature) return;
       setSelectedId(String(feature.id ?? ""));
       setActiveMarkerFeature(feature);
+      pendingMapboxFeatureRef.current = feature;
       setMapboxFeature(feature);
       setMapboxActive(true);
       logMapboxEvent(
@@ -773,15 +792,31 @@ const closeMapbox = useCallback(() => {
       mapboxglModule.accessToken = mapboxToken;
       const container = mapboxContainerRef.current;
       if (!container) return;
+      const initialFeature =
+        pendingMapboxFeatureRef.current ?? mapboxFeatureRef.current ?? null;
+      const initialBounds = initialFeature
+        ? getGeometryBounds(initialFeature.geometry)
+        : null;
+      const initialCenter = getFeatureCenter(initialFeature) ?? DEFAULT_CENTER;
+      const initialZoom = initialBounds ? 18 : 12;
       const map = new mapboxglModule.Map({
         container,
         style: "mapbox://styles/mapbox/satellite-v9",
-        center: DEFAULT_CENTER,
-        zoom: 18,
+        center: initialCenter,
+        zoom: initialZoom,
         pitch: 60,
         bearing: 0,
         projection: "mercator",
       });
+      logMapboxEvent(
+        {
+          step: "initial-center",
+          bounds: initialBounds,
+          center: initialCenter,
+          zoom: initialZoom,
+        },
+        "initial-center",
+      );
       mapboxInstanceRef.current = map;
       if (typeof window !== "undefined") {
         window.__mapboxInstance = map;
@@ -863,12 +898,16 @@ const closeMapbox = useCallback(() => {
       };
       map.on("load", () => {
         if (cancelled) return;
+        map.setPitch(pitch);
+        map.setBearing(bearing);
         addLayerRules();
         applyPendingFeature();
         map.resize();
       });
       map.on("styledata", () => {
         if (cancelled) return;
+        map.setPitch(pitch);
+        map.setBearing(bearing);
         addLayerRules();
         applyPendingFeature();
         map.resize();
@@ -883,7 +922,7 @@ const closeMapbox = useCallback(() => {
         delete window.__mapboxInstance;
       }
     };
-  }, [mapboxActive, mapboxToken, sendFeatureToMapbox, logMapboxEvent]);
+  }, [mapboxActive, mapboxToken, sendFeatureToMapbox, logMapboxEvent, pitch, bearing]);
 
   useEffect(() => {
     if (!mapboxActive) {
@@ -891,6 +930,22 @@ const closeMapbox = useCallback(() => {
     }
     mapboxInstanceRef.current?.resize();
   }, [mapboxActive]);
+
+  useEffect(() => {
+    if (!mapboxActive) {
+      return;
+    }
+    const map = mapboxInstanceRef.current;
+    if (!map) {
+      return;
+    }
+    try {
+      map.setPitch(pitch);
+      map.setBearing(bearing);
+    } catch {
+      /* ignore */
+    }
+  }, [pitch, bearing, mapboxActive]);
 
   useEffect(() => {
     if (!mapboxActive || !mapboxFeature) {
@@ -1440,6 +1495,37 @@ const closeMapbox = useCallback(() => {
                       Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
                     </p>
                   )}
+                  <div className="mt-5 border-t border-slate-800 pt-4">
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Vista Mapbox
+                    </div>
+                    <div className="mt-3 space-y-3 text-[0.7rem] text-slate-300">
+                      <div className="flex items-center justify-between">
+                        <span>Pitch</span>
+                        <span className="font-mono">{pitch}°</span>
+                      </div>
+                      <input
+                        className="h-2 w-full appearance-none rounded-full bg-slate-700"
+                        type="range"
+                        min="0"
+                        max="80"
+                        value={pitch}
+                        onChange={(event) => setPitch(Number(event.target.value))}
+                      />
+                      <div className="flex items-center justify-between">
+                        <span>Rotación</span>
+                        <span className="font-mono">{bearing}°</span>
+                      </div>
+                      <input
+                        className="h-2 w-full appearance-none rounded-full bg-slate-700"
+                        type="range"
+                        min="-180"
+                        max="180"
+                        value={bearing}
+                        onChange={(event) => setBearing(Number(event.target.value))}
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
                   La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
