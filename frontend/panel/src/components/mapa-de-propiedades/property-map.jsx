@@ -210,6 +210,17 @@ export function PropertyMap() {
       };
       source.setData(payload);
       const bounds = getGeometryBounds(feature.geometry);
+      const applyFit = () => {
+        if (bounds && map.isStyleLoaded()) {
+          map.fitBounds(
+            [
+              [bounds.minLng, bounds.minLat],
+              [bounds.maxLng, bounds.maxLat],
+            ],
+            { padding: 40, maxZoom: 19 },
+          );
+        }
+      };
       if (bounds && map.isStyleLoaded()) {
         map.fitBounds(
           [
@@ -218,6 +229,9 @@ export function PropertyMap() {
           ],
           { padding: 30, maxZoom: 19 },
         );
+      } else {
+        map.once("styledata", applyFit);
+        map.once("idle", applyFit);
       }
       logMapboxEvent(
         {
@@ -523,25 +537,33 @@ const closeMapbox = useCallback(() => {
       if (nivel === "municipio" && estadoKey) {
         url.searchParams.set("estado", estadoKey);
       }
-    const response = await fetch(url.toString(), {
-      cache: "no-store",
-      credentials: "include",
-      headers: { "Accept": "application/json" },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      console.error("demografia mapa error", response.status, body);
-      throw new Error(body?.error ?? "No se pudo cargar el mapa demográfico");
-    }
+
+      const response = await fetch(url.toString(), {
+        cache: "no-store",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        console.warn("demografia mapa error", response.status, body ?? {});
+        setDemografiaDataset([]);
+        setDemografiaGeojson(null);
+        return;
+      }
       const payload = await response.json();
       if (!payload?.ok) {
-        throw new Error(payload?.error || "Demografía respondió error");
+        console.warn("demografia mapa payload error", payload);
+        setDemografiaDataset([]);
+        setDemografiaGeojson(null);
+        return;
       }
       setDemografiaDataset(payload.dataset ?? []);
       setDemografiaGeojson(payload.geojson ?? null);
       setDemografiaLevel(nivel);
     } catch (err) {
-      console.error("Error cargando el mapa demográfico:", err);
+      console.warn("Error cargando el mapa demográfico:", err);
+      setDemografiaDataset([]);
+      setDemografiaGeojson(null);
     }
   }, []);
 
@@ -869,6 +891,23 @@ const closeMapbox = useCallback(() => {
     }
     mapboxInstanceRef.current?.resize();
   }, [mapboxActive]);
+
+  useEffect(() => {
+    if (!mapboxActive || !mapboxFeature) {
+      return;
+    }
+    const map = mapboxInstanceRef.current;
+    const bounds = getGeometryBounds(mapboxFeature.geometry);
+    if (map && bounds) {
+      map.fitBounds(
+        [
+          [bounds.minLng, bounds.minLat],
+          [bounds.maxLng, bounds.maxLat],
+        ],
+        { padding: 40, maxZoom: 19 },
+      );
+    }
+  }, [mapboxActive, mapboxFeature]);
 
 
   useEffect(() => {
@@ -1304,8 +1343,8 @@ const closeMapbox = useCallback(() => {
           </div>
         </div>
       </aside>
-      <section className="relative flex-1">
-        <div className="relative h-[600px] w-full">
+      <section className="relative flex-1 min-w-0">
+        <div className="relative h-[600px] w-full min-h-[600px]">
           <div
             ref={mapContainerRef}
             className={`absolute inset-0 z-10 rounded-md border border-slate-200 bg-white/10 shadow-sm shadow-slate-900/10 transition-opacity duration-200 ${
@@ -1314,7 +1353,7 @@ const closeMapbox = useCallback(() => {
           />
           <div
             ref={mapboxContainerRef}
-            className={`absolute inset-0 z-20 rounded-md transition-opacity duration-200 ${
+            className={`absolute inset-0 z-20 w-full h-full rounded-md transition-opacity duration-200 ${
               mapboxActive
                 ? "pointer-events-auto opacity-100"
                 : "pointer-events-none opacity-0"
@@ -1323,86 +1362,88 @@ const closeMapbox = useCallback(() => {
           <div
             className={`absolute inset-0 z-30 transition-opacity duration-200 ${
               mapboxActive
-                ? "pointer-events-auto opacity-100"
+                ? "pointer-events-none opacity-100"
                 : "pointer-events-none opacity-0"
             }`}
           >
             <div className="absolute inset-y-4 right-4 z-50 w-full max-w-sm rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-                <div>
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
-                    Mapbox 3D
-                  </p>
-                  {!mapboxToken && (
-                    <p className="text-[0.65rem] text-rose-400">
-                      Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar esta vista.
+              <div className="pointer-events-auto">
+                <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                  <div>
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
+                      Mapbox 3D
+                    </p>
+                    {!mapboxToken && (
+                      <p className="text-[0.65rem] text-rose-400">
+                        Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar esta vista.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900 hover:text-white"
+                    onClick={closeMapbox}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
+                  {mapboxFeature ? (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-lg font-semibold text-white">
+                          {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
+                        </div>
+                        <span
+                          className="h-4 w-4 rounded-full border border-slate-500"
+                          style={{
+                            backgroundColor:
+                              mapboxProps?.color ??
+                              mapboxProps?.status_color ??
+                              "#95A5A6",
+                          }}
+                        />
+                      </div>
+                      {mapboxCatalogLabel && (
+                        <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
+                      )}
+                      {mapboxLocationLabel && (
+                        <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
+                      )}
+                      <div className="mt-4 space-y-2 text-slate-200">
+                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                          <span>Status:</span>
+                          <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                          <span>Precio:</span>
+                          <span className="font-semibold">{mapboxPriceLabel}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                          <span>Área:</span>
+                          <span className="font-semibold">{mapboxAreaLabel}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                          <span>Niveles:</span>
+                          <span className="font-semibold">{mapboxLevelsLabel}</span>
+                        </div>
+                        {mapboxProps?.descripcion && (
+                          <div>
+                            <p className="text-xs text-slate-300">Descripción:</p>
+                            <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[0.85rem] text-slate-400">
+                      Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
                     </p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900 hover:text-white"
-                  onClick={closeMapbox}
-                >
-                  Cerrar
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
-                {mapboxFeature ? (
-                  <>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-lg font-semibold text-white">
-                        {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
-                      </div>
-                      <span
-                        className="h-4 w-4 rounded-full border border-slate-500"
-                        style={{
-                          backgroundColor:
-                            mapboxProps?.color ??
-                            mapboxProps?.status_color ??
-                            "#95A5A6",
-                        }}
-                      />
-                    </div>
-                    {mapboxCatalogLabel && (
-                      <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
-                    )}
-                    {mapboxLocationLabel && (
-                      <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
-                    )}
-                    <div className="mt-4 space-y-2 text-slate-200">
-                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                        <span>Status:</span>
-                        <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                        <span>Precio:</span>
-                        <span className="font-semibold">{mapboxPriceLabel}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                        <span>Área:</span>
-                        <span className="font-semibold">{mapboxAreaLabel}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                        <span>Niveles:</span>
-                        <span className="font-semibold">{mapboxLevelsLabel}</span>
-                      </div>
-                      {mapboxProps?.descripcion && (
-                        <div>
-                          <p className="text-xs text-slate-300">Descripción:</p>
-                          <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-[0.85rem] text-slate-400">
-                    Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
-                  </p>
-                )}
-              </div>
-              <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
-                La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
+                <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
+                  La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
+                </div>
               </div>
             </div>
           </div>
