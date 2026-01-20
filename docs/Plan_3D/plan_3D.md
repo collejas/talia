@@ -42,6 +42,11 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 - Validar los polígonos creados para evitar vertices innecesarios, mantener índices GiST actualizados y usar `ST_Simplify` cuando haya geometrías complejas.
 - El módulo inmobiliario debe filtrar solo los estados/municipios con desarrollos; los demás se muestran en gris para evitar colorear países o estados sin datos, y se deben recalcular los totales al actualizar un estado.
 
+## Validación del flujo jerárquico
+
+- Documentar para el cliente que el mapa nacional → estatal → municipal sólo pinta regiones que contienen desarrollos (los códigos `pais_codigo`, `estado_cve` y `municipio_cve` en `crm_propiedades_geojson`) y que al hacer clic en un municipio válido el mapa se centra, colorea y expone los desarrollos que pertenecen a ese municipio.
+- Registrar los pasos manuales que deben seguirse (abrir `/crm/propiedades`, seleccionar país → estado → municipio) para comprobar que cada nivel se centra antes de mostrar el siguiente y que el botón “ver en Mapbox” se activa al seleccionar una unidad.
+
 ## Registro de avances
 
 - Reescribimos la jerarquía espacial para que `propiedad_desarrollos`, `propiedad_capas` y `propiedad_unidades` representen los niveles maestros del plan 3D y eliminamos la tabla `propiedades` para evitar duplicidad; todo el inventario final vive ahora en `propiedad_unidades`.
