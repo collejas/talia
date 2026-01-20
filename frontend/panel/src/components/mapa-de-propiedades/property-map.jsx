@@ -1241,10 +1241,10 @@ const closeMapbox = useCallback(() => {
   );
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
+    <div className="lg:flex-row flex flex-col gap-4">
       <aside
-        className="w-full rounded-md border border-slate-200 bg-white/60 p-3 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:w-80"
-        style={{ maxHeight: "calc(100vh - 120px)", overflow: "hidden" }}
+        className="h-[600px] w-full rounded-md border border-slate-200 bg-white/60 p-3 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:h-[600px] lg:w-80"
+        style={{ maxHeight: "600px", overflow: "hidden" }}
       >
         <div className="flex flex-col gap-2">
           <div>
