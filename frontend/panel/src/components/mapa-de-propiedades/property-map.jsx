@@ -109,6 +109,44 @@ function ensureStatusColors(feature) {
   return feature;
 }
 
+function buildHierarchy(features) {
+  const devMap = new Map();
+  for (const feature of features) {
+    const props = feature?.properties ?? {};
+    const devId = props.desarrollo_id ?? props.desarrollo_nombre ?? props.nombre ?? "sin-desarrollo";
+    const devName = props.desarrollo_nombre ?? props.desarrollo_tipo ?? "Desarrollo";
+    if (!devMap.has(devId)) {
+      devMap.set(devId, { id: devId, name: devName, capas: new Map() });
+    }
+    const dev = devMap.get(devId);
+    if (!dev) continue;
+    const capaNombre = props.capa_nombre ?? `Capa ${props.nivel ?? "0"}`;
+    const capaKey = `${capaNombre}:${props.nivel ?? ""}`;
+    if (!dev.capas.has(capaKey)) {
+      dev.capas.set(capaKey, {
+        id: capaKey,
+        name: capaNombre,
+        units: [],
+      });
+    }
+    const capa = dev.capas.get(capaKey);
+    if (!capa) continue;
+    const status = (props.status ?? "").toLowerCase();
+    const statusColor = props.status_color ?? STATUS_COLORS[status] ?? STATUS_COLORS.disponible;
+    capa.units.push({
+      id: feature.id,
+      name: props.nombre ?? props.unidad ?? "Unidad",
+      feature,
+      color: statusColor,
+    });
+  }
+  return Array.from(devMap.values()).map((dev) => ({
+    id: dev.id,
+    name: dev.name,
+    capas: Array.from(dev.capas.values()),
+  }));
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -323,6 +361,8 @@ export function PropertyMap() {
       return true;
     });
   }, [features, nivelFilter, tipoFilter]);
+
+  const hierarchyTree = useMemo(() => buildHierarchy(filteredFeatures), [filteredFeatures]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -1183,6 +1223,19 @@ const closeMapbox = useCallback(() => {
     [leaflet],
   );
 
+  const handleUnitSelect = useCallback(
+    (unit) => {
+      if (!unit?.feature) {
+        return;
+      }
+      const id = String(unit.feature.id ?? "");
+      setSelectedId(id);
+      zoomToFeature(unit.feature);
+      openMapboxFeature(unit.feature);
+    },
+    [openMapboxFeature, zoomToFeature],
+  );
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       <aside className="w-full rounded-md border border-slate-200 bg-white/60 p-4 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:w-80">
@@ -1289,130 +1342,49 @@ const closeMapbox = useCallback(() => {
               ? error
               : `${filteredFeatures.length} propiedades mostrando`}
           </div>
-          <div className="space-y-2">
-            {filteredFeatures.map((feature) => {
-              const props = feature.properties ?? {};
-              const active = String(feature.id ?? "") === selectedId;
-              const displayColor =
-                props.color ??
-                props.wallColor ??
-                props.status_color ??
-                props.tipo_color ??
-                STATUS_COLORS[props.status ?? ""] ??
-                "#888";
-              const catalogLabel = [
-                props.linea_nombre ? `Línea ${props.linea_nombre}` : null,
-                props.familia_nombre ? `Familia ${props.familia_nombre}` : null,
-                props.modelo_nombre ? `Modelo ${props.modelo_nombre}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-              const locationParts = [
-                props.pais_codigo ? `País ${props.pais_codigo}` : null,
-                props.estado_cve ? `Estado ${props.estado_cve}` : null,
-                props.municipio_cve ? `Municipio ${props.municipio_cve}` : null,
-                props.colonia ? props.colonia : null,
-              ].filter(Boolean);
-              const locationLabel = locationParts.join(" · ");
-              const postalLabel = props.codigo_postal ? `CP ${props.codigo_postal}` : null;
-              const desarrolloLabel =
-                typeof props.desarrollo_nombre === "string"
-                  ? `${props.desarrollo_nombre}${
-                      typeof props.desarrollo_tipo === "string" ? ` · ${props.desarrollo_tipo}` : ""
-                    }`
-                  : null;
-              const statusRaw = typeof props.status === "string" ? props.status : "";
-              const statusText = statusRaw ? statusRaw.toUpperCase() : "Sin status";
-              const desarrolloStatusLabel =
-                typeof props.desarrollo_status === "string"
-                  ? props.desarrollo_status.toUpperCase()
-                  : null;
-              const handleKeyDown = (event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setSelectedId(String(feature.id ?? ""));
-                  zoomToFeature(feature);
-                }
-              };
-              return (
-                <div
-                  key={feature.id ?? JSON.stringify(props)}
-                  role="button"
-                  tabIndex={0}
-                  className={`flex w-full items-start justify-between rounded-md px-3 py-2 text-left text-sm ${
-                    active
-                      ? "border border-slate-900 bg-slate-900 text-white"
-                      : "border border-slate-200 bg-white text-slate-700 hover:border-slate-400"
-                  }`}
-                  onClick={() => {
-                    setSelectedId(String(feature.id ?? ""));
-                    zoomToFeature(feature);
-                  }}
-                  onKeyDown={handleKeyDown}
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-2">
-                      <div className="font-semibold">{props.nombre || "Propiedad"}</div>
-                      <span
-                        className="text-[0.65rem] font-semibold uppercase tracking-wide"
-                        style={{
-                          color:
-                            props.status_color ??
-                            STATUS_COLORS[props.status ?? ""] ??
-                            "#4b5563",
-                        }}
-                      >
-                        {statusText}
-                      </span>
+          <div className="flex h-full flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition">
+            <div
+              className="flex-1 overflow-y-auto px-3 py-2"
+              style={{ maxHeight: "calc(100vh - 400px)" }}
+            >
+              <ul className="space-y-3">
+                {hierarchyTree.map((dev) => (
+                  <li key={dev.id} className="rounded border border-slate-100 bg-slate-50/80">
+                    <div className="px-3 py-2 text-sm font-semibold text-slate-700">
+                      {dev.name}
                     </div>
-                    {desarrolloLabel && (
-                      <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
-                        Desarrollo: {desarrolloLabel}
-                      </div>
-                    )}
-                    {desarrolloStatusLabel && (
-                      <div className="text-[0.65rem] text-slate-400">
-                        Estado de desarrollo: {desarrolloStatusLabel}
-                      </div>
-                    )}
-                    {catalogLabel && (
-                      <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
-                        {catalogLabel}
-                      </div>
-                    )}
-                    {locationLabel && (
-                      <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
-                        {locationLabel}
-                        {postalLabel ? ` · ${postalLabel}` : ""}
-                      </div>
-                    )}
-                    <div className="mt-1">
-                      <button
-                        type="button"
-                        onClick={() => openMapboxFeature(feature)}
-                        disabled={!mapboxToken}
-                        className={`rounded border px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] transition ${
-                          mapboxToken
-                            ? "border-slate-300 text-slate-700 hover:border-slate-600 hover:bg-slate-900 hover:text-white"
-                            : "border-rose-400 text-rose-400 hover:border-rose-400 hover:text-rose-300"
-                        }`}
-                      >
-                        Ver en Mapbox
-                      </button>
-                      {!mapboxToken && (
-                        <p className="mt-1 text-[0.55rem] text-rose-400">
-                          Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar Mapbox.
-                        </p>
-                      )}
+                    <div className="space-y-2 px-3 pb-3">
+                      {dev.capas.map((capa) => (
+                        <div key={capa.id} className="space-y-1 border-l border-slate-200 pl-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                            {capa.name}
+                          </div>
+                          <div className="flex flex-wrap gap-2 pl-1">
+                            {capa.units.map((unit) => (
+                              <button
+                                key={unit.id}
+                                type="button"
+                                onClick={() => handleUnitSelect(unit)}
+                                title={`${unit.name}`}
+                                className={`relative flex h-8 w-8 flex-none items-center justify-center rounded-full border-2 transition ${
+                                  selectedId === String(unit.id) ? "border-slate-900" : "border-slate-300"
+                                }`}
+                              >
+                                <span
+                                  className="absolute h-4 w-4 rounded-full"
+                                  style={{ backgroundColor: unit.color }}
+                                />
+                                <span className="sr-only">{unit.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <span
-                    className="h-4 w-4 rounded-full border border-slate-300"
-                    style={{ backgroundColor: displayColor }}
-                  />
-                </div>
-              );
-            })}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </aside>
