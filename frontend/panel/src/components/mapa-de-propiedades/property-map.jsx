@@ -109,28 +109,63 @@ function ensureStatusColors(feature) {
   return feature;
 }
 
+function normalizeTipoLabel(value) {
+  if (typeof value !== "string") {
+    return "General";
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "vertical") return "Vertical";
+  if (normalized === "horizontal") return "Horizontal";
+  if (normalized === "mixto") return "Mixto";
+  if (normalized === "capa") return "Capa";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function buildHierarchy(features) {
   const devMap = new Map();
   for (const feature of features) {
     const props = feature?.properties ?? {};
-    const devId = props.desarrollo_id ?? props.desarrollo_nombre ?? props.nombre ?? "sin-desarrollo";
-    const devName = props.desarrollo_nombre ?? props.desarrollo_tipo ?? "Desarrollo";
+    const devId =
+      props.desarrollo_id ?? props.grupo ?? props.desarrollo_nombre ?? props.nombre ?? "sin-desarrollo";
+    const devName = props.desarrollo_nombre ?? props.nombre ?? "Desarrollo";
+    const tipoLabel =
+      normalizeTipoLabel(props.desarrollo_tipo ?? props.tipo_nombre ?? props.desarrollo_ambito ?? "");
+    const tipoKey = `${devId}::${tipoLabel}`;
+
     if (!devMap.has(devId)) {
-      devMap.set(devId, { id: devId, name: devName, capas: new Map() });
+      devMap.set(devId, {
+        id: devId,
+        name: devName,
+        tipoLabels: new Set(),
+        tipos: new Map(),
+      });
     }
     const dev = devMap.get(devId);
     if (!dev) continue;
+    dev.tipoLabels.add(tipoLabel);
+
+    if (!dev.tipos.has(tipoKey)) {
+      dev.tipos.set(tipoKey, {
+        id: tipoKey,
+        label: tipoLabel,
+        capas: new Map(),
+      });
+    }
+    const tipo = dev.tipos.get(tipoKey);
+    if (!tipo) continue;
+
     const capaNombre = props.capa_nombre ?? `Capa ${props.nivel ?? "0"}`;
-    const capaKey = `${capaNombre}:${props.nivel ?? ""}`;
-    if (!dev.capas.has(capaKey)) {
-      dev.capas.set(capaKey, {
+    const capaKey = `${tipoKey}::${capaNombre}`;
+    if (!tipo.capas.has(capaKey)) {
+      tipo.capas.set(capaKey, {
         id: capaKey,
         name: capaNombre,
         units: [],
       });
     }
-    const capa = dev.capas.get(capaKey);
+    const capa = tipo.capas.get(capaKey);
     if (!capa) continue;
+
     const status = (props.status ?? "").toLowerCase();
     const statusColor = props.status_color ?? STATUS_COLORS[status] ?? STATUS_COLORS.disponible;
     capa.units.push({
@@ -141,14 +176,21 @@ function buildHierarchy(features) {
     });
   }
   return Array.from(devMap.values())
-    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
     .map((dev) => ({
       id: dev.id,
       name: dev.name,
-      capas: Array.from(dev.capas.values()).sort((a, b) =>
-        (a.name ?? "").localeCompare(b.name ?? ""),
-      ),
-    }));
+      tipoSummary: Array.from(dev.tipoLabels).filter(Boolean),
+      tipos: Array.from(dev.tipos.values())
+        .map((tipo) => ({
+          id: tipo.id,
+          label: tipo.label,
+          capas: Array.from(tipo.capas.values()).sort((a, b) =>
+            (a.name ?? "").localeCompare(b.name ?? ""),
+          ),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    }))
+    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 }
 
 export function PropertyMap() {
@@ -186,6 +228,7 @@ export function PropertyMap() {
   const [mapboxFeature, setMapboxFeature] = useState(null);
   const [expandedDevIds, setExpandedDevIds] = useState(() => new Set());
   const [expandedCapas, setExpandedCapas] = useState(new Set());
+  const [expandedTipos, setExpandedTipos] = useState(() => new Set());
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   const logMapboxEvent = useCallback((payload, label = "event") => {
@@ -1382,55 +1425,93 @@ const closeMapbox = useCallback(() => {
                         <span>{dev.name}</span>
                         <span className="text-xs text-slate-400">{devExpanded ? "-" : "+"}</span>
                       </button>
+                      {dev.tipoSummary && dev.tipoSummary.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1 text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">
+                          {dev.tipoSummary.map((item) => (
+                            <span key={item}>{item}</span>
+                          ))}
+                        </div>
+                      )}
                       {devExpanded && (
                         <div className="mt-1 space-y-3 pl-4 text-xs text-slate-600">
-                          {dev.capas.map((capa) => {
-                            const capaExpanded = expandedCapas.has(capa.id);
+                          {dev.tipos.map((tipo) => {
+                            const tipoExpanded = expandedTipos.has(tipo.id);
                             return (
-                              <div key={capa.id} className="border-t border-slate-100 pt-2">
+                              <div key={tipo.id}>
                                 <button
                                   type="button"
-                                  className="flex w-full items-center justify-between text-left font-semibold uppercase tracking-[0.2em]"
+                                  className="flex w-full items-center justify-between text-left font-semibold uppercase tracking-[0.2em] text-slate-500"
                                   onClick={() =>
-                                    setExpandedCapas((prev) => {
+                                    setExpandedTipos((prev) => {
                                       const next = new Set(prev);
-                                      if (next.has(capa.id)) {
-                                        next.delete(capa.id);
+                                      if (next.has(tipo.id)) {
+                                        next.delete(tipo.id);
                                       } else {
-                                        next.add(capa.id);
+                                        next.add(tipo.id);
                                       }
                                       return next;
                                     })
                                   }
                                 >
-                                  <span>{capa.name}</span>
-                                  <span className="text-[0.6rem] text-slate-400">
-                                    {capaExpanded ? "-" : "+"}
+                                  <span>{tipo.label}</span>
+                                  <span className="text-[0.6rem] text-slate-300">
+                                    {tipoExpanded ? "-" : "+"}
                                   </span>
                                 </button>
-                                {capaExpanded && (
+                                {tipoExpanded && (
                                   <div className="mt-1 space-y-1 pl-3 text-[0.8rem]">
-                                    {capa.units.map((unit) => (
-                                      <button
-                                        key={unit.id}
-                                        type="button"
-                                        onClick={() => handleUnitSelect(unit)}
-                                        className={`flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-slate-700 transition ${
-                                          selectedId === String(unit.id)
-                                            ? "border-slate-900 bg-slate-900 text-white"
-                                            : "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-100"
-                                        }`}
-                                      >
-                                        <span
-                                          className="h-2.5 w-2.5 rounded-full border"
-                                          style={{
-                                            backgroundColor: unit.color,
-                                            borderColor: unit.color,
-                                          }}
-                                        />
-                                        <span className="font-semibold">{unit.name}</span>
-                                      </button>
-                                    ))}
+                                    {tipo.capas.map((capa) => {
+                                      const capaExpanded = expandedCapas.has(capa.id);
+                                      return (
+                                        <div key={capa.id} className="border-t border-slate-100 pt-2">
+                                          <button
+                                            type="button"
+                                            className="flex w-full items-center justify-between text-left font-semibold"
+                                            onClick={() =>
+                                              setExpandedCapas((prev) => {
+                                                const next = new Set(prev);
+                                                if (next.has(capa.id)) {
+                                                  next.delete(capa.id);
+                                                } else {
+                                                  next.add(capa.id);
+                                                }
+                                                return next;
+                                              })
+                                            }
+                                          >
+                                            <span>{capa.name}</span>
+                                            <span className="text-[0.6rem] text-slate-400">
+                                              {capaExpanded ? "-" : "+"}
+                                            </span>
+                                          </button>
+                                          {capaExpanded && (
+                                            <div className="mt-1 space-y-1 pl-3 text-[0.8rem]">
+                                              {capa.units.map((unit) => (
+                                                <button
+                                                  key={unit.id}
+                                                  type="button"
+                                                  onClick={() => handleUnitSelect(unit)}
+                                                  className={`flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-slate-700 transition ${
+                                                    selectedId === String(unit.id)
+                                                      ? "border-slate-900 bg-slate-900 text-white"
+                                                      : "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-100"
+                                                  }`}
+                                                >
+                                                  <span
+                                                    className="h-2.5 w-2.5 rounded-full border"
+                                                    style={{
+                                                      backgroundColor: unit.color,
+                                                      borderColor: unit.color,
+                                                    }}
+                                                  />
+                                                  <span className="font-semibold">{unit.name}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>
