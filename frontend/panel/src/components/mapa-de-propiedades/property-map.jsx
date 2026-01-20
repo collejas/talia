@@ -119,7 +119,11 @@ export function PropertyMap() {
     if (!props) {
       return "#95A5A6";
     }
-    return props.wallColor ?? STATUS_COLORS[props.status ?? ""] ?? "#95A5A6";
+    const statusColor =
+      (typeof props.status_color === "string" && props.status_color) ||
+      STATUS_COLORS[props.status ?? ""] ||
+      "#95A5A6";
+    return props.color ?? props.wallColor ?? statusColor;
   }, []);
 
   const applyLayerStyle = useCallback(
@@ -161,6 +165,37 @@ export function PropertyMap() {
     : mapLevel === "pais"
     ? "México"
     : "Selecciona un polígono";
+
+  const activeFeatureProps = activeMarkerFeature?.properties ?? null;
+  const activeDevelopmentSummary = (() => {
+    if (!activeFeatureProps) {
+      return null;
+    }
+    if (typeof activeFeatureProps.desarrollo_nombre === "string") {
+      return `${activeFeatureProps.desarrollo_nombre}${
+        typeof activeFeatureProps.desarrollo_tipo === "string"
+          ? ` · ${activeFeatureProps.desarrollo_tipo}`
+          : ""
+      }`;
+    }
+    return typeof activeFeatureProps.nombre === "string" ? activeFeatureProps.nombre : null;
+  })();
+  const activeLocationSummary = activeFeatureProps
+    ? [
+        typeof activeFeatureProps.pais_codigo === "string"
+          ? `País ${activeFeatureProps.pais_codigo}`
+          : null,
+        typeof activeFeatureProps.estado_cve === "string"
+          ? `Estado ${activeFeatureProps.estado_cve}`
+          : null,
+        typeof activeFeatureProps.municipio_cve === "string"
+          ? `Municipio ${activeFeatureProps.municipio_cve}`
+          : null,
+        typeof activeFeatureProps.colonia === "string" ? activeFeatureProps.colonia : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
 
   const applyRegionStyle = useCallback(
     (layerInstance, feature) => {
@@ -414,10 +449,16 @@ export function PropertyMap() {
     if (mapLevel !== "municipio") {
       return;
     }
+    let aggregatedBounds = null;
     for (const feature of filteredFeatures) {
       const bounds = leaflet.geoJSON(feature).getBounds();
       if (!bounds.isValid()) {
         continue;
+      }
+      if (aggregatedBounds) {
+        aggregatedBounds.extend(bounds);
+      } else {
+        aggregatedBounds = bounds;
       }
       const center = bounds.getCenter();
       const color = getFeatureColor(feature);
@@ -428,14 +469,30 @@ export function PropertyMap() {
         fillOpacity: 0.9,
         weight: 2,
       });
-      marker.bindTooltip(
-        `${feature.properties?.nombre ?? "Propiedad"} - ${feature.properties?.status ?? ""}`,
-      );
+      const props = feature.properties ?? {};
+      const tooltipParts = [
+        props.nombre ?? "Propiedad",
+        props.desarrollo_nombre ? `Desarrollo ${props.desarrollo_nombre}` : null,
+        props.estado_cve ? `Estado ${props.estado_cve}` : null,
+        props.municipio_cve ? `Municipio ${props.municipio_cve}` : null,
+        props.linea_nombre ? `Línea ${props.linea_nombre}` : null,
+        props.status ? props.status.toUpperCase() : null,
+      ].filter(Boolean);
+      marker.bindTooltip(tooltipParts.join(" · "));
+      if (typeof marker.setZIndexOffset === "function") {
+        marker.setZIndexOffset(1000);
+      }
+      if (typeof marker.bringToFront === "function") {
+        marker.bringToFront();
+      }
       marker.on("click", () => {
         setSelectedId(String(feature.id ?? ""));
         setActiveMarkerFeature(feature);
       });
       markersLayerRef.current.addLayer(marker);
+    }
+    if (mapInstanceRef.current && mapLevel === "municipio" && aggregatedBounds?.isValid()) {
+      mapInstanceRef.current.fitBounds(aggregatedBounds, { padding: [30, 30], maxZoom: 19 });
     }
   }, [filteredFeatures, leaflet, mapLevel, getFeatureColor]);
 
@@ -569,16 +626,22 @@ export function PropertyMap() {
       return;
     }
     const processed = filteredFeatures.map((feature) => {
-      const baseColor = feature?.properties?.tipo_color || STATUS_COLORS[feature?.properties?.status] || "#95A5A6";
+      const props = feature?.properties ?? {};
+      const normalizedColor =
+        (typeof props.color === "string" && props.color) ||
+        (typeof props.status_color === "string" && props.status_color) ||
+        (typeof props.tipo_color === "string" && props.tipo_color) ||
+        STATUS_COLORS[props.status ?? ""] ||
+        "#95A5A6";
       return {
         ...feature,
         properties: {
-          ...feature.properties,
-          wallColor: baseColor,
-          roofColor: baseColor,
-          height: Number(feature.properties?.height ?? 0),
-          min_height: Number(feature.properties?.min_height ?? 0),
-          levels: Number(feature.properties?.levels ?? 0),
+          ...props,
+          wallColor: normalizedColor,
+          roofColor: normalizedColor,
+          height: Number(props.height ?? 0),
+          min_height: Number(props.min_height ?? 0),
+          levels: Number(props.levels ?? 0),
         },
       };
     });
@@ -601,13 +664,13 @@ export function PropertyMap() {
       }
     });
 
-    if (processed.length && mapInstanceRef.current && leaflet) {
+    if (processed.length && mapInstanceRef.current && leaflet && mapLevel === "pais") {
       const bounds = leaflet.geoJSON(payload).getBounds();
       if (bounds.isValid()) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
       }
     }
-  }, [filteredFeatures, viewMode, selectedId, leaflet, applyLayerStyle, osmbReady]);
+  }, [filteredFeatures, viewMode, selectedId, leaflet, applyLayerStyle, osmbReady, mapLevel]);
 
   const zoomToFeature = useCallback(
     (feature) => {
@@ -682,7 +745,14 @@ export function PropertyMap() {
             <div>{levelSummaryLabel}</div>
             {activeMarkerFeature && (
               <div className="text-[0.65rem] text-slate-600">
-                Desarrollo seleccionado: {activeMarkerFeature.properties?.nombre}
+                {activeDevelopmentSummary
+                  ? `Desarrollo seleccionado: ${activeDevelopmentSummary}`
+                  : "Unidad seleccionada"}
+                {activeLocationSummary && (
+                  <div className="mt-0.5 text-[0.65rem] text-slate-500 dark:text-slate-400">
+                    {activeLocationSummary}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -723,12 +793,15 @@ export function PropertyMap() {
           </div>
           <div className="space-y-2">
             {filteredFeatures.map((feature) => {
-              const props = feature.properties;
-              if (!props) {
-                return null;
-              }
+              const props = feature.properties ?? {};
               const active = String(feature.id ?? "") === selectedId;
-              const baseColor = props.tipo_color || STATUS_COLORS[props.status || ""] || "#888";
+              const displayColor =
+                props.color ??
+                props.wallColor ??
+                props.status_color ??
+                props.tipo_color ??
+                STATUS_COLORS[props.status ?? ""] ??
+                "#888";
               const catalogLabel = [
                 props.linea_nombre ? `Línea ${props.linea_nombre}` : null,
                 props.familia_nombre ? `Familia ${props.familia_nombre}` : null,
@@ -736,13 +809,26 @@ export function PropertyMap() {
               ]
                 .filter(Boolean)
                 .join(" · ");
-              const locationLabel = [
+              const locationParts = [
+                props.pais_codigo ? `País ${props.pais_codigo}` : null,
                 props.estado_cve ? `Estado ${props.estado_cve}` : null,
                 props.municipio_cve ? `Municipio ${props.municipio_cve}` : null,
                 props.colonia ? props.colonia : null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
+              ].filter(Boolean);
+              const locationLabel = locationParts.join(" · ");
+              const postalLabel = props.codigo_postal ? `CP ${props.codigo_postal}` : null;
+              const desarrolloLabel =
+                typeof props.desarrollo_nombre === "string"
+                  ? `${props.desarrollo_nombre}${
+                      typeof props.desarrollo_tipo === "string" ? ` · ${props.desarrollo_tipo}` : ""
+                    }`
+                  : null;
+              const statusRaw = typeof props.status === "string" ? props.status : "";
+              const statusText = statusRaw ? statusRaw.toUpperCase() : "Sin status";
+              const desarrolloStatusLabel =
+                typeof props.desarrollo_status === "string"
+                  ? props.desarrollo_status.toUpperCase()
+                  : null;
               return (
                 <button
                   key={feature.id ?? JSON.stringify(props)}
@@ -758,10 +844,30 @@ export function PropertyMap() {
                   }}
                 >
                   <div className="flex flex-col gap-0.5">
-                    <div className="font-semibold">{props.nombre || "Propiedad"}</div>
-                    <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
-                      {props.status?.toUpperCase() || "Estado desconocido"}
+                    <div className="flex items-center gap-2">
+                      <div className="font-semibold">{props.nombre || "Propiedad"}</div>
+                      <span
+                        className="text-[0.65rem] font-semibold uppercase tracking-wide"
+                        style={{
+                          color:
+                            props.status_color ??
+                            STATUS_COLORS[props.status ?? ""] ??
+                            "#4b5563",
+                        }}
+                      >
+                        {statusText}
+                      </span>
                     </div>
+                    {desarrolloLabel && (
+                      <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
+                        Desarrollo: {desarrolloLabel}
+                      </div>
+                    )}
+                    {desarrolloStatusLabel && (
+                      <div className="text-[0.65rem] text-slate-400">
+                        Estado de desarrollo: {desarrolloStatusLabel}
+                      </div>
+                    )}
                     {catalogLabel && (
                       <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
                         {catalogLabel}
@@ -770,13 +876,13 @@ export function PropertyMap() {
                     {locationLabel && (
                       <div className="text-[0.65rem] text-slate-500 dark:text-slate-400">
                         {locationLabel}
-                        {props.codigo_postal ? ` · CP ${props.codigo_postal}` : ""}
+                        {postalLabel ? ` · ${postalLabel}` : ""}
                       </div>
                     )}
                   </div>
                   <span
                     className="h-4 w-4 rounded-full border border-slate-300"
-                    style={{ backgroundColor: baseColor }}
+                    style={{ backgroundColor: displayColor }}
                   />
                 </button>
               );
