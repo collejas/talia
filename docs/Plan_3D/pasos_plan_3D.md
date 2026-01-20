@@ -17,7 +17,7 @@
    - [ ] Extender `propiedades` con `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`.
    - [ ] Crear selects que reutilicen los JSONB/servicios existentes (`backend/app/data/geo`, `leads_geo`) para popular estados/municipios.
    - [ ] Verificar que `propiedades` pueda referenciar `linea_id`, `familia_id`, `modelo_id` sin acoplarse a `settings/productos`.
-   - [ ] Confirmar que el RPC `crm_propiedades_geojson` (ver `supabase/migrations/20280205_100000_propiedades_geojson_extended.sql`) expone los nuevos atributos geográficos y los nombres de `linea`, `familia` y `modelo` para que Leaflet/Mapbox puedan colorear y filtrar por plantilla.
+   - [x] Confirmar que el RPC `crm_propiedades_geojson` (ver `supabase/migrations/20280205_100000_propiedades_geojson_extended.sql` y `supabase/migrations/20280214_130000_propiedades_geojson_3d_metadata.sql`) expone los nuevos atributos geográficos y los nombres de `linea`, `familia` y `modelo` para que Leaflet/Mapbox puedan colorear y filtrar por plantilla.
    - [ ] Ajustar `frontend/panel/src/components/settings/propiedades/propiedad-form.tsx` y el payload de `/crm/propiedades` para que el formulario capture/normalice `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia` y que conserve el vínculo con los catálogos (`linea_id`, `familia_id`, `modelo_id`) sin mezclar lógica del módulo `settings/productos`.
 
 5. [ ] **Implementar flujo Leaflet jerárquico + Mapbox**
@@ -54,3 +54,4 @@
 - Marcamos como completados los pasos 1 a 3 del plan porque ya existen `propiedad_tipos`, las tablas espaciales jerárquicas (`propiedad_desarrollos`, `propiedad_capas`, `propiedad_unidades`), y el RPC/API `/api/crm/propiedades/geojson` que alimenta el mapa.
 - Rediseñamos el flujo de `settings/propiedades` para manejar la creación jerárquica (desarrollo → capa → unidad) primero en atributos y luego en geometrías, reflejándolo en la vista tipo árbol y en el backend (nuevos endpoints/migraciones).
 - Actualizamos los catálogos, migraciones y políticas para que `organizacion_id`, `status`, `nivel`, `altura` y `geom` de la jerarquía final (propiedad_unidades) estén alineados con la experiencia inmobiliaria y podamos mostrar inventario reactivo sin depender de la tabla `propiedades`.
+- Reescribimos `crm_propiedades_geojson` (ver migración `20280214_130000_propiedades_geojson_3d_metadata.sql`), el proxy `/api/crm/propiedades/geojson` y el componente `frontend/panel/src/components/mapa-de-propiedades/property-map.jsx` para consumir los nuevos campos (`color`, `status_color`, `linea_nombre`, `familia_nombre`, `modelo_nombre`, `desarrollo_*`, `pais/estado/municipio`) y asegurar tooltips, marcadores y navegación coherentes con el plan 3D.
