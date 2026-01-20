@@ -456,7 +456,10 @@ export function PropertyMap() {
           return false;
         }
       }
-      if (mapLevel === "municipio" && selectedMunicipioGeoKey) {
+      if (mapLevel === "municipio") {
+        if (!selectedMunicipioGeoKey) {
+          return false;
+        }
         const featureProps = feature?.properties ?? {};
         const featureGeoKey = buildMunicipioGeoKey(featureProps);
         if (!featureGeoKey || featureGeoKey !== selectedMunicipioGeoKey) {
@@ -571,6 +574,58 @@ export function PropertyMap() {
     return keys;
   }, [features]);
 
+  const normalizeStateCode = useCallback((value) => {
+    if (!value) return "";
+    return `${value}`.padStart(2, "0");
+  }, []);
+
+  const normalizeMunicipioCode = useCallback((value) => {
+    if (!value) return "";
+    return `${value}`.padStart(3, "0");
+  }, []);
+
+  const propertyCountryCodes = useMemo(() => {
+    const codes = new Set();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const candidate = (props.pais_codigo ?? props.ISO_A2 ?? props.iso_a2 ?? "").toString().trim().toUpperCase();
+      if (candidate) {
+        codes.add(candidate);
+      }
+    }
+    return codes;
+  }, [features]);
+
+  const propertyStateCodes = useMemo(() => {
+    const codes = new Set();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const value = props.estado_cve ?? props.cve_ent ?? props.cve_entidad ?? "";
+      const normalized = normalizeStateCode(value.toString().trim());
+      if (normalized) {
+        codes.add(normalized);
+        codes.add(value.toString().trim().toUpperCase());
+      }
+    }
+    return codes;
+  }, [features, normalizeStateCode]);
+
+  const propertyMunicipioCodes = useMemo(() => {
+    const codes = new Set();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const value = props.municipio_cve ?? props.cve_mun ?? props.cvegeo ?? "";
+      const normalized = normalizeMunicipioCode(value.toString().trim());
+      if (normalized) {
+        codes.add(normalized);
+      }
+      if (value) {
+        codes.add(value.toString().trim().toUpperCase());
+      }
+    }
+    return codes;
+  }, [features, normalizeMunicipioCode]);
+
   const datasetMap = useMemo(() => {
     const map = new Map();
     for (const entry of demografiaDataset) {
@@ -674,11 +729,11 @@ export function PropertyMap() {
         (mapLevel === "estado" && selectedStateKey === key) ||
         (mapLevel === "municipio" && selectedMunicipioKey === key);
       const isMunicipioView = mapLevel === "municipio";
-      const fillColor = isMunicipioView ? "transparent" : color;
+      const fillColor = color;
       const fillOpacity = isMunicipioView
         ? hoveredRegionKey === key
           ? 0.35
-          : 0
+          : 0.15
         : hoveredRegionKey === key
         ? 0.85
         : 0.6;
@@ -923,16 +978,38 @@ const closeMapbox = useCallback(() => {
     if (demografiaLevel !== mapLevel) return null;
     let features = demografiaGeojson.features || [];
     const filterByLevel = (feature) => {
-      const key = resolveRegionKey(feature);
-      if (!key) return false;
+      const props = feature.properties || {};
       if (mapLevel === "pais") {
-        return propertyCountryKeys.size ? propertyCountryKeys.has(key) : true;
+        if (!propertyCountryCodes.size) return true;
+        const candidate =
+          (props.iso_a2 ?? props.ISO_A2 ?? props.iso_a3 ?? props.ISO_A3 ?? "").toString().trim().toUpperCase();
+        return Boolean(candidate && propertyCountryCodes.has(candidate));
       }
       if (mapLevel === "estado") {
-        return propertyStateKeys.size ? propertyStateKeys.has(key) : true;
+        if (!propertyStateCodes.size) return true;
+        const candidate = normalizeStateCode(
+          (props.cve_ent ?? props.cve_entidad ?? props.estado_cve ?? "").toString().trim(),
+        );
+        if (candidate && propertyStateCodes.has(candidate)) {
+          return true;
+        }
+        if (props.cve_ent) {
+          return propertyStateCodes.has(`${props.cve_ent}`.trim().toUpperCase());
+        }
+        return false;
       }
       if (mapLevel === "municipio") {
-        return propertyMunicipioKeys.size ? propertyMunicipioKeys.has(key) : true;
+        if (!propertyMunicipioCodes.size) return true;
+        const candidate = normalizeMunicipioCode(
+          (props.cve_mun ?? props.municipio_cve ?? props.cvegeo ?? "").toString().trim(),
+        );
+        if (candidate && propertyMunicipioCodes.has(candidate)) {
+          return true;
+        }
+        if (props.cvegeo) {
+          return propertyMunicipioCodes.has(`${props.cvegeo}`.trim().toUpperCase());
+        }
+        return false;
       }
       return true;
     };
@@ -985,7 +1062,7 @@ const closeMapbox = useCallback(() => {
       return;
     }
     markersLayerRef.current.clearLayers();
-    if (mapLevel !== "municipio") {
+    if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
       return;
     }
     let aggregatedBounds = null;
