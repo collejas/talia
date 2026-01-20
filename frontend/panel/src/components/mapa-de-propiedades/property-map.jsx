@@ -94,6 +94,21 @@ function getFeatureCenter(feature) {
   return [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2];
 }
 
+function ensureStatusColors(feature) {
+  if (!feature || typeof feature !== "object") {
+    return feature;
+  }
+  const props = feature.properties || {};
+  if (!props.color) {
+    props.color = STATUS_COLORS[(props.status ?? "").toLowerCase()] ?? "#95A5A6";
+  }
+  if (!props.status_color) {
+    props.status_color = STATUS_COLORS[(props.status ?? "").toLowerCase()] ?? "#95A5A6";
+  }
+  feature.properties = props;
+  return feature;
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -212,9 +227,10 @@ export function PropertyMap() {
         );
         return false;
       }
+      const enrichedFeature = ensureStatusColors({ ...feature });
       const payload = {
         type: "FeatureCollection",
-        features: [feature],
+        features: [enrichedFeature],
       };
       source.setData(payload);
       const bounds = getGeometryBounds(feature.geometry);
@@ -852,17 +868,17 @@ const closeMapbox = useCallback(() => {
             id: fillLayerId,
             type: "fill-extrusion",
             source: sourceId,
-            paint: {
-              "fill-extrusion-color": [
-                "coalesce",
-                ["get", "color"],
-                ["get", "status_color"],
-                "#95A5A6",
-              ],
-              "fill-extrusion-height": [
-                "coalesce",
-                ["to-number", ["get", "height"], 0],
-                0,
+              paint: {
+                "fill-extrusion-color": [
+                  "coalesce",
+                  ["get", "status_color"],
+                  ["get", "color"],
+                  "#95A5A6",
+                ],
+                "fill-extrusion-height": [
+                  "coalesce",
+                  ["to-number", ["get", "height"], 0],
+                  0,
               ],
               "fill-extrusion-base": [
                 "coalesce",
@@ -879,7 +895,7 @@ const closeMapbox = useCallback(() => {
             type: "line",
             source: sourceId,
             paint: {
-              "line-color": "#000",
+              "line-color": ["coalesce", ["get", "status_color"], "#000"],
               "line-width": 1,
               "line-opacity": 0.6,
             },
@@ -1063,7 +1079,9 @@ const closeMapbox = useCallback(() => {
         return response.json();
       })
       .then((data) => {
-        setFeatures(data?.features ?? []);
+        const normalized =
+          (data?.features ?? []).map((feature) => ensureStatusColors(feature));
+        setFeatures(normalized);
         if (controller.signal.aborted) return;
         setLoading(false);
       })
