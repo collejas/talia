@@ -17,6 +17,7 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 - Hacer clic en México activa el siguiente nivel: se resalta únicamente los tres estados con desarrollos (Playa del Carmen, Guadalajara, Los Cabos), se vuelve a calcular el popup por hover, y se colorean los estados según el `status` consolidado por estado. Se apoya en los JSONB de `backend/app/data/geo` para obtener poligonos de los estados.
 - Clicar un estado carga sus municipios coloreados únicamente si tienen desarrollos. Cada municipio habilitado muestra un tooltip con métricas propias y el panel lateral se actualiza para listar los proyectos del estado.
 - Seleccionar un municipio agrega marcadores `L.marker` por desarrollo y muestra un panel de lista con acciones (“centrar marcador”, “ver en Mapbox”). Cada marcador usa `bindTooltip`/`bindPopup` para información inmediata del proyecto.
+- El conjunto de países/estados/municipios coloreados ahora proviene directamente de las propiedades (`crm_propiedades_geojson` + sus codificaciones `pais_codigo`, `estado_cve`, `municipio_cve`), de modo que el mapa solo pinta regiones con desarrollos y centra la vista en ellas antes de mostrar las unidades del nivel inferior.
 - El stack de navegación permite volver al nivel anterior y un control “centrar todo” restablece México sin perder filtros. Se debe conservar el color para los estados/municipios que no tienen desarrollos (grises o transparentes) para que no distraigan.
 
 ## Transición a Mapbox 3D

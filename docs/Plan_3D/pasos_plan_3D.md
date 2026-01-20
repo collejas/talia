@@ -28,6 +28,7 @@
    - [ ] Implementar el control jerárquico y la navegación (México → estado → municipio) usando el mapa actual (`frontend/panel/src/components/mapa-de-propiedades/property-map.jsx`), alimentando los niveles con `crm_propiedades_geojson` y los geoJSON base de `backend/app/data/geo`; documentar los filtros de nivel/estatus que ya existen en ese componente para reutilizar.
    - [ ] Añadir una barra lateral/drawer (más allá de lo que ya muestra `property-map.jsx`) con indicadores de color/status, el listado de desarrollos y botones “centrar marcador” / “ver en Mapbox” que sincronizan con los filtros y la información del tooltip descrita en `docs/Plan_3D/frontend_leaflet_osmb.md`.
    - [x] Crear el módulo Mapbox que se monta/desmonta con cada “Ver en Mapbox”, reutiliza los datos de `crm_propiedades_geojson` y pinta el `fill-extrusion` con las alturas/status del desarrollo, y muestra el panel de detalles con precio, niveles, amenities y el botón “volver al mapa nacional” como en el documento.
+   - [x] Filtrar los geoJSON jerárquicos por los códigos `pais_codigo`/`estado_cve`/`municipio_cve` de `crm_propiedades_geojson`, de modo que solo se coloreen y centren las regiones que realmente tienen desarrollos antes de mostrar las unidades del siguiente nivel.
 
 6. [ ] **Diseñar la vista de creación/edición en settings**
    - [ ] Añadir `/settings/propiedades` en el sidebar (al lado de `settings/productos`) con el botón “Propiedades”.
@@ -59,3 +60,4 @@
 - Mejoramos el componente `property-map.jsx` para que los municipios pierdan el relleno al explorar sus marcadores, el mapa jerárquico ajuste el `maxZoom` por nivel, y la vista Mapbox se redimensione al activarse mientras mantiene destacados los registros seleccionados.
 - Ajustamos la inicialización de Mapbox para que arranque centrado en la unidad/development seleccionado, registramos el centro/bounds en `logs/mapbox-debug.log` y mantenemos disponible el helper `waitForMapboxPayload` para depuración de envíos del RPC.
 - El endpoint `/api/crm/demografia/mapa` ya captura fallos del CRM/Supabase y responde con un payload seguro (`ok:false`, dataset y geojson vacíos) en lugar de un 502, dejando a la UI lista para volver a consultar niveles sin romper la navegación.
+- Filtramos el flow jerárquico de Leaflet (país → estado → municipio) con los códigos `pais_codigo`/`estado_cve`/`municipio_cve` que llegan desde `crm_propiedades_geojson`, de modo que cada clic colorea y centra únicamente las regiones que tienen desarrollos antes de desplegar las unidades.
