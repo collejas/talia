@@ -125,9 +125,28 @@ function buildHierarchy(features) {
   const devMap = new Map();
   for (const feature of features) {
     const props = feature?.properties ?? {};
-    const devId =
-      props.desarrollo_id ?? props.grupo ?? props.desarrollo_nombre ?? props.nombre ?? "sin-desarrollo";
-    const devName = props.desarrollo_nombre ?? props.nombre ?? "Desarrollo";
+    const featureSource =
+      typeof props.target_type === "string"
+        ? props.target_type
+        : typeof props.tipo === "string"
+        ? props.tipo
+        : "";
+    const featureKind = featureSource.toString().trim().toLowerCase();
+    const isUnit =
+      !featureKind || ["unidad", "departamento", "poligono", "unit", "department"].includes(featureKind);
+    if (!isUnit) {
+      continue;
+    }
+    const rawDevId = props.desarrollo_id;
+    if (!rawDevId || (typeof rawDevId === "string" && !rawDevId.trim())) {
+      continue;
+    }
+    let devId =
+      typeof rawDevId === "string" ? rawDevId.trim() : typeof rawDevId === "number" ? String(rawDevId) : "";
+    if (!devId) {
+      devId = "sin-desarrollo";
+    }
+    const devName = props.desarrollo_nombre ?? props.nombre ?? devId;
     const tipoLabel =
       normalizeTipoLabel(props.desarrollo_tipo ?? props.tipo_nombre ?? props.desarrollo_ambito ?? "");
     const tipoKey = `${devId}::${tipoLabel}`;
@@ -412,6 +431,22 @@ export function PropertyMap() {
   }, [features, nivelFilter, tipoFilter]);
 
   const hierarchyTree = useMemo(() => buildHierarchy(filteredFeatures), [filteredFeatures]);
+
+  useEffect(() => {
+    if (!hierarchyTree.length) return;
+    const summary = hierarchyTree.map((dev) => ({
+      id: dev.id,
+      tipos: dev.tipos.map((tipo) => tipo.label),
+      capas: dev.tipos.reduce((acc, tipo) => acc + tipo.capas.length, 0),
+    }));
+    logMapboxEvent(
+      {
+        hierarchy: summary,
+        featureCount: filteredFeatures.length,
+      },
+      "hierarchy-tree",
+    );
+  }, [filteredFeatures.length, hierarchyTree, logMapboxEvent]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
