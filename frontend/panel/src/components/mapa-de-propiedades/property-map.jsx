@@ -11,7 +11,7 @@ const STATUS_COLORS = {
   reservado: "#9B59B6",
 };
 
-const DEFAULT_CENTER = [19.4326, -99.1332];
+const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 function resolveRegionKey(feature) {
@@ -120,6 +120,133 @@ export function PropertyMap() {
   const [mapboxActive, setMapboxActive] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  const logMapboxEvent = useCallback((payload, label = "event") => {
+    if (!payload) return;
+    fetch("/api/mapbox/depura", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mapbox-msg": label,
+      },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // ignore logging failures
+    });
+  }, []);
+
+  const waitForMapboxInstance = useCallback(() => {
+    return new Promise((resolve) => {
+      const check = () => {
+        const candidate =
+          (typeof window !== "undefined" && window.__mapboxInstance) ?? mapboxInstanceRef.current;
+        if (candidate) {
+          resolve(candidate);
+          return;
+        }
+        setTimeout(check, 250);
+      };
+      check();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.waitForMapboxPayload = async (forcedPayload) => {
+      const map = await waitForMapboxInstance();
+      const source = map.getSource("propiedad-3d");
+      console.log("Mapbox before forced payload", source?._data);
+      if (forcedPayload && source && typeof source.setData === "function") {
+        source.setData(forcedPayload);
+        map.fitBounds(
+          [
+            [-109.73834533, 23.00161481],
+            [-109.73770243, 23.0023697],
+          ],
+          { padding: 30, maxZoom: 19 },
+        );
+      }
+      console.log("Mapbox after forced payload", source?._data);
+    };
+  }, [waitForMapboxInstance]);
+
+  const mapboxFeatureRef = useRef(null);
+  const pendingMapboxFeatureRef = useRef(null);
+
+  useEffect(() => {
+    mapboxFeatureRef.current = mapboxFeature;
+  }, [mapboxFeature]);
+
+  const sendFeatureToMapbox = useCallback(
+    (feature) => {
+      if (!feature || !mapboxActive) {
+        logMapboxEvent(
+          { step: "send-failure", reason: "inactive", featureId: feature?.id ?? null },
+          "send-failure",
+        );
+        return false;
+      }
+      const map = mapboxInstanceRef.current;
+      if (!map) {
+        logMapboxEvent(
+          { step: "send-failure", reason: "no-map", featureId: feature?.id ?? null },
+          "send-failure",
+        );
+        return false;
+      }
+      const source = map.getSource("propiedad-3d");
+      if (!source || typeof source.setData !== "function") {
+        logMapboxEvent(
+          { step: "send-failure", reason: "no-source", featureId: feature?.id ?? null },
+          "send-failure",
+        );
+        return false;
+      }
+      const payload = {
+        type: "FeatureCollection",
+        features: [feature],
+      };
+      source.setData(payload);
+      const bounds = getGeometryBounds(feature.geometry);
+      if (bounds && map.isStyleLoaded()) {
+        map.fitBounds(
+          [
+            [bounds.minLng, bounds.minLat],
+            [bounds.maxLng, bounds.maxLat],
+          ],
+          { padding: 30, maxZoom: 19 },
+        );
+      }
+      logMapboxEvent(
+        {
+          feature,
+          bounds,
+          timestamp: new Date().toISOString(),
+        },
+        "set-data",
+      );
+      return true;
+    },
+    [logMapboxEvent, mapboxActive],
+  );
+
+  useEffect(() => {
+    if (!mapboxActive) {
+      pendingMapboxFeatureRef.current = null;
+      return;
+    }
+    const targetFeature = mapboxFeature ?? pendingMapboxFeatureRef.current;
+    if (!targetFeature) {
+      return;
+    }
+    if (!sendFeatureToMapbox(targetFeature)) {
+      pendingMapboxFeatureRef.current = targetFeature;
+    } else {
+      pendingMapboxFeatureRef.current = null;
+    }
+  }, [mapboxActive, mapboxFeature, sendFeatureToMapbox]);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -284,17 +411,24 @@ export function PropertyMap() {
       const isActive =
         (mapLevel === "estado" && selectedStateKey === key) ||
         (mapLevel === "municipio" && selectedMunicipioKey === key);
-    const fillStyle =
-      mapLevel === "municipio" && mapLevel !== "pais" ? "transparent" : color;
-    layerInstance.setStyle({
-      color: "#0f172a",
-      weight: isActive ? 3 : 1,
-      fillColor: fillStyle,
-      fillOpacity: mapLevel === "municipio" ? 0.15 : hoveredRegionKey === key ? 0.85 : 0.6,
-    });
-  },
-  [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
-);
+      const isMunicipioView = mapLevel === "municipio";
+      const fillColor = isMunicipioView ? "transparent" : color;
+      const fillOpacity = isMunicipioView
+        ? hoveredRegionKey === key
+          ? 0.35
+          : 0
+        : hoveredRegionKey === key
+        ? 0.85
+        : 0.6;
+      layerInstance.setStyle({
+        color: "#0f172a",
+        weight: isActive ? 3 : 1,
+        fillColor,
+        fillOpacity,
+      });
+    },
+    [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
+  );
 
 const handleRegionClick = useCallback(
   (feature) => {
@@ -315,11 +449,23 @@ const handleRegionClick = useCallback(
   [mapLevel],
 );
 
-const openMapboxFeature = useCallback((feature) => {
-  if (!feature) return;
-  setMapboxFeature(feature);
-  setMapboxActive(true);
-}, []);
+  const openMapboxFeature = useCallback(
+    (feature) => {
+      if (!feature) return;
+      setSelectedId(String(feature.id ?? ""));
+      setActiveMarkerFeature(feature);
+      setMapboxFeature(feature);
+      setMapboxActive(true);
+      logMapboxEvent(
+        {
+          feature,
+          action: "open",
+        },
+        "open-mapbox",
+      );
+    },
+    [logMapboxEvent],
+  );
 
 const closeMapbox = useCallback(() => {
   setMapboxActive(false);
@@ -513,13 +659,15 @@ const closeMapbox = useCallback(() => {
     }
     try {
       const bounds = leaflet.geoJSON(filteredDemografiaGeojson).getBounds();
-      if (bounds.isValid()) {
-        mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 7 });
+      if (!bounds.isValid()) {
+        return;
       }
+      const maxZoom = mapLevel === "municipio" ? 15 : mapLevel === "estado" ? 10 : 7;
+      mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom });
     } catch {
       // ignore invalid bounds
     }
-  }, [filteredDemografiaGeojson, leaflet]);
+  }, [filteredDemografiaGeojson, leaflet, mapLevel]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
@@ -593,7 +741,7 @@ const closeMapbox = useCallback(() => {
       mapboxInstanceRef.current = null;
       return;
     }
-    if (!mapboxFeature || !mapboxToken) {
+    if (!mapboxToken) {
       return;
     }
     let cancelled = false;
@@ -603,41 +751,44 @@ const closeMapbox = useCallback(() => {
       mapboxglModule.accessToken = mapboxToken;
       const container = mapboxContainerRef.current;
       if (!container) return;
-      const bounds = getGeometryBounds(mapboxFeature.geometry);
-      const center = bounds
-        ? [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2]
-        : DEFAULT_CENTER;
       const map = new mapboxglModule.Map({
         container,
         style: "mapbox://styles/mapbox/satellite-v9",
-        center,
+        center: DEFAULT_CENTER,
         zoom: 18,
         pitch: 60,
         bearing: 0,
         projection: "mercator",
       });
       mapboxInstanceRef.current = map;
+      if (typeof window !== "undefined") {
+        window.__mapboxInstance = map;
+      }
       const sourceId = "propiedad-3d";
       const fillLayerId = "propiedad-3d-fill";
       const lineLayerId = "propiedad-3d-outline";
-      const featureCollection = {
-        type: "FeatureCollection",
-        features: mapboxFeature ? [mapboxFeature] : [],
-      };
       const addLayerRules = () => {
-        if (!map.isStyleLoaded()) {
+        const styleReady = map.isStyleLoaded();
+        logMapboxEvent(
+          {
+            step: "add-layer",
+            styleLoaded: styleReady,
+            fillLayer: Boolean(map.getLayer(fillLayerId)),
+            outlineLayer: Boolean(map.getLayer(lineLayerId)),
+          },
+          "add-layer",
+        );
+        if (cancelled || !styleReady) {
           return;
         }
         if (!map.getSource(sourceId)) {
           map.addSource(sourceId, {
             type: "geojson",
-            data: featureCollection,
+            data: {
+              type: "FeatureCollection",
+              features: [],
+            },
           });
-        } else {
-          const source = map.getSource(sourceId);
-          if (source && typeof source.setData === "function") {
-            source.setData(featureCollection);
-          }
         }
         if (!map.getLayer(fillLayerId)) {
           map.addLayer({
@@ -678,54 +829,58 @@ const closeMapbox = useCallback(() => {
           });
         }
       };
+      const applyPendingFeature = () => {
+        const candidate =
+          pendingMapboxFeatureRef.current ?? mapboxFeatureRef.current;
+        if (!candidate) {
+          return;
+        }
+        if (sendFeatureToMapbox(candidate)) {
+          pendingMapboxFeatureRef.current = null;
+        }
+      };
       map.on("load", () => {
         if (cancelled) return;
         addLayerRules();
-        if (bounds) {
-          map.fitBounds(
-            [
-              [bounds.minLng, bounds.minLat],
-              [bounds.maxLng, bounds.maxLat],
-            ],
-            { padding: 30, maxZoom: 19 },
-          );
-        }
+        applyPendingFeature();
+        map.resize();
       });
       map.on("styledata", () => {
         if (cancelled) return;
         addLayerRules();
+        applyPendingFeature();
+        map.resize();
       });
     })();
     return () => {
       cancelled = true;
+      pendingMapboxFeatureRef.current = null;
       mapboxInstanceRef.current?.remove();
       mapboxInstanceRef.current = null;
+      if (typeof window !== "undefined") {
+        delete window.__mapboxInstance;
+      }
     };
-  }, [mapboxActive, mapboxFeature, mapboxToken]);
+  }, [mapboxActive, mapboxToken, sendFeatureToMapbox, logMapboxEvent]);
 
   useEffect(() => {
-    if (!mapboxActive || !mapboxFeature || !mapboxInstanceRef.current) {
+    if (!mapboxActive) {
       return;
     }
-    const map = mapboxInstanceRef.current;
-    const source = map.getSource("propiedad-3d");
-    if (source && typeof source.setData === "function") {
-      source.setData({
-        type: "FeatureCollection",
-        features: [mapboxFeature],
-      });
+    mapboxInstanceRef.current?.resize();
+  }, [mapboxActive]);
+
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
     }
-    const bounds = getGeometryBounds(mapboxFeature.geometry);
-    if (bounds && map.isStyleLoaded()) {
-      map.fitBounds(
-        [
-          [bounds.minLng, bounds.minLat],
-          [bounds.maxLng, bounds.maxLat],
-        ],
-        { padding: 30, maxZoom: 19 },
-      );
+    if (mapboxInstanceRef.current) {
+      window.__mapboxInstance = mapboxInstanceRef.current;
+    } else if (window.__mapboxInstance) {
+      delete window.__mapboxInstance;
     }
-  }, [mapboxActive, mapboxFeature]);
+  }, [mapboxActive]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -1060,10 +1215,18 @@ const closeMapbox = useCallback(() => {
                 typeof props.desarrollo_status === "string"
                   ? props.desarrollo_status.toUpperCase()
                   : null;
+              const handleKeyDown = (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedId(String(feature.id ?? ""));
+                  zoomToFeature(feature);
+                }
+              };
               return (
-                <button
+                <div
                   key={feature.id ?? JSON.stringify(props)}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   className={`flex w-full items-start justify-between rounded-md px-3 py-2 text-left text-sm ${
                     active
                       ? "border border-slate-900 bg-slate-900 text-white"
@@ -1073,6 +1236,7 @@ const closeMapbox = useCallback(() => {
                     setSelectedId(String(feature.id ?? ""));
                     zoomToFeature(feature);
                   }}
+                  onKeyDown={handleKeyDown}
                 >
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
@@ -1134,107 +1298,113 @@ const closeMapbox = useCallback(() => {
                     className="h-4 w-4 rounded-full border border-slate-300"
                     style={{ backgroundColor: displayColor }}
                   />
-                </button>
+                </div>
               );
             })}
           </div>
         </div>
       </aside>
       <section className="relative flex-1">
-        <div
-          ref={mapContainerRef}
-          className="h-[600px] w-full rounded-md border border-slate-200 bg-white/10 shadow-sm shadow-slate-900/10"
-        />
-        <div
-          ref={mapboxContainerRef}
-          className={`absolute inset-0 z-40 rounded-md transition-opacity duration-200 ${
-            mapboxActive
-              ? "pointer-events-auto opacity-100"
-              : "pointer-events-none opacity-0"
-          }`}
-        />
-        <div
-          className={`absolute inset-0 z-50 flex flex-col border border-slate-800 bg-gradient-to-b from-slate-950/90 to-slate-950/60 transition-opacity duration-200 ${
-            mapboxActive
-              ? "pointer-events-auto opacity-100"
-              : "pointer-events-none opacity-0"
-          }`}
-        >
-          <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
-                Mapbox 3D
-              </p>
-              {!mapboxToken && (
-                <p className="text-[0.65rem] text-rose-400">
-                  Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar esta vista.
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900"
-              onClick={closeMapbox}
-            >
-              Volver al mapa nacional
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
-            {mapboxFeature ? (
-              <>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-lg font-semibold text-white">
-                    {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
-                  </div>
-                  <span
-                    className="h-4 w-4 rounded-full border border-slate-500"
-                    style={{
-                      backgroundColor:
-                        mapboxProps?.color ??
-                        mapboxProps?.status_color ??
-                        "#95A5A6",
-                    }}
-                  />
-                </div>
-                {mapboxCatalogLabel && (
-                  <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
-                )}
-                {mapboxLocationLabel && (
-                  <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
-                )}
-                <div className="mt-4 space-y-2 text-slate-200">
-                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                    <span>Status:</span>
-                    <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                    <span>Precio:</span>
-                    <span className="font-semibold">{mapboxPriceLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                    <span>Área:</span>
-                    <span className="font-semibold">{mapboxAreaLabel}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                    <span>Niveles:</span>
-                    <span className="font-semibold">{mapboxLevelsLabel}</span>
-                  </div>
-                  {mapboxProps?.descripcion && (
-                    <div>
-                      <p className="text-xs text-slate-300">Descripción:</p>
-                      <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
-                    </div>
+        <div className="relative h-[600px] w-full">
+          <div
+            ref={mapContainerRef}
+            className={`absolute inset-0 z-10 rounded-md border border-slate-200 bg-white/10 shadow-sm shadow-slate-900/10 transition-opacity duration-200 ${
+              mapboxActive ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+            }`}
+          />
+          <div
+            ref={mapboxContainerRef}
+            className={`absolute inset-0 z-20 rounded-md transition-opacity duration-200 ${
+              mapboxActive
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none opacity-0"
+            }`}
+          />
+          <div
+            className={`absolute inset-0 z-30 transition-opacity duration-200 ${
+              mapboxActive
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none opacity-0"
+            }`}
+          >
+            <div className="absolute inset-y-4 right-4 z-50 w-full max-w-sm rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                <div>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
+                    Mapbox 3D
+                  </p>
+                  {!mapboxToken && (
+                    <p className="text-[0.65rem] text-rose-400">
+                      Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar esta vista.
+                    </p>
                   )}
                 </div>
-              </>
-            ) : (
-              <p className="text-[0.85rem] text-slate-400">
-                Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
-              </p>
-            )}
-          </div>
-          <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
-            La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
+                <button
+                  type="button"
+                  className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900 hover:text-white"
+                  onClick={closeMapbox}
+                >
+                  Cerrar
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
+                {mapboxFeature ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-lg font-semibold text-white">
+                        {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
+                      </div>
+                      <span
+                        className="h-4 w-4 rounded-full border border-slate-500"
+                        style={{
+                          backgroundColor:
+                            mapboxProps?.color ??
+                            mapboxProps?.status_color ??
+                            "#95A5A6",
+                        }}
+                      />
+                    </div>
+                    {mapboxCatalogLabel && (
+                      <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
+                    )}
+                    {mapboxLocationLabel && (
+                      <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
+                    )}
+                    <div className="mt-4 space-y-2 text-slate-200">
+                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                        <span>Status:</span>
+                        <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                        <span>Precio:</span>
+                        <span className="font-semibold">{mapboxPriceLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                        <span>Área:</span>
+                        <span className="font-semibold">{mapboxAreaLabel}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                        <span>Niveles:</span>
+                        <span className="font-semibold">{mapboxLevelsLabel}</span>
+                      </div>
+                      {mapboxProps?.descripcion && (
+                        <div>
+                          <p className="text-xs text-slate-300">Descripción:</p>
+                          <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[0.85rem] text-slate-400">
+                    Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
+                  </p>
+                )}
+              </div>
+              <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
+                La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
+              </div>
+            </div>
           </div>
         </div>
       </section>
