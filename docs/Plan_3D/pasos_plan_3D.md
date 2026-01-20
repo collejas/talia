@@ -7,7 +7,7 @@
 2. [x] **Diseñar la base espacial**
    - [x] Crear `propiedades` con `organizacion_id`, `tipo_id`, `status`, `precio`, `height`, `min_height`, `levels`, `metadata` y `geom geometry(PolygonZ,4326)`.
    - [x] Añadir índices GiST y RLS por organización.
-- [x] Crear `propiedad_desarrollos` y asegurar que `propiedad_capas`/`propiedad_unidades` se relacionan a este desarrollo para reflejar los planos jerárquicos.
+   - [x] Crear `propiedad_desarrollos` y asegurar que `propiedad_capas`/`propiedad_unidades` se relacionan a este desarrollo para reflejar los planos jerárquicos.
 
 3. [x] **Exponer GeoJSON**
    - [x] Crear RPC/endpoint `crm_propiedades_geojson(...)` que filtre por organización, estado, municipio y tipo, devolviendo `FeatureCollection` con todos los `properties` necesarios (color, alturas, referencias a línea/familia/modelo).
@@ -17,29 +17,37 @@
    - [ ] Extender `propiedades` con `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`.
    - [ ] Crear selects que reutilicen los JSONB/servicios existentes (`backend/app/data/geo`, `leads_geo`) para popular estados/municipios.
    - [ ] Verificar que `propiedades` pueda referenciar `linea_id`, `familia_id`, `modelo_id` sin acoplarse a `settings/productos`.
+   - [ ] Confirmar que el RPC `crm_propiedades_geojson` (ver `supabase/migrations/20280205_100000_propiedades_geojson_extended.sql`) expone los nuevos atributos geográficos y los nombres de `linea`, `familia` y `modelo` para que Leaflet/Mapbox puedan colorear y filtrar por plantilla.
+   - [ ] Ajustar `frontend/panel/src/components/settings/propiedades/propiedad-form.tsx` y el payload de `/crm/propiedades` para que el formulario capture/normalice `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia` y que conserve el vínculo con los catálogos (`linea_id`, `familia_id`, `modelo_id`) sin mezclar lógica del módulo `settings/productos`.
 
 5. [ ] **Implementar flujo Leaflet jerárquico + Mapbox**
    - [ ] Leaflet inicia con México coloreado por el consolidado global; el hover muestra totales y el clic abre el nivel de estados restringidos a los tres con desarrollos.
    - [ ] Clicar un estado muestra municipios activos coloreados y actualiza el panel lateral con desarrollos disponibles.
    - [ ] En el nivel de municipios se agregan marcadores y tooltips; cada click agrega el botón “ver en Mapbox” y mantiene el stack de navegación con “centrar todo”.
    - [ ] Al seleccionar un marcador, se instancia Mapbox GL con `satellite-v9`, `pitch`, `fill-extrusion` y se destruye al regresar.
+   - [ ] Implementar el control jerárquico y la navegación (México → estado → municipio) usando el mapa actual (`frontend/panel/src/components/mapa-de-propiedades/property-map.jsx`), alimentando los niveles con `crm_propiedades_geojson` y los geoJSON base de `backend/app/data/geo`; documentar los filtros de nivel/estatus que ya existen en ese componente para reutilizar.
+   - [ ] Añadir una barra lateral/drawer (más allá de lo que ya muestra `property-map.jsx`) con indicadores de color/status, el listado de desarrollos y botones “centrar marcador” / “ver en Mapbox” que sincronizan con los filtros y la información del tooltip descrita en `docs/Plan_3D/frontend_leaflet_osmb.md`.
+   - [ ] Crear el módulo Mapbox que se monta/desmonta con cada “Ver en Mapbox”, reutiliza los datos de `crm_propiedades_geojson` y pinta el `fill-extrusion` con las alturas/status del desarrollo, y muestra el panel de detalles con precio, niveles, amenities y el botón “volver al mapa nacional” como en el documento.
 
 6. [ ] **Diseñar la vista de creación/edición en settings**
    - [ ] Añadir `/settings/propiedades` en el sidebar (al lado de `settings/productos`) con el botón “Propiedades”.
    - [ ] Diseñar layout tipo editor de capas: formulario compacto a la izquierda y mapa Leaflet + `leaflet-draw` a la derecha, misma altura.
    - [ ] El formulario incluye datos generales, jerarquía país/estado/municipio/código postal/colonia, referencias a línea/familia/modelo, altura/levels/status y controles guardar/limpiar/centrar.
    - [ ] El mapa permite dibujar/editar polígonos, mantiene el `featureGroup`, y si ya existe la geometría la carga para seguir editando.
+   - [ ] Revisar `frontend/panel/src/app/settings/propiedades/page.tsx` y `PropiedadForm` para asegurar que el layout coincide con el editor de capas descrito en `docs/Plan_3D/frontend_leaflet_osmb.md`, que `PropiedadGeomEditor` expone los controles de `leaflet-draw` y que las acciones de guardar/centrar limpian el `featureGroup` antes de subir la geometría.
 
 7. [ ] **UX, filtros y documentación**
    - [ ] Añadir panel lateral con lista de desarrollos (por municipio/estado) que permita centrar y saltar a Mapbox.
    - [ ] Incluir filtros por tipo, nivel y rango de precio que afecten Leaflet y el detalle Mapbox.
    - [ ] Preparar mensaje o loader para comunicar al usuario cuándo el mapa pasa de Leaflet a Mapbox.
    - [ ] Documentar el plan maestro, los endpoints usados y el flujo de navegación para el cliente.
+   - [ ] Registrar en `docs/Plan_3D/frontend_leaflet_osmb.md` y/o en otro documento qué datos de `crm_propiedades_geojson` se usan para cada color/status y cómo se garantiza la consistencia con `propiedad_unidades`/`propiedad_capas`, incluyendo qué filtro se aplica en cada nivel.
 
 8. [ ] **Validación y pruebas**
    - [ ] Población de muestra (30 polígonos) con datos exagerados (polígonos grandes) para comprobar colores y visibilidad.
    - [ ] Probar queries espaciales (`ST_Intersects`, `ST_Buffer`, `ST_Simplify`) y filtros por `status`/`tipo`.
    - [ ] Verificar que `settings/productos` pueda seguir funcionando con productos tradicionales mientras el módulo inmobiliario opera por separado.
+   - [ ] Automatizar pruebas manuales sobre `frontend/panel` para asegurarse de que los filtros (tipo, nivel, rango de precio) actualizan tanto el marcado en Leaflet como los datos de Mapbox y que el botón “volver al mapa nacional” elimina la instancia Mapbox sin corrupción de estados.
 
 # Registro de avances
 
