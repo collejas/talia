@@ -284,15 +284,17 @@ export function PropertyMap() {
       const isActive =
         (mapLevel === "estado" && selectedStateKey === key) ||
         (mapLevel === "municipio" && selectedMunicipioKey === key);
-      layerInstance.setStyle({
-        color: "#0f172a",
-        weight: isActive ? 3 : 1,
-        fillColor: color,
-        fillOpacity: hoveredRegionKey === key ? 0.85 : 0.6,
-      });
-    },
-    [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
-  );
+    const fillStyle =
+      mapLevel === "municipio" && mapLevel !== "pais" ? "transparent" : color;
+    layerInstance.setStyle({
+      color: "#0f172a",
+      weight: isActive ? 3 : 1,
+      fillColor: fillStyle,
+      fillOpacity: mapLevel === "municipio" ? 0.15 : hoveredRegionKey === key ? 0.85 : 0.6,
+    });
+  },
+  [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
+);
 
 const handleRegionClick = useCallback(
   (feature) => {
@@ -469,6 +471,10 @@ const closeMapbox = useCallback(() => {
     const markersLayer = leaflet.layerGroup();
     markersLayerRef.current = markersLayer;
     markersLayer.addTo(map);
+    const markerPane = map.getPane?.("markerPane");
+    if (markerPane) {
+      markerPane.style.zIndex = "750";
+    }
 
     return () => {
       map.remove();
@@ -1104,17 +1110,25 @@ const closeMapbox = useCallback(() => {
                         {postalLabel ? ` · ${postalLabel}` : ""}
                       </div>
                     )}
-                    {mapboxToken && (
-                      <div className="mt-1">
-                        <button
-                          type="button"
-                          onClick={() => openMapboxFeature(feature)}
-                          className="rounded border border-slate-300 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-slate-700 transition hover:border-slate-600 hover:bg-slate-900 hover:text-white"
-                        >
-                          Ver en Mapbox
-                        </button>
-                      </div>
-                    )}
+                    <div className="mt-1">
+                      <button
+                        type="button"
+                        onClick={() => openMapboxFeature(feature)}
+                        disabled={!mapboxToken}
+                        className={`rounded border px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] transition ${
+                          mapboxToken
+                            ? "border-slate-300 text-slate-700 hover:border-slate-600 hover:bg-slate-900 hover:text-white"
+                            : "border-rose-400 text-rose-400 hover:border-rose-400 hover:text-rose-300"
+                        }`}
+                      >
+                        Ver en Mapbox
+                      </button>
+                      {!mapboxToken && (
+                        <p className="mt-1 text-[0.55rem] text-rose-400">
+                          Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar Mapbox.
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <span
                     className="h-4 w-4 rounded-full border border-slate-300"
