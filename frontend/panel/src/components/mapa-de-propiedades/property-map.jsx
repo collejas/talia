@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 const STATUS_COLORS = {
   disponible: "#2ECC71",
@@ -52,11 +53,46 @@ function buildChoroplethColor(value, max = 5000) {
   return `hsl(${hue}, 70%, ${light}%)`;
 }
 
+function collectCoordinates(coord, callback) {
+  if (!Array.isArray(coord)) {
+    return;
+  }
+  if (typeof coord[0] === "number" && typeof coord[1] === "number") {
+    callback(coord[0], coord[1]);
+    return;
+  }
+  for (const item of coord) {
+    collectCoordinates(item, callback);
+  }
+}
+
+function getGeometryBounds(geometry) {
+  if (!geometry || typeof geometry !== "object") {
+    return null;
+  }
+  let minLng = Infinity;
+  let minLat = Infinity;
+  let maxLng = -Infinity;
+  let maxLat = -Infinity;
+  collectCoordinates(geometry.coordinates, (lng, lat) => {
+    minLng = Math.min(minLng, lng);
+    minLat = Math.min(minLat, lat);
+    maxLng = Math.max(maxLng, lng);
+    maxLat = Math.max(maxLat, lat);
+  });
+  if (minLng === Infinity || minLat === Infinity) {
+    return null;
+  }
+  return { minLng, minLat, maxLng, maxLat };
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const osmbRef = useRef(null);
   const layerRef = useRef(null);
+  const mapboxContainerRef = useRef(null);
+  const mapboxInstanceRef = useRef(null);
 
   const [features, setFeatures] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -81,6 +117,9 @@ export function PropertyMap() {
   const [selectedMunicipioKey, setSelectedMunicipioKey] = useState(null);
   const [hoveredRegionKey, setHoveredRegionKey] = useState(null);
   const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
+  const [mapboxActive, setMapboxActive] = useState(false);
+  const [mapboxFeature, setMapboxFeature] = useState(null);
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -166,6 +205,41 @@ export function PropertyMap() {
     ? "México"
     : "Selecciona un polígono";
 
+  const mapboxProps = mapboxFeature?.properties ?? null;
+  const mapboxStatusLabel =
+    typeof mapboxProps?.status === "string" ? mapboxProps.status.toUpperCase() : null;
+  const mapboxPriceLabel =
+    mapboxProps?.precio != null
+      ? new Intl.NumberFormat("es-MX", {
+          style: "currency",
+          currency: "MXN",
+          maximumFractionDigits: 0,
+        }).format(Number(mapboxProps.precio))
+      : "Sin precio";
+  const mapboxAreaLabel =
+    mapboxProps?.area_m2 != null ? `${Number(mapboxProps.area_m2)} m²` : "Sin área registrada";
+  const mapboxLevelsLabel =
+    (mapboxProps?.levels ?? mapboxProps?.altura ?? mapboxProps?.height) != null
+      ? `${Number(mapboxProps?.levels ?? mapboxProps?.altura ?? mapboxProps?.height)} niveles`
+      : "Niveles no definidos";
+  const mapboxCatalogLabel = [
+    mapboxProps?.linea_nombre ? `Línea ${mapboxProps.linea_nombre}` : null,
+    mapboxProps?.familia_nombre ? `Familia ${mapboxProps.familia_nombre}` : null,
+    mapboxProps?.modelo_nombre ? `Modelo ${mapboxProps.modelo_nombre}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const mapboxLocationLabel = mapboxProps
+    ? [
+        mapboxProps.pais_codigo ? `País ${mapboxProps.pais_codigo}` : null,
+        mapboxProps.estado_cve ? `Estado ${mapboxProps.estado_cve}` : null,
+        mapboxProps.municipio_cve ? `Municipio ${mapboxProps.municipio_cve}` : null,
+        mapboxProps.colonia ? mapboxProps.colonia : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
   const activeFeatureProps = activeMarkerFeature?.properties ?? null;
   const activeDevelopmentSummary = (() => {
     if (!activeFeatureProps) {
@@ -220,10 +294,10 @@ export function PropertyMap() {
     [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
   );
 
-  const handleRegionClick = useCallback(
-    (feature) => {
-      const key = resolveRegionKey(feature);
-      if (!key) return;
+const handleRegionClick = useCallback(
+  (feature) => {
+    const key = resolveRegionKey(feature);
+    if (!key) return;
       if (mapLevel === "pais") {
         setMapLevel("estado");
         setSelectedStateKey(null);
@@ -234,10 +308,21 @@ export function PropertyMap() {
         setMapLevel("municipio");
       } else if (mapLevel === "municipio") {
         setSelectedMunicipioKey(key);
-      }
-    },
-    [mapLevel],
-  );
+    }
+  },
+  [mapLevel],
+);
+
+const openMapboxFeature = useCallback((feature) => {
+  if (!feature) return;
+  setMapboxFeature(feature);
+  setMapboxActive(true);
+}, []);
+
+const closeMapbox = useCallback(() => {
+  setMapboxActive(false);
+  setMapboxFeature(null);
+}, []);
 
   const handleRegionHover = useCallback((feature) => {
     const key = resolveRegionKey(feature);
@@ -495,6 +580,146 @@ export function PropertyMap() {
       mapInstanceRef.current.fitBounds(aggregatedBounds, { padding: [30, 30], maxZoom: 19 });
     }
   }, [filteredFeatures, leaflet, mapLevel, getFeatureColor]);
+
+  useEffect(() => {
+    if (!mapboxActive) {
+      mapboxInstanceRef.current?.remove();
+      mapboxInstanceRef.current = null;
+      return;
+    }
+    if (!mapboxFeature || !mapboxToken) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const mapboxglModule = (await import("mapbox-gl")).default;
+      if (cancelled) return;
+      mapboxglModule.accessToken = mapboxToken;
+      const container = mapboxContainerRef.current;
+      if (!container) return;
+      const bounds = getGeometryBounds(mapboxFeature.geometry);
+      const center = bounds
+        ? [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2]
+        : DEFAULT_CENTER;
+      const map = new mapboxglModule.Map({
+        container,
+        style: "mapbox://styles/mapbox/satellite-v9",
+        center,
+        zoom: 18,
+        pitch: 60,
+        bearing: 0,
+        projection: "mercator",
+      });
+      mapboxInstanceRef.current = map;
+      const sourceId = "propiedad-3d";
+      const fillLayerId = "propiedad-3d-fill";
+      const lineLayerId = "propiedad-3d-outline";
+      const featureCollection = {
+        type: "FeatureCollection",
+        features: mapboxFeature ? [mapboxFeature] : [],
+      };
+      const addLayerRules = () => {
+        if (!map.isStyleLoaded()) {
+          return;
+        }
+        if (!map.getSource(sourceId)) {
+          map.addSource(sourceId, {
+            type: "geojson",
+            data: featureCollection,
+          });
+        } else {
+          const source = map.getSource(sourceId);
+          if (source && typeof source.setData === "function") {
+            source.setData(featureCollection);
+          }
+        }
+        if (!map.getLayer(fillLayerId)) {
+          map.addLayer({
+            id: fillLayerId,
+            type: "fill-extrusion",
+            source: sourceId,
+            paint: {
+              "fill-extrusion-color": [
+                "coalesce",
+                ["get", "color"],
+                ["get", "status_color"],
+                "#95A5A6",
+              ],
+              "fill-extrusion-height": [
+                "coalesce",
+                ["to-number", ["get", "height"], 0],
+                0,
+              ],
+              "fill-extrusion-base": [
+                "coalesce",
+                ["to-number", ["get", "min_height"], 0],
+                0,
+              ],
+              "fill-extrusion-opacity": 0.9,
+            },
+          });
+        }
+        if (!map.getLayer(lineLayerId)) {
+          map.addLayer({
+            id: lineLayerId,
+            type: "line",
+            source: sourceId,
+            paint: {
+              "line-color": "#000",
+              "line-width": 1,
+              "line-opacity": 0.6,
+            },
+          });
+        }
+      };
+      map.on("load", () => {
+        if (cancelled) return;
+        addLayerRules();
+        if (bounds) {
+          map.fitBounds(
+            [
+              [bounds.minLng, bounds.minLat],
+              [bounds.maxLng, bounds.maxLat],
+            ],
+            { padding: 30, maxZoom: 19 },
+          );
+        }
+      });
+      map.on("styledata", () => {
+        if (cancelled) return;
+        addLayerRules();
+      });
+    })();
+    return () => {
+      cancelled = true;
+      mapboxInstanceRef.current?.remove();
+      mapboxInstanceRef.current = null;
+    };
+  }, [mapboxActive, mapboxFeature, mapboxToken]);
+
+  useEffect(() => {
+    if (!mapboxActive || !mapboxFeature || !mapboxInstanceRef.current) {
+      return;
+    }
+    const map = mapboxInstanceRef.current;
+    const source = map.getSource("propiedad-3d");
+    if (source && typeof source.setData === "function") {
+      source.setData({
+        type: "FeatureCollection",
+        features: [mapboxFeature],
+      });
+    }
+    const bounds = getGeometryBounds(mapboxFeature.geometry);
+    if (bounds && map.isStyleLoaded()) {
+      map.fitBounds(
+        [
+          [bounds.minLng, bounds.minLat],
+          [bounds.maxLng, bounds.maxLat],
+        ],
+        { padding: 30, maxZoom: 19 },
+      );
+    }
+  }, [mapboxActive, mapboxFeature]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -879,6 +1104,17 @@ export function PropertyMap() {
                         {postalLabel ? ` · ${postalLabel}` : ""}
                       </div>
                     )}
+                    {mapboxToken && (
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => openMapboxFeature(feature)}
+                          className="rounded border border-slate-300 px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-slate-700 transition hover:border-slate-600 hover:bg-slate-900 hover:text-white"
+                        >
+                          Ver en Mapbox
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <span
                     className="h-4 w-4 rounded-full border border-slate-300"
@@ -895,6 +1131,98 @@ export function PropertyMap() {
           ref={mapContainerRef}
           className="h-[600px] w-full rounded-md border border-slate-200 bg-white/10 shadow-sm shadow-slate-900/10"
         />
+        <div
+          ref={mapboxContainerRef}
+          className={`absolute inset-0 z-40 rounded-md transition-opacity duration-200 ${
+            mapboxActive
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+        />
+        <div
+          className={`absolute inset-0 z-50 flex flex-col border border-slate-800 bg-gradient-to-b from-slate-950/90 to-slate-950/60 transition-opacity duration-200 ${
+            mapboxActive
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
+                Mapbox 3D
+              </p>
+              {!mapboxToken && (
+                <p className="text-[0.65rem] text-rose-400">
+                  Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar esta vista.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900"
+              onClick={closeMapbox}
+            >
+              Volver al mapa nacional
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
+            {mapboxFeature ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-lg font-semibold text-white">
+                    {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
+                  </div>
+                  <span
+                    className="h-4 w-4 rounded-full border border-slate-500"
+                    style={{
+                      backgroundColor:
+                        mapboxProps?.color ??
+                        mapboxProps?.status_color ??
+                        "#95A5A6",
+                    }}
+                  />
+                </div>
+                {mapboxCatalogLabel && (
+                  <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
+                )}
+                {mapboxLocationLabel && (
+                  <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
+                )}
+                <div className="mt-4 space-y-2 text-slate-200">
+                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                    <span>Status:</span>
+                    <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                    <span>Precio:</span>
+                    <span className="font-semibold">{mapboxPriceLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                    <span>Área:</span>
+                    <span className="font-semibold">{mapboxAreaLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                    <span>Niveles:</span>
+                    <span className="font-semibold">{mapboxLevelsLabel}</span>
+                  </div>
+                  {mapboxProps?.descripcion && (
+                    <div>
+                      <p className="text-xs text-slate-300">Descripción:</p>
+                      <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-[0.85rem] text-slate-400">
+                Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
+              </p>
+            )}
+          </div>
+          <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
+            La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
+          </div>
+        </div>
       </section>
     </div>
   );
