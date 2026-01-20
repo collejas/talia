@@ -140,11 +140,15 @@ function buildHierarchy(features) {
       color: statusColor,
     });
   }
-  return Array.from(devMap.values()).map((dev) => ({
-    id: dev.id,
-    name: dev.name,
-    capas: Array.from(dev.capas.values()),
-  }));
+  return Array.from(devMap.values())
+    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
+    .map((dev) => ({
+      id: dev.id,
+      name: dev.name,
+      capas: Array.from(dev.capas.values()).sort((a, b) =>
+        (a.name ?? "").localeCompare(b.name ?? ""),
+      ),
+    }));
 }
 
 export function PropertyMap() {
@@ -1342,30 +1346,28 @@ const closeMapbox = useCallback(() => {
               ? error
               : `${filteredFeatures.length} propiedades mostrando`}
           </div>
-          <div className="flex h-full flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition">
+          <div className="flex h-[320px] flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition sm:h-[420px] lg:h-[calc(100vh-400px)]">
             <div
-              className="flex-1 overflow-y-auto px-3 py-2"
-              style={{ maxHeight: "calc(100vh - 400px)" }}
+              className="flex h-full flex-col overflow-y-auto px-3 py-2"
+              style={{ minHeight: 260 }}
             >
               <ul className="space-y-3">
                 {hierarchyTree.map((dev) => (
                   <li key={dev.id} className="rounded border border-slate-100 bg-slate-50/80">
-                    <div className="px-3 py-2 text-sm font-semibold text-slate-700">
-                      {dev.name}
-                    </div>
-                    <div className="space-y-2 px-3 pb-3">
+                    <div className="px-3 py-2 text-sm font-semibold text-slate-700">{dev.name}</div>
+                    <ul className="space-y-2 border-t border-slate-100 px-3 pt-2">
                       {dev.capas.map((capa) => (
-                        <div key={capa.id} className="space-y-1 border-l border-slate-200 pl-3">
+                        <li key={capa.id} className="space-y-1">
                           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                             {capa.name}
                           </div>
-                          <div className="flex flex-wrap gap-2 pl-1">
+                          <div className="flex flex-wrap gap-2 pl-3">
                             {capa.units.map((unit) => (
                               <button
                                 key={unit.id}
                                 type="button"
                                 onClick={() => handleUnitSelect(unit)}
-                                title={`${unit.name}`}
+                                title={unit.name}
                                 className={`relative flex h-8 w-8 flex-none items-center justify-center rounded-full border-2 transition ${
                                   selectedId === String(unit.id) ? "border-slate-900" : "border-slate-300"
                                 }`}
@@ -1378,9 +1380,9 @@ const closeMapbox = useCallback(() => {
                               </button>
                             ))}
                           </div>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </li>
                 ))}
               </ul>
