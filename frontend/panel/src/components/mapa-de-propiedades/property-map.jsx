@@ -212,6 +212,34 @@ function buildHierarchy(features) {
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 }
 
+function padNumeric(value, length) {
+  if (value == null) {
+    return "".padStart(length, "0");
+  }
+  const cleaned = `${value}`.replace(/\D/g, "");
+  return cleaned.padStart(length, "0");
+}
+
+const COUNTRY_ISO_EQUIVALENTS = {
+  MX: "MEX",
+  MEX: "MX",
+};
+
+function buildMunicipioGeoKey(properties) {
+  const statePart = padNumeric(
+    properties?.estado_cve ?? properties?.cve_ent ?? properties?.cve_entidad ?? "",
+    2,
+  );
+  const municipioPart = padNumeric(
+    properties?.municipio_cve ?? properties?.cve_mun ?? "",
+    3,
+  );
+  if (!statePart.trim() || !municipioPart.trim()) {
+    return "";
+  }
+  return `${statePart}${municipioPart}`;
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -239,8 +267,10 @@ export function PropertyMap() {
   const [demografiaGeojson, setDemografiaGeojson] = useState(null);
   const [demografiaDataset, setDemografiaDataset] = useState([]);
   const [demografiaLevel, setDemografiaLevel] = useState("pais");
+  const [selectedCountryKey, setSelectedCountryKey] = useState(null);
   const [selectedStateKey, setSelectedStateKey] = useState(null);
   const [selectedMunicipioKey, setSelectedMunicipioKey] = useState(null);
+  const [selectedMunicipioGeoKey, setSelectedMunicipioGeoKey] = useState(null);
   const [hoveredRegionKey, setHoveredRegionKey] = useState(null);
   const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
   const [mapboxActive, setMapboxActive] = useState(false);
@@ -426,9 +456,16 @@ export function PropertyMap() {
           return false;
         }
       }
+      if (mapLevel === "municipio" && selectedMunicipioGeoKey) {
+        const featureProps = feature?.properties ?? {};
+        const featureGeoKey = buildMunicipioGeoKey(featureProps);
+        if (!featureGeoKey || featureGeoKey !== selectedMunicipioGeoKey) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [features, nivelFilter, tipoFilter]);
+  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey]);
 
   const hierarchyTree = useMemo(() => buildHierarchy(filteredFeatures), [filteredFeatures]);
 
@@ -481,6 +518,58 @@ export function PropertyMap() {
     },
     [getFeatureColor],
   );
+
+  const normalizeCountryCode = useCallback((code) => {
+    if (!code) return null;
+    const cleaned = `${code}`.trim().toUpperCase();
+    if (!cleaned) return null;
+    const counterpart = COUNTRY_ISO_EQUIVALENTS[cleaned];
+    return { primary: cleaned, counterpart };
+  }, []);
+
+  const propertyCountryKeys = useMemo(() => {
+    const keys = new Set();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const candidate = normalizeCountryCode(props.pais_codigo ?? props.iso_a2 ?? props.ISO_A2 ?? "");
+      if (!candidate?.primary) continue;
+      keys.add(candidate.primary);
+      if (candidate.counterpart) {
+        keys.add(candidate.counterpart);
+      }
+    }
+    return keys;
+  }, [features, normalizeCountryCode]);
+
+  const propertyStateKeys = useMemo(() => {
+    const keys = new Set();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const stateValue = props.estado_cve ?? props.cve_ent ?? props.cve_entidad ?? "";
+      const normalized = padNumeric(stateValue, 2);
+      if (normalized.trim()) {
+        keys.add(normalized);
+        keys.add(stateValue.trim().toUpperCase());
+      }
+    }
+    return keys;
+  }, [features]);
+
+  const propertyMunicipioKeys = useMemo(() => {
+    const keys = new Set();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const municipioKey = buildMunicipioGeoKey(props);
+      if (municipioKey) {
+        keys.add(municipioKey);
+      }
+      const alternate = props.cvegeo;
+      if (alternate) {
+        keys.add(`${alternate}`.trim().toUpperCase());
+      }
+    }
+    return keys;
+  }, [features]);
 
   const datasetMap = useMemo(() => {
     const map = new Map();
@@ -581,6 +670,7 @@ export function PropertyMap() {
         (entry?.visitantes_total ?? 0);
       const color = buildChoroplethColor(total);
       const isActive =
+        (mapLevel === "pais" && selectedCountryKey === key) ||
         (mapLevel === "estado" && selectedStateKey === key) ||
         (mapLevel === "municipio" && selectedMunicipioKey === key);
       const isMunicipioView = mapLevel === "municipio";
@@ -599,23 +689,35 @@ export function PropertyMap() {
         fillOpacity,
       });
     },
-    [datasetMap, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey],
+    [
+      datasetMap,
+      hoveredRegionKey,
+      mapLevel,
+      selectedCountryKey,
+      selectedMunicipioKey,
+      selectedStateKey,
+    ],
   );
 
 const handleRegionClick = useCallback(
   (feature) => {
     const key = resolveRegionKey(feature);
     if (!key) return;
-      if (mapLevel === "pais") {
-        setMapLevel("estado");
-        setSelectedStateKey(null);
-        setSelectedMunicipioKey(null);
-      } else if (mapLevel === "estado") {
-        setSelectedStateKey(key);
-        setSelectedMunicipioKey(null);
-        setMapLevel("municipio");
-      } else if (mapLevel === "municipio") {
-        setSelectedMunicipioKey(key);
+    if (mapLevel === "pais") {
+      setSelectedCountryKey(key);
+      setSelectedStateKey(null);
+      setSelectedMunicipioKey(null);
+      setSelectedMunicipioGeoKey(null);
+      setMapLevel("estado");
+    } else if (mapLevel === "estado") {
+      setSelectedStateKey(key);
+      setSelectedMunicipioKey(null);
+      setSelectedMunicipioGeoKey(null);
+      setMapLevel("municipio");
+    } else if (mapLevel === "municipio") {
+      setSelectedMunicipioKey(key);
+      const municipioGeoKey = buildMunicipioGeoKey(feature?.properties ?? {});
+      setSelectedMunicipioGeoKey(municipioGeoKey || null);
     }
   },
   [mapLevel],
@@ -678,11 +780,13 @@ const closeMapbox = useCallback(() => {
     if (mapLevel === "municipio") {
       setMapLevel("estado");
       setSelectedMunicipioKey(null);
+      setSelectedMunicipioGeoKey(null);
       return;
     }
     if (mapLevel === "estado") {
       setMapLevel("pais");
       setSelectedStateKey(null);
+      setSelectedCountryKey(null);
     }
   }, [mapLevel]);
 
@@ -818,16 +922,31 @@ const closeMapbox = useCallback(() => {
     if (!demografiaGeojson) return null;
     if (demografiaLevel !== mapLevel) return null;
     let features = demografiaGeojson.features || [];
-    if (mapLevel === "pais") {
-      features = features.filter((feature) => {
-        const props = feature.properties || {};
-        const countries = [props.iso_a3, props.ISO_A3, props.iso_a2, props.ISO_A2];
-        return countries.some((item) => typeof item === "string" && item.toUpperCase() === "MEX");
-      });
-    }
+    const filterByLevel = (feature) => {
+      const key = resolveRegionKey(feature);
+      if (!key) return false;
+      if (mapLevel === "pais") {
+        return propertyCountryKeys.size ? propertyCountryKeys.has(key) : true;
+      }
+      if (mapLevel === "estado") {
+        return propertyStateKeys.size ? propertyStateKeys.has(key) : true;
+      }
+      if (mapLevel === "municipio") {
+        return propertyMunicipioKeys.size ? propertyMunicipioKeys.has(key) : true;
+      }
+      return true;
+    };
+    features = features.filter(filterByLevel);
     if (!features.length) return null;
     return { ...demografiaGeojson, features };
-  }, [demografiaGeojson, mapLevel, demografiaLevel]);
+  }, [
+    demografiaGeojson,
+    demografiaLevel,
+    mapLevel,
+    propertyCountryKeys,
+    propertyStateKeys,
+    propertyMunicipioKeys,
+  ]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current || !filteredDemografiaGeojson) {
