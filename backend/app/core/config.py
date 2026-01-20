@@ -207,7 +207,7 @@ class Settings(BaseSettings):
         default="https://www.inegi.org.mx/app/api/denue/v1",
         validation_alias=AliasChoices("DENUE_BASE_URL", "TALIA_DENUE_BASE_URL"),
     )
-    log_file_path: str = "/home/devuser/talia/logs/api.log"
+    log_file_path: str = "/var/www/talia/logs/api.log"
     webchat_inactivity_hours: int | None = Field(
         default=None,
         description="Número de horas para reiniciar conversación webchat; usa default SQL cuando no se define.",

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
 from urllib.parse import urlparse
+import time
 
 from fastapi import (
     APIRouter,
@@ -76,6 +77,7 @@ from app.services.storage import StorageError
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
+import_debug_logger = get_logger("app.api.crm.import")
 
 DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
@@ -1352,7 +1354,10 @@ def _format_coordinate(value: Any) -> str:
 def _format_point(point: Sequence[Any]) -> str:
     if len(point) < 2:
         raise ValueError("Cada punto debe tener al menos dos coordenadas.")
-    return " ".join(_format_coordinate(coord) for coord in point)
+    coords = list(point)
+    while len(coords) < 3:
+        coords.append(0)
+    return " ".join(_format_coordinate(coord) for coord in coords)
 
 
 def _format_ring(ring: Sequence[Sequence[Any]]) -> str:
@@ -1381,19 +1386,145 @@ def _geometry_coordinates_to_wkt(geom_type: str, coords: Any) -> str:
     raise ValueError("Solo se permiten polígonos o multipolígonos.")
 
 
+def _parse_multipolygon_body(body: str) -> list[list[list[list[float]]]]:
+    polygons: list[list[list[list[float]]]] = []
+    polygon: list[list[list[float]]] | None = None
+    ring: list[list[float]] | None = None
+    coord: list[float] | None = None
+    number = ""
+    depth = 0
+    number_chars = set("0123456789+-.eE")
+
+    def flush_number(target: list[float]) -> None:
+        nonlocal number
+        if not number:
+            return
+        target.append(float(number))
+        number = ""
+
+    for char in body:
+        if char == "(":
+            depth += 1
+            if depth == 2:
+                polygon = []
+            elif depth == 3:
+                ring = []
+            elif depth == 4:
+                coord = []
+            continue
+        if char == ")":
+            if depth == 4 and coord is not None:
+                flush_number(coord)
+                if coord:
+                    ring.append(coord)
+                coord = []
+            elif depth == 3 and ring is not None:
+                if ring:
+                    polygon.append(ring)
+                ring = []
+            elif depth == 2 and polygon is not None:
+                if polygon:
+                    polygons.append(polygon)
+                polygon = []
+            depth -= 1
+            continue
+        if char == ",":
+            if depth == 4 and coord is not None:
+                flush_number(coord)
+                if coord:
+                    ring.append(coord)
+                coord = []
+            continue
+        if char.isspace():
+            if depth == 4 and coord is not None:
+                flush_number(coord)
+            continue
+        if depth >= 4 and char in number_chars:
+            if coord is None:
+                coord = []
+            number += char
+            continue
+        if depth >= 4 and coord is not None:
+            flush_number(coord)
+        number = ""
+    return polygons
+
+
+def _ensure_z_dimension(body: str) -> str:
+    normalized_body = _ensure_z_suffix(body)
+    rest = normalized_body[len("MULTIPOLYGON") :].strip()
+    body_start = rest.find("(")
+    if body_start == -1:
+        return normalized_body
+    polygon_body = rest[body_start:]
+    multipolygon = _parse_multipolygon_body(polygon_body)
+    if not multipolygon:
+        return normalized_body
+
+    max_dim = 0
+    for polygon in multipolygon:
+        for ring in polygon:
+            for coord in ring:
+                max_dim = max(max_dim, len(coord))
+    target_dim = max(max_dim, 3)
+
+    for polygon in multipolygon:
+        for ring in polygon:
+            for coord in ring:
+                while len(coord) < target_dim:
+                    coord.append(0.0)
+
+    formatted_body = _format_multipolygon(multipolygon)
+    suffix = " ZM" if target_dim >= 4 else " Z"
+    result = f"MULTIPOLYGON{suffix} {formatted_body}"
+    import_debug_logger.debug(
+        "geometry.ensure_z_dimension",
+        extra={
+            "length": len(result),
+            "slice": result[:80],
+            "target_dim": target_dim,
+        },
+    )
+    return result
+
+
+def _ensure_z_suffix(body: str) -> str:
+    prefix = "MULTIPOLYGON"
+    upper = body.upper()
+    if not upper.startswith(prefix):
+        return body
+    rest = body[len(prefix):].lstrip()
+    if not rest:
+        return f"{prefix} Z"
+    if rest.upper().startswith(("Z ", "ZM ", "Z(", "ZM(")):
+        return f"{prefix} {rest}"
+    if rest.upper().startswith("Z"):
+        return f"{prefix} {rest[1:].lstrip()}"
+    if rest.upper().startswith("ZM"):
+        return f"{prefix} {rest[2:].lstrip()}"
+    return f"{prefix} Z {rest}"
+
+
 def _normalize_geometry_input(value: str | Mapping[str, Any] | None) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
         trimmed = value.strip()
+        import_debug_logger.info(
+            "geometry.normalize.string.input",
+            extra={"length": len(trimmed), "starts_with_srid": trimmed.upper().startswith("SRID=")},
+        )
         if not trimmed:
             return None
         upper = trimmed.upper()
         if upper.startswith("SRID="):
-            if upper.startswith("SRID=4326;"):
-                return trimmed
-            return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
-        return f"SRID=4326;{trimmed}"
+            suffix = trimmed.split(";", 1)[-1]
+            body = _convert_polygon_to_multipolygon(suffix)
+            body = _ensure_z_dimension(body)
+            return f"SRID=4326;{body}"
+        body = _convert_polygon_to_multipolygon(trimmed)
+        body = _ensure_z_dimension(body)
+        return f"SRID=4326;{body}"
 
     geometry = value
     if geometry.get("type", "").upper() == "FEATURE" and isinstance(geometry.get("geometry"), Mapping):
@@ -1403,7 +1534,12 @@ def _normalize_geometry_input(value: str | Mapping[str, Any] | None) -> str | No
     if not geom_type or coords is None:
         raise ValueError("La geometría debe incluir tipo y coordenadas.")
     body = _geometry_coordinates_to_wkt(geom_type, coords)
-    return f"SRID=4326;{geom_type} {body}"
+    if geom_type == "POLYGON":
+        body = _convert_polygon_to_multipolygon(f"POLYGON {body}")
+    else:
+        body = f"{geom_type} {body}"
+    normalized = _ensure_z_dimension(body)
+    return f"SRID=4326;{normalized}"
 
 
 class ImportUnidad(BaseModel):
@@ -11391,21 +11527,46 @@ async def importar_propiedades_csv(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> dict[str, Any]:
+    start = time.perf_counter()
+    file_name = getattr(file, "filename", "csv")
     try:
         raw = await file.read()
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
+        import_debug_logger.exception(
+            "import_csv.invalid_encoding",
+            extra={"file": file_name},
+        )
         raise HTTPException(status_code=400, detail="El archivo CSV debe estar en UTF-8.") from None
+
+    import_debug_logger.info(
+        "import_csv.received",
+        extra={"file": file_name, "size_bytes": len(raw)},
+    )
 
     try:
         payload = _csv_to_import_request(text)
     except ValueError as exc:
+        import_debug_logger.warning(
+            "import_csv.invalid_payload",
+            extra={"file": file_name, "error": str(exc)},
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
         result = await _process_import_request(payload, repo, organizacion_id)
     except CRMRepositoryError as exc:
+        import_debug_logger.error(
+            "import_csv.repository_error",
+            extra={"file": file_name, "error": str(exc)},
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    duration_ms = (time.perf_counter() - start) * 1000
+    import_debug_logger.info(
+        "import_csv.completed",
+        extra={"file": file_name, "duration_ms": duration_ms, "desarrollos": len(result.get("desarrollos", []))},
+    )
 
     return {"ok": True, **result}
 
@@ -11415,6 +11576,15 @@ async def _process_import_request(
     repo: CRMRepository,
     organizacion_id: UUID,
 ) -> dict[str, list[dict[str, Any]]]:
+    import_debug_logger.info(
+        "import_process.start",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "desarrollos_in_payload": len(payload.desarrollos or []),
+            "mixtos_in_payload": len(payload.mixtos or []),
+        },
+    )
+    start = time.perf_counter()
     tipo_lookup = await _build_tipo_lookup(repo, organizacion_id)
     desarrollos: list[dict[str, Any]] = []
     mixtos: list[dict[str, Any]] = []
@@ -11422,6 +11592,16 @@ async def _process_import_request(
         desarrollos.append(await _import_desarrollo_tree(repo, organizacion_id, desarrollo, tipo_lookup))
     for mixto in payload.mixtos or []:
         mixtos.append(await _import_desarrollo_mixto(repo, organizacion_id, mixto, tipo_lookup))
+    duration_ms = (time.perf_counter() - start) * 1000
+    import_debug_logger.info(
+        "import_process.completed",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "desarrollos": len(desarrollos),
+            "mixtos": len(mixtos),
+            "duration_ms": duration_ms,
+        },
+    )
     return {"desarrollos": desarrollos, "mixtos": mixtos}
 
 
@@ -11456,7 +11636,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 raise ValueError(f"Hay varios desarrollos para el grupo '{group_key}'.")
             group["desarrollo"] = ImportDesarrollo(
                 nombre=_require_value(row.get("nombre"), "nombre", line),
-                tipo=_parse_desarrollo_tipo(row.get("tipo")),
+                tipo=_parse_desarrollo_tipo(_resolve_desarrollo_tipo_value(row)),
                 status=_parse_status_value(row.get("status")),
                 pais_codigo=_strip_value(row.get("pais_codigo")) or "MX",
                 estado_cve=_strip_value(row.get("estado_cve")),
@@ -11528,10 +11708,37 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
     return ImportPropiedadesRequest(desarrollos=desarrollos, mixtos=[])
 
 
+_POLYGON_PREFIX = re.compile(r"^POLYGON(?:\s+([A-Za-z]+))?\s*(.*)", re.IGNORECASE)
 def _strip_value(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _convert_polygon_to_multipolygon(body: str) -> str:
+    trimmed = body.strip()
+    match = _POLYGON_PREFIX.match(trimmed)
+    if not match:
+        return trimmed
+    dim = match.group(1)
+    inner = match.group(2).strip()
+    if not inner:
+        raise ValueError("El polígono no contiene coordenadas.")
+    suffix = f" {dim.strip()}" if dim else ""
+    import_debug_logger.debug(
+        "geometry.convert_polygon_to_multipolygon",
+        extra={"dim": dim or "<none>", "inner_length": len(inner)},
+    )
+    return f"MULTIPOLYGON{suffix} ({inner})"
+
+
+def _resolve_desarrollo_tipo_value(row: dict[str, Any]) -> Any:
+    for key in ("tipo", "tipo_nombre"):
+        if key in row and row[key] is not None:
+            value = _strip_value(row[key])
+            if value:
+                return value
+    return ""
 
 
 def _require_value(value: Any, field: str, line: int) -> str:
@@ -11832,7 +12039,30 @@ async def _create_poligono_if_present(
     status: PropiedadStatus,
     metadata: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
+    import_debug_logger.info(
+        "poligono.create.start",
+        extra={
+            "target_type": target_type.value,
+            "target_id": target_id,
+            "status": status.value,
+        },
+    )
+    normalize_start = time.perf_counter()
     geom = _normalize_geometry_input(geometry)
+    normalize_duration_ms = (time.perf_counter() - normalize_start) * 1000
+    geometry_preview = None
+    if isinstance(geom, str):
+        geometry_preview = geom if len(geom) <= 200 else f"{geom[:200]}..."
+    import_debug_logger.info(
+        "geometry.normalized",
+        extra={
+            "target_type": target_type.value,
+            "target_id": target_id,
+            "duration_ms": normalize_duration_ms,
+            "geometry_is_none": geom is None,
+            "geometry_preview": geometry_preview,
+        },
+    )
     if geom is None:
         return None
     payload: dict[str, Any] = {
@@ -11842,7 +12072,16 @@ async def _create_poligono_if_present(
         "status": status.value,
         "metadata": _coerce_metadata(metadata),
     }
-    return await repo.create_propiedad_poligono(organizacion_id=organizacion_id, payload=payload)
+    record = await repo.create_propiedad_poligono(organizacion_id=organizacion_id, payload=payload)
+    import_debug_logger.info(
+        "poligono.create.finished",
+        extra={
+            "target_type": target_type.value,
+            "target_id": target_id,
+            "poligono_id": record["id"],
+        },
+    )
+    return record
 
 
 def _resolve_tipo_id(

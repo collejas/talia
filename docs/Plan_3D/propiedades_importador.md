@@ -16,9 +16,9 @@ El CSV debe contener al menos las siguientes columnas. Las filas se agrupan por 
 | `nivel` | Para filas de `capa`; número entero que identifica el nivel. |
 | `capa_nivel` | Para filas de `unidad`; referencia al `nivel` de la capa padre. |
 | `unidad` | Identificador de la unidad (solo en filas `unidad`). |
-| `tipo_nombre` | Nombre del tipo de propiedad (coincidencia con `propiedad_tipos`). |
+| `tipo_nombre` | Nombre del tipo de propiedad (coincidencia con `propiedad_tipos`). También se usa como alias para `tipo` cuando la fila describe un desarrollo y `tipo` viene vacío. |
 | `poligono` | Geometría en GeoJSON o WKT; el backend la convierte a `SRID=4326`. |
-| `metadata` | JSON válido (opcional) para metadata adicional. |
+| `metadata` | JSON válido (opcional) para metadata adicional (ej. `{}` o `{"sector":"norte"}`). |
 | `linea_id`, `familia_id`, `modelo_id` | UUIDs opcionales para enlazar catálogos. |
 
 Las columnas adicionales como `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`, `descripcion`, `altura`, `precio`, `area_m2` o `area_m2` son bienvenidas y se transfieren directamente.
@@ -54,3 +54,5 @@ Eso crea un CSV con la columna `geometry` que luego puedes renombrar o procesar 
 1. Descarga `GET /crm/propiedades/tipos` para reservar `tipo_nombre` coherentes.\
 2. Mantén el archivo CSV limpio: agrupa filas por desarrollo y ordena las capas (`nivel`) antes de las unidades (`capa_nivel`).\
 3. El modal de `/settings/propiedades` refresca la jerarquía una vez concluido el import; si necesitas ajustes, edita desde el árbol o vuelve a importar el CSV.
+
+> **Alias para el tipo de desarrollo**: cuando la fila describe un `desarrollo`, el importador busca primero la columna `tipo` y, si no existe o viene vacía, usa `tipo_nombre`. Esto te permite reutilizar CSVs antiguos donde ponías `vertical`/`horizontal` en `tipo_nombre` sin renombrar nada; el backend normaliza (trim + lowercase) antes de validar contra el enum `property_desarrollo_tipo`.

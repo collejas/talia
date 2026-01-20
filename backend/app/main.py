@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
         "app.channels.webchat": str(log_dir / "webchat.log"),
         "app.analytics.visitas": str(log_dir / "visitas.log"),
         "app.services.whatsapp_followups": str(log_dir / "whatsapp.log"),
+        "app.api.crm.import": str(log_dir / "propiedades-import.log"),
     }
 
     configure_logging(
