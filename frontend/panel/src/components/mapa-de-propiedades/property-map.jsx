@@ -1242,8 +1242,11 @@ const closeMapbox = useCallback(() => {
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
-      <aside className="w-full rounded-md border border-slate-200 bg-white/60 p-4 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:w-80">
-        <div className="flex flex-col gap-4">
+      <aside
+        className="w-full rounded-md border border-slate-200 bg-white/60 p-3 shadow-sm shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/60 lg:w-80"
+        style={{ maxHeight: "calc(100vh - 120px)", overflow: "hidden" }}
+      >
+        <div className="flex flex-col gap-2">
           <div>
             <label className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-200">
               Filtrar por nivel
@@ -1346,10 +1349,13 @@ const closeMapbox = useCallback(() => {
               ? error
               : `${filteredFeatures.length} propiedades mostrando`}
           </div>
-          <div className="flex h-[320px] flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition sm:h-[420px] lg:h-[calc(100vh-400px)]">
+          <div
+            className="flex flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white/40 shadow-sm transition"
+            style={{ height: "calc(100vh - 360px)" }}
+          >
             <div
-              className="flex h-full flex-col overflow-y-auto px-3 py-2"
-              style={{ minHeight: 260 }}
+              className="h-full overflow-y-auto px-3 py-2"
+              style={{ maxHeight: "calc(100vh - 360px)", minHeight: 260 }}
             >
               <ul className="space-y-3">
                 {hierarchyTree.map((dev) => (
@@ -1361,22 +1367,23 @@ const closeMapbox = useCallback(() => {
                           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                             {capa.name}
                           </div>
-                          <div className="flex flex-wrap gap-2 pl-3">
+                          <div className="space-y-1 pl-3">
                             {capa.units.map((unit) => (
                               <button
                                 key={unit.id}
                                 type="button"
                                 onClick={() => handleUnitSelect(unit)}
-                                title={unit.name}
-                                className={`relative flex h-8 w-8 flex-none items-center justify-center rounded-full border-2 transition ${
-                                  selectedId === String(unit.id) ? "border-slate-900" : "border-slate-300"
+                                className={`flex items-center gap-2 rounded-md border px-2 py-1 text-xs transition ${
+                                  selectedId === String(unit.id)
+                                    ? "border-slate-800 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"
                                 }`}
                               >
                                 <span
-                                  className="absolute h-4 w-4 rounded-full"
-                                  style={{ backgroundColor: unit.color }}
+                                  className="h-3 w-3 rounded-full border"
+                                  style={{ backgroundColor: unit.color, borderColor: unit.color }}
                                 />
-                                <span className="sr-only">{unit.name}</span>
+                                <span className="font-semibold">{unit.name}</span>
                               </button>
                             ))}
                           </div>
