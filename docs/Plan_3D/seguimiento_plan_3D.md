@@ -14,9 +14,11 @@
 - [x] El proxy `/api/crm/demografia/mapa` ya atrapa fallos del CRM/Supabase, responde con un payload seguro (`ok:false` + dataset/geojson vacíos) y evita los 502 que rompían la jerarquía al recargar.
 - [x] Documentamos la verificación manual del flujo país → estado → municipio para que el cliente compruebe que sólo las regiones con desarrollos se pintan y que cada nivel centra automáticamente los desarrollos antes de desplegar las unidades.
 - [x] La jerarquía Leaflet ahora pinta y centra únicamente los países/estados/municipios con desarrollos (`crm_propiedades_geojson` + `pais_codigo`/`estado_cve`/`municipio_cve`) antes de desplegar las unidades, garantizando que los municipios visibles se puedan clicar.
+- [x] Reordenamos `property-map.jsx` para que `getStatusCategory` se defina antes de `regionStatusCounts`, eliminando el ReferenceError y asegurando que los conteos (`vendidas`, `apartadas`, `disponibles`) estén listos para la próxima capa de tooltips.
 
 ## Próximos pasos sugeridos
 - [ ] Continuar refinando la UI del árbol para que los polígonos se manejen como contenedores colapsables (con iconos de expansión y etiquetas “Polígono guardado” ocultas) y los botones de polígono estén anidados dentro del nodo correspondiente, garantizando una experiencia coherente con la jerarquía y el estado actual de los nodos.
+- [ ] Agregar tooltips al pasar el cursor sobre países/estados/municipios que muestren los totales calculados por `regionStatusCounts` (unidades vendidas, apartadas y disponibles) para vincular la nueva capa de información con el flujo jerárquico actual.
 
 ## Referencias claves
 - Documentación general del plan espacial: `docs/Plan_3D/plan_3D.md` y la bitácora `docs/Plan_3D/pasos_plan_3D.md`.

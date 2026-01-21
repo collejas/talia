@@ -240,6 +240,23 @@ function buildMunicipioGeoKey(properties) {
   return `${statePart}${municipioPart}`;
 }
 
+function getCountryKeyFromProps(props) {
+  const candidate =
+    (props?.pais_codigo ?? props?.ISO_A2 ?? props?.iso_a2 ?? props?.iso_a3 ?? props?.ISO_A3 ?? "")
+      .toString()
+      .trim()
+      .toUpperCase();
+  if (!candidate) return null;
+  return candidate;
+}
+
+function getStateKeyFromProps(props, normalizeState) {
+  const candidate =
+    (props?.estado_cve ?? props?.cve_ent ?? props?.cve_entidad ?? "").toString().trim();
+  if (!candidate) return null;
+  return normalizeState(candidate);
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -626,6 +643,43 @@ export function PropertyMap() {
     return codes;
   }, [features, normalizeMunicipioCode]);
 
+  const getStatusCategory = useCallback((value) => {
+    switch ((value ?? "").toString().trim().toLowerCase()) {
+      case "vendido":
+      case "vendidas":
+        return "vendidas";
+      case "reservado":
+      case "apartado":
+        return "apartadas";
+      case "disponible":
+      default:
+        return "disponibles";
+    }
+  }, []);
+
+  const regionStatusCounts = useMemo(() => {
+    const map = new Map();
+    for (const feature of features) {
+      const props = feature?.properties ?? {};
+      const statusBucket = getStatusCategory(props.status);
+      const countryKey = getCountryKeyFromProps(props);
+      const stateKey = normalizeStateCode(
+        (props.estado_cve ?? props.cve_ent ?? props.cve_entidad ?? "").toString().trim(),
+      );
+      const municipioKey =
+        buildMunicipioGeoKey(props) ||
+        normalizeMunicipioCode((props.municipio_cve ?? props.cve_mun ?? props.cvegeo ?? "").toString().trim());
+      const keys = [countryKey, stateKey, municipioKey].filter(Boolean);
+      for (const key of keys) {
+        const normalized = `${key}`.toString().trim().toUpperCase();
+        const entry = map.get(normalized) ?? { disponibles: 0, apartadas: 0, vendidas: 0 };
+        entry[statusBucket] = (entry[statusBucket] ?? 0) + 1;
+        map.set(normalized, entry);
+      }
+    }
+    return map;
+  }, [features, getStatusCategory, normalizeStateCode, normalizeMunicipioCode]);
+
   const datasetMap = useMemo(() => {
     const map = new Map();
     for (const entry of demografiaDataset) {
@@ -948,6 +1002,7 @@ const closeMapbox = useCallback(() => {
         layerInstance.on("click", () => handleRegionClickRef.current?.(feature));
         layerInstance.on("mouseover", () => handleRegionHoverRef.current?.(feature));
         layerInstance.on("mouseout", () => handleRegionOutRef.current?.());
+        layerInstance.bindTooltip("", { sticky: true, direction: "top" });
         applyRegionStyleRef.current?.(layerInstance, feature);
       },
     });
@@ -1055,7 +1110,45 @@ const closeMapbox = useCallback(() => {
         applyRegionStyleRef.current?.(layer, layer.feature);
       }
     });
-  }, [mapLevel, hoveredRegionKey, selectedMunicipioKey, selectedStateKey]);
+  }, [applyRegionStyleRef, hoveredRegionKey, mapLevel, selectedMunicipioKey, selectedStateKey]);
+
+  const buildRegionTooltipText = useCallback(
+    (key) => {
+      const stats = regionStatusCounts.get(key);
+      if (!stats) {
+        return "Vendidas: 0 · Apartadas: 0 · Disponibles: 0";
+      }
+      const sold = stats.vendidas ?? 0;
+      const reserved = stats.apartadas ?? 0;
+      const available = stats.disponibles ?? 0;
+      return `Vendidas: ${sold} · Apartadas: ${reserved} · Disponibles: ${available}`;
+    },
+    [regionStatusCounts],
+  );
+
+  useEffect(() => {
+    if (!hierarchyLayerRef.current) {
+      return;
+    }
+    hierarchyLayerRef.current.eachLayer((layer) => {
+      if (layer.feature) {
+        applyRegionStyleRef.current?.(layer, layer.feature);
+        const key = resolveRegionKey(layer.feature);
+        const tooltip = layer.getTooltip?.();
+        if (tooltip) {
+          layer.setTooltipContent(buildRegionTooltipText(key));
+        }
+      }
+    });
+  }, [
+    applyRegionStyleRef,
+    buildRegionTooltipText,
+    hoveredRegionKey,
+    mapLevel,
+    regionStatusCounts,
+    selectedMunicipioKey,
+    selectedStateKey,
+  ]);
 
   useEffect(() => {
     if (!markersLayerRef.current || !leaflet) {
