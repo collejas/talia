@@ -55,4 +55,17 @@ Eso crea un CSV con la columna `geometry` que luego puedes renombrar o procesar 
 2. Mantén el archivo CSV limpio: agrupa filas por desarrollo y ordena las capas (`nivel`) antes de las unidades (`capa_nivel`).\
 3. El modal de `/settings/propiedades` refresca la jerarquía una vez concluido el import; si necesitas ajustes, edita desde el árbol o vuelve a importar el CSV.
 
+## Columnas de volumen amigables
+
+Para evitar tener que escribir JSON, puedes añadir columnas independientes que definan el volumen que quieres para cada capa/unidad. El importador toma esas columnas y las coloca dentro de `propiedad_poligonos.metadata`, que luego lee `crm_propiedades_geojson` para calcular `height`, `min_height` y `levels`. Estas columnas son opcionales, pero si las llenas el volumen saldrá correcto en Mapbox:
+
+| Nueva columna | Qué representa | Cómo se usa |
+| --- | --- | --- |
+| `height` | Altura total en metros que debe tener la extrusión del polígono. | Si existe, el importador copia ese número a `metadata.height`. |
+| `min_height` | Altura desde la cual empieza el volumen (puede ser 0). | Se guarda como `metadata.min_height`. |
+| `levels` | Cuántos niveles se deben dibujar (utiliza `1` para cada piso). | Se propaga a `metadata.levels`; si no la rellenas, el backend usa el `nivel` numérico como fallback. |
+| `metadata_color` / `color` | Color del polígono en formato hex (`#RRGGBB`). | Se guarda en `metadata.color` y el mapa la usa para pintar la capa. |
+
+Puedes mantener esos valores consistentes por piso (ej. `height=3`, `min_height=0`, `levels=1` para cada capa y unidad nueva). El importador los transforma automáticamente en JSON antes de llamar al repositorio, por lo que el usuario solo interactúa con columnas numéricas sencillas en el CSV.
+
 > **Alias para el tipo de desarrollo**: cuando la fila describe un `desarrollo`, el importador busca primero la columna `tipo` y, si no existe o viene vacía, usa `tipo_nombre`. Esto te permite reutilizar CSVs antiguos donde ponías `vertical`/`horizontal` en `tipo_nombre` sin renombrar nada; el backend normaliza (trim + lowercase) antes de validar contra el enum `property_desarrollo_tipo`.
