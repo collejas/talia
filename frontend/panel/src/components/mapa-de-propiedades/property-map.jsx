@@ -14,6 +14,33 @@ const STATUS_COLORS = {
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
+function getFeatureId(feature) {
+  if (!feature || typeof feature !== "object") return null;
+  const props = feature.properties ?? {};
+  const candidates = [
+    props.__feature_id,
+    props.__original_id,
+    feature.id,
+    props.id,
+    props.target_id,
+    props.poligono_id,
+    props.desarrollo_id,
+    props.nivel_id,
+  ];
+  const picked = candidates.find((v) => v !== undefined && v !== null && String(v).length);
+  return picked ? String(picked) : null;
+}
+
+const inferFeatureKind = (feature) => {
+  const props = feature?.properties ?? {};
+  const direct = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
+  if (direct) return direct;
+  if (props.nivel != null) return "capa";
+  if (props.area_m2 != null || props.unidad) return "unidad";
+  if (props.desarrollo_tipo) return "desarrollo";
+  return "unknown";
+};
+
 function getDevelopmentPolygonColor(properties) {
   if (!properties || typeof properties !== "object") {
     return "#2563EB";
@@ -41,6 +68,7 @@ function inferFeatureLayer(feature) {
   if (directLayer) {
     return directLayer;
   }
+  if (props.target_type === "desarrollo") return "desarrollo";
   if (props.unidad || props.tipo_id || props.area_m2) {
     return "unidad";
   }
@@ -298,6 +326,9 @@ export function PropertyMap() {
   const layerRef = useRef(null);
   const mapboxContainerRef = useRef(null);
   const mapboxInstanceRef = useRef(null);
+  const featuresRef = useRef([]);
+  const activeNodeRef = useRef(null);
+  const pendingPayloadRef = useRef(null);
 
   const [features, setFeatures] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -327,6 +358,8 @@ export function PropertyMap() {
   const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
   const [mapboxActive, setMapboxActive] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
+  const [activeNode, setActiveNode] = useState(null);
+  const [parentStack, setParentStack] = useState([]);
   const [expandedDevIds, setExpandedDevIds] = useState(() => new Set());
   const [expandedCapas, setExpandedCapas] = useState(new Set());
   const [expandedTipos, setExpandedTipos] = useState(() => new Set());
@@ -390,38 +423,90 @@ export function PropertyMap() {
     mapboxFeatureRef.current = mapboxFeature;
   }, [mapboxFeature]);
 
-  const sendFeatureToMapbox = useCallback(
-    (feature) => {
-      if (!feature || !mapboxActive) {
-        logMapboxEvent(
-          { step: "send-failure", reason: "inactive", featureId: feature?.id ?? null },
-          "send-failure",
-        );
+  useEffect(() => {
+    activeNodeRef.current = activeNode;
+  }, [activeNode]);
+
+  useEffect(() => {
+    featuresRef.current = features;
+  }, [features]);
+
+  const sendFeaturesToMapbox = useCallback(
+    (featureList) => {
+      if (!Array.isArray(featureList) || !featureList.length) {
+        return false;
+      }
+      if (!mapboxActive) {
+        pendingPayloadRef.current = featureList;
+        logMapboxEvent({ step: "send-failure", reason: "inactive" }, "send-failure");
         return false;
       }
       const map = mapboxInstanceRef.current;
       if (!map) {
-        logMapboxEvent(
-          { step: "send-failure", reason: "no-map", featureId: feature?.id ?? null },
-          "send-failure",
-        );
+        pendingPayloadRef.current = featureList;
+        logMapboxEvent({ step: "send-failure", reason: "no-map" }, "send-failure");
         return false;
+      }
+      // Solo envia hijos inmediatos según el tipo del nodo activo para evitar mezclar niveles.
+      const parentKind = inferFeatureKind(activeNodeRef.current);
+      let childList = featureList;
+      if (parentKind === "desarrollo") {
+        childList = featureList.filter((f) => inferFeatureKind(f) === "capa");
+      } else if (parentKind === "capa") {
+        childList = featureList.filter((f) => inferFeatureKind(f) === "unidad");
+      }
+      if (!childList.length) {
+        childList = featureList;
       }
       const source = map.getSource("propiedad-3d");
       if (!source || typeof source.setData !== "function") {
-        logMapboxEvent(
-          { step: "send-failure", reason: "no-source", featureId: feature?.id ?? null },
-          "send-failure",
-        );
+        pendingPayloadRef.current = featureList;
+        logMapboxEvent({ step: "send-failure", reason: "no-source" }, "send-failure");
         return false;
       }
-      const enrichedFeature = ensureStatusColors({ ...feature });
-      const payload = {
-        type: "FeatureCollection",
-        features: [enrichedFeature],
-      };
+      const enriched = childList.map((f) => {
+        const clone = ensureStatusColors({ ...f });
+        const props = { ...(clone.properties ?? {}) };
+        const kind = inferFeatureKind(clone);
+        if (kind === "desarrollo") {
+          props.__feature_id = props.desarrollo_id ?? props.target_id ?? props.id ?? f.id ?? null;
+        } else if (kind === "capa") {
+          props.__feature_id = props.id ?? f.id ?? props.target_id ?? null;
+        } else {
+          props.__feature_id = props.id ?? f.id ?? props.target_id ?? null;
+        }
+        // Conserva el id original para cuando Mapbox pierda feature.id en eventos de clic.
+        props.__original_id = f.id ?? props.id ?? null;
+        // Normaliza numéricos sin forzar a cero; deja que el dato decida la extrusión.
+        props.height = Number(props.height ?? props.levels ?? props.altura ?? 0);
+        props.min_height = Number(props.min_height ?? props.base ?? 0);
+        props.levels = Number(props.levels ?? props.nivel ?? props.height ?? 0);
+        // Si es capa y no viene min_height, calcularlo según nivel*height para que se apilen.
+        if (kind === "capa" && (!props.min_height || Number.isNaN(props.min_height))) {
+          const nivelNum = Number(props.nivel ?? props.levels ?? 0);
+          if (!Number.isNaN(nivelNum) && props.height) {
+            props.min_height = nivelNum * props.height;
+          }
+        }
+        clone.properties = props;
+        return clone;
+      });
+      const payload = { type: "FeatureCollection", features: enriched };
       source.setData(payload);
-      const bounds = getGeometryBounds(feature.geometry);
+      let bounds = null;
+      try {
+        for (const feat of featureList) {
+          const b = getGeometryBounds(feat.geometry);
+          if (!b) continue;
+          if (!bounds) bounds = { ...b };
+          bounds.minLng = Math.min(bounds.minLng, b.minLng);
+          bounds.minLat = Math.min(bounds.minLat, b.minLat);
+          bounds.maxLng = Math.max(bounds.maxLng, b.maxLng);
+          bounds.maxLat = Math.max(bounds.maxLat, b.maxLat);
+        }
+      } catch {
+        bounds = null;
+      }
       const applyCamera = () => {
         try {
           map.setPitch(pitch);
@@ -455,22 +540,22 @@ export function PropertyMap() {
         map.once("styledata", applyFit);
         map.once("idle", applyFit);
       }
-      logMapboxEvent(
-        {
-          feature,
-          bounds,
-          timestamp: new Date().toISOString(),
-        },
-        "set-data",
-      );
+      pendingPayloadRef.current = null;
+      logMapboxEvent({ features: featureList, bounds }, "set-data");
       return true;
     },
     [logMapboxEvent, mapboxActive, pitch, bearing],
   );
 
+  const sendFeatureToMapbox = useCallback(
+    (feature) => sendFeaturesToMapbox(feature ? [feature] : []),
+    [sendFeaturesToMapbox],
+  );
+
   useEffect(() => {
     if (!mapboxActive) {
       pendingMapboxFeatureRef.current = null;
+      pendingPayloadRef.current = null;
       return;
     }
     const targetFeature = mapboxFeature ?? pendingMapboxFeatureRef.current;
@@ -483,6 +568,79 @@ export function PropertyMap() {
       pendingMapboxFeatureRef.current = null;
     }
   }, [mapboxActive, mapboxFeature, sendFeatureToMapbox]);
+
+  const getChildrenForNode = useCallback(
+    (node) => {
+      if (!node) return [];
+      const parentId = getFeatureId(node);
+      if (!parentId) return [];
+      const parentKind = inferFeatureKind(node);
+      const list = featuresRef.current ?? [];
+      return list.filter((child) => {
+        if (getFeatureId(child) === parentId) {
+          return false; // evita incluir al padre en el set de hijos
+        }
+        const props = child?.properties ?? {};
+        const kind = inferFeatureKind(child);
+        const childDevId = props.desarrollo_id ?? props.target_id ?? null;
+        if (childDevId && childDevId === parentId && parentKind === "desarrollo") {
+          return true;
+        }
+        if (parentKind === "desarrollo") {
+          return (
+            props.desarrollo_id === parentId ||
+            props.target_parent_id === parentId ||
+            (kind === "capa" && props.desarrollo_id === parentId) ||
+            (kind === "unidad" && props.desarrollo_id === parentId)
+          );
+        }
+        if (parentKind === "capa") {
+          return (
+            props.nivel_id === parentId ||
+            props.capa_id === parentId ||
+            props.parent_id === parentId ||
+            props.target_parent_id === parentId
+          );
+        }
+        if (parentKind === "unidad") {
+          return props.parent_id === parentId || props.target_parent_id === parentId;
+        }
+        return props.parent_id === parentId || props.target_parent_id === parentId;
+      });
+    },
+    [featuresRef],
+  );
+
+  const ascendMapbox = useCallback(() => {
+    setParentStack((prev) => {
+      if (!prev.length) return prev;
+      const next = [...prev];
+      const parent = next.pop();
+      setActiveNode(parent ?? null);
+      if (parent) {
+        const children = getChildrenForNode(parent);
+        if (children.length) {
+          sendFeaturesToMapbox(children);
+        } else {
+          sendFeatureToMapbox(parent);
+        }
+        setMapboxFeature(parent);
+      }
+      return next;
+    });
+  }, [getChildrenForNode, sendFeatureToMapbox, sendFeaturesToMapbox]);
+
+  useEffect(() => {
+    if (!activeNode || !mapboxActive) {
+      return;
+    }
+    const children = getChildrenForNode(activeNode);
+    if (children.length) {
+      sendFeaturesToMapbox(children);
+    } else {
+      sendFeatureToMapbox(activeNode);
+    }
+  }, [activeNode, getChildrenForNode, mapboxActive, sendFeatureToMapbox, sendFeaturesToMapbox]);
 
   const nivelOptions = useMemo(() => {
     const niveles = new Set();
@@ -896,6 +1054,8 @@ export function PropertyMap() {
       pendingMapboxFeatureRef.current = feature;
       setMapboxFeature(feature);
       setMapboxActive(true);
+      setActiveNode(feature);
+      setParentStack([]);
       logMapboxEvent(
         {
           feature,
@@ -905,6 +1065,49 @@ export function PropertyMap() {
       );
     },
     [logMapboxEvent],
+  );
+
+  const findFeatureForDevelopment = useCallback(
+    (devId) => {
+      if (!devId) return null;
+      const list = featuresRef.current ?? [];
+      const normalized = String(devId);
+      const exact = list.find((f) => {
+        const props = f?.properties ?? {};
+        const kind = inferFeatureKind(f);
+        const featureDevId =
+          kind === "desarrollo"
+            ? props.target_id ?? props.desarrollo_id ?? f.id ?? null
+            : props.target_id ?? props.desarrollo_id ?? null;
+        return (
+          featureDevId &&
+          String(featureDevId) === normalized &&
+          kind === "desarrollo"
+        );
+      });
+      if (exact) return exact;
+      const capaOrUnidad = list.find((f) => {
+        const props = f?.properties ?? {};
+        const featureDevId = props.target_id ?? props.desarrollo_id ?? null;
+        const kind = inferFeatureKind(f);
+        return (
+          featureDevId &&
+          String(featureDevId) === normalized &&
+          ["capa", "unidad"].includes(kind)
+        );
+      });
+      if (capaOrUnidad) return capaOrUnidad;
+      return (
+        list.find((f) => {
+          const props = f?.properties ?? {};
+          return (
+            (props.desarrollo_id && String(props.desarrollo_id) === normalized) ||
+            (props.target_id && String(props.target_id) === normalized)
+          );
+        }) || null
+      );
+    },
+    [],
   );
 
   const closeMapbox = useCallback(() => {
@@ -1422,11 +1625,17 @@ export function PropertyMap() {
         }
       };
       const applyPendingFeature = () => {
-        const candidate =
-          pendingMapboxFeatureRef.current ?? mapboxFeatureRef.current;
-        if (!candidate) {
-          return;
+        const pendingList = pendingPayloadRef.current;
+        if (Array.isArray(pendingList) && pendingList.length) {
+          if (sendFeaturesToMapbox(pendingList)) {
+            pendingPayloadRef.current = null;
+          }
         }
+        const candidate =
+          pendingMapboxFeatureRef.current ??
+          mapboxFeatureRef.current ??
+          activeNodeRef.current;
+        if (!candidate) return;
         if (sendFeatureToMapbox(candidate)) {
           pendingMapboxFeatureRef.current = null;
         }
@@ -1436,6 +1645,38 @@ export function PropertyMap() {
         map.setPitch(pitch);
         map.setBearing(bearing);
         addLayerRules();
+        map.on("click", fillLayerId, (event) => {
+          const clicked = event?.features?.[0];
+          if (!clicked) return;
+          const parentId = getFeatureId(clicked);
+          const parentKind = inferFeatureKind(clicked);
+          setParentStack((prev) => {
+            const next = [...prev];
+            const current = activeNodeRef.current;
+            if (current) {
+              next.push(current);
+            }
+            return next;
+          });
+          setActiveNode(clicked);
+          setMapboxFeature(clicked);
+          const children = getChildrenForNode(clicked);
+          logMapboxEvent(
+            {
+              step: "click-drill",
+              parentId,
+              parentKind,
+              childrenCount: children.length,
+              childIds: children.map((c) => getFeatureId(c)),
+            },
+            "click-drill",
+          );
+          if (children.length) {
+            sendFeaturesToMapbox(children);
+          } else {
+            sendFeatureToMapbox(clicked);
+          }
+        });
         applyPendingFeature();
         map.resize();
       });
@@ -1457,7 +1698,16 @@ export function PropertyMap() {
         delete window.__mapboxInstance;
       }
     };
-  }, [mapboxActive, mapboxToken, sendFeatureToMapbox, logMapboxEvent, pitch, bearing]);
+  }, [
+    mapboxActive,
+    mapboxToken,
+    sendFeatureToMapbox,
+    sendFeaturesToMapbox,
+    getChildrenForNode,
+    logMapboxEvent,
+    pitch,
+    bearing,
+  ]);
 
   useEffect(() => {
     if (!mapboxActive) {
@@ -1849,24 +2099,39 @@ export function PropertyMap() {
                   const devExpanded = expandedDevIds.has(dev.id);
                   return (
                     <div key={dev.id} className="border-b border-slate-100 pb-2 last:border-0">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between text-left font-semibold text-slate-700"
-                        onClick={() =>
-                          setExpandedDevIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(dev.id)) {
-                              next.delete(dev.id);
-                            } else {
-                              next.add(dev.id);
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          className="flex-1 text-left font-semibold text-slate-700 hover:text-slate-900"
+                          onClick={() => {
+                            const feature = findFeatureForDevelopment(dev.id);
+                            if (feature) {
+                              openMapboxFeature(feature);
                             }
-                            return next;
-                          })
-                        }
-                      >
-                        <span>{dev.name}</span>
-                        <span className="text-xs text-slate-400">{devExpanded ? "-" : "+"}</span>
-                      </button>
+                          }}
+                        >
+                          {dev.name}
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="rounded border border-slate-200 px-2 py-1 text-[0.65rem] text-slate-600 hover:border-slate-400 hover:text-slate-800"
+                            onClick={() =>
+                              setExpandedDevIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(dev.id)) {
+                                  next.delete(dev.id);
+                                } else {
+                                  next.add(dev.id);
+                                }
+                                return next;
+                              })
+                            }
+                          >
+                            {devExpanded ? "-" : "+"}
+                          </button>
+                        </div>
+                      </div>
                       {dev.tipoSummary && dev.tipoSummary.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1 text-[0.6rem] uppercase tracking-[0.2em] text-slate-400">
                           {dev.tipoSummary.map((item) => (
@@ -2005,13 +2270,24 @@ export function PropertyMap() {
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900 hover:text-white"
-                    onClick={closeMapbox}
-                  >
-                    Cerrar
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {parentStack.length > 0 && (
+                      <button
+                        type="button"
+                        className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900 hover:text-white"
+                        onClick={ascendMapbox}
+                      >
+                        Subir
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="rounded border border-slate-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:bg-slate-900 hover:text-white"
+                      onClick={closeMapbox}
+                    >
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
                   {mapboxFeature ? (

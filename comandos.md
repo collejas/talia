@@ -143,6 +143,7 @@ git config --global user.email collejas1@gmail.com
 # DUENO:
 sudo chown -R jorge:jorge /var/www/talia
 sudo chown -R jorge:jorge /var/www/talia/frontend/panel/.next
+sudo chown -R jorge:jorge /var/www/talia/logs/mapbox-debug.log
 
 git clone <https://github.com/collejas/buscador.git> /var/www/
         talia/buscador
