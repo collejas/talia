@@ -433,7 +433,7 @@ export function PropertyMap() {
   }, [features]);
 
   const sendFeaturesToMapbox = useCallback(
-    (featureList) => {
+    (featureList, parentKindOverride = null) => {
       if (!Array.isArray(featureList) || !featureList.length) {
         return false;
       }
@@ -448,8 +448,8 @@ export function PropertyMap() {
         logMapboxEvent({ step: "send-failure", reason: "no-map" }, "send-failure");
         return false;
       }
-      // Solo envia hijos inmediatos según el tipo del nodo activo para evitar mezclar niveles.
-      const parentKind = inferFeatureKind(activeNodeRef.current);
+      // Solo envia hijos inmediatos según el tipo del nodo activo/clicado para evitar mezclar niveles.
+      const parentKind = parentKindOverride ?? inferFeatureKind(activeNodeRef.current);
       let childList = featureList;
       if (parentKind === "desarrollo") {
         childList = featureList.filter((f) => inferFeatureKind(f) === "capa");
@@ -1708,7 +1708,7 @@ export function PropertyMap() {
             "click-drill",
           );
           if (children.length) {
-            sendFeaturesToMapbox(children);
+            sendFeaturesToMapbox(children, parentKind);
           } else {
             sendFeatureToMapbox(clicked);
           }
