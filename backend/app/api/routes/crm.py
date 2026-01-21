@@ -11673,7 +11673,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 codigo_postal=_strip_value(row.get("codigo_postal")),
                 colonia=_strip_value(row.get("colonia")),
                 descripcion=_strip_value(row.get("descripcion")),
-                metadata=_parse_metadata(row.get("metadata")),
+                metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
             continue
@@ -11689,7 +11689,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 descripcion=_strip_value(row.get("descripcion")),
                 altura=_parse_decimal(row.get("altura")),
                 status=_parse_status_value(row.get("status")),
-                metadata=_parse_metadata(row.get("metadata")),
+                metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
             group["capas"].append(capa)
@@ -11715,7 +11715,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 linea_id=_parse_uuid_value(row.get("linea_id")),
                 familia_id=_parse_uuid_value(row.get("familia_id")),
                 modelo_id=_parse_uuid_value(row.get("modelo_id")),
-                metadata=_parse_metadata(row.get("metadata")),
+                metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
             capa.unidades = capa.unidades or []
@@ -11797,6 +11797,26 @@ def _parse_decimal(value: Any) -> Decimal | None:
         raise ValueError(f"El valor '{trimmed}' no es un número válido.") from exc
 
 
+def _parse_optional_decimal(value: Any) -> Decimal | None:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return None
+    try:
+        return Decimal(trimmed)
+    except InvalidOperation as exc:
+        raise ValueError(f"El valor '{trimmed}' no es un número válido.") from exc
+
+
+def _parse_optional_int(value: Any) -> int | None:
+    trimmed = _strip_value(value)
+    if not trimmed:
+        return None
+    try:
+        return int(trimmed)
+    except ValueError as exc:
+        raise ValueError(f"'{trimmed}' debe ser un entero válido.") from exc
+
+
 def _parse_status_value(value: Any) -> PropiedadStatus:
     trimmed = _strip_value(value)
     if not trimmed:
@@ -11842,6 +11862,32 @@ def _parse_metadata(value: Any) -> dict[str, Any] | None:
     if not isinstance(parsed, dict):
         raise ValueError("El metadata debe contener un objeto JSON.")
     return parsed
+
+
+def _merge_volume_metadata(row: dict[str, Any], base_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    meta = dict(base_metadata) if base_metadata else {}
+    changes = False
+    height = _parse_optional_decimal(row.get("height") or row.get("altura"))
+    min_height = _parse_optional_decimal(row.get("min_height") or row.get("base"))
+    levels = _parse_optional_int(row.get("levels"))
+    color = _strip_value(row.get("metadata_color") or row.get("color"))
+
+    def assign(key: str, value: Any) -> None:
+        nonlocal changes
+        if value is not None:
+            if isinstance(value, Decimal):
+                meta[key] = float(value)
+            else:
+                meta[key] = value
+            changes = True
+
+    assign("height", height)
+    assign("min_height", min_height)
+    assign("levels", levels)
+    if color:
+        assign("color", color)
+
+    return meta if changes or meta else None
 
 
 def _parse_uuid_value(value: Any) -> UUID | None:

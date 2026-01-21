@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Literal, Sequence
 from uuid import UUID
 
@@ -38,6 +39,16 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {}
     return {}
+
+
+def _make_json_serializable(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {key: _make_json_serializable(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_make_json_serializable(item) for item in value]
+    return value
 
 
 def _sanitize_search_pattern(value: str | None) -> str | None:
@@ -7082,19 +7093,20 @@ class CRMRepository:
             headers["X-Organizacion-Id"] = str(organizacion_id)
         if prefer:
             headers["Prefer"] = prefer
+        json_payload = _make_json_serializable(json) if json is not None else None
         logger.info(
             "crm_request_start",
             extra={
                 "method": method,
                 "path": path,
                 "params": params,
-                "json_keys": list(json.keys()) if isinstance(json, dict) else None,
+                "json_keys": list(json_payload.keys()) if isinstance(json_payload, dict) else None,
                 "organizacion_id": str(organizacion_id) if organizacion_id else None,
             },
         )
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, params=params, json=json, headers=headers)
+                resp = await client.request(method, url, params=params, json=json_payload, headers=headers)
         except httpx.RequestError as exc:  # pragma: no cover - red de terceros
             raise CRMRepositoryError(f"Error de red al llamar Supabase: {exc}") from exc
         logger.info(
