@@ -220,11 +220,6 @@ function padNumeric(value, length) {
   return cleaned.padStart(length, "0");
 }
 
-const COUNTRY_ISO_EQUIVALENTS = {
-  MX: "MEX",
-  MEX: "MX",
-};
-
 function buildMunicipioGeoKey(properties) {
   const statePart = padNumeric(
     properties?.estado_cve ?? properties?.cve_ent ?? properties?.cve_entidad ?? "",
@@ -539,58 +534,6 @@ export function PropertyMap() {
     [getFeatureColor],
   );
 
-  const normalizeCountryCode = useCallback((code) => {
-    if (!code) return null;
-    const cleaned = `${code}`.trim().toUpperCase();
-    if (!cleaned) return null;
-    const counterpart = COUNTRY_ISO_EQUIVALENTS[cleaned];
-    return { primary: cleaned, counterpart };
-  }, []);
-
-  const propertyCountryKeys = useMemo(() => {
-    const keys = new Set();
-    for (const feature of features) {
-      const props = feature?.properties ?? {};
-      const candidate = normalizeCountryCode(props.pais_codigo ?? props.iso_a2 ?? props.ISO_A2 ?? "");
-      if (!candidate?.primary) continue;
-      keys.add(candidate.primary);
-      if (candidate.counterpart) {
-        keys.add(candidate.counterpart);
-      }
-    }
-    return keys;
-  }, [features, normalizeCountryCode]);
-
-  const propertyStateKeys = useMemo(() => {
-    const keys = new Set();
-    for (const feature of features) {
-      const props = feature?.properties ?? {};
-      const stateValue = props.estado_cve ?? props.cve_ent ?? props.cve_entidad ?? "";
-      const normalized = padNumeric(stateValue, 2);
-      if (normalized.trim()) {
-        keys.add(normalized);
-        keys.add(stateValue.trim().toUpperCase());
-      }
-    }
-    return keys;
-  }, [features]);
-
-  const propertyMunicipioKeys = useMemo(() => {
-    const keys = new Set();
-    for (const feature of features) {
-      const props = feature?.properties ?? {};
-      const municipioKey = buildMunicipioGeoKey(props);
-      if (municipioKey) {
-        keys.add(municipioKey);
-      }
-      const alternate = props.cvegeo;
-      if (alternate) {
-        keys.add(`${alternate}`.trim().toUpperCase());
-      }
-    }
-    return keys;
-  }, [features]);
-
   const normalizeStateCode = useCallback((value) => {
     if (!value) return "";
     return `${value}`.padStart(2, "0");
@@ -600,6 +543,30 @@ export function PropertyMap() {
     if (!value) return "";
     return `${value}`.padStart(3, "0");
   }, []);
+
+  const logRegionSelection = useCallback(
+    (level, feature, nextLevel) => {
+      if (!feature) return;
+      const props = feature?.properties ?? {};
+      const stateKey = getStateKeyFromProps(props, normalizeStateCode);
+      const municipioKey = buildMunicipioGeoKey(props);
+      const resolvedKey = resolveRegionKey(feature);
+      logMapboxEvent(
+        {
+          action: "region-navigate",
+          currentLevel: level,
+          nextLevel,
+          regionKey: resolvedKey,
+          stateKey,
+          municipioKey,
+          estado_cve: props.estado_cve ?? props.cve_ent ?? props.cve_entidad,
+          municipio_cve: props.municipio_cve ?? props.cve_mun ?? props.cvegeo,
+        },
+        "region-click",
+      );
+    },
+    [logMapboxEvent, normalizeStateCode],
+  );
 
   const propertyCountryCodes = useMemo(() => {
     const codes = new Set();
@@ -808,29 +775,36 @@ export function PropertyMap() {
     ],
   );
 
-const handleRegionClick = useCallback(
-  (feature) => {
-    const key = resolveRegionKey(feature);
-    if (!key) return;
-    if (mapLevel === "pais") {
-      setSelectedCountryKey(key);
-      setSelectedStateKey(null);
-      setSelectedMunicipioKey(null);
-      setSelectedMunicipioGeoKey(null);
-      setMapLevel("estado");
-    } else if (mapLevel === "estado") {
-      setSelectedStateKey(key);
-      setSelectedMunicipioKey(null);
-      setSelectedMunicipioGeoKey(null);
-      setMapLevel("municipio");
-    } else if (mapLevel === "municipio") {
-      setSelectedMunicipioKey(key);
-      const municipioGeoKey = buildMunicipioGeoKey(feature?.properties ?? {});
-      setSelectedMunicipioGeoKey(municipioGeoKey || null);
-    }
-  },
-  [mapLevel],
-);
+  const handleRegionClick = useCallback(
+    (feature) => {
+      const key = resolveRegionKey(feature);
+      if (!key) return;
+      const targetLevel =
+        mapLevel === "pais"
+          ? "estado"
+          : mapLevel === "estado"
+          ? "municipio"
+          : "municipio-detail";
+      logRegionSelection(mapLevel, feature, targetLevel);
+      if (mapLevel === "pais") {
+        setSelectedCountryKey(key);
+        setSelectedStateKey(null);
+        setSelectedMunicipioKey(null);
+        setSelectedMunicipioGeoKey(null);
+        setMapLevel("estado");
+      } else if (mapLevel === "estado") {
+        setSelectedStateKey(key);
+        setSelectedMunicipioKey(null);
+        setSelectedMunicipioGeoKey(null);
+        setMapLevel("municipio");
+      } else if (mapLevel === "municipio") {
+        setSelectedMunicipioKey(key);
+        const municipioGeoKey = buildMunicipioGeoKey(feature?.properties ?? {});
+        setSelectedMunicipioGeoKey(municipioGeoKey || null);
+      }
+    },
+    [logRegionSelection, mapLevel],
+  );
 
   const openMapboxFeature = useCallback(
     (feature) => {
@@ -851,10 +825,10 @@ const handleRegionClick = useCallback(
     [logMapboxEvent],
   );
 
-const closeMapbox = useCallback(() => {
-  setMapboxActive(false);
-  setMapboxFeature(null);
-}, []);
+  const closeMapbox = useCallback(() => {
+    setMapboxActive(false);
+    setMapboxFeature(null);
+  }, []);
 
   const handleRegionHover = useCallback((feature) => {
     const key = resolveRegionKey(feature);
@@ -1075,9 +1049,11 @@ const closeMapbox = useCallback(() => {
     demografiaGeojson,
     demografiaLevel,
     mapLevel,
-    propertyCountryKeys,
-    propertyStateKeys,
-    propertyMunicipioKeys,
+    propertyCountryCodes,
+    propertyStateCodes,
+    propertyMunicipioCodes,
+    normalizeStateCode,
+    normalizeMunicipioCode,
   ]);
 
   useEffect(() => {
@@ -1206,7 +1182,7 @@ const closeMapbox = useCallback(() => {
     if (mapInstanceRef.current && mapLevel === "municipio" && aggregatedBounds?.isValid()) {
       mapInstanceRef.current.fitBounds(aggregatedBounds, { padding: [30, 30], maxZoom: 19 });
     }
-  }, [filteredFeatures, leaflet, mapLevel, getFeatureColor]);
+  }, [filteredFeatures, leaflet, mapLevel, getFeatureColor, selectedMunicipioGeoKey]);
 
   useEffect(() => {
     if (!mapboxActive) {

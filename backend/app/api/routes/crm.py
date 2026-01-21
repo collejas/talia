@@ -79,6 +79,18 @@ router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
 import_debug_logger = get_logger("app.api.crm.import")
 
+MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
+MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
+
+def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
+    try:
+        MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with MAPBOX_LOG_FILE.open("a", encoding="utf-8") as handle:
+            timestamp = datetime.utcnow().isoformat()
+            handle.write(f"{timestamp} | {tag} | {json.dumps(payload, default=str)}\n")
+    except Exception as exc:  # pragma: no cover - best-effort logging
+        logger.debug("mapbox_debug_log_failed", extra={"tag": tag, "error": str(exc)})
+
 DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
 DEFAULT_REMINDER_SLUG = "default"
@@ -11393,13 +11405,29 @@ async def obtener_propiedad_poligono(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
 ) -> dict[str, Any]:
+    request_payload = {
+        "organizacion_id": str(organizacion_id),
+        "target_type": target_type.value,
+        "target_id": str(target_id),
+    }
+    _write_mapbox_debug_log("supabase-request-propiedad-poligono", request_payload)
     try:
         record = await repo.get_propiedad_poligono(
             organizacion_id=organizacion_id,
             target_type=target_type.value,
             target_id=target_id,
         )
+        response_payload = {
+            **request_payload,
+            "found": bool(record),
+            "poligono": record,
+        }
+        _write_mapbox_debug_log("supabase-response-propiedad-poligono", response_payload)
     except CRMRepositoryError as exc:
+        _write_mapbox_debug_log(
+            "supabase-error-propiedad-poligono",
+            {**request_payload, "error": str(exc)},
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "poligono": record}
 
