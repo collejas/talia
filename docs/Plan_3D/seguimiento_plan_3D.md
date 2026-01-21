@@ -14,6 +14,7 @@
 - [x] El proxy `/api/crm/demografia/mapa` ya atrapa fallos del CRM/Supabase, responde con un payload seguro (`ok:false` + dataset/geojson vacíos) y evita los 502 que rompían la jerarquía al recargar.
 - [x] Documentamos la verificación manual del flujo país → estado → municipio para que el cliente compruebe que sólo las regiones con desarrollos se pintan y que cada nivel centra automáticamente los desarrollos antes de desplegar las unidades.
 - [x] La jerarquía Leaflet ahora pinta y centra únicamente los países/estados/municipios con desarrollos (`crm_propiedades_geojson` + `pais_codigo`/`estado_cve`/`municipio_cve`) antes de desplegar las unidades, garantizando que los municipios visibles se puedan clicar.
+- [x] Al llegar al nivel de municipio eliminamos las capas demográficas solo después de seleccionar un municipio (para que al hacer clic en un estado el mapa siga mostrando municipios con desarrollos) y dejamos el focus en los desarrollos limpias; el mapa sigue centrado en los desarrollos al limpiar las capas antes de renderizar.
 - [x] Reordenamos `property-map.jsx` para que `getStatusCategory` se defina antes de `regionStatusCounts`, eliminando el ReferenceError y asegurando que los conteos (`vendidas`, `apartadas`, `disponibles`) estén listos para la próxima capa de tooltips.
 
 ## Próximos pasos sugeridos

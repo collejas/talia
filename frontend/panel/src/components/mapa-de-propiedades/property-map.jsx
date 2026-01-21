@@ -1081,10 +1081,13 @@ const closeMapbox = useCallback(() => {
   ]);
 
   useEffect(() => {
-    if (!hierarchyLayerRef.current || !filteredDemografiaGeojson) {
+    if (!hierarchyLayerRef.current) {
       return;
     }
     hierarchyLayerRef.current.clearLayers();
+    if (!filteredDemografiaGeojson || (mapLevel === "municipio" && selectedMunicipioKey)) {
+      return;
+    }
     hierarchyLayerRef.current.addData(filteredDemografiaGeojson);
     if (!leaflet || !mapInstanceRef.current) {
       return;
@@ -1099,7 +1102,7 @@ const closeMapbox = useCallback(() => {
     } catch {
       // ignore invalid bounds
     }
-  }, [filteredDemografiaGeojson, leaflet, mapLevel]);
+  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
