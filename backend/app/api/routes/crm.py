@@ -1176,6 +1176,7 @@ class GeoJSONFeature(BaseModel):
     id: UUID
     geometry: dict[str, Any]
     properties: dict[str, Any]
+    layer: str | None = None
 
 
 class GeoJSONFeatureCollection(BaseModel):

@@ -14,6 +14,45 @@ const STATUS_COLORS = {
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
+function getDevelopmentPolygonColor(properties) {
+  if (!properties || typeof properties !== "object") {
+    return "#2563EB";
+  }
+  const status = (properties.desarrollo_status ?? properties.status ?? "").toString().trim().toLowerCase();
+  return STATUS_COLORS[status] ?? "#2563EB";
+}
+
+function getDevelopmentPolygonStyle(feature) {
+  const color = getDevelopmentPolygonColor(feature?.properties);
+  return {
+    color,
+    weight: 3,
+    fillColor: color,
+    fillOpacity: 0.25,
+  };
+}
+
+function inferFeatureLayer(feature) {
+  if (!feature || typeof feature !== "object") {
+    return "unknown";
+  }
+  const props = feature.properties ?? {};
+  const directLayer = (feature.layer ?? props.layer ?? "").toString().trim().toLowerCase();
+  if (directLayer) {
+    return directLayer;
+  }
+  if (props.unidad || props.tipo_id || props.area_m2) {
+    return "unidad";
+  }
+  if (props.capa_nombre || props.nivel != null) {
+    return "capa";
+  }
+  if (props.desarrollo_tipo || props.desarrollo_status || props.descripcion) {
+    return "desarrollo";
+  }
+  return "unknown";
+}
+
 function resolveRegionKey(feature) {
   if (!feature || typeof feature !== "object") {
     return "";
@@ -275,6 +314,7 @@ export function PropertyMap() {
   const selectedIdRef = useRef(selectedId);
   const hierarchyLayerRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const municipalPolygonLayerRef = useRef(null);
   const [mapLevel, setMapLevel] = useState("pais");
   const [demografiaGeojson, setDemografiaGeojson] = useState(null);
   const [demografiaDataset, setDemografiaDataset] = useState([]);
@@ -481,6 +521,40 @@ export function PropertyMap() {
       return true;
     });
   }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey]);
+
+  const municipioDevelopmentFeatures = useMemo(() => {
+    if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
+      return [];
+    }
+    return features.filter((feature) => {
+      const props = feature?.properties ?? {};
+      const layerValue = inferFeatureLayer(feature);
+      if (!["desarrollo", "mix"].includes(layerValue)) {
+        return false;
+      }
+      const municipioKey = buildMunicipioGeoKey(props);
+      return Boolean(municipioKey && municipioKey === selectedMunicipioGeoKey);
+    });
+  }, [features, mapLevel, selectedMunicipioGeoKey]);
+
+  useEffect(() => {
+    if (mapLevel !== "municipio") {
+      return;
+    }
+    const layers = Array.from(
+      new Set(filteredFeatures.map((feature) => inferFeatureLayer(feature)).slice(0, 10)),
+    );
+    logMapboxEvent(
+      {
+        action: "municipio-feature-debug",
+        selectedMunicipioGeoKey,
+        filteredCount: filteredFeatures.length,
+        developmentCount: municipioDevelopmentFeatures.length,
+        layers,
+      },
+      "municipio-debug",
+    );
+  }, [filteredFeatures, logMapboxEvent, mapLevel, municipioDevelopmentFeatures, selectedMunicipioGeoKey]);
 
   const hierarchyTree = useMemo(() => buildHierarchy(filteredFeatures), [filteredFeatures]);
 
@@ -991,9 +1065,16 @@ export function PropertyMap() {
       markerPane.style.zIndex = "750";
     }
 
+    const municipalPolygonLayer = leaflet.geoJSON([], {
+      style: getDevelopmentPolygonStyle,
+    });
+    municipalPolygonLayerRef.current = municipalPolygonLayer;
+    municipalPolygonLayer.addTo(map);
+
     return () => {
       map.remove();
       layerRef.current?.clearLayers();
+      municipalPolygonLayerRef.current?.clearLayers();
     };
   }, [leaflet, applyLayerStyle]);
 
@@ -1134,6 +1215,9 @@ export function PropertyMap() {
       return;
     }
     markersLayerRef.current.clearLayers();
+    if (mapLevel === "municipio" && municipioDevelopmentFeatures.length) {
+      return;
+    }
     if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
       return;
     }
@@ -1182,7 +1266,42 @@ export function PropertyMap() {
     if (mapInstanceRef.current && mapLevel === "municipio" && aggregatedBounds?.isValid()) {
       mapInstanceRef.current.fitBounds(aggregatedBounds, { padding: [30, 30], maxZoom: 19 });
     }
-  }, [filteredFeatures, leaflet, mapLevel, getFeatureColor, selectedMunicipioGeoKey]);
+  }, [
+    filteredFeatures,
+    leaflet,
+    mapLevel,
+    getFeatureColor,
+    municipioDevelopmentFeatures,
+    selectedMunicipioGeoKey,
+  ]);
+
+  useEffect(() => {
+    const layer = municipalPolygonLayerRef.current;
+    const map = mapInstanceRef.current;
+    if (!layer || !leaflet || !map) {
+      return;
+    }
+    layer.clearLayers();
+    if (mapLevel !== "municipio" || !municipioDevelopmentFeatures.length) {
+      return;
+    }
+    const payload = {
+      type: "FeatureCollection",
+      features: municipioDevelopmentFeatures,
+    };
+    layer.addData(payload);
+    if (typeof layer.bringToFront === "function") {
+      layer.bringToFront();
+    }
+    try {
+      const bounds = leaflet.geoJSON(payload).getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
+      }
+    } catch {
+      // ignore invalid bounds
+    }
+  }, [leaflet, mapLevel, municipioDevelopmentFeatures]);
 
   useEffect(() => {
     if (!mapboxActive) {
@@ -1515,6 +1634,7 @@ export function PropertyMap() {
     if (!layerRef.current) {
       return;
     }
+    const shouldRenderLayer = !(mapLevel === "municipio" && municipioDevelopmentFeatures.length);
     const processed = filteredFeatures.map((feature) => {
       const props = feature?.properties ?? {};
       const normalizedColor =
@@ -1547,12 +1667,14 @@ export function PropertyMap() {
     }
 
     layerRef.current.clearLayers();
-    layerRef.current.addData(payload);
-    layerRef.current.eachLayer((layer) => {
-      if (layer.feature) {
-        applyLayerStyle(layer, layer.feature);
-      }
-    });
+    if (shouldRenderLayer) {
+      layerRef.current.addData(payload);
+      layerRef.current.eachLayer((layer) => {
+        if (layer.feature) {
+          applyLayerStyle(layer, layer.feature);
+        }
+      });
+    }
 
     if (processed.length && mapInstanceRef.current && leaflet && mapLevel === "pais") {
       const bounds = leaflet.geoJSON(payload).getBounds();
@@ -1560,7 +1682,16 @@ export function PropertyMap() {
         mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
       }
     }
-  }, [filteredFeatures, viewMode, selectedId, leaflet, applyLayerStyle, osmbReady, mapLevel]);
+  }, [
+    filteredFeatures,
+    viewMode,
+    selectedId,
+    leaflet,
+    applyLayerStyle,
+    osmbReady,
+    mapLevel,
+    municipioDevelopmentFeatures,
+  ]);
 
   const zoomToFeature = useCallback(
     (feature) => {

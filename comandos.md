@@ -88,6 +88,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+codex resume 019bde41-668a-70b3-8342-1352b421fadc
 https://api.mapbox.com/styles/v1/mapbox/satellite-v9?access_token=pk.eyJ1IjoiY29sbGVqYXMiLCJhIjoiY21rZzdxODIwMDU2MTNkb2Z3dHd4NmR2aCJ9.3PXIYpRq5QlvhrlPGVmZhQ
 
 ACCESS_TOKEN=eyJhbGciOiJFUzI1NiIsImtpZCI6IjI3MjYwOTg4LTU2NDYtNDVlZi05Y2Q1LTg4ZWY0MzMzZDI4NSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3FuaW15YW10Y3piYndtbHJsZWpjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJiNmNjNjM4NS0zNzQxLTQ3NDItYWU4My1iY2IwZDk5YmM1YzUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY4ODU4NTQ3LCJpYXQiOjE3Njg4NTQ5NDcsImVtYWlsIjoiYWRtaW5pc3RyYWNpb25AZ2VvYWN0aXYubXgiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkpvcmdlIFRvcnJlIENvbGxlamFzIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3Njg4NTQ5NDd9XSwic2Vzc2lvbl9pZCI6ImNlYzE1OTVjLTkzMmEtNDYyNC05NTMzLWFmMGE1NzQ0NmMzZSIsImlzX2Fub255bW91cyI6ZmFsc2V9.WOLjzOJljXD_NkYlnnXDkdLAfXlM8VVULdKaPQiJTwLXUf8RSgQEfl0VPY4rAqnCbncFb2JEEM0iiuTJXdrmIA ./scripts/import-propiedades.sh /var/www/talia/colo4.csv
@@ -141,6 +142,7 @@ git config --global user.email collejas1@gmail.com
 
 # DUENO:
 sudo chown -R jorge:jorge /var/www/talia
+sudo chown -R jorge:jorge /var/www/talia/frontend/panel/.next
 
 git clone <https://github.com/collejas/buscador.git> /var/www/
         talia/buscador
