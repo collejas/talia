@@ -329,6 +329,7 @@ export function PropertyMap() {
   const featuresRef = useRef([]);
   const activeNodeRef = useRef(null);
   const pendingPayloadRef = useRef(null);
+  const hoveredMapboxIdRef = useRef(null);
 
   const [features, setFeatures] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -468,6 +469,19 @@ export function PropertyMap() {
         const clone = ensureStatusColors({ ...f });
         const props = { ...(clone.properties ?? {}) };
         const kind = inferFeatureKind(clone);
+        const resolvedId =
+          props.__feature_id ??
+          clone.id ??
+          props.id ??
+          props.target_id ??
+          props.poligono_id ??
+          props.desarrollo_id ??
+          props.nivel_id ??
+          null;
+        if (resolvedId) {
+          clone.id = resolvedId;
+          props.id = resolvedId;
+        }
         if (kind === "desarrollo") {
           props.__feature_id = props.desarrollo_id ?? props.target_id ?? props.id ?? f.id ?? null;
         } else if (kind === "capa") {
@@ -1583,6 +1597,7 @@ export function PropertyMap() {
               type: "FeatureCollection",
               features: [],
             },
+            promoteId: "id",
           });
         }
         if (!map.getLayer(fillLayerId)) {
@@ -1592,10 +1607,10 @@ export function PropertyMap() {
             source: sourceId,
               paint: {
                 "fill-extrusion-color": [
-                  "coalesce",
-                  ["get", "status_color"],
-                  ["get", "color"],
-                  "#95A5A6",
+                  "case",
+                  ["boolean", ["feature-state", "hover"], false],
+                  "#22c55e",
+                  ["coalesce", ["get", "status_color"], ["get", "color"], "#95A5A6"],
                 ],
                 "fill-extrusion-height": [
                   "coalesce",
@@ -1645,6 +1660,27 @@ export function PropertyMap() {
         map.setPitch(pitch);
         map.setBearing(bearing);
         addLayerRules();
+        map.on("mouseenter", fillLayerId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mousemove", fillLayerId, (event) => {
+          const feature = event?.features?.[0];
+          const fid = feature?.id ?? feature?.properties?.id;
+          if (!fid) return;
+          const current = hoveredMapboxIdRef.current;
+          if (current && current === fid) return;
+          if (current) map.setFeatureState({ source: sourceId, id: current }, { hover: false });
+          hoveredMapboxIdRef.current = fid;
+          map.setFeatureState({ source: sourceId, id: fid }, { hover: true });
+        });
+        map.on("mouseleave", fillLayerId, () => {
+          const current = hoveredMapboxIdRef.current;
+          if (current) {
+            map.setFeatureState({ source: sourceId, id: current }, { hover: false });
+            hoveredMapboxIdRef.current = null;
+          }
+          map.getCanvas().style.cursor = "";
+        });
         map.on("click", fillLayerId, (event) => {
           const clicked = event?.features?.[0];
           if (!clicked) return;
