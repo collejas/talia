@@ -509,18 +509,26 @@ export function PropertyMap() {
         }
       }
       if (mapLevel === "municipio") {
-        if (!selectedMunicipioGeoKey) {
-          return false;
-        }
         const featureProps = feature?.properties ?? {};
-        const featureGeoKey = buildMunicipioGeoKey(featureProps);
-        if (!featureGeoKey || featureGeoKey !== selectedMunicipioGeoKey) {
-          return false;
+        if (selectedMunicipioGeoKey) {
+          const featureGeoKey = buildMunicipioGeoKey(featureProps);
+          if (!featureGeoKey || featureGeoKey !== selectedMunicipioGeoKey) {
+            return false;
+          }
+        } else if (selectedStateKey) {
+          const featureStateKey = padNumeric(
+            featureProps.estado_cve ?? featureProps.cve_ent ?? featureProps.cve_entidad ?? "",
+            2,
+          );
+          const selectedStateNormalized = padNumeric(selectedStateKey, 2);
+          if (!featureStateKey || featureStateKey !== selectedStateNormalized) {
+            return false;
+          }
         }
       }
       return true;
     });
-  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey]);
+  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
 
   const municipioDevelopmentFeatures = useMemo(() => {
     if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
