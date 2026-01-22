@@ -33,7 +33,9 @@ function getFeatureId(feature) {
 
 const inferFeatureKind = (feature) => {
   const props = feature?.properties ?? {};
-  const direct = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
+  const rawTipo = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
+  // Tratar "departamento" como unidad para coherencia en el drill-down.
+  const direct = rawTipo === "departamento" ? "unidad" : rawTipo;
   if (direct) return direct;
   if (props.nivel != null) return "capa";
   if (props.area_m2 != null || props.unidad) return "unidad";
@@ -348,6 +350,8 @@ export function PropertyMap() {
   const activeNodeRef = useRef(null);
   const pendingPayloadRef = useRef(null);
   const hoveredMapboxIdRef = useRef(null);
+  const mapboxVisibleIdsRef = useRef([]);
+  const selectedMapboxUnitIdRef = useRef(null);
 
   const [features, setFeatures] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -493,6 +497,7 @@ export function PropertyMap() {
         logMapboxEvent({ step: "send-failure", reason: "no-source" }, "send-failure");
         return false;
       }
+      let filterId = null;
       const enriched = childList.map((f) => {
         const clone = ensureStatusColors({ ...f });
         const props = { ...(clone.properties ?? {}) };
@@ -511,6 +516,9 @@ export function PropertyMap() {
         if (resolvedId) {
           clone.id = resolvedId;
           props.id = resolvedId;
+        }
+        if (parentKind === "unidad") {
+          filterId = filterId ?? resolvedId ?? null;
         }
         if (kind === "desarrollo") {
           props.__feature_id = props.desarrollo_id ?? props.target_id ?? props.id ?? f.id ?? null;
@@ -537,6 +545,17 @@ export function PropertyMap() {
       });
       const payload = { type: "FeatureCollection", features: enriched };
       source.setData(payload);
+      mapboxVisibleIdsRef.current = enriched
+        .map((f) => (f?.id != null ? String(f.id) : null))
+        .filter(Boolean);
+      // Limpia cualquier aislamiento previo en el nuevo set.
+      try {
+        for (const id of mapboxVisibleIdsRef.current) {
+          map.setFeatureState({ source: "propiedad-3d", id }, { hidden: false });
+        }
+      } catch {
+        /* ignore */
+      }
       let bounds = null;
       try {
         for (const feat of featureList) {
@@ -585,7 +604,19 @@ export function PropertyMap() {
         map.once("idle", applyFit);
       }
       pendingPayloadRef.current = null;
-      logMapboxEvent({ features: featureList, bounds }, "set-data");
+      logMapboxEvent(
+        {
+          features: featureList,
+          bounds,
+          mapbox: {
+            parentKind,
+            enrichedCount: enriched.length,
+            visibleIdsSample: mapboxVisibleIdsRef.current.slice(0, 10),
+            styleLoaded: map.isStyleLoaded(),
+          },
+        },
+        "set-data",
+      );
       return true;
     },
     [logMapboxEvent, mapboxActive, pitch, bearing],
@@ -658,6 +689,17 @@ export function PropertyMap() {
   );
 
   const ascendMapbox = useCallback(() => {
+    const map = mapboxInstanceRef.current;
+    if (map) {
+      try {
+        for (const id of mapboxVisibleIdsRef.current ?? []) {
+          map.setFeatureState({ source: "propiedad-3d", id }, { hidden: false });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    selectedMapboxUnitIdRef.current = null;
     setParentStack((prev) => {
       if (!prev.length) return prev;
       const next = [...prev];
@@ -1633,30 +1675,46 @@ export function PropertyMap() {
           });
         }
         if (!map.getLayer(fillLayerId)) {
+          const baseExpr = [
+            "coalesce",
+            ["to-number", ["get", "min_height"], 0],
+            0,
+          ];
+          const heightExpr = [
+            "+",
+            ["coalesce", ["to-number", ["get", "height"]], 0],
+            ["coalesce", ["to-number", ["get", "min_height"]], 0],
+          ];
           map.addLayer({
             id: fillLayerId,
             type: "fill-extrusion",
             source: sourceId,
-              paint: {
-                "fill-extrusion-color": [
-                  "case",
-                  ["boolean", ["feature-state", "hover"], false],
-                  "#22c55e",
-                  ["coalesce", ["get", "status_color"], ["get", "color"], "#95A5A6"],
-                ],
-                "fill-extrusion-height": [
-                  "+",
-                  ["coalesce", ["to-number", ["get", "height"]], 0],
-                  ["coalesce", ["to-number", ["get", "min_height"]], 0],
-                ],
-                "fill-extrusion-base": [
-                  "coalesce",
-                  ["to-number", ["get", "min_height"], 0],
-                  0,
-                ],
-                "fill-extrusion-opacity": 0.95,
-                "fill-extrusion-vertical-gradient": false,
-              },
+            paint: {
+              // Nota: fill-extrusion-opacity no soporta data expressions en esta versión,
+              // así que ocultamos por color/altura en lugar de opacidad.
+              "fill-extrusion-color": [
+                "case",
+                ["boolean", ["feature-state", "hidden"], false],
+                "rgba(0,0,0,0)",
+                ["boolean", ["feature-state", "hover"], false],
+                "#22c55e",
+                ["coalesce", ["get", "status_color"], ["get", "color"], "#95A5A6"],
+              ],
+              "fill-extrusion-height": [
+                "case",
+                ["boolean", ["feature-state", "hidden"], false],
+                0,
+                heightExpr,
+              ],
+              "fill-extrusion-base": [
+                "case",
+                ["boolean", ["feature-state", "hidden"], false],
+                0,
+                baseExpr,
+              ],
+              "fill-extrusion-opacity": 0.95,
+              "fill-extrusion-vertical-gradient": false,
+            },
             layout: {
               "fill-extrusion-sort-key": [
                 "coalesce",
@@ -1672,7 +1730,12 @@ export function PropertyMap() {
             type: "line",
             source: sourceId,
             paint: {
-              "line-color": ["coalesce", ["get", "status_color"], "#000"],
+              "line-color": [
+                "case",
+                ["boolean", ["feature-state", "hidden"], false],
+                "rgba(0,0,0,0)",
+                ["coalesce", ["get", "status_color"], "#000"],
+              ],
               "line-width": 1,
               "line-opacity": 0.6,
             },
@@ -1736,6 +1799,55 @@ export function PropertyMap() {
           if (!clicked) return;
           const parentId = getFeatureId(clicked);
           const parentKind = inferFeatureKind(clicked);
+          const clearIsolation = () => {
+            try {
+              for (const id of mapboxVisibleIdsRef.current ?? []) {
+                map.setFeatureState({ source: sourceId, id }, { hidden: false });
+              }
+            } catch {
+              /* ignore */
+            }
+            selectedMapboxUnitIdRef.current = null;
+          };
+          const isolateToUnit = (unitId) => {
+            if (!unitId) return;
+            try {
+              for (const id of mapboxVisibleIdsRef.current ?? []) {
+                map.setFeatureState(
+                  { source: sourceId, id },
+                  { hidden: String(id) !== String(unitId) },
+                );
+              }
+            } catch {
+              /* ignore */
+            }
+            selectedMapboxUnitIdRef.current = String(unitId);
+          };
+
+          // Aislamiento: si el usuario clickea una unidad, ocultamos el resto sin reescribir el source.
+          if (parentKind === "unidad") {
+            const unitId = getFeatureId(clicked);
+            if (!unitId) return;
+            if (selectedMapboxUnitIdRef.current === String(unitId)) {
+              clearIsolation(); // toggle: segundo clic vuelve a mostrar todas
+              logMapboxEvent(
+                { step: "unit-isolate-clear", unitId, visibleCount: (mapboxVisibleIdsRef.current ?? []).length },
+                "unit-isolate",
+              );
+            } else {
+              isolateToUnit(unitId);
+              logMapboxEvent(
+                { step: "unit-isolate", unitId, visibleCount: (mapboxVisibleIdsRef.current ?? []).length },
+                "unit-isolate",
+              );
+            }
+            return;
+          }
+
+          // Si clickea fuera de unidad, limpiamos cualquier aislamiento previo.
+          if (selectedMapboxUnitIdRef.current) {
+            clearIsolation();
+          }
           setParentStack((prev) => {
             const next = [...prev];
             const current = activeNodeRef.current;
@@ -1757,6 +1869,7 @@ export function PropertyMap() {
             },
             "click-drill",
           );
+          // Para desarrollo/capa seguimos usando drill-down normal.
           if (children.length) {
             sendFeaturesToMapbox(children, parentKind);
           } else {
@@ -1766,6 +1879,7 @@ export function PropertyMap() {
         applyPendingFeature();
         map.resize();
       });
+      // Sin filtros persistentes para unidades; noop en idle.
       map.on("styledata", () => {
         if (cancelled) return;
         map.setPitch(pitch);
@@ -1778,6 +1892,7 @@ export function PropertyMap() {
     return () => {
       cancelled = true;
       pendingMapboxFeatureRef.current = null;
+      selectedMapboxUnitIdRef.current = null;
       mapboxInstanceRef.current?.remove();
       mapboxInstanceRef.current = null;
       if (typeof window !== "undefined") {

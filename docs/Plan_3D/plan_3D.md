@@ -24,6 +24,7 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 - Cuando el usuario pulsa “ver en Mapbox” en un marcador, Leaflet se oculta y se instancia Mapbox GL con `mapbox://styles/mapbox/satellite-v9`, `pitch 60`, `bearing 0`, `zoom 18` y el centro en el desarrollo seleccionado, minimizando el uso de tiles cargando solo bajo demanda. La instancia se destruye al regresar a Leaflet para evitar gasto excesivo de tiles.
 - Se agrega una capa `fill-extrusion` o similar con `height`, `min_height` y `levels`. El color sigue la misma escala (verde/amarillo/rojo) para mantener consistencia visual. Popup/panel muestra detalles (precio, status, amenities, niveles) y un botón “volver al mapa nacional”.
 - Mapbox también puede usar los datos de `linea/familia/modelo` para contextualizar el desarrollo con la plantilla que le corresponde.
+- Implementación actual: el drill-down en Mapbox respeta la jerarquía (desarrollo → solo capas → solo unidades), con extrusión sólida (`height = base + height`), sin gradiente vertical, iluminación frontal y hover en verde; antes de enviar a Mapbox se normalizan IDs y se eliminan coordenadas Z para evitar caras faltantes.
 
 ## Vista de creación/edición de propiedades (settings)
 - En `/settings/propiedades` se añade una pantalla tipo “editor de capas”: formulario de datos generales (colapsado/compacto) a la izquierda y mapa de Leaflet + `leaflet-draw` a la derecha, ocupando toda la altura del contenedor (igual que en QGIS/ArcMap).
