@@ -454,6 +454,66 @@ export function PropertyMap() {
     featuresRef.current = features;
   }, [features]);
 
+  const applyMapboxBoundsCamera = useCallback(
+    (map, bounds, options = {}) => {
+      if (!map || !bounds) return false;
+      const padding = options.padding ?? 30;
+      const maxZoom = options.maxZoom ?? 19;
+      const duration = options.duration ?? 650;
+      const targetBounds = [
+        [bounds.minLng, bounds.minLat],
+        [bounds.maxLng, bounds.maxLat],
+      ];
+      try {
+        if (typeof map.cameraForBounds === "function") {
+          const camera = map.cameraForBounds(targetBounds, {
+            padding,
+            bearing,
+            pitch,
+          });
+          if (camera) {
+            const nextZoom =
+              typeof camera.zoom === "number"
+                ? Math.min(camera.zoom, maxZoom)
+                : maxZoom;
+            map.easeTo({
+              ...camera,
+              zoom: nextZoom,
+              bearing,
+              pitch,
+              duration,
+              essential: true,
+            });
+            return true;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      // Fallback: fitBounds + keep pitch/bearing stable.
+      try {
+        map.fitBounds(targetBounds, {
+          padding,
+          maxZoom,
+          duration,
+          bearing,
+          pitch,
+        });
+        return true;
+      } catch {
+        try {
+          map.fitBounds(targetBounds, { padding, maxZoom });
+          map.setPitch(pitch);
+          map.setBearing(bearing);
+        } catch {
+          /* ignore */
+        }
+        return false;
+      }
+    },
+    [bearing, pitch],
+  );
+
   const sendFeaturesToMapbox = useCallback(
     (featureList, parentKindOverride = null) => {
       if (!Array.isArray(featureList) || !featureList.length) {
@@ -558,7 +618,7 @@ export function PropertyMap() {
       }
       let bounds = null;
       try {
-        for (const feat of featureList) {
+        for (const feat of enriched) {
           const b = getGeometryBounds(feat.geometry);
           if (!b) continue;
           if (!bounds) bounds = { ...b };
@@ -570,35 +630,12 @@ export function PropertyMap() {
       } catch {
         bounds = null;
       }
-      const applyCamera = () => {
-        try {
-          map.setPitch(pitch);
-          map.setBearing(bearing);
-        } catch {
-          /* ignore */
-        }
-      };
       const applyFit = () => {
-        if (bounds && map.isStyleLoaded()) {
-          map.fitBounds(
-            [
-              [bounds.minLng, bounds.minLat],
-              [bounds.maxLng, bounds.maxLat],
-            ],
-            { padding: 40, maxZoom: 19 },
-          );
-          applyCamera();
-        }
+        if (!bounds || !map.isStyleLoaded()) return;
+        applyMapboxBoundsCamera(map, bounds, { padding: 30, maxZoom: 19, duration: 650 });
       };
       if (bounds && map.isStyleLoaded()) {
-        map.fitBounds(
-          [
-            [bounds.minLng, bounds.minLat],
-            [bounds.maxLng, bounds.maxLat],
-          ],
-          { padding: 30, maxZoom: 19 },
-        );
-        applyCamera();
+        applyMapboxBoundsCamera(map, bounds, { padding: 30, maxZoom: 19, duration: 650 });
       } else {
         map.once("styledata", applyFit);
         map.once("idle", applyFit);
@@ -619,7 +656,7 @@ export function PropertyMap() {
       );
       return true;
     },
-    [logMapboxEvent, mapboxActive, pitch, bearing],
+    [applyMapboxBoundsCamera, logMapboxEvent, mapboxActive, pitch, bearing],
   );
 
   const sendFeatureToMapbox = useCallback(
@@ -1939,16 +1976,17 @@ export function PropertyMap() {
     }
     const map = mapboxInstanceRef.current;
     const bounds = getGeometryBounds(mapboxFeature.geometry);
-    if (map && bounds) {
-      map.fitBounds(
-        [
-          [bounds.minLng, bounds.minLat],
-          [bounds.maxLng, bounds.maxLat],
-        ],
-        { padding: 40, maxZoom: 19 },
-      );
+    if (map && bounds && map.isStyleLoaded()) {
+      applyMapboxBoundsCamera(map, bounds, { padding: 40, maxZoom: 19, duration: 650 });
+    } else if (map && bounds) {
+      const apply = () => {
+        if (!map.isStyleLoaded()) return;
+        applyMapboxBoundsCamera(map, bounds, { padding: 40, maxZoom: 19, duration: 650 });
+      };
+      map.once("styledata", apply);
+      map.once("idle", apply);
     }
-  }, [mapboxActive, mapboxFeature]);
+  }, [applyMapboxBoundsCamera, mapboxActive, mapboxFeature]);
 
 
   useEffect(() => {
