@@ -1643,6 +1643,7 @@ export function PropertyMap() {
                   0,
                 ],
                 "fill-extrusion-opacity": 0.95,
+                "fill-extrusion-vertical-gradient": false,
               },
             layout: {
               "fill-extrusion-sort-key": [
@@ -1686,6 +1687,16 @@ export function PropertyMap() {
         if (cancelled) return;
         map.setPitch(pitch);
         map.setBearing(bearing);
+        try {
+          map.setLight({
+            anchor: "viewport",
+            color: "white",
+            intensity: 0.35,
+            position: [1.5, 180, 80],
+          });
+        } catch {
+          /* ignore light errors */
+        }
         addLayerRules();
         map.on("mouseenter", fillLayerId, () => {
           map.getCanvas().style.cursor = "pointer";
