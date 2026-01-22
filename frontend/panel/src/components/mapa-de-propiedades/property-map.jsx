@@ -472,7 +472,17 @@ export function PropertyMap() {
       if (parentKind === "desarrollo") {
         childList = featureList.filter((f) => inferFeatureKind(f) === "capa");
       } else if (parentKind === "capa") {
-        childList = featureList.filter((f) => inferFeatureKind(f) === "unidad");
+        // Solo unidades cuyo nivel coincide con la capa seleccionada
+        const parentLevel = activeNodeRef.current?.properties?.nivel;
+        childList = featureList.filter((f) => {
+          if (inferFeatureKind(f) !== "unidad") return false;
+          const unitLevel = f?.properties?.nivel;
+          return (
+            typeof parentLevel === "number" &&
+            typeof unitLevel === "number" &&
+            Number(unitLevel) === Number(parentLevel)
+          );
+        });
       }
       if (!childList.length) {
         childList = featureList;
@@ -629,11 +639,13 @@ export function PropertyMap() {
           );
         }
         if (parentKind === "capa") {
+          const parentNivel = node?.properties?.nivel;
           return (
             props.nivel_id === parentId ||
             props.capa_id === parentId ||
             props.parent_id === parentId ||
-            props.target_parent_id === parentId
+            props.target_parent_id === parentId ||
+            (typeof parentNivel === "number" && props.nivel === parentNivel)
           );
         }
         if (parentKind === "unidad") {
