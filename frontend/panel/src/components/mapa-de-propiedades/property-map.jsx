@@ -351,6 +351,7 @@ export function PropertyMap() {
   const pendingPayloadRef = useRef(null);
   const hoveredMapboxIdRef = useRef(null);
   const mapboxVisibleIdsRef = useRef([]);
+  const mapboxIdIndexRef = useRef(new Map());
   const selectedMapboxUnitIdRef = useRef(null);
 
   const [features, setFeatures] = useState([]);
@@ -557,7 +558,6 @@ export function PropertyMap() {
         logMapboxEvent({ step: "send-failure", reason: "no-source" }, "send-failure");
         return false;
       }
-      let filterId = null;
       const enriched = childList.map((f) => {
         const clone = ensureStatusColors({ ...f });
         const props = { ...(clone.properties ?? {}) };
@@ -576,9 +576,6 @@ export function PropertyMap() {
         if (resolvedId) {
           clone.id = resolvedId;
           props.id = resolvedId;
-        }
-        if (parentKind === "unidad") {
-          filterId = filterId ?? resolvedId ?? null;
         }
         if (kind === "desarrollo") {
           props.__feature_id = props.desarrollo_id ?? props.target_id ?? props.id ?? f.id ?? null;
@@ -608,6 +605,33 @@ export function PropertyMap() {
       mapboxVisibleIdsRef.current = enriched
         .map((f) => (f?.id != null ? String(f.id) : null))
         .filter(Boolean);
+      // Índice para resolver clicks de Mapbox (que a veces traen ids en props diferentes).
+      try {
+        const index = new Map();
+        for (const feature of enriched) {
+          const props = feature?.properties ?? {};
+          const idValue = feature?.id ?? props.id ?? props.__feature_id ?? props.__original_id ?? null;
+          if (idValue == null) continue;
+          const idStr = String(idValue);
+          index.set(idStr, idStr);
+          const keys = [
+            props.id,
+            props.__feature_id,
+            props.__original_id,
+            props.poligono_id,
+            props.target_id,
+          ].filter((v) => v !== undefined && v !== null && String(v).length);
+          for (const k of keys) {
+            index.set(String(k), idStr);
+          }
+        }
+        mapboxIdIndexRef.current = index;
+      } catch {
+        mapboxIdIndexRef.current = new Map();
+      }
+      // panel summary removed
+      // Al cambiar el set de features visibles, se limpia el aislamiento de unidad.
+      selectedMapboxUnitIdRef.current = null;
       // Limpia cualquier aislamiento previo en el nuevo set.
       try {
         for (const id of mapboxVisibleIdsRef.current) {
@@ -1848,33 +1872,72 @@ export function PropertyMap() {
           };
           const isolateToUnit = (unitId) => {
             if (!unitId) return;
+            const resolved =
+              mapboxIdIndexRef.current?.get(String(unitId)) ??
+              (mapboxVisibleIdsRef.current ?? []).find((id) => String(id) === String(unitId)) ??
+              null;
+            if (!resolved) {
+              logMapboxEvent(
+                {
+                  step: "unit-isolate-miss",
+                  unitId,
+                  visibleCount: (mapboxVisibleIdsRef.current ?? []).length,
+                  visibleSample: (mapboxVisibleIdsRef.current ?? []).slice(0, 10),
+                },
+                "unit-isolate",
+              );
+              return;
+            }
             try {
               for (const id of mapboxVisibleIdsRef.current ?? []) {
                 map.setFeatureState(
                   { source: sourceId, id },
-                  { hidden: String(id) !== String(unitId) },
+                  { hidden: String(id) !== String(resolved) },
                 );
               }
             } catch {
               /* ignore */
             }
-            selectedMapboxUnitIdRef.current = String(unitId);
+            selectedMapboxUnitIdRef.current = String(resolved);
           };
 
           // Aislamiento: si el usuario clickea una unidad, ocultamos el resto sin reescribir el source.
           if (parentKind === "unidad") {
-            const unitId = getFeatureId(clicked);
+            const unitId =
+              getFeatureId(clicked) ??
+              clicked?.id ??
+              clicked?.properties?.id ??
+              clicked?.properties?.__feature_id ??
+              clicked?.properties?.__original_id ??
+              clicked?.properties?.poligono_id ??
+              null;
             if (!unitId) return;
-            if (selectedMapboxUnitIdRef.current === String(unitId)) {
+            const resolved =
+              mapboxIdIndexRef.current?.get(String(unitId)) ??
+              (mapboxVisibleIdsRef.current ?? []).find((id) => String(id) === String(unitId)) ??
+              null;
+            if (!resolved) {
+              logMapboxEvent(
+                {
+                  step: "unit-isolate-miss",
+                  unitId,
+                  visibleCount: (mapboxVisibleIdsRef.current ?? []).length,
+                  visibleSample: (mapboxVisibleIdsRef.current ?? []).slice(0, 10),
+                },
+                "unit-isolate",
+              );
+              return;
+            }
+            if (selectedMapboxUnitIdRef.current === String(resolved)) {
               clearIsolation(); // toggle: segundo clic vuelve a mostrar todas
               logMapboxEvent(
-                { step: "unit-isolate-clear", unitId, visibleCount: (mapboxVisibleIdsRef.current ?? []).length },
+                { step: "unit-isolate-clear", unitId: resolved, visibleCount: (mapboxVisibleIdsRef.current ?? []).length },
                 "unit-isolate",
               );
             } else {
-              isolateToUnit(unitId);
+              isolateToUnit(resolved);
               logMapboxEvent(
-                { step: "unit-isolate", unitId, visibleCount: (mapboxVisibleIdsRef.current ?? []).length },
+                { step: "unit-isolate", unitId: resolved, visibleCount: (mapboxVisibleIdsRef.current ?? []).length },
                 "unit-isolate",
               );
             }
