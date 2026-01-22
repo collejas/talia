@@ -319,6 +319,24 @@ function getStateKeyFromProps(props, normalizeState) {
   return normalizeState(candidate);
 }
 
+function stripZFromCoords(coords) {
+  if (!Array.isArray(coords)) return coords;
+  if (coords.length === 0) return coords;
+  if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+    return coords.slice(0, 2);
+  }
+  return coords.map(stripZFromCoords);
+}
+
+function stripZGeometry(geometry) {
+  if (!geometry || typeof geometry !== "object") return geometry;
+  if (!Array.isArray(geometry.coordinates)) return geometry;
+  return {
+    ...geometry,
+    coordinates: stripZFromCoords(geometry.coordinates),
+  };
+}
+
 export function PropertyMap() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -469,6 +487,8 @@ export function PropertyMap() {
         const clone = ensureStatusColors({ ...f });
         const props = { ...(clone.properties ?? {}) };
         const kind = inferFeatureKind(clone);
+        // Fuerza 2D para que Mapbox extruya sin caras faltantes (ignora coordenadas Z).
+        clone.geometry = stripZGeometry(clone.geometry);
         const resolvedId =
           props.__feature_id ??
           clone.id ??
@@ -1613,16 +1633,23 @@ export function PropertyMap() {
                   ["coalesce", ["get", "status_color"], ["get", "color"], "#95A5A6"],
                 ],
                 "fill-extrusion-height": [
+                  "+",
+                  ["coalesce", ["to-number", ["get", "height"]], 0],
+                  ["coalesce", ["to-number", ["get", "min_height"]], 0],
+                ],
+                "fill-extrusion-base": [
                   "coalesce",
-                  ["to-number", ["get", "height"], 0],
+                  ["to-number", ["get", "min_height"], 0],
                   0,
-              ],
-              "fill-extrusion-base": [
+                ],
+                "fill-extrusion-opacity": 0.95,
+              },
+            layout: {
+              "fill-extrusion-sort-key": [
                 "coalesce",
                 ["to-number", ["get", "min_height"], 0],
                 0,
               ],
-              "fill-extrusion-opacity": 0.9,
             },
           });
         }
