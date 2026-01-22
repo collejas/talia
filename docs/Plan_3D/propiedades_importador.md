@@ -21,6 +21,16 @@ El CSV debe contener al menos las siguientes columnas. Las filas se agrupan por 
 | `metadata` | JSON válido (opcional) para metadata adicional (ej. `{}` o `{"sector":"norte"}`). |
 | `linea_id`, `familia_id`, `modelo_id` | UUIDs opcionales para enlazar catálogos. |
 
+### Campos específicos por entidad
+
+Además de las columnas anteriores, puedes incluir campos adicionales para poblar los atributos propios de cada tabla espacial:
+
+- **`propiedad_desarrollos`**: `descripcion_desarrollo`, `codigo_postal`, `colonia` (además de los campos jerárquicos como `pais_codigo`, `estado_cve` y `municipio_cve`). Estos valores se escriben directamente en el registro del desarrollo.
+- **`propiedad_capas`**: `descripcion_capa` y `altura` (`nivel` define la jerarquía). La descripción se guarda en la capa y la altura se utiliza para calcular el volumen de Mapbox si falta metadata.
+- **`propiedad_unidades`**: `descripcion_unidad`, `precio` y `area_m2` acompañan al identificador `unidad`/`nombre`. Si no los provees, la unidad se crea con valores en blanco pero el importador ya acepta esas columnas para enriquecer el inventario.
+
+Los nombres `descripcion_desarrollo`, `descripcion_capa` y `descripcion_unidad` se aplican únicamente cuando la fila es del tipo correspondiente; si usas la columna genérica `descripcion` también funcionará (se aplica según el valor de `entidad`), pero las columnas específicas ayudan a evitar confusiones cuando completas el archivo. Sólo escribe la descripción que corresponda al nivel del registro y deja las demás vacías.
+
 Las columnas adicionales como `pais_codigo`, `estado_cve`, `municipio_cve`, `codigo_postal`, `colonia`, `descripcion`, `altura`, `precio`, `area_m2` o `area_m2` son bienvenidas y se transfieren directamente.
 
 ## Ejemplo simplificado

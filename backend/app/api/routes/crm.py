@@ -11634,6 +11634,19 @@ async def _process_import_request(
     return {"desarrollos": desarrollos, "mixtos": mixtos}
 
 
+ENTITY_DESCRIPTION_COLUMNS: dict[str, tuple[str, ...]] = {
+    "desarrollo": ("descripcion_desarrollo", "descripcion"),
+    "capa": ("descripcion_capa", "descripcion"),
+    "unidad": ("descripcion_unidad", "descripcion"),
+}
+
+def _resolve_entity_description(row: dict[str, Any], entidad: str) -> str | None:
+    for key in ENTITY_DESCRIPTION_COLUMNS.get(entidad, ("descripcion",)):
+        value = _strip_value(row.get(key))
+        if value:
+            return value
+    return None
+
 def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
     reader = csv.DictReader(io.StringIO(content), skipinitialspace=True)
     if not reader.fieldnames:
@@ -11672,7 +11685,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 municipio_cve=_strip_value(row.get("municipio_cve")),
                 codigo_postal=_strip_value(row.get("codigo_postal")),
                 colonia=_strip_value(row.get("colonia")),
-                descripcion=_strip_value(row.get("descripcion")),
+                descripcion=_resolve_entity_description(row, "desarrollo"),
                 metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
@@ -11686,7 +11699,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
             capa = ImportCapa(
                 nivel=nivel,
                 nombre=_strip_value(row.get("nombre")),
-                descripcion=_strip_value(row.get("descripcion")),
+                descripcion=_resolve_entity_description(row, "capa"),
                 altura=_parse_decimal(row.get("altura")),
                 status=_parse_status_value(row.get("status")),
                 metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
@@ -11709,7 +11722,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 tipo_id=_parse_uuid_value(row.get("tipo_id")),
                 tipo_nombre=_strip_value(row.get("tipo_nombre")),
                 status=_parse_status_value(row.get("status")),
-                descripcion=_strip_value(row.get("descripcion")),
+                descripcion=_resolve_entity_description(row, "unidad"),
                 precio=_parse_decimal(row.get("precio")),
                 area_m2=_parse_decimal(row.get("area_m2")),
                 linea_id=_parse_uuid_value(row.get("linea_id")),

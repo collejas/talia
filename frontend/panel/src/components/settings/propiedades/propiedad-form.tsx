@@ -2072,9 +2072,15 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
         <p className="text-[0.65rem] text-slate-500">
           Carga un CSV siguiendo el formato descrito en{" "}
           <span className="font-semibold text-slate-700">docs/Plan_3D/propiedades_importador.md</span>.
-          El archivo debe incluir columnas como <code>entidad</code>, <code>grupo</code>,{' '}
-          <code>nombre</code>, <code>nivel</code>, <code>unidad</code>, <code>tipo_nombre</code> y{' '}
-          <code>poligono</code>; el backend transformará cada fila en la jerarquía adecuada.
+          El archivo debe incluir columnas como <code>entidad</code>, <code>grupo</code>, <code>nombre</code>,
+          <code>nivel</code>, <code>unidad</code>, <code>tipo_nombre</code> y <code>poligono</code>; el backend
+          transformará cada fila en la jerarquía adecuada. Para enriquecer los registros también puedes añadir
+          columnas específicas a cada tabla: los desarrollos aceptan <code>descripcion_desarrollo</code>, <code>codigo_postal</code>{' '}
+          y <code>colonia</code>; las capas pueden llevar <code>descripcion_capa</code> y <code>altura</code>; y las unidades
+          admiten <code>descripcion_unidad</code>, <code>precio</code> y <code>area_m2</code>. Llena cada columna en la fila
+          correspondiente al nivel que quieres afectar: cada <code>descripcion_*</code> se aplica únicamente a la entidad
+          (`desarrollo`, `capa` o `unidad`) que representa la fila. También puedes seguir usando la columna genérica
+          <code>descripcion</code> y el importador la asignará según el tipo de entidad si no llenas las específicas.
         </p>
         {importError && <p className="text-xs text-rose-500">{importError}</p>}
         {importStatus === "success" && importResult && (
