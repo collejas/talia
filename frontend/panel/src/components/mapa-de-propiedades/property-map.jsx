@@ -734,8 +734,14 @@ export function PropertyMap() {
       pendingPayloadRef.current = null;
       return;
     }
-    const targetFeature = mapboxFeature ?? pendingMapboxFeatureRef.current;
+    const hasVisibleSet = (mapboxVisibleIdsRef.current ?? []).length > 0;
+    // Priorizamos el feature pendiente (abrir Mapbox) y evitamos que cambios de `mapboxFeature`
+    // (clics para actualizar el panel) reescriban el source y rompan el drill-down.
+    const targetFeature = pendingMapboxFeatureRef.current ?? mapboxFeature;
     if (!targetFeature) {
+      return;
+    }
+    if (hasVisibleSet && !pendingMapboxFeatureRef.current) {
       return;
     }
     if (!sendFeatureToMapbox(targetFeature)) {
@@ -1098,7 +1104,8 @@ export function PropertyMap() {
     ? "México"
     : "Selecciona un polígono";
 
-  const mapboxProps = mapboxFeature?.properties ?? null;
+  const mapboxPanelFeature = mapboxFeature ?? activeNode ?? null;
+  const mapboxProps = mapboxPanelFeature?.properties ?? null;
   const mapboxPanelLabel = useMemo(() => {
     const panel = mapboxPanelRef.current ?? {};
     const isolatedId = selectedMapboxUnitIdRef.current;
@@ -1980,6 +1987,9 @@ export function PropertyMap() {
               clicked?.properties?.poligono_id ??
               null;
             if (!unitId) return;
+            // Mantiene el panel informativo sincronizado con la unidad clickeada.
+            setMapboxFeature(clicked);
+            setSelectedId(String(unitId));
             const resolved =
               mapboxIdIndexRef.current?.get(String(unitId)) ??
               (mapboxVisibleIdsRef.current ?? []).find((id) => String(id) === String(unitId)) ??
@@ -2660,7 +2670,7 @@ export function PropertyMap() {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
-                  {mapboxFeature ? (
+                  {mapboxPanelFeature ? (
                     <>
                       <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
                         {mapboxPanelLabel}
