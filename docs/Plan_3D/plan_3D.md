@@ -25,6 +25,11 @@ Desplegar una experiencia geoespacial jerárquica donde Leaflet controle la nave
 - Se agrega una capa `fill-extrusion` o similar con `height`, `min_height` y `levels`. El color sigue la misma escala (verde/amarillo/rojo) para mantener consistencia visual. Popup/panel muestra detalles (precio, status, amenities, niveles) y un botón “volver al mapa nacional”.
 - Mapbox también puede usar los datos de `linea/familia/modelo` para contextualizar el desarrollo con la plantilla que le corresponde.
 - Implementación actual: el drill-down en Mapbox respeta la jerarquía (desarrollo → solo capas → solo unidades), con extrusión sólida (`height = base + height`), sin gradiente vertical, iluminación frontal y hover en verde; antes de enviar a Mapbox se normalizan IDs y se eliminan coordenadas Z para evitar caras faltantes.
+- **Notas de implementación (2026-01-22)**:
+  - **Z en GeoJSON**: Mapbox `fill-extrusion` no usa coordenadas Z del polígono como base; la base/altura provienen de `min_height` y `height`. En el frontend se elimina la Z (`stripZGeometry`) antes de enviar a Mapbox para evitar artefactos.
+  - **Aislar una unidad**: al hacer clic en una unidad se ocultan las demás unidades del set actual usando `feature-state.hidden` (sin reescribir el source), para que la unidad seleccionada permanezca visible.
+  - **Limitación Mapbox**: `fill-extrusion-opacity` no admite expresiones en este stack; el ocultamiento se implementa con `fill-extrusion-color = rgba(0,0,0,0)` y `height/base = 0` cuando `hidden=true`.
+  - **Cámara estable (sin “brinco” a 2D)**: para transiciones desarrollo→capa→unidad se usa `cameraForBounds` + `easeTo` (o fallback a `fitBounds` con `bearing/pitch`) para mantener `pitch/bearing` estables y animación smooth.
 
 ## Vista de creación/edición de propiedades (settings)
 - En `/settings/propiedades` se añade una pantalla tipo “editor de capas”: formulario de datos generales (colapsado/compacto) a la izquierda y mapa de Leaflet + `leaflet-draw` a la derecha, ocupando toda la altura del contenedor (igual que en QGIS/ArcMap).

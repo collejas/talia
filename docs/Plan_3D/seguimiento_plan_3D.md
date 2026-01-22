@@ -17,6 +17,9 @@
 - [x] Al llegar al nivel de municipio eliminamos las capas demográficas solo después de seleccionar un municipio (para que al hacer clic en un estado el mapa siga mostrando municipios con desarrollos) y dejamos el focus en los desarrollos limpias; el mapa sigue centrado en los desarrollos al limpiar las capas antes de renderizar.
 - [x] Reordenamos `property-map.jsx` para que `getStatusCategory` se defina antes de `regionStatusCounts`, eliminando el ReferenceError y asegurando que los conteos (`vendidas`, `apartadas`, `disponibles`) estén listos para la próxima capa de tooltips.
 - [x] Vista Mapbox ahora respeta el drill-down jerárquico: desarrollo → solo capas; capa → solo unidades. Se forzó `fill-extrusion-height = base + height` para volúmenes cerrados, se desactivó el gradiente vertical, se añadió luz frontal y hover verde para resaltar polígonos. IDs se normalizan y se eliminan las coordenadas Z antes de enviar a Mapbox para evitar caras faltantes.
+- [x] (2026-01-22) Aislamiento de unidad en Mapbox: al clicar una unidad se ocultan las demás del set visible usando `feature-state.hidden` para conservar la unidad seleccionada sin reescribir el source.
+- [x] (2026-01-22) Workaround de compatibilidad: `fill-extrusion-opacity` no soporta expresiones; el ocultamiento se hace con color transparente y `height/base` a cero cuando `hidden=true`.
+- [x] (2026-01-22) Transiciones smooth sin “brinco” a vista 2D: la cámara usa `cameraForBounds + easeTo` (fallback a `fitBounds` con `bearing/pitch`) para mantener `pitch/bearing` estables al pasar desarrollo→capa→unidad.
 
 ## Próximos pasos sugeridos
 - [ ] Continuar refinando la UI del árbol para que los polígonos se manejen como contenedores colapsables (con iconos de expansión y etiquetas “Polígono guardado” ocultas) y los botones de polígono estén anidados dentro del nodo correspondiente, garantizando una experiencia coherente con la jerarquía y el estado actual de los nodos.

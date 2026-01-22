@@ -35,6 +35,12 @@ Este documento complementa el plan maestro y describe cómo debe comportarse el 
 - Mostrar un panel con info extendida (precio, status, amenidades, niveles, referencia a línea/modelo) y un botón “volver al mapa nacional” que destruye la instancia Mapbox y reestablece Leaflet.
 - Para no sobrepasar el límite de Mapbox, la instancia se crea bajo demanda y se destruye al salir, además de que solo se activa para los marcadores de los tres estados clave.
 
+### Detalles de implementación (2026-01-22)
+- **Cámara sin parpadeo (pitch estable)**: al cambiar de dataset (desarrollo→capas, capas→unidades) se calcula la cámara con `cameraForBounds` (incluyendo `pitch/bearing`) y se usa `easeTo` para evitar el “salto” a vista ortogonal y luego a 3D.
+- **Z no se usa para extrusión**: aunque el GeoJSON venga con Z, la extrusión se controla por `properties.height/min_height`. El frontend limpia la Z antes de enviar a Mapbox.
+- **Ocultar unidades no seleccionadas**: al clicar una unidad se ocultan las demás con `feature-state.hidden`, sin reescribir el source.
+- **Compatibilidad**: `fill-extrusion-opacity` no soporta expresiones en este stack; el ocultamiento se implementa con color transparente (`rgba(0,0,0,0)`) y `height/base` a 0 para features ocultas.
+
 ## 4. Vista de creación/edición (settings/propiedades)
 - `/settings/propiedades` debe estar visible en el sidebar bajo la sección de `settings` como un botón “Propiedades”.
 - El layout debe imitar un editor de capas: el formulario de “Datos generales” se ubica a la izquierda (Texto más compacto, márgenes reducidos) y el mapa con `leaflet-draw` a la derecha ocupando el alto completo del contenedor.

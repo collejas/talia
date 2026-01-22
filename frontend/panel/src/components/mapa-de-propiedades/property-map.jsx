@@ -353,6 +353,14 @@ export function PropertyMap() {
   const mapboxVisibleIdsRef = useRef([]);
   const mapboxIdIndexRef = useRef(new Map());
   const selectedMapboxUnitIdRef = useRef(null);
+  const mapboxPanelRef = useRef({
+    scopeKind: null,
+    visibleTotal: 0,
+    kindCounts: {},
+    statusCounts: {},
+    selectedUnitId: null,
+    selectedUnitLabel: null,
+  });
 
   const [features, setFeatures] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -366,6 +374,7 @@ export function PropertyMap() {
   const [osmbReady, setOsmbReady] = useState(false);
   const [pitch, setPitch] = useState(60);
   const [bearing, setBearing] = useState(0);
+  const [mapboxPanelVersion, setMapboxPanelVersion] = useState(0);
   const selectedIdRef = useRef(selectedId);
   const hierarchyLayerRef = useRef(null);
   const markersLayerRef = useRef(null);
@@ -632,6 +641,37 @@ export function PropertyMap() {
       // panel summary removed
       // Al cambiar el set de features visibles, se limpia el aislamiento de unidad.
       selectedMapboxUnitIdRef.current = null;
+      mapboxPanelRef.current = {
+        scopeKind: parentKind,
+        visibleTotal: enriched.length,
+        kindCounts: {},
+        statusCounts: {},
+        selectedUnitId: null,
+        selectedUnitLabel: null,
+      };
+      try {
+        const kindCounts = {};
+        const statusCounts = {};
+        for (const feature of enriched) {
+          const kind = inferFeatureKind(feature);
+          kindCounts[kind] = (kindCounts[kind] ?? 0) + 1;
+          const statusRaw =
+            (feature?.properties?.status ??
+              feature?.properties?.desarrollo_status ??
+              "")
+              .toString()
+              .trim()
+              .toLowerCase();
+          if (statusRaw) {
+            statusCounts[statusRaw] = (statusCounts[statusRaw] ?? 0) + 1;
+          }
+        }
+        mapboxPanelRef.current.kindCounts = kindCounts;
+        mapboxPanelRef.current.statusCounts = statusCounts;
+      } catch {
+        // ignore
+      }
+      setMapboxPanelVersion((v) => v + 1);
       // Limpia cualquier aislamiento previo en el nuevo set.
       try {
         for (const id of mapboxVisibleIdsRef.current) {
@@ -1059,6 +1099,27 @@ export function PropertyMap() {
     : "Selecciona un polígono";
 
   const mapboxProps = mapboxFeature?.properties ?? null;
+  const mapboxPanelLabel = useMemo(() => {
+    const panel = mapboxPanelRef.current ?? {};
+    const isolatedId = selectedMapboxUnitIdRef.current;
+    if (isolatedId) {
+      const unitLabel =
+        panel.selectedUnitLabel ??
+        mapboxProps?.unidad ??
+        mapboxProps?.nombre ??
+        isolatedId;
+      return `Mostrando: 1 unidad · ${unitLabel}`;
+    }
+    const kindCounts = panel.kindCounts ?? {};
+    const parts = Object.entries(kindCounts)
+      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+      .map(([kind, count]) => `${count} ${kind}`);
+    if (parts.length) {
+      return `Mostrando: ${parts.join(" · ")}`;
+    }
+    const total = panel.visibleTotal ?? 0;
+    return total ? `Mostrando: ${total} elementos` : "Mostrando: 0 elementos";
+  }, [mapboxPanelVersion, mapboxProps]);
   const mapboxStatusLabel =
     typeof mapboxProps?.status === "string" ? mapboxProps.status.toUpperCase() : null;
   const mapboxPriceLabel =
@@ -1869,6 +1930,9 @@ export function PropertyMap() {
               /* ignore */
             }
             selectedMapboxUnitIdRef.current = null;
+            mapboxPanelRef.current.selectedUnitId = null;
+            mapboxPanelRef.current.selectedUnitLabel = null;
+            setMapboxPanelVersion((v) => v + 1);
           };
           const isolateToUnit = (unitId) => {
             if (!unitId) return;
@@ -1899,6 +1963,10 @@ export function PropertyMap() {
               /* ignore */
             }
             selectedMapboxUnitIdRef.current = String(resolved);
+            mapboxPanelRef.current.selectedUnitId = String(resolved);
+            mapboxPanelRef.current.selectedUnitLabel =
+              clicked?.properties?.unidad ?? clicked?.properties?.nombre ?? null;
+            setMapboxPanelVersion((v) => v + 1);
           };
 
           // Aislamiento: si el usuario clickea una unidad, ocultamos el resto sin reescribir el source.
@@ -2594,6 +2662,9 @@ export function PropertyMap() {
                 <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
                   {mapboxFeature ? (
                     <>
+                      <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
+                        {mapboxPanelLabel}
+                      </p>
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-lg font-semibold text-white">
                           {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}

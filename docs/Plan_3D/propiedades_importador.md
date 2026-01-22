@@ -68,4 +68,9 @@ Para evitar tener que escribir JSON, puedes añadir columnas independientes que 
 
 Puedes mantener esos valores consistentes por piso (ej. `height=3`, `min_height=0`, `levels=1` para cada capa y unidad nueva). El importador los transforma automáticamente en JSON antes de llamar al repositorio, por lo que el usuario solo interactúa con columnas numéricas sencillas en el CSV.
 
+### Nota importante sobre coordenadas Z (2026-01-22)
+- Aunque exportes polígonos con coordenadas `[lng, lat, z]` (QGIS/ArcGIS), la vista 3D en Mapbox **no usa esa Z** para la base del volumen.
+- El frontend normaliza la geometría a 2D (elimina Z) y la extrusión depende de `metadata.min_height` (base) y `metadata.height` (altura).
+- Por lo tanto, si quieres que un polígono se “apile” en un piso superior, debes llenar `min_height` en el CSV (en metros) o derivarlo del nivel (ej. `min_height = nivel * altura_por_piso`).
+
 > **Alias para el tipo de desarrollo**: cuando la fila describe un `desarrollo`, el importador busca primero la columna `tipo` y, si no existe o viene vacía, usa `tipo_nombre`. Esto te permite reutilizar CSVs antiguos donde ponías `vertical`/`horizontal` en `tipo_nombre` sin renombrar nada; el backend normaliza (trim + lowercase) antes de validar contra el enum `property_desarrollo_tipo`.
