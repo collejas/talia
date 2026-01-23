@@ -9,7 +9,7 @@ El CSV debe contener al menos las siguientes columnas. Las filas se agrupan por 
 | Columna | Descripción |
 | --- | --- |
 | `entidad` | `desarrollo`, `capa` o `unidad`. |
-| `grupo` | Identificador que agrupa capas y unidades al desarrollo correspondiente. |
+| `grupo` | Identificador que agrupa capas y unidades al desarrollo correspondiente **dentro del mismo CSV**. Recomendación: usa un valor único por desarrollo cuando el archivo contenga varios desarrollos. Si repites el mismo `grupo` en varios desarrollos, el importador desambigua internamente y las filas `capa`/`unidad` con ese `grupo` se asignan al **último desarrollo** declarado con ese mismo `grupo` (por orden en el archivo). |
 | `nombre` | Nombre del desarrollo, capa o unidad (dependiendo de `entidad`). |
 | `tipo` | Para desarrollos, `horizontal`/`vertical`/`mixto` (por defecto `horizontal`). |
 | `status` | Estado (`disponible`, `apartado`, `vendido`, `reservado`). |
@@ -63,7 +63,8 @@ Eso crea un CSV con la columna `geometry` que luego puedes renombrar o procesar 
 
 1. Descarga `GET /crm/propiedades/tipos` para reservar `tipo_nombre` coherentes.\
 2. Mantén el archivo CSV limpio: agrupa filas por desarrollo y ordena las capas (`nivel`) antes de las unidades (`capa_nivel`).\
-3. El modal de `/settings/propiedades` refresca la jerarquía una vez concluido el import; si necesitas ajustes, edita desde el árbol o vuelve a importar el CSV.
+3. Si el archivo contiene **varios desarrollos**, mantén el orden `desarrollo → capas → unidades` por cada desarrollo y evita mezclar grupos; si reutilizas el mismo `grupo`, recuerda que se toma como referencia el **último desarrollo** con ese `grupo`.\
+4. El modal de `/settings/propiedades` refresca la jerarquía una vez concluido el import; si necesitas ajustes, edita desde el árbol o vuelve a importar el CSV.
 
 ## Columnas de volumen amigables
 

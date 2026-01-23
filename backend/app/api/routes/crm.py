@@ -11653,6 +11653,8 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
         raise ValueError("El CSV está vacío.")
 
     groups: dict[str, dict[str, Any]] = {}
+    current_group_key: str | None = None
+    group_aliases: dict[str, list[str]] = {}
     for line, raw in enumerate(reader, start=1):
         row = {key: (value or "") for key, value in raw.items()}
         entidad = _strip_value(row.get("entidad") or row.get("tipo_entidad"))
@@ -11661,17 +11663,49 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
         entidad = entidad.lower()
         if entidad not in {"desarrollo", "capa", "unidad"}:
             raise ValueError(f"La entidad '{entidad}' en la línea {line} no es válida.")
-        group_key = _strip_value(row.get("grupo")) or _strip_value(row.get("nombre")) or f"fila-{line}"
-        if not group_key:
-            raise ValueError(f"Necesitas un identificador de grupo en la línea {line}.")
-        group = groups.setdefault(
-            group_key,
-            {
-                "desarrollo": None,
-                "capas": [],
-                "capas_lookup": {},
-            },
-        )
+        raw_group = _strip_value(row.get("grupo"))
+
+        if entidad == "desarrollo":
+            base_key = raw_group or _strip_value(row.get("nombre")) or f"fila-{line}"
+            if not base_key:
+                raise ValueError(f"Necesitas un identificador de grupo en la línea {line}.")
+            group_key = base_key
+            if group_key in groups and groups[group_key].get("desarrollo") is not None:
+                suffix = 2
+                candidate = f"{group_key}#{suffix}"
+                while candidate in groups:
+                    suffix += 1
+                    candidate = f"{group_key}#{suffix}"
+                group_key = candidate
+            group = groups.setdefault(
+                group_key,
+                {
+                    "desarrollo": None,
+                    "capas": [],
+                    "capas_lookup": {},
+                },
+            )
+            if raw_group:
+                group_aliases.setdefault(raw_group, []).append(group_key)
+            current_group_key = group_key
+        else:
+            if raw_group:
+                aliases = group_aliases.get(raw_group)
+                if aliases:
+                    group_key = current_group_key if current_group_key in aliases else aliases[-1]
+                else:
+                    group_key = raw_group
+            else:
+                group_key = current_group_key or _strip_value(row.get("nombre")) or f"fila-{line}"
+            if not group_key:
+                raise ValueError(f"Necesitas un identificador de grupo en la línea {line}.")
+            group = groups.get(group_key)
+            if group is None:
+                raise ValueError(
+                    f"No se encontró el grupo '{group_key}' en la línea {line}. "
+                    "Debes declarar primero el desarrollo correspondiente (o bien mantener el archivo ordenado: "
+                    "desarrollo → capas → unidades)."
+                )
 
         if entidad == "desarrollo":
             if group["desarrollo"] is not None:
