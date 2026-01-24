@@ -761,7 +761,7 @@ export function PropertyMap() {
       );
       return true;
     },
-    [applyMapboxBoundsCamera, logMapboxEvent, mapboxActive, pitch, bearing],
+    [applyMapboxBoundsCamera, logMapboxEvent, mapboxActive],
   );
 
   const sendFeatureToMapbox = useCallback(
@@ -1160,6 +1160,7 @@ export function PropertyMap() {
   const mapboxPanelFeature = mapboxFeature ?? activeNode ?? null;
   const mapboxProps = mapboxPanelFeature?.properties ?? null;
   const mapboxPanelLabel = useMemo(() => {
+    void mapboxPanelVersion;
     const panel = mapboxPanelRef.current ?? {};
     const isolatedId = selectedMapboxUnitIdRef.current;
     if (isolatedId) {
