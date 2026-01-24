@@ -185,6 +185,7 @@ async def _process_conversation(
     reengage_cutoff = reference_time - timedelta(minutes=settings.whatsapp_reengage_minutes)
     escalate_cutoff = reference_time - timedelta(minutes=settings.whatsapp_escalate_minutes)
     reengage_attempts = int(reengage_meta.get("attempts") or 0)
+    max_reengage_attempts = max(1, int(settings.whatsapp_reengage_max_attempts))
     escalate_reference = reengage_sent_at or last_out
     escalate_delay_minutes = max(0, settings.whatsapp_escalate_minutes)
     if escalate_delay_minutes <= 0:
@@ -197,28 +198,32 @@ async def _process_conversation(
     should_reengage = (
         last_out <= reengage_cutoff
         and (reengage_sent_at is None or reengage_sent_at <= reengage_cutoff)
-        and reengage_attempts < 2
+        and reengage_attempts < max_reengage_attempts
     )
 
     should_escalate = (
-        reengage_attempts >= 2
+        reengage_attempts >= max_reengage_attempts
         and escalate_sent_at is None
         and escalate_delay_reached
     )
 
+    last_out_iso = last_out.isoformat() if last_out else None
+    escalate_reference_iso = (
+        escalate_reference.isoformat() if isinstance(escalate_reference, datetime) else None
+    )
     logger.info(
         "whatsapp.followup.reengage_check",
         extra={
             "conversation_id": convo_id,
             "contact_id": contact_id,
-            "last_out": last_out,
+            "last_out": last_out_iso,
             "reengage_cutoff": reengage_cutoff.isoformat(),
             "reengage_sent_at": reengage_sent_at.isoformat() if reengage_sent_at else None,
             "attempts": reengage_attempts,
             "contact_complete": contact_complete,
             "should_reengage": should_reengage,
             "escalate_cutoff": escalate_cutoff.isoformat(),
-            "escalate_reference": escalate_reference,
+            "escalate_reference": escalate_reference_iso,
             "escalate_sent_at": escalate_sent_at.isoformat() if escalate_sent_at else None,
             "escalate_delay_reached": escalate_delay_reached,
             "should_escalate": should_escalate,
@@ -273,6 +278,7 @@ async def _send_reengage_message(
             "attempts": int(followup_meta.get("reengage", {}).get("attempts") or 0),
         },
     )
+    send_result = None
     try:
         send_result = await whatsapp_service.send_manual_message(to_number=phone, body=REENGAGE_TEMPLATE)
     except Exception as exc:  # pragma: no cover
@@ -282,7 +288,8 @@ async def _send_reengage_message(
         )
         return
 
-    if send_result.sid:
+    message_sid = getattr(send_result, "sid", None) if send_result else None
+    if message_sid:
         contact_id_value = contact.get("id") or contact.get("contacto_id")
         wa_id = None
         if phone and phone.startswith("+"):
@@ -300,7 +307,7 @@ async def _send_reengage_message(
                 wa_id=wa_id,
                 phone_e164=phone,
                 body=REENGAGE_TEMPLATE,
-                message_sid=send_result.sid,
+                message_sid=message_sid,
                 conversation_id=conversation_id,
                 contact_id=contact_id_str,
                 metadata=metadata_payload,
@@ -311,7 +318,7 @@ async def _send_reengage_message(
                 "whatsapp.followup.reengage_register_failed",
                 extra={
                     "conversation_id": conversation_id,
-                    "message_sid": send_result.sid,
+                    "message_sid": message_sid,
                     "error": str(exc),
                 },
             )

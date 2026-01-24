@@ -306,6 +306,15 @@ class Settings(BaseSettings):
         ),
         ge=3,
     )
+    whatsapp_reengage_max_attempts: int = Field(
+        default=1,
+        description="Intentos máximos de reenganche automático en conversaciones WhatsApp antes de escalar.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_REENGAGE_MAX_ATTEMPTS",
+            "TALIA_WHATSAPP_REENGAGE_MAX_ATTEMPTS",
+        ),
+        ge=1,
+    )
     whatsapp_escalate_minutes: int = Field(
         default=120,
         description="Minutos sin respuesta tras el reenganche para escalar al vendedor asignado.",

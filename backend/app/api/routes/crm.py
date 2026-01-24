@@ -1278,7 +1278,7 @@ class PropiedadCapaCreateRequest(BaseModel):
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
     @field_validator("geom", mode="before")
-    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
+    def ensure_geo_with_srid_before(cls, value: str | None) -> str | None:
         if value is None:
             return None
         trimmed = value.strip()
@@ -1341,7 +1341,7 @@ class PropiedadPoligonoUpdateRequest(BaseModel):
         return f"SRID=4326;{trimmed.split(';', 1)[-1]}"
 
     @field_validator("geom", mode="before")
-    def ensure_geo_with_srid(cls, value: str | None) -> str | None:
+    def ensure_geo_with_srid_before_update(cls, value: str | None) -> str | None:
         if value is None:
             return None
         trimmed = value.strip()

@@ -1051,6 +1051,7 @@ async def _notify_sales_rep(
         },
     )
 
+    send_result = None
     try:
         from app.channels.whatsapp import service as whatsapp_service
 
@@ -1071,37 +1072,40 @@ async def _notify_sales_rep(
         )
         return
 
-    if send_result.error:
+    send_error = getattr(send_result, "error", None) if send_result else None
+    if send_error:
         logger.warning(
             "whatsapp.notify_sales.send_failed",
             extra={
                 "conversation_id": context.conversation_id,
                 "trigger": trigger,
-                "error": send_result.error,
+                "error": send_error,
             },
         )
         return
 
+    message_sid = getattr(send_result, "sid", None) if send_result else None
+    status_value = getattr(send_result, "status", None) if send_result else None
     logger.info(
         "whatsapp.notify_sales.result",
         extra={
             "conversation_id": context.conversation_id,
             "trigger": trigger,
             "template_sid": template_sid,
-            "message_sid": send_result.sid,
-            "status": send_result.status,
+            "message_sid": message_sid,
+            "status": status_value,
             "seller_id": seller_id,
         },
     )
 
-    if send_result.sid:
+    if message_sid:
         try:
             await storage.register_whatsapp_message(
                 direction="saliente",
                 wa_id=None,
                 phone_e164=seller_phone,
                 body=message_body if not template_sid else None,
-                message_sid=send_result.sid,
+                message_sid=message_sid,
                 metadata={
                     "trigger": trigger,
                     "template_sid": template_sid,
@@ -1118,7 +1122,7 @@ async def _notify_sales_rep(
                     "conversation_id": context.conversation_id,
                     "trigger": trigger,
                     "error": str(exc),
-                    "message_sid": send_result.sid,
+                    "message_sid": message_sid,
                 },
             )
 
@@ -1153,7 +1157,7 @@ async def _notify_sales_rep(
                 contact_id=context.contact_id,
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
-                notification_sid=send_result.sid,
+                notification_sid=message_sid,
                 canal="whatsapp",
             )
     except (ValueError, CRMRepositoryError) as exc:
