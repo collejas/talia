@@ -19,7 +19,9 @@ El CSV debe contener al menos las siguientes columnas. Las filas se agrupan por 
 | `tipo_nombre` | Nombre del tipo de propiedad (coincidencia con `propiedad_tipos`). También se usa como alias para `tipo` cuando la fila describe un desarrollo y `tipo` viene vacío. |
 | `poligono` | Geometría en GeoJSON o WKT; el backend la convierte a `SRID=4326`. |
 | `metadata` | JSON válido (opcional) para metadata adicional (ej. `{}` o `{"sector":"norte"}`). |
-| `linea_id`, `familia_id`, `modelo_id` | UUIDs opcionales para enlazar catálogos. |
+| `linea_id`, `familia_id`, `modelo_id`, `linea_nombre`, `familia_nombre`, `modelo_nombre` | UUIDs opcionales para enlazar catálogos; si el usuario no conoce los UUIDs puede enviar los nombres registrados en el CRM y el importador los resolverá (crea la línea/familia/modelo si es necesario). |
+
+> Nota: `familia_nombre` requiere que el CSV incluya también `linea_id` o `linea_nombre` para asociar la familia a la línea correcta, y `modelo_nombre` necesita `familia_id` o `familia_nombre` (con la línea inferida) para ubicar el catálogo completo.
 
 ### Campos específicos por entidad
 

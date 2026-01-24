@@ -1568,6 +1568,9 @@ class ImportUnidad(BaseModel):
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
+    linea_nombre: str | None = None
+    familia_nombre: str | None = None
+    modelo_nombre: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
     poligono: str | dict[str, Any] | None = None
 
@@ -6121,9 +6124,9 @@ def _build_field_header_map(
 
 BASE_HEADER_CANDIDATES = {
     "nombre": ["nombre", "name"],
-    "linea": ["linea", "línea", "line"],
-    "familia": ["familia", "family"],
-    "modelo": ["modelo", "model"],
+    "linea": ["linea", "línea", "line", "linea_nombre", "línea_nombre"],
+    "familia": ["familia", "family", "familia_nombre"],
+    "modelo": ["modelo", "model", "modelo_nombre"],
     "slug": ["slug"],
 }
 
@@ -11615,12 +11618,29 @@ async def _process_import_request(
     )
     start = time.perf_counter()
     tipo_lookup = await _build_tipo_lookup(repo, organizacion_id)
+    catalog_lookup = await _PropertyCatalogLookup.build(repo, organizacion_id)
     desarrollos: list[dict[str, Any]] = []
     mixtos: list[dict[str, Any]] = []
     for desarrollo in payload.desarrollos or []:
-        desarrollos.append(await _import_desarrollo_tree(repo, organizacion_id, desarrollo, tipo_lookup))
+        desarrollos.append(
+            await _import_desarrollo_tree(
+                repo,
+                organizacion_id,
+                desarrollo,
+                tipo_lookup,
+                catalog_lookup,
+            )
+        )
     for mixto in payload.mixtos or []:
-        mixtos.append(await _import_desarrollo_mixto(repo, organizacion_id, mixto, tipo_lookup))
+        mixtos.append(
+            await _import_desarrollo_mixto(
+                repo,
+                organizacion_id,
+                mixto,
+                tipo_lookup,
+                catalog_lookup,
+            )
+        )
     duration_ms = (time.perf_counter() - start) * 1000
     import_debug_logger.info(
         "import_process.completed",
@@ -11657,6 +11677,11 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
     group_aliases: dict[str, list[str]] = {}
     for line, raw in enumerate(reader, start=1):
         row = {key: (value or "") for key, value in raw.items()}
+        normalized_row = {
+            _normalize_column_value(key): value
+            for key, value in row.items()
+            if key
+        }
         entidad = _strip_value(row.get("entidad") or row.get("tipo_entidad"))
         if not entidad:
             continue
@@ -11750,6 +11775,9 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
             capa = group["capas_lookup"].get((group_key, capa_nivel))
             if capa is None:
                 raise ValueError(f"No se encontró la capa de nivel {capa_nivel} para la unidad en la línea {line}.")
+            linea_nombre_value = _pick_value(normalized_row, BASE_HEADER_CANDIDATES["linea"])
+            familia_nombre_value = _pick_value(normalized_row, BASE_HEADER_CANDIDATES["familia"])
+            modelo_nombre_value = _pick_value(normalized_row, BASE_HEADER_CANDIDATES["modelo"])
             unidad = ImportUnidad(
                 unidad=_require_value(row.get("unidad"), "unidad", line),
                 nombre=_strip_value(row.get("nombre")) or _strip_value(row.get("unidad")) or "",
@@ -11762,6 +11790,9 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 linea_id=_parse_uuid_value(row.get("linea_id")),
                 familia_id=_parse_uuid_value(row.get("familia_id")),
                 modelo_id=_parse_uuid_value(row.get("modelo_id")),
+                linea_nombre=linea_nombre_value or None,
+                familia_nombre=familia_nombre_value or None,
+                modelo_nombre=modelo_nombre_value or None,
                 metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
@@ -11911,6 +11942,119 @@ def _parse_metadata(value: Any) -> dict[str, Any] | None:
     return parsed
 
 
+class _PropertyCatalogLookup:
+    def __init__(
+        self,
+        repo: CRMRepository,
+        organizacion_id: UUID,
+        lineas_cache: dict[str, dict[str, Any]],
+        familias_cache: dict[tuple[str, str], dict[str, Any]],
+        modelos_cache: dict[tuple[str, str], dict[str, Any]],
+        modelos_global: dict[str, dict[str, Any]],
+    ) -> None:
+        self.repo = repo
+        self.organizacion_id = organizacion_id
+        self.lineas_cache = lineas_cache
+        self.familias_cache = familias_cache
+        self.modelos_cache = modelos_cache
+        self.modelos_global = modelos_global
+
+    @classmethod
+    async def build(cls, repo: CRMRepository, organizacion_id: UUID) -> "_PropertyCatalogLookup":
+        lineas_raw = await repo.list_lineas_de_negocio(
+            organizacion_id=organizacion_id,
+            include_inactive=True,
+            limit=1000,
+        )
+        lineas_cache = {
+            _normalize_column_value(str(linea.get("nombre", ""))): linea
+            for linea in lineas_raw
+            if linea.get("nombre")
+        }
+        familias_cache: dict[tuple[str, str], dict[str, Any]] = {}
+        familias = await repo.list_familias_productos(
+            organizacion_id=organizacion_id,
+            include_inactive=True,
+            limit=1000,
+        )
+        for familia in familias:
+            linea_id = familia.get("linea_id")
+            nombre = familia.get("nombre")
+            if not linea_id or not nombre:
+                continue
+            familias_cache[(str(linea_id), _normalize_column_value(nombre))] = familia
+        modelos_cache: dict[tuple[str, str], dict[str, Any]] = {}
+        modelos_global: dict[str, dict[str, Any]] = {}
+        modelos = await repo.list_modelos_productos(
+            organizacion_id=organizacion_id,
+            include_inactive=True,
+            limit=1000,
+        )
+        for modelo in modelos:
+            familia_id = modelo.get("familia_id")
+            nombre = modelo.get("nombre")
+            if not familia_id or not nombre:
+                continue
+            modelos_cache[(str(familia_id), _normalize_column_value(nombre))] = modelo
+            modelos_global[_normalize_column_value(nombre)] = modelo
+        return cls(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            lineas_cache=lineas_cache,
+            familias_cache=familias_cache,
+            modelos_cache=modelos_cache,
+            modelos_global=modelos_global,
+        )
+
+    async def ensure_linea(self, name: str) -> UUID:
+        normalized = _normalize_column_value(name)
+        if not normalized:
+            raise ValueError("Línea vacía o inválida.")
+        cached = self.lineas_cache.get(normalized)
+        if cached:
+            return UUID(str(cached["id"]))
+        payload = {"nombre": name, "activo": True}
+        nueva = await self.repo.create_linea_de_negocio(
+            organizacion_id=self.organizacion_id,
+            payload=payload,
+        )
+        normalized_nueva = _normalize_column_value(str(nueva.get("nombre", name)))
+        self.lineas_cache[normalized_nueva] = nueva
+        return UUID(str(nueva["id"]))
+
+    async def ensure_familia(self, name: str, linea_id: UUID) -> UUID:
+        normalized = _normalize_column_value(name)
+        key = (str(linea_id), normalized)
+        cached = self.familias_cache.get(key)
+        if cached:
+            return UUID(str(cached["id"]))
+        payload = {"nombre": name, "linea_id": str(linea_id), "activo": True}
+        nueva = await self.repo.create_familia_producto(
+            organizacion_id=self.organizacion_id,
+            payload=payload,
+        )
+        self.familias_cache[key] = nueva
+        return UUID(str(nueva["id"]))
+
+    async def ensure_model(self, name: str, familia_id: UUID) -> UUID:
+        normalized = _normalize_column_value(name)
+        key = (str(familia_id), normalized)
+        cached = self.modelos_cache.get(key)
+        if cached:
+            return UUID(str(cached["id"]))
+        global_cached = self.modelos_global.get(normalized)
+        if global_cached:
+            return UUID(str(global_cached["id"]))
+        payload = {"nombre": name, "familia_id": str(familia_id), "activo": True}
+        nuevo = await self.repo.create_modelo_producto(
+            organizacion_id=self.organizacion_id,
+            payload=payload,
+        )
+        self.modelos_cache[key] = nuevo
+        self.modelos_global[normalized] = nuevo
+        return UUID(str(nuevo["id"]))
+
+
 def _merge_volume_metadata(row: dict[str, Any], base_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
     meta = dict(base_metadata) if base_metadata else {}
     changes = False
@@ -11953,6 +12097,7 @@ async def _import_desarrollo_tree(
     organizacion_id: UUID,
     desarrollo: ImportDesarrollo,
     tipo_lookup: dict[str, str],
+    catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "nombre": desarrollo.nombre.strip(),
@@ -12044,12 +12189,33 @@ async def _import_desarrollo_tree(
                         unidad_payload["precio"] = _decimal_to_number(unidad.precio)
                     if unidad.area_m2 is not None:
                         unidad_payload["area_m2"] = _decimal_to_number(unidad.area_m2)
-                    if unidad.linea_id:
-                        unidad_payload["linea_id"] = str(unidad.linea_id)
-                    if unidad.familia_id:
-                        unidad_payload["familia_id"] = str(unidad.familia_id)
-                    if unidad.modelo_id:
-                        unidad_payload["modelo_id"] = str(unidad.modelo_id)
+                    resolved_linea_id = unidad.linea_id
+                    if not resolved_linea_id and unidad.linea_nombre:
+                        resolved_linea_id = await catalog_lookup.ensure_linea(unidad.linea_nombre)
+                    resolved_familia_id = unidad.familia_id
+                    if not resolved_familia_id and unidad.familia_nombre:
+                        if not resolved_linea_id:
+                            raise ValueError(
+                                "Para usar 'familia_nombre' necesitas proporcionar 'linea_id' o 'linea_nombre'."
+                            )
+                        resolved_familia_id = await catalog_lookup.ensure_familia(
+                            unidad.familia_nombre, resolved_linea_id
+                        )
+                    resolved_modelo_id = unidad.modelo_id
+                    if not resolved_modelo_id and unidad.modelo_nombre:
+                        if not resolved_familia_id:
+                            raise ValueError(
+                                "Para usar 'modelo_nombre' necesitas proporcionar 'familia_id' o 'familia_nombre'."
+                            )
+                        resolved_modelo_id = await catalog_lookup.ensure_model(
+                            unidad.modelo_nombre, resolved_familia_id
+                        )
+                    if resolved_linea_id:
+                        unidad_payload["linea_id"] = str(resolved_linea_id)
+                    if resolved_familia_id:
+                        unidad_payload["familia_id"] = str(resolved_familia_id)
+                    if resolved_modelo_id:
+                        unidad_payload["modelo_id"] = str(resolved_modelo_id)
 
                     unidad_record = await repo.create_propiedad_unidad(
                         organizacion_id=organizacion_id,
@@ -12084,6 +12250,7 @@ async def _import_desarrollo_mixto(
     organizacion_id: UUID,
     mixto: ImportDesarrolloMixto,
     tipo_lookup: dict[str, str],
+    catalog_lookup: _PropertyCatalogLookup,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "nombre": mixto.nombre.strip(),
@@ -12121,7 +12288,13 @@ async def _import_desarrollo_mixto(
         summary["poligono_id"] = mix_poligono["id"]
 
     for item in mixto.items:
-        child = await _import_desarrollo_tree(repo, organizacion_id, item.desarrollo, tipo_lookup)
+        child = await _import_desarrollo_tree(
+            repo,
+            organizacion_id,
+            item.desarrollo,
+            tipo_lookup,
+            catalog_lookup,
+        )
         mixto_payload: dict[str, Any] = {
             "mix_id": record["id"],
             "desarrollo_id": child["id"],
