@@ -1728,6 +1728,11 @@ export function PropertyMap() {
       return;
     }
     hierarchyLayerRef.current.clearLayers();
+    // Cuando estamos navegando desarrollo→capa→unidad en Leaflet, ocultamos la capa de demografía
+    // para que no se encime con los polígonos de propiedades.
+    if (leafletActiveNodeRef.current) {
+      return;
+    }
     if (!filteredDemografiaGeojson || (mapLevel === "municipio" && selectedMunicipioKey)) {
       return;
     }
@@ -1745,7 +1750,7 @@ export function PropertyMap() {
     } catch {
       // ignore invalid bounds
     }
-  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey]);
+  }, [filteredDemografiaGeojson, leaflet, mapLevel, selectedMunicipioKey, leafletActiveNode]);
 
   useEffect(() => {
     if (!hierarchyLayerRef.current) {
@@ -1801,6 +1806,10 @@ export function PropertyMap() {
       return;
     }
     markersLayerRef.current.clearLayers();
+    // En drill-down Leaflet, apagamos marcadores para evitar "doble capa".
+    if (leafletActiveNodeRef.current) {
+      return;
+    }
     if (mapLevel === "municipio" && municipioDevelopmentFeatures.length) {
       return;
     }
@@ -1859,6 +1868,7 @@ export function PropertyMap() {
     getFeatureColor,
     municipioDevelopmentFeatures,
     selectedMunicipioGeoKey,
+    leafletActiveNode,
   ]);
 
   useEffect(() => {
@@ -1873,9 +1883,7 @@ export function PropertyMap() {
     }
     // Si estamos haciendo drill-down (desarrollo/capa/unidad) dejamos libre la capa municipal
     // para que no tape los polígonos de la capa/unidades.
-    if (leafletActiveNodeRef.current) {
-      return;
-    }
+    if (leafletActiveNodeRef.current) return;
     const payload = {
       type: "FeatureCollection",
       features: municipioDevelopmentFeatures,
@@ -1892,7 +1900,7 @@ export function PropertyMap() {
     } catch {
       // ignore invalid bounds
     }
-  }, [leaflet, mapLevel, municipioDevelopmentFeatures]);
+  }, [leaflet, mapLevel, municipioDevelopmentFeatures, leafletActiveNode]);
 
   useEffect(() => {
     if (!mapboxActive) {
