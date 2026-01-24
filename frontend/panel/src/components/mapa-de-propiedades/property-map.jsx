@@ -190,11 +190,13 @@ function ensureStatusColors(feature) {
     return feature;
   }
   const props = feature.properties || {};
+  const statusKey =
+    typeof props.status === "string" ? props.status.trim().toLowerCase() : "";
   if (!props.color) {
-    props.color = STATUS_COLORS[(props.status ?? "").toLowerCase()] ?? "#95A5A6";
+    props.color = (statusKey && STATUS_COLORS[statusKey]) ?? "#95A5A6";
   }
   if (!props.status_color) {
-    props.status_color = STATUS_COLORS[(props.status ?? "").toLowerCase()] ?? "#95A5A6";
+    props.status_color = (statusKey && STATUS_COLORS[statusKey]) ?? "#95A5A6";
   }
   feature.properties = props;
   return feature;
@@ -1093,11 +1095,14 @@ export function PropertyMap() {
     if (!props) {
       return "#95A5A6";
     }
+    const statusKey =
+      typeof props.status === "string" ? props.status.trim().toLowerCase() : "";
     const statusColor =
       (typeof props.status_color === "string" && props.status_color) ||
-      STATUS_COLORS[props.status ?? ""] ||
+      (statusKey && STATUS_COLORS[statusKey]) ||
       "#95A5A6";
-    return props.color ?? props.wallColor ?? statusColor;
+    // Prioriza siempre el color por status (vendido/apartado/etc).
+    return statusColor || props.color || props.wallColor || "#95A5A6";
   }, []);
 
   const applyLayerStyle = useCallback(
