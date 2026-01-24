@@ -432,6 +432,8 @@ export function PropertyMap() {
   const [activeMarkerFeature, setActiveMarkerFeature] = useState(null);
   const [mapboxActive, setMapboxActive] = useState(false);
   const [mapboxFeature, setMapboxFeature] = useState(null);
+  const [leafletActiveNode, setLeafletActiveNode] = useState(null);
+  const [leafletParentStack, setLeafletParentStack] = useState([]);
   const [activeNode, setActiveNode] = useState(null);
   const [parentStack, setParentStack] = useState([]);
   const [expandedDevIds, setExpandedDevIds] = useState(() => new Set());
@@ -496,6 +498,16 @@ export function PropertyMap() {
   useEffect(() => {
     mapboxFeatureRef.current = mapboxFeature;
   }, [mapboxFeature]);
+
+  const leafletActiveNodeRef = useRef(null);
+  useEffect(() => {
+    leafletActiveNodeRef.current = leafletActiveNode;
+  }, [leafletActiveNode]);
+
+  const resetLeafletDrilldown = useCallback(() => {
+    setLeafletParentStack([]);
+    setLeafletActiveNode(null);
+  }, []);
 
   useEffect(() => {
     activeNodeRef.current = activeNode;
@@ -848,6 +860,79 @@ export function PropertyMap() {
     [featuresRef],
   );
 
+  const deriveDrillChildren = useCallback(
+    (node) => {
+      if (!node) return [];
+      const parentKind = inferFeatureKind(node);
+      const children = getChildrenForNode(node);
+      if (!children.length) return [];
+      if (parentKind === "desarrollo") {
+        const capas = children.filter((child) => inferFeatureKind(child) === "capa");
+        return capas.length ? capas : children;
+      }
+      if (parentKind === "capa") {
+        const unidades = children.filter((child) => inferFeatureKind(child) === "unidad");
+        return unidades.length ? unidades : children;
+      }
+      return children;
+    },
+    [getChildrenForNode],
+  );
+
+  const ascendLeaflet = useCallback(() => {
+    setLeafletParentStack((prev) => {
+      if (!prev.length) {
+        setLeafletActiveNode(null);
+        return prev;
+      }
+      const next = [...prev];
+      const parent = next.pop() ?? null;
+      setLeafletActiveNode(parent);
+      return next;
+    });
+  }, []);
+
+  const handleLeafletFeatureClick = useCallback(
+    (feature, layerInstance) => {
+      if (!feature) return;
+      const props = feature?.properties ?? {};
+      const kind = inferFeatureKind(feature);
+      const id = getFeatureId(feature) ?? (feature?.id != null ? String(feature.id) : "");
+      if (props) {
+        layerInstance?.bindPopup?.(
+          `<strong>${props.nombre ?? props.desarrollo_nombre ?? "Propiedad"}</strong><br>${props.status ?? ""}`,
+        );
+        layerInstance?.openPopup?.();
+      }
+      if (id) {
+        setSelectedId(String(id));
+      }
+      if (kind === "unidad") {
+        return;
+      }
+      if (kind === "desarrollo" || kind === "capa") {
+        try {
+          const bounds = layerInstance?.getBounds?.();
+          if (bounds?.isValid?.() && mapInstanceRef.current) {
+            mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 19 });
+          }
+        } catch {
+          /* ignore */
+        }
+        setLeafletParentStack((prev) => {
+          const next = [...prev];
+          const current = leafletActiveNodeRef.current;
+          if (current) {
+            next.push(current);
+          }
+          return next;
+        });
+        setLeafletActiveNode(feature);
+      }
+    },
+    [],
+  );
+
   const ascendMapbox = useCallback(() => {
     const map = mapboxInstanceRef.current;
     if (map) {
@@ -935,6 +1020,17 @@ export function PropertyMap() {
       return true;
     });
   }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
+
+  const leafletVisibleFeatures = useMemo(() => {
+    if (mapboxActive) {
+      return filteredFeatures;
+    }
+    if (!leafletActiveNode) {
+      return filteredFeatures;
+    }
+    const children = deriveDrillChildren(leafletActiveNode);
+    return children.length ? children : [leafletActiveNode];
+  }, [deriveDrillChildren, filteredFeatures, leafletActiveNode, mapboxActive]);
 
   const municipioDevelopmentFeatures = useMemo(() => {
     if (mapLevel !== "municipio" || !selectedMunicipioGeoKey) {
@@ -1415,6 +1511,11 @@ export function PropertyMap() {
     handleRegionOutRef.current = handleRegionOut;
   }, [handleRegionOut]);
 
+  const handleLeafletFeatureClickRef = useRef(handleLeafletFeatureClick);
+  useEffect(() => {
+    handleLeafletFeatureClickRef.current = handleLeafletFeatureClick;
+  }, [handleLeafletFeatureClick]);
+
   const handleBackLevel = useCallback(() => {
     if (mapLevel === "municipio") {
       setMapLevel("estado");
@@ -1506,14 +1607,7 @@ export function PropertyMap() {
       }),
       onEachFeature: (feature, layerInstance) => {
         layerInstance.on("click", () => {
-          const props = feature?.properties;
-          if (props) {
-            layerInstance.bindPopup(
-              `<strong>${props.nombre ?? "Propiedad"}</strong><br>${props.status ?? ""}`,
-            );
-            layerInstance.openPopup();
-            setSelectedId(String(feature?.id ?? ""));
-          }
+          handleLeafletFeatureClickRef.current?.(feature, layerInstance);
         });
         layerInstance.on("mouseover", () => {
           const highlightWeight = (layerInstance.options?.weight ?? 2) + 2;
@@ -1549,6 +1643,16 @@ export function PropertyMap() {
 
     const municipalPolygonLayer = leaflet.geoJSON([], {
       style: getDevelopmentPolygonStyle,
+      onEachFeature: (feature, layerInstance) => {
+        layerInstance.on("click", () => handleLeafletFeatureClickRef.current?.(feature, layerInstance));
+        layerInstance.on("mouseover", () => {
+          const highlightWeight = (layerInstance.options?.weight ?? 3) + 2;
+          layerInstance.setStyle({ weight: highlightWeight, fillOpacity: 0.5 });
+        });
+        layerInstance.on("mouseout", () => {
+          layerInstance.setStyle(getDevelopmentPolygonStyle(feature));
+        });
+      },
     });
     municipalPolygonLayerRef.current = municipalPolygonLayer;
     municipalPolygonLayer.addTo(map);
@@ -1765,6 +1869,11 @@ export function PropertyMap() {
     }
     layer.clearLayers();
     if (mapLevel !== "municipio" || !municipioDevelopmentFeatures.length) {
+      return;
+    }
+    // Si estamos haciendo drill-down (desarrollo/capa/unidad) dejamos libre la capa municipal
+    // para que no tape los polígonos de la capa/unidades.
+    if (leafletActiveNodeRef.current) {
       return;
     }
     const payload = {
@@ -2285,6 +2394,7 @@ export function PropertyMap() {
         const normalized =
           (data?.features ?? []).map((feature) => ensureStatusColors(feature));
         setFeatures(normalized);
+        resetLeafletDrilldown();
         if (controller.signal.aborted) return;
         setLoading(false);
       })
@@ -2297,7 +2407,7 @@ export function PropertyMap() {
     return () => {
       controller.abort();
     };
-  }, [nivelFilter, tipoFilter]);
+  }, [nivelFilter, tipoFilter, resetLeafletDrilldown]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2326,8 +2436,12 @@ export function PropertyMap() {
     if (!layerRef.current) {
       return;
     }
-    const shouldRenderLayer = !(mapLevel === "municipio" && municipioDevelopmentFeatures.length);
-    const processed = filteredFeatures.map((feature) => {
+    const shouldRenderLayer =
+      !(mapLevel === "municipio" && municipioDevelopmentFeatures.length) ||
+      Boolean(leafletActiveNode) ||
+      leafletParentStack.length > 0;
+    const baseFeatures = mapboxActive ? filteredFeatures : leafletVisibleFeatures;
+    const processed = baseFeatures.map((feature) => {
       const props = feature?.properties ?? {};
       const normalizedColor =
         (typeof props.color === "string" && props.color) ||
@@ -2368,7 +2482,14 @@ export function PropertyMap() {
       });
     }
 
-    if (processed.length && mapInstanceRef.current && leaflet && mapLevel === "pais") {
+    if (
+      processed.length &&
+      mapInstanceRef.current &&
+      leaflet &&
+      mapLevel === "pais" &&
+      !mapboxActive &&
+      !leafletActiveNode
+    ) {
       const bounds = leaflet.geoJSON(payload).getBounds();
       if (bounds.isValid()) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
@@ -2376,6 +2497,10 @@ export function PropertyMap() {
     }
   }, [
     filteredFeatures,
+    leafletVisibleFeatures,
+    mapboxActive,
+    leafletActiveNode,
+    leafletParentStack.length,
     viewMode,
     selectedId,
     leaflet,
@@ -2676,6 +2801,34 @@ export function PropertyMap() {
               mapboxActive ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
             }`}
           />
+          {!mapboxActive && (leafletActiveNode || leafletParentStack.length > 0) && (
+            <div className="absolute right-4 top-4 z-20 pointer-events-auto">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs shadow-sm">
+                <div className="max-w-[220px] truncate text-slate-700">
+                  {leafletActiveNode?.properties?.desarrollo_nombre ??
+                    leafletActiveNode?.properties?.nombre ??
+                    "Explorando"}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-2 py-1 text-[0.65rem] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                    onClick={ascendLeaflet}
+                    disabled={leafletParentStack.length === 0}
+                  >
+                    Subir
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-2 py-1 text-[0.65rem] font-semibold text-slate-800 hover:bg-slate-50"
+                    onClick={resetLeafletDrilldown}
+                  >
+                    Inicio
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div
             ref={mapboxContainerRef}
             className={`absolute inset-0 z-20 w-full h-full rounded-md transition-opacity duration-200 ${
