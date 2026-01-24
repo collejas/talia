@@ -33,8 +33,10 @@ WorkingDirectory=/var/www/talia/frontend/panel
 
 # Variables de entorno
 Environment=NODE_ENV=production
-Environment=PANEL_API_URL=http://127.0.0.1:8004/api
+Environment=PANEL_API_URL=http://127.0.0.1:8004
 EnvironmentFile=/var/www/talia/frontend/panel/.env.local
+# Nota: si `PANEL_API_URL` también existe en `.env.local`, systemd tomará el valor del archivo
+# (por eso conviene que ambos coincidan).
 
 # Crear carpeta de logs (propietario root)
 ExecStartPre=/usr/bin/mkdir -p /var/www/talia/logs

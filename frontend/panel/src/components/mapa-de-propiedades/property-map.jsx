@@ -34,12 +34,34 @@ function getFeatureId(feature) {
 const inferFeatureKind = (feature) => {
   const props = feature?.properties ?? {};
   const rawTipo = (props.target_type ?? props.tipo ?? "").toString().toLowerCase();
-  // Tratar "departamento" como unidad para coherencia en el drill-down.
-  const direct = rawTipo === "departamento" ? "unidad" : rawTipo;
-  if (direct) return direct;
-  if (props.nivel != null) return "capa";
-  if (props.area_m2 != null || props.unidad) return "unidad";
-  if (props.desarrollo_tipo) return "desarrollo";
+  // Normaliza tipos conocidos y evita que labels de negocio (p.ej. "lote") rompan el drill-down.
+  const normalized = rawTipo.trim();
+  if (["desarrollo", "mix", "capa", "unidad"].includes(normalized)) {
+    return normalized;
+  }
+
+  // Tipos que en la UI deben comportarse como unidad.
+  const unitAliases = new Set([
+    "departamento",
+    "lote",
+    "casa",
+    "terreno",
+    "local",
+    "oficina",
+    "bodega",
+    "unit",
+    "department",
+  ]);
+  if (unitAliases.has(normalized)) {
+    return "unidad";
+  }
+
+  // Inferencia por estructura de datos (más confiable que `tipo`).
+  if (props.unidad != null || props.tipo_id != null || props.precio != null || props.area_m2 != null) {
+    return "unidad";
+  }
+  if (props.nivel != null || props.capa_nombre != null || props.altura != null) return "capa";
+  if (props.desarrollo_tipo || props.desarrollo_status) return "desarrollo";
   return "unknown";
 };
 
@@ -188,6 +210,25 @@ function normalizeTipoLabel(value) {
   if (normalized === "mixto") return "Mixto";
   if (normalized === "capa") return "Capa";
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function toFiniteNumber(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed.length) return null;
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  return null;
+}
+
+function normalizeLooseString(value) {
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim();
+  return str.length ? str.toLowerCase() : null;
 }
 
 function buildHierarchy(features) {
@@ -755,7 +796,10 @@ export function PropertyMap() {
     (node) => {
       if (!node) return [];
       const parentId = getFeatureId(node);
-      if (!parentId) return [];
+      const parentProps = node?.properties ?? {};
+      const parentNombre = normalizeLooseString(parentProps?.nombre);
+      const parentNivel = toFiniteNumber(parentProps?.nivel);
+      const parentDesarrolloId = parentProps?.desarrollo_id ?? parentProps?.target_id ?? null;
       const parentKind = inferFeatureKind(node);
       const list = featuresRef.current ?? [];
       return list.filter((child) => {
@@ -777,18 +821,27 @@ export function PropertyMap() {
           );
         }
         if (parentKind === "capa") {
-          const parentNivel = node?.properties?.nivel;
+          const unitNivel = toFiniteNumber(props?.nivel);
+          const unitCapaNombre = normalizeLooseString(props?.capa_nombre);
+          const unitDesarrolloId = props?.desarrollo_id ?? props?.target_id ?? null;
           return (
-            props.nivel_id === parentId ||
-            props.capa_id === parentId ||
+            (parentId && (props.nivel_id === parentId || props.capa_id === parentId)) ||
             props.parent_id === parentId ||
             props.target_parent_id === parentId ||
-            (typeof parentNivel === "number" && props.nivel === parentNivel)
+            (parentNivel !== null && unitNivel !== null && unitNivel === parentNivel) ||
+            (parentNombre &&
+              unitCapaNombre &&
+              parentNombre === unitCapaNombre &&
+              (!parentDesarrolloId || !unitDesarrolloId || parentDesarrolloId === unitDesarrolloId))
           );
         }
         if (parentKind === "unidad") {
-          return props.parent_id === parentId || props.target_parent_id === parentId;
+          if (parentId) {
+            return props.parent_id === parentId || props.target_parent_id === parentId;
+          }
+          return false;
         }
+        if (!parentId) return false;
         return props.parent_id === parentId || props.target_parent_id === parentId;
       });
     },
