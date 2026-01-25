@@ -3585,6 +3585,28 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
         return row
 
+    async def get_catalog_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        item_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{item_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar catálogo: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
+        return row
+
     async def list_lineas_de_negocio(
         self,
         *,

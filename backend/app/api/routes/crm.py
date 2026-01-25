@@ -1267,6 +1267,24 @@ class PropiedadUnidadCreateRequest(BaseModel):
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
 
+class CRMPropertySaleRequest(BaseModel):
+    catalog_item_id: UUID
+    propiedad_id: UUID
+    unidad_id: UUID
+    precio_final: Decimal = Field(..., gt=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    oportunidad_id: UUID | None = None
+    cuenta_id: UUID | None = None
+    contacto_id: UUID | None = None
+    cotizacion_metadata: dict[str, Any] | None = Field(default_factory=dict)
+    item_metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @field_validator("moneda")
+    @classmethod
+    def uppercase_currency(cls, value: str) -> str:
+        return value.upper()
+
+
 class PropiedadCapaCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     desarrollo_id: UUID
@@ -11533,6 +11551,86 @@ async def eliminar_propiedad_unidad(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "unidad": record}
+
+
+@router.post(
+    "/ventas/propiedades",
+    response_model=CRMQuote,
+    status_code=status.HTTP_201_CREATED,
+)
+async def registrar_venta_propiedad(
+    *,
+    payload: CRMPropertySaleRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> CRMQuote:
+    catalog_item = await repo.get_catalog_item(
+        organizacion_id=organizacion_id, item_id=payload.catalog_item_id
+    )
+    if not catalog_item:
+        raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    price_value = _decimal_to_number(payload.precio_final)
+    sale_refs = {
+        "propiedad_id": str(payload.propiedad_id),
+        "unidad_id": str(payload.unidad_id),
+        "catalog_item_id": str(payload.catalog_item_id),
+        "precio_final": price_value,
+    }
+    quote_metadata = _normalize_metadata_value(payload.cotizacion_metadata) or {}
+    quote_metadata = {**quote_metadata, **sale_refs}
+    item_metadata = _normalize_metadata_value(payload.item_metadata) or {}
+    item_metadata = {**item_metadata, **sale_refs}
+
+    quote_payload: dict[str, Any] = {
+        "estatus": "aceptada",
+        "total": price_value,
+        "moneda": payload.moneda,
+        "metadata": quote_metadata,
+    }
+    if payload.oportunidad_id:
+        quote_payload["oportunidad_id"] = str(payload.oportunidad_id)
+    if payload.cuenta_id:
+        quote_payload["cuenta_id"] = str(payload.cuenta_id)
+    if payload.contacto_id:
+        quote_payload["contacto_id"] = str(payload.contacto_id)
+
+    try:
+        quote = await repo.create_quote(
+            organizacion_id=organizacion_id,
+            payload=quote_payload,
+        )
+        item_payload: dict[str, Any] = {
+            "cotizacion_id": str(quote["id"]),
+            "producto_id": str(payload.catalog_item_id),
+            "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
+            "cantidad": 1,
+            "precio_unitario": price_value,
+            "subtotal": price_value,
+            "metadata": item_metadata,
+        }
+        await repo.add_quote_item(
+            organizacion_id=organizacion_id,
+            payload=item_payload,
+        )
+        await repo.update_propiedad_unidad(
+            organizacion_id=organizacion_id,
+            unidad_id=payload.unidad_id,
+            payload={"status": PropiedadStatus.vendido.value},
+        )
+        catalog_metadata = dict(catalog_item.get("metadatos") or {})
+        catalog_metadata.update(
+            {
+                "venta_registrada_en": datetime.now(timezone.utc).isoformat(),
+                "venta_activa": False,
+            }
+        )
+        await repo.update_catalog_item(
+            item_id=payload.catalog_item_id,
+            payload={"activo": False, "metadatos": catalog_metadata},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMQuote.model_validate(quote)
 
 
 @router.post("/propiedades/importar")

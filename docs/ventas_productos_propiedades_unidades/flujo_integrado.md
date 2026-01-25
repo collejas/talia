@@ -20,3 +20,8 @@
 1. Crear y documentar el endpoint de ventas unificado (`/crm/ventas/propiedades`) y definir qué entidades actualiza (catalog_item, propiedad_unidad, cotización/oportunidad). 
 2. Asegurar que cada venta marque la unidad como `activo = false` y `status = vendido` para que el inventario se reduzca automáticamente.
 3. Extender los reportes / vistas de ventas para incluir la información geoespacial (ver `docs/Plan_3D/plan_ventas_integradas.md`) y evitar que productos vendidos vuelvan a aparecer como disponibles.
+
+## Implementación actual
+- Ya existe `POST /crm/ventas/propiedades`: recibe `catalog_item_id`, `propiedad_id`, `unidad_id`, `precio_final` (y opcionalmente `oportunidad_id`, `cuenta_id`, `contacto_id` y metadata adicional).  
+- El endpoint crea una cotización aceptada (`estatus = "aceptada"`) con un solo item que apunta al `catalog_item` de la unidad y guarda los IDs espaciales dentro de `metadata`.  
+- Posteriormente actualiza la unidad (`propiedad_unidades.status = "vendido"`) y el catálogo (`catalog_items.activo = false` y `metadatos.venta_registrada_en = ...`) para evitar que se vuelva a cotizar la misma geometría.
