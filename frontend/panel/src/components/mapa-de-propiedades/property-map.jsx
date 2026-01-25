@@ -387,12 +387,15 @@ export function PropertyMap() {
   const mapInstanceRef = useRef(null);
   const osmbRef = useRef(null);
   const layerRef = useRef(null);
+  const leafletDrillControlsRef = useRef(null);
   const mapboxContainerRef = useRef(null);
   const mapboxInstanceRef = useRef(null);
   const featuresRef = useRef([]);
+  const filteredFeaturesRef = useRef([]);
   const activeNodeRef = useRef(null);
   const pendingPayloadRef = useRef(null);
   const hoveredMapboxIdRef = useRef(null);
+  const municipioDevelopmentFeaturesRef = useRef([]);
   const mapboxVisibleIdsRef = useRef([]);
   const mapboxIdIndexRef = useRef(new Map());
   const selectedMapboxUnitIdRef = useRef(null);
@@ -506,10 +509,41 @@ export function PropertyMap() {
     leafletActiveNodeRef.current = leafletActiveNode;
   }, [leafletActiveNode]);
 
+  const fitLeafletToFeatures = useCallback(
+    (featureList, options = { padding: [30, 30], maxZoom: 19 }) => {
+      if (!mapInstanceRef.current || !leaflet) return;
+      if (!Array.isArray(featureList) || featureList.length === 0) return;
+      try {
+        const bounds = leaflet.geoJSON({ type: "FeatureCollection", features: featureList }).getBounds();
+        if (bounds.isValid()) {
+          mapInstanceRef.current.fitBounds(bounds, options);
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [leaflet],
+  );
+
   const resetLeafletDrilldown = useCallback(() => {
     setLeafletParentStack([]);
     setLeafletActiveNode(null);
-  }, []);
+    // Vuelve a la vista raíz del nivel actual.
+    const municipioFeatures = municipioDevelopmentFeaturesRef.current ?? [];
+    const filtered = filteredFeaturesRef.current ?? [];
+    if (mapLevel === "municipio" && municipioFeatures.length) {
+      fitLeafletToFeatures(municipioFeatures, { padding: [30, 30], maxZoom: 18 });
+    } else if (filtered.length) {
+      fitLeafletToFeatures(filtered, { padding: [30, 30], maxZoom: 19 });
+    }
+    if (typeof window !== "undefined") {
+      console.debug("[leaflet] inicio", {
+        mapLevel,
+        municipioCount: municipioFeatures.length,
+        filteredCount: filtered.length,
+      });
+    }
+  }, [fitLeafletToFeatures, mapLevel]);
 
   useEffect(() => {
     activeNodeRef.current = activeNode;
@@ -882,17 +916,47 @@ export function PropertyMap() {
   );
 
   const ascendLeaflet = useCallback(() => {
-    setLeafletParentStack((prev) => {
-      if (!prev.length) {
-        setLeafletActiveNode(null);
-        return prev;
-      }
-      const next = [...prev];
-      const parent = next.pop() ?? null;
-      setLeafletActiveNode(parent);
-      return next;
+    const nextStack = [...leafletParentStack];
+    const parent = nextStack.pop() ?? null;
+    setLeafletParentStack(nextStack);
+    setLeafletActiveNode(parent);
+
+    if (parent) {
+      const children = deriveDrillChildren(parent);
+      fitLeafletToFeatures(children.length ? children : [parent]);
+      return;
+    }
+
+    // Si no hay padre (primer nivel), "subir" equivale a salir del drill-down.
+    const municipioFeatures = municipioDevelopmentFeaturesRef.current ?? [];
+    const filtered = filteredFeaturesRef.current ?? [];
+    if (mapLevel === "municipio" && municipioFeatures.length) {
+      fitLeafletToFeatures(municipioFeatures, { padding: [30, 30], maxZoom: 18 });
+    } else if (filtered.length) {
+      fitLeafletToFeatures(filtered, { padding: [30, 30], maxZoom: 19 });
+    }
+    if (typeof window !== "undefined") {
+      console.debug("[leaflet] subir", {
+        hadParent: Boolean(parent),
+        nextStackLen: nextStack.length,
+        mapLevel,
+      });
+    }
+  }, [
+    deriveDrillChildren,
+    fitLeafletToFeatures,
+    leafletParentStack,
+    mapLevel,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    console.debug("[leaflet] drill-state", {
+      mapLevel,
+      activeKind: leafletActiveNode ? inferFeatureKind(leafletActiveNode) : null,
+      stackLen: leafletParentStack.length,
     });
-  }, []);
+  }, [leafletActiveNode, leafletParentStack.length, mapLevel]);
 
   const handleLeafletFeatureClick = useCallback(
     (feature, layerInstance) => {
@@ -934,6 +998,17 @@ export function PropertyMap() {
     },
     [],
   );
+
+  // Recentrar cuando cambia el nodo activo del drill-down Leaflet.
+  useEffect(() => {
+    if (mapboxActive) return;
+    if (!leafletActiveNode) return;
+    const children = deriveDrillChildren(leafletActiveNode);
+    fitLeafletToFeatures(children.length ? children : [leafletActiveNode], {
+      padding: [30, 30],
+      maxZoom: 19,
+    });
+  }, [deriveDrillChildren, fitLeafletToFeatures, leafletActiveNode, mapboxActive]);
 
   const ascendMapbox = useCallback(() => {
     const map = mapboxInstanceRef.current;
@@ -1023,6 +1098,10 @@ export function PropertyMap() {
     });
   }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
 
+  useEffect(() => {
+    filteredFeaturesRef.current = filteredFeatures;
+  }, [filteredFeatures]);
+
   const leafletVisibleFeatures = useMemo(() => {
     if (mapboxActive) {
       return filteredFeatures;
@@ -1048,6 +1127,10 @@ export function PropertyMap() {
       return Boolean(municipioKey && municipioKey === selectedMunicipioGeoKey);
     });
   }, [features, mapLevel, selectedMunicipioGeoKey]);
+
+  useEffect(() => {
+    municipioDevelopmentFeaturesRef.current = municipioDevelopmentFeatures;
+  }, [municipioDevelopmentFeatures]);
 
   useEffect(() => {
     if (mapLevel !== "municipio") {
@@ -1668,6 +1751,19 @@ export function PropertyMap() {
       municipalPolygonLayerRef.current?.clearLayers();
     };
   }, [leaflet, applyLayerStyle]);
+
+  useEffect(() => {
+    if (!leaflet || !leafletDrillControlsRef.current) {
+      return;
+    }
+    // Evita que Leaflet capture clicks/scroll sobre los botones (Subir/Inicio).
+    try {
+      leaflet.DomEvent?.disableClickPropagation?.(leafletDrillControlsRef.current);
+      leaflet.DomEvent?.disableScrollPropagation?.(leafletDrillControlsRef.current);
+    } catch {
+      /* ignore */
+    }
+  }, [leaflet]);
 
   useEffect(() => {
     const estadoKey = mapLevel === "municipio" ? selectedStateKey : undefined;
@@ -2815,7 +2911,10 @@ export function PropertyMap() {
             }`}
           />
           {!mapboxActive && (leafletActiveNode || leafletParentStack.length > 0) && (
-            <div className="absolute right-4 top-4 z-20 pointer-events-auto">
+            <div
+              ref={leafletDrillControlsRef}
+              className="absolute right-4 top-4 z-50 pointer-events-auto"
+            >
               <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs shadow-sm">
                 <div className="max-w-[220px] truncate text-slate-700">
                   {leafletActiveNode?.properties?.desarrollo_nombre ??
@@ -2823,18 +2922,50 @@ export function PropertyMap() {
                     "Explorando"}
                 </div>
                 <div className="flex items-center gap-2">
+                  {/** Evita que Leaflet capture el click debajo del botón (mousedown/pointerdown). */}
                   <button
                     type="button"
                     className="rounded border border-slate-300 px-2 py-1 text-[0.65rem] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                    onClick={ascendLeaflet}
-                    disabled={leafletParentStack.length === 0}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      // En algunos browsers Leaflet escucha eventos nativos antes del click.
+                      event.nativeEvent?.stopImmediatePropagation?.();
+                    }}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.nativeEvent?.stopImmediatePropagation?.();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.nativeEvent?.stopImmediatePropagation?.();
+                      ascendLeaflet();
+                    }}
+                    disabled={!leafletActiveNode && leafletParentStack.length === 0}
                   >
                     Subir
                   </button>
                   <button
                     type="button"
                     className="rounded border border-slate-300 px-2 py-1 text-[0.65rem] font-semibold text-slate-800 hover:bg-slate-50"
-                    onClick={resetLeafletDrilldown}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.nativeEvent?.stopImmediatePropagation?.();
+                    }}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.nativeEvent?.stopImmediatePropagation?.();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.nativeEvent?.stopImmediatePropagation?.();
+                      resetLeafletDrilldown();
+                    }}
                   >
                     Inicio
                   </button>
