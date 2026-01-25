@@ -88,6 +88,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+codex resume 019bf0a5-df36-7253-97ec-3a93c6836246
 codex resume 019be342-95be-7023-80b9-4b61e128b67b
 codex resume 019bde41-668a-70b3-8342-1352b421fadc
 https://api.mapbox.com/styles/v1/mapbox/satellite-v9?access_token=pk.eyJ1IjoiY29sbGVqYXMiLCJhIjoiY21rZzdxODIwMDU2MTNkb2Z3dHd4NmR2aCJ9.3PXIYpRq5QlvhrlPGVmZhQ

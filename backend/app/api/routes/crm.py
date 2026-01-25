@@ -12078,6 +12078,19 @@ def _merge_volume_metadata(row: dict[str, Any], base_metadata: dict[str, Any] | 
     if color:
         assign("color", color)
 
+    prefix = "metadata_unidad_"
+    for raw_key, raw_value in row.items():
+        normalized_key = raw_key.lower().strip()
+        if not normalized_key.startswith(prefix):
+            continue
+        suffix = normalized_key[len(prefix) :]
+        if not suffix:
+            continue
+        value = _strip_value(raw_value)
+        if value == "":
+            continue
+        assign(suffix, value)
+
     return meta if changes or meta else None
 
 
@@ -12221,6 +12234,16 @@ async def _import_desarrollo_tree(
                         organizacion_id=organizacion_id,
                         payload=unidad_payload,
                     )
+                    await _ensure_catalog_item_for_unidad(
+                        repo=repo,
+                        organizacion_id=organizacion_id,
+                        desarrollo_record=record,
+                        unidad_record=unidad_record,
+                        unidad_source=unidad,
+                        linea_id=resolved_linea_id,
+                        familia_id=resolved_familia_id,
+                        modelo_id=resolved_modelo_id,
+                    )
                     unidad_summary: dict[str, Any] = {
                         "id": unidad_record["id"],
                         "unidad": unidad_record["unidad"],
@@ -12303,12 +12326,12 @@ async def _import_desarrollo_mixto(
             "status": item.status.value,
             "metadata": _coerce_metadata(item.metadata),
         }
-        if item.descripcion:
-            mixto_payload["descripcion"] = item.descripcion.strip()
-        if item.nivel is not None:
-            mixto_payload["nivel"] = item.nivel
-        if item.altura is not None:
-            mixto_payload["altura"] = _decimal_to_number(item.altura)
+    if item.descripcion:
+        mixto_payload["descripcion"] = item.descripcion.strip()
+    if item.nivel is not None:
+        mixto_payload["nivel"] = item.nivel
+    if item.altura is not None:
+        mixto_payload["altura"] = _decimal_to_number(item.altura)
 
         item_record = await repo.create_propiedad_desarrollo_mix_item(
             organizacion_id=organizacion_id,
@@ -12323,6 +12346,75 @@ async def _import_desarrollo_mixto(
         )
 
     return summary
+
+
+def _strip_catalog_volume_metadata(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not metadata:
+        return metadata
+    suppression = {"height", "min_height", "levels", "color"}
+    filtered = {key: value for key, value in metadata.items() if key not in suppression}
+    return filtered if filtered else None
+
+
+async def _ensure_catalog_item_for_unidad(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    desarrollo_record: dict[str, Any],
+    unidad_record: dict[str, Any],
+    unidad_source: ImportUnidad,
+    linea_id: UUID | None,
+    familia_id: UUID | None,
+    modelo_id: UUID | None,
+) -> None:
+    slug = _build_unidad_catalog_slug(development_name=desarrollo_record.get("nombre"), unidad_key=unidad_record.get("unidad"))
+    metadata = _coerce_metadata(unidad_source.metadata)
+    metadata = _strip_catalog_volume_metadata(metadata)
+    metadata = {**(metadata or {}), "propiedad_id": str(desarrollo_record["id"]), "unidad_id": str(unidad_record["id"])}
+    payload: dict[str, Any] = {
+        "organizacion_id": str(organizacion_id),
+        "nombre": f'{desarrollo_record.get("nombre") or "Propiedad"} · {unidad_record.get("unidad") or unidad_record.get("nombre") or ""}'.strip(" ·"),
+        "unidad": str(unidad_record.get("unidad") or unidad_record.get("nombre") or ""),
+        "tipo": "producto",
+        "precio_base": _decimal_to_number(unidad_source.precio),
+        "moneda": "MXN",
+        "activo": True,
+        "metadatos": metadata,
+    }
+    if slug:
+        payload["slug"] = slug
+    if linea_id:
+        payload["linea_id"] = str(linea_id)
+    if familia_id:
+        payload["familia_id"] = str(familia_id)
+    if modelo_id:
+        payload["modelo_id"] = str(modelo_id)
+    if unidad_source.descripcion:
+        payload["descripcion_corta"] = unidad_source.descripcion.strip()
+    existing = await repo.get_catalog_item_by_slug(
+        organizacion_id=organizacion_id,
+        slug=slug,
+    )
+    if existing:
+        await repo.update_catalog_item(
+            item_id=_safe_uuid(existing["id"]),
+            payload=payload,
+        )
+    else:
+        await repo.create_catalog_item(payload=payload)
+
+
+def _build_unidad_catalog_slug(*, development_name: Any | None, unidad_key: Any | None) -> str:
+    base_parts = []
+    if development_name:
+        base_parts.append(str(development_name))
+    if unidad_key:
+        base_parts.append(str(unidad_key))
+    base = "-".join(base_parts)
+    slug = _slugify(base)
+    if slug:
+        slug = f"{slug}-{uuid4().hex[:6]}"
+    return slug or str(uuid4())
 
 
 async def _create_poligono_if_present(
