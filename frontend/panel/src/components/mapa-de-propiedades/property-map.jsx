@@ -421,6 +421,15 @@ export function PropertyMap() {
   const [pitch, setPitch] = useState(60);
   const [bearing, setBearing] = useState(0);
   const [mapboxPanelVersion, setMapboxPanelVersion] = useState(0);
+  const [saleLoading, setSaleLoading] = useState(false);
+  const [saleError, setSaleError] = useState(null);
+  const [saleSuccess, setSaleSuccess] = useState(null);
+  const [saleLogs, setSaleLogs] = useState([]);
+  const [geojsonRefreshVersion, setGeojsonRefreshVersion] = useState(0);
+  const lastSaleTimestampRef = useRef(null);
+  const refreshGeojson = useCallback(() => {
+    setGeojsonRefreshVersion((value) => value + 1);
+  }, []);
   const selectedIdRef = useRef(selectedId);
   const hierarchyLayerRef = useRef(null);
   const markersLayerRef = useRef(null);
@@ -503,6 +512,31 @@ export function PropertyMap() {
   useEffect(() => {
     mapboxFeatureRef.current = mapboxFeature;
   }, [mapboxFeature]);
+
+  useEffect(() => {
+    if (!mapboxFeature) return;
+    const props = mapboxFeature.properties ?? {};
+    const metadata = props.metadata ?? {};
+    logMapboxEvent(
+      {
+        feature_id: getFeatureId(mapboxFeature),
+        layer: mapboxFeature.layer ?? props.layer ?? null,
+        catalog_item_id:
+          metadata.catalog_item_id ??
+          props.catalog_item_id ??
+          metadata.catalog_item ??
+          props.catalog_item ??
+          null,
+        status: (props.status ?? "").toString().toLowerCase(),
+        metadata_keys: Object.keys(metadata),
+        properties: {
+          unidad: props.unidad ?? props.nombre ?? null,
+          desarrollo_id: props.desarrollo_id ?? props.target_id ?? null,
+        },
+      },
+      "mapbox-feature-selected",
+    );
+  }, [logMapboxEvent, mapboxFeature]);
 
   const leafletActiveNodeRef = useRef(null);
   useEffect(() => {
@@ -693,6 +727,14 @@ export function PropertyMap() {
           const nivelNum = Number(props.nivel ?? props.levels ?? 0);
           if (!Number.isNaN(nivelNum) && props.height) {
             props.min_height = nivelNum * props.height;
+          }
+        }
+        const metadataPayload = props.metadata ?? {};
+        if (metadataPayload && typeof metadataPayload === "object") {
+          const catalogValue =
+            metadataPayload.catalog_item_id ?? metadataPayload.catalog_item ?? null;
+          if (catalogValue) {
+            props.catalog_item_id = String(catalogValue);
           }
         }
         clone.properties = props;
@@ -1343,6 +1385,16 @@ export function PropertyMap() {
 
   const mapboxPanelFeature = mapboxFeature ?? activeNode ?? null;
   const mapboxProps = mapboxPanelFeature?.properties ?? null;
+  const mapboxMetadata = mapboxProps?.metadata ?? {};
+  const catalogItemId =
+    mapboxMetadata?.catalog_item_id ??
+    mapboxProps?.catalog_item_id ??
+    mapboxMetadata?.catalog_item ??
+    mapboxProps?.metadata?.catalog_item ??
+    null;
+  const unidadId = mapboxProps?.id ?? mapboxProps?.unidad_id ?? mapboxProps?.unidad ?? null;
+  const propiedadId =
+    mapboxProps?.desarrollo_id ?? mapboxProps?.propiedad_id ?? mapboxProps?.target_id ?? null;
   const mapboxPanelLabel = useMemo(() => {
     void mapboxPanelVersion;
     const panel = mapboxPanelRef.current ?? {};
@@ -1398,6 +1450,60 @@ export function PropertyMap() {
         .filter(Boolean)
         .join(" · ")
     : null;
+
+  const handleRegisterSale = useCallback(async () => {
+    setSaleError(null);
+    setSaleSuccess(null);
+    if (!catalogItemId || !propiedadId || !unidadId) {
+      setSaleError("Datos incompletos de la unidad seleccionada.");
+      return;
+    }
+    let precioValue = mapboxProps?.precio;
+    const parsedPrice = precioValue != null ? Number(precioValue) : NaN;
+    if (!precioValue || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      const promptValue = window.prompt(
+        "Precio final de la unidad (MXN)",
+        precioValue ? String(precioValue) : "0",
+      );
+      if (promptValue === null) {
+        return;
+      }
+      precioValue = Number(promptValue);
+      if (Number.isNaN(precioValue) || precioValue <= 0) {
+        setSaleError("Precio inválido.");
+        return;
+      }
+    } else {
+      precioValue = parsedPrice;
+    }
+    setSaleLoading(true);
+    try {
+      const response = await fetch("/api/crm/ventas/propiedades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          catalog_item_id: catalogItemId,
+          propiedad_id: propiedadId,
+          unidad_id: unidadId,
+          precio_final: precioValue,
+          moneda: "MXN",
+        }),
+      });
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error ?? "venta_failed");
+      }
+      const data = await response.json().catch(() => null);
+      setSaleSuccess(
+        data?.id ? `Venta registrada (${data.id})` : "Venta registrada correctamente.",
+      );
+      refreshGeojson();
+    } catch (error) {
+      setSaleError(error instanceof Error ? error.message : "venta_failed");
+    } finally {
+      setSaleLoading(false);
+    }
+  }, [catalogItemId, propiedadId, unidadId, mapboxProps, refreshGeojson]);
 
   const activeFeatureProps = activeMarkerFeature?.properties ?? null;
   const activeDevelopmentSummary = (() => {
@@ -2516,7 +2622,47 @@ export function PropertyMap() {
     return () => {
       controller.abort();
     };
-  }, [nivelFilter, tipoFilter, resetLeafletDrilldown]);
+  }, [nivelFilter, tipoFilter, resetLeafletDrilldown, geojsonRefreshVersion]);
+
+  useEffect(() => {
+    setSaleError(null);
+    setSaleSuccess(null);
+  }, [mapboxProps?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchLogs = async () => {
+      try {
+        const response = await fetch("/api/crm/ventas/logs", {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = await response.json().catch(() => null);
+        if (cancelled) {
+          return;
+        }
+        const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+        setSaleLogs(logs);
+        const latestTimestamp = logs?.[0]?.timestamp;
+        if (latestTimestamp && latestTimestamp !== lastSaleTimestampRef.current) {
+          lastSaleTimestampRef.current = latestTimestamp;
+          refreshGeojson();
+        }
+      } catch (error) {
+        console.warn("ventas/logs", error);
+      }
+    };
+
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [refreshGeojson]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3066,10 +3212,39 @@ export function PropertyMap() {
                         {mapboxProps?.descripcion && (
                           <div>
                             <p className="text-xs text-slate-300">Descripción:</p>
-                            <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
-                          </div>
-                        )}
-                      </div>
+                         <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
+                        </div>
+                      )}
+                    </div>
+                      {catalogItemId && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
+                        <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
+                          <button
+                            type="button"
+                            className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                            onClick={handleRegisterSale}
+                            disabled={saleLoading}
+                          >
+                            {saleLoading ? "Registrando venta..." : "Registrar venta"}
+                          </button>
+                          {saleError && (
+                            <p className="text-[0.65rem] text-rose-400">{saleError}</p>
+                          )}
+                          {saleSuccess && (
+                            <p className="text-[0.65rem] text-emerald-300">{saleSuccess}</p>
+                          )}
+                        </div>
+                      )}
+                      {saleLogs.length > 0 && (
+                        <div className="mt-4 text-[0.65rem] uppercase tracking-[0.2em] text-slate-400">
+                          Última venta registrada:
+                          <span className="block text-[0.75rem] font-semibold text-slate-200">
+                            {saleLogs[0]?.timestamp
+                              ? new Date(saleLogs[0].timestamp).toLocaleString()
+                              : "—"}{" "}
+                            · Unidad {saleLogs[0]?.unidad_id ?? "—"}
+                          </span>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <p className="text-[0.85rem] text-slate-400">

@@ -321,6 +321,60 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_unidad_invalid_delete_response:{row!r}")
         return row
 
+    async def get_propiedad_capa(
+        self,
+        *,
+        organizacion_id: UUID,
+        capa_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{capa_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_capas",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_capa_invalid_response:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_capa_invalid_response:{row!r}")
+        return row
+
+    async def get_propiedad_desarrollo(
+        self,
+        *,
+        organizacion_id: UUID,
+        desarrollo_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{desarrollo_id}",
+            "limit": "1",
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_desarrollos",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_desarrollo_invalid_response:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"propiedad_desarrollo_invalid_response:{row!r}")
+        return row
+
     async def delete_propiedad_capa(
         self,
         *,

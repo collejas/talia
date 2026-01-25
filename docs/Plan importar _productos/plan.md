@@ -27,6 +27,7 @@ Diseñar una experiencia guiada dentro de `settings/productos` que permita a un 
   - [ ] crea o actualiza filas en `catalog_items` respetando las relaciones jerárquicas de línea > familia > modelo > producto.
   - [ ] devuelve un reporte con filas creadas, actualizadas y errores de validación.
 - [ ] Notificar al asistente vectorial y a la indexación para que consuman los metadatos recién generados.
+- [ ] Registrar que el importador ya deriva los campos volumétricos (`height`, `min_height`, `levels`, `metadata_color`) y cualquier `metadata_unidad_*` hacia el nuevo JSON `catalog_items.metadatos_extra` para evitar el error de la columna generada `metadata`.
 
 ## Detalles de implementación
 
@@ -46,7 +47,9 @@ Diseñar una experiencia guiada dentro de `settings/productos` que permita a un 
 
 ### Importador y validaciones pendientes
 - El backend del CRM necesita un endpoint POST que reciba el archivo y el `scheme_id`, valide tipos y campos obligatorios, y arme el objeto `metadata` para cada fila.
+- El backend del CRM necesita un endpoint POST que reciba el archivo y el `scheme_id`, valide tipos y campos obligatorios, y arme el objeto `metadata` para cada fila. Ahora el helper copia los campos `metadata_unidad_*`, `height`, `levels`, `min_height` y `metadata_color` hacia `catalog_items.metadatos_extra` para no escribir directamente en la columna generada `metadata` y poder mantener los atributos volumétricos/visuales en el catálogo.
 - Debe garantizarse que los productos heredados respetan la organización y que la metadata generada se indexa en la tienda vectorial.
+- El importador ya invoca `_ensure_catalog_item_for_unidad` (también se ejecuta desde `/crm/propiedades`) con los datos del desarrollo y la unidad, lo que crea/actualiza `catalog_items` y guarda `catalog_item_id`, `propiedad_id` y `unidad_id` en la metadata de la unidad. La ruta escribe además en `/var/www/talia/logs/mapbox-debug.log` cada sincronización para facilitar el monitoreo del panel Mapbox.
 - Al final de cada importación debe haber un reporte de filas aceptadas/descartadas con mensajes en español y la opción de descargar los errores.
 
 ## Siguientes pasos

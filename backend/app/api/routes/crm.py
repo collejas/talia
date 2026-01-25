@@ -1603,6 +1603,7 @@ class ImportUnidad(BaseModel):
     familia_nombre: str | None = None
     modelo_nombre: str | None = None
     metadata: dict[str, Any] | None = Field(default_factory=dict)
+    metadata_extra: dict[str, Any] | None = Field(default=None)
     poligono: str | dict[str, Any] | None = None
 
 
@@ -11503,6 +11504,54 @@ async def crear_propiedad(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    nivel_uuid = _safe_uuid(record.get("nivel_id"))
+    capa_record: dict[str, Any] | None = None
+    if nivel_uuid:
+        capa_record = await repo.get_propiedad_capa(
+            organizacion_id=organizacion_id,
+            capa_id=nivel_uuid,
+        )
+    desarrollo_uuid = _safe_uuid(record.get("desarrollo_id")) or (
+        capa_record and _safe_uuid(capa_record.get("desarrollo_id"))
+    ) or _safe_uuid(payload.desarrollo_id)
+    desarrollo_record: dict[str, Any] | None = None
+    if desarrollo_uuid:
+        desarrollo_record = await repo.get_propiedad_desarrollo(
+            organizacion_id=organizacion_id,
+            desarrollo_id=desarrollo_uuid,
+        )
+    desarrollo_record = desarrollo_record or {"id": str(desarrollo_uuid) if desarrollo_uuid else None}
+    unidad_source = ImportUnidad(
+        unidad=payload.unidad,
+        nombre=payload.nombre,
+        tipo_id=payload.tipo_id,
+        status=payload.status,
+        descripcion=payload.descripcion,
+        precio=payload.precio,
+        area_m2=payload.area_m2,
+        linea_id=payload.linea_id,
+        familia_id=payload.familia_id,
+        modelo_id=payload.modelo_id,
+        metadata=metadata,
+    )
+    linea_uuid = payload.linea_id
+    familia_uuid = payload.familia_id
+    modelo_uuid = payload.modelo_id
+
+    try:
+        await _ensure_catalog_item_for_unidad(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            desarrollo_record=desarrollo_record,
+            unidad_record=record,
+            unidad_source=unidad_source,
+            linea_id=linea_uuid,
+            familia_id=familia_uuid,
+            modelo_id=modelo_uuid,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     return {"ok": True, "unidad": record}
 
 
@@ -11641,6 +11690,20 @@ async def registrar_venta_propiedad(
             item_id=payload.catalog_item_id,
             payload={"activo": False, "metadatos": catalog_metadata},
         )
+        sale_entry = {
+            "organizacion_id": str(organizacion_id),
+            "catalog_item_id": str(payload.catalog_item_id),
+            "propiedad_id": str(payload.propiedad_id),
+            "unidad_id": str(payload.unidad_id),
+            "precio_final": price_value,
+            "moneda": payload.moneda,
+            "cotizacion_id": str(quote["id"]),
+            "oportunidad_id": str(payload.oportunidad_id) if payload.oportunidad_id else None,
+            "cuenta_id": str(payload.cuenta_id) if payload.cuenta_id else None,
+            "contacto_id": str(payload.contacto_id) if payload.contacto_id else None,
+        }
+        sale_logger.info("propiedad_sale_registered", extra=sale_entry)
+        _write_propiedad_sale_log(sale_entry)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuote.model_validate(quote)
@@ -11905,6 +11968,7 @@ def _csv_to_import_request(content: str) -> ImportPropiedadesRequest:
                 familia_nombre=familia_nombre_value or None,
                 modelo_nombre=modelo_nombre_value or None,
                 metadata=_merge_volume_metadata(row, _parse_metadata(row.get("metadata"))),
+                metadata_extra=_collect_metadata_extra_from_row(row),
                 poligono=_parse_geometry_value(row.get("poligono")),
             )
             capa.unidades = capa.unidades or []
@@ -12205,6 +12269,44 @@ def _merge_volume_metadata(row: dict[str, Any], base_metadata: dict[str, Any] | 
     return meta if changes or meta else None
 
 
+def _collect_metadata_extra_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    extra: dict[str, Any] = {}
+
+    def assign(key: str, value: Any | None) -> None:
+        if value is None:
+            return
+        if isinstance(value, Decimal):
+            extra[key] = float(value)
+        else:
+            extra[key] = value
+
+    height = _parse_optional_decimal(row.get("height") or row.get("altura"))
+    min_height = _parse_optional_decimal(row.get("min_height") or row.get("base"))
+    levels = _parse_optional_int(row.get("levels"))
+    color = _strip_value(row.get("metadata_color") or row.get("color"))
+
+    assign("height", height)
+    assign("min_height", min_height)
+    assign("levels", levels)
+    if color:
+        assign("color", color)
+
+    prefix = "metadata_unidad_"
+    for raw_key, raw_value in row.items():
+        normalized_key = raw_key.lower().strip()
+        if not normalized_key.startswith(prefix):
+            continue
+        suffix = normalized_key[len(prefix) :]
+        if not suffix:
+            continue
+        value = _strip_value(raw_value)
+        if value == "":
+            continue
+        assign(suffix, value)
+
+    return extra if extra else None
+
+
 def _parse_uuid_value(value: Any) -> UUID | None:
     trimmed = _strip_value(value)
     if not trimmed:
@@ -12502,17 +12604,47 @@ async def _ensure_catalog_item_for_unidad(
         payload["modelo_id"] = str(modelo_id)
     if unidad_source.descripcion:
         payload["descripcion_corta"] = unidad_source.descripcion.strip()
+    metadata_extra = unidad_source.metadata_extra or {}
+    if metadata_extra:
+        payload["metadatos_extra"] = metadata_extra
     existing = await repo.get_catalog_item_by_slug(
         organizacion_id=organizacion_id,
         slug=slug,
     )
+    catalog_item_row: dict[str, Any] | None = None
     if existing:
-        await repo.update_catalog_item(
+        catalog_item_row = await repo.update_catalog_item(
             item_id=_safe_uuid(existing["id"]),
             payload=payload,
         )
     else:
-        await repo.create_catalog_item(payload=payload)
+        catalog_item_row = await repo.create_catalog_item(payload=payload)
+    catalog_item_id = _safe_uuid(catalog_item_row.get("id"))
+    unidad_uuid = _safe_uuid(unidad_record.get("id"))
+    if catalog_item_id:
+        metadata["catalog_item_id"] = str(catalog_item_id)
+        if unidad_uuid:
+            unidad_metadata = _ensure_dict(unidad_record.get("metadata"), default={})
+            if unidad_metadata.get("catalog_item_id") != str(catalog_item_id):
+                unidad_metadata["catalog_item_id"] = str(catalog_item_id)
+                await repo.update_propiedad_unidad(
+                    organizacion_id=organizacion_id,
+                    unidad_id=unidad_uuid,
+                    payload={"metadata": unidad_metadata},
+                )
+    _write_mapbox_debug_log(
+        "catalog_item_sync",
+        {
+            "organizacion_id": str(organizacion_id),
+            "unidad_id": str(unidad_record.get("id")),
+            "catalog_item_id": str(catalog_item_id) if catalog_item_id else None,
+            "status": unidad_record.get("status"),
+            "linea_id": unidad_record.get("linea_id"),
+            "familia_id": unidad_record.get("familia_id"),
+            "metadata_keys": sorted(list(metadata.keys())),
+            "metadata_extra_keys": sorted(list((unidad_source.metadata_extra or {}).keys())),
+        },
+    )
 
 
 def _build_unidad_catalog_slug(*, development_name: Any | None, unidad_key: Any | None) -> str:

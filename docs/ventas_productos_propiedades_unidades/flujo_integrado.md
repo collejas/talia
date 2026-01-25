@@ -14,6 +14,7 @@
 
 ## Importador y metadata
 - El CSV puede enviar columnas con prefijos `metadata_` o `metadata_unidad_` para poblar libremente `catalog_items.metadatos`; el backend ya absorbe esos campos y solo quita los atributos volumétricos/visuales (`height`, `min_height`, `levels`, `color`) antes de guardar.
+- Las columnas `height`, `min_height`, `levels`, `metadata_color` y los campos `metadata_unidad_*` se copian ahora a la columna adicional `catalog_items.metadatos_extra`, que es la que consume Mapbox (evita el error 428C9 de la columna generada `metadata`) y también se replica en el log `logs/mapbox-debug.log` bajo la etiqueta `catalog_item_sync` para verificar qué metadata extra se está sincronizando.
 - `propiedad_id` y `unidad_id` deben permanecer en `metadatos` porque garantizan que la venta se enlace con su geometría original.
 
 ## Próximos pasos
@@ -25,3 +26,7 @@
 - Ya existe `POST /crm/ventas/propiedades`: recibe `catalog_item_id`, `propiedad_id`, `unidad_id`, `precio_final` (y opcionalmente `oportunidad_id`, `cuenta_id`, `contacto_id` y metadata adicional).  
 - El endpoint crea una cotización aceptada (`estatus = "aceptada"`) con un solo item que apunta al `catalog_item` de la unidad y guarda los IDs espaciales dentro de `metadata`.  
 - Posteriormente actualiza la unidad (`propiedad_unidades.status = "vendido"`) y el catálogo (`catalog_items.activo = false` y `metadatos.venta_registrada_en = ...`) para evitar que se vuelva a cotizar la misma geometría.
+- El backend no solo lo hace desde el importador: la ruta `/crm/propiedades` ahora también dispara `_ensure_catalog_item_for_unidad`, obtiene el desarrollo que contiene a la unidad y agrega los metadatos `catalog_item_id`, `propiedad_id` y `unidad_id` cada vez que se crea una unidad manualmente. Así la vista Mapbox ya puede mostrar el botón “Registrar venta” incluso cuando la unidad se registra por la UI del panel.
+- Ese mismo log se puede usar para depurar por qué el botón no aparece (registra el `catalog_item_id`, el `status` y las claves de metadata/metadata_extra de cada unidad). Lo emitimos cada vez que `_ensure_catalog_item_for_unidad` corre y permite checar que `catalog_item_id` no se pierda entre el inventario espacial y el catálogo comercial.
+- El front de propiedades consulta `/api/crm/ventas/propiedades` (ruta que a su vez consume el backend) y muestra un botón en el panel 3D para registrar una venta con el precio final; el mapa se refresca inmediatamente tras cada venta gracias a un trigger de re-fetch de `/api/crm/propiedades/geojson` y a un polling que lee las últimas entradas de `logs/propiedades-ventas.log` mediante `/api/crm/ventas/logs`.
+- Gracias al log, el panel detecta nuevas ventas y actualiza los polígonos vendidos sin necesidad de un refresh manual; también se mantiene un pequeño historial de la última venta registrada dentro del panel Mapbox.
