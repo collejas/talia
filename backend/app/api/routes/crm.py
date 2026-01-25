@@ -78,9 +78,11 @@ from app.services.storage import StorageError
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
 import_debug_logger = get_logger("app.api.crm.import")
+sale_logger = get_logger("app.api.crm.sales")
 
 MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
 MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
+SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
@@ -90,6 +92,17 @@ def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
             handle.write(f"{timestamp} | {tag} | {json.dumps(payload, default=str)}\n")
     except Exception as exc:  # pragma: no cover - best-effort logging
         logger.debug("mapbox_debug_log_failed", extra={"tag": tag, "error": str(exc)})
+
+
+def _write_propiedad_sale_log(entry: dict[str, Any]) -> None:
+    try:
+        MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with SALE_LOG_FILE.open("a", encoding="utf-8") as handle:
+            timestamp = datetime.utcnow().isoformat()
+            record = {"timestamp": timestamp, **entry}
+            handle.write(f"{json.dumps(record, default=str)}\n")
+    except Exception as exc:  # pragma: no cover - best-effort logging
+        logger.debug("propiedad_sale_log_failed", extra={"error": str(exc), "entry": entry})
 
 DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
