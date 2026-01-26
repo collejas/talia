@@ -13,8 +13,6 @@ const STATUS_COLORS = {
   reservado: "#9B59B6",
 };
 
-const READY_LEAD_STAGES = new Set(["etapa_3", "etapa_4"]);
-
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -433,7 +431,7 @@ export function PropertyMap() {
   const [saleModalPrice, setSaleModalPrice] = useState("");
   const [saleModalLeadId, setSaleModalLeadId] = useState(null);
   const [saleModalError, setSaleModalError] = useState(null);
-  const [leadSearch, setLeadSearch] = useState("");
+  const [leadStageFilter, setLeadStageFilter] = useState("all");
   const [availableLeads, setAvailableLeads] = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsError, setLeadsError] = useState(null);
@@ -1468,40 +1466,28 @@ export function PropertyMap() {
     setSaleModalPrice(priceValue != null ? String(priceValue) : "");
     setSaleModalLeadId(null);
     setSaleModalError(null);
-    setLeadSearch("");
     setSaleModalOpen(true);
   }, [mapboxProps?.precio]);
 
   const filteredLeads = useMemo(() => {
-    const searchTerm = leadSearch.trim().toLowerCase();
-    return availableLeads
-      .filter((lead) => READY_LEAD_STAGES.has(lead.etapa ?? ""))
-      .filter((lead) => {
-        if (!searchTerm) {
-          return true;
-        }
-        const haystack = [
-          lead.nombre_completo,
-          lead.email,
-          lead.celular,
-          lead.id,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(searchTerm);
-      });
-  }, [availableLeads, leadSearch]);
+    const validStages = ["etapa_3", "etapa_4"];
+    return availableLeads.filter((lead) => {
+      const stage = (lead.etapa ?? "").toString().trim();
+      const matchesStage =
+        leadStageFilter === "all" ? validStages.includes(stage) : stage === leadStageFilter;
+      return matchesStage;
+    });
+  }, [availableLeads, leadStageFilter]);
 
   useEffect(() => {
     if (!isSaleModalOpen) {
       setAvailableLeads([]);
-      setLeadSearch("");
       setSaleModalLeadId(null);
       setSaleModalPrice("");
       setSaleModalError(null);
       setLeadsError(null);
       setLeadsLoading(false);
+      setLeadStageFilter("all");
       return;
     }
     const controller = new AbortController();
@@ -3352,12 +3338,26 @@ export function PropertyMap() {
                                     <span className="text-[0.65rem] text-slate-400">Cargando...</span>
                                   )}
                                 </div>
-                                <Input
-                                  type="search"
-                                  value={leadSearch}
-                                  onChange={(event) => setLeadSearch(event.target.value)}
-                                  placeholder="Buscar por nombre / email / teléfono"
-                                />
+                                <div className="flex gap-2">
+                                  {[
+                                    { label: "Todos", value: "all" },
+                                    { label: "Etapa 3", value: "etapa_3" },
+                                    { label: "Etapa 4", value: "etapa_4" },
+                                  ].map((option) => (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      className={`rounded border px-3 py-1 text-[0.65rem] uppercase tracking-[0.25em] transition ${
+                                        leadStageFilter === option.value
+                                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                                          : "border-slate-700 text-slate-400 hover:border-emerald-400"
+                                      }`}
+                                      onClick={() => setLeadStageFilter(option.value)}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
                                 {leadsError && (
                                   <p className="text-[0.65rem] text-rose-400">{leadsError}</p>
                                 )}
