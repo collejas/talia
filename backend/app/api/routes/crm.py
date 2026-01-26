@@ -85,6 +85,7 @@ MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
 SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
 
 LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
+OPPORTUNITY_SALE_STAGE_TOKENS = frozenset({"negociacion", "propuesta"})
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
@@ -199,6 +200,34 @@ async def _run_catalog_reindex(
         )
 
 
+def _stage_code_is_ready(code: str | None) -> bool:
+    if not code:
+        return False
+    normalized = code.strip().lower()
+    return any(token in normalized for token in OPPORTUNITY_SALE_STAGE_TOKENS)
+
+
+async def _ensure_opportunity_ready_for_sale(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    opportunity_id: UUID,
+) -> dict[str, Any]:
+    opportunity = await repo.get_opportunity_with_stage(
+        organizacion_id=organizacion_id,
+        opportunity_id=opportunity_id,
+    )
+    if not opportunity:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="opportunity_not_found")
+    stage = opportunity.get("etapa") or {}
+    codigo = stage.get("codigo")
+    if not _stage_code_is_ready(codigo):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"opportunity_stage_not_ready:{codigo or 'unknown'}",
+        )
+    return opportunity
+
+
 def _trigger_catalog_reindex(
     background_tasks: BackgroundTasks,
     organizacion_value: Any | None,
@@ -236,6 +265,15 @@ def _normalize_metadata_value(value: Any) -> dict[str, Any] | None:
         if isinstance(parsed, Mapping):
             return {str(key): val for key, val in parsed.items() if val is not None}
     return None
+
+
+def _coerce_optional_number(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _extract_metadata_from_content(content: str) -> dict[str, Any] | None:
@@ -3831,6 +3869,25 @@ class CRMOpportunity(BaseModel):
     cerrado_en: str | None = None
 
 
+class CRMSaleReadyOpportunity(BaseModel):
+    id: UUID
+    titulo: str
+    estado: str
+    monto_estimado: float | None = None
+    moneda: str | None = None
+    probabilidad: float | None = None
+    etapa_codigo: str | None = None
+    etapa_nombre: str | None = None
+    etapa_categoria: str | None = None
+    cuenta_id: UUID | None = None
+    cuenta_nombre: str | None = None
+    contacto_id: UUID | None = None
+    contacto_nombre: str | None = None
+    contacto_correo: str | None = None
+    contacto_telefono: str | None = None
+    metadata: dict | None = None
+
+
 class CRMOpportunityCreate(BaseModel):
     cuenta_id: UUID | None = None
     contacto_principal_id: UUID | None = None
@@ -5016,6 +5073,53 @@ async def list_opportunities(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [CRMOpportunity.model_validate(row) for row in rows]
     return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset)
+
+
+@router.get("/oportunidades/ventas/lista", response_model=list[CRMSaleReadyOpportunity])
+async def list_sale_ready_opportunities(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[CRMSaleReadyOpportunity]:
+    try:
+        rows = await repo.list_sale_ready_opportunities(
+            organizacion_id=organizacion_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    allowed: list[CRMSaleReadyOpportunity] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        stage = row.get("etapa") or {}
+        code = stage.get("codigo")
+        if not _stage_code_is_ready(code):
+            continue
+        contacto = row.get("contacto") or {}
+        cuenta = row.get("cuenta") or {}
+        allowed.append(
+            CRMSaleReadyOpportunity(
+                id=_safe_uuid(row.get("id")),
+                titulo=row.get("titulo") or "",
+                estado=row.get("estado") or "",
+                monto_estimado=_coerce_optional_number(row.get("monto_estimado")),
+                moneda=row.get("moneda"),
+                probabilidad=_coerce_optional_number(row.get("probabilidad")),
+                etapa_codigo=code,
+                etapa_nombre=stage.get("nombre"),
+                etapa_categoria=stage.get("categoria"),
+                cuenta_id=_safe_uuid(cuenta.get("id")),
+                cuenta_nombre=cuenta.get("nombre"),
+                contacto_id=_safe_uuid(contacto.get("id")),
+                contacto_nombre=contacto.get("nombre_completo") or contacto.get("nombres") or None,
+                contacto_correo=contacto.get("correo"),
+                contacto_telefono=contacto.get("telefono_e164"),
+                metadata=row.get("metadata"),
+            )
+        )
+    return allowed
 
 
 @router.post(
@@ -11685,7 +11789,9 @@ async def registrar_venta_propiedad(
     )
     if not catalog_item:
         raise HTTPException(status_code=404, detail="catalog_item_not_found")
-    if payload.lead_id:
+    if payload.oportunidad_id:
+        await _ensure_opportunity_ready_for_sale(repo, organizacion_id, payload.oportunidad_id)
+    elif payload.lead_id:
         await _ensure_lead_ready_for_sale(repo, organizacion_id, payload.lead_id)
     price_value = _decimal_to_number(payload.precio_final)
     sale_refs = {

@@ -740,6 +740,38 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
         return data
 
+    async def list_sale_ready_opportunities(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        select_fields = ",".join(
+            [
+                "id",
+                "titulo",
+                "estado",
+                "monto_estimado",
+                "moneda",
+                "probabilidad",
+                "metadata",
+                "contacto:contactos!oportunidades_contacto_principal_org_fkey(id,nombre_completo,correo,telefono_e164)",
+                "cuenta:cuentas!oportunidades_cuenta_org_fkey(id,nombre)",
+                "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden)",
+            ]
+        )
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc",
+            "limit": str(limit),
+            "select": select_fields,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades de venta: {data!r}")
+        return data
+
     async def create_opportunity(
         self,
         *,
@@ -779,6 +811,33 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al obtener oportunidad: {row!r}")
+        return row
+
+    async def get_opportunity_with_stage(
+        self,
+        *,
+        organizacion_id: UUID,
+        opportunity_id: UUID,
+    ) -> dict[str, Any] | None:
+        select_fields = ",".join(
+            [
+                "*",
+                "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden)",
+            ]
+        )
+        params = {
+            "id": f"eq.{opportunity_id}",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "limit": "1",
+            "select": select_fields,
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"opportunity_with_stage_invalid:{row!r}")
         return row
 
     async def list_activities(

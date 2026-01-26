@@ -13,6 +13,9 @@ const STATUS_COLORS = {
   reservado: "#9B59B6",
 };
 
+const OPPORTUNITY_STAGE_KEYWORDS = ["negociacion", "propuesta"];
+
+
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -429,12 +432,12 @@ export function PropertyMap() {
   const [saleLogs, setSaleLogs] = useState([]);
   const [isSaleModalOpen, setSaleModalOpen] = useState(false);
   const [saleModalPrice, setSaleModalPrice] = useState("");
-  const [saleModalLeadId, setSaleModalLeadId] = useState(null);
+  const [saleModalOpportunityId, setSaleModalOpportunityId] = useState(null);
   const [saleModalError, setSaleModalError] = useState(null);
-  const [leadStageFilter, setLeadStageFilter] = useState("all");
-  const [availableLeads, setAvailableLeads] = useState([]);
-  const [leadsLoading, setLeadsLoading] = useState(false);
-  const [leadsError, setLeadsError] = useState(null);
+  const [opportunityStageFilter, setOpportunityStageFilter] = useState("all");
+  const [availableOpportunities, setAvailableOpportunities] = useState([]);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
+  const [opportunitiesError, setOpportunitiesError] = useState(null);
   const [geojsonRefreshVersion, setGeojsonRefreshVersion] = useState(0);
   const lastSaleTimestampRef = useRef(null);
   const refreshGeojson = useCallback(() => {
@@ -1464,52 +1467,64 @@ export function PropertyMap() {
   const handleOpenSaleModal = useCallback(() => {
     const priceValue = mapboxProps?.precio;
     setSaleModalPrice(priceValue != null ? String(priceValue) : "");
-    setSaleModalLeadId(null);
+    setSaleModalOpportunityId(null);
     setSaleModalError(null);
+    setOpportunityStageFilter("all");
     setSaleModalOpen(true);
   }, [mapboxProps?.precio]);
 
-  const filteredLeads = useMemo(() => {
-    const validStages = ["etapa_3", "etapa_4"];
-    return availableLeads.filter((lead) => {
-      const stage = (lead.etapa ?? "").toString().trim();
-      const matchesStage =
-        leadStageFilter === "all" ? validStages.includes(stage) : stage === leadStageFilter;
-      return matchesStage;
-    });
-  }, [availableLeads, leadStageFilter]);
+  const stageMatchesFilter = useCallback(
+    (code = "") => {
+      const normalized = code.trim().toLowerCase();
+      if (opportunityStageFilter === "all") {
+        return OPPORTUNITY_STAGE_KEYWORDS.some((token) => normalized.includes(token));
+      }
+      return normalized.includes(opportunityStageFilter);
+    },
+    [opportunityStageFilter],
+  );
+
+  const filteredOpportunities = useMemo(() => {
+    return availableOpportunities.filter((opportunity) =>
+      stageMatchesFilter(String(opportunity.etapa_codigo ?? "")),
+    );
+  }, [availableOpportunities, stageMatchesFilter]);
 
   useEffect(() => {
     if (!isSaleModalOpen) {
-      setAvailableLeads([]);
-      setSaleModalLeadId(null);
+      setAvailableOpportunities([]);
+      setSaleModalOpportunityId(null);
       setSaleModalPrice("");
       setSaleModalError(null);
-      setLeadsError(null);
-      setLeadsLoading(false);
-      setLeadStageFilter("all");
+      setOpportunitiesError(null);
+      setOpportunitiesLoading(false);
+      setOpportunityStageFilter("all");
       return;
     }
     const controller = new AbortController();
-    setLeadsLoading(true);
-    setLeadsError(null);
+    setOpportunitiesLoading(true);
+    setOpportunitiesError(null);
     (async () => {
       try {
-        const response = await fetch("/api/crm/leads?etapas=etapa_3,etapa_4", {
+        const response = await fetch("/api/crm/oportunidades/ventas/lista?limit=200", {
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error((await response.json().catch(() => null))?.error ?? "leads_fetch_failed");
+          throw new Error(
+            (await response.json().catch(() => null))?.error ?? "opportunities_sale_list_failed",
+          );
         }
         const data = await response.json().catch(() => null);
         if (controller.signal.aborted) return;
-        setAvailableLeads(Array.isArray(data) ? data : []);
+        setAvailableOpportunities(Array.isArray(data) ? data : []);
       } catch (error) {
         if (controller.signal.aborted) return;
-        setLeadsError(error instanceof Error ? error.message : "leads_fetch_failed");
+        setOpportunitiesError(
+          error instanceof Error ? error.message : "opportunities_sale_list_failed",
+        );
       } finally {
         if (!controller.signal.aborted) {
-          setLeadsLoading(false);
+          setOpportunitiesLoading(false);
         }
       }
     })();
@@ -1517,10 +1532,10 @@ export function PropertyMap() {
   }, [isSaleModalOpen]);
 
   useEffect(() => {
-    if (isSaleModalOpen && filteredLeads.length && !saleModalLeadId) {
-      setSaleModalLeadId(filteredLeads[0].id);
+    if (isSaleModalOpen && filteredOpportunities.length && !saleModalOpportunityId) {
+      setSaleModalOpportunityId(filteredOpportunities[0].id);
     }
-  }, [filteredLeads, isSaleModalOpen, saleModalLeadId]);
+  }, [filteredOpportunities, isSaleModalOpen, saleModalOpportunityId]);
 
   const handleConfirmSale = useCallback(async () => {
     setSaleModalError(null);
@@ -1530,8 +1545,8 @@ export function PropertyMap() {
       setSaleModalError("Datos incompletos de la unidad seleccionada.");
       return;
     }
-    if (!saleModalLeadId) {
-      setSaleModalError("Selecciona un lead listo para venta.");
+    if (!saleModalOpportunityId) {
+      setSaleModalError("Selecciona una oportunidad lista para venta.");
       return;
     }
     const priceNumber = Number(saleModalPrice);
@@ -1539,6 +1554,9 @@ export function PropertyMap() {
       setSaleModalError("Precio final inválido.");
       return;
     }
+    const selectedOpportunity = filteredOpportunities.find(
+      (opportunity) => opportunity.id === saleModalOpportunityId,
+    );
     setSaleLoading(true);
     try {
       const response = await fetch("/api/crm/ventas/propiedades", {
@@ -1550,7 +1568,9 @@ export function PropertyMap() {
           unidad_id: unidadId,
           precio_final: priceNumber,
           moneda: "MXN",
-          lead_id: saleModalLeadId,
+          oportunidad_id: saleModalOpportunityId,
+          cuenta_id: selectedOpportunity?.cuenta_id ?? null,
+          contacto_id: selectedOpportunity?.contacto_id ?? null,
         }),
       });
       if (!response.ok) {
@@ -1574,8 +1594,9 @@ export function PropertyMap() {
     catalogItemId,
     propiedadId,
     unidadId,
-    saleModalLeadId,
+    saleModalOpportunityId,
     saleModalPrice,
+    filteredOpportunities,
     refreshGeojson,
   ]);
 
@@ -3311,122 +3332,138 @@ export function PropertyMap() {
                           <Dialog open={isSaleModalOpen} onOpenChange={setSaleModalOpen}>
                             <DialogContent className="min-w-[320px] max-w-lg space-y-4">
                               <DialogHeader>
-                              <DialogTitle>Registrar venta vinculada a lead</DialogTitle>
-                              <DialogDescription>
-                                Selecciona el lead listo para cerrar esta unidad y confirma el precio final
-                                antes de enviar la cotización.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-1">
-                                <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
-                                  Precio final (MXN)
-                                </p>
-                                <Input
-                                  type="text"
-                                  value={saleModalPrice}
-                                  onChange={(event) => setSaleModalPrice(event.target.value)}
-                                  placeholder="Ej. 1,200,000"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-sm font-semibold tracking-[0.2em] uppercase text-slate-300">
-                                    Leads en etapa lista
+                                <DialogTitle>Registrar venta vinculada a oportunidad</DialogTitle>
+                                <DialogDescription>
+                                  Selecciona la oportunidad lista para cerrar esta unidad y confirma el precio
+                                  final antes de enviar la cotización.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="space-y-1">
+                                  <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
+                                    Precio final (MXN)
                                   </p>
-                                  {leadsLoading && (
-                                    <span className="text-[0.65rem] text-slate-400">Cargando...</span>
-                                  )}
+                                  <Input
+                                    type="text"
+                                    value={saleModalPrice}
+                                    onChange={(event) => setSaleModalPrice(event.target.value)}
+                                    placeholder="Ej. 1,200,000"
+                                  />
                                 </div>
-                                <div className="flex gap-2">
-                                  {[
-                                    { label: "Todos", value: "all" },
-                                    { label: "Etapa 3", value: "etapa_3" },
-                                    { label: "Etapa 4", value: "etapa_4" },
-                                  ].map((option) => (
-                                    <button
-                                      key={option.value}
-                                      type="button"
-                                      className={`rounded border px-3 py-1 text-[0.65rem] uppercase tracking-[0.25em] transition ${
-                                        leadStageFilter === option.value
-                                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                                          : "border-slate-700 text-slate-400 hover:border-emerald-400"
-                                      }`}
-                                      onClick={() => setLeadStageFilter(option.value)}
-                                    >
-                                      {option.label}
-                                    </button>
-                                  ))}
-                                </div>
-                                {leadsError && (
-                                  <p className="text-[0.65rem] text-rose-400">{leadsError}</p>
-                                )}
-                                <div className="space-y-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1 shadow-inner">
-                                  {leadsLoading && !availableLeads.length ? (
-                                    <p className="text-[0.65rem] text-slate-400">Buscando leads...</p>
-                                  ) : filteredLeads.length === 0 ? (
-                                    <p className="text-[0.65rem] text-slate-400">
-                                      {availableLeads.length
-                                        ? "Ningún lead en las etapas seleccionadas."
-                                        : "No se encontraron leads disponibles."}
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-semibold tracking-[0.2em] uppercase text-slate-300">
+                                      Oportunidades listas
                                     </p>
-                                  ) : (
-                                    filteredLeads.map((lead) => {
-                                      const isSelected = saleModalLeadId === lead.id;
-                                      const displayName =
-                                        lead.nombre_completo ??
-                                        lead.metadata?.contacto_nombre ??
-                                        lead.email ??
-                                        `Lead ${lead.id.slice(0, 6)}`;
-                                      return (
-                                        <button
-                                          key={lead.id}
-                                          type="button"
-                                          className={`w-full rounded border px-3 py-2 text-left text-sm transition ${
-                                            isSelected
-                                              ? "border-emerald-500 bg-emerald-500/10"
-                                              : "border-slate-700 hover:border-emerald-400"
-                                          }`}
-                                          onClick={() => setSaleModalLeadId(lead.id)}
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <span className="font-semibold text-white">{displayName}</span>
-                                            <span className="text-[0.6rem] uppercase tracking-[0.25em] text-slate-400">
-                                              {lead.etapa ?? "Sin etapa"}
-                                            </span>
-                                          </div>
-                                          <p className="text-[0.65rem] text-slate-400">
-                                            {lead.email ?? lead.celular ?? lead.estado ?? lead.id}
-                                          </p>
-                                        </button>
-                                      );
-                                    })
+                                    {opportunitiesLoading && (
+                                      <span className="text-[0.65rem] text-slate-400">Cargando...</span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {[
+                                      { label: "Todos", value: "all" },
+                                      { label: "Negociación", value: "negociacion" },
+                                      { label: "Propuesta", value: "propuesta" },
+                                    ].map((option) => (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        className={`rounded border px-3 py-1 text-[0.65rem] uppercase tracking-[0.25em] transition ${
+                                          opportunityStageFilter === option.value
+                                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                                            : "border-slate-700 text-slate-400 hover:border-emerald-400"
+                                        }`}
+                                        onClick={() => setOpportunityStageFilter(option.value)}
+                                      >
+                                        {option.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {opportunitiesError && (
+                                    <p className="text-[0.65rem] text-rose-400">{opportunitiesError}</p>
                                   )}
+                                  <div className="space-y-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1 shadow-inner">
+                                    {opportunitiesLoading && !availableOpportunities.length ? (
+                                      <p className="text-[0.65rem] text-slate-400">
+                                        Buscando oportunidades...
+                                      </p>
+                                    ) : filteredOpportunities.length === 0 ? (
+                                      <p className="text-[0.65rem] text-slate-400">
+                                        {availableOpportunities.length
+                                          ? "No hay oportunidades en esas etapas."
+                                          : "No se encontraron oportunidades disponibles."}
+                                      </p>
+                                    ) : (
+                                      filteredOpportunities.map((opportunity) => {
+                                        const isSelected = saleModalOpportunityId === opportunity.id;
+                                        const stageLabel =
+                                          opportunity.etapa_nombre ??
+                                          opportunity.etapa_codigo ??
+                                          "Sin etapa visible";
+                                        return (
+                                          <button
+                                            key={opportunity.id}
+                                            type="button"
+                                            className={`w-full rounded border px-3 py-2 text-left text-sm transition ${
+                                              isSelected
+                                                ? "border-emerald-500 bg-emerald-500/10"
+                                                : "border-slate-700 hover:border-emerald-400"
+                                            }`}
+                                            onClick={() => setSaleModalOpportunityId(opportunity.id)}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span className="font-semibold text-white">{opportunity.titulo}</span>
+                                              <span className="text-[0.6rem] uppercase tracking-[0.25em] text-slate-400">
+                                                {stageLabel}
+                                              </span>
+                                            </div>
+                                            <p className="text-[0.65rem] text-slate-400">
+                                              {opportunity.contacto_nombre ??
+                                                opportunity.contacto_correo ??
+                                                opportunity.contacto_telefono ??
+                                                opportunity.id}
+                                            </p>
+                                            <p className="text-[0.65rem] text-slate-400">
+                                              {opportunity.cuenta_nombre ?? "Cuenta sin nombre"}
+                                            </p>
+                                            <p className="text-[0.65rem] text-slate-400">
+                                              {opportunity.monto_estimado
+                                                ? new Intl.NumberFormat("es-MX", {
+                                                    style: "currency",
+                                                    currency: opportunity.moneda ?? "MXN",
+                                                    maximumFractionDigits: 0,
+                                                  }).format(opportunity.monto_estimado)
+                                                : "Monto no registrado"}
+                                            </p>
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
                                 </div>
+                                {saleModalError && (
+                                  <p className="text-[0.65rem] text-rose-400">{saleModalError}</p>
+                                )}
                               </div>
-                              {saleModalError && (
-                                <p className="text-[0.65rem] text-rose-400">{saleModalError}</p>
-                              )}
-                            </div>
-                            <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                              <button
-                                type="button"
-                                className="w-full rounded border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-slate-400 sm:w-auto"
-                                onClick={() => setSaleModalOpen(false)}
-                                disabled={saleLoading}
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 sm:w-auto"
-                                onClick={handleConfirmSale}
-                                disabled={saleLoading}
-                              >
-                                {saleLoading ? "Registrando venta..." : "Confirmar venta"}
-                              </button>
-                            </DialogFooter>
-                          </DialogContent>
+                              <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                                <button
+                                  type="button"
+                                  className="w-full rounded border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-slate-400 sm:w-auto"
+                                  onClick={() => setSaleModalOpen(false)}
+                                  disabled={saleLoading}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 sm:w-auto"
+                                  onClick={handleConfirmSale}
+                                  disabled={saleLoading}
+                                >
+                                  {saleLoading ? "Registrando venta..." : "Confirmar venta"}
+                                </button>
+                              </DialogFooter>
+                            </DialogContent>
                           </Dialog>
                         </>
                       )}
