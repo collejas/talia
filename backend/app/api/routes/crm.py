@@ -40,7 +40,7 @@ try:
     from openpyxl import load_workbook
 except ModuleNotFoundError:  # pragma: no cover
     load_workbook = None
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator, model_validator
 
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
@@ -88,6 +88,14 @@ LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
 OPPORTUNITY_SALE_STAGE_TOKENS = frozenset(
     {"negociacion", "propuesta", "prospeccion", "demo"},
 )
+SALE_TARGET_STAGE_CODES = (
+    "general_negociacion",
+    "negociacion",
+    "general_propuesta",
+    "propuesta",
+    "general_demo",
+    "demo",
+)
 WINNING_STAGE_CODES = ("general_cerrado_ganado", "cerrado_ganado")
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
@@ -109,6 +117,20 @@ def _write_propiedad_sale_log(entry: dict[str, Any]) -> None:
             handle.write(f"{json.dumps(record, default=str)}\n")
     except Exception as exc:  # pragma: no cover - best-effort logging
         logger.debug("propiedad_sale_log_failed", extra={"error": str(exc), "entry": entry})
+
+
+def _write_propiedad_sale_event(event: str, payload: dict[str, Any]) -> None:
+    try:
+        MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with SALE_LOG_FILE.open("a", encoding="utf-8") as handle:
+            timestamp = datetime.utcnow().isoformat()
+            record = {"timestamp": timestamp, "event": event, **payload}
+            handle.write(f"{json.dumps(record, default=str)}\n")
+    except Exception as exc:  # pragma: no cover - best-effort logging
+        logger.debug(
+            "propiedad_sale_event_log_failed",
+            extra={"event": event, "error": str(exc), "payload": payload},
+        )
 
 
 async def _ensure_lead_ready_for_sale(
@@ -214,6 +236,7 @@ async def _ensure_opportunity_ready_for_sale(
     repo: CRMRepository,
     organizacion_id: UUID,
     opportunity_id: UUID,
+    usuario_id: UUID | None = None,
 ) -> dict[str, Any]:
     opportunity = await repo.get_opportunity_with_stage(
         organizacion_id=organizacion_id,
@@ -223,10 +246,78 @@ async def _ensure_opportunity_ready_for_sale(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="opportunity_not_found")
     stage = opportunity.get("etapa") or {}
     codigo = stage.get("codigo")
+    sale_logger.info(
+        "propiedad_opportunity_stage_check",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "oportunidad_id": str(opportunity_id),
+            "stage_codigo": codigo,
+            "stage_id": str(stage.get("id")) if stage.get("id") else None,
+        },
+    )
+    _write_propiedad_sale_event(
+        "opportunity_stage_check",
+        {
+            "organizacion_id": str(organizacion_id),
+            "oportunidad_id": str(opportunity_id),
+            "stage_codigo": codigo,
+            "stage_id": str(stage.get("id")) if stage.get("id") else None,
+        },
+    )
     if not _stage_code_is_ready(codigo):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"opportunity_stage_not_ready:{codigo or 'unknown'}",
+        target_stage = await _find_preferred_sale_stage(repo, organizacion_id)
+        if not target_stage:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"opportunity_stage_not_ready:{codigo or 'unknown'}",
+            )
+        target_stage_id = _safe_uuid(target_stage.get("id"))
+        if not target_stage_id:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="sale_stage_invalid",
+            )
+        try:
+            opportunity = await repo.update_opportunity(
+                organizacion_id=organizacion_id,
+                oportunidad_id=opportunity_id,
+                payload={"etapa_id": str(target_stage_id)},
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        current_stage_id = _safe_uuid(stage.get("id"))
+        history_payload: dict[str, Any] = {
+            "oportunidad_id": str(opportunity_id),
+            "etapa_destino_id": str(target_stage_id),
+            "fuente": "venta_mapbox",
+        }
+        if current_stage_id:
+            history_payload["etapa_origen_id"] = str(current_stage_id)
+        if usuario_id:
+            history_payload["cambiado_por_usuario_id"] = str(usuario_id)
+        await repo.append_stage_history(
+            organizacion_id=organizacion_id,
+            payload={k: v for k, v in history_payload.items() if v is not None},
+        )
+        sale_logger.info(
+            "propiedad_opportunity_stage_advanced",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(opportunity_id),
+                "stage_from_codigo": codigo,
+                "stage_to_codigo": target_stage.get("codigo"),
+                "stage_to_id": str(target_stage_id),
+            },
+        )
+        _write_propiedad_sale_event(
+            "opportunity_stage_advanced",
+            {
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(opportunity_id),
+                "stage_from_codigo": codigo,
+                "stage_to_codigo": target_stage.get("codigo"),
+                "stage_to_id": str(target_stage_id),
+            },
         )
     return opportunity
 
@@ -248,6 +339,27 @@ async def _find_winning_stage(
             continue
         stage_code = (stage.get("codigo") or "").lower()
         if "ganado" in stage_code:
+            return stage
+    return None
+
+
+async def _find_preferred_sale_stage(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> dict[str, Any] | None:
+    for code in SALE_TARGET_STAGE_CODES:
+        stage = await repo.get_pipeline_stage_by_code(
+            organizacion_id=organizacion_id,
+            code=code,
+        )
+        if stage:
+            return stage
+    stages = await repo.list_pipelines(organizacion_id=organizacion_id)
+    for stage in stages:
+        if not isinstance(stage, dict):
+            continue
+        codigo = (stage.get("codigo") or "").lower()
+        if _stage_code_is_ready(codigo):
             return stage
     return None
 
@@ -284,12 +396,161 @@ async def _advance_opportunity_to_won(
             organizacion_id=organizacion_id,
             payload={k: v for k, v in history_payload.items() if v is not None},
         )
+        sale_logger.info(
+            "propiedad_opportunity_marked_won",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "stage_destino_id": str(next_stage_id),
+                "stage_destino_codigo": stage.get("codigo"),
+            },
+        )
+        _write_propiedad_sale_event(
+            "opportunity_marked_won",
+            {
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "stage_destino_id": str(next_stage_id),
+                "stage_destino_codigo": stage.get("codigo"),
+            },
+        )
     except CRMRepositoryError as exc:
         logger.warning(
             "crm.sale_stage_advance_failed",
             extra={
                 "organizacion_id": str(organizacion_id),
                 "oportunidad_id": str(oportunidad_id),
+                "error": str(exc),
+            },
+        )
+        sale_logger.warning(
+            "propiedad_opportunity_winning_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "stage_destino_id": str(next_stage_id) if next_stage_id else None,
+                "error": str(exc),
+            },
+        )
+        _write_propiedad_sale_event(
+            "opportunity_winning_failed",
+            {
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "stage_destino_id": str(next_stage_id) if next_stage_id else None,
+                "error": str(exc),
+            },
+        )
+
+
+async def _render_quote_pdf_after_sale(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    quote_id: UUID,
+    oportunidad_id: UUID,
+    usuario_id: UUID | None = None,
+) -> None:
+    try:
+        quote_row = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=quote_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "quote_entry_fetch_failed_after_sale",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote_id),
+                "error": str(exc),
+            },
+        )
+        return
+    try:
+        opportunity = await repo.get_opportunity_with_contact(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "opportunity_fetch_failed_for_pdf",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "quote_id": str(quote_id),
+                "error": str(exc),
+            },
+        )
+        return
+    contact = opportunity.get("contacto") or {}
+    subtotal_value = _as_number(quote_row.get("subtotal"))
+    impuestos_value = _as_number(quote_row.get("impuestos"))
+    total_value = _as_number(quote_row.get("total"))
+    items_list = quote_row.get("items") or []
+    conceptos = _concepts_from_items(items_list if isinstance(items_list, list) else [])
+    reference = str(oportunidad_id).split("-")[0]
+    quote_context = quotes_service.QuoteRenderContext(
+        lead_label=_clean_text(
+            opportunity.get("titulo")
+            or contact.get("company_name")
+            or contact.get("nombre_completo")
+        )
+        or "Cotización",
+        reference=reference,
+        issuer_name=settings.mail_username or "Tal-IA",
+        issuer_email=settings.mail_username,
+        contact_name=_clean_text(contact.get("nombre_completo")),
+        contact_company=_clean_text(contact.get("company_name")),
+        contact_email=_clean_text(contact.get("correo")),
+        contact_phone=_clean_text(contact.get("telefono_e164")),
+        conceptos=conceptos,
+        subtotal=subtotal_value,
+        impuestos=impuestos_value,
+        total=total_value,
+        moneda=_clean_text(quote_row.get("moneda") or "MXN") or "MXN",
+        valido_hasta=_parse_date(quote_row.get("valida_hasta")),
+        descripcion=_clean_text(opportunity.get("descripcion") or opportunity.get("titulo")),
+        notes=_clean_text(contact.get("notes") or opportunity.get("metadata", {}).get("notas")),
+        items=items_list if isinstance(items_list, list) else [],
+    )
+    try:
+        pdf_doc = await quotes_service.render_quote_pdf(quote_context)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning(
+            "quote_pdf_render_failed",
+            extra={"quote_id": str(quote_id), "error": str(exc)},
+        )
+        return
+    try:
+        upload = await storage.upload_quote_document(
+            content=pdf_doc.content,
+            filename=pdf_doc.filename,
+            lead_id=str(oportunidad_id),
+        )
+    except StorageError as exc:
+        logger.warning(
+            "quote_pdf_upload_failed",
+            extra={"quote_id": str(quote_id), "error": str(exc)},
+        )
+        return
+    metadata_patch = {
+        "pdf_url": upload["url"],
+        "pdf_path": upload["path"],
+        "pdf_generated_en": datetime.now(timezone.utc).isoformat(),
+    }
+    if usuario_id:
+        metadata_patch["pdf_generado_por"] = str(usuario_id)
+    try:
+        await repo.mark_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=quote_id,
+            metadata_patch=metadata_patch,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "quote_metadata_patch_failed",
+            extra={
+                "quote_id": str(quote_id),
+                "organizacion_id": str(organizacion_id),
                 "error": str(exc),
             },
         )
@@ -2665,7 +2926,18 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
         if not isinstance(entry, dict):
             continue
         catalog = entry.get("catalog_item")
-        catalog_item = CRMCatalogItem.model_validate(catalog) if isinstance(catalog, dict) else None
+        catalog_item = None
+        if isinstance(catalog, dict):
+            try:
+                catalog_item = CRMCatalogItem.model_validate(catalog)
+            except ValidationError as exc:  # pragma: no cover - best-effort
+                logger.debug(
+                    "crm.quote_catalog_item_validation_failed",
+                    extra={
+                        "error": str(exc),
+                        "catalog": catalog,
+                    },
+                )
         metadata = entry.get("metadata")
         metadata_dict = metadata if isinstance(metadata, dict) else {}
         catalog_item_id = (
@@ -11916,6 +12188,7 @@ async def registrar_venta_propiedad(
             repo,
             organizacion_id,
             payload.oportunidad_id,
+            usuario_id,
         )
     elif payload.lead_id:
         await _ensure_lead_ready_for_sale(repo, organizacion_id, payload.lead_id)
@@ -11947,14 +12220,74 @@ async def registrar_venta_propiedad(
         quote_payload["contacto_id"] = str(payload.contacto_id)
 
     try:
+        sale_logger.info(
+            "propiedad_sale_started",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "catalog_item_id": str(payload.catalog_item_id),
+                "propiedad_id": str(payload.propiedad_id),
+                "unidad_id": str(payload.unidad_id),
+                "oportunidad_id": str(payload.oportunidad_id) if payload.oportunidad_id else None,
+                "lead_id": str(payload.lead_id) if payload.lead_id else None,
+                "precio_final": price_value,
+                "moneda": payload.moneda,
+            },
+        )
+        _write_propiedad_sale_event(
+            "sale_started",
+            {
+                "organizacion_id": str(organizacion_id),
+                "catalog_item_id": str(payload.catalog_item_id),
+                "propiedad_id": str(payload.propiedad_id),
+                "unidad_id": str(payload.unidad_id),
+                "oportunidad_id": str(payload.oportunidad_id) if payload.oportunidad_id else None,
+                "lead_id": str(payload.lead_id) if payload.lead_id else None,
+                "precio_final": price_value,
+                "moneda": payload.moneda,
+            },
+        )
         quote = await repo.create_quote(
             organizacion_id=organizacion_id,
             payload=quote_payload,
+        )
+        sale_logger.info(
+            "propiedad_quote_created",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote["id"]),
+                "total": quote.get("total"),
+                "moneda": quote.get("moneda"),
+            },
+        )
+        _write_propiedad_sale_event(
+            "quote_created",
+            {
+                "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote["id"]),
+                "total": quote.get("total"),
+                "moneda": quote.get("moneda"),
+            },
         )
         product = await _ensure_product_for_catalog_item(
             repo,
             organizacion_id,
             payload.catalog_item_id,
+        )
+        sale_logger.info(
+            "propiedad_product_ensured",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "product_id": str(product.get("id")),
+                "catalog_item_id": str(payload.catalog_item_id),
+            },
+        )
+        _write_propiedad_sale_event(
+            "product_ensured",
+            {
+                "organizacion_id": str(organizacion_id),
+                "product_id": str(product.get("id")),
+                "catalog_item_id": str(payload.catalog_item_id),
+            },
         )
         item_payload: dict[str, Any] = {
             "cotizacion_id": str(quote["id"]),
@@ -11969,10 +12302,54 @@ async def registrar_venta_propiedad(
             organizacion_id=organizacion_id,
             payload=item_payload,
         )
+        sale_logger.info(
+            "propiedad_quote_item_added",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote["id"]),
+                "producto_id": str(product.get("id")),
+                "cantidad": 1,
+                "precio_unitario": price_value,
+            },
+        )
+        _write_propiedad_sale_event(
+            "quote_item_added",
+            {
+                "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote["id"]),
+                "producto_id": str(product.get("id")),
+                "cantidad": 1,
+                "precio_unitario": price_value,
+            },
+        )
+        if payload.oportunidad_id:
+            await _render_quote_pdf_after_sale(
+                repo,
+                organizacion_id,
+                _safe_uuid(quote.get("id")) or UUID(str(quote["id"])),
+                _safe_uuid(payload.oportunidad_id),
+                usuario_id,
+            )
         await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
             unidad_id=payload.unidad_id,
             payload={"status": PropiedadStatus.vendido.value},
+        )
+        sale_logger.info(
+            "propiedad_unidad_status_updated",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "unidad_id": str(payload.unidad_id),
+                "status": PropiedadStatus.vendido.value,
+            },
+        )
+        _write_propiedad_sale_event(
+            "unidad_status_updated",
+            {
+                "organizacion_id": str(organizacion_id),
+                "unidad_id": str(payload.unidad_id),
+                "status": PropiedadStatus.vendido.value,
+            },
         )
         catalog_metadata = dict(catalog_item.get("metadatos") or {})
         catalog_metadata.update(
@@ -11984,6 +12361,20 @@ async def registrar_venta_propiedad(
         await repo.update_catalog_item(
             item_id=payload.catalog_item_id,
             payload={"activo": False, "metadatos": catalog_metadata},
+        )
+        sale_logger.info(
+            "propiedad_catalog_item_deactivated",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "catalog_item_id": str(payload.catalog_item_id),
+            },
+        )
+        _write_propiedad_sale_event(
+            "catalog_item_deactivated",
+            {
+                "organizacion_id": str(organizacion_id),
+                "catalog_item_id": str(payload.catalog_item_id),
+            },
         )
         sale_entry = {
             "organizacion_id": str(organizacion_id),
