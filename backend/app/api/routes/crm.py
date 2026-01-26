@@ -10590,8 +10590,13 @@ async def list_leads(
         rows = await repo.list_leads(
             organizacion_id=organizacion_id,
             estado=estado,
-            etapas=stage_codes,
         )
+        if stage_codes:
+            rows = [
+                row
+                for row in rows
+                if row.get("etapa") is not None and str(row.get("etapa")).strip() in stage_codes
+            ]
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMLead.model_validate(row) for row in rows]
