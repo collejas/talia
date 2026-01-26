@@ -83,6 +83,8 @@ sale_logger = get_logger("app.api.crm.sales")
 MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
 MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
 SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
+SALE_LOG_TAIL_BYTES = 64 * 1024
+DEFAULT_SALE_LOG_LIMIT = 20
 
 LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
 OPPORTUNITY_SALE_STAGE_TOKENS = frozenset(
@@ -131,6 +133,43 @@ def _write_propiedad_sale_event(event: str, payload: dict[str, Any]) -> None:
             "propiedad_sale_event_log_failed",
             extra={"event": event, "error": str(exc), "payload": payload},
         )
+
+
+def _read_propiedad_sale_log_records(limit: int = DEFAULT_SALE_LOG_LIMIT) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    if not SALE_LOG_FILE.exists():
+        return []
+    try:
+        file_stats = SALE_LOG_FILE.stat()
+    except OSError:
+        return []
+    chunk_size = min(file_stats.st_size, SALE_LOG_TAIL_BYTES) if file_stats.st_size > 0 else 0
+    if chunk_size <= 0:
+        return []
+    start_position = max(0, file_stats.st_size - chunk_size)
+    try:
+        with SALE_LOG_FILE.open("rb") as handle:
+            handle.seek(start_position)
+            buffer = handle.read(chunk_size)
+    except OSError:
+        return []
+    text = buffer.decode("utf-8", errors="ignore")
+    lines = text.splitlines()
+    if start_position > 0 and lines:
+        lines = lines[1:]
+    lines = [line for line in lines if line.strip()]
+    if not lines:
+        return []
+    selected_lines = lines[-limit:] if limit < len(lines) else lines[:]
+    selected_lines.reverse()
+    entries: list[dict[str, Any]] = []
+    for line in selected_lines:
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            entries.append({"raw": line})
+    return entries
 
 
 async def _ensure_lead_ready_for_sale(
@@ -586,6 +625,20 @@ async def _mark_quote_as_accepted_from_mapbox(
         )
         return
     quote = _quote_from_row(quote_row)
+    event_payload = {
+        "organizacion_id": str(organizacion_id),
+        "quote_id": str(quote_id),
+        "oportunidad_id": str(quote.oportunidad_id) if quote.oportunidad_id else None,
+        "canal_envio": metadata_patch["canal_envio"],
+        "estatus": "aceptada",
+    }
+    if usuario_id:
+        event_payload["usuario_id"] = str(usuario_id)
+    sale_logger.info(
+        "propiedad_quote_marked_from_mapbox",
+        extra=event_payload,
+    )
+    _write_propiedad_sale_event("quote_marked_from_mapbox", event_payload)
     if quote.oportunidad_id:
         await _auto_move_opportunity_to_won(
             repo=repo,
@@ -4791,6 +4844,11 @@ class LeadQuoteResponse(BaseModel):
 
 class LeadQuoteListResponse(BaseModel):
     quotes: list[LeadQuote] = Field(default_factory=list)
+
+
+class CRMSaleLogsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    logs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class QuoteSignedUrlResponse(BaseModel):
@@ -12450,6 +12508,18 @@ async def registrar_venta_propiedad(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuote.model_validate(quote)
+
+
+@router.get("/ventas/logs", response_model=CRMSaleLogsResponse)
+async def list_propiedades_sale_logs(
+    *,
+    limit: Annotated[int, Query(ge=1, le=200)] = DEFAULT_SALE_LOG_LIMIT,
+) -> CRMSaleLogsResponse:
+    try:
+        logs = _read_propiedad_sale_log_records(limit)
+    except Exception as exc:  # pragma: no cover - fallback
+        raise HTTPException(status_code=502, detail="sale_logs_unavailable") from exc
+    return CRMSaleLogsResponse(logs=logs)
 
 
 @router.post("/propiedades/importar")
