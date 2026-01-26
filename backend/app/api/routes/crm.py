@@ -556,6 +556,45 @@ async def _render_quote_pdf_after_sale(
         )
 
 
+async def _mark_quote_as_accepted_from_mapbox(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    quote_id: UUID,
+    usuario_id: UUID | None = None,
+) -> None:
+    metadata_patch: dict[str, Any] = {
+        "canal_envio": "mapbox",
+        "marcada_en": datetime.now(timezone.utc).isoformat(),
+    }
+    if usuario_id:
+        metadata_patch["marcada_por"] = str(usuario_id)
+    try:
+        quote_row = await repo.mark_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=quote_id,
+            estatus="aceptada",
+            metadata_patch=metadata_patch,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "quote_mark_from_mapbox_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote_id),
+                "error": str(exc),
+            },
+        )
+        return
+    quote = _quote_from_row(quote_row)
+    if quote.oportunidad_id:
+        await _auto_move_opportunity_to_won(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=UUID(str(quote.oportunidad_id)),
+            quote=quote,
+        )
+
+
 async def _ensure_product_for_catalog_item(
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -4706,7 +4745,7 @@ class LeadQuoteCreatePayload(BaseModel):
 
 class LeadQuoteMarkPayload(BaseModel):
     estado: Literal["enviada", "aceptada", "rechazada", "cancelada"]
-    canal: Literal["email", "whatsapp", "manual", "otro"] | None = Field(default=None)
+    canal: Literal["email", "whatsapp", "manual", "otro", "mapbox"] | None = Field(default=None)
     proposal_sent_at: datetime | date | None = Field(default=None)
     metadata: dict[str, Any] | None = Field(default=None)
 
@@ -4733,7 +4772,7 @@ class LeadQuote(BaseModel):
     moneda: str | None = None
     valido_hasta: date | None = None
     estado: Literal["borrador", "enviada", "aceptada", "rechazada", "cancelada"]
-    canal_envio: Literal["email", "whatsapp", "manual", "otro"] | None = None
+    canal_envio: Literal["email", "whatsapp", "manual", "otro", "mapbox"] | None = None
     enviada_por: UUID | None = None
     enviada_en: datetime | None = None
     aprobada_en: datetime | None = None
@@ -12323,11 +12362,18 @@ async def registrar_venta_propiedad(
             },
         )
         if payload.oportunidad_id:
+            quote_uuid = _safe_uuid(quote.get("id")) or UUID(str(quote["id"]))
             await _render_quote_pdf_after_sale(
                 repo,
                 organizacion_id,
-                _safe_uuid(quote.get("id")) or UUID(str(quote["id"])),
+                quote_uuid,
                 _safe_uuid(payload.oportunidad_id),
+                usuario_id,
+            )
+            await _mark_quote_as_accepted_from_mapbox(
+                repo,
+                organizacion_id,
+                quote_uuid,
                 usuario_id,
             )
         await repo.update_propiedad_unidad(
