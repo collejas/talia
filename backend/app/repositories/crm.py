@@ -1465,6 +1465,26 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar leads: {data!r}")
         return data
 
+    async def get_lead_by_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        lead_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{lead_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/leads", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"lead_get_invalid:{row!r}")
+        return row
+
     async def create_lead(
         self,
         *,
@@ -7321,6 +7341,12 @@ class CRMRepository:
             return resp.json()
         except ValueError as exc:
             raise CRMRepositoryError(f"Respuesta inválida de RPC {function_name}: {exc}") from exc
+
+    async def reprocess_lead(self, *, lead_id: UUID) -> None:
+        await self._rpc("reprocesar_lead", {"p_lead": str(lead_id)})
+
+    async def refresh_analytics_leads_por_dia(self) -> None:
+        await self._rpc("api_refresh_analytics_leads_por_dia", {})
 
     async def _request_with_user(
         self,

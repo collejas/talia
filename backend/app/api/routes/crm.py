@@ -84,6 +84,8 @@ MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
 MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
 SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
 
+LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
+
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
         MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -103,6 +105,40 @@ def _write_propiedad_sale_log(entry: dict[str, Any]) -> None:
             handle.write(f"{json.dumps(record, default=str)}\n")
     except Exception as exc:  # pragma: no cover - best-effort logging
         logger.debug("propiedad_sale_log_failed", extra={"error": str(exc), "entry": entry})
+
+
+async def _ensure_lead_ready_for_sale(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    lead_id: UUID,
+) -> dict[str, Any]:
+    lead = await repo.get_lead_by_id(organizacion_id=organizacion_id, lead_id=lead_id)
+    if not lead:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="lead_not_found")
+    etapa = lead.get("etapa") or "sin_etapa"
+    if etapa not in LEAD_SALES_READY_STAGES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"lead_etapa_no_lista:{etapa}",
+        )
+    return lead
+
+
+async def _sync_lead_metrics_after_sale(repo: CRMRepository, lead_id: UUID) -> None:
+    try:
+        await repo.reprocess_lead(lead_id=lead_id)
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "reprocess_lead_failed",
+            extra={"lead_id": str(lead_id), "error": str(exc)},
+        )
+    try:
+        await repo.refresh_analytics_leads_por_dia()
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "refresh_leads_por_dia_failed",
+            extra={"lead_id": str(lead_id), "error": str(exc)},
+        )
 
 DEFAULT_TEMPLATE_SLUG = "default"
 DEFAULT_QUOTE_TEMPLATE_SLUG = "default"
@@ -1286,6 +1322,7 @@ class CRMPropertySaleRequest(BaseModel):
     unidad_id: UUID
     precio_final: Decimal = Field(..., gt=0)
     moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    lead_id: UUID | None = None
     oportunidad_id: UUID | None = None
     cuenta_id: UUID | None = None
     contacto_id: UUID | None = None
@@ -11631,6 +11668,8 @@ async def registrar_venta_propiedad(
     )
     if not catalog_item:
         raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    if payload.lead_id:
+        await _ensure_lead_ready_for_sale(repo, organizacion_id, payload.lead_id)
     price_value = _decimal_to_number(payload.precio_final)
     sale_refs = {
         "propiedad_id": str(payload.propiedad_id),
@@ -11638,6 +11677,8 @@ async def registrar_venta_propiedad(
         "catalog_item_id": str(payload.catalog_item_id),
         "precio_final": price_value,
     }
+    if payload.lead_id:
+        sale_refs["lead_id"] = str(payload.lead_id)
     quote_metadata = _normalize_metadata_value(payload.cotizacion_metadata) or {}
     quote_metadata = {**quote_metadata, **sale_refs}
     item_metadata = _normalize_metadata_value(payload.item_metadata) or {}
@@ -11695,6 +11736,7 @@ async def registrar_venta_propiedad(
             "catalog_item_id": str(payload.catalog_item_id),
             "propiedad_id": str(payload.propiedad_id),
             "unidad_id": str(payload.unidad_id),
+            "lead_id": str(payload.lead_id) if payload.lead_id else None,
             "precio_final": price_value,
             "moneda": payload.moneda,
             "cotizacion_id": str(quote["id"]),
@@ -11704,6 +11746,8 @@ async def registrar_venta_propiedad(
         }
         sale_logger.info("propiedad_sale_registered", extra=sale_entry)
         _write_propiedad_sale_log(sale_entry)
+        if payload.lead_id:
+            await _sync_lead_metrics_after_sale(repo, payload.lead_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuote.model_validate(quote)
