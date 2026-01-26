@@ -13,11 +13,16 @@ const STATUS_COLORS = {
   reservado: "#9B59B6",
 };
 
-const OPPORTUNITY_STAGE_KEYWORDS = ["negociacion", "propuesta"];
-
-
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+function formatDescriptionLabel(value) {
+  if (!value) return null;
+  const trimmed = value.toString().trim();
+  if (!trimmed.length) return null;
+  const maxLen = 50;
+  return trimmed.length <= maxLen ? trimmed : `${trimmed.slice(0, maxLen - 3)}...`;
+}
 
 function getFeatureId(feature) {
   if (!feature || typeof feature !== "object") return null;
@@ -434,7 +439,6 @@ export function PropertyMap() {
   const [saleModalPrice, setSaleModalPrice] = useState("");
   const [saleModalOpportunityId, setSaleModalOpportunityId] = useState(null);
   const [saleModalError, setSaleModalError] = useState(null);
-  const [opportunityStageFilter, setOpportunityStageFilter] = useState("all");
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [opportunitiesError, setOpportunitiesError] = useState(null);
@@ -1469,26 +1473,8 @@ export function PropertyMap() {
     setSaleModalPrice(priceValue != null ? String(priceValue) : "");
     setSaleModalOpportunityId(null);
     setSaleModalError(null);
-    setOpportunityStageFilter("all");
     setSaleModalOpen(true);
   }, [mapboxProps?.precio]);
-
-  const stageMatchesFilter = useCallback(
-    (code = "") => {
-      const normalized = code.trim().toLowerCase();
-      if (opportunityStageFilter === "all") {
-        return OPPORTUNITY_STAGE_KEYWORDS.some((token) => normalized.includes(token));
-      }
-      return normalized.includes(opportunityStageFilter);
-    },
-    [opportunityStageFilter],
-  );
-
-  const filteredOpportunities = useMemo(() => {
-    return availableOpportunities.filter((opportunity) =>
-      stageMatchesFilter(String(opportunity.etapa_codigo ?? "")),
-    );
-  }, [availableOpportunities, stageMatchesFilter]);
 
   useEffect(() => {
     if (!isSaleModalOpen) {
@@ -1498,7 +1484,6 @@ export function PropertyMap() {
       setSaleModalError(null);
       setOpportunitiesError(null);
       setOpportunitiesLoading(false);
-      setOpportunityStageFilter("all");
       return;
     }
     const controller = new AbortController();
@@ -1532,10 +1517,17 @@ export function PropertyMap() {
   }, [isSaleModalOpen]);
 
   useEffect(() => {
-    if (isSaleModalOpen && filteredOpportunities.length && !saleModalOpportunityId) {
-      setSaleModalOpportunityId(filteredOpportunities[0].id);
+    if (isSaleModalOpen && availableOpportunities.length && !saleModalOpportunityId) {
+      setSaleModalOpportunityId(availableOpportunities[0].id);
     }
-  }, [filteredOpportunities, isSaleModalOpen, saleModalOpportunityId]);
+  }, [availableOpportunities, isSaleModalOpen, saleModalOpportunityId]);
+
+  const selectedOpportunity = useMemo(() => {
+    if (!saleModalOpportunityId) return null;
+    return (
+      availableOpportunities.find((opportunity) => opportunity.id === saleModalOpportunityId) ?? null
+    );
+  }, [availableOpportunities, saleModalOpportunityId]);
 
   const handleConfirmSale = useCallback(async () => {
     setSaleModalError(null);
@@ -1554,9 +1546,6 @@ export function PropertyMap() {
       setSaleModalError("Precio final inválido.");
       return;
     }
-    const selectedOpportunity = filteredOpportunities.find(
-      (opportunity) => opportunity.id === saleModalOpportunityId,
-    );
     setSaleLoading(true);
     try {
       const response = await fetch("/api/crm/ventas/propiedades", {
@@ -1596,7 +1585,7 @@ export function PropertyMap() {
     unidadId,
     saleModalOpportunityId,
     saleModalPrice,
-    filteredOpportunities,
+    selectedOpportunity,
     refreshGeojson,
   ]);
 
@@ -3350,96 +3339,104 @@ export function PropertyMap() {
                                     placeholder="Ej. 1,200,000"
                                   />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                   <div className="flex items-center justify-between">
                                     <p className="text-sm font-semibold tracking-[0.2em] uppercase text-slate-300">
-                                      Oportunidades listas
+                                      Oportunidades con contacto completo
                                     </p>
                                     {opportunitiesLoading && (
                                       <span className="text-[0.65rem] text-slate-400">Cargando...</span>
                                     )}
                                   </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {[
-                                      { label: "Todos", value: "all" },
-                                      { label: "Negociación", value: "negociacion" },
-                                      { label: "Propuesta", value: "propuesta" },
-                                    ].map((option) => (
-                                      <button
-                                        key={option.value}
-                                        type="button"
-                                        className={`rounded border px-3 py-1 text-[0.65rem] uppercase tracking-[0.25em] transition ${
-                                          opportunityStageFilter === option.value
-                                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                                            : "border-slate-700 text-slate-400 hover:border-emerald-400"
-                                        }`}
-                                        onClick={() => setOpportunityStageFilter(option.value)}
-                                      >
-                                        {option.label}
-                                      </button>
-                                    ))}
+                                  <div className="space-y-2">
+                                    <label className="text-[0.65rem] text-slate-400" htmlFor="opportunity-select">
+                                      Elige la oportunidad o cliente vinculado antes de confirmar la venta.
+                                    </label>
+                                    <select
+                                      id="opportunity-select"
+                                      className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white transition focus:border-emerald-500 focus:outline-none"
+                                      value={saleModalOpportunityId ?? ""}
+                                      onChange={(event) => {
+                                        setSaleModalOpportunityId(event.target.value || null);
+                                      }}
+                                      disabled={opportunitiesLoading}
+                                    >
+                                      <option value="">Selecciona una oportunidad</option>
+                                      {availableOpportunities.map((opportunity) => {
+                                        const contactLabel =
+                                          opportunity.contacto_nombre ??
+                                          opportunity.contacto_correo ??
+                                          opportunity.contacto_telefono ??
+                                          "Contacto sin datos";
+                                        const descriptionLabel = formatDescriptionLabel(
+                                          opportunity.descripcion,
+                                        );
+                                        return (
+                                          <option key={opportunity.id} value={opportunity.id}>
+                                            {opportunity.titulo ?? `Oportunidad ${opportunity.id}`} ·{" "}
+                                            {contactLabel}
+                                            {descriptionLabel ? ` · ${descriptionLabel}` : ""}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
                                   </div>
                                   {opportunitiesError && (
                                     <p className="text-[0.65rem] text-rose-400">{opportunitiesError}</p>
                                   )}
-                                  <div className="space-y-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1 shadow-inner">
-                                    {opportunitiesLoading && !availableOpportunities.length ? (
-                                      <p className="text-[0.65rem] text-slate-400">
-                                        Buscando oportunidades...
-                                      </p>
-                                    ) : filteredOpportunities.length === 0 ? (
-                                      <p className="text-[0.65rem] text-slate-400">
-                                        {availableOpportunities.length
-                                          ? "No hay oportunidades en esas etapas."
-                                          : "No se encontraron oportunidades disponibles."}
-                                      </p>
-                                    ) : (
-                                      filteredOpportunities.map((opportunity) => {
-                                        const isSelected = saleModalOpportunityId === opportunity.id;
-                                        const stageLabel =
-                                          opportunity.etapa_nombre ??
-                                          opportunity.etapa_codigo ??
-                                          "Sin etapa visible";
-                                        return (
-                                          <button
-                                            key={opportunity.id}
-                                            type="button"
-                                            className={`w-full rounded border px-3 py-2 text-left text-sm transition ${
-                                              isSelected
-                                                ? "border-emerald-500 bg-emerald-500/10"
-                                                : "border-slate-700 hover:border-emerald-400"
-                                            }`}
-                                            onClick={() => setSaleModalOpportunityId(opportunity.id)}
-                                          >
-                                            <div className="flex items-center justify-between">
-                                              <span className="font-semibold text-white">{opportunity.titulo}</span>
-                                              <span className="text-[0.6rem] uppercase tracking-[0.25em] text-slate-400">
-                                                {stageLabel}
-                                              </span>
-                                            </div>
-                                            <p className="text-[0.65rem] text-slate-400">
-                                              {opportunity.contacto_nombre ??
-                                                opportunity.contacto_correo ??
-                                                opportunity.contacto_telefono ??
-                                                opportunity.id}
-                                            </p>
-                                            <p className="text-[0.65rem] text-slate-400">
-                                              {opportunity.cuenta_nombre ?? "Cuenta sin nombre"}
-                                            </p>
-                                            <p className="text-[0.65rem] text-slate-400">
-                                              {opportunity.monto_estimado
-                                                ? new Intl.NumberFormat("es-MX", {
-                                                    style: "currency",
-                                                    currency: opportunity.moneda ?? "MXN",
-                                                    maximumFractionDigits: 0,
-                                                  }).format(opportunity.monto_estimado)
-                                                : "Monto no registrado"}
-                                            </p>
-                                          </button>
-                                        );
-                                      })
-                                    )}
-                                  </div>
+                                  {selectedOpportunity ? (
+                                    <div className="space-y-1 rounded border border-slate-800 bg-slate-950/60 px-3 py-3 text-[0.72rem] text-slate-300">
+                                      <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-[0.2em] text-slate-500">
+                                        <span>Etapa</span>
+                                        <span className="font-semibold text-white">
+                                          {selectedOpportunity.etapa_nombre ??
+                                            selectedOpportunity.etapa_codigo ??
+                                            "—"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[0.75rem]">
+                                        <span className="text-slate-400">Contacto</span>
+                                        <span className="text-right text-slate-200">
+                                          {selectedOpportunity.contacto_nombre ??
+                                            selectedOpportunity.contacto_correo ??
+                                            selectedOpportunity.contacto_telefono ??
+                                            "Contacto sin datos"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[0.75rem]">
+                                        <span className="text-slate-400">Cuenta</span>
+                                        <span className="text-right text-slate-200">
+                                          {selectedOpportunity.cuenta_nombre ?? "Cuenta sin nombre"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[0.75rem]">
+                                        <span className="text-slate-400">Descripción</span>
+                                        <span className="text-right text-slate-200">
+                                          {selectedOpportunity.descripcion ??
+                                            selectedOpportunity.metadata?.nota ??
+                                            "Sin descripción"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[0.75rem]">
+                                        <span className="text-slate-400">Monto estimado</span>
+                                        <span className="text-right font-semibold text-slate-100">
+                                          {selectedOpportunity.monto_estimado
+                                            ? new Intl.NumberFormat("es-MX", {
+                                                style: "currency",
+                                                currency: selectedOpportunity.moneda ?? "MXN",
+                                                maximumFractionDigits: 0,
+                                              }).format(selectedOpportunity.monto_estimado)
+                                            : "Monto no registrado"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-[0.65rem] text-slate-400">
+                                      {opportunitiesLoading
+                                        ? "Actualizando oportunidades..."
+                                        : "No se encontraron oportunidades disponibles con contacto completo."}
+                                    </p>
+                                  )}
                                 </div>
                                 {saleModalError && (
                                   <p className="text-[0.65rem] text-rose-400">{saleModalError}</p>

@@ -85,7 +85,9 @@ MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
 SALE_LOG_FILE = MAPBOX_LOG_DIR / "propiedades-ventas.log"
 
 LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
-OPPORTUNITY_SALE_STAGE_TOKENS = frozenset({"negociacion", "propuesta"})
+OPPORTUNITY_SALE_STAGE_TOKENS = frozenset(
+    {"negociacion", "propuesta", "prospeccion", "demo"},
+)
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
@@ -226,6 +228,57 @@ async def _ensure_opportunity_ready_for_sale(
             detail=f"opportunity_stage_not_ready:{codigo or 'unknown'}",
         )
     return opportunity
+
+
+async def _ensure_product_for_catalog_item(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    catalog_item_id: UUID,
+) -> dict[str, Any]:
+    catalog_item = await repo.get_catalog_item(
+        organizacion_id=organizacion_id,
+        item_id=catalog_item_id,
+    )
+    if not catalog_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="catalog_item_not_found")
+    product = await repo.get_product(
+        organizacion_id=organizacion_id,
+        product_id=catalog_item_id,
+    )
+    if product:
+        return product
+    metadata = _ensure_dict(
+        catalog_item.get("metadatos") or catalog_item.get("metadata") or {},
+        default={},
+    )
+    metadata["catalog_item_id"] = str(catalog_item_id)
+    codigo = (catalog_item.get("slug") or catalog_item.get("nombre") or str(catalog_item_id)).strip()
+    if not codigo:
+        codigo = str(catalog_item_id)
+    payload: dict[str, Any] = {
+        "id": str(catalog_item_id),
+        "codigo": codigo,
+        "nombre": catalog_item.get("nombre") or "Producto inmobiliario",
+        "descripcion": catalog_item.get("descripcion_corta")
+        or catalog_item.get("descripcion_larga")
+        or catalog_item.get("descripcion")
+        or None,
+        "precio_base": _coerce_optional_number(catalog_item.get("precio_base")),
+        "moneda": (catalog_item.get("moneda") or "MXN").strip().upper()[:3],
+        "activo": bool(catalog_item.get("activo") is not False),
+        "metadata": metadata,
+    }
+    familia_id = catalog_item.get("familia_id")
+    if isinstance(familia_id, str) and familia_id.strip():
+        payload["familia_id"] = familia_id.strip()
+    modelo_id = catalog_item.get("modelo_id")
+    if isinstance(modelo_id, str) and modelo_id.strip():
+        payload["modelo_id"] = modelo_id.strip()
+    product = await repo.create_product(
+        organizacion_id=organizacion_id,
+        payload=payload,
+    )
+    return product
 
 
 def _trigger_catalog_reindex(
@@ -3876,6 +3929,7 @@ class CRMSaleReadyOpportunity(BaseModel):
     monto_estimado: float | None = None
     moneda: str | None = None
     probabilidad: float | None = None
+    descripcion: str | None = None
     etapa_codigo: str | None = None
     etapa_nombre: str | None = None
     etapa_categoria: str | None = None
@@ -5081,11 +5135,13 @@ async def list_sale_ready_opportunities(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    contacto_captura_estado: str | None = Query(default="completo"),
 ) -> list[CRMSaleReadyOpportunity]:
     try:
         rows = await repo.list_sale_ready_opportunities(
             organizacion_id=organizacion_id,
             limit=limit,
+            contacto_captura_estado=contacto_captura_estado,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -5095,8 +5151,6 @@ async def list_sale_ready_opportunities(
             continue
         stage = row.get("etapa") or {}
         code = stage.get("codigo")
-        if not _stage_code_is_ready(code):
-            continue
         contacto = row.get("contacto") or {}
         cuenta = row.get("cuenta") or {}
         allowed.append(
@@ -5106,6 +5160,7 @@ async def list_sale_ready_opportunities(
                 estado=row.get("estado") or "",
                 monto_estimado=_coerce_optional_number(row.get("monto_estimado")),
                 moneda=row.get("moneda"),
+                descripcion=row.get("descripcion"),
                 probabilidad=_coerce_optional_number(row.get("probabilidad")),
                 etapa_codigo=code,
                 etapa_nombre=stage.get("nombre"),
@@ -11825,9 +11880,14 @@ async def registrar_venta_propiedad(
             organizacion_id=organizacion_id,
             payload=quote_payload,
         )
+        product = await _ensure_product_for_catalog_item(
+            repo,
+            organizacion_id,
+            payload.catalog_item_id,
+        )
         item_payload: dict[str, Any] = {
             "cotizacion_id": str(quote["id"]),
-            "producto_id": str(payload.catalog_item_id),
+            "producto_id": str(product.get("id")),
             "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
             "cantidad": 1,
             "precio_unitario": price_value,

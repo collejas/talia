@@ -745,11 +745,13 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         limit: int = 200,
+        contacto_captura_estado: str | None = "completo",
     ) -> list[dict[str, Any]]:
         select_fields = ",".join(
             [
                 "id",
                 "titulo",
+                "descripcion",
                 "estado",
                 "monto_estimado",
                 "moneda",
@@ -766,11 +768,46 @@ class CRMRepository:
             "limit": str(limit),
             "select": select_fields,
         }
+        contact_ids: list[str] | None = None
+        if contacto_captura_estado:
+            contact_ids = await self._list_contact_ids_by_captura_estado(
+                organizacion_id, contacto_captura_estado
+            )
+            if not contact_ids:
+                return []
+            params["contacto_principal_id"] = f"in.({','.join(contact_ids)})"
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades de venta: {data!r}")
         return data
+
+    async def _list_contact_ids_by_captura_estado(
+        self,
+        organizacion_id: UUID,
+        captura_estado: str,
+        *,
+        limit: int = 500,
+    ) -> list[str]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "captura_estado": f"eq.{captura_estado}",
+            "select": "id",
+            "limit": str(limit),
+        }
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar contactos por captura_estado: {data!r}"
+            )
+        ids: list[str] = []
+        for row in data:
+            if isinstance(row, dict):
+                contact_id = row.get("id")
+                if isinstance(contact_id, str) and contact_id.strip():
+                    ids.append(contact_id.strip())
+        return ids
 
     async def create_opportunity(
         self,
@@ -3738,6 +3775,28 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al buscar catálogo: {row!r}")
+        return row
+
+    async def get_product(
+        self,
+        *,
+        organizacion_id: UUID,
+        product_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{product_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/productos", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar producto: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar producto: {row!r}")
         return row
 
     async def list_lineas_de_negocio(
