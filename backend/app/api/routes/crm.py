@@ -88,6 +88,7 @@ LEAD_SALES_READY_STAGES = frozenset({"etapa_3", "etapa_4"})
 OPPORTUNITY_SALE_STAGE_TOKENS = frozenset(
     {"negociacion", "propuesta", "prospeccion", "demo"},
 )
+WINNING_STAGE_CODES = ("general_cerrado_ganado", "cerrado_ganado")
 
 def _write_mapbox_debug_log(tag: str, payload: Any) -> None:
     try:
@@ -228,6 +229,70 @@ async def _ensure_opportunity_ready_for_sale(
             detail=f"opportunity_stage_not_ready:{codigo or 'unknown'}",
         )
     return opportunity
+
+
+async def _find_winning_stage(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> dict[str, Any] | None:
+    for code in WINNING_STAGE_CODES:
+        stage = await repo.get_pipeline_stage_by_code(
+            organizacion_id=organizacion_id,
+            code=code,
+        )
+        if stage:
+            return stage
+    stages = await repo.list_pipelines(organizacion_id=organizacion_id)
+    for stage in stages:
+        if not isinstance(stage, dict):
+            continue
+        stage_code = (stage.get("codigo") or "").lower()
+        if "ganado" in stage_code:
+            return stage
+    return None
+
+
+async def _advance_opportunity_to_won(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    current_stage_id: UUID | None,
+    usuario_id: UUID | None = None,
+) -> None:
+    stage = await _find_winning_stage(repo, organizacion_id)
+    if not stage:
+        return
+    next_stage_id = _safe_uuid(stage.get("id"))
+    if not next_stage_id or next_stage_id == current_stage_id:
+        return
+    try:
+        await repo.update_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            payload={"etapa_id": str(next_stage_id)},
+        )
+
+        history_payload: dict[str, Any] = {
+            "oportunidad_id": str(oportunidad_id),
+            "etapa_origen_id": str(current_stage_id) if current_stage_id else None,
+            "etapa_destino_id": str(next_stage_id),
+            "fuente": "venta_mapbox",
+        }
+        if usuario_id:
+            history_payload["cambiado_por_usuario_id"] = str(usuario_id)
+        await repo.append_stage_history(
+            organizacion_id=organizacion_id,
+            payload={k: v for k, v in history_payload.items() if v is not None},
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "crm.sale_stage_advance_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "error": str(exc),
+            },
+        )
 
 
 async def _ensure_product_for_catalog_item(
@@ -11838,14 +11903,20 @@ async def registrar_venta_propiedad(
     payload: CRMPropertySaleRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> CRMQuote:
     catalog_item = await repo.get_catalog_item(
         organizacion_id=organizacion_id, item_id=payload.catalog_item_id
     )
     if not catalog_item:
         raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    opportunity: dict[str, Any] | None = None
     if payload.oportunidad_id:
-        await _ensure_opportunity_ready_for_sale(repo, organizacion_id, payload.oportunidad_id)
+        opportunity = await _ensure_opportunity_ready_for_sale(
+            repo,
+            organizacion_id,
+            payload.oportunidad_id,
+        )
     elif payload.lead_id:
         await _ensure_lead_ready_for_sale(repo, organizacion_id, payload.lead_id)
     price_value = _decimal_to_number(payload.precio_final)
@@ -11931,6 +12002,14 @@ async def registrar_venta_propiedad(
         _write_propiedad_sale_log(sale_entry)
         if payload.lead_id:
             await _sync_lead_metrics_after_sale(repo, payload.lead_id)
+        if payload.oportunidad_id:
+            await _advance_opportunity_to_won(
+                repo,
+                organizacion_id,
+                payload.oportunidad_id,
+                _safe_uuid(opportunity.get("etapa_id")) if opportunity else None,
+                usuario_id,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuote.model_validate(quote)

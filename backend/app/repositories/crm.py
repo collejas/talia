@@ -718,6 +718,28 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar etapas: {data!r}")
         return data
 
+    async def get_pipeline_stage_by_code(
+        self,
+        *,
+        organizacion_id: UUID,
+        code: str,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "codigo": f"eq.{code}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/etapas_pipeline", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar etapa: {data!r}")
+        if not data:
+            return None
+        stage = data[0]
+        if not isinstance(stage, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al buscar etapa: {stage!r}")
+        return stage
+
     async def list_opportunities(
         self,
         *,
