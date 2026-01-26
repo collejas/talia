@@ -1452,6 +1452,7 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         estado: str | None = None,
+        etapas: Sequence[str] | None = None,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -1459,6 +1460,13 @@ class CRMRepository:
         }
         if estado:
             params["estado"] = f"eq.{estado}"
+        if etapas:
+            normalized = [stage.strip() for stage in etapas if stage and stage.strip()]
+            if normalized:
+                if len(normalized) == 1:
+                    params["etapa"] = f"eq.{normalized[0]}"
+                else:
+                    params["etapa"] = f"in.({','.join(normalized)})"
         resp = await self._request("GET", "/rest/v1/leads", params=params)
         data = resp.json()
         if not isinstance(data, list):

@@ -4705,6 +4705,10 @@ class CRMLead(BaseModel):
     metadata: dict | None = None
     creado_en: datetime
     actualizado_en: datetime
+    nombre_completo: str | None = None
+    email: str | None = None
+    celular: str | None = None
+    etapa: str | None = None
 
 
 class CRMLeadCreate(BaseModel):
@@ -10577,9 +10581,17 @@ async def list_leads(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     estado: str | None = Query(default=None),
+    etapas: str | None = Query(default=None, description="Lista separada por comas de etapas del pipeline"),
 ) -> list[CRMLead]:
     try:
-        rows = await repo.list_leads(organizacion_id=organizacion_id, estado=estado)
+        stage_codes = None
+        if etapas:
+            stage_codes = [code.strip() for code in etapas.split(",") if code.strip()]
+        rows = await repo.list_leads(
+            organizacion_id=organizacion_id,
+            estado=estado,
+            etapas=stage_codes,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMLead.model_validate(row) for row in rows]

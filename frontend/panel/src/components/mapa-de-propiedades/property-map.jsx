@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 const STATUS_COLORS = {
   disponible: "#2ECC71",
@@ -10,6 +12,8 @@ const STATUS_COLORS = {
   vendido: "#E74C3C",
   reservado: "#9B59B6",
 };
+
+const READY_LEAD_STAGES = new Set(["etapa_3", "etapa_4"]);
 
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -425,6 +429,14 @@ export function PropertyMap() {
   const [saleError, setSaleError] = useState(null);
   const [saleSuccess, setSaleSuccess] = useState(null);
   const [saleLogs, setSaleLogs] = useState([]);
+  const [isSaleModalOpen, setSaleModalOpen] = useState(false);
+  const [saleModalPrice, setSaleModalPrice] = useState("");
+  const [saleModalLeadId, setSaleModalLeadId] = useState(null);
+  const [saleModalError, setSaleModalError] = useState(null);
+  const [leadSearch, setLeadSearch] = useState("");
+  const [availableLeads, setAvailableLeads] = useState([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState(null);
   const [geojsonRefreshVersion, setGeojsonRefreshVersion] = useState(0);
   const lastSaleTimestampRef = useRef(null);
   const refreshGeojson = useCallback(() => {
@@ -1451,30 +1463,95 @@ export function PropertyMap() {
         .join(" · ")
     : null;
 
-  const handleRegisterSale = useCallback(async () => {
+  const handleOpenSaleModal = useCallback(() => {
+    const priceValue = mapboxProps?.precio;
+    setSaleModalPrice(priceValue != null ? String(priceValue) : "");
+    setSaleModalLeadId(null);
+    setSaleModalError(null);
+    setLeadSearch("");
+    setSaleModalOpen(true);
+  }, [mapboxProps?.precio]);
+
+  const filteredLeads = useMemo(() => {
+    const searchTerm = leadSearch.trim().toLowerCase();
+    return availableLeads
+      .filter((lead) => READY_LEAD_STAGES.has(lead.etapa ?? ""))
+      .filter((lead) => {
+        if (!searchTerm) {
+          return true;
+        }
+        const haystack = [
+          lead.nombre_completo,
+          lead.email,
+          lead.celular,
+          lead.id,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(searchTerm);
+      });
+  }, [availableLeads, leadSearch]);
+
+  useEffect(() => {
+    if (!isSaleModalOpen) {
+      setAvailableLeads([]);
+      setLeadSearch("");
+      setSaleModalLeadId(null);
+      setSaleModalPrice("");
+      setSaleModalError(null);
+      setLeadsError(null);
+      setLeadsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setLeadsLoading(true);
+    setLeadsError(null);
+    (async () => {
+      try {
+        const response = await fetch("/api/crm/leads?etapas=etapa_3,etapa_4", {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error((await response.json().catch(() => null))?.error ?? "leads_fetch_failed");
+        }
+        const data = await response.json().catch(() => null);
+        if (controller.signal.aborted) return;
+        setAvailableLeads(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setLeadsError(error instanceof Error ? error.message : "leads_fetch_failed");
+      } finally {
+        if (!controller.signal.aborted) {
+          setLeadsLoading(false);
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [isSaleModalOpen]);
+
+  useEffect(() => {
+    if (isSaleModalOpen && filteredLeads.length && !saleModalLeadId) {
+      setSaleModalLeadId(filteredLeads[0].id);
+    }
+  }, [filteredLeads, isSaleModalOpen, saleModalLeadId]);
+
+  const handleConfirmSale = useCallback(async () => {
+    setSaleModalError(null);
     setSaleError(null);
     setSaleSuccess(null);
     if (!catalogItemId || !propiedadId || !unidadId) {
-      setSaleError("Datos incompletos de la unidad seleccionada.");
+      setSaleModalError("Datos incompletos de la unidad seleccionada.");
       return;
     }
-    let precioValue = mapboxProps?.precio;
-    const parsedPrice = precioValue != null ? Number(precioValue) : NaN;
-    if (!precioValue || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-      const promptValue = window.prompt(
-        "Precio final de la unidad (MXN)",
-        precioValue ? String(precioValue) : "0",
-      );
-      if (promptValue === null) {
-        return;
-      }
-      precioValue = Number(promptValue);
-      if (Number.isNaN(precioValue) || precioValue <= 0) {
-        setSaleError("Precio inválido.");
-        return;
-      }
-    } else {
-      precioValue = parsedPrice;
+    if (!saleModalLeadId) {
+      setSaleModalError("Selecciona un lead listo para venta.");
+      return;
+    }
+    const priceNumber = Number(saleModalPrice);
+    if (Number.isNaN(priceNumber) || priceNumber <= 0) {
+      setSaleModalError("Precio final inválido.");
+      return;
     }
     setSaleLoading(true);
     try {
@@ -1485,8 +1562,9 @@ export function PropertyMap() {
           catalog_item_id: catalogItemId,
           propiedad_id: propiedadId,
           unidad_id: unidadId,
-          precio_final: precioValue,
+          precio_final: priceNumber,
           moneda: "MXN",
+          lead_id: saleModalLeadId,
         }),
       });
       if (!response.ok) {
@@ -1498,12 +1576,22 @@ export function PropertyMap() {
         data?.id ? `Venta registrada (${data.id})` : "Venta registrada correctamente.",
       );
       refreshGeojson();
+      setSaleModalOpen(false);
     } catch (error) {
-      setSaleError(error instanceof Error ? error.message : "venta_failed");
+      const message = error instanceof Error ? error.message : "venta_failed";
+      setSaleModalError(message);
+      setSaleError(message);
     } finally {
       setSaleLoading(false);
     }
-  }, [catalogItemId, propiedadId, unidadId, mapboxProps, refreshGeojson]);
+  }, [
+    catalogItemId,
+    propiedadId,
+    unidadId,
+    saleModalLeadId,
+    saleModalPrice,
+    refreshGeojson,
+  ]);
 
   const activeFeatureProps = activeMarkerFeature?.properties ?? null;
   const activeDevelopmentSummary = (() => {
@@ -3217,22 +3305,130 @@ export function PropertyMap() {
                       )}
                     </div>
                       {catalogItemId && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
-                        <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
-                          <button
-                            type="button"
-                            className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 disabled:opacity-50"
-                            onClick={handleRegisterSale}
-                            disabled={saleLoading}
-                          >
-                            {saleLoading ? "Registrando venta..." : "Registrar venta"}
-                          </button>
-                          {saleError && (
-                            <p className="text-[0.65rem] text-rose-400">{saleError}</p>
-                          )}
-                          {saleSuccess && (
-                            <p className="text-[0.65rem] text-emerald-300">{saleSuccess}</p>
-                          )}
-                        </div>
+                        <>
+                          <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
+                            <button
+                              type="button"
+                              className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 disabled:opacity-50"
+                              onClick={handleOpenSaleModal}
+                              disabled={saleLoading}
+                            >
+                              Registrar venta
+                            </button>
+                            {saleError && (
+                              <p className="text-[0.65rem] text-rose-400">{saleError}</p>
+                            )}
+                            {saleSuccess && (
+                              <p className="text-[0.65rem] text-emerald-300">{saleSuccess}</p>
+                            )}
+                          </div>
+                          <Dialog open={isSaleModalOpen} onOpenChange={setSaleModalOpen}>
+                            <DialogContent className="min-w-[320px] max-w-lg space-y-4">
+                              <DialogHeader>
+                              <DialogTitle>Registrar venta vinculada a lead</DialogTitle>
+                              <DialogDescription>
+                                Selecciona el lead listo para cerrar esta unidad y confirma el precio final
+                                antes de enviar la cotización.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="space-y-1">
+                                <p className="text-[0.65rem] uppercase tracking-[0.3em] text-slate-500">
+                                  Precio final (MXN)
+                                </p>
+                                <Input
+                                  type="text"
+                                  value={saleModalPrice}
+                                  onChange={(event) => setSaleModalPrice(event.target.value)}
+                                  placeholder="Ej. 1,200,000"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-sm font-semibold tracking-[0.2em] uppercase text-slate-300">
+                                    Leads en etapa lista
+                                  </p>
+                                  {leadsLoading && (
+                                    <span className="text-[0.65rem] text-slate-400">Cargando...</span>
+                                  )}
+                                </div>
+                                <Input
+                                  type="search"
+                                  value={leadSearch}
+                                  onChange={(event) => setLeadSearch(event.target.value)}
+                                  placeholder="Buscar por nombre / email / teléfono"
+                                />
+                                {leadsError && (
+                                  <p className="text-[0.65rem] text-rose-400">{leadsError}</p>
+                                )}
+                                <div className="space-y-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1 shadow-inner">
+                                  {leadsLoading && !availableLeads.length ? (
+                                    <p className="text-[0.65rem] text-slate-400">Buscando leads...</p>
+                                  ) : filteredLeads.length === 0 ? (
+                                    <p className="text-[0.65rem] text-slate-400">
+                                      {availableLeads.length
+                                        ? "Ningún lead en las etapas seleccionadas."
+                                        : "No se encontraron leads disponibles."}
+                                    </p>
+                                  ) : (
+                                    filteredLeads.map((lead) => {
+                                      const isSelected = saleModalLeadId === lead.id;
+                                      const displayName =
+                                        lead.nombre_completo ??
+                                        lead.metadata?.contacto_nombre ??
+                                        lead.email ??
+                                        `Lead ${lead.id.slice(0, 6)}`;
+                                      return (
+                                        <button
+                                          key={lead.id}
+                                          type="button"
+                                          className={`w-full rounded border px-3 py-2 text-left text-sm transition ${
+                                            isSelected
+                                              ? "border-emerald-500 bg-emerald-500/10"
+                                              : "border-slate-700 hover:border-emerald-400"
+                                          }`}
+                                          onClick={() => setSaleModalLeadId(lead.id)}
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-white">{displayName}</span>
+                                            <span className="text-[0.6rem] uppercase tracking-[0.25em] text-slate-400">
+                                              {lead.etapa ?? "Sin etapa"}
+                                            </span>
+                                          </div>
+                                          <p className="text-[0.65rem] text-slate-400">
+                                            {lead.email ?? lead.celular ?? lead.estado ?? lead.id}
+                                          </p>
+                                        </button>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </div>
+                              {saleModalError && (
+                                <p className="text-[0.65rem] text-rose-400">{saleModalError}</p>
+                              )}
+                            </div>
+                            <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                              <button
+                                type="button"
+                                className="w-full rounded border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-slate-400 sm:w-auto"
+                                onClick={() => setSaleModalOpen(false)}
+                                disabled={saleLoading}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 sm:w-auto"
+                                onClick={handleConfirmSale}
+                                disabled={saleLoading}
+                              >
+                                {saleLoading ? "Registrando venta..." : "Confirmar venta"}
+                              </button>
+                            </DialogFooter>
+                          </DialogContent>
+                          </Dialog>
+                        </>
                       )}
                       {saleLogs.length > 0 && (
                         <div className="mt-4 text-[0.65rem] uppercase tracking-[0.2em] text-slate-400">
