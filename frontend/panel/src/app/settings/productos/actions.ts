@@ -369,7 +369,9 @@ export async function deleteFamiliaProducto(id: string): Promise<void> {
   }
 }
 
-export async function deleteModeloProducto(id: string): Promise<void> {
+export type DeleteModeloResult = { ok: true } | { ok: false; error: string }
+
+export async function deleteModeloProducto(id: string): Promise<DeleteModeloResult> {
   if (!id) {
     throw new Error("Falta el identificador del modelo.")
   }
@@ -377,6 +379,10 @@ export async function deleteModeloProducto(id: string): Promise<void> {
     method: "DELETE",
   })
   if (!response.ok) {
-    throw new Error(response.error || "No se pudo eliminar el modelo.")
+    return {
+      ok: false,
+      error: response.error || "No se pudo eliminar el modelo.",
+    }
   }
+  return { ok: true }
 }

@@ -2903,10 +2903,15 @@ async def _execute_function_call(
         }
 
     if name == "list_catalog_fraccionamientos":
-        org_value = arguments.get("organizacion_id")
-        if not org_value:
+        org_value_raw = arguments.get("organizacion_id")
+        org_value = str(org_value_raw).strip() if org_value_raw else None
+        contact = None
+        contact_org = None
+        if context.contact_id:
             contact = await _resolve_contact(context.contact_id)
-            org_value = _extract_contact_org(contact)
+            contact_org = _extract_contact_org(contact)
+        if not org_value or org_value == context.conversation_id:
+            org_value = contact_org
         if not org_value:
             raise ValueError("organizacion_id requerido para listar fraccionamientos")
         resolved = _resolve_org_uuid(org_value)

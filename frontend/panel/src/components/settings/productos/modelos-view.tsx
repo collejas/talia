@@ -230,7 +230,12 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
     startTransition(() => {
       void (async () => {
         try {
-          await deleteModeloProducto(modelo.id)
+          const result = await deleteModeloProducto(modelo.id)
+          if (!result.ok) {
+            const message = formatDeleteErrorMessage(result.error)
+            setListFeedback({ type: "error", message })
+            return
+          }
           setModelosState((prev) => prev.filter((item) => item.id !== modelo.id))
           setSelectedModelos((prev) => prev.filter((id) => id !== modelo.id))
           setListFeedback({ type: "success", message: "Modelo eliminado correctamente." })
@@ -267,31 +272,41 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
       void (async () => {
         try {
           const operations = selectedModelos.map(async (id) => {
-            await deleteModeloProducto(id)
-            return id
+            const result = await deleteModeloProducto(id)
+            return { id, result }
           })
           const results = await Promise.allSettled(operations)
           const deletedIds = results
-            .filter((res): res is PromiseFulfilledResult<string> => res.status === "fulfilled")
-            .map((res) => res.value)
+            .filter(
+              (res): res is PromiseFulfilledResult<{ id: string; result: DeleteModeloResult }> =>
+                res.status === "fulfilled" && res.value.result.ok,
+            )
+            .map((res) => res.value.id)
           if (deletedIds.length) {
             const deletedSet = new Set(deletedIds)
             setModelosState((prev) => prev.filter((item) => !deletedSet.has(item.id)))
             setSelectedModelos((prev) => prev.filter((id) => !deletedSet.has(id)))
           }
-          const failed = results.find((res) => res.status === "rejected") as
-            | PromiseRejectedResult
-            | undefined
-          if (failed) {
+          const rejected = results.find((res): res is PromiseRejectedResult => res.status === "rejected")
+          if (rejected) {
             const message = formatDeleteErrorMessage(
-              failed.reason instanceof Error ? failed.reason.message : String(failed.reason),
+              rejected.reason instanceof Error ? rejected.reason.message : String(rejected.reason),
             )
             setListFeedback({ type: "error", message })
           } else {
-            setListFeedback({
-              type: "success",
-              message: `Se eliminaron ${deletedIds.length} modelo(s).`,
-            })
+            const failed = results.find(
+              (res): res is PromiseFulfilledResult<{ id: string; result: DeleteModeloResult }> =>
+                res.status === "fulfilled" && !res.value.result.ok,
+            )
+            if (failed) {
+              const message = formatDeleteErrorMessage(failed.value.result.error)
+              setListFeedback({ type: "error", message })
+            } else if (deletedIds.length) {
+              setListFeedback({
+                type: "success",
+                message: `Se eliminaron ${deletedIds.length} modelo(s).`,
+              })
+            }
           }
         } catch (error) {
           console.error("[modelos] bulk delete failed", error)

@@ -88,6 +88,19 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-panel.service
 sudo systemctl restart talia-api.service
 
+
+• Called
+  └ supabase.execute_sql({"query":"SELECT id, organizacion_id, nombre, descripcion, activo, metadata, creado_en, actualizado_en,
+        familia_id FROM public.modelos_productos ORDER BY creado_en DESC LIMIT 5;"})
+        1405-4b8e-95e2-d731c987b83e>\n[{\"id\":\"0fc1b1cf-9466-43d7-a7c4-4c6ef5346ab8\",\"organizacion_id\":\"00000000-0000-0000-
+        0000-000000000001\",\"nombre\":\"View\",\"descripcion\":null,\"activo\":true,\"metadata\":{},\"creado_en\":\"2026-01-25
+        21:21:57.87955+00\",\"actualizado_en\":\"2026-01-25 21:21:57.87955+00\",\"familia_id\":\"ba132f2d-5aa2-43a1-be47-
+        e0f5ed3f972b\"},{\"id\":\"f317322...
+
+• Called supabase.execute_sql({"query":"SELECT COUNT(*) AS total FROM public.modelos_productos;"})
+  └ "Below is the result of the SQL query. Note
+
+codex resume 019bfcfe-cade-7ec1-99fb-d30cf89ccc7b
 codex resume 019bfb33-b0b4-7f42-b6ca-612ba14ef81c
 codex resume 019bf0a5-df36-7253-97ec-3a93c6836246
 codex resume 019be342-95be-7023-80b9-4b61e128b67b
