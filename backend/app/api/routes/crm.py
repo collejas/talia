@@ -1825,6 +1825,10 @@ class PropiedadUnidadCreateRequest(BaseModel):
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
 
+class PropiedadUnidadStatusUpdateRequest(BaseModel):
+    status: PropiedadStatus
+
+
 class CRMPropertySaleRequest(BaseModel):
     catalog_item_id: UUID
     propiedad_id: UUID
@@ -12242,6 +12246,35 @@ async def editar_propiedad_unidad(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "unidad": record}
+
+
+@router.patch("/propiedad-unidades/{unidad_id}/status")
+async def actualizar_status_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadStatusUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> dict[str, Any]:
+    try:
+        record = await repo.update_propiedad_unidad(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+            payload={"status": payload.status.value},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    event_payload = {
+        "organizacion_id": str(organizacion_id),
+        "unidad_id": str(unidad_id),
+        "status": payload.status.value,
+        "usuario_id": str(usuario_id) if usuario_id else None,
+        "source": "mapbox",
+    }
+    sale_logger.info("propiedad_unidad_status_manual", extra=event_payload)
+    _write_propiedad_sale_event("unidad_status_manual", event_payload)
     return {"ok": True, "unidad": record}
 
 

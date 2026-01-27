@@ -3,9 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
+function formatDescriptionLabel(value) {
+  if (!value) return null;
+  const trimmed = value.toString().trim();
+  if (!trimmed.length) return null;
+  const maxLen = 50;
+  return trimmed.length <= maxLen ? trimmed : `${trimmed.slice(0, maxLen - 3)}...`;
+}
 const STATUS_COLORS = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
@@ -15,14 +23,6 @@ const STATUS_COLORS = {
 
 const DEFAULT_CENTER = [-99.1332, 19.4326];
 const TILE_SOURCE = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-
-function formatDescriptionLabel(value) {
-  if (!value) return null;
-  const trimmed = value.toString().trim();
-  if (!trimmed.length) return null;
-  const maxLen = 50;
-  return trimmed.length <= maxLen ? trimmed : `${trimmed.slice(0, maxLen - 3)}...`;
-}
 
 function getFeatureId(feature) {
   if (!feature || typeof feature !== "object") return null;
@@ -441,7 +441,9 @@ export function PropertyMap() {
   const [saleModalError, setSaleModalError] = useState(null);
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
-  const [opportunitiesError, setOpportunitiesError] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [statusError, setStatusError] = useState(null);
   const [geojsonRefreshVersion, setGeojsonRefreshVersion] = useState(0);
   const lastSaleTimestampRef = useRef(null);
   const refreshGeojson = useCallback(() => {
@@ -1476,19 +1478,52 @@ export function PropertyMap() {
     setSaleModalOpen(true);
   }, [mapboxProps?.precio]);
 
+  const handleStatusUpdate = useCallback(
+    async (status) => {
+      if (!mapboxProps?.id) {
+        return;
+      }
+      setStatusLoading(true);
+      setStatusMessage(null);
+      setStatusError(null);
+      try {
+        const response = await fetch(`/api/crm/propiedad-unidades/${mapboxProps.id}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.detail || payload?.error || "update_status_failed");
+        }
+        setStatusMessage(
+          `Unidad ${status === "apartado" ? "apartada" : "reservada"} correctamente.`,
+        );
+        refreshGeojson();
+      } catch (error) {
+        setStatusError(
+          error instanceof Error ? error.message : "update_status_failed",
+        );
+      } finally {
+        setStatusLoading(false);
+      }
+    },
+    [mapboxProps?.id, refreshGeojson],
+  );
+
   useEffect(() => {
     if (!isSaleModalOpen) {
       setAvailableOpportunities([]);
       setSaleModalOpportunityId(null);
       setSaleModalPrice("");
       setSaleModalError(null);
-      setOpportunitiesError(null);
       setOpportunitiesLoading(false);
       return;
     }
     const controller = new AbortController();
     setOpportunitiesLoading(true);
-    setOpportunitiesError(null);
     (async () => {
       try {
         const response = await fetch("/api/crm/oportunidades/ventas/lista?limit=200", {
@@ -1504,7 +1539,7 @@ export function PropertyMap() {
         setAvailableOpportunities(Array.isArray(data) ? data : []);
       } catch (error) {
         if (controller.signal.aborted) return;
-        setOpportunitiesError(
+        setSaleModalError(
           error instanceof Error ? error.message : "opportunities_sale_list_failed",
         );
       } finally {
@@ -2714,6 +2749,12 @@ export function PropertyMap() {
   }, [mapboxProps?.id]);
 
   useEffect(() => {
+    setStatusMessage(null);
+    setStatusError(null);
+    setStatusLoading(false);
+  }, [mapboxProps?.id]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const fetchLogs = async () => {
@@ -3296,21 +3337,54 @@ export function PropertyMap() {
                         {mapboxProps?.descripcion && (
                           <div>
                             <p className="text-xs text-slate-300">Descripción:</p>
-                         <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
-                        </div>
-                      )}
-                    </div>
+                            <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
+                          </div>
+                        )}
+                      </div>
                       {catalogItemId && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
                         <>
                           <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
-                            <button
-                              type="button"
-                              className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 disabled:opacity-50"
-                              onClick={handleOpenSaleModal}
-                              disabled={saleLoading}
-                            >
-                              Registrar venta
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="flex-1 min-w-[120px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:opacity-50"
+                                style={{
+                                  backgroundColor: STATUS_COLORS.apartado,
+                                }}
+                                onClick={() => handleStatusUpdate("apartado")}
+                                disabled={statusLoading}
+                              >
+                                {statusLoading ? "Actualizando..." : "Apartar"}
+                              </button>
+                              <button
+                                type="button"
+                                className="flex-1 min-w-[120px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:opacity-50"
+                                style={{
+                                  backgroundColor: STATUS_COLORS.reservado,
+                                }}
+                                onClick={() => handleStatusUpdate("reservado")}
+                                disabled={statusLoading}
+                              >
+                                {statusLoading ? "Actualizando..." : "Reservar"}
+                              </button>
+                              <button
+                                type="button"
+                                className="flex-1 min-w-[120px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:opacity-50"
+                                style={{
+                                  backgroundColor: STATUS_COLORS.vendido,
+                                }}
+                                onClick={handleOpenSaleModal}
+                                disabled={saleLoading}
+                              >
+                                {saleLoading ? "Registrando venta..." : "Vender"}
+                              </button>
+                            </div>
+                            {statusMessage && (
+                              <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>
+                            )}
+                            {statusError && (
+                              <p className="text-[0.65rem] text-rose-400">{statusError}</p>
+                            )}
                             {saleError && (
                               <p className="text-[0.65rem] text-rose-400">{saleError}</p>
                             )}
@@ -3373,93 +3447,29 @@ export function PropertyMap() {
                                         );
                                         return (
                                           <option key={opportunity.id} value={opportunity.id}>
-                                            {opportunity.titulo ?? `Oportunidad ${opportunity.id}`} ·{" "}
-                                            {contactLabel}
+                                            {opportunity.titulo ?? `Oportunidad ${opportunity.id}`} · {contactLabel}
                                             {descriptionLabel ? ` · ${descriptionLabel}` : ""}
                                           </option>
                                         );
                                       })}
                                     </select>
+                                    {saleModalError && (
+                                      <p className="text-[0.65rem] text-rose-400">{saleModalError}</p>
+                                    )}
                                   </div>
-                                  {opportunitiesError && (
-                                    <p className="text-[0.65rem] text-rose-400">{opportunitiesError}</p>
-                                  )}
-                                  {selectedOpportunity ? (
-                                    <div className="space-y-1 rounded border border-slate-800 bg-slate-950/60 px-3 py-3 text-[0.72rem] text-slate-300">
-                                      <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-[0.2em] text-slate-500">
-                                        <span>Etapa</span>
-                                        <span className="font-semibold text-white">
-                                          {selectedOpportunity.etapa_nombre ??
-                                            selectedOpportunity.etapa_codigo ??
-                                            "—"}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center justify-between text-[0.75rem]">
-                                        <span className="text-slate-400">Contacto</span>
-                                        <span className="text-right text-slate-200">
-                                          {selectedOpportunity.contacto_nombre ??
-                                            selectedOpportunity.contacto_correo ??
-                                            selectedOpportunity.contacto_telefono ??
-                                            "Contacto sin datos"}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center justify-between text-[0.75rem]">
-                                        <span className="text-slate-400">Cuenta</span>
-                                        <span className="text-right text-slate-200">
-                                          {selectedOpportunity.cuenta_nombre ?? "Cuenta sin nombre"}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center justify-between text-[0.75rem]">
-                                        <span className="text-slate-400">Descripción</span>
-                                        <span className="text-right text-slate-200">
-                                          {selectedOpportunity.descripcion ??
-                                            selectedOpportunity.metadata?.nota ??
-                                            "Sin descripción"}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center justify-between text-[0.75rem]">
-                                        <span className="text-slate-400">Monto estimado</span>
-                                        <span className="text-right font-semibold text-slate-100">
-                                          {selectedOpportunity.monto_estimado
-                                            ? new Intl.NumberFormat("es-MX", {
-                                                style: "currency",
-                                                currency: selectedOpportunity.moneda ?? "MXN",
-                                                maximumFractionDigits: 0,
-                                              }).format(selectedOpportunity.monto_estimado)
-                                            : "Monto no registrado"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-[0.65rem] text-slate-400">
-                                      {opportunitiesLoading
-                                        ? "Actualizando oportunidades..."
-                                        : "No se encontraron oportunidades disponibles con contacto completo."}
-                                    </p>
-                                  )}
                                 </div>
-                                {saleModalError && (
-                                  <p className="text-[0.65rem] text-rose-400">{saleModalError}</p>
-                                )}
                               </div>
-                              <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                                <button
-                                  type="button"
-                                  className="w-full rounded border border-slate-700 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-slate-400 sm:w-auto"
-                                  onClick={() => setSaleModalOpen(false)}
-                                  disabled={saleLoading}
-                                >
+                              <div className="flex gap-2">
+                                <Button onClick={() => setSaleModalOpen(false)} variant="secondary">
                                   Cancelar
-                                </button>
-                                <button
-                                  type="button"
-                                  className="w-full rounded bg-emerald-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-emerald-400 sm:w-auto"
+                                </Button>
+                                <Button
                                   onClick={handleConfirmSale}
-                                  disabled={saleLoading}
+                                  disabled={saleLoading || !saleModalOpportunityId}
                                 >
                                   {saleLoading ? "Registrando venta..." : "Confirmar venta"}
-                                </button>
-                              </DialogFooter>
+                                </Button>
+                              </div>
                             </DialogContent>
                           </Dialog>
                         </>
