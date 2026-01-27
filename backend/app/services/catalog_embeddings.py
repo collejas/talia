@@ -597,9 +597,18 @@ class CatalogEmbeddingService:
             modelo_name = _safe_text(modelo.get("nombre"))
             if modelo_name:
                 sections.append(f"Modelo: {modelo_name}")
-        metadata = row.get("metadata")
-        if metadata:
-            summary = _safe_text(json.dumps(metadata, ensure_ascii=False))
+        joined_metadata: dict[str, Any] = {}
+        for candidate in (
+            row.get("metadata"),
+            row.get("metadatos"),
+            row.get("metadatos_extra"),
+        ):
+            if isinstance(candidate, dict):
+                for key, value in candidate.items():
+                    if value is not None:
+                        joined_metadata[str(key)] = value
+        if joined_metadata:
+            summary = _safe_text(json.dumps(joined_metadata, ensure_ascii=False))
             if summary:
                 sections.append(f"Metadata: {summary}")
         resources = self._resources_for("producto", row.get("id"), resource_map)
