@@ -53,6 +53,11 @@ from app.services.catalog_fraccionamientos import (
     list_catalog_fraccionamientos,
     list_catalog_modelos,
 )
+from app.services.catalog_locations import (
+    LocationResolver,
+    extract_development_id,
+    format_location_payload,
+)
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
 
@@ -3123,8 +3128,7 @@ async def _execute_function_call(
             "detail_level": detail_level,
             "limit": limit,
         }
-        matches_log: list[dict[str, Any]] = []
-        items: list[dict[str, Any]] = []
+        match_entries: list[dict[str, Any]] = []
         for match in matches:
             slug = match.metadata.get("slug")
             item_data: dict[str, Any] | None = None
@@ -3166,13 +3170,48 @@ async def _execute_function_call(
             if isinstance(metadata, Mapping):
                 metadata = {str(key): val for key, val in metadata.items()}
             metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
+            development_id = extract_development_id(match.metadata)
+            if not development_id and isinstance(metadata_value, Mapping):
+                development_id = extract_development_id(metadata_value)
+            if not development_id and item_data:
+                development_id = extract_development_id(
+                    item_data.get("metadata") or item_data.get("metadatos")
+                )
+            match_entries.append(
+                {
+                    "match": match,
+                    "slug": slug,
+                    "item_data": item_data or {},
+                    "metadata": metadata,
+                    "metadata_keys": metadata_keys,
+                    "similarity": match.similarity,
+                    "fallback": item_data is not None,
+                    "development_id": development_id,
+                }
+            )
+        location_resolver = LocationResolver(repo, str(org_uuid))
+        development_ids = [
+            entry["development_id"]
+            for entry in match_entries
+            if entry.get("development_id")
+        ]
+        location_map = await location_resolver.resolve(development_ids)
+        matches_log = []
+        items = []
+        for entry in match_entries:
+            match = entry["match"]
+            item_data = entry["item_data"]
+            metadata = entry["metadata"]
+            location_payload = format_location_payload(
+                location_map.get(entry.get("development_id"))
+            )
             matches_log.append(
                 {
-                    "slug": slug,
-                    "similarity": match.similarity,
-                    "metadata_keys": metadata_keys,
+                    "slug": entry["slug"],
+                    "similarity": entry["similarity"],
+                    "metadata_keys": entry["metadata_keys"],
                     "metadata": metadata,
-                    "fallback_used": item_data is not None,
+                    "fallback_used": entry["fallback"],
                 }
             )
             items.append(
@@ -3193,7 +3232,8 @@ async def _execute_function_call(
                     if item_data
                     else match.metadata.get("activo"),
                     "metadata": metadata,
-                    "similarity": match.similarity,
+                    "similarity": entry["similarity"],
+                    **({"ubicacion": location_payload} if location_payload else {}),
                 }
             )
         write_catalog_debug_entry(

@@ -375,6 +375,36 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_desarrollo_invalid_response:{row!r}")
         return row
 
+    async def list_propiedad_desarrollos_by_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        desarrollo_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        if not desarrollo_ids:
+            return []
+        ids = ",".join(str(value) for value in desarrollo_ids)
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"in.({ids})",
+            "limit": str(len(desarrollo_ids)),
+        }
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_desarrollos",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_desarrollos_invalid_response:{data!r}")
+        desarrollos: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            desarrollos.append(row)
+        return desarrollos
+
     async def delete_propiedad_capa(
         self,
         *,

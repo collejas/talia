@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
 from app.repositories.crm import CRMRepository
+from app.services.catalog_locations import (
+    LocationResolver,
+    extract_development_id,
+    format_location_payload,
+)
 
 
 def _safe_text(value: Any) -> str | None:
@@ -41,6 +47,49 @@ def _normalize_metadata_value(value: Any) -> dict[str, Any]:
         if isinstance(parsed, Mapping):
             return {str(key): val for key, val in parsed.items() if val is not None}
     return {}
+
+
+def _collect_development_id_from_item(item: Mapping[str, Any]) -> str | None:
+    for key in ("metadata", "metadatos", "metadatos_extra"):
+        meta = item.get(key)
+        if isinstance(meta, Mapping):
+            dev_id = extract_development_id(meta)
+            if dev_id:
+                return dev_id
+    return extract_development_id(item)
+
+
+def _location_signature(location: Mapping[str, str | None]) -> tuple[str | None, ...]:
+    return (
+        location.get("estado_cve"),
+        location.get("estado_nombre"),
+        location.get("municipio_cve"),
+        location.get("municipio_nombre"),
+        location.get("colonia"),
+        location.get("codigo_postal"),
+        location.get("desarrollo_id"),
+        location.get("nombre"),
+    )
+
+
+def _sorted_locations(locations: list[dict[str, str | None]]) -> list[dict[str, str | None]]:
+    return sorted(
+        locations,
+        key=lambda value: (
+            value.get("estado_nombre") or "",
+            value.get("municipio_nombre") or "",
+            value.get("desarrollo_nombre") or "",
+        ),
+    )
+
+
+def _location_payload_for_item(
+    location_map: Mapping[str, dict[str, str | None]],
+    item: Mapping[str, Any],
+) -> dict[str, str | None] | None:
+    desarrollo_id = _collect_development_id_from_item(item)
+    location = location_map.get(desarrollo_id) if desarrollo_id else None
+    return format_location_payload(location)
 
 
 def _resolve_property_type(
@@ -87,6 +136,13 @@ async def list_catalog_fraccionamientos(
         include_inactive=include_inactive,
         limit=500,
     )
+    location_resolver = LocationResolver(repo, str(organizacion_id))
+    development_ids: list[str] = []
+    for item in catalog_items:
+        dev_id = _collect_development_id_from_item(item)
+        if dev_id:
+            development_ids.append(dev_id)
+    location_map = await location_resolver.resolve(development_ids)
     lineas = await repo.list_lineas_de_negocio(
         organizacion_id=organizacion_id,
         include_inactive=include_inactive,
@@ -99,6 +155,7 @@ async def list_catalog_fraccionamientos(
     }
     prototipos_by_family: dict[str, list[str]] = {}
     seen_by_family: dict[str, set[str]] = {}
+    family_locations: dict[str, dict[tuple[str | None, ...], dict[str, str | None]]] = defaultdict(dict)
     for item in catalog_items:
         familia_id = item.get("familia_id")
         if not familia_id:
@@ -114,6 +171,12 @@ async def list_catalog_fraccionamientos(
             continue
         seen.add(name)
         prototipos_by_family.setdefault(family_key, []).append(name)
+        desarrollo_id = _collect_development_id_from_item(item)
+        if desarrollo_id:
+            location = location_map.get(desarrollo_id)
+            if location:
+                signature = _location_signature(location)
+                family_locations[family_key][signature] = format_location_payload(location)
 
     rows: list[dict[str, Any]] = []
     for familia in familias:
@@ -125,16 +188,18 @@ async def list_catalog_fraccionamientos(
         )
         linea = linea_names.get(str(familia.get("linea_id"))) or None
         prototipos = prototipos_by_family.get(family_id, [])
-        rows.append(
-            {
-                "nombre": familia.get("nombre") or "",
-                "descripcion": familia.get("descripcion"),
-                "segmento": segmento,
-                "linea": linea,
-                "activo": bool(familia.get("activo")),
-                "prototipos": prototipos,
-            }
-        )
+        row = {
+            "nombre": familia.get("nombre") or "",
+            "descripcion": familia.get("descripcion"),
+            "segmento": segmento,
+            "linea": linea,
+            "activo": bool(familia.get("activo")),
+            "prototipos": prototipos,
+        }
+        location_entries = family_locations.get(family_id)
+        if location_entries:
+            row["ubicaciones"] = _sorted_locations(list(location_entries.values()))
+        rows.append(row)
     rows.sort(key=lambda value: value["nombre"].lower())
     return rows
 
@@ -160,6 +225,13 @@ async def list_catalog_modelos(
         include_inactive=include_inactive,
         limit=limit,
     )
+    location_resolver = LocationResolver(repo, str(organizacion_id))
+    development_ids: list[str] = []
+    for item in catalog_items:
+        dev_id = _collect_development_id_from_item(item)
+        if dev_id:
+            development_ids.append(dev_id)
+    location_map = await location_resolver.resolve(development_ids)
     tipos = await repo.list_propiedad_tipos(organizacion_id=organizacion_id)
 
     linea_lookup = {
@@ -226,21 +298,23 @@ async def list_catalog_modelos(
         tipo_id, tipo_nombre = _resolve_property_type(
             item.get("tipo"), property_types
         )
-        familia_entry["modelos"].append(
-            {
-                "id": str(item.get("id")),
-                "nombre": item.get("nombre"),
-                "slug": item.get("slug"),
-                "unidad": item.get("unidad"),
-                "precio_base": item.get("precio_base"),
-                "moneda": item.get("moneda"),
-                "activo": bool(item.get("activo")),
-                "tipo": tipo_nombre or _safe_text(item.get("tipo")),
-                "tipo_id": tipo_id,
-                "metadata": metadata,
-                "metadata_keys": sorted(metadata.keys()),
-            }
-        )
+        model_entry = {
+            "id": str(item.get("id")),
+            "nombre": item.get("nombre"),
+            "slug": item.get("slug"),
+            "unidad": item.get("unidad"),
+            "precio_base": item.get("precio_base"),
+            "moneda": item.get("moneda"),
+            "activo": bool(item.get("activo")),
+            "tipo": tipo_nombre or _safe_text(item.get("tipo")),
+            "tipo_id": tipo_id,
+            "metadata": metadata,
+            "metadata_keys": sorted(metadata.keys()),
+        }
+        location_payload = _location_payload_for_item(location_map, item)
+        if location_payload:
+            model_entry["ubicacion"] = location_payload
+        familia_entry["modelos"].append(model_entry)
 
     lineas_result: list[dict[str, Any]] = []
     familias_by_line: dict[str, list[dict[str, Any]]] = {}

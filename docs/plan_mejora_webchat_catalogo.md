@@ -9,12 +9,14 @@
 1. Que el asistente deje de agrupar respuestas por línea/familia y, en cambio, atienda la intención real del prospecto usando los tipos de propiedad (`propiedad_tipos`) y los productos concretos almacenados en `catalog_items`.
 2. Que el flujo de detalle respete los metadatos completos (`metadata`, `metadatos`, `metadatos_extra`) y que siempre se informe el tipo de inmueble (terreno, departamento, local, oficina...).
 3. Que las herramientas `list_catalog_modelos`, `list_catalog_fraccionamientos` y `fetch_catalog_item_details` se usen en el orden correcto según la intención y que el conversation log (`logs/catalogo-debug.log`) documente los pasos para poder revisar qué vectores se están retornando.
+4. Que las respuestas incluyan siempre el estado y municipio (y si es posible colonia/código postal) derivados de `propiedad_desarrollos`, de modo que el asistente pueda listar y filtrar el catálogo por ubicación geográfica además de por tipo de inmueble.
 
 ## Pasos propuestos
 1. **Actualizar el prompt:** describir claramente cuándo usar cada herramienta del catálogo, insistir en el tipo de propiedad, pedir que se nombren los campos del `metadata` como `Clave: valor` y explicar que las “líneas”/“familias” sólo sirven de contexto adicional. También se debe explicar que si el prospecto menciona cualquier bien raíz (casas, locales, terrenos, duplex, consultorios, solares, oficinas) se debe invocar `list_catalog_modelos` y filtrar por los tipos adecuados antes de responder.
 2. **Reforzar la documentación interna:** este documento comparte el análisis general y la estrategia; se sugiere revisarlo antes de aplicar cambios en el prompt o en el backend para mantener coherencia.
 3. **Verificar logs:** usar `logs/catalogo-debug.log` para confirmar que `fetch_catalog_item_details` y `list_catalog_fraccionamientos` entregan metadata útil. Si se detectan preguntas sin matches, revisar el audit log (`catalog_embeddings_audit`) y volver a ejecutar la reindexación.
-4. **Regenerar los embeddings de forma automatizada:** el comando de reindexación ya existe y se puede ejecutar con:
+4. **Incluir datos geográficos en las herramientas:** extender `list_catalog_modelos`, `list_catalog_fraccionamientos` y `fetch_catalog_item_details` para añadir un campo `ubicaciones`/`ubicacion` que recoja el estado, municipio, colonia/código postal y el nombre del desarrollo tomado de `propiedad_desarrollos`, usando los mapas de `app/data/geo/municipios`. Así el asistente puede responder con “Terrenos en San Luis Potosí / San Luis Potosí” y filtrar por ubicación cuando el prospecto lo pida.
+5. **Regenerar los embeddings de forma automatizada:** el comando de reindexación ya existe y se puede ejecutar con:
    ```bash
    poetry run python - <<'PY'
    import asyncio
@@ -32,7 +34,7 @@
    PY
    ```
    Ese script toma todos los recursos (`lineas`, `familias`, `modelos` y `catalog_items`) y los vuelve a indexar en la tabla `catalog_document_embeddings`. Debe ejecutarse cada vez que haya cambios en productos o cada vez que el backend vuelva a estar desactualizado.
-5. **Monitorear anomalías:** si el asistente vuelve a preguntar por “lotes” y no responde con modelos de tipo “lote” o “terreno”, revisar el `catalogo-debug.log` y los resultados de `list_catalog_modelos` para detectar si el filtrado por tipo está fallando.
+6. **Monitorear anomalías:** si el asistente vuelve a preguntar por “lotes” y no responde con modelos de tipo “lote” o “terreno”, revisar el `catalogo-debug.log` y los resultados de `list_catalog_modelos` para detectar si el filtrado por tipo está fallando.
 
 ## Referencias rápidas
 - Logs de depuración: `/var/www/talia/logs/catalogo-debug.log`
