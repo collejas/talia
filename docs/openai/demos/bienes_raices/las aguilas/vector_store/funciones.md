@@ -367,6 +367,10 @@
         "type": "string",
         "description": "ID de la organización que se usa en el contexto del chat."
       },
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID de la conversación activa relacionada con la consulta."
+      },
       "query": {
         "type": "string",
         "description": "Nombre del prototipo o fraccionamiento que desean conocer."
@@ -419,10 +423,42 @@
         "minimum": 1,
         "maximum": 20
       }
+  },
+  "required": [
+    "organizacion_id"
+  ],
+  "additionalProperties": false
+}
+
+---
+
+{
+  "name": "list_catalog_modelos",
+  "description": "Entrega la jerarquía completa de líneas, familias y modelos, junto con los tipos de propiedad disponibles.",
+  "strict": false,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "organizacion_id": {
+        "type": "string",
+        "description": "ID de la organización cuyo catálogo se está consultando."
+      },
+      "include_inactive": {
+        "type": "boolean",
+        "description": "Incluir modelos inactivos.",
+        "default": false
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Máximo de registros de catálogo a revisar (1-500).",
+        "minimum": 1,
+        "maximum": 500
+      }
     },
     "required": [
       "organizacion_id"
     ],
     "additionalProperties": false
   }
+}
 }

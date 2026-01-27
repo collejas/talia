@@ -38,3 +38,4 @@
 - Preparar el logger en el backend para que los datos de la vector store se persistan en `logs/catalogo-debug.log` y usar ese archivo para analizar casos donde se devuelven listas vacías.
 - Verificar si la vista `models` tiene middleware que lanza el 500 al remover sin productos y capturar el digest con el error real.
 - Una vez que el logger esté activo, reproducir las preguntas que antes devolvían 
+  respuestas vacías para confirmar que ahora traen la metadata completa del match.

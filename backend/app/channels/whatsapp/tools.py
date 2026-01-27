@@ -18,7 +18,11 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import send_email, storage
 from app.services.calendar import CalendarError
 from app.services.catalog_embeddings import CatalogEmbeddingService
-from app.services.catalog_fraccionamientos import list_catalog_fraccionamientos
+from app.logging.catalog_debug import write_catalog_debug_entry
+from app.services.catalog_fraccionamientos import (
+    list_catalog_fraccionamientos,
+    list_catalog_modelos,
+)
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
 
@@ -172,7 +176,87 @@ async def execute_tool(
             )
         except CRMRepositoryError as exc:
             raise ValueError(str(exc)) from exc
+        conversation_id_value = (
+            str(context.conversation_id) if context and context.conversation_id else None
+        )
+        write_catalog_debug_entry(
+            {
+                "source": "whatsapp.list_catalog_fraccionamientos",
+                "conversation_id": conversation_id_value,
+                "organizacion_id": str(org_uuid),
+                "include_inactive": include_inactive,
+                "prototipos_limit": prototipos_limit,
+                "row_count": len(rows),
+                "fraccionamientos": [
+                    {
+                        "nombre": row.get("nombre"),
+                        "segmento": row.get("segmento"),
+                        "linea": row.get("linea"),
+                        "prototipos": row.get("prototipos"),
+                    }
+                    for row in rows
+                ],
+            }
+        )
         return {"status": "ok", "fraccionamientos": rows}
+
+    if func == "list_catalog_modelos":
+        org_value = arguments.get("organizacion_id")
+        if not org_value:
+            contact = await _resolve_contact(context.contact_id)
+            org_value = webchat_service._extract_contact_org(contact)
+        if not org_value:
+            raise ValueError("organizacion_id requerido para list_catalog_modelos")
+        resolved = webchat_service._resolve_org_uuid(org_value)
+        if not resolved:
+            raise ValueError("organizacion_id inválido")
+        org_uuid = UUID(resolved)
+        include_inactive_raw = arguments.get("include_inactive")
+        if isinstance(include_inactive_raw, str):
+            include_inactive = include_inactive_raw.strip().lower() in {
+                "1",
+                "true",
+                "sí",
+                "si",
+                "yes",
+            }
+        else:
+            include_inactive = bool(include_inactive_raw)
+        limit_raw = arguments.get("limit")
+        try:
+            limit = int(limit_raw)
+        except (TypeError, ValueError):
+            limit = 500
+        limit = max(1, min(500, limit))
+        repo = CRMRepository()
+        try:
+            result = await list_catalog_modelos(
+                repo,
+                organizacion_id=org_uuid,
+                include_inactive=include_inactive,
+                limit=limit,
+            )
+        except CRMRepositoryError as exc:
+            raise ValueError(str(exc)) from exc
+        conversation_id_value = (
+            str(context.conversation_id) if context and context.conversation_id else None
+        )
+        write_catalog_debug_entry(
+            {
+                "source": "whatsapp.list_catalog_modelos",
+                "conversation_id": conversation_id_value,
+                "organizacion_id": str(org_uuid),
+                "include_inactive": include_inactive,
+                "limit": limit,
+                "familias_total": result.get("familias_total"),
+                "modelos_total": result.get("modelos_total"),
+                "lineas": [
+                    {"nombre": linea.get("nombre"), "familias": len(linea.get("familias") or [])}
+                    for linea in result.get("lineas", [])
+                ],
+            }
+        )
+        return {"status": "ok", **result}
 
     if func == "fetch_catalog_item_details":
         org_value = arguments.get("organizacion_id")
@@ -210,6 +294,18 @@ async def execute_tool(
         except CRMRepositoryError as exc:
             raise ValueError(str(exc)) from exc
 
+        conversation_id_value = (
+            str(context.conversation_id) if context and context.conversation_id else None
+        )
+        log_base = {
+            "source": "whatsapp.fetch_catalog_item_details",
+            "conversation_id": conversation_id_value,
+            "organizacion_id": str(org_uuid),
+            "query": query,
+            "detail_level": detail_level,
+            "limit": limit,
+        }
+        matches_log: list[dict[str, Any]] = []
         items: list[dict[str, Any]] = []
         for match in matches:
             slug = match.metadata.get("slug")
@@ -255,6 +351,18 @@ async def execute_tool(
                     if isinstance(metadata_value, Mapping)
                     else match.metadata
                 )
+            if isinstance(metadata, Mapping):
+                metadata = {str(key): val for key, val in metadata.items()}
+            metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
+            matches_log.append(
+                {
+                    "slug": slug,
+                    "similarity": match.similarity,
+                    "metadata_keys": metadata_keys,
+                    "metadata": metadata,
+                    "fallback_used": item_data is not None,
+                }
+            )
             items.append(
                 {
                     "nombre": item_data.get("nombre") if item_data else match.metadata.get("nombre"),
@@ -268,6 +376,14 @@ async def execute_tool(
                     "similarity": match.similarity,
                 }
             )
+        write_catalog_debug_entry(
+            {
+                **log_base,
+                "match_count": len(matches),
+                "items_returned": len(items),
+                "matches": matches_log,
+            }
+        )
         return {
             "status": "ok",
             "items": items,

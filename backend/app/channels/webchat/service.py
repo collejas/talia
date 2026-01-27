@@ -49,8 +49,12 @@ from app.services.catalog_context import (
     build_catalog_context,
 )
 from app.services.catalog_embeddings import CatalogEmbeddingService
-from app.services.catalog_fraccionamientos import list_catalog_fraccionamientos
+from app.services.catalog_fraccionamientos import (
+    list_catalog_fraccionamientos,
+    list_catalog_modelos,
+)
 from app.services.storage import StorageError
+from app.logging.catalog_debug import write_catalog_debug_entry
 
 from . import schemas
 
@@ -77,6 +81,33 @@ TEXT_EXTENSION_WHITELIST = {
     ".yml",
     ".log",
 }
+
+PROPERTY_INTENT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("terreno", "terrenos o lotes"),
+    ("lote", "terrenos o lotes"),
+    ("solar", "terrenos o solares"),
+    ("parcela", "terrenos o solares"),
+    ("predio", "terrenos o solares"),
+    ("local", "locales comerciales"),
+    ("oficina", "oficinas"),
+    ("consultorio", "consultorios"),
+    ("condominio", "desarrollos residenciales o departamentos"),
+    ("casa", "casas"),
+    ("departamento", "departamentos"),
+    ("duplex", "dúplex"),
+    ("propiedad", "propiedades"),
+    ("fraccionamiento", "fraccionamientos o desarrollos"),
+)
+
+
+def _detect_property_intent(text: str | None) -> str | None:
+    if not text:
+        return None
+    normalized = text.lower()
+    for keyword, label in PROPERTY_INTENT_KEYWORDS:
+        if keyword in normalized:
+            return label
+    return None
 
 CALENDAR_MAX_WINDOW_DAYS = 60
 
@@ -2421,6 +2452,27 @@ async def _run_assistant_turn(
                 ],
             }
         )
+    property_intent = _detect_property_intent(user_message.content)
+    if property_intent:
+        org_label = organizacion_id or "la organización actual"
+        reminder_text = (
+            "Recordatorio operativo: el visitante está buscando "
+            f"{property_intent}. Antes de responder, ejecuta list_catalog_modelos "
+            f"con organizacion_id '{org_label}', usa la lista de propiedad_tipos "
+            "para identificar si es un lote, terreno, local, oficina, departamento, etc., "
+            "y describe los modelos coincidentes con su tipo explícito."
+        )
+        base_input.append(
+            {
+                "role": "developer",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": reminder_text,
+                    }
+                ],
+            }
+        )
     base_input.append(
         {
             "role": "user",
@@ -2942,7 +2994,87 @@ async def _execute_function_call(
             )
         except CRMRepositoryError as exc:
             raise ValueError(str(exc)) from exc
+        conversation_id_value = (
+            str(context.conversation_id) if context and context.conversation_id else None
+        )
+        write_catalog_debug_entry(
+            {
+                "source": "webchat.list_catalog_fraccionamientos",
+                "conversation_id": conversation_id_value,
+                "organizacion_id": str(org_uuid),
+                "include_inactive": include_inactive,
+                "prototipos_limit": prototipos_limit,
+                "row_count": len(rows),
+                "fraccionamientos": [
+                    {
+                        "nombre": row.get("nombre"),
+                        "segmento": row.get("segmento"),
+                        "linea": row.get("linea"),
+                        "prototipos": row.get("prototipos"),
+                    }
+                    for row in rows
+                ],
+            }
+        )
         return {"status": "ok", "fraccionamientos": rows}
+
+    if name == "list_catalog_modelos":
+        org_value = arguments.get("organizacion_id")
+        if not org_value:
+            contact = await _resolve_contact(context.contact_id)
+            org_value = _extract_contact_org(contact)
+        if not org_value:
+            raise ValueError("organizacion_id requerido para list_catalog_modelos")
+        resolved = _resolve_org_uuid(org_value)
+        if not resolved:
+            raise ValueError("organizacion_id inválido")
+        org_uuid = UUID(resolved)
+        include_inactive_raw = arguments.get("include_inactive")
+        if isinstance(include_inactive_raw, str):
+            include_inactive = include_inactive_raw.strip().lower() in {
+                "1",
+                "true",
+                "sí",
+                "si",
+                "yes",
+            }
+        else:
+            include_inactive = bool(include_inactive_raw)
+        limit_raw = arguments.get("limit")
+        try:
+            limit = int(limit_raw)
+        except (TypeError, ValueError):
+            limit = 500
+        limit = max(1, min(500, limit))
+        repo = CRMRepository()
+        try:
+            result = await list_catalog_modelos(
+                repo,
+                organizacion_id=org_uuid,
+                include_inactive=include_inactive,
+                limit=limit,
+            )
+        except CRMRepositoryError as exc:
+            raise ValueError(str(exc)) from exc
+        conversation_id_value = (
+            str(context.conversation_id) if context and context.conversation_id else None
+        )
+        write_catalog_debug_entry(
+            {
+                "source": "webchat.list_catalog_modelos",
+                "conversation_id": conversation_id_value,
+                "organizacion_id": str(org_uuid),
+                "include_inactive": include_inactive,
+                "limit": limit,
+                "familias_total": result.get("familias_total"),
+                "modelos_total": result.get("modelos_total"),
+                "lineas": [
+                    {"nombre": linea.get("nombre"), "familias": len(linea.get("familias") or [])}
+                    for linea in result.get("lineas", [])
+                ],
+            }
+        )
+        return {"status": "ok", **result}
 
     if name == "fetch_catalog_item_details":
         org_value = arguments.get("organizacion_id")
@@ -2980,6 +3112,18 @@ async def _execute_function_call(
         except CRMRepositoryError as exc:
             raise ValueError(str(exc)) from exc
 
+        conversation_id_value = (
+            str(context.conversation_id) if context and context.conversation_id else None
+        )
+        log_base = {
+            "source": "webchat.fetch_catalog_item_details",
+            "conversation_id": conversation_id_value,
+            "organizacion_id": str(org_uuid),
+            "query": query,
+            "detail_level": detail_level,
+            "limit": limit,
+        }
+        matches_log: list[dict[str, Any]] = []
         items: list[dict[str, Any]] = []
         for match in matches:
             slug = match.metadata.get("slug")
@@ -3019,19 +3163,47 @@ async def _execute_function_call(
             metadata = merged_metadata or (
                 metadata_value if isinstance(metadata_value, Mapping) else match.metadata
             )
+            if isinstance(metadata, Mapping):
+                metadata = {str(key): val for key, val in metadata.items()}
+            metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
+            matches_log.append(
+                {
+                    "slug": slug,
+                    "similarity": match.similarity,
+                    "metadata_keys": metadata_keys,
+                    "metadata": metadata,
+                    "fallback_used": item_data is not None,
+                }
+            )
             items.append(
                 {
-                    "nombre": item_data.get("nombre") if item_data else match.metadata.get("nombre"),
+                    "nombre": item_data.get("nombre")
+                    if item_data
+                    else match.metadata.get("nombre"),
                     "slug": item_data.get("slug") if item_data else match.metadata.get("slug"),
                     "tipo": item_data.get("tipo") if item_data else match.metadata.get("tipo"),
                     "unidad": item_data.get("unidad") if item_data else None,
-                    "precio_base": item_data.get("precio_base") if item_data else None,
-                    "moneda": item_data.get("moneda") if item_data else match.metadata.get("moneda"),
-                    "activo": item_data.get("activo") if item_data else match.metadata.get("activo"),
+                    "precio_base": item_data.get("precio_base")
+                    if item_data
+                    else None,
+                    "moneda": item_data.get("moneda")
+                    if item_data
+                    else match.metadata.get("moneda"),
+                    "activo": item_data.get("activo")
+                    if item_data
+                    else match.metadata.get("activo"),
                     "metadata": metadata,
                     "similarity": match.similarity,
                 }
             )
+        write_catalog_debug_entry(
+            {
+                **log_base,
+                "match_count": len(matches),
+                "items_returned": len(items),
+                "matches": matches_log,
+            }
+        )
         return {
             "status": "ok",
             "items": items,

@@ -68,12 +68,16 @@ from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
 from app.services.brevo import process_brevo_events
 from app.services.catalog_embeddings import CatalogEmbeddingService
-from app.services.catalog_fraccionamientos import list_catalog_fraccionamientos as list_fraccionamientos
+from app.services.catalog_fraccionamientos import (
+    list_catalog_fraccionamientos as list_fraccionamientos,
+    list_catalog_modelos,
+)
 from app.services.demografia_service import DemografiaServiceError
 from app.services.metrics import metrics as contact_metrics
 from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
+from app.logging.catalog_debug import write_catalog_debug_entry
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
@@ -219,6 +223,10 @@ MAX_PROSPECCION_BATCH = 500
 class CatalogItemDetailsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     organizacion_id: str = Field(..., min_length=1, description="UUID de la organización.")
+    conversacion_id: str | None = Field(
+        None,
+        description="Identificador opcional de la conversación activa.",
+    )
     query: str = Field(..., min_length=1, description="Nombre del prototipo o fraccionamiento.")
     detail_level: Literal["metadata", "overview"] = Field(
         "metadata", description="Nivel de detalle requerido (metadata vs overview)."
@@ -810,12 +818,31 @@ async def fetch_catalog_item_details(
             detail="No se pudo consultar la vector store del catálogo.",
         ) from exc
 
+    log_base = {
+        "source": "api.fetch_catalog_item_details",
+        "conversation_id": payload.conversacion_id,
+        "organizacion_id": str(organizacion_uuid),
+        "query": payload.query,
+        "detail_level": payload.detail_level,
+        "limit": payload.limit,
+    }
+
     if not matches:
+        write_catalog_debug_entry(
+            {
+                **log_base,
+                "match_count": 0,
+                "items_returned": 0,
+                "matches": [],
+                "error": "no_matches",
+            }
+        )
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
             detail="No se encontraron coincidencias para la consulta.",
         )
 
+    matches_log: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
     for match in matches:
         slug = match.metadata.get("slug")
@@ -855,6 +882,18 @@ async def fetch_catalog_item_details(
         metadata = merged_metadata or (
             metadata_value if isinstance(metadata_value, Mapping) else match.metadata
         )
+        if isinstance(metadata, Mapping):
+            metadata = {str(key): val for key, val in metadata.items()}
+        metadata_keys = list(metadata.keys()) if isinstance(metadata, Mapping) else []
+        matches_log.append(
+            {
+                "slug": slug,
+                "similarity": match.similarity,
+                "metadata_keys": metadata_keys,
+                "metadata": metadata,
+                "fallback_used": item_data is not None,
+            }
+        )
         items.append(
             {
                 "nombre": item_data.get("nombre") if item_data else match.metadata.get("nombre"),
@@ -868,6 +907,15 @@ async def fetch_catalog_item_details(
                 "similarity": match.similarity,
             }
         )
+
+    write_catalog_debug_entry(
+        {
+            **log_base,
+            "match_count": len(matches),
+            "items_returned": len(items),
+            "matches": matches_log,
+        }
+    )
 
     return {
         "items": items,
@@ -6277,7 +6325,55 @@ async def catalog_fraccionamientos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    write_catalog_debug_entry(
+        {
+            "source": "api.list_catalog_fraccionamientos",
+            "organizacion_id": str(organizacion_id),
+            "include_inactive": include_inactive,
+            "prototipos_limit": prototipos_limit,
+            "row_count": len(rows),
+            "fraccionamientos": [
+                {
+                    "nombre": row.get("nombre"),
+                    "segmento": row.get("segmento"),
+                    "linea": row.get("linea"),
+                    "prototipos": row.get("prototipos"),
+                }
+                for row in rows
+            ],
+        }
+    )
     return [CRMCatalogFraccionamiento.model_validate(row) for row in rows]
+
+
+@router.get("/catalog/modelos")
+async def catalog_modelos(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    include_inactive: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+) -> dict[str, Any]:
+    try:
+        result = await list_catalog_modelos(
+            repo,
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    write_catalog_debug_entry(
+        {
+            "source": "api.catalog_modelos",
+            "organizacion_id": str(organizacion_id),
+            "include_inactive": include_inactive,
+            "limit": limit,
+            "familias_total": result.get("familias_total"),
+            "modelos_total": result.get("modelos_total"),
+        }
+    )
+    return result
 
 
 @router.get("/productos/lineas", response_model=list[CRMLineaDeNegocio])
@@ -12607,6 +12703,12 @@ async def importar_propiedades_csv(
 
     try:
         result = await _process_import_request(payload, repo, organizacion_id)
+    except ValueError as exc:
+        import_debug_logger.warning(
+            "import_csv.invalid_tipo",
+            extra={"file": file_name, "error": str(exc)},
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except CRMRepositoryError as exc:
         import_debug_logger.error(
             "import_csv.repository_error",
@@ -13573,9 +13675,22 @@ def _resolve_tipo_id(
             raise ValueError("El nombre del tipo no puede estar vacío.")
         match = lookup.get(key)
         if not match:
+            match = _find_tipo_alias(key, lookup)
+        if not match:
             raise ValueError(f"No existe el tipo de propiedad '{tipo_nombre}'.")
         return match
     raise ValueError("Cada unidad requiere un tipo_id o tipo_nombre.")
+
+
+def _find_tipo_alias(normalized_value: str, lookup: dict[str, str]) -> str | None:
+    if not normalized_value:
+        return None
+    for alias, tipo_id in sorted(lookup.items(), key=lambda pair: -len(pair[0])):
+        if not alias:
+            continue
+        if alias in normalized_value:
+            return tipo_id
+    return None
 
 
 async def _build_tipo_lookup(repo: CRMRepository, organizacion_id: UUID) -> dict[str, str]:
