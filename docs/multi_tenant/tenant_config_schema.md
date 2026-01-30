@@ -96,26 +96,26 @@ Convención: `canal/proveedor.nombre` o `proveedor.nombre`.
 Ejemplos:
 
 ### OpenAI
-- `openai.api_key` (nivel B)
+- `openai.api_key` (nivel B, POR_TENANT)
 
 ### Twilio
-- `twilio.account_sid` (nivel A)
-- `twilio.auth_token` (nivel B)
+- `twilio.account_sid` (nivel A, POR_TENANT)
+- `twilio.auth_token` (nivel B, POR_TENANT)
 
 ### Messenger / Meta
-- `meta.messenger.page_access_token` (nivel B)
-- `meta.messenger.verify_token` (nivel A/B)
-- `meta.messenger.app_secret` (nivel B)
+- `meta.messenger.page_access_token` (nivel B, POR_TENANT)
+- `meta.messenger.verify_token` (nivel A/B, POR_TENANT)
+- `meta.messenger.app_secret` (nivel B, POR_TENANT)
 
 ### Correo/Calendario
-- `mail.username` (nivel A)
-- `mail.password` (nivel B)
-- `calendar.username` (nivel A)
-- `calendar.password` (nivel B)
+- `mail.username` (nivel A, POR_TENANT)
+- `mail.password` (nivel B, POR_TENANT)
+- `calendar.username` (nivel A, POR_TENANT)
+- `calendar.password` (nivel B, POR_TENANT)
 
 ### Google / Places / OAuth
-- `google.places_api_key` (nivel B)
-- `google.oauth.client_secret` (nivel B)
+- `google.places_api_key` (nivel B, POR_TENANT)
+- `google.oauth.client_secret` (nivel B, POR_TENANT)
 
 ### DENUE
 - `denue.token` (nivel A)

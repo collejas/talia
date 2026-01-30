@@ -19,6 +19,18 @@ Objetivo: decidir qué valores deben quedarse globales en `.env` (infra/runtime)
 
 - [ ] (pendiente) Notas y decisiones tomadas.
 
+## Decisiones confirmadas (producto)
+
+Se decidió que **todos** estos bloques son **POR_TENANT** (se guardan en BD por `organizacion_id`):
+- [x] OpenAI `api_key`
+- [x] Twilio (cuenta + auth token)
+- [x] Meta/Messenger (app secret + page token + verify token)
+- [x] Correo (SMTP/IMAP credenciales)
+- [x] Calendario (usuario/contraseña/URLs)
+- [x] Google Places / OAuth client secret
+
+Implicación: el backend mantiene solo master key(s) globales para cifrar/descifrar, pero los valores viven por tenant en `public.secretos`.
+
 ## Inventario actual (extraído de archivos)
 
 ### `backend/.env` (nombres detectados)

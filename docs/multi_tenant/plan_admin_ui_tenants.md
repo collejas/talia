@@ -22,6 +22,7 @@ Objetivo: que un **platform admin** pueda crear/editar/eliminar tenants y config
 - [ ] Listar `organizaciones` (nombre, id, estado_onboarding, creado_en)
 - [ ] Botón “Crear tenant”
 - [ ] Acciones: Editar / Desactivar / Eliminar (si se permite)
+- [ ] Link a detalle: `/settings/tenants/{tenantId}`
 
 ### B) Detalle de tenant
 

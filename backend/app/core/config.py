@@ -95,6 +95,16 @@ class Settings(BaseSettings):
     )
     supabase_jwt_secret: str | None = None
     supabase_legacy_jwt_secret: str | None = None
+    secrets_master_key: str | None = Field(
+        default=None,
+        description="Master key (base64-url o hex) para cifrar secretos en `public.secretos`.",
+        validation_alias=AliasChoices("TALIA_SECRETS_MASTER_KEY", "SECRETS_MASTER_KEY"),
+    )
+    secrets_master_key_high: str | None = Field(
+        default=None,
+        description="Master key secundaria (base64-url o hex) para secretos de seguridad extendida.",
+        validation_alias=AliasChoices("TALIA_SECRETS_MASTER_KEY_HIGH", "SECRETS_MASTER_KEY_HIGH"),
+    )
     cliente_portal_base_url: str | None = Field(
         default=None,
         description="URL base pública que usará el enlace del portal de clientes.",

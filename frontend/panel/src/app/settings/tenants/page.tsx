@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
@@ -98,13 +99,14 @@ export default async function TenantsSettingsPage() {
                       <TableHead className="hidden md:table-cell">Dominio</TableHead>
                       <TableHead className="hidden lg:table-cell">Onboarding</TableHead>
                       <TableHead className="hidden lg:table-cell">Activo</TableHead>
+                      <TableHead>Acciones</TableHead>
                       <TableHead className="hidden xl:table-cell">ID</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                           No hay tenants registrados (o no tienes permiso de platform admin).
                         </TableCell>
                       </TableRow>
@@ -118,6 +120,11 @@ export default async function TenantsSettingsPage() {
                           </TableCell>
                           <TableCell className="hidden lg:table-cell">
                             {tenant.activo === null || tenant.activo === undefined ? "—" : tenant.activo ? "Sí" : "No"}
+                          </TableCell>
+                          <TableCell>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={`/settings/tenants/${tenant.id}`}>Configurar</Link>
+                            </Button>
                           </TableCell>
                           <TableCell className="hidden xl:table-cell font-mono text-xs">{tenant.id}</TableCell>
                         </TableRow>
@@ -133,4 +140,3 @@ export default async function TenantsSettingsPage() {
     </AppViewLayout>
   )
 }
-

@@ -95,6 +95,109 @@ class PlatformRepository:
             raise PlatformRepositoryError("route_create_failed")
         return data[0]
 
+    async def delete_channel_route(self, *, organizacion_id: UUID, route_id: UUID) -> None:
+        await self._rest(
+            "DELETE",
+            "/rest/v1/organizacion_rutas_canal",
+            params={"organizacion_id": f"eq.{organizacion_id}", "id": f"eq.{route_id}"},
+        )
+
+    async def get_organizacion_config(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "select": "id,config",
+            "id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            return None
+        config = row.get("config")
+        return config if isinstance(config, dict) else ({} if config is None else None)
+
+    async def set_organizacion_config(
+        self, *, organizacion_id: UUID, config: dict[str, Any], updated_by: UUID | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"config": config}
+        if updated_by:
+            payload["actualizado_por"] = str(updated_by)
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/organizaciones",
+            params={"id": f"eq.{organizacion_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("organizacion_update_failed")
+        return data[0]
+
+    async def list_secret_metadata(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,organizacion_id,clave,etiqueta,version,creado_por,actualizado_por,creado_en,actualizado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "actualizado_en.desc",
+        }
+        data = await self._rest("GET", "/rest/v1/secretos", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("secretos_invalid_response")
+        return data
+
+    async def get_secret_row(self, *, organizacion_id: UUID, clave: str) -> dict[str, Any] | None:
+        params = {
+            "select": "id,organizacion_id,clave,version,etiqueta,nonce,valor_cifrado,creado_en,actualizado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "clave": f"eq.{clave}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/secretos", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def upsert_secret(
+        self,
+        *,
+        organizacion_id: UUID,
+        clave: str,
+        valor_cifrado: str,
+        nonce: str,
+        etiqueta: str | None,
+        version: int,
+        updated_by: UUID | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "organizacion_id": str(organizacion_id),
+            "clave": clave,
+            "valor_cifrado": valor_cifrado,
+            "nonce": nonce,
+            "etiqueta": etiqueta,
+            "version": version,
+        }
+        if updated_by:
+            payload["actualizado_por"] = str(updated_by)
+            payload["creado_por"] = str(updated_by)
+        data = await self._rest(
+            "POST",
+            "/rest/v1/secretos",
+            params={"on_conflict": "organizacion_id,clave"},
+            json=payload,
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("secret_upsert_failed")
+        return data[0]
+
+    async def delete_secret(self, *, organizacion_id: UUID, clave: str) -> None:
+        await self._rest(
+            "DELETE",
+            "/rest/v1/secretos",
+            params={"organizacion_id": f"eq.{organizacion_id}", "clave": f"eq.{clave}"},
+        )
+
     async def resolve_org_for_route(self, *, canal: str, clave: str) -> str | None:
         params = {
             "select": "organizacion_id",
@@ -138,4 +241,3 @@ class PlatformRepository:
         if resp.status_code == 204:
             return None
         return resp.json()
-

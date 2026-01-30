@@ -16,6 +16,7 @@
 ## Observaciones
 
 - [ ] (pendiente) Primer arranque / notas de implementación.
+- [ ] Decisión: proveedores/credenciales son POR_TENANT (OpenAI/Twilio/Meta/Mail/Calendar/Google).
 
 ## Objetivo
 Registrar nuevos tenants (tabla `public.organizaciones`) y configurar el **routing** de canales (por ejemplo `tenant_alias` del widget webchat) desde una vista/admin interna, sin añadir un bloque nuevo de variables por cada cliente en `.env`.
@@ -71,6 +72,7 @@ Luego el runtime migra a leer “settings por org” desde BD.
 - Vista: `/settings/tenants`
   - Lista tenants.
   - Crea tenant y opcionalmente registra `webchat_alias` como ruta `canal=webchat`.
+  - Detalle: `/settings/tenants/{tenantId}` para Config/Routing/Secretos.
 
 ### UI propuesta (iteración siguiente)
 
@@ -94,6 +96,10 @@ on conflict (user_id) do nothing;
 ```
 
 3. Entra al panel y abre `/settings/tenants`.
+
+4. Configura master keys para secretos (backend) y reinicia el API:
+   - Variables: `TALIA_SECRETS_MASTER_KEY`, `TALIA_SECRETS_MASTER_KEY_HIGH`
+   - Ver: `docs/multi_tenant/secrets_security.md`
 
 ## Nota sobre variables `.env`
 
@@ -124,3 +130,12 @@ Se reservan para defaults globales o fallback, no para onboarding por cliente.
    - ping webhook endpoints
    - prueba de envío (WhatsApp/Messenger) si aplica
    - prueba widget (webchat)
+
+## Smoke test (manual) — para verificar que quedó bien
+
+- [ ] Crear tenant en `/settings/tenants`
+- [ ] Abrir `/settings/tenants/{tenantId}`
+- [ ] Routing: crear y borrar una ruta
+- [ ] Config: guardar un JSON simple (ej. `{ "features": { "webchat": { "enabled": true } } }`)
+- [ ] Secretos: guardar `openai.api_key` (tier B), confirmar que solo aparece metadata, y borrar
+- [ ] Validación: `POST /api/admin/tenants/{tenantId}/validate` y revisar `missing_*`

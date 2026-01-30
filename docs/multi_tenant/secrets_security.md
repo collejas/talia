@@ -16,6 +16,32 @@ Objetivo: permitir guardar tokens/llaves/contraseñas por tenant en la BD para o
 
 - [ ] (pendiente) Decisiones finales sobre algoritmo, rotación y quién administra.
 
+## Configuración requerida (backend)
+
+Estos valores siguen siendo **globales** (no por tenant) y se quedan en `backend/.env`:
+- `TALIA_SECRETS_MASTER_KEY` (tier A)
+- `TALIA_SECRETS_MASTER_KEY_HIGH` (tier B)
+
+Formato soportado:
+- base64-url sin padding (recomendado), o
+- hex (64 chars)
+
+Ejemplos para generar (elige uno):
+
+```bash
+# base64-url (32 bytes)
+python - <<'PY'
+import base64, os
+print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('='))
+PY
+
+# hex (32 bytes)
+python - <<'PY'
+import os
+print(os.urandom(32).hex())
+PY
+```
+
 ## ¿Es seguro guardar secretos en BD?
 
 Sí, puede ser seguro si cumples:
