@@ -52,6 +52,8 @@ const MODELO_FORM_DEFAULTS: ModeloFormValues = {
 
 type Feedback = { type: "success" | "error"; message: string }
 type PendingAction = "save" | "delete" | "bulk-delete"
+type DeleteModeloFailedResult = { id: string; result: { ok: false; error: string } }
+type DeleteModeloSuccessResult = { id: string; result: { ok: true } }
 
 const formatter = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -278,7 +280,7 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
           const results = await Promise.allSettled(operations)
           const deletedIds = results
             .filter(
-              (res): res is PromiseFulfilledResult<{ id: string; result: DeleteModeloResult }> =>
+              (res): res is PromiseFulfilledResult<DeleteModeloSuccessResult> =>
                 res.status === "fulfilled" && res.value.result.ok,
             )
             .map((res) => res.value.id)
@@ -295,8 +297,8 @@ export function ModelosView({ modelos, familias, lineas }: ModelosViewProps) {
             setListFeedback({ type: "error", message })
           } else {
             const failed = results.find(
-              (res): res is PromiseFulfilledResult<{ id: string; result: DeleteModeloResult }> =>
-                res.status === "fulfilled" && !res.value.result.ok,
+              (res): res is PromiseFulfilledResult<DeleteModeloFailedResult> =>
+                res.status === "fulfilled" && res.value.result.ok === false,
             )
             if (failed) {
               const message = formatDeleteErrorMessage(failed.value.result.error)

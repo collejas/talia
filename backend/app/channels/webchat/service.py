@@ -1277,7 +1277,7 @@ def _resolve_alias_to_org(alias: str | None) -> str | None:
     return alias_map.get(alias_key.lower())
 
 
-def resolve_webchat_organizacion(
+async def resolve_webchat_organizacion(
     metadata: dict[str, Any] | None,
     contact: dict[str, Any] | None = None,
 ) -> str | None:
@@ -1289,13 +1289,31 @@ def resolve_webchat_organizacion(
     if metadata_org:
         return metadata_org
     alias_value = _extract_metadata_alias(metadata)
-    alias_org = _resolve_alias_to_org(alias_value)
-    if alias_org:
-        return alias_org
+    if alias_value:
+        try:
+            from app.services.channel_routing import resolve_organizacion_id
+
+            resolved = await resolve_organizacion_id(canal="webchat", clave=alias_value)
+        except Exception:
+            resolved = None
+        if resolved:
+            return resolved
+        alias_org = _resolve_alias_to_org(alias_value)
+        if alias_org:
+            return alias_org
     fallback_alias = get_webchat_tenant_alias()
-    alias_org = _resolve_alias_to_org(fallback_alias)
-    if alias_org:
-        return alias_org
+    if fallback_alias:
+        try:
+            from app.services.channel_routing import resolve_organizacion_id
+
+            resolved = await resolve_organizacion_id(canal="webchat", clave=fallback_alias)
+        except Exception:
+            resolved = None
+        if resolved:
+            return resolved
+        alias_org = _resolve_alias_to_org(fallback_alias)
+        if alias_org:
+            return alias_org
     return _safe_str_value(settings.webchat_default_organizacion_id)
 
 
@@ -1785,7 +1803,7 @@ async def _register_webchat_visit(
             cvegeo=cvegeo,
             referrer=referrer,
             landing_url=landing_url,
-            organizacion_id=resolve_webchat_organizacion(
+            organizacion_id=await resolve_webchat_organizacion(
                 client_meta,
                 contact=resolved_contact,
             ),
@@ -1849,7 +1867,7 @@ async def handle_message(
 
     metadata_dict = payload.metadata if isinstance(payload.metadata, dict) else None
     attachments_payload = payload.attachments or []
-    organizacion_hint = resolve_webchat_organizacion(metadata_dict)
+    organizacion_hint = await resolve_webchat_organizacion(metadata_dict)
 
     try:
         registration = await storage.register_webchat_message(
@@ -1878,7 +1896,7 @@ async def handle_message(
         raise HTTPException(status_code=500, detail="No se pudo identificar la conversación")
 
     try:
-        conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
+    conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
     except storage.StorageError as exc:
         logger.exception(
             "webchat.conversation_lookup_failed",
@@ -1930,7 +1948,7 @@ async def handle_message(
         )
     contact: dict[str, Any] | None = await _resolve_contact(str(contact_id))
     resolved_organizacion_id = (
-        resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
+        await resolve_webchat_organizacion(metadata_dict, contact=contact) or organizacion_hint
     )
 
     contact_id_value = await _register_webchat_visit(

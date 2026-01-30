@@ -115,6 +115,7 @@ const NAVIGATION = {
         { title: "Empleados", url: "/settings/empleados", icon: IconUsersGroup },
         { title: "Departamentos", url: "/settings/empleados/departamentos", icon: IconHierarchy },
         { title: "Puestos", url: "/settings/empleados/puestos", icon: IconBriefcase },
+        { title: "Tenants", url: "/settings/tenants", icon: IconDatabase },
         {
           title: "Plantillas de contacto",
           url: "/settings/prospeccion/plantillas",

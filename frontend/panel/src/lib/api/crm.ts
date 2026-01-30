@@ -12,7 +12,7 @@ type CrmFetchOptions = {
   searchParams?: Record<string, string | number | boolean | null | undefined>;
   body?: unknown;
   headers?: Record<string, string | undefined>;
-  organizacionId?: string;
+  organizacionId?: string | null;
   usuarioId?: string | null;
   withUserToken?: boolean;
 };
@@ -53,8 +53,9 @@ export async function callCrmApi<T = unknown>(
     };
   }
 
-  const organizacionId = options.organizacionId ?? resolveDefaultOrganizacionId();
   const usuarioId = options.usuarioId ?? (await resolveCurrentUsuarioId());
+  const resolvedOrganizacionId =
+    options.organizacionId === undefined ? resolveDefaultOrganizacionId() : options.organizacionId;
 
   const sanitizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = new URL(`${baseUrl}${sanitizedPath}`);
@@ -69,9 +70,11 @@ export async function callCrmApi<T = unknown>(
   const headers: Record<string, string> = {
     Accept: "application/json",
     Authorization: `Bearer ${token}`,
-    "X-Organizacion-Id": organizacionId,
     ...(options.headers ?? {}),
   };
+  if (resolvedOrganizacionId) {
+    headers["X-Organizacion-Id"] = resolvedOrganizacionId;
+  }
   if (usuarioId) {
     headers["X-Usuario-Id"] = usuarioId;
   }
