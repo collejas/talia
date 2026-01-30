@@ -1,0 +1,90 @@
+# Plan: vista admin `/settings/tenants` (alta/edición de tenants + variables)
+
+Objetivo: que un **platform admin** pueda crear/editar/eliminar tenants y configurar routing, config y secretos desde UI, sin tocar `.env` por cliente.
+
+## Checklist
+
+- [ ] Confirmar roles: `platform_admin` vs `tenant_admin` (por ahora solo platform admin)
+- [ ] Definir tabs y campos de la UI (General/Routing/Config/Secretos/Validación)
+- [ ] Conectar UI → endpoints `/api/admin/*`
+- [ ] Implementar “no mostrar secretos” (solo set/rotate)
+- [ ] Agregar validaciones por campo (regex + required)
+- [ ] Agregar botón “Probar configuración” por canal
+- [ ] Registrar auditoría (quién cambió qué)
+
+## Observaciones
+
+- [ ] (pendiente) Notas de implementación/decisiones de UI.
+
+## 1) Pantallas / tabs
+
+### A) Lista de tenants
+- [ ] Listar `organizaciones` (nombre, id, estado_onboarding, creado_en)
+- [ ] Botón “Crear tenant”
+- [ ] Acciones: Editar / Desactivar / Eliminar (si se permite)
+
+### B) Detalle de tenant
+
+Tab **General** (`organizaciones`)
+- [ ] `nombre`
+- [ ] `dominio` (si aplica)
+- [ ] `estado_onboarding` (enum/flag)
+- [ ] Notas internas (opcional)
+
+Tab **Routing** (`organizacion_rutas_canal`)
+- [ ] Webchat alias (`canal=webchat`)
+- [ ] WhatsApp E.164 (`canal=whatsapp`) (permitir múltiples)
+- [ ] Messenger page_id (`canal=messenger`) (permitir múltiples)
+
+Tab **Config** (`organizaciones.config` JSONB)
+- [ ] Features flags: `features.*`
+- [ ] `webchat.*` (assistant_id, prompt_version, reengage, calendar, timezone)
+- [ ] `whatsapp.*` (prompt_id/version, templates, tiempos)
+- [ ] `messenger.*` (prompt_id/version)
+- [ ] `branding.*` (public_name, logo_url, theme)
+
+Tab **Secretos** (`secretos`)
+- [ ] OpenAI `openai.api_key` (si aplica por tenant)
+- [ ] Twilio `twilio.account_sid` / `twilio.auth_token`
+- [ ] Meta `meta.messenger.page_access_token` / `meta.messenger.app_secret` / `meta.messenger.verify_token`
+- [ ] Mail `mail.username` / `mail.password`
+- [ ] Calendar `calendar.username` / `calendar.password`
+- [ ] Google `google.places_api_key` / `google.oauth.client_secret`
+- [ ] DENUE `denue.token`
+
+Tab **Validación**
+- [ ] Probar webchat: resolver alias → org + endpoint de conversación
+- [ ] Probar WhatsApp: validar firma Twilio + webhook path (sin enviar mensaje real por defecto)
+- [ ] Probar Messenger: validar verify token + webhook
+- [ ] Probar SMTP/IMAP: conexión y auth (sin enviar email por defecto)
+- [ ] Reporte de “faltantes” (campos requeridos no configurados)
+
+## 2) Contratos API (backend)
+
+Base: `/api/admin` (platform-admin-only)
+
+- [ ] `GET /tenants` (lista)
+- [ ] `POST /tenants` (crear)
+- [ ] `GET /tenants/{org_id}` (detalle)
+- [ ] `PATCH /tenants/{org_id}` (editar)
+- [ ] `DELETE /tenants/{org_id}` (opcional)
+
+- [ ] `GET /tenants/{org_id}/routes`
+- [ ] `POST /tenants/{org_id}/routes`
+- [ ] `DELETE /tenants/{org_id}/routes/{route_id}` (o por `canal+clave`)
+
+- [ ] `GET /tenants/{org_id}/config`
+- [ ] `PUT /tenants/{org_id}/config`
+
+- [ ] `GET /tenants/{org_id}/secrets` (solo lista de claves + metadata, nunca valores)
+- [ ] `PUT /tenants/{org_id}/secrets/{key}` (set/rotate)
+- [ ] `DELETE /tenants/{org_id}/secrets/{key}`
+
+- [ ] `POST /tenants/{org_id}/validate` (ejecuta checks y regresa reporte)
+
+## 3) Reglas de seguridad (UI + backend)
+
+- [ ] UI oculta el menú “Tenants” si no eres platform admin (opcional, backend ya bloquea)
+- [ ] Backend valida platform admin en cada endpoint `/api/admin/*`
+- [ ] Nunca devolver secretos (ni en logs)
+- [ ] Rate limit de endpoints sensibles (especialmente validate + rotate)

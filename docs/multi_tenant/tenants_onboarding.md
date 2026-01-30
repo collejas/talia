@@ -11,6 +11,7 @@
 - [ ] Migrar runtime para leer de BD (no `.env` por tenant)
 - [ ] Validaciones automáticas por canal (botón Probar)
 - [ ] Hardening (auditoría, logs, masking, mínimos permisos)
+- [ ] Documentar UI admin (ver `docs/multi_tenant/plan_admin_ui_tenants.md`)
 
 ## Observaciones
 
