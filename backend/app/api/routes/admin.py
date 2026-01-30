@@ -330,9 +330,8 @@ async def set_tenant_config(
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantConfigResponse:
     try:
-        row = await repo.set_organizacion_config(
-            organizacion_id=organizacion_id, config=payload.config, updated_by=user_id
-        )
+        _ = user_id  # reservado para auditoría futura
+        row = await repo.set_organizacion_config(organizacion_id=organizacion_id, config=payload.config)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     config = row.get("config")

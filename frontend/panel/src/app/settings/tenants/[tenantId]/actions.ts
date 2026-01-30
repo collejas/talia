@@ -38,15 +38,6 @@ function getText(formData: FormData, key: string): string {
   return value.trim()
 }
 
-function getOptionalBoolean(formData: FormData, key: string): boolean | null {
-  if (!formData.has(key)) return null
-  const value = formData.get(key)
-  if (typeof value !== "string") return null
-  const normalized = value.trim().toLowerCase()
-  if (!normalized.length) return null
-  return normalized === "on" || normalized === "true" || normalized === "1" || normalized === "sí"
-}
-
 function requireTenantId(formData: FormData): string {
   const tenantId = getText(formData, "tenant_id")
   if (!tenantId) throw new Error("Falta tenant_id.")
@@ -156,11 +147,13 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
   try {
     const tenantId = requireTenantId(formData)
 
-    const webchatEnabled = getOptionalBoolean(formData, "webchat_enabled")
+    // En checkboxes HTML, cuando están desmarcados NO viajan en el FormData.
+    // Aquí queremos que el usuario pueda guardar explícitamente `false`, así que derivamos el valor desde `has()`.
+    const webchatEnabled = formData.has("webchat_enabled")
     const assistantId = getText(formData, "webchat_assistant_id")
     const promptVersion = getText(formData, "webchat_prompt_version")
     const inactivityHoursRaw = getText(formData, "webchat_inactivity_hours")
-    const persistSession = getOptionalBoolean(formData, "webchat_persist_session")
+    const persistSession = formData.has("webchat_persist_session")
     const reengageMinutesRaw = getText(formData, "webchat_reengage_minutes")
     const reengageMaxAttemptsRaw = getText(formData, "webchat_reengage_max_attempts")
     const escalateMinutesRaw = getText(formData, "webchat_escalate_minutes")
@@ -182,9 +175,7 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     const currentConfig = getResp.data.config ?? {}
     const patch: Record<string, unknown> = {}
 
-    if (webchatEnabled !== null) {
-      patch.features = { webchat: { enabled: webchatEnabled } }
-    }
+    patch.features = { webchat: { enabled: webchatEnabled } }
 
     const parseNumber = (raw: string): number | undefined => {
       if (!raw) return undefined
@@ -197,7 +188,7 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     if (promptVersion) webchatPatch.prompt_version = promptVersion
     const inactivityHours = parseNumber(inactivityHoursRaw)
     if (inactivityHours !== undefined) webchatPatch.inactivity_hours = inactivityHours
-    if (persistSession !== null) webchatPatch.persist_session = persistSession
+    webchatPatch.persist_session = persistSession
     const reengageMinutes = parseNumber(reengageMinutesRaw)
     if (reengageMinutes !== undefined) webchatPatch.reengage_minutes = reengageMinutes
     const reengageMaxAttempts = parseNumber(reengageMaxAttemptsRaw)

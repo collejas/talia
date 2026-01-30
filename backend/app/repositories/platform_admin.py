@@ -118,11 +118,10 @@ class PlatformRepository:
         return config if isinstance(config, dict) else ({} if config is None else None)
 
     async def set_organizacion_config(
-        self, *, organizacion_id: UUID, config: dict[str, Any], updated_by: UUID | None = None
+        self, *, organizacion_id: UUID, config: dict[str, Any]
     ) -> dict[str, Any]:
+        # Nota: `public.organizaciones` no tiene columna `actualizado_por` (solo `actualizado_en`).
         payload: dict[str, Any] = {"config": config}
-        if updated_by:
-            payload["actualizado_por"] = str(updated_by)
         data = await self._rest(
             "PATCH",
             "/rest/v1/organizaciones",
