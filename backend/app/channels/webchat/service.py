@@ -43,6 +43,7 @@ from app.services.time_utils import get_current_time_reference
 from app.channels.webchat import notifications as webchat_notifications
 from app.services import calendar as calendar_service
 from app.services import openai as openai_service
+from app.services import tenant_runtime
 from app.services.calendar import CalendarError
 from app.services.catalog_context import (
     CatalogContext,
@@ -1868,13 +1869,36 @@ async def handle_message(
     metadata_dict = payload.metadata if isinstance(payload.metadata, dict) else None
     attachments_payload = payload.attachments or []
     organizacion_hint = await resolve_webchat_organizacion(metadata_dict)
+    runtime_inactivity_hours = settings.webchat_inactivity_hours
+    runtime_openai_api_key: str | None = None
+    runtime_assistant_id: str | None = None
+    runtime_prompt_version: str | None = None
+    if organizacion_hint:
+        try:
+            org_uuid = UUID(str(organizacion_hint))
+        except (TypeError, ValueError):
+            org_uuid = None
+        if org_uuid:
+            try:
+                rt = await tenant_runtime.get_webchat_runtime_settings(organizacion_id=org_uuid)
+            except Exception as exc:
+                logger.warning(
+                    "tenant_runtime.webchat_settings_failed",
+                    extra={"organizacion_id": str(org_uuid), "error": str(exc)},
+                )
+            else:
+                runtime_openai_api_key = rt.openai_api_key
+                runtime_assistant_id = rt.assistant_id
+                runtime_prompt_version = rt.prompt_version
+                if rt.inactivity_hours is not None:
+                    runtime_inactivity_hours = rt.inactivity_hours
 
     try:
         registration = await storage.register_webchat_message(
             session_id=payload.session_id,
             author="user",
             content=payload.content,
-            inactivity_hours=settings.webchat_inactivity_hours,
+            inactivity_hours=runtime_inactivity_hours,
             metadata={
                 "client_message_id": payload.client_message_id,
                 "locale": payload.locale,
@@ -1962,12 +1986,28 @@ async def handle_message(
 
     assistant: AssistantConfig
     try:
-        assistant = registry.resolve_assistant("landing")
+        if runtime_assistant_id:
+            # Permite configurar por tenant vía `organizaciones.config.webchat.assistant_id`.
+            if runtime_assistant_id.startswith("pmpt_"):
+                assistant = AssistantConfig(
+                    assistant_id=None,
+                    prompt_id=runtime_assistant_id,
+                    prompt_version=runtime_prompt_version or settings.openai_prompt_webchat_version or settings.openai_prompt_version,
+                    project_id=settings.openai_project_id,
+                )
+            else:
+                assistant = AssistantConfig(
+                    assistant_id=runtime_assistant_id,
+                    prompt_id=None,
+                    project_id=settings.openai_project_id,
+                )
+        else:
+            assistant = registry.resolve_assistant("landing")
     except ValueError as exc:  # pragma: no cover - configuración inválida
         logger.exception("webchat.assistant_resolve_failed", extra={"error": str(exc)})
         raise HTTPException(status_code=500, detail="Asistente no configurado") from exc
 
-    client = openai_service.get_assistant_client()
+    client = openai_service.get_assistant_client(api_key=runtime_openai_api_key)
     assistant_spec: AssistantSpec | None = None
     if assistant.is_prompt:
         if not assistant.prompt_id:
@@ -2027,7 +2067,7 @@ async def handle_message(
             user_message=payload,
             openai_conversation_id=openai_conversation_id,
             previous_response_id=conversation_meta.get("last_response_id"),
-            organizacion_id=organizacion_hint,
+            organizacion_id=resolved_organizacion_id,
             catalog_context=catalog_context,
             booking_context=booking_context_text,
         )

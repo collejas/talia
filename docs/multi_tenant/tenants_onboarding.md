@@ -73,6 +73,7 @@ Luego el runtime migra a leer “settings por org” desde BD.
   - Lista tenants.
   - Crea tenant y opcionalmente registra `webchat_alias` como ruta `canal=webchat`.
   - Detalle: `/settings/tenants/{tenantId}` para Config/Routing/Secretos.
+  - Tab recomendado para empezar: **Webchat** (formularios).
 
 ### UI propuesta (iteración siguiente)
 
@@ -136,6 +137,14 @@ Se reservan para defaults globales o fallback, no para onboarding por cliente.
 - [ ] Crear tenant en `/settings/tenants`
 - [ ] Abrir `/settings/tenants/{tenantId}`
 - [ ] Routing: crear y borrar una ruta
-- [ ] Config: guardar un JSON simple (ej. `{ "features": { "webchat": { "enabled": true } } }`)
-- [ ] Secretos: guardar `openai.api_key` (tier B), confirmar que solo aparece metadata, y borrar
-- [ ] Validación: `POST /api/admin/tenants/{tenantId}/validate` y revisar `missing_*`
+- [ ] Webchat tab: guardar `assistant_id`, `prompt_version`, timers y calendar defaults
+- [ ] Webchat tab: guardar `openai.api_key` (tier B) y confirmar que solo aparece metadata
+- [ ] Webchat tab: guardar alias (routing) y confirmar que aparece en tab Routing
+- [ ] Validación: `POST /api/admin/tenants/{tenantId}/validate?scope=webchat` y revisar `missing_*`
+  - Tip: para empezar solo webchat, usa `scope=webchat`.
+
+## Qué sigue (iteración inmediata)
+
+- [ ] UI: reemplazar JSON libre por formularios por sección (webchat/whatsapp/messenger/mail/calendar/google)
+- [ ] UI: wizard “Onboarding” con pasos y requeridos mínimos
+- [ ] Runtime: usar `secretos`/`organizaciones.config` por tenant (con fallback a `.env` legacy)

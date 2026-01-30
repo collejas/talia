@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,6 +19,8 @@ import {
   deleteTenantSecretAction,
   setTenantSecretAction,
   updateTenantConfigAction,
+  updateWebchatSettingsAction,
+  validateTenantAction,
 } from "./actions"
 
 const INITIAL_CRUD_STATE: CrudActionState = { status: "idle" }
@@ -103,6 +106,266 @@ export type RouteItem = {
   canal: string
   clave: string
   activo?: boolean | null
+}
+
+type WebchatInitialValues = {
+  enabled?: boolean
+  assistant_id?: string
+  prompt_version?: string
+  inactivity_hours?: number
+  persist_session?: boolean
+  reengage_minutes?: number
+  reengage_max_attempts?: number
+  escalate_minutes?: number
+  calendar_resource_id?: string
+  calendar_timezone?: string
+  calendar_default_days?: number
+  calendar_hold_minutes?: number
+  webchat_alias?: string
+}
+
+export function TenantWebchatSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: WebchatInitialValues
+}) {
+  const [state, formAction] = useActionState(updateWebchatSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="space-y-6">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex items-center gap-3">
+              <input
+                id="webchat_enabled"
+                name="webchat_enabled"
+                type="checkbox"
+                defaultChecked={Boolean(initialValues.enabled)}
+                className="size-4"
+              />
+              <Label htmlFor="webchat_enabled">Webchat habilitado</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Nota: esto solo cambia el flag en <code>organizaciones.config.features.webchat.enabled</code>.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="webchat_alias">Alias (routing)</Label>
+            <Input
+              id="webchat_alias"
+              name="webchat_alias"
+              placeholder="ej. talia, cliente-x"
+              defaultValue={initialValues.webchat_alias ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">
+              Se crea como ruta <code>canal=webchat</code>.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="openai_api_key">OpenAI API key (secreto, tier B)</Label>
+            <Input
+              id="openai_api_key"
+              name="openai_api_key"
+              type="password"
+              placeholder="Pega aquí (no se vuelve a mostrar)"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="webchat_assistant_id">assistant_id</Label>
+            <Input
+              id="webchat_assistant_id"
+              name="webchat_assistant_id"
+              placeholder="asst_..."
+              defaultValue={initialValues.assistant_id ?? ""}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="webchat_prompt_version">prompt_version</Label>
+            <Input
+              id="webchat_prompt_version"
+              name="webchat_prompt_version"
+              placeholder="ej. 1"
+              defaultValue={initialValues.prompt_version ?? ""}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="webchat_inactivity_hours">inactivity_hours</Label>
+            <Input
+              id="webchat_inactivity_hours"
+              name="webchat_inactivity_hours"
+              type="number"
+              min={0}
+              defaultValue={initialValues.inactivity_hours ?? ""}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <input
+                id="webchat_persist_session"
+                name="webchat_persist_session"
+                type="checkbox"
+                defaultChecked={Boolean(initialValues.persist_session)}
+                className="size-4"
+              />
+              <Label htmlFor="webchat_persist_session">persist_session</Label>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="webchat_reengage_minutes">reengage_minutes</Label>
+            <Input
+              id="webchat_reengage_minutes"
+              name="webchat_reengage_minutes"
+              type="number"
+              min={0}
+              defaultValue={initialValues.reengage_minutes ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="webchat_reengage_max_attempts">reengage_max_attempts</Label>
+            <Input
+              id="webchat_reengage_max_attempts"
+              name="webchat_reengage_max_attempts"
+              type="number"
+              min={0}
+              defaultValue={initialValues.reengage_max_attempts ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="webchat_escalate_minutes">escalate_minutes</Label>
+            <Input
+              id="webchat_escalate_minutes"
+              name="webchat_escalate_minutes"
+              type="number"
+              min={0}
+              defaultValue={initialValues.escalate_minutes ?? ""}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <Separator />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="webchat_calendar_resource_id">calendar.resource_id</Label>
+            <Input
+              id="webchat_calendar_resource_id"
+              name="webchat_calendar_resource_id"
+              placeholder="uuid"
+              defaultValue={initialValues.calendar_resource_id ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="webchat_calendar_timezone">calendar.timezone</Label>
+            <Input
+              id="webchat_calendar_timezone"
+              name="webchat_calendar_timezone"
+              placeholder="America/Mexico_City"
+              defaultValue={initialValues.calendar_timezone ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="webchat_calendar_default_days">calendar.default_days</Label>
+            <Input
+              id="webchat_calendar_default_days"
+              name="webchat_calendar_default_days"
+              type="number"
+              min={1}
+              defaultValue={initialValues.calendar_default_days ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="webchat_calendar_hold_minutes">calendar.hold_minutes</Label>
+            <Input
+              id="webchat_calendar_hold_minutes"
+              name="webchat_calendar_hold_minutes"
+              type="number"
+              min={0}
+              defaultValue={initialValues.calendar_hold_minutes ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar Webchat" pendingLabel="Guardando..." />
+        </div>
+      </form>
+
+      <form action={validateAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="scope" value="webchat" />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Validación</h3>
+            <p className="text-xs text-muted-foreground">Revisa faltantes mínimos en routing/config/secretos.</p>
+          </div>
+          <Button type="submit" variant="outline" size="sm">
+            Validar
+          </Button>
+        </div>
+        {validateState.report ? (
+          <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
+            <p className="font-medium">{validateState.message}</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_routes.length ? (
+                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_config.length ? (
+                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_secrets.length ? (
+                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              {validateState.report.notes.length ? (
+                <div className="space-y-1 md:col-span-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+                  <ul className="list-disc pl-5">
+                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <FormStatusMessage state={validateState} />
+        )}
+      </form>
+    </div>
+  )
 }
 
 export function TenantRoutingManager({ tenantId, routes }: { tenantId: string; routes: RouteItem[] }) {
