@@ -25,7 +25,7 @@ Permitir que usuarios del landing conversacional interactúen con TalIA en tiemp
 - Posible token corto para asegurar el widget (`TALIA_WEBCHAT_PUBLIC_TOKEN`).
 - Multi-tenant (routing):
   - El widget puede enviar `metadata.tenant_alias` en cada request.
-  - El backend puede resolver `organizacion_id` a partir de ese alias usando una tabla de routing (ver `docs/tenants_onboarding.md`).
+  - El backend puede resolver `organizacion_id` a partir de ese alias usando una tabla de routing (ver `docs/multi_tenant/tenants_onboarding.md`).
 
 ## Flujo Conversacional
 1. Usuario escribe en el widget → se envía `POST /messages`.
