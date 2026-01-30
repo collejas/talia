@@ -22,8 +22,16 @@ done
 
 cd "$BACKEND_DIR"
 
-# Ejecuta uvicorn con Poetry, leyendo el .env del backend
-exec /usr/bin/poetry run uvicorn app.main:app \
+# Ejecuta uvicorn.
+# Preferimos usar el venv local (`backend/.venv`) porque systemd corre como root y Poetry puede no estar disponible/configurado.
+VENV_PY="$BACKEND_DIR/.venv/bin/python"
+if [[ -x "$VENV_PY" ]]; then
+  UVICORN_CMD=("$VENV_PY" -m uvicorn)
+else
+  UVICORN_CMD=(/usr/bin/python3 -m uvicorn)
+fi
+
+exec "${UVICORN_CMD[@]}" app.main:app \
   --host 0.0.0.0 \
   --port 8004 \
   --proxy-headers \

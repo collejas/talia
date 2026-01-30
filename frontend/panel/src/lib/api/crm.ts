@@ -121,21 +121,64 @@ export async function callCrmApi<T = unknown>(
     }
   }
 
-  let response: Response
-  try {
-    response = await fetch(url.toString(), {
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+  const maxAttempts = 3
+  let response: Response | undefined
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      response = await fetch(url.toString(), {
+        method,
+        headers,
+        cache: "no-store",
+        ...(body ? { body } : {}),
+      })
+      lastError = undefined
+      break
+    } catch (error) {
+      lastError = error
+      const rawError = error as unknown as { cause?: unknown }
+      const cause = rawError?.cause as { code?: string } | undefined
+      const retryableCodes = new Set(["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH"])
+      const isRetryable = cause?.code && retryableCodes.has(cause.code)
+      if (attempt < maxAttempts && isRetryable) {
+        await sleep(250 * attempt)
+        continue
+      }
+      break
+    }
+  }
+
+  if (!response) {
+    const errorMessage =
+      lastError instanceof Error
+        ? `Error al contactar el CRM (${lastError.message})`
+        : "Error desconocido al contactar el CRM."
+    const rawError = lastError as unknown as {
+      name?: string
+      message?: string
+      stack?: string
+      cause?: unknown
+    }
+    console.error("[crm] fetch_failed", {
+      url: url.toString(),
       method,
-      headers,
-      cache: "no-store",
-      ...(body ? { body } : {}),
+      hasOrganizacionId: Boolean(resolvedOrganizacionId),
+      hasUsuarioId: Boolean(usuarioId),
+      withUserToken: Boolean(options.withUserToken),
+      error:
+        rawError?.message ??
+        (lastError instanceof Error ? lastError.message : String(lastError)),
+      errorName: rawError?.name,
+      errorCause:
+        typeof rawError?.cause === "object" && rawError.cause
+          ? (rawError.cause as { code?: string; errno?: number; address?: string; port?: number })
+          : rawError?.cause,
     })
-  } catch (error) {
     return {
       ok: false,
       error:
-        error instanceof Error
-          ? `Error al contactar el CRM (${error.message})`
-          : "Error desconocido al contactar el CRM.",
+        `${errorMessage} (url=${url.toString()})`,
     }
   }
 
@@ -229,7 +272,36 @@ function decodeJwtUserId(token: string | null | undefined): string | null {
 
 async function mapResponseError(response: Response): Promise<string> {
   if (response.status === 401 || response.status === 403) {
-    return "Tu sesión caducó. Vuelve a iniciar sesión.";
+    try {
+      const text = await response.text();
+      if (text) {
+        // FastAPI suele responder {"detail": "..."}; a veces es string plano.
+        try {
+          const json = JSON.parse(text);
+          const detail =
+            typeof json === "string"
+              ? json
+              : typeof json?.detail === "string"
+                ? json.detail
+                : typeof json?.message === "string"
+                  ? json.message
+                  : "";
+          if (detail === "platform_admin_required") {
+            return "No tienes permisos de platform admin para ver Tenants. Agrega tu user_id a public.platform_admins.";
+          }
+          if (detail === "authorization_invalid" || detail.startsWith("auth_user_invalid")) {
+            return "Tu sesión caducó. Vuelve a iniciar sesión.";
+          }
+        } catch {
+          if (text.includes("platform_admin_required")) {
+            return "No tienes permisos de platform admin para ver Tenants. Agrega tu user_id a public.platform_admins.";
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return "Tu sesión caducó o no tienes permisos. Vuelve a iniciar sesión.";
   }
   try {
     const text = await response.text();

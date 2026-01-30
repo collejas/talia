@@ -1896,7 +1896,7 @@ async def handle_message(
         raise HTTPException(status_code=500, detail="No se pudo identificar la conversación")
 
     try:
-    conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
+        conversation_meta = await storage.fetch_webchat_conversation(conversation_id)
     except storage.StorageError as exc:
         logger.exception(
             "webchat.conversation_lookup_failed",
