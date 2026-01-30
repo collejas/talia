@@ -22,6 +22,8 @@ from app.core.secrets_crypto import SecretsCryptoError, decrypt_secret
 
 logger = get_logger("app.services.tenant_runtime")
 
+MASTER_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
+
 _CONFIG_CACHE: dict[str, Any] = {}
 _CONFIG_CACHE_EXPIRES: dict[str, datetime] = {}
 _SECRET_CACHE: dict[str, Any] = {}
@@ -191,3 +193,21 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
         inactivity_hours=inactivity_hours,
     )
 
+
+async def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:
+    """Devuelve el alias principal (primera ruta activa) para webchat."""
+    data = await _supabase_get(
+        "/rest/v1/organizacion_rutas_canal",
+        params={
+            "select": "clave,activo,creado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "canal": "eq.webchat",
+            "activo": "eq.true",
+            "order": "creado_en.asc",
+            "limit": "1",
+        },
+    )
+    if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+        return None
+    clave = data[0].get("clave")
+    return clave.strip() if isinstance(clave, str) and clave.strip() else None

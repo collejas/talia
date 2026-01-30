@@ -131,6 +131,7 @@ DEMO_STAGE_CODE = "demo"
 CONTACT_ASSIGNMENT_ERROR = (
     "Necesito al menos un teléfono o correo para conectarte con un vendedor."
 )
+MASTER_ORGANIZACION_ID = "00000000-0000-0000-0000-000000000001"
 
 
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
@@ -1315,7 +1316,9 @@ async def resolve_webchat_organizacion(
         alias_org = _resolve_alias_to_org(fallback_alias)
         if alias_org:
             return alias_org
-    return _safe_str_value(settings.webchat_default_organizacion_id)
+    # Último fallback (tenant maestro). Esto evita que llamadas RPC queden ambiguas
+    # cuando existen overloads tenant-aware y el widget no envía tenant_alias.
+    return _safe_str_value(settings.webchat_default_organizacion_id) or MASTER_ORGANIZACION_ID
 
 
 def _guess_extension(name: str | None, url: str | None) -> str:

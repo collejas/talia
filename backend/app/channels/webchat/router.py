@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 
 from app.core.config import settings
 
 from . import schemas, service
+from app.services import tenant_runtime
+from app.services.channel_routing import resolve_organizacion_id
 
 router = APIRouter(prefix="/webchat", tags=["webchat"])
 
@@ -107,12 +110,53 @@ async def register_webchat_visit(
     response_model=schemas.ClientConfig,
     summary="Obtiene configuración del widget webchat",
 )
-async def get_webchat_config() -> schemas.ClientConfig:
-    """Expone parámetros de comportamiento para el frontend."""
+async def get_webchat_config(
+    request: Request,
+    tenant_alias: str | None = Query(default=None, description="Alias del tenant (recomendado)."),
+) -> schemas.ClientConfig:
+    """Expone parámetros de comportamiento para el frontend.
+
+    Nota: para multi-tenant, el widget debe enviar `tenant_alias` (en query o metadata).
+    """
+    alias_value = tenant_alias.strip().lower() if isinstance(tenant_alias, str) and tenant_alias.strip() else None
+    organizacion_id: str | None = None
+    if alias_value:
+        try:
+            organizacion_id = await resolve_organizacion_id(canal="webchat", clave=alias_value)
+        except Exception:
+            organizacion_id = None
+    if not alias_value:
+        # Fallback: para el tenant maestro, tomamos el primer alias activo desde BD.
+        try:
+            alias_value = await tenant_runtime.get_primary_webchat_alias(
+                organizacion_id=tenant_runtime.MASTER_ORGANIZACION_ID
+            )
+        except Exception:
+            alias_value = None
+        if alias_value:
+            organizacion_id = str(tenant_runtime.MASTER_ORGANIZACION_ID)
+
+    persist_session = settings.webchat_persist_session
+    inactivity_timeout_hours = settings.webchat_inactivity_hours
+    if organizacion_id:
+        try:
+            config = await tenant_runtime.get_org_config(organizacion_id=UUID(organizacion_id))
+        except Exception:
+            config = {}
+        if isinstance(config, dict):
+            webchat = config.get("webchat")
+            if isinstance(webchat, dict):
+                persist = webchat.get("persist_session")
+                inactivity = webchat.get("inactivity_hours")
+                if isinstance(persist, bool):
+                    persist_session = persist
+                if isinstance(inactivity, int):
+                    inactivity_timeout_hours = inactivity
+
     return schemas.ClientConfig(
-        persist_session=settings.webchat_persist_session,
-        inactivity_timeout_hours=settings.webchat_inactivity_hours,
-        tenant_alias=service.get_webchat_tenant_alias(),
+        persist_session=persist_session,
+        inactivity_timeout_hours=inactivity_timeout_hours,
+        tenant_alias=alias_value or service.get_webchat_tenant_alias(),
     )
 
 

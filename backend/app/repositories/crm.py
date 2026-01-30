@@ -2424,11 +2424,26 @@ class CRMRepository:
             payload["p_inactivity_hours"] = inactivity_hours
         if attachments:
             payload["p_attachments"] = attachments
+        # IMPORTANTE:
+        # En la BD existen 2 overloads de `registrar_mensaje_webchat`:
+        # - uno sin `p_organizacion_id`
+        # - otro con `p_organizacion_id uuid`
+        # PostgREST falla con PGRST203 si enviamos el payload sin ese campo (no puede elegir candidato).
+        # Solución: siempre enviar `p_organizacion_id` y, si no hay pista, caer al tenant maestro.
+        org_uuid: UUID | None = None
         if organizacion_id:
             try:
-                payload["p_organizacion_id"] = str(UUID(str(organizacion_id)))
-            except (ValueError, TypeError) as exc:
-                raise CRMRepositoryError(f"organizacion_id inválido: {organizacion_id}") from exc
+                org_uuid = UUID(str(organizacion_id))
+            except (ValueError, TypeError):
+                org_uuid = None
+        if not org_uuid and settings.webchat_default_organizacion_id:
+            try:
+                org_uuid = UUID(str(settings.webchat_default_organizacion_id))
+            except (ValueError, TypeError):
+                org_uuid = None
+        if not org_uuid:
+            org_uuid = UUID("00000000-0000-0000-0000-000000000001")
+        payload["p_organizacion_id"] = str(org_uuid)
         data = await self._rpc("registrar_mensaje_webchat", payload)
         if not isinstance(data, list) or not data:
             raise CRMRepositoryError(f"Respuesta inesperada registrar_mensaje_webchat: {data!r}")
