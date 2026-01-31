@@ -15,12 +15,14 @@ from app.assistants import registry
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
 from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
 from app.channels.whatsapp import tools as whatsapp_tools
+from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import conversation_summary, leads_geo, storage
 from app.services import openai as openai_service
 from app.services.context_formatter import build_crm_context_lines
+from app.services import tenant_runtime
 from app.services import twilio as twilio_service
 from app.services.metrics import metrics
 from app.services.prospeccion_progress import progress_hub
@@ -56,6 +58,7 @@ class TwilioSendResult:
     sid: str | None
     status: str | None
     error: str | None = None
+    from_number: str | None = None
 
 
 async def handle_incoming_message(
@@ -93,7 +96,7 @@ async def handle_incoming_message(
 
     normalized_from = _normalize_phone_number(message.from_number)
     recipient_number = _normalize_phone_number(message.to_number)
-    organizacion_hint = resolve_whatsapp_organizacion(to_number=recipient_number)
+    organizacion_hint = await resolve_whatsapp_organizacion(to_number=recipient_number)
 
     if not organizacion_hint:
         logger.error(
@@ -131,6 +134,8 @@ async def handle_incoming_message(
     conversation_id = str(registration.get("conversation_id") or "")
     contact_id = str(registration.get("contact_id") or "")
     openai_conversation_id = registration.get("openai_conversation_id")
+    org_uuid = _parse_org_uuid(organizacion_hint)
+
 
     if conversation_id:
         try:
@@ -257,6 +262,13 @@ async def handle_incoming_message(
             catalog_context=catalog_context.text if catalog_context else None,
             booking_context=booking_context_text,
         )
+        log_event(
+            logger,
+            "whatsapp.reply_generated",
+            conversation_id=conversation_id,
+            response_id=assistant_reply.response_id,
+            openai_conversation_id=assistant_reply.openai_conversation_id,
+        )
     except Exception as exc:  # pragma: no cover - errores inesperados de OpenAI
         logger.exception(
             "whatsapp.generate_reply_failed",
@@ -287,6 +299,14 @@ async def handle_incoming_message(
     send_result = await _send_whatsapp_reply(
         to_number=message.from_number,
         body=final_reply_text,
+        organizacion_id=org_uuid,
+    )
+    log_event(
+        logger,
+        "whatsapp.reply_dispatched",
+        conversation_id=conversation_id,
+        status=send_result.status,
+        error=send_result.error,
     )
 
     metadata = {
@@ -297,7 +317,7 @@ async def handle_incoming_message(
     if send_result.error:
         metadata["delivery_error"] = send_result.error
 
-    resolved_contact_org = resolve_whatsapp_organizacion(contact=contact_record)
+    resolved_contact_org = await resolve_whatsapp_organizacion(contact=contact_record)
     try:
         await storage.register_whatsapp_message(
             direction="saliente",
@@ -315,6 +335,19 @@ async def handle_incoming_message(
         logger.warning(
             "whatsapp.register_outgoing_failed",
             extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        log_event(
+            logger,
+            "whatsapp.reply_register_failed",
+            conversation_id=conversation_id,
+            error=str(exc),
+        )
+    else:
+        log_event(
+            logger,
+            "whatsapp.reply_registered",
+            conversation_id=conversation_id,
+            message_sid=send_result.sid,
         )
 
 
@@ -722,13 +755,15 @@ async def _send_whatsapp_reply(
     body: str | None = None,
     content_sid: str | None = None,
     content_variables: dict[str, str] | None = None,
+    organizacion_id: UUID | None = None,
 ) -> TwilioSendResult:
     """Envía la respuesta al contacto utilizando la API de Twilio."""
 
+    runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
     if (
-        not settings.twilio_phone_number
-        or not settings.twilio_account_sid
-        or not settings.twilio_auth_token
+        not runtime.phone_number
+        or not runtime.account_sid
+        or not runtime.auth_token
     ):
         logger.warning("whatsapp.twilio_not_configured")
         return TwilioSendResult(sid=None, status="skipped", error="twilio_not_configured")
@@ -740,11 +775,11 @@ async def _send_whatsapp_reply(
     normalized_to = to_number or ""
     if normalized_to and not normalized_to.lower().startswith("whatsapp:"):
         normalized_to = f"whatsapp:{normalized_to}"
-    normalized_from = settings.twilio_phone_number
+    normalized_from = runtime.phone_number
     if normalized_from and not normalized_from.lower().startswith("whatsapp:"):
         normalized_from = f"whatsapp:{normalized_from}"
 
-    client = twilio_service.get_twilio_client()
+    client = twilio_service.get_twilio_client_for_credentials(runtime.account_sid, runtime.auth_token)
     message_kwargs: dict[str, Any] = {
         "to": normalized_to,
         "from_": normalized_from,
@@ -769,7 +804,12 @@ async def _send_whatsapp_reply(
         return TwilioSendResult(sid=None, status="failed", error=str(exc))
 
     status = getattr(message, "status", None)
-    return TwilioSendResult(sid=getattr(message, "sid", None), status=status, error=None)
+    return TwilioSendResult(
+        sid=getattr(message, "sid", None),
+        status=status,
+        error=None,
+        from_number=normalized_from,
+    )
 
 
 async def send_manual_message(
@@ -1021,63 +1061,6 @@ def _normalize_phone_number(value: str | None) -> str | None:
     return text
 
 
-def _safe_str_value(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        trimmed = value.strip()
-        return trimmed or None
-    try:
-        text = str(value).strip()
-    except Exception:
-        return None
-    return text or None
-
-
-def _normalize_phone_key(value: str | None) -> str | None:
-    normalized = _normalize_phone_number(value)
-    if not normalized:
-        return None
-    key = normalized.strip().replace(" ", "")
-    if key and not key.startswith("+") and key.replace("+", "").isdigit():
-        if key.startswith("+"):
-            return key
-        return f"+{key}"
-    return key or None
-
-
-def _whatsapp_phone_map() -> dict[str, str]:
-    configured = getattr(settings, "whatsapp_phone_org_map", {}) or {}
-    normalized: dict[str, str] = {}
-    for phone, org in configured.items():
-        key = _normalize_phone_key(phone)
-        org_value = _safe_str_value(org)
-        if key and org_value:
-            normalized[key] = org_value
-    default_org = _safe_str_value(settings.whatsapp_default_organizacion_id)
-    default_phone = _normalize_phone_key(settings.twilio_phone_number)
-    if default_org and default_phone and default_phone not in normalized:
-        normalized[default_phone] = default_org
-    return normalized
-
-
-def resolve_whatsapp_organizacion(
-    *,
-    to_number: str | None = None,
-    contact: dict[str, Any] | None = None,
-) -> str | None:
-    """Identifica el tenant asociado al canal WhatsApp."""
-    if contact and isinstance(contact, dict):
-        contact_org = _safe_str_value(contact.get("organizacion_id"))
-        if contact_org:
-            return contact_org
-    phone_key = _normalize_phone_key(to_number)
-    phone_map = _whatsapp_phone_map()
-    if phone_key and phone_key in phone_map:
-        return phone_map[phone_key]
-    return _safe_str_value(settings.whatsapp_default_organizacion_id)
-
-
 def _map_status_to_event(status: str | None) -> str | None:
     if not status:
         return None
@@ -1093,6 +1076,15 @@ def _map_status_to_event(status: str | None) -> str | None:
         "undelivered": "fallido",
     }
     return mapping.get(normalized)
+
+
+def _parse_org_uuid(value: str | None) -> UUID | None:
+    if not value:
+        return None
+    try:
+        return UUID(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _map_status_to_envio_estado(status: str | None) -> str | None:

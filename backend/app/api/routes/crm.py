@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, fie
 from app.channels.webchat import schemas as webchat_schemas
 from app.channels.webchat import service as webchat_service
 from app.channels.whatsapp import service as whatsapp_service
+from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -14980,7 +14981,7 @@ async def _send_manual_whatsapp_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             metadata=metadata_payload,
-            organizacion_id=whatsapp_service.resolve_whatsapp_organizacion(contact=contact),
+            organizacion_id=await resolve_whatsapp_organizacion(contact=contact),
         )
     except StorageError as exc:
         logger.exception(

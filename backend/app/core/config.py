@@ -86,6 +86,31 @@ class Settings(BaseSettings):
             "TWILIO_VALIDATE_SIGNATURES", "TALIA_TWILIO_VALIDATE_SIGNATURES"
         ),
     )
+    voice_webhook_path: str | None = Field(
+        default=None,
+        description="Ruta base para los callbacks de voz (TwiML) cuando Twilio inicia conexiones.",
+        validation_alias=AliasChoices("WEBHOOK_PATH", "VOICE_WEBHOOK_PATH"),
+    )
+    voice_full_duplex: bool = Field(
+        default=True,
+        description="Controla si Twilio habilita duplex completo para streaming de voz.",
+        validation_alias=AliasChoices("VOICE_FULL_DUPLEX", "TALIA_VOICE_FULL_DUPLEX"),
+    )
+    voice_stream_jwt_secret: str | None = Field(
+        default=None,
+        description="Clé JWT usada para autorizar los streams de voz de Twilio.",
+        validation_alias=AliasChoices("VOICE_STREAM_JWT_SECRET", "TALIA_VOICE_STREAM_JWT_SECRET"),
+    )
+    voice_debug_verbose: bool = Field(
+        default=True,
+        description="Activa logging verboso del canal de voz.",
+        validation_alias=AliasChoices("DEBUG_VOICE_VERBOSE", "TALIA_DEBUG_VOICE_VERBOSE"),
+    )
+    voice_debug_energy_every_n: int = Field(
+        default=20,
+        description="Graba energía cada N muestras cuando se depura la detección de voz.",
+        validation_alias=AliasChoices("DEBUG_ENERGY_EVERY_N", "TALIA_DEBUG_ENERGY_EVERY_N"),
+    )
     supabase_url: str | None = None
     supabase_service_role: str | None = None
     # Acepta varias variantes comunes del anon key para robustez

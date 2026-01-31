@@ -89,44 +89,6 @@ sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
 codex resume 019c1168-6f48-7b02-ba42-ad799ff9793e
-• Called
-  └ supabase.execute_sql({"query":"SELECT id, organizacion_id, nombre, descripcion, activo, metadata, creado_en, actualizado_en,
-        familia_id FROM public.modelos_productos ORDER BY creado_en DESC LIMIT 5;"})
-        1405-4b8e-95e2-d731c987b83e>\n[{\"id\":\"0fc1b1cf-9466-43d7-a7c4-4c6ef5346ab8\",\"organizacion_id\":\"00000000-0000-0000-
-        0000-000000000001\",\"nombre\":\"View\",\"descripcion\":null,\"activo\":true,\"metadata\":{},\"creado_en\":\"2026-01-25
-        21:21:57.87955+00\",\"actualizado_en\":\"2026-01-25 21:21:57.87955+00\",\"familia_id\":\"ba132f2d-5aa2-43a1-be47-
-        e0f5ed3f972b\"},{\"id\":\"f317322...
-
-• Called supabase.execute_sql({"query":"SELECT COUNT(*) AS total FROM public.modelos_productos;"})
-  └ "Below is the result of the SQL query. Note
-
-codex resume 019bfcfe-cade-7ec1-99fb-d30cf89ccc7b
-codex resume 019bfb33-b0b4-7f42-b6ca-612ba14ef81c
-codex resume 019bf0a5-df36-7253-97ec-3a93c6836246
-codex resume 019be342-95be-7023-80b9-4b61e128b67b
-codex resume 019bde41-668a-70b3-8342-1352b421fadc
-https://api.mapbox.com/styles/v1/mapbox/satellite-v9?access_token=pk.eyJ1IjoiY29sbGVqYXMiLCJhIjoiY21rZzdxODIwMDU2MTNkb2Z3dHd4NmR2aCJ9.3PXIYpRq5QlvhrlPGVmZhQ
-
-ACCESS_TOKEN=eyJhbGciOiJFUzI1NiIsImtpZCI6IjI3MjYwOTg4LTU2NDYtNDVlZi05Y2Q1LTg4ZWY0MzMzZDI4NSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3FuaW15YW10Y3piYndtbHJsZWpjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJiNmNjNjM4NS0zNzQxLTQ3NDItYWU4My1iY2IwZDk5YmM1YzUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzY4ODU4NTQ3LCJpYXQiOjE3Njg4NTQ5NDcsImVtYWlsIjoiYWRtaW5pc3RyYWNpb25AZ2VvYWN0aXYubXgiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkpvcmdlIFRvcnJlIENvbGxlamFzIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3Njg4NTQ5NDd9XSwic2Vzc2lvbl9pZCI6ImNlYzE1OTVjLTkzMmEtNDYyNC05NTMzLWFmMGE1NzQ0NmMzZSIsImlzX2Fub255bW91cyI6ZmFsc2V9.WOLjzOJljXD_NkYlnnXDkdLAfXlM8VVULdKaPQiJTwLXUf8RSgQEfl0VPY4rAqnCbncFb2JEEM0iiuTJXdrmIA ./scripts/import-propiedades.sh /var/www/talia/colo4.csv
-Called supabase.list_tables({"schemas":["public"]})
-
-codex resume 019bd902-9fc8-79b3-b4ce-f1578f9994d0
-codex resume 019bcd04-5536-7c80-ae3c-a095c39c5022
-codex resume 019bb984-1f7e-7943-9ac3-6d312c3b3523
-Reinicio #1 · 2 reenganches
-codex resume 019bb280-f26a-7a71-9034-ea258a99959f
-
-codex resume 019b9e77-2a84-72d2-b6ed-a4c89b1b0609
-
-en la tabla o tablas que creamos catalog_document_embeddings, catalog_embeddings_audit;  o en  en donde se hace las busquedas mi asistente?
-
-codex resume 019b991d-b4f6-7fd1-b21c-9aecf6191147
-
-codex resume 019b5bc9-5365-7e10-83c1-9d33b44f1f61
-
-codex resume 019b4224-315f-7c43-a0f2-1d7e50717429
-
-codex resume 019b2e79-916e-70c2-aa64-a7c29ffccd1b
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 
@@ -136,18 +98,6 @@ import base64, os
 print("TALIA_SECRETS_MASTER_KEY=" + base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('='))
 print("TALIA_SECRETS_MASTER_KEY_HIGH=" + base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip('='))
 PY
-
-# CORRECCIONES BASE DATOS 
-codex resume 019b2974-9cf6-70e0-b634-fde1f0394354
-embudo, leads
-
-codex resume 019b23d2-a2ee-7df3-a0fb-2c10530e5186
-
-codex resume 019b1e71-4b72-7352-a90d-320e151c35e0
-
-codex resume 019b0a33-3b12-7e21-8191-075e0deb333e
-
-codex resume 019b196a-f55b-7f82-afa1-91208c4b517a
 
 # SORIANA
 carlossanchez-fanjul@soriana.com

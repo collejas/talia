@@ -22,6 +22,7 @@ Objetivo: que un **platform admin** pueda crear/editar/eliminar tenants y config
 - [x] La nueva pestaña Calendario grava `webchat.calendar.*` + `calendar.*` en `organizaciones.config`, rota las credenciales y ofrece un botón “Validar”.
 - [x] La pestaña Correo ahora persiste `mail.*` en `organizaciones.config`, rota `mail.username`/`mail.password` y tiene un botón “Validar” específico.
 - [x] La pestaña Twilio guarda `twilio.*` + `voice.*` en `organizaciones.config`, rota `twilio.account_sid`/`twilio.auth_token`/`voice.stream_jwt_secret` y tiene validación por canal.
+- [x] `app.services.tenant_runtime` ya se consume desde WhatsApp para resolver Twilio/Voz por tenant, así que la aplicación usa las credenciales que configuras en la UI.
 
 ## 1) Pantallas / tabs
 

@@ -271,6 +271,7 @@ En `/settings/tenants`, por tenant:
 - El panel `/settings/tenants` ya tiene pestañas para Webchat, Calendario y Correo, cada una guardando los campos de `organizaciones.config`, rotando los secretos (`openai.api_key`, `calendar.username`/`password`, `mail.username`/`password`) y mostrando un botón “Validar” centrado en el scope correspondiente.
 - El backend todavía lee valores heredados de `backend/.env` (`TALIA_MAIL_*`, `TALIA_CALENDARIO_*`, `WEBCHAT_*`), pero el objetivo es migrar esos valores al tenant legacy y dejar en `.env` solo variables globales (infraestructura, URLs, master keys de cifrado).
 - Falta ejecutar el plan de migración completo (leer del `.env` actual → poblar BD → eliminar de `.env`) para que solo queden las variables que no cambian por tenant.
+- El backend ya usa `app.services.tenant_runtime` para cargar `twilio.*`/`voice.*` por `organizacion_id` cuando responde en WhatsApp, así que esas credenciales se pueden rotar desde el panel y el runtime encuentra el token adecuado para cada tenant.
 - La pestaña “Twilio” ya guarda `twilio.*` / `voice.*` y los secretos `twilio.account_sid` / `twilio.auth_token` / `voice.stream_jwt_secret`, así que ese bloque puede migrar a BD también.
 
 ## Nota de seguridad (para decisión de producto)
