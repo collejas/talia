@@ -125,6 +125,12 @@ type CalendarInitialValues = {
   calendar_timezone?: string
   calendar_default_days?: number
   calendar_hold_minutes?: number
+  calendar_provider?: string
+  calendar_server_url?: string
+  calendar_server_url_alternate?: string
+  calendar_server_port?: number
+  calendar_full_calendar_url?: string
+  calendar_full_contact_list_url?: string
 }
 
 export function TenantWebchatSettings({
@@ -385,6 +391,92 @@ export function TenantCalendarSettings({
             type="number"
             min={0}
             defaultValue={initialValues.calendar_hold_minutes ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="calendar_provider">calendar.provider</Label>
+          <Input
+            id="calendar_provider"
+            name="calendar_provider"
+            placeholder="ej. caldav"
+            defaultValue={initialValues.calendar_provider ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_server_url">calendar.server_url</Label>
+          <Input
+            id="calendar_server_url"
+            name="calendar_server_url"
+            placeholder="https://mail.talia.mx:2080"
+            defaultValue={initialValues.calendar_server_url ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_server_url_alternate">calendar.server_url_alternate</Label>
+          <Input
+            id="calendar_server_url_alternate"
+            name="calendar_server_url_alternate"
+            placeholder="https://mail.talia.mx:2080/principals/..."
+            defaultValue={initialValues.calendar_server_url_alternate ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_server_port">calendar.server_port</Label>
+          <Input
+            id="calendar_server_port"
+            name="calendar_server_port"
+            type="number"
+            min={1}
+            defaultValue={initialValues.calendar_server_port ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_full_calendar_url">calendar.full_calendar_url</Label>
+          <Input
+            id="calendar_full_calendar_url"
+            name="calendar_full_calendar_url"
+            placeholder="https://mail.talia.mx:2080/calendar/"
+            defaultValue={initialValues.calendar_full_calendar_url ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_full_contact_list_url">calendar.full_contact_list_url</Label>
+          <Input
+            id="calendar_full_contact_list_url"
+            name="calendar_full_contact_list_url"
+            placeholder="https://mail.talia.mx:2080/contacts/"
+            defaultValue={initialValues.calendar_full_contact_list_url ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2 md:col-span-2">
+          <p className="text-xs text-muted-foreground">
+            Las credenciales de calendario se guardan como secretos (`calendar.username` tier A y `calendar.password` tier
+            B) y no se muestran después de guardar.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_username">calendar.username</Label>
+          <Input
+            id="calendar_username"
+            name="calendar_username"
+            placeholder="hola@talia.mx"
+            defaultValue=""
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_password">calendar.password</Label>
+          <Input
+            id="calendar_password"
+            name="calendar_password"
+            type="password"
+            placeholder="Pega para rotar"
+            defaultValue=""
           />
         </div>
       </div>

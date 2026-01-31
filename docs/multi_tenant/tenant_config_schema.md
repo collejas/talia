@@ -74,6 +74,14 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `webchat.calendar.default_days` (number)
 - `webchat.calendar.hold_minutes` (number)
 
+### `calendar.*`
+- `calendar.provider` (string) ← `TALIA_CALENDARIO_DEFAULT_PROVIDER`
+- `calendar.server_url` (string) ← `TALIA_CALENDARIO_SERVER_URL`
+- `calendar.server_url_alternate` (string) ← `TALIA_CALENDARIO_SERVER_URL_ALTERNATE`
+- `calendar.server_port` (number) ← `TALIA_CALENDARIO_SERVER_PORT`
+- `calendar.full_calendar_url` (string) ← `TALIA_CALENDARIO_FULL_CALENDAR_URL`
+- `calendar.full_contact_list_url` (string) ← `TALIA_CALENDARIO_FULL_CONTACT_LIST_URL`
+
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`
 - `whatsapp.inactivity_minutes` / `whatsapp.reengage_minutes` / `whatsapp.escalate_minutes`

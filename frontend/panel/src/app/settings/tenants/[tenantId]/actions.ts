@@ -244,6 +244,14 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     const calendarTimezone = getText(formData, "calendar_timezone")
     const calendarDefaultDaysRaw = getText(formData, "calendar_default_days")
     const calendarHoldMinutesRaw = getText(formData, "calendar_hold_minutes")
+    const calendarProvider = getText(formData, "calendar_provider")
+    const calendarServerUrl = getText(formData, "calendar_server_url")
+    const calendarServerUrlAlternate = getText(formData, "calendar_server_url_alternate")
+    const calendarServerPortRaw = getText(formData, "calendar_server_port")
+    const calendarFullCalendarUrl = getText(formData, "calendar_full_calendar_url")
+    const calendarFullContactListUrl = getText(formData, "calendar_full_contact_list_url")
+    const calendarUsername = getText(formData, "calendar_username")
+    const calendarPassword = getText(formData, "calendar_password")
 
     const calendarPatch: Record<string, unknown> = {}
     if (calendarResourceId) calendarPatch.resource_id = calendarResourceId
@@ -252,8 +260,17 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     if (calendarDefaultDays !== undefined) calendarPatch.default_days = calendarDefaultDays
     const calendarHoldMinutes = parseNumber(calendarHoldMinutesRaw)
     if (calendarHoldMinutes !== undefined) calendarPatch.hold_minutes = calendarHoldMinutes
+    const calendarConfigPatch: Record<string, unknown> = {}
+    if (calendarProvider) calendarConfigPatch.provider = calendarProvider
+    if (calendarServerUrl) calendarConfigPatch.server_url = calendarServerUrl
+    if (calendarServerUrlAlternate) calendarConfigPatch.server_url_alternate = calendarServerUrlAlternate
+    const calendarServerPort = parseNumber(calendarServerPortRaw)
+    if (calendarServerPort !== undefined) calendarConfigPatch.server_port = calendarServerPort
+    if (calendarFullCalendarUrl) calendarConfigPatch.full_calendar_url = calendarFullCalendarUrl
+    if (calendarFullContactListUrl) calendarConfigPatch.full_contact_list_url = calendarFullContactListUrl
 
-    if (!Object.keys(calendarPatch).length) {
+    const hasCalendarConfig = Object.keys(calendarPatch).length || Object.keys(calendarConfigPatch).length
+    if (!hasCalendarConfig && !calendarUsername && !calendarPassword) {
       throw new Error("Debes completar al menos un campo del calendario.")
     }
 
@@ -265,10 +282,13 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     if (!getResp.ok) throw new Error(getResp.error)
 
     const currentConfig = getResp.data.config ?? {}
-    const patch: Record<string, unknown> = {
-      webchat: {
-        calendar: calendarPatch,
-      },
+    const patch: Record<string, unknown> = {}
+
+    if (Object.keys(calendarPatch).length) {
+      patch.webchat = { calendar: calendarPatch }
+    }
+    if (Object.keys(calendarConfigPatch).length) {
+      patch.calendar = calendarConfigPatch
     }
 
     const merged = mergeDeep({ ...currentConfig }, patch)
@@ -280,6 +300,26 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
       body: { config: merged },
     })
     if (!putResp.ok) throw new Error(putResp.error)
+
+    async function upsertSecret(clave: string, valor: string, tier: "A" | "B") {
+      const secretResp = await callCrmApi<{ ok: boolean }>(
+        `/admin/tenants/${tenantId}/secrets/${encodeURIComponent(clave)}`,
+        {
+          method: "PUT",
+          organizacionId: null,
+          withUserToken: true,
+          body: { valor, tier },
+        },
+      )
+      if (!secretResp.ok) throw new Error(secretResp.error)
+    }
+
+    if (calendarUsername) {
+      await upsertSecret("calendar.username", calendarUsername, "A")
+    }
+    if (calendarPassword) {
+      await upsertSecret("calendar.password", calendarPassword, "B")
+    }
 
     revalidatePath(`/settings/tenants/${tenantId}`)
     return success("Configuración de calendario guardada.")

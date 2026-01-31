@@ -85,11 +85,18 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const features = getNestedRecord(config, "features")
   const webchatFeature = features ? getNestedRecord(features, "webchat") : null
   const webchatEnabled = webchatFeature ? Boolean(getNestedBoolean(webchatFeature, "enabled")) : false
+  const calendarConfig = getNestedRecord(config, "calendar") ?? {}
   const calendarInitialValues = {
     calendar_resource_id: getNestedString(webchatCalendar, "resource_id") ?? "",
     calendar_timezone: getNestedString(webchatCalendar, "timezone") ?? "",
     calendar_default_days: getNestedNumber(webchatCalendar, "default_days"),
     calendar_hold_minutes: getNestedNumber(webchatCalendar, "hold_minutes"),
+    calendar_provider: getNestedString(calendarConfig, "provider") ?? "",
+    calendar_server_url: getNestedString(calendarConfig, "server_url") ?? "",
+    calendar_server_url_alternate: getNestedString(calendarConfig, "server_url_alternate") ?? "",
+    calendar_server_port: getNestedNumber(calendarConfig, "server_port"),
+    calendar_full_calendar_url: getNestedString(calendarConfig, "full_calendar_url") ?? "",
+    calendar_full_contact_list_url: getNestedString(calendarConfig, "full_contact_list_url") ?? "",
   }
 
   return (
