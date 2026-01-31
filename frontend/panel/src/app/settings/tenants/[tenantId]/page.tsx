@@ -11,6 +11,7 @@ import { callCrmApi } from "@/lib/api/crm"
 import {
   TenantCalendarSettings,
   TenantMailSettings,
+  TenantTwilioSettings,
   TenantConfigEditor,
   TenantRoutingManager,
   TenantSecretsManager,
@@ -108,6 +109,17 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     mail_use_ssl: getNestedBoolean(mailConfig, "use_ssl"),
     mail_use_tls: getNestedBoolean(mailConfig, "use_tls"),
   }
+  const twilioConfig = getNestedRecord(config, "twilio") ?? {}
+  const voiceConfig = getNestedRecord(config, "voice") ?? {}
+  const twilioInitialValues = {
+    twilio_phone_number: getNestedString(twilioConfig, "phone_number"),
+    twilio_phone_number_sid: getNestedString(twilioConfig, "phone_number_sid"),
+    twilio_validate_signatures: getNestedBoolean(twilioConfig, "validate_signatures") ?? true,
+    voice_webhook_path: getNestedString(voiceConfig, "webhook_path") ?? "",
+    voice_full_duplex: getNestedBoolean(voiceConfig, "full_duplex") ?? true,
+    voice_debug_verbose: getNestedBoolean(voiceConfig, "debug_verbose") ?? false,
+    voice_debug_energy_every_n: getNestedNumber(voiceConfig, "energy_every_n"),
+  }
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -133,10 +145,11 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="webchat">
-              <TabsList className="grid grid-cols-6">
+              <TabsList className="grid grid-cols-7">
                 <TabsTrigger value="webchat">Webchat</TabsTrigger>
                 <TabsTrigger value="calendar">Calendario</TabsTrigger>
                 <TabsTrigger value="mail">Correo</TabsTrigger>
+                <TabsTrigger value="twilio">Twilio</TabsTrigger>
                 <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
                 <TabsTrigger value="routing">Routing</TabsTrigger>
                 <TabsTrigger value="secrets">Secretos</TabsTrigger>
@@ -162,6 +175,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               </TabsContent>
               <TabsContent value="mail" className="pt-4">
                 <TenantMailSettings tenantId={tenantId} initialValues={mailInitialValues} />
+              </TabsContent>
+              <TabsContent value="twilio" className="pt-4">
+                <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
               </TabsContent>
               <TabsContent value="config" className="pt-4">
                 <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />

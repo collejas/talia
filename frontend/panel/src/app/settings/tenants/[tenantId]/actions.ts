@@ -398,6 +398,79 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
   }
 }
 
+export async function updateTwilioSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+
+    const phoneNumber = getText(formData, "twilio_phone_number")
+    const phoneNumberSid = getText(formData, "twilio_phone_number_sid")
+    const validateSignatures = formData.has("twilio_validate_signatures")
+    const webhookPath = getText(formData, "voice_webhook_path")
+    const fullDuplex = formData.has("voice_full_duplex")
+    const debugVerbose = formData.has("voice_debug_verbose")
+    const debugEnergyRaw = getText(formData, "voice_debug_energy_every_n")
+
+    const accountSid = getText(formData, "twilio_account_sid")
+    const authToken = getText(formData, "twilio_auth_token")
+    const streamJwtSecret = getText(formData, "voice_stream_jwt_secret")
+
+    const twilioPatch: Record<string, unknown> = {}
+    if (phoneNumber) twilioPatch.phone_number = phoneNumber
+    if (phoneNumberSid) twilioPatch.phone_number_sid = phoneNumberSid
+    twilioPatch.validate_signatures = validateSignatures
+
+    const voicePatch: Record<string, unknown> = {
+      full_duplex: fullDuplex,
+      debug_verbose: debugVerbose,
+    }
+    if (webhookPath) voicePatch.webhook_path = webhookPath
+    const debugEnergy = parseNumber(debugEnergyRaw)
+    if (debugEnergy !== undefined) voicePatch.energy_every_n = debugEnergy
+
+    const hasConfigUpdate = Boolean(Object.keys(twilioPatch).length || Object.keys(voicePatch).length)
+    if (!hasConfigUpdate && !accountSid && !authToken && !streamJwtSecret) {
+      throw new Error("Debes completar al menos un campo de la configuración de Twilio.")
+    }
+
+    const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
+      method: "GET",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!getResp.ok) throw new Error(getResp.error)
+
+    const currentConfig = getResp.data.config ?? {}
+    const patch: Record<string, unknown> = {}
+    if (Object.keys(twilioPatch).length) patch.twilio = twilioPatch
+    if (Object.keys(voicePatch).length) patch.voice = voicePatch
+
+    const merged = mergeDeep({ ...currentConfig }, patch)
+
+    const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+      method: "PUT",
+      organizacionId: null,
+      withUserToken: true,
+      body: { config: merged },
+    })
+    if (!putResp.ok) throw new Error(putResp.error)
+
+    if (accountSid) {
+      await upsertTenantSecret(tenantId, "twilio.account_sid", accountSid, "A")
+    }
+    if (authToken) {
+      await upsertTenantSecret(tenantId, "twilio.auth_token", authToken, "B")
+    }
+    if (streamJwtSecret) {
+      await upsertTenantSecret(tenantId, "voice.stream_jwt_secret", streamJwtSecret, "B")
+    }
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de Twilio guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración de Twilio.")
+  }
+}
+
 export async function validateTenantAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

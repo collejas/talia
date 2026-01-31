@@ -425,7 +425,7 @@ async def delete_tenant_secret(
 @router.post("/tenants/{organizacion_id}/validate", response_model=TenantValidationReport)
 async def validate_tenant(
     organizacion_id: UUID,
-    scope: Literal["webchat", "calendar", "mail", "full"] = "full",
+    scope: Literal["webchat", "calendar", "mail", "twilio", "full"] = "full",
     _: UUID = Depends(require_platform_admin),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
@@ -438,12 +438,27 @@ async def validate_tenant(
 
     report = TenantValidationReport(organizacion_id=organizacion_id)
 
-    required_route_canals = ["webchat"] if scope in {"webchat", "calendar", "full"} else []
+    required_route_canals: list[str] = []
+    if scope in {"webchat", "calendar", "full"}:
+        required_route_canals.append("webchat")
+    if scope in {"twilio", "full"}:
+        required_route_canals.append("whatsapp")
     for canal in required_route_canals:
         has = any(isinstance(r, dict) and r.get("canal") == canal for r in routes)
         if not has:
             report.missing_routes.append(f"route:{canal}")
 
+    twilio_config_keys = [
+        "twilio.phone_number",
+        "twilio.phone_number_sid",
+        "twilio.validate_signatures",
+    ]
+    voice_config_keys = [
+        "voice.webhook_path",
+        "voice.full_duplex",
+        "voice.debug_verbose",
+        "voice.energy_every_n",
+    ]
     webchat_config_keys = [
         "webchat.assistant_id",
         "webchat.prompt_version",
@@ -472,11 +487,15 @@ async def validate_tenant(
 
     required_config: list[str]
     if scope == "full":
-        required_config = webchat_config_keys + calendar_config_keys + mail_config_keys
+        required_config = (
+            webchat_config_keys + calendar_config_keys + mail_config_keys + twilio_config_keys + voice_config_keys
+        )
     elif scope == "calendar":
         required_config = calendar_config_keys
     elif scope == "mail":
         required_config = mail_config_keys
+    elif scope == "twilio":
+        required_config = twilio_config_keys + voice_config_keys
     else:
         required_config = webchat_config_keys
 
@@ -495,11 +514,14 @@ async def validate_tenant(
             "calendar.password",
             "google.places_api_key",
             "google.oauth.client_secret",
+            "voice.stream_jwt_secret",
         ]
     elif scope == "calendar":
         required_secrets = ["calendar.username", "calendar.password"]
     elif scope == "mail":
         required_secrets = ["mail.username", "mail.password"]
+    elif scope == "twilio":
+        required_secrets = ["twilio.account_sid", "twilio.auth_token", "voice.stream_jwt_secret"]
     else:
         required_secrets = ["openai.api_key"]
 

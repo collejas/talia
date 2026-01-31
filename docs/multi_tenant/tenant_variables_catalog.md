@@ -204,6 +204,18 @@ Correo (ejemplos):
 
 > ✅ La pestaña “Correo” del panel ya expone estos campos y rota los secretos relacionados por tenant.
 
+Twilio / Voz (ejemplos):
+- `TWILIO_PHONE_NUMBER` → `twilio.phone_number`
+- `TWILIO_PHONE_NUMBER_SID` → `twilio.phone_number_sid`
+- `TWILIO_VALIDATE_SIGNATURES` → `twilio.validate_signatures`
+- `WEBHOOK_PATH` → `voice.webhook_path`
+- `VOICE_FULL_DUPLEX` → `voice.full_duplex`
+- `VOICE_STREAM_JWT_SECRET` → `voice.stream_jwt_secret`
+- `DEBUG_VOICE_VERBOSE` → `voice.debug_verbose`
+- `DEBUG_ENERGY_EVERY_N` → `voice.energy_every_n`
+
+> ✅ La pestaña “Twilio” del panel ya configura estos bloques (config + secretos) y ofrece validación por canal.
+
 ## 4) Secretos por tenant (BD: `public.secretos`)
 
 Valores sensibles que NO deben vivir en `.env` por tenant y que la UI debe manejar sin mostrar el valor una vez guardado (solo “actualizar/rotar”).
@@ -212,9 +224,9 @@ OpenAI (si quieres llave por tenant):
 - `TALIA_OPENAI_API_KEY` / `OPENAI_API_KEY`
 
 Twilio:
-- `TWILIO_ACCOUNT_SID` (no siempre secreto, pero sensible)
-- `TWILIO_AUTH_TOKEN`
-- `VOICE_STREAM_JWT_SECRET` (si se usa)
+- `twilio.account_sid` (nivel A)
+- `twilio.auth_token` (nivel B)
+- `voice.stream_jwt_secret` (nivel B)
 
 Messenger:
 - `MESSENGER_PAGE_ACCESS_TOKEN`
@@ -259,6 +271,7 @@ En `/settings/tenants`, por tenant:
 - El panel `/settings/tenants` ya tiene pestañas para Webchat, Calendario y Correo, cada una guardando los campos de `organizaciones.config`, rotando los secretos (`openai.api_key`, `calendar.username`/`password`, `mail.username`/`password`) y mostrando un botón “Validar” centrado en el scope correspondiente.
 - El backend todavía lee valores heredados de `backend/.env` (`TALIA_MAIL_*`, `TALIA_CALENDARIO_*`, `WEBCHAT_*`), pero el objetivo es migrar esos valores al tenant legacy y dejar en `.env` solo variables globales (infraestructura, URLs, master keys de cifrado).
 - Falta ejecutar el plan de migración completo (leer del `.env` actual → poblar BD → eliminar de `.env`) para que solo queden las variables que no cambian por tenant.
+- La pestaña “Twilio” ya guarda `twilio.*` / `voice.*` y los secretos `twilio.account_sid` / `twilio.auth_token` / `voice.stream_jwt_secret`, así que ese bloque puede migrar a BD también.
 
 ## Nota de seguridad (para decisión de producto)
 

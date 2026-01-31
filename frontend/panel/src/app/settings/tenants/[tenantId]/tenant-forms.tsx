@@ -19,6 +19,7 @@ import {
   setTenantSecretAction,
   updateCalendarSettingsAction,
   updateMailSettingsAction,
+  updateTwilioSettingsAction,
   updateTenantConfigAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -141,6 +142,16 @@ type MailInitialValues = {
   mail_outgoing_port_smtp?: number
   mail_use_ssl?: boolean
   mail_use_tls?: boolean
+}
+
+type TwilioInitialValues = {
+  twilio_phone_number?: string
+  twilio_phone_number_sid?: string
+  twilio_validate_signatures?: boolean
+  voice_webhook_path?: string
+  voice_full_duplex?: boolean
+  voice_debug_verbose?: boolean
+  voice_debug_energy_every_n?: number
 }
 
 export function TenantWebchatSettings({
@@ -669,6 +680,205 @@ export function TenantMailSettings({
           <div>
             <h3 className="text-sm font-medium">Validación</h3>
             <p className="text-xs text-muted-foreground">Revisa faltantes de config/secretos.</p>
+          </div>
+          <Button type="submit" variant="outline" size="sm">
+            Validar
+          </Button>
+        </div>
+        {validateState.report ? (
+          <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
+            <p className="font-medium">{validateState.message}</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_routes.length ? (
+                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_config.length ? (
+                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_secrets.length ? (
+                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              {validateState.report.notes.length ? (
+                <div className="space-y-1 md:col-span-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+                  <ul className="list-disc pl-5">
+                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <FormStatusMessage state={validateState} />
+        )}
+      </form>
+    </div>
+  )
+}
+
+export function TenantTwilioSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: TwilioInitialValues
+}) {
+  const [state, formAction] = useActionState(updateTwilioSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="space-y-6">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="twilio_phone_number">twilio.phone_number</Label>
+            <Input
+              id="twilio_phone_number"
+              name="twilio_phone_number"
+              placeholder="+5214443354450"
+              defaultValue={initialValues.twilio_phone_number ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="twilio_phone_number_sid">twilio.phone_number_sid</Label>
+            <Input
+              id="twilio_phone_number_sid"
+              name="twilio_phone_number_sid"
+              placeholder="PNXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+              defaultValue={initialValues.twilio_phone_number_sid ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            id="twilio_validate_signatures"
+            name="twilio_validate_signatures"
+            type="checkbox"
+            className="size-4"
+            defaultChecked={Boolean(initialValues.twilio_validate_signatures)}
+          />
+          <Label htmlFor="twilio_validate_signatures">twilio.validate_signatures</Label>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="voice_webhook_path">voice.webhook_path</Label>
+            <Input
+              id="voice_webhook_path"
+              name="voice_webhook_path"
+              placeholder="call-whisper"
+              defaultValue={initialValues.voice_webhook_path ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="voice_debug_energy_every_n">voice.energy_every_n</Label>
+            <Input
+              id="voice_debug_energy_every_n"
+              name="voice_debug_energy_every_n"
+              type="number"
+              min={0}
+              defaultValue={initialValues.voice_debug_energy_every_n ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex items-center gap-3">
+            <input
+              id="voice_full_duplex"
+              name="voice_full_duplex"
+              type="checkbox"
+              className="size-4"
+              defaultChecked={Boolean(initialValues.voice_full_duplex)}
+            />
+            <Label htmlFor="voice_full_duplex">voice.full_duplex</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              id="voice_debug_verbose"
+              name="voice_debug_verbose"
+              type="checkbox"
+              className="size-4"
+              defaultChecked={Boolean(initialValues.voice_debug_verbose)}
+            />
+            <Label htmlFor="voice_debug_verbose">voice.debug_verbose</Label>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Esta sección guarda la configuración no sensible de <code>organizaciones.config.twilio</code> y <code>organizaciones.config.voice</code>.
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="twilio_account_sid">twilio.account_sid (secreto, tier A)</Label>
+            <Input
+              id="twilio_account_sid"
+              name="twilio_account_sid"
+              type="password"
+              placeholder="AC..."
+              defaultValue=""
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="twilio_auth_token">twilio.auth_token (secreto, tier B)</Label>
+            <Input
+              id="twilio_auth_token"
+              name="twilio_auth_token"
+              type="password"
+              placeholder="Auth token"
+              defaultValue=""
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="voice_stream_jwt_secret">voice.stream_jwt_secret (secreto, tier B)</Label>
+            <Input
+              id="voice_stream_jwt_secret"
+              name="voice_stream_jwt_secret"
+              type="password"
+              placeholder="Token JWT para el stream"
+              defaultValue=""
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar Twilio" pendingLabel="Guardando..." />
+        </div>
+      </form>
+
+      <form action={validateAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="scope" value="twilio" />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Validación</h3>
+            <p className="text-xs text-muted-foreground">Revisa faltantes de config/secretos para Twilio/Voz.</p>
           </div>
           <Button type="submit" variant="outline" size="sm">
             Validar

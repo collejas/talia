@@ -88,7 +88,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-
+codex resume 019c1168-6f48-7b02-ba42-ad799ff9793e
 • Called
   └ supabase.execute_sql({"query":"SELECT id, organizacion_id, nombre, descripcion, activo, metadata, creado_en, actualizado_en,
         familia_id FROM public.modelos_productos ORDER BY creado_en DESC LIMIT 5;"})

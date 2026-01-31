@@ -94,6 +94,19 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 
 > ✅ La pestaña “Correo” del panel ya persiste estas claves y rota los secretos correspondientes por tenant.
 
+### `twilio.*`
+- `twilio.phone_number` (string) ← `TWILIO_PHONE_NUMBER`
+- `twilio.phone_number_sid` (string) ← `TWILIO_PHONE_NUMBER_SID`
+- `twilio.validate_signatures` (bool) ← `TWILIO_VALIDATE_SIGNATURES`
+
+### `voice.*`
+- `voice.webhook_path` (string) ← `WEBHOOK_PATH`
+- `voice.full_duplex` (bool) ← `VOICE_FULL_DUPLEX`
+- `voice.debug_verbose` (bool) ← `DEBUG_VOICE_VERBOSE`
+- `voice.energy_every_n` (number) ← `DEBUG_ENERGY_EVERY_N`
+
+> ✅ La pestaña “Twilio” del panel ahora persiste `twilio.*` y `voice.*` (incluidas las flags de streaming) y rota los secretos asociados.
+
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`
 - `whatsapp.inactivity_minutes` / `whatsapp.reengage_minutes` / `whatsapp.escalate_minutes`
@@ -121,6 +134,7 @@ Ejemplos:
 ### Twilio
 - `twilio.account_sid` (nivel A, POR_TENANT)
 - `twilio.auth_token` (nivel B, POR_TENANT)
+- `voice.stream_jwt_secret` (nivel B, POR_TENANT)
 
 ### Messenger / Meta
 - `meta.messenger.page_access_token` (nivel B, POR_TENANT)
