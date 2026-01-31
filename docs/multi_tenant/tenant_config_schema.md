@@ -82,6 +82,14 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `calendar.full_calendar_url` (string) ← `TALIA_CALENDARIO_FULL_CALENDAR_URL`
 - `calendar.full_contact_list_url` (string) ← `TALIA_CALENDARIO_FULL_CONTACT_LIST_URL`
 
+### `mail.*`
+- `mail.incoming_server` (string) ← `TALIA_MAIL_INCOMING_SERVER`
+- `mail.incoming_port_imap` (number) ← `TALIA_MAIL_INCOMING_PORT_IMAP`
+- `mail.outgoing_server` (string) ← `TALIA_MAIL_OUTGOING_SERVER`
+- `mail.outgoing_port_smtp` (number) ← `TALIA_MAIL_OUTGOING_PORT_SMTP`
+- `mail.use_ssl` (bool) ← `TALIA_MAIL_USE_SSL`
+- `mail.use_tls` (bool) ← `TALIA_MAIL_USE_TLS`
+
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`
 - `whatsapp.inactivity_minutes` / `whatsapp.reengage_minutes` / `whatsapp.escalate_minutes`

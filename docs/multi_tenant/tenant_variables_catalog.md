@@ -63,6 +63,16 @@ Correo/Calendario:
 - `TALIA_CALENDARIO_SERVER_URL`, `TALIA_CALENDARIO_SERVER_URL_ALTERNATE`, `TALIA_CALENDARIO_SERVER_PORT`
 - `TALIA_CALENDARIO_FULL_CALENDAR_URL`, `TALIA_CALENDARIO_FULL_CONTACT_LIST_URL`
 
+### Correo (por tenant)
+- `TALIA_MAIL_USERNAME` → `mail.username` (secreto, nivel A)
+- `TALIA_MAIL_CONTRASENA` → `mail.password` (secreto, nivel B)
+- `TALIA_MAIL_INCOMING_SERVER` → `mail.incoming_server`
+- `TALIA_MAIL_INCOMING_PORT_IMAP` → `mail.incoming_port_imap`
+- `TALIA_MAIL_OUTGOING_SERVER` → `mail.outgoing_server`
+- `TALIA_MAIL_OUTGOING_PORT_SMTP` → `mail.outgoing_port_smtp`
+- `TALIA_MAIL_USE_SSL` → `mail.use_ssl`
+- `TALIA_MAIL_USE_TLS` → `mail.use_tls`
+
 Inventario completo (lista plana):
 - `API_NEARBY_SEARCH`
 - `BARGE_ENERGY_HIGH`, `BARGE_ENERGY_LOW`, `BARGE_IN_COOLDOWN_MS`, `BARGE_IN_ENABLED`, `BARGE_IN_MIN_AI_MS`, `BARGE_MIN_SPEECH_MS`, `BARGE_REQUIRE_AI_SPEAKING`, `BARGE_REQUIRE_VAD`

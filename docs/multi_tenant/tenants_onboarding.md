@@ -148,3 +148,4 @@ Se reservan para defaults globales o fallback, no para onboarding por cliente.
 - [ ] UI: reemplazar JSON libre por formularios por sección (webchat/whatsapp/messenger/mail/calendar/google)
 - [ ] UI: wizard “Onboarding” con pasos y requeridos mínimos
 - [ ] Runtime: usar `secretos`/`organizaciones.config` por tenant (con fallback a `.env` legacy)
+- [ ] UI: agregar validaciones de Correo (SMTP/IMAP) en `/settings/tenants` y documentar los requeridos por tenant
