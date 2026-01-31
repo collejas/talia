@@ -194,6 +194,69 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
     )
 
 
+@dataclass(slots=True)
+class CalendarRuntimeSettings:
+    resource_id: str | None
+    timezone: str
+    default_days: int
+    hold_minutes: int
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_timezone(value: Any, fallback: str) -> str:
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate:
+            return candidate
+    return fallback
+
+
+async def get_calendar_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> CalendarRuntimeSettings:
+    default_timezone = settings.webchat_calendar_timezone
+    default_days = settings.webchat_calendar_default_days
+    default_hold = settings.webchat_calendar_hold_minutes
+
+    settings_payload = CalendarRuntimeSettings(
+        resource_id=settings.webchat_calendar_resource_id,
+        timezone=default_timezone,
+        default_days=default_days,
+        hold_minutes=default_hold,
+    )
+
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    webchat = _as_dict(config.get("webchat")) or {}
+    calendar = _as_dict(webchat.get("calendar")) or {}
+
+    resource_id = calendar.get("resource_id")
+    if isinstance(resource_id, str) and resource_id.strip():
+        settings_payload.resource_id = resource_id.strip()
+
+    timezone = calendar.get("timezone")
+    settings_payload.timezone = _normalize_timezone(timezone, settings_payload.timezone)
+
+    settings_payload.default_days = _coerce_int(calendar.get("default_days"), settings_payload.default_days)
+    settings_payload.hold_minutes = _coerce_int(calendar.get("hold_minutes"), settings_payload.hold_minutes)
+
+    if not settings_payload.resource_id:
+        settings_payload.resource_id = settings.webchat_calendar_resource_id
+
+    return settings_payload
+
+
 async def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:
     """Devuelve el alias principal (primera ruta activa) para webchat."""
     data = await _supabase_get(

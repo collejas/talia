@@ -124,7 +124,7 @@ async def execute_tool(
         return await _handle_restart_cycle(arguments, context)
 
     if func == "list_demo_slots":
-        return await _handle_list_demo_slots(arguments)
+        return await _handle_list_demo_slots(arguments, context)
 
     if func == "schedule_demo":
         return await _handle_schedule_demo(arguments, context)
@@ -683,13 +683,23 @@ async def _handle_restart_cycle(
     }
 
 
-async def _handle_list_demo_slots(arguments: dict[str, Any]) -> dict[str, Any]:
-    resource_id = webchat_service._resolve_calendar_resource_id()
-    timezone_pref = webchat_service._resolve_timezone_preference(arguments.get("timezone"))
+async def _handle_list_demo_slots(
+    arguments: dict[str, Any],
+    context: ToolRuntimeContext,
+) -> dict[str, Any]:
+    conversation_meta = await webchat_service._resolve_conversation_metadata(context.conversation_id)
+    calendar_settings = await webchat_service.get_calendar_runtime_settings_for_organizacion(
+        conversation_meta.get("organizacion_id")
+    )
+    resource_id = calendar_settings.resource_id
+    if not resource_id:
+        raise ValueError("No se configuró el calendario de demos para el webchat.")
+    timezone_pref = webchat_service._resolve_timezone_preference(arguments.get("timezone"), calendar_settings)
     start_raw = arguments.get("start_date") or arguments.get("window_start")
     start_date = webchat_service._parse_calendar_date(start_raw)
     window_days = webchat_service._normalize_window_days(
-        arguments.get("window_days") or arguments.get("days")
+        arguments.get("window_days") or arguments.get("days"),
+        calendar_settings.default_days,
     )
     end_date = start_date + timedelta(days=window_days - 1)
     try:
@@ -699,6 +709,7 @@ async def _handle_list_demo_slots(arguments: dict[str, Any]) -> dict[str, Any]:
             end_date=end_date,
             timezone_hint=timezone_pref,
             max_days=window_days,
+            fallback_hold_minutes=calendar_settings.hold_minutes,
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
@@ -722,7 +733,13 @@ async def _handle_list_demo_slots(arguments: dict[str, Any]) -> dict[str, Any]:
 async def _handle_schedule_demo(
     arguments: dict[str, Any], context: ToolRuntimeContext
 ) -> dict[str, Any]:
-    resource_id = webchat_service._resolve_calendar_resource_id()
+    conversation_meta = await webchat_service._resolve_conversation_metadata(context.conversation_id)
+    calendar_settings = await webchat_service.get_calendar_runtime_settings_for_organizacion(
+        conversation_meta.get("organizacion_id")
+    )
+    resource_id = calendar_settings.resource_id
+    if not resource_id:
+        raise ValueError("No se configuró el calendario de demos para el webchat.")
     slot_id = str(arguments.get("slot_id") or "").strip()
     start_raw = arguments.get("start_at")
     if not start_raw and slot_id:
@@ -730,7 +747,7 @@ async def _handle_schedule_demo(
         if candidate:
             start_raw = candidate
     slot_datetime = webchat_service._parse_calendar_datetime(start_raw)
-    hold_minutes = max(1, settings.webchat_calendar_hold_minutes)
+    hold_minutes = max(1, calendar_settings.hold_minutes)
     slot_identifier = slot_id or webchat_service._build_slot_identifier(resource_id, slot_datetime)
     notes = (arguments.get("notes") or "").strip() or None
 

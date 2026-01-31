@@ -83,18 +83,19 @@ def _compute_slot_id(resource_id: str, slot_start_iso: str) -> str:
     return f"{resource_id}:{slot_start_iso}"
 
 
-def _compute_slot_duration_minutes(slots: list[dict[str, Any]]) -> int:
+def _compute_slot_duration_minutes(slots: list[dict[str, Any]], fallback_hold_minutes: int | None) -> int:
     if not slots:
-        return settings.webchat_calendar_hold_minutes
+        return fallback_hold_minutes if fallback_hold_minutes is not None else settings.webchat_calendar_hold_minutes
     first = slots[0]
     start_raw = first.get("slot_start")
     end_raw = first.get("slot_end")
     if not start_raw or not end_raw:
-        return settings.webchat_calendar_hold_minutes
+        return fallback_hold_minutes if fallback_hold_minutes is not None else settings.webchat_calendar_hold_minutes
     start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
     end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
     minutes = int((end - start).total_seconds() // 60)
-    return minutes if minutes > 0 else settings.webchat_calendar_hold_minutes
+    fallback = fallback_hold_minutes if fallback_hold_minutes is not None else settings.webchat_calendar_hold_minutes
+    return minutes if minutes > 0 else fallback
 
 
 async def list_slots(
@@ -104,6 +105,7 @@ async def list_slots(
     end_date: date,
     timezone_hint: str,
     max_days: int,
+    fallback_hold_minutes: int | None = None,
 ) -> dict[str, Any]:
     """Obtiene la disponibilidad de un recurso en el rango solicitado."""
     payload = {
@@ -143,7 +145,7 @@ async def list_slots(
         "window_start": window_start.isoformat(),
         "window_end": window_end.isoformat(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "slot_duration_minutes": _compute_slot_duration_minutes(rows),
+        "slot_duration_minutes": _compute_slot_duration_minutes(rows, fallback_hold_minutes),
         "slots": slots,
     }
 
