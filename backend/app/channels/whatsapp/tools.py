@@ -15,7 +15,7 @@ from app.channels.webchat import service as webchat_service
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import send_email, storage
+from app.services import send_email, storage, tenant_runtime
 from app.services.calendar import CalendarError
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.logging.catalog_debug import write_catalog_debug_entry
@@ -454,8 +454,11 @@ async def _handle_information_email(
                     extra={
                         "contact_id": contact.get("id") or context.contact_id,
                         "error": str(exc),
-                    },
-                )
+                },
+            )
+
+    mail_org_uuid = _contact_org_uuid(contact)
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)
 
     template = _clone_template()
     include_summary = bool(template.get("use_summary", True))
@@ -504,6 +507,7 @@ async def _handle_information_email(
             recipients=[email_value],
             body_html=None,
             attachments=None,
+            mail_settings=mail_settings,
         )
     except EmailSendError as exc:
         logger.error(
@@ -1009,6 +1013,21 @@ async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
             "whatsapp.tools.contact_lookup_failed",
             extra={"contact_id": contact_id, "error": str(exc)},
         )
+        return None
+
+
+def _contact_org_uuid(contact: dict[str, Any] | None) -> UUID | None:
+    if not contact:
+        return None
+    org_value = webchat_service._extract_contact_org(contact)
+    if not org_value:
+        return None
+    resolved = webchat_service._resolve_org_uuid(org_value)
+    if not resolved:
+        return None
+    try:
+        return UUID(resolved)
+    except ValueError:
         return None
 
 

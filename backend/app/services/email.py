@@ -13,6 +13,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.tenant_runtime import MailRuntimeSettings
 
 logger = get_logger("app.services.email")
 
@@ -33,6 +34,10 @@ def _normalize_recipients(recipients: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(result))
 
 
+def _resolve_mail_settings(mail_settings: MailRuntimeSettings | None) -> MailRuntimeSettings:
+    return mail_settings or MailRuntimeSettings.from_settings()
+
+
 def send_email(
     *,
     subject: str,
@@ -40,12 +45,15 @@ def send_email(
     recipients: Sequence[str],
     body_html: str | None = None,
     attachments: Sequence[dict[str, object]] | None = None,
+    mail_settings: MailRuntimeSettings | None = None,
 ) -> str:
     """Envía un correo y devuelve el Message-ID utilizado."""
 
     to_recipients = _normalize_recipients(recipients)
     if not to_recipients:
         raise EmailSendError("No se proporcionaron destinatarios válidos.")
+
+    mail_config = _resolve_mail_settings(mail_settings)
 
     message_id = make_msgid()
     if settings.brevo_api_key:
@@ -56,6 +64,7 @@ def send_email(
             body_html=body_html,
             recipients=to_recipients,
             attachments=attachments or (),
+            mail_settings=mail_config,
         )
     else:
         result = _send_email_smtp(
@@ -65,6 +74,7 @@ def send_email(
             body_html=body_html,
             recipients=to_recipients,
             attachments=attachments or (),
+            mail_settings=mail_config,
         )
 
     logger.info(
@@ -92,18 +102,19 @@ def _send_email_smtp(
     body_html: str | None,
     recipients: Sequence[str],
     attachments: Sequence[dict[str, object]],
+    mail_settings: MailRuntimeSettings,
 ) -> str:
-    smtp_host = (settings.mail_outgoing_server or "").strip()
-    smtp_port = settings.mail_outgoing_port_smtp or 587
-    username = (settings.mail_username or "").strip()
-    password = settings.mail_password
+    smtp_host = (mail_settings.outgoing_server or "").strip()
+    smtp_port = mail_settings.outgoing_port_smtp or 587
+    username = (mail_settings.username or "").strip()
+    password = mail_settings.password
 
     if not smtp_host or not username or not password:
         raise EmailSendError("Configuración SMTP incompleta (host/usuario/contraseña).")
 
     message = EmailMessage()
     message["Subject"] = subject
-    display_name = (settings.mail_from_name or "").strip()
+    display_name = (mail_settings.from_name or "").strip()
     if display_name:
         message["From"] = formataddr((display_name, username))
     else:
@@ -136,7 +147,7 @@ def _send_email_smtp(
                 part[header_name] = str(value)
 
     context = ssl.create_default_context()
-    use_ssl = bool(getattr(settings, "mail_use_ssl", False))
+    use_ssl = mail_settings.use_ssl
     try:
         if use_ssl:
             with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
@@ -144,7 +155,7 @@ def _send_email_smtp(
                 server.send_message(message)
         else:
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                if settings.mail_use_tls:
+                if mail_settings.use_tls:
                     server.starttls(context=context)
                 server.login(username, password)
                 server.send_message(message)
@@ -163,16 +174,17 @@ def _send_email_brevo(
     body_html: str | None,
     recipients: Sequence[str],
     attachments: Sequence[dict[str, object]],
+    mail_settings: MailRuntimeSettings,
 ) -> str:
     api_key = (settings.brevo_api_key or "").strip()
     base_url = (settings.brevo_base_url or "https://api.brevo.com/v3").strip().rstrip("/")
-    sender_email = (settings.mail_username or "").strip()
+    sender_email = (mail_settings.username or "").strip()
     if not api_key:
         raise EmailSendError("Configuración Brevo incompleta: falta API Key.")
     if not sender_email:
         raise EmailSendError("Configuración Brevo incompleta: falta MAIL_USERNAME como remitente.")
 
-    sender_name = (settings.mail_from_name or "").strip() or sender_email
+    sender_name = (mail_settings.from_name or "").strip() or sender_email
     endpoint = f"{base_url}/smtp/email"
     payload: dict[str, object] = {
         "sender": {"email": sender_email, "name": sender_name},

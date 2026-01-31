@@ -223,6 +223,16 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
+def _coerce_str(value: Any) -> str | None:
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    return candidate or None
+
+
 def _normalize_timezone(value: Any, fallback: str) -> str:
     if isinstance(value, str):
         candidate = value.strip()
@@ -269,6 +279,33 @@ async def get_calendar_runtime_settings(
     return settings_payload
 
 
+@dataclass(slots=True)
+class MailRuntimeSettings:
+    username: str | None
+    password: str | None
+    incoming_server: str | None
+    incoming_port_imap: int | None
+    outgoing_server: str | None
+    outgoing_port_smtp: int | None
+    use_ssl: bool
+    use_tls: bool
+    from_name: str | None
+
+    @staticmethod
+    def from_settings() -> "MailRuntimeSettings":
+        return MailRuntimeSettings(
+            username=settings.mail_username,
+            password=settings.mail_password,
+            incoming_server=settings.mail_incoming_server,
+            incoming_port_imap=settings.mail_incoming_port_imap,
+            outgoing_server=settings.mail_outgoing_server,
+            outgoing_port_smtp=settings.mail_outgoing_port_smtp,
+            use_ssl=settings.mail_use_ssl,
+            use_tls=settings.mail_use_tls,
+            from_name=settings.mail_from_name,
+        )
+
+
 def _coerce_bool(value: Any, default: bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -279,6 +316,48 @@ def _coerce_bool(value: Any, default: bool) -> bool:
         if lowered in {"0", "false", "f", "no", "n"}:
             return False
     return default
+
+
+async def get_mail_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> MailRuntimeSettings:
+    settings_payload = MailRuntimeSettings.from_settings()
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    mail_cfg = _as_dict(config.get("mail")) or {}
+    incoming_server = _coerce_str(mail_cfg.get("incoming_server"))
+    if incoming_server is not None:
+        settings_payload.incoming_server = incoming_server
+    incoming_port = mail_cfg.get("incoming_port_imap")
+    if incoming_port is not None:
+        settings_payload.incoming_port_imap = _coerce_int(
+            incoming_port, settings_payload.incoming_port_imap or 0
+        )
+    outgoing_server = _coerce_str(mail_cfg.get("outgoing_server"))
+    if outgoing_server is not None:
+        settings_payload.outgoing_server = outgoing_server
+    outgoing_port = mail_cfg.get("outgoing_port_smtp")
+    if outgoing_port is not None:
+        settings_payload.outgoing_port_smtp = _coerce_int(
+            outgoing_port, settings_payload.outgoing_port_smtp or 0
+        )
+    settings_payload.use_ssl = _coerce_bool(mail_cfg.get("use_ssl"), settings_payload.use_ssl)
+    settings_payload.use_tls = _coerce_bool(mail_cfg.get("use_tls"), settings_payload.use_tls)
+    from_name = _coerce_str(mail_cfg.get("from_name"))
+    if from_name is not None:
+        settings_payload.from_name = from_name
+
+    username_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="mail.username")
+    if username_secret:
+        settings_payload.username = username_secret
+    password_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="mail.password")
+    if password_secret:
+        settings_payload.password = password_secret
+
+    return settings_payload
 
 
 @dataclass(slots=True)

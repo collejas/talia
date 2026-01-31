@@ -60,6 +60,7 @@ from app.services import (
     normalize_denue_place,
     send_email,
     storage,
+    tenant_runtime,
 )
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
@@ -8391,6 +8392,9 @@ async def send_lead_quote(
     contact = _single_related(oportunidad_row.get("contacto")) or {}
     cuenta = _single_related(oportunidad_row.get("cuenta")) or {}
     oportunidad_metadata = _ensure_dict(oportunidad_row.get("metadata"), default={})
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(
+        organizacion_id=organizacion_id
+    )
     lead_label = (
         oportunidad_row.get("titulo")
         or contact.get("nombre_completo")
@@ -8411,11 +8415,13 @@ async def send_lead_quote(
         base_payload.total = totals["total"]
     conceptos_context = base_payload.conceptos or _concepts_from_items(normalized_items)
 
+    issuer_name = mail_settings.from_name or mail_settings.username or "Tal-IA"
+    issuer_email = mail_settings.username
     quote_context = quotes_service.QuoteRenderContext(
         lead_label=lead_label,
         reference=str(oportunidad_id).split("-")[0],
-        issuer_name=settings.mail_username or "Tal-IA",
-        issuer_email=settings.mail_username,
+        issuer_name=issuer_name,
+        issuer_email=issuer_email,
         contact_name=_clean_text(contact.get("nombre_completo")),
         contact_company=_clean_text(contact.get("company_name")),
         contact_email=_clean_text(contact.get("correo")),
@@ -8494,6 +8500,7 @@ async def send_lead_quote(
                         "filename": pdf_doc.filename,
                     }
                 ],
+                mail_settings=mail_settings,
             )
         except EmailSendError as exc:
             raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
@@ -8811,6 +8818,8 @@ async def crear_link_portal_cliente(
         body["creado_por"] = user_id
     body.update(_cliente_context(cliente_data))
 
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=organizacion_id)
+
     registro = await repo.create_portal_token(
         usuario_token=user_token,
         payload=body,
@@ -8832,6 +8841,7 @@ async def crear_link_portal_cliente(
                     subject=subject,
                     body_text=body_text,
                     recipients=recipients,
+                    mail_settings=mail_settings,
                 )
                 email_summary.update({"sent": True, "recipients": recipients, "subject": subject})
             except EmailSendError as exc:

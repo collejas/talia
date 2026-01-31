@@ -353,13 +353,14 @@ def _build_demo_ics_attachment(
     timezone_name: str,
     contact_name: str | None,
     contact_email: str,
+    organizer_email: str,
+    organizer_name: str | None,
 ) -> dict[str, object]:
     start_utc = booking.start_at.astimezone(timezone.utc)
     end_source = booking.end_at or (
         booking.start_at + timedelta(minutes=DEFAULT_DEMO_DURATION_MINUTES)
     )
     end_utc = end_source.astimezone(timezone.utc)
-    organizer_email = (settings.mail_username or contact_email).strip() or contact_email
     description_parts = [
         "Demo de Tal-IA confirmada.",
         f"Zona horaria preferida: {timezone_name.replace('_', ' ')}.",
@@ -369,6 +370,9 @@ def _build_demo_ics_attachment(
     description = _sanitize_ics_text(" ".join(description_parts))
     summary = _sanitize_ics_text("Demo Tal-IA")
     attendee_name = contact_name.strip() if isinstance(contact_name, str) else contact_email
+    organizer_display = (
+        _sanitize_ics_text(organizer_name.strip()) if organizer_name else "Tal-IA"
+    )
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -383,7 +387,7 @@ def _build_demo_ics_attachment(
         f"SUMMARY:{summary}",
         f"DESCRIPTION:{description}",
         f"ATTENDEE;CN={_sanitize_ics_text(attendee_name)}:mailto:{contact_email}",
-        f"ORGANIZER;CN=Tal-IA:mailto:{organizer_email}",
+        f"ORGANIZER;CN={organizer_display}:mailto:{organizer_email}",
         "STATUS:CONFIRMED",
         "SEQUENCE:0",
         "END:VEVENT",
@@ -497,6 +501,11 @@ async def _send_booking_confirmation_email(
         )
         return
 
+    org_uuid = _parse_org_uuid(org_hint)
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=org_uuid)
+    organizer_email = (mail_settings.username or email_value).strip() or email_value
+    organizer_name = mail_settings.from_name or "Tal-IA"
+
     timezone_name = booking.timezone or settings.webchat_calendar_timezone
     tz_label = timezone_name.replace("_", " ")
     try:
@@ -538,6 +547,8 @@ async def _send_booking_confirmation_email(
             timezone_name=timezone_name,
             contact_name=contact_name,
             contact_email=email_value,
+            organizer_email=organizer_email,
+            organizer_name=organizer_name,
         )
     ]
 
@@ -548,6 +559,7 @@ async def _send_booking_confirmation_email(
             body_text="\n".join(body_lines),
             recipients=[email_value],
             attachments=attachments,
+            mail_settings=mail_settings,
         )
     except EmailSendError as exc:
         await _mark_booking_invite_status(
@@ -756,6 +768,9 @@ async def _send_booking_cancellation_email(
         )
         return
 
+    contact_org_uuid = _parse_org_uuid(_extract_contact_org(contact))
+    mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=contact_org_uuid)
+
     timezone_name = booking.timezone or settings.webchat_calendar_timezone
     tz_label = timezone_name.replace("_", " ") if isinstance(timezone_name, str) else "UTC"
     try:
@@ -792,6 +807,7 @@ async def _send_booking_cancellation_email(
             subject="Tal-IA · Demo cancelada",
             body_text="\n".join(body_lines),
             recipients=[email_value],
+            mail_settings=mail_settings,
         )
     except EmailSendError as exc:
         await _patch_booking_metadata(
@@ -1272,6 +1288,16 @@ def _resolve_org_uuid(value: str | None) -> str | None:
         except ValueError:
             pass
     return None
+
+
+def _parse_org_uuid(value: str | None) -> UUID | None:
+    resolved = _resolve_org_uuid(value)
+    if not resolved:
+        return None
+    try:
+        return UUID(resolved)
+    except ValueError:
+        return None
 
 
 def _extract_metadata_alias(metadata: dict[str, Any] | None) -> str | None:
