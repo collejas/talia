@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
 
 import {
+  TenantCalendarSettings,
   TenantConfigEditor,
   TenantRoutingManager,
   TenantSecretsManager,
@@ -84,6 +85,12 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const features = getNestedRecord(config, "features")
   const webchatFeature = features ? getNestedRecord(features, "webchat") : null
   const webchatEnabled = webchatFeature ? Boolean(getNestedBoolean(webchatFeature, "enabled")) : false
+  const calendarInitialValues = {
+    calendar_resource_id: getNestedString(webchatCalendar, "resource_id") ?? "",
+    calendar_timezone: getNestedString(webchatCalendar, "timezone") ?? "",
+    calendar_default_days: getNestedNumber(webchatCalendar, "default_days"),
+    calendar_hold_minutes: getNestedNumber(webchatCalendar, "hold_minutes"),
+  }
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -109,8 +116,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="webchat">
-              <TabsList className="grid grid-cols-4">
+              <TabsList className="grid grid-cols-5">
                 <TabsTrigger value="webchat">Webchat</TabsTrigger>
+                <TabsTrigger value="calendar">Calendario</TabsTrigger>
                 <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
                 <TabsTrigger value="routing">Routing</TabsTrigger>
                 <TabsTrigger value="secrets">Secretos</TabsTrigger>
@@ -122,26 +130,17 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                     enabled: webchatEnabled,
                     assistant_id: getNestedString(webchatConfig, "assistant_id") ?? "",
                     prompt_version: getNestedString(webchatConfig, "prompt_version") ?? "",
-                    inactivity_hours:
-                      getNestedNumber(webchatConfig, "inactivity_hours"),
-                    persist_session:
-                      getNestedBoolean(webchatConfig, "persist_session"),
-                    reengage_minutes:
-                      getNestedNumber(webchatConfig, "reengage_minutes"),
-                    reengage_max_attempts:
-                      getNestedNumber(webchatConfig, "reengage_max_attempts"),
-                    escalate_minutes:
-                      getNestedNumber(webchatConfig, "escalate_minutes"),
-                    calendar_resource_id:
-                      getNestedString(webchatCalendar, "resource_id") ?? "",
-                    calendar_timezone: getNestedString(webchatCalendar, "timezone") ?? "",
-                    calendar_default_days:
-                      getNestedNumber(webchatCalendar, "default_days"),
-                    calendar_hold_minutes:
-                      getNestedNumber(webchatCalendar, "hold_minutes"),
+                    inactivity_hours: getNestedNumber(webchatConfig, "inactivity_hours"),
+                    persist_session: getNestedBoolean(webchatConfig, "persist_session"),
+                    reengage_minutes: getNestedNumber(webchatConfig, "reengage_minutes"),
+                    reengage_max_attempts: getNestedNumber(webchatConfig, "reengage_max_attempts"),
+                    escalate_minutes: getNestedNumber(webchatConfig, "escalate_minutes"),
                     webchat_alias: webchatRoute,
                   }}
                 />
+              </TabsContent>
+              <TabsContent value="calendar" className="pt-4">
+                <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
               </TabsContent>
               <TabsContent value="config" className="pt-4">
                 <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />

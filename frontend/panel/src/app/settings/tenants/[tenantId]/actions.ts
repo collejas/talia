@@ -60,6 +60,12 @@ function mergeDeep(target: Record<string, unknown>, patch: Record<string, unknow
   return target
 }
 
+function parseNumber(raw: string): number | undefined {
+  if (!raw) return undefined
+  const num = Number(raw)
+  return Number.isFinite(num) ? num : undefined
+}
+
 export async function updateTenantConfigAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)
@@ -157,10 +163,6 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     const reengageMinutesRaw = getText(formData, "webchat_reengage_minutes")
     const reengageMaxAttemptsRaw = getText(formData, "webchat_reengage_max_attempts")
     const escalateMinutesRaw = getText(formData, "webchat_escalate_minutes")
-    const calendarResourceId = getText(formData, "webchat_calendar_resource_id")
-    const calendarTimezone = getText(formData, "webchat_calendar_timezone")
-    const calendarDefaultDaysRaw = getText(formData, "webchat_calendar_default_days")
-    const calendarHoldMinutesRaw = getText(formData, "webchat_calendar_hold_minutes")
 
     const openaiApiKey = getText(formData, "openai_api_key")
     const webchatAlias = getText(formData, "webchat_alias")
@@ -177,12 +179,6 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
 
     patch.features = { webchat: { enabled: webchatEnabled } }
 
-    const parseNumber = (raw: string): number | undefined => {
-      if (!raw) return undefined
-      const num = Number(raw)
-      return Number.isFinite(num) ? num : undefined
-    }
-
     const webchatPatch: Record<string, unknown> = {}
     if (assistantId) webchatPatch.assistant_id = assistantId
     if (promptVersion) webchatPatch.prompt_version = promptVersion
@@ -195,15 +191,6 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     if (reengageMaxAttempts !== undefined) webchatPatch.reengage_max_attempts = reengageMaxAttempts
     const escalateMinutes = parseNumber(escalateMinutesRaw)
     if (escalateMinutes !== undefined) webchatPatch.escalate_minutes = escalateMinutes
-
-    const calendarPatch: Record<string, unknown> = {}
-    if (calendarResourceId) calendarPatch.resource_id = calendarResourceId
-    if (calendarTimezone) calendarPatch.timezone = calendarTimezone
-    const calendarDefaultDays = parseNumber(calendarDefaultDaysRaw)
-    if (calendarDefaultDays !== undefined) calendarPatch.default_days = calendarDefaultDays
-    const calendarHoldMinutes = parseNumber(calendarHoldMinutesRaw)
-    if (calendarHoldMinutes !== undefined) calendarPatch.hold_minutes = calendarHoldMinutes
-    if (Object.keys(calendarPatch).length) webchatPatch.calendar = calendarPatch
 
     if (Object.keys(webchatPatch).length) {
       patch.webchat = webchatPatch
@@ -246,6 +233,58 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     return success("Webchat guardado (config/routing/secretos).")
   } catch (error) {
     return failure(error, "No se pudo guardar la configuración de Webchat.")
+  }
+}
+
+export async function updateCalendarSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+
+    const calendarResourceId = getText(formData, "calendar_resource_id")
+    const calendarTimezone = getText(formData, "calendar_timezone")
+    const calendarDefaultDaysRaw = getText(formData, "calendar_default_days")
+    const calendarHoldMinutesRaw = getText(formData, "calendar_hold_minutes")
+
+    const calendarPatch: Record<string, unknown> = {}
+    if (calendarResourceId) calendarPatch.resource_id = calendarResourceId
+    if (calendarTimezone) calendarPatch.timezone = calendarTimezone
+    const calendarDefaultDays = parseNumber(calendarDefaultDaysRaw)
+    if (calendarDefaultDays !== undefined) calendarPatch.default_days = calendarDefaultDays
+    const calendarHoldMinutes = parseNumber(calendarHoldMinutesRaw)
+    if (calendarHoldMinutes !== undefined) calendarPatch.hold_minutes = calendarHoldMinutes
+
+    if (!Object.keys(calendarPatch).length) {
+      throw new Error("Debes completar al menos un campo del calendario.")
+    }
+
+    const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
+      method: "GET",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!getResp.ok) throw new Error(getResp.error)
+
+    const currentConfig = getResp.data.config ?? {}
+    const patch: Record<string, unknown> = {
+      webchat: {
+        calendar: calendarPatch,
+      },
+    }
+
+    const merged = mergeDeep({ ...currentConfig }, patch)
+
+    const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+      method: "PUT",
+      organizacionId: null,
+      withUserToken: true,
+      body: { config: merged },
+    })
+    if (!putResp.ok) throw new Error(putResp.error)
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de calendario guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración del calendario.")
   }
 }
 

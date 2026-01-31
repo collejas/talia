@@ -6,7 +6,6 @@ import { useFormStatus } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,6 +17,7 @@ import {
   deleteTenantRouteAction,
   deleteTenantSecretAction,
   setTenantSecretAction,
+  updateCalendarSettingsAction,
   updateTenantConfigAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -117,11 +117,14 @@ type WebchatInitialValues = {
   reengage_minutes?: number
   reengage_max_attempts?: number
   escalate_minutes?: number
+  webchat_alias?: string
+}
+
+type CalendarInitialValues = {
   calendar_resource_id?: string
   calendar_timezone?: string
   calendar_default_days?: number
   calendar_hold_minutes?: number
-  webchat_alias?: string
 }
 
 export function TenantWebchatSettings({
@@ -254,49 +257,10 @@ export function TenantWebchatSettings({
             />
           </div>
 
-          <div className="md:col-span-2">
-            <Separator />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="webchat_calendar_resource_id">calendar.resource_id</Label>
-            <Input
-              id="webchat_calendar_resource_id"
-              name="webchat_calendar_resource_id"
-              placeholder="uuid"
-              defaultValue={initialValues.calendar_resource_id ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="webchat_calendar_timezone">calendar.timezone</Label>
-            <Input
-              id="webchat_calendar_timezone"
-              name="webchat_calendar_timezone"
-              placeholder="America/Mexico_City"
-              defaultValue={initialValues.calendar_timezone ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="webchat_calendar_default_days">calendar.default_days</Label>
-            <Input
-              id="webchat_calendar_default_days"
-              name="webchat_calendar_default_days"
-              type="number"
-              min={1}
-              defaultValue={initialValues.calendar_default_days ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="webchat_calendar_hold_minutes">calendar.hold_minutes</Label>
-            <Input
-              id="webchat_calendar_hold_minutes"
-              name="webchat_calendar_hold_minutes"
-              type="number"
-              min={0}
-              defaultValue={initialValues.calendar_hold_minutes ?? ""}
-            />
-          </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          La pestaña “Calendario” administra el recurso, zona horarios y ventanas que usa el webchat para reservar citas.
+        </p>
 
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
@@ -365,6 +329,71 @@ export function TenantWebchatSettings({
         )}
       </form>
     </div>
+  )
+}
+
+export function TenantCalendarSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: CalendarInitialValues
+}) {
+  const [state, formAction] = useActionState(updateCalendarSettingsAction, INITIAL_CRUD_STATE)
+
+  return (
+    <form action={formAction} className="space-y-6">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="calendar_resource_id">calendar.resource_id</Label>
+          <Input
+            id="calendar_resource_id"
+            name="calendar_resource_id"
+            placeholder="uuid del recurso (Supabase)"
+            defaultValue={initialValues.calendar_resource_id ?? ""}
+          />
+          <p className="text-xs text-muted-foreground">
+            Se refiere a <code>calendar_resources.id</code> que expone slots.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_timezone">calendar.timezone</Label>
+          <Input
+            id="calendar_timezone"
+            name="calendar_timezone"
+            placeholder="America/Mexico_City"
+            defaultValue={initialValues.calendar_timezone ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_default_days">calendar.default_days</Label>
+          <Input
+            id="calendar_default_days"
+            name="calendar_default_days"
+            type="number"
+            min={1}
+            defaultValue={initialValues.calendar_default_days ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_hold_minutes">calendar.hold_minutes</Label>
+          <Input
+            id="calendar_hold_minutes"
+            name="calendar_hold_minutes"
+            type="number"
+            min={0}
+            defaultValue={initialValues.calendar_hold_minutes ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar Calendario" pendingLabel="Guardando..." />
+      </div>
+    </form>
   )
 }
 
