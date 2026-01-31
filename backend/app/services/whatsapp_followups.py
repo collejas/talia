@@ -280,7 +280,11 @@ async def _send_reengage_message(
     )
     send_result = None
     try:
-        send_result = await whatsapp_service.send_manual_message(to_number=phone, body=REENGAGE_TEMPLATE)
+        send_result = await whatsapp_service.send_manual_message(
+            to_number=phone,
+            body=REENGAGE_TEMPLATE,
+            organizacion_id=org_id,
+        )
     except Exception as exc:  # pragma: no cover
         logger.warning(
             "whatsapp.followup.reengage_send_failed",

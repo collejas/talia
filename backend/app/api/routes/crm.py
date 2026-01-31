@@ -14966,7 +14966,13 @@ async def _send_manual_whatsapp_message(
     if not phone:
         raise HTTPException(status_code=400, detail="contact_phone_missing")
 
-    send_result = await whatsapp_service.send_manual_message(to_number=phone, body=content)
+    resolved_org_hint = await resolve_whatsapp_organizacion(contact=contact)
+    resolved_org_uuid = _parse_uuid_value(resolved_org_hint)
+    send_result = await whatsapp_service.send_manual_message(
+        to_number=phone,
+        body=content,
+        organizacion_id=resolved_org_uuid,
+    )
     if send_result.error:
         logger.error(
             "panel.inbox.whatsapp_manual_send_failed",
@@ -14991,7 +14997,7 @@ async def _send_manual_whatsapp_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             metadata=metadata_payload,
-            organizacion_id=await resolve_whatsapp_organizacion(contact=contact),
+        organizacion_id=resolved_org_hint,
         )
     except StorageError as exc:
         logger.exception(

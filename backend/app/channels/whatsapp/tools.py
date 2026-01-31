@@ -1212,6 +1212,7 @@ async def _notify_sales_rep(
             body=None if template_sid else message_body,
             template_sid=template_sid,
             template_variables=template_vars,
+            organizacion_id=org_uuid,
         )
     except Exception as exc:  # pragma: no cover
         logger.warning(

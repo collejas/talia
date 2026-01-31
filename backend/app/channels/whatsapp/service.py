@@ -818,13 +818,20 @@ async def send_manual_message(
     body: str | None = None,
     template_sid: str | None = None,
     template_variables: dict[str, str] | None = None,
+    organizacion_id: UUID | str | None = None,
 ) -> TwilioSendResult:
     """Expone el envío de mensajes manuales desde el panel o automatizaciones."""
+    org_uuid: UUID | None
+    if isinstance(organizacion_id, UUID):
+        org_uuid = organizacion_id
+    else:
+        org_uuid = _parse_org_uuid(organizacion_id if isinstance(organizacion_id, str) else None)
     return await _send_whatsapp_reply(
         to_number=to_number,
         body=body,
         content_sid=template_sid,
         content_variables=template_variables,
+        organizacion_id=org_uuid,
     )
 
 

@@ -88,6 +88,16 @@ async def _supabase_get(path: str, *, params: dict[str, str]) -> Any:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url, params=params, headers=headers)
     if resp.status_code >= 400:
+        body = resp.text
+        logger.warning(
+            "tenant_runtime.supabase_get_error",
+            extra={
+                "path": path,
+                "params": params,
+                "status_code": resp.status_code,
+                "body": body[:1024] if isinstance(body, str) else None,
+            },
+        )
         raise TenantRuntimeError(f"supabase_error:{resp.status_code}:{path}")
     return resp.json()
 

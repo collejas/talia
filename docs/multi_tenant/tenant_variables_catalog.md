@@ -151,6 +151,13 @@ Recomendación:
 
 > Nota: el `backend/.env` todavía define `TALIA_MAIL_*` y `TALIA_CALENDARIO_*` por compatibilidad con el tenant legacy, pero esos valores deben vivir en BD (config + secretos) y solo permanecer en `.env` mientras se migra; el panel ya los edita por tenant.
 
+## Estado actual de la migración (tenant legacy)
+
+- `organizaciones.config` del tenant `00000000-0000-0000-0000-000000000001` ya contiene valores para `features`, `webchat.*` (incluyendo calendario), `calendar.*`, `mail.*`, `twilio.*` y `voice.*` tal como los captura la UI de `/settings/tenants`. Los servidores de correo/calendario y los recursos ya apuntan a `mail.talia.mx` y el alias webchat apunta a `pmpt_6963d2de04ac81948b43bf4c7adf24f300a7d41c8e65c375` con los timers deseados.
+- `public.secretos` para el mismo tenant almacena los secretos de nivel A/B: `openai.api_key`, `calendar.username`, `calendar.password`, `mail.username`, `mail.password`, `twilio.account_sid` y `twilio.auth_token` (más `voice.stream_jwt_secret` si se necesitara). Esto confirma que la información sensible ya vive en BD y que solo quedan pendientes los ajustes runtime que consumen estos valores.
+
+El siguiente hito es garantizar que el backend (en especial `tenant_runtime` y los servicios de WhatsApp/agenda/correo) lea estos bloques por tenant y utilice el fallback a `.env` únicamente para valores globales que no se migraron.
+
 ## 2) Routing por tenant (BD: `public.organizacion_rutas_canal`)
 
 Valores que sirven para “mapear” tráfico entrante a `organizacion_id`:
