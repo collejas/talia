@@ -10,6 +10,7 @@ import { callCrmApi } from "@/lib/api/crm"
 
 import {
   TenantCalendarSettings,
+  TenantMailSettings,
   TenantConfigEditor,
   TenantRoutingManager,
   TenantSecretsManager,
@@ -98,6 +99,15 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     calendar_full_calendar_url: getNestedString(calendarConfig, "full_calendar_url") ?? "",
     calendar_full_contact_list_url: getNestedString(calendarConfig, "full_contact_list_url") ?? "",
   }
+  const mailConfig = getNestedRecord(config, "mail") ?? {}
+  const mailInitialValues = {
+    mail_incoming_server: getNestedString(mailConfig, "incoming_server"),
+    mail_incoming_port_imap: getNestedNumber(mailConfig, "incoming_port_imap"),
+    mail_outgoing_server: getNestedString(mailConfig, "outgoing_server"),
+    mail_outgoing_port_smtp: getNestedNumber(mailConfig, "outgoing_port_smtp"),
+    mail_use_ssl: getNestedBoolean(mailConfig, "use_ssl"),
+    mail_use_tls: getNestedBoolean(mailConfig, "use_tls"),
+  }
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -123,9 +133,10 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="webchat">
-              <TabsList className="grid grid-cols-5">
+              <TabsList className="grid grid-cols-6">
                 <TabsTrigger value="webchat">Webchat</TabsTrigger>
                 <TabsTrigger value="calendar">Calendario</TabsTrigger>
+                <TabsTrigger value="mail">Correo</TabsTrigger>
                 <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
                 <TabsTrigger value="routing">Routing</TabsTrigger>
                 <TabsTrigger value="secrets">Secretos</TabsTrigger>
@@ -148,6 +159,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               </TabsContent>
               <TabsContent value="calendar" className="pt-4">
                 <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
+              </TabsContent>
+              <TabsContent value="mail" className="pt-4">
+                <TenantMailSettings tenantId={tenantId} initialValues={mailInitialValues} />
               </TabsContent>
               <TabsContent value="config" className="pt-4">
                 <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />

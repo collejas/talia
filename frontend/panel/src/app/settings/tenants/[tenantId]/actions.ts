@@ -66,6 +66,24 @@ function parseNumber(raw: string): number | undefined {
   return Number.isFinite(num) ? num : undefined
 }
 
+async function upsertTenantSecret(
+  tenantId: string,
+  clave: string,
+  valor: string,
+  tier: "A" | "B",
+): Promise<void> {
+  const secretResp = await callCrmApi<{ ok: boolean }>(
+    `/admin/tenants/${tenantId}/secrets/${encodeURIComponent(clave)}`,
+    {
+      method: "PUT",
+      organizacionId: null,
+      withUserToken: true,
+      body: { valor, tier },
+    },
+  )
+  if (!secretResp.ok) throw new Error(secretResp.error)
+}
+
 export async function updateTenantConfigAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)
@@ -301,30 +319,82 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     })
     if (!putResp.ok) throw new Error(putResp.error)
 
-    async function upsertSecret(clave: string, valor: string, tier: "A" | "B") {
-      const secretResp = await callCrmApi<{ ok: boolean }>(
-        `/admin/tenants/${tenantId}/secrets/${encodeURIComponent(clave)}`,
-        {
-          method: "PUT",
-          organizacionId: null,
-          withUserToken: true,
-          body: { valor, tier },
-        },
-      )
-      if (!secretResp.ok) throw new Error(secretResp.error)
-    }
-
     if (calendarUsername) {
-      await upsertSecret("calendar.username", calendarUsername, "A")
+      await upsertTenantSecret(tenantId, "calendar.username", calendarUsername, "A")
     }
     if (calendarPassword) {
-      await upsertSecret("calendar.password", calendarPassword, "B")
+      await upsertTenantSecret(tenantId, "calendar.password", calendarPassword, "B")
     }
 
     revalidatePath(`/settings/tenants/${tenantId}`)
     return success("Configuración de calendario guardada.")
   } catch (error) {
     return failure(error, "No se pudo guardar la configuración del calendario.")
+  }
+}
+
+export async function updateMailSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+
+    const incomingServer = getText(formData, "mail_incoming_server")
+    const incomingPortRaw = getText(formData, "mail_incoming_port_imap")
+    const outgoingServer = getText(formData, "mail_outgoing_server")
+    const outgoingPortRaw = getText(formData, "mail_outgoing_port_smtp")
+    const useSsl = formData.has("mail_use_ssl")
+    const useTls = formData.has("mail_use_tls")
+    const mailUsername = getText(formData, "mail_username")
+    const mailPassword = getText(formData, "mail_password")
+
+    const mailPatch: Record<string, unknown> = {}
+    if (incomingServer) mailPatch.incoming_server = incomingServer
+    const incomingPort = parseNumber(incomingPortRaw)
+    if (incomingPort !== undefined) mailPatch.incoming_port_imap = incomingPort
+    if (outgoingServer) mailPatch.outgoing_server = outgoingServer
+    const outgoingPort = parseNumber(outgoingPortRaw)
+    if (outgoingPort !== undefined) mailPatch.outgoing_port_smtp = outgoingPort
+    mailPatch.use_ssl = useSsl
+    mailPatch.use_tls = useTls
+
+    const hasMailConfig = Object.keys(mailPatch).length > 0
+    if (!hasMailConfig && !mailUsername && !mailPassword) {
+      throw new Error("Debes completar al menos un campo de la configuración de correo.")
+    }
+
+    const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
+      method: "GET",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!getResp.ok) throw new Error(getResp.error)
+
+    const currentConfig = getResp.data.config ?? {}
+    const patch: Record<string, unknown> = {}
+    if (hasMailConfig) {
+      patch.mail = mailPatch
+    }
+
+    const merged = mergeDeep({ ...currentConfig }, patch)
+
+    const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+      method: "PUT",
+      organizacionId: null,
+      withUserToken: true,
+      body: { config: merged },
+    })
+    if (!putResp.ok) throw new Error(putResp.error)
+
+    if (mailUsername) {
+      await upsertTenantSecret(tenantId, "mail.username", mailUsername, "A")
+    }
+    if (mailPassword) {
+      await upsertTenantSecret(tenantId, "mail.password", mailPassword, "B")
+    }
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de correo guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración del correo.")
   }
 }
 

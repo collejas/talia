@@ -82,6 +82,8 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `calendar.full_calendar_url` (string) ← `TALIA_CALENDARIO_FULL_CALENDAR_URL`
 - `calendar.full_contact_list_url` (string) ← `TALIA_CALENDARIO_FULL_CONTACT_LIST_URL`
 
+> ✅ Esta sección ya se puede editar en la pestaña “Calendario” del panel de tenants y registra los valores por tenant.
+
 ### `mail.*`
 - `mail.incoming_server` (string) ← `TALIA_MAIL_INCOMING_SERVER`
 - `mail.incoming_port_imap` (number) ← `TALIA_MAIL_INCOMING_PORT_IMAP`
@@ -89,6 +91,8 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `mail.outgoing_port_smtp` (number) ← `TALIA_MAIL_OUTGOING_PORT_SMTP`
 - `mail.use_ssl` (bool) ← `TALIA_MAIL_USE_SSL`
 - `mail.use_tls` (bool) ← `TALIA_MAIL_USE_TLS`
+
+> ✅ La pestaña “Correo” del panel ya persiste estas claves y rota los secretos correspondientes por tenant.
 
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`

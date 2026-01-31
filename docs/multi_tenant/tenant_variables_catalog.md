@@ -149,6 +149,8 @@ Estos valores son de infraestructura o “service role” y no deben configurars
 Recomendación:
 - Añadir una **master key de cifrado** global (ej. `TALIA_SECRETS_MASTER_KEY`) para cifrar/descifrar valores de `public.secretos` desde el backend.
 
+> Nota: el `backend/.env` todavía define `TALIA_MAIL_*` y `TALIA_CALENDARIO_*` por compatibilidad con el tenant legacy, pero esos valores deben vivir en BD (config + secretos) y solo permanecer en `.env` mientras se migra; el panel ya los edita por tenant.
+
 ## 2) Routing por tenant (BD: `public.organizacion_rutas_canal`)
 
 Valores que sirven para “mapear” tráfico entrante a `organizacion_id`:
@@ -191,6 +193,16 @@ Otros (según si varía por cliente):
 - `TALIA_GEOLOCATION_API_URL`
 - `DENUE_BASE_URL`
 - `GOOGLE_REDIRECT_URI` (si cambia por dominio/tenant)
+
+Correo (ejemplos):
+- `TALIA_MAIL_INCOMING_SERVER` → `mail.incoming_server`
+- `TALIA_MAIL_INCOMING_PORT_IMAP` → `mail.incoming_port_imap`
+- `TALIA_MAIL_OUTGOING_SERVER` → `mail.outgoing_server`
+- `TALIA_MAIL_OUTGOING_PORT_SMTP` → `mail.outgoing_port_smtp`
+- `TALIA_MAIL_USE_SSL` → `mail.use_ssl`
+- `TALIA_MAIL_USE_TLS` → `mail.use_tls`
+
+> ✅ La pestaña “Correo” del panel ya expone estos campos y rota los secretos relacionados por tenant.
 
 ## 4) Secretos por tenant (BD: `public.secretos`)
 
@@ -241,6 +253,12 @@ En `/settings/tenants`, por tenant:
 - Tab **Routing**: CRUD de `organizacion_rutas_canal`.
 - Tab **Secretos**: CRUD/rotación de `secretos` (nunca leer el valor).
 - Tab **Validación**: botones de “probar” por canal (webchat/whatsapp/messenger).
+
+## Estado actual (enero 2026)
+
+- El panel `/settings/tenants` ya tiene pestañas para Webchat, Calendario y Correo, cada una guardando los campos de `organizaciones.config`, rotando los secretos (`openai.api_key`, `calendar.username`/`password`, `mail.username`/`password`) y mostrando un botón “Validar” centrado en el scope correspondiente.
+- El backend todavía lee valores heredados de `backend/.env` (`TALIA_MAIL_*`, `TALIA_CALENDARIO_*`, `WEBCHAT_*`), pero el objetivo es migrar esos valores al tenant legacy y dejar en `.env` solo variables globales (infraestructura, URLs, master keys de cifrado).
+- Falta ejecutar el plan de migración completo (leer del `.env` actual → poblar BD → eliminar de `.env`) para que solo queden las variables que no cambian por tenant.
 
 ## Nota de seguridad (para decisión de producto)
 

@@ -425,7 +425,7 @@ async def delete_tenant_secret(
 @router.post("/tenants/{organizacion_id}/validate", response_model=TenantValidationReport)
 async def validate_tenant(
     organizacion_id: UUID,
-    scope: Literal["webchat", "full"] = "full",
+    scope: Literal["webchat", "calendar", "mail", "full"] = "full",
     _: UUID = Depends(require_platform_admin),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
@@ -438,31 +438,71 @@ async def validate_tenant(
 
     report = TenantValidationReport(organizacion_id=organizacion_id)
 
-    # Routing mínimo por canal (puedes ampliar esto por cliente/caso).
-    required_route_canals = ["webchat"] if scope in {"webchat", "full"} else []
+    required_route_canals = ["webchat"] if scope in {"webchat", "calendar", "full"} else []
     for canal in required_route_canals:
         has = any(isinstance(r, dict) and r.get("canal") == canal for r in routes)
         if not has:
             report.missing_routes.append(f"route:{canal}")
 
-    # Secretos mínimos (POR_TENANT) según contrato canónico.
-    required_secrets = ["openai.api_key"]
+    webchat_config_keys = [
+        "webchat.assistant_id",
+        "webchat.prompt_version",
+        "webchat.inactivity_hours",
+        "webchat.persist_session",
+    ]
+    calendar_config_keys = [
+        "webchat.calendar.resource_id",
+        "webchat.calendar.timezone",
+        "webchat.calendar.default_days",
+        "webchat.calendar.hold_minutes",
+        "calendar.provider",
+        "calendar.server_url",
+        "calendar.server_port",
+        "calendar.full_calendar_url",
+        "calendar.full_contact_list_url",
+    ]
+    mail_config_keys = [
+        "mail.incoming_server",
+        "mail.incoming_port_imap",
+        "mail.outgoing_server",
+        "mail.outgoing_port_smtp",
+        "mail.use_ssl",
+        "mail.use_tls",
+    ]
+
+    required_config: list[str]
     if scope == "full":
-        required_secrets.extend(
-            [
-                "twilio.account_sid",
-                "twilio.auth_token",
-                "meta.messenger.page_access_token",
-                "meta.messenger.app_secret",
-                "meta.messenger.verify_token",
-                "mail.username",
-                "mail.password",
-                "calendar.username",
-                "calendar.password",
-                "google.places_api_key",
-                "google.oauth.client_secret",
-            ]
-        )
+        required_config = webchat_config_keys + calendar_config_keys + mail_config_keys
+    elif scope == "calendar":
+        required_config = calendar_config_keys
+    elif scope == "mail":
+        required_config = mail_config_keys
+    else:
+        required_config = webchat_config_keys
+
+    required_secrets: list[str]
+    if scope == "full":
+        required_secrets = [
+            "openai.api_key",
+            "twilio.account_sid",
+            "twilio.auth_token",
+            "meta.messenger.page_access_token",
+            "meta.messenger.app_secret",
+            "meta.messenger.verify_token",
+            "mail.username",
+            "mail.password",
+            "calendar.username",
+            "calendar.password",
+            "google.places_api_key",
+            "google.oauth.client_secret",
+        ]
+    elif scope == "calendar":
+        required_secrets = ["calendar.username", "calendar.password"]
+    elif scope == "mail":
+        required_secrets = ["mail.username", "mail.password"]
+    else:
+        required_secrets = ["openai.api_key"]
+
     present_secret_keys = {
         str(row.get("clave")).strip().lower()
         for row in secrets
@@ -472,17 +512,6 @@ async def validate_tenant(
         if key not in present_secret_keys:
             report.missing_secrets.append(key)
 
-    # Config mínima (no secreta) para webchat (puedes ampliar por canal).
-    required_config = []
-    if scope in {"webchat", "full"}:
-        required_config.extend(
-            [
-                "webchat.assistant_id",
-                "webchat.prompt_version",
-                "webchat.inactivity_hours",
-                "webchat.persist_session",
-            ]
-        )
     for dotted in required_config:
         value = _get_config_value(config, dotted)
         if value is None or value == "":

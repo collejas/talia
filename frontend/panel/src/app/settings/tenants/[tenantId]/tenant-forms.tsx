@@ -18,6 +18,7 @@ import {
   deleteTenantSecretAction,
   setTenantSecretAction,
   updateCalendarSettingsAction,
+  updateMailSettingsAction,
   updateTenantConfigAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -131,6 +132,15 @@ type CalendarInitialValues = {
   calendar_server_port?: number
   calendar_full_calendar_url?: string
   calendar_full_contact_list_url?: string
+}
+
+type MailInitialValues = {
+  mail_incoming_server?: string
+  mail_incoming_port_imap?: number
+  mail_outgoing_server?: string
+  mail_outgoing_port_smtp?: number
+  mail_use_ssl?: boolean
+  mail_use_tls?: boolean
 }
 
 export function TenantWebchatSettings({
@@ -490,11 +500,175 @@ export function TenantCalendarSettings({
       </form>
       <form action={validateAction} className="space-y-3">
         <input type="hidden" name="tenant_id" value={tenantId} />
-        <input type="hidden" name="scope" value="webchat" />
+        <input type="hidden" name="scope" value="calendar" />
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-medium">Validación</h3>
-            <p className="text-xs text-muted-foreground">Revisa faltantes de routing/config/secretos.</p>
+            <p className="text-xs text-muted-foreground">Revisa faltantes de routing/config/secretos relacionados con el calendario.</p>
+          </div>
+          <Button type="submit" variant="outline" size="sm">
+            Validar
+          </Button>
+        </div>
+        {validateState.report ? (
+          <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
+            <p className="font-medium">{validateState.message}</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_routes.length ? (
+                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_config.length ? (
+                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_secrets.length ? (
+                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              {validateState.report.notes.length ? (
+                <div className="space-y-1 md:col-span-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+                  <ul className="list-disc pl-5">
+                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <FormStatusMessage state={validateState} />
+        )}
+      </form>
+    </div>
+  )
+}
+
+export function TenantMailSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: MailInitialValues
+}) {
+  const [state, formAction] = useActionState(updateMailSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="space-y-6">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="mail_incoming_server">mail.incoming_server</Label>
+            <Input
+              id="mail_incoming_server"
+              name="mail_incoming_server"
+              placeholder="mail.talia.mx"
+              defaultValue={initialValues.mail_incoming_server ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mail_incoming_port_imap">mail.incoming_port_imap</Label>
+            <Input
+              id="mail_incoming_port_imap"
+              name="mail_incoming_port_imap"
+              type="number"
+              min={1}
+              defaultValue={initialValues.mail_incoming_port_imap ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mail_outgoing_server">mail.outgoing_server</Label>
+            <Input
+              id="mail_outgoing_server"
+              name="mail_outgoing_server"
+              placeholder="mail.talia.mx"
+              defaultValue={initialValues.mail_outgoing_server ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mail_outgoing_port_smtp">mail.outgoing_port_smtp</Label>
+            <Input
+              id="mail_outgoing_port_smtp"
+              name="mail_outgoing_port_smtp"
+              type="number"
+              min={1}
+              defaultValue={initialValues.mail_outgoing_port_smtp ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex items-center gap-3">
+            <input
+              id="mail_use_ssl"
+              name="mail_use_ssl"
+              type="checkbox"
+              className="size-4"
+              defaultChecked={Boolean(initialValues.mail_use_ssl)}
+            />
+            <Label htmlFor="mail_use_ssl">mail.use_ssl</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              id="mail_use_tls"
+              name="mail_use_tls"
+              type="checkbox"
+              className="size-4"
+              defaultChecked={Boolean(initialValues.mail_use_tls)}
+            />
+            <Label htmlFor="mail_use_tls">mail.use_tls</Label>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Esta sección guarda la configuración no sensible de <code>organizaciones.config.mail</code>.
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="mail_username">mail.username (secreto, tier A)</Label>
+            <Input id="mail_username" name="mail_username" placeholder="hola@talia.mx" defaultValue="" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mail_password">mail.password (secreto, tier B)</Label>
+            <Input id="mail_password" name="mail_password" type="password" placeholder="Pega para rotar" defaultValue="" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar Correo" pendingLabel="Guardando..." />
+        </div>
+      </form>
+
+      <form action={validateAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="scope" value="mail" />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Validación</h3>
+            <p className="text-xs text-muted-foreground">Revisa faltantes de config/secretos.</p>
           </div>
           <Button type="submit" variant="outline" size="sm">
             Validar
