@@ -16,6 +16,11 @@ Objetivo: que un **platform admin** pueda crear/editar/eliminar tenants y config
 
 - [ ] (pendiente) Notas de implementación/decisiones de UI.
 
+## Avances recientes
+
+- [x] La pestaña Webchat ahora persiste `webchat.*` (assistant_id, prompt_version, timers/alias) y rota `openai.api_key` vía `secrets`.
+- [x] La nueva pestaña Calendario grava `webchat.calendar.*` + `calendar.*` en `organizaciones.config`, rota las credenciales y ofrece un botón “Validar”.
+
 ## 1) Pantallas / tabs
 
 ### A) Lista de tenants

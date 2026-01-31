@@ -137,10 +137,10 @@ Se reservan para defaults globales o fallback, no para onboarding por cliente.
 - [ ] Crear tenant en `/settings/tenants`
 - [ ] Abrir `/settings/tenants/{tenantId}`
 - [ ] Routing: crear y borrar una ruta
-- [ ] Webchat tab: guardar `assistant_id`, `prompt_version`, timers y calendar defaults
-- [ ] Webchat tab: guardar `openai.api_key` (tier B) y confirmar que solo aparece metadata
-- [ ] Webchat tab: guardar alias (routing) y confirmar que aparece en tab Routing
-- [ ] Validación: `POST /api/admin/tenants/{tenantId}/validate?scope=webchat` y revisar `missing_*`
+- [x] Webchat tab: guardar `assistant_id`, `prompt_version`, timers y calendar defaults
+- [x] Webchat tab: guardar `openai.api_key` (tier B) y confirmar que solo aparece metadata
+- [x] Webchat tab: guardar alias (routing) y confirmar que aparece en tab Routing
+- [x] Validación: `POST /api/admin/tenants/{tenantId}/validate?scope=webchat` y revisar `missing_*`
   - Tip: para empezar solo webchat, usa `scope=webchat`.
 
 ## Qué sigue (iteración inmediata)
