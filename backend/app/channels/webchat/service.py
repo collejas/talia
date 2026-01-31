@@ -37,8 +37,10 @@ from app.services import (
     leads_geo,
     send_email,
     storage,
+    tenant_runtime,
     webchat_followups,
 )
+from app.services.tenant_runtime import CalendarProviderSettings
 from app.services.time_utils import get_current_time_reference
 from app.channels.webchat import notifications as webchat_notifications
 from app.services import calendar as calendar_service
@@ -132,6 +134,7 @@ CONTACT_ASSIGNMENT_ERROR = (
     "Necesito al menos un teléfono o correo para conectarte con un vendedor."
 )
 MASTER_ORGANIZACION_ID = "00000000-0000-0000-0000-000000000001"
+MASTER_ORGANIZACION_UUID = UUID(MASTER_ORGANIZACION_ID)
 
 
 _REMINDER_SETTINGS_CACHE: dict[str, Any] | None = None
@@ -148,10 +151,15 @@ def _parse_organizacion_uuid(value: Any | None) -> UUID | None:
         return None
 
 
+def _resolve_calendar_organizacion_uuid(value: Any | None) -> UUID:
+    parsed = _parse_organizacion_uuid(value)
+    return parsed or MASTER_ORGANIZACION_UUID
+
+
 async def get_calendar_runtime_settings_for_organizacion(
     value: Any | None,
 ) -> tenant_runtime.CalendarRuntimeSettings:
-    org_uuid = _parse_organizacion_uuid(value)
+    org_uuid = _resolve_calendar_organizacion_uuid(value)
     return await tenant_runtime.get_calendar_runtime_settings(organizacion_id=org_uuid)
 
 
@@ -355,6 +363,7 @@ def _build_demo_ics_attachment(
     contact_email: str,
     organizer_email: str,
     organizer_name: str | None,
+    calendar_provider_settings: CalendarProviderSettings | None = None,
 ) -> dict[str, object]:
     start_utc = booking.start_at.astimezone(timezone.utc)
     end_source = booking.end_at or (
@@ -367,6 +376,11 @@ def _build_demo_ics_attachment(
     ]
     if booking.notes:
         description_parts.append(f"Notas: {booking.notes.strip()}")
+    provider_label = (
+        calendar_provider_settings.provider if calendar_provider_settings else None
+    )
+    if provider_label:
+        description_parts.append(f"Proveedor: {provider_label}.")
     description = _sanitize_ics_text(" ".join(description_parts))
     summary = _sanitize_ics_text("Demo Tal-IA")
     attendee_name = contact_name.strip() if isinstance(contact_name, str) else contact_email
@@ -388,11 +402,35 @@ def _build_demo_ics_attachment(
         f"DESCRIPTION:{description}",
         f"ATTENDEE;CN={_sanitize_ics_text(attendee_name)}:mailto:{contact_email}",
         f"ORGANIZER;CN={organizer_display}:mailto:{organizer_email}",
-        "STATUS:CONFIRMED",
-        "SEQUENCE:0",
-        "END:VEVENT",
-        "END:VCALENDAR",
     ]
+    provider_extra: list[str] = []
+    if calendar_provider_settings:
+        provider_label = calendar_provider_settings.provider
+        if provider_label:
+            provider_extra.append(f"X-CAL-PROVIDER:{provider_label}")
+        if calendar_provider_settings.full_calendar_url:
+            provider_extra.append(f"URL:{calendar_provider_settings.full_calendar_url}")
+        if calendar_provider_settings.full_contact_list_url:
+            provider_extra.append(
+                f"X-WR-RELCALURI:{calendar_provider_settings.full_contact_list_url}"
+            )
+        server_endpoint = (
+            calendar_provider_settings.server_url
+            or calendar_provider_settings.server_url_alternate
+        )
+        if server_endpoint:
+            provider_extra.append(f"X-CAL-SERVER:{server_endpoint}")
+        if calendar_provider_settings.server_port is not None:
+            provider_extra.append(f"X-CAL-PORT:{calendar_provider_settings.server_port}")
+    lines.extend(provider_extra)
+    lines.extend(
+        [
+            "STATUS:CONFIRMED",
+            "SEQUENCE:0",
+            "END:VEVENT",
+            "END:VCALENDAR",
+        ]
+    )
     ics_payload = "\r\n".join(lines) + "\r\n"
     return {
         "content": ics_payload.encode("utf-8"),
@@ -501,10 +539,13 @@ async def _send_booking_confirmation_email(
         )
         return
 
-    org_uuid = _parse_org_uuid(org_hint)
+    org_uuid = _resolve_calendar_organizacion_uuid(org_hint)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=org_uuid)
     organizer_email = (mail_settings.username or email_value).strip() or email_value
     organizer_name = mail_settings.from_name or "Tal-IA"
+    calendar_provider_settings = await tenant_runtime.get_calendar_provider_settings(
+        organizacion_id=org_uuid
+    )
 
     timezone_name = booking.timezone or settings.webchat_calendar_timezone
     tz_label = timezone_name.replace("_", " ")
@@ -540,6 +581,14 @@ async def _send_booking_confirmation_email(
             "Tal-IA · Geoactiv",
         ]
     )
+    if calendar_provider_settings.full_calendar_url:
+        body_lines.extend(
+            [
+                "",
+                "Puedes revisar la disponibilidad desde:",
+                calendar_provider_settings.full_calendar_url,
+            ]
+        )
     subject = "Tal-IA · Demo confirmada"
     attachments = [
         _build_demo_ics_attachment(
@@ -549,6 +598,7 @@ async def _send_booking_confirmation_email(
             contact_email=email_value,
             organizer_email=organizer_email,
             organizer_name=organizer_name,
+            calendar_provider_settings=calendar_provider_settings,
         )
     ]
 
@@ -768,7 +818,7 @@ async def _send_booking_cancellation_email(
         )
         return
 
-    contact_org_uuid = _parse_org_uuid(_extract_contact_org(contact))
+    contact_org_uuid = _resolve_calendar_organizacion_uuid(_extract_contact_org(contact))
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=contact_org_uuid)
 
     timezone_name = booking.timezone or settings.webchat_calendar_timezone

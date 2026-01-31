@@ -310,6 +310,54 @@ class Settings(BaseSettings):
         default=10,
         description="Minutos que se mantiene bloqueado un horario antes de confirmar la cita.",
     )
+    calendar_provider: str | None = Field(
+        default=None,
+        description="Proveedor externo del calendario (ej. caldav, google).",
+        validation_alias=AliasChoices(
+            "CALENDAR_PROVIDER",
+            "TALIA_CALENDARIO_DEFAULT_PROVIDER",
+        ),
+    )
+    calendar_server_url: str | None = Field(
+        default=None,
+        description="URL base del proveedor del calendario.",
+        validation_alias=AliasChoices(
+            "CALENDAR_SERVER_URL",
+            "TALIA_CALENDARIO_SERVER_URL",
+        ),
+    )
+    calendar_server_url_alternate: str | None = Field(
+        default=None,
+        description="URL alterna para la autenticación del calendario.",
+        validation_alias=AliasChoices(
+            "CALENDAR_SERVER_URL_ALTERNATE",
+            "TALIA_CALENDARIO_SERVER_URL_ALTERNATE",
+        ),
+    )
+    calendar_server_port: int | None = Field(
+        default=None,
+        description="Puerto del servidor del calendario (ej. 2080).",
+        validation_alias=AliasChoices(
+            "CALENDAR_SERVER_PORT",
+            "TALIA_CALENDARIO_SERVER_PORT",
+        ),
+    )
+    calendar_full_calendar_url: str | None = Field(
+        default=None,
+        description="URL completa del calendario para enlaces públicos o referencias.",
+        validation_alias=AliasChoices(
+            "CALENDAR_FULL_CALENDAR_URL",
+            "TALIA_CALENDARIO_FULL_CALENDAR_URL",
+        ),
+    )
+    calendar_full_contact_list_url: str | None = Field(
+        default=None,
+        description="URL del listado completo de contactos del proveedor del calendario.",
+        validation_alias=AliasChoices(
+            "CALENDAR_FULL_CONTACT_LIST_URL",
+            "TALIA_CALENDARIO_FULL_CONTACT_LIST_URL",
+        ),
+    )
     webchat_reengage_minutes: int = Field(
         default=30,
         description="Minutos sin respuesta en webchat antes de que el bot intente reenganchar.",

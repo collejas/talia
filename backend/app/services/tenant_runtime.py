@@ -117,7 +117,9 @@ async def get_org_config(*, organizacion_id: UUID) -> dict[str, Any]:
     return config
 
 
-async def get_secret_plaintext(*, organizacion_id: UUID, clave: str) -> str | None:
+async def get_secret_plaintext(*, organizacion_id: UUID | None, clave: str) -> str | None:
+    if organizacion_id is None:
+        return None
     key = clave.strip().lower()
     cache_key = f"{organizacion_id}:{key}"
     now = datetime.now(timezone.utc)
@@ -223,6 +225,15 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
+def _coerce_int_or_none(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _coerce_str(value: Any) -> str | None:
     if isinstance(value, str):
         trimmed = value.strip()
@@ -275,6 +286,59 @@ async def get_calendar_runtime_settings(
 
     if not settings_payload.resource_id:
         settings_payload.resource_id = settings.webchat_calendar_resource_id
+
+    return settings_payload
+
+
+@dataclass(slots=True)
+class CalendarProviderSettings:
+    provider: str | None
+    server_url: str | None
+    server_url_alternate: str | None
+    server_port: int | None
+    full_calendar_url: str | None
+    full_contact_list_url: str | None
+
+    @staticmethod
+    def from_settings() -> "CalendarProviderSettings":
+        return CalendarProviderSettings(
+            provider=settings.calendar_provider,
+            server_url=settings.calendar_server_url,
+            server_url_alternate=settings.calendar_server_url_alternate,
+            server_port=settings.calendar_server_port,
+            full_calendar_url=settings.calendar_full_calendar_url,
+            full_contact_list_url=settings.calendar_full_contact_list_url,
+        )
+
+
+async def get_calendar_provider_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> CalendarProviderSettings:
+    settings_payload = CalendarProviderSettings.from_settings()
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    calendar_cfg = _as_dict(config.get("calendar")) or {}
+    provider_value = _coerce_str(calendar_cfg.get("provider"))
+    if provider_value is not None:
+        settings_payload.provider = provider_value
+    server_url_value = _coerce_str(calendar_cfg.get("server_url"))
+    if server_url_value is not None:
+        settings_payload.server_url = server_url_value
+    server_url_alt = _coerce_str(calendar_cfg.get("server_url_alternate"))
+    if server_url_alt is not None:
+        settings_payload.server_url_alternate = server_url_alt
+    port_value = _coerce_int_or_none(calendar_cfg.get("server_port"))
+    if port_value is not None:
+        settings_payload.server_port = port_value
+    full_calendar_url_value = _coerce_str(calendar_cfg.get("full_calendar_url"))
+    if full_calendar_url_value is not None:
+        settings_payload.full_calendar_url = full_calendar_url_value
+    contact_list_url_value = _coerce_str(calendar_cfg.get("full_contact_list_url"))
+    if contact_list_url_value is not None:
+        settings_payload.full_contact_list_url = contact_list_url_value
 
     return settings_payload
 
