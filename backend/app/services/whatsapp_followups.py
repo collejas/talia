@@ -14,7 +14,7 @@ from app.channels.whatsapp import tools as whatsapp_tools
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import storage
+from app.services import storage, tenant_runtime
 from app.services.storage import StorageError
 
 logger = get_logger("app.services.whatsapp_followups")
@@ -182,12 +182,13 @@ async def _process_conversation(
     reengage_sent_at = _parse_ts(reengage_meta.get("sent_at"))
     escalate_sent_at = _parse_ts(escalate_meta.get("sent_at"))
 
-    reengage_cutoff = reference_time - timedelta(minutes=settings.whatsapp_reengage_minutes)
-    escalate_cutoff = reference_time - timedelta(minutes=settings.whatsapp_escalate_minutes)
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+    reengage_cutoff = reference_time - timedelta(minutes=whatsapp_settings.reengage_minutes)
+    escalate_cutoff = reference_time - timedelta(minutes=whatsapp_settings.escalate_minutes)
     reengage_attempts = int(reengage_meta.get("attempts") or 0)
-    max_reengage_attempts = max(1, int(settings.whatsapp_reengage_max_attempts))
+    max_reengage_attempts = max(1, whatsapp_settings.reengage_max_attempts)
     escalate_reference = reengage_sent_at or last_out
-    escalate_delay_minutes = max(0, settings.whatsapp_escalate_minutes)
+    escalate_delay_minutes = max(0, whatsapp_settings.escalate_minutes)
     if escalate_delay_minutes <= 0:
         escalate_delay_reached = True
     else:
@@ -240,6 +241,7 @@ async def _process_conversation(
             repo=repo,
             opportunity_id=opp_uuid,
             org_id=org_uuid,
+            whatsapp_settings=whatsapp_settings,
         )
         return
 
@@ -266,6 +268,7 @@ async def _send_reengage_message(
     repo: CRMRepository,
     opportunity_id: UUID,
     org_id: UUID,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
 ) -> None:
     phone = str(contact.get("telefono_e164") or "").strip()
     if not phone:
@@ -276,6 +279,7 @@ async def _send_reengage_message(
             "conversation_id": conversation_id,
             "phone": phone,
             "attempts": int(followup_meta.get("reengage", {}).get("attempts") or 0),
+            "reengage_minutes": whatsapp_settings.reengage_minutes,
         },
     )
     send_result = None

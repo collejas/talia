@@ -1111,6 +1111,8 @@ async def _notify_sales_rep(
         )
         return
 
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+
     metadata = _ensure_dict(opportunity.get("metadata"))
     notifications = _ensure_dict(metadata.get("sales_notifications"))
     primary_triggers = {"close_lead", "information_email"}
@@ -1151,8 +1153,14 @@ async def _notify_sales_rep(
         email=email,
         extra=extra,
     )
-    appointment_template = settings.whatsapp_sales_appointment_template_sid
-    cancel_template = settings.whatsapp_sales_cancel_appointment_template_sid
+    appointment_template = (
+        whatsapp_settings.appointment_template_sid
+        or settings.whatsapp_sales_appointment_template_sid
+    )
+    cancel_template = (
+        whatsapp_settings.cancel_template_sid
+        or settings.whatsapp_sales_cancel_appointment_template_sid
+    )
     template_sid: str | None = None
     template_vars: dict[str, str] | None = None
     if trigger == "booking_confirmed" and appointment_template:
@@ -1180,7 +1188,7 @@ async def _notify_sales_rep(
                     "seller_id": seller_id,
                 },
             )
-        template_sid = settings.whatsapp_sales_template_sid
+        template_sid = whatsapp_settings.sales_template_sid or settings.whatsapp_sales_template_sid
         if template_sid:
             template_vars = _build_sales_template_variables(
             contact=contact_record,

@@ -497,18 +497,127 @@ async def get_twilio_runtime_settings(
     if not voice_stream:
         voice_stream = settings.voice_stream_jwt_secret
 
-    return TwilioRuntimeSettings(
-        phone_number=phone_number,
-        phone_number_sid=phone_number_sid,
-        validate_signatures=validate_signatures,
-        voice_webhook_path=webhook_path,
-        voice_full_duplex=full_duplex,
-        voice_debug_verbose=debug_verbose,
-        voice_debug_energy_every_n=debug_energy,
-        account_sid=account_sid,
-        auth_token=auth_token,
-        voice_stream_jwt_secret=voice_stream,
+        return TwilioRuntimeSettings(
+            phone_number=phone_number,
+            phone_number_sid=phone_number_sid,
+            validate_signatures=validate_signatures,
+            voice_webhook_path=webhook_path,
+            voice_full_duplex=full_duplex,
+            voice_debug_verbose=debug_verbose,
+            voice_debug_energy_every_n=debug_energy,
+            account_sid=account_sid,
+            auth_token=auth_token,
+            voice_stream_jwt_secret=voice_stream,
+        )
+
+
+def _coerce_positive_int(value: Any, default: int) -> int:
+    if isinstance(value, (int, float)):
+        candidate = int(value)
+        if candidate >= 0:
+            return candidate
+        return default
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return default
+        try:
+            parsed = int(candidate)
+        except ValueError:
+            return default
+        return parsed if parsed >= 0 else default
+    return default
+
+
+def _coerce_str_or_none(value: Any) -> str | None:
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    if value is None:
+        return None
+    candidate = str(value).strip()
+    return candidate or None
+
+
+@dataclass(slots=True)
+class WhatsappRuntimeSettings:
+    assistant_id: str | None
+    prompt_id: str | None
+    prompt_version: str | None
+    inactivity_minutes: int
+    reengage_minutes: int
+    reengage_max_attempts: int
+    escalate_minutes: int
+    sales_template_sid: str | None
+    appointment_template_sid: str | None
+    cancel_template_sid: str | None
+
+    @staticmethod
+    def from_settings() -> "WhatsappRuntimeSettings":
+        return WhatsappRuntimeSettings(
+            assistant_id=settings.whatsapp_assistant_id,
+            prompt_id=settings.whatsapp_prompt_id,
+            prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
+            inactivity_minutes=settings.whatsapp_inactivity_minutes,
+            reengage_minutes=settings.whatsapp_reengage_minutes,
+            reengage_max_attempts=max(1, int(settings.whatsapp_reengage_max_attempts)),
+            escalate_minutes=settings.whatsapp_escalate_minutes,
+            sales_template_sid=settings.whatsapp_sales_template_sid,
+            appointment_template_sid=settings.whatsapp_sales_appointment_template_sid,
+            cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
+        )
+
+
+async def get_whatsapp_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> WhatsappRuntimeSettings:
+    settings_payload = WhatsappRuntimeSettings.from_settings()
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
+
+    assistant_id = _coerce_str_or_none(whatsapp_cfg.get("assistant_id"))
+    if assistant_id is not None:
+        settings_payload.assistant_id = assistant_id
+
+    prompt_id = _coerce_str_or_none(whatsapp_cfg.get("prompt_id"))
+    if prompt_id is not None:
+        settings_payload.prompt_id = prompt_id
+
+    prompt_version = _coerce_str_or_none(whatsapp_cfg.get("prompt_version"))
+    if prompt_version is not None:
+        settings_payload.prompt_version = prompt_version
+
+    inactivity_value = whatsapp_cfg.get("inactivity_minutes")
+    if inactivity_value is not None:
+        settings_payload.inactivity_minutes = _coerce_positive_int(inactivity_value, settings_payload.inactivity_minutes)
+
+    settings_payload.reengage_minutes = _coerce_positive_int(
+        whatsapp_cfg.get("reengage_minutes"), settings_payload.reengage_minutes
     )
+    settings_payload.reengage_max_attempts = max(
+        1,
+        _coerce_positive_int(whatsapp_cfg.get("reengage_max_attempts"), settings_payload.reengage_max_attempts),
+    )
+    settings_payload.escalate_minutes = _coerce_positive_int(
+        whatsapp_cfg.get("escalate_minutes"), settings_payload.escalate_minutes
+    )
+
+    templates = _as_dict(whatsapp_cfg.get("templates")) or {}
+    sales_template = _coerce_str_or_none(templates.get("sales"))
+    if sales_template is not None:
+        settings_payload.sales_template_sid = sales_template
+    appointment_template = _coerce_str_or_none(templates.get("appointment"))
+    if appointment_template is not None:
+        settings_payload.appointment_template_sid = appointment_template
+    cancel_template = _coerce_str_or_none(templates.get("cancel"))
+    if cancel_template is not None:
+        settings_payload.cancel_template_sid = cancel_template
+
+    return settings_payload
 
 
 async def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:

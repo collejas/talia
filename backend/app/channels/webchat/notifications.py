@@ -13,7 +13,7 @@ from app.channels.whatsapp import service as whatsapp_service
 from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
-from app.services import storage
+from app.services import storage, tenant_runtime
 from app.services.storage import StorageError
 
 logger = get_logger("app.channels.webchat.notify_sales")
@@ -263,6 +263,16 @@ async def notify_sales_rep(
         )
         return
 
+    try:
+        org_uuid = UUID(str(org_id))
+    except (TypeError, ValueError):
+        logger.warning(
+            "webchat.notify_sales.invalid_org",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger},
+        )
+        return
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
+
     metadata = _ensure_dict(opportunity.get("metadata"))
     notifications = _ensure_dict(metadata.get("sales_notifications"))
     if notifications.get(trigger):
@@ -294,9 +304,14 @@ async def notify_sales_rep(
         email=email,
     )
 
-    appointment_template_sid = settings.whatsapp_sales_appointment_template_sid
+    appointment_template_sid = (
+        whatsapp_settings.appointment_template_sid
+        or settings.whatsapp_sales_appointment_template_sid
+    )
     fallback_template_sid = (
-        settings.webchat_sales_template_sid or settings.whatsapp_sales_template_sid
+        settings.webchat_sales_template_sid
+        or whatsapp_settings.sales_template_sid
+        or settings.whatsapp_sales_template_sid
     )
 
     template_sid: str | None = None

@@ -20,6 +20,7 @@ import {
   updateCalendarSettingsAction,
   updateMailSettingsAction,
   updateTwilioSettingsAction,
+  updateWhatsAppSettingsAction,
   updateTenantConfigAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -152,6 +153,19 @@ type TwilioInitialValues = {
   voice_full_duplex?: boolean
   voice_debug_verbose?: boolean
   voice_debug_energy_every_n?: number
+}
+
+type WhatsAppInitialValues = {
+  whatsapp_prompt_id?: string
+  whatsapp_prompt_version?: string
+  whatsapp_assistant_id?: string
+  whatsapp_inactivity_minutes?: number
+  whatsapp_reengage_minutes?: number
+  whatsapp_reengage_max_attempts?: number
+  whatsapp_escalate_minutes?: number
+  whatsapp_template_sales?: string
+  whatsapp_template_appointment?: string
+  whatsapp_template_cancel?: string
 }
 
 export function TenantWebchatSettings({
@@ -931,6 +945,135 @@ export function TenantTwilioSettings({
         ) : (
           <FormStatusMessage state={validateState} />
         )}
+      </form>
+    </div>
+  )
+}
+
+export function TenantWhatsAppSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: WhatsAppInitialValues
+}) {
+  const [state, formAction] = useActionState(updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="space-y-6">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_prompt_id">whatsapp.prompt_id</Label>
+            <Input
+              id="whatsapp_prompt_id"
+              name="whatsapp_prompt_id"
+              placeholder="pmpt_..."
+              defaultValue={initialValues.whatsapp_prompt_id ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_prompt_version">whatsapp.prompt_version</Label>
+            <Input
+              id="whatsapp_prompt_version"
+              name="whatsapp_prompt_version"
+              defaultValue={initialValues.whatsapp_prompt_version ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_assistant_id">whatsapp.assistant_id</Label>
+            <Input
+              id="whatsapp_assistant_id"
+              name="whatsapp_assistant_id"
+              placeholder="assistant_..."
+              defaultValue={initialValues.whatsapp_assistant_id ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_inactivity_minutes">whatsapp.inactivity_minutes</Label>
+            <Input
+              id="whatsapp_inactivity_minutes"
+              name="whatsapp_inactivity_minutes"
+              type="number"
+              min={0}
+              defaultValue={initialValues.whatsapp_inactivity_minutes ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_reengage_minutes">whatsapp.reengage_minutes</Label>
+            <Input
+              id="whatsapp_reengage_minutes"
+              name="whatsapp_reengage_minutes"
+              type="number"
+              min={0}
+              defaultValue={initialValues.whatsapp_reengage_minutes ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_reengage_max_attempts">whatsapp.reengage_max_attempts</Label>
+            <Input
+              id="whatsapp_reengage_max_attempts"
+              name="whatsapp_reengage_max_attempts"
+              type="number"
+              min={1}
+              defaultValue={initialValues.whatsapp_reengage_max_attempts ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_escalate_minutes">whatsapp.escalate_minutes</Label>
+            <Input
+              id="whatsapp_escalate_minutes"
+              name="whatsapp_escalate_minutes"
+              type="number"
+              min={0}
+              defaultValue={initialValues.whatsapp_escalate_minutes ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_sales">whatsapp.templates.sales</Label>
+            <Input
+              id="whatsapp_template_sales"
+              name="whatsapp_template_sales"
+              placeholder="HX..."
+              defaultValue={initialValues.whatsapp_template_sales ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_appointment">whatsapp.templates.appointment</Label>
+            <Input
+              id="whatsapp_template_appointment"
+              name="whatsapp_template_appointment"
+              placeholder="HX..."
+              defaultValue={initialValues.whatsapp_template_appointment ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_cancel">whatsapp.templates.cancel</Label>
+            <Input
+              id="whatsapp_template_cancel"
+              name="whatsapp_template_cancel"
+              placeholder="HX..."
+              defaultValue={initialValues.whatsapp_template_cancel ?? ""}
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Esta sección guarda la configuración no sensible bajo <code>organizaciones.config.whatsapp</code>.
+        </p>
+
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
+        </div>
       </form>
     </div>
   )

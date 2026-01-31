@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
-from app.assistants import registry
+from app.assistants.manager import AssistantConfig
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
 from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
 from app.channels.whatsapp import tools as whatsapp_tools
@@ -105,6 +105,8 @@ async def handle_incoming_message(
         )
         raise HTTPException(status_code=500, detail="No se pudo enrutar el mensaje entrante")
 
+    org_uuid = _parse_org_uuid(organizacion_hint)
+    whatsapp_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
     try:
         registration = await storage.register_whatsapp_message(
             direction="entrante",
@@ -113,7 +115,7 @@ async def handle_incoming_message(
             body=message.body,
             message_sid=message.message_sid,
             profile_name=message.profile_name,
-            inactivity_minutes=settings.whatsapp_inactivity_minutes,
+            inactivity_minutes=whatsapp_settings.inactivity_minutes,
             metadata=message.metadata(),
             attachments=message.attachments_as_dict(),
             webhook_payload=message.raw_payload,
@@ -261,6 +263,7 @@ async def handle_incoming_message(
             previous_response_id=previous_response_id,
             catalog_context=catalog_context.text if catalog_context else None,
             booking_context=booking_context_text,
+            whatsapp_settings=whatsapp_settings,
         )
         log_event(
             logger,
@@ -582,8 +585,9 @@ async def _generate_assistant_reply(
     previous_response_id: str | None,
     catalog_context: str | None,
     booking_context: str | None,
+    whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
 ) -> AssistantReply:
-    assistant = registry.resolve_assistant("whatsapp")
+    assistant = _build_assistant_from_runtime(whatsapp_settings)
     client = openai_service.get_assistant_client()
     assistant_spec = None
     if not assistant.is_prompt:
@@ -1101,3 +1105,22 @@ def _map_status_to_envio_estado(status: str | None) -> str | None:
     if event == "en_cola":
         return "enviado"
     return event
+
+
+def _build_assistant_from_runtime(
+    settings_values: tenant_runtime.WhatsappRuntimeSettings,
+) -> AssistantConfig:
+    if settings_values.prompt_id:
+        return AssistantConfig(
+            assistant_id=None,
+            prompt_id=settings_values.prompt_id,
+            prompt_version=settings_values.prompt_version,
+            project_id=settings.openai_project_id,
+        )
+    target_id = settings_values.assistant_id or settings.openai_assistant_id
+    if not target_id:
+        raise RuntimeError("No se configuró un ASSISTANT_ID para WhatsApp")
+    return AssistantConfig(
+        assistant_id=target_id,
+        project_id=settings.openai_project_id,
+    )

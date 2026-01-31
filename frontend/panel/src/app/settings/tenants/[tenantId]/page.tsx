@@ -12,6 +12,7 @@ import {
   TenantCalendarSettings,
   TenantMailSettings,
   TenantTwilioSettings,
+  TenantWhatsAppSettings,
   TenantConfigEditor,
   TenantRoutingManager,
   TenantSecretsManager,
@@ -120,6 +121,20 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     voice_debug_verbose: getNestedBoolean(voiceConfig, "debug_verbose") ?? false,
     voice_debug_energy_every_n: getNestedNumber(voiceConfig, "energy_every_n"),
   }
+  const whatsappConfig = getNestedRecord(config, "whatsapp") ?? {}
+  const whatsappTemplates = getNestedRecord(whatsappConfig, "templates") ?? {}
+  const whatsappInitialValues = {
+    whatsapp_prompt_id: getNestedString(whatsappConfig, "prompt_id"),
+    whatsapp_prompt_version: getNestedString(whatsappConfig, "prompt_version"),
+    whatsapp_assistant_id: getNestedString(whatsappConfig, "assistant_id"),
+    whatsapp_inactivity_minutes: getNestedNumber(whatsappConfig, "inactivity_minutes"),
+    whatsapp_reengage_minutes: getNestedNumber(whatsappConfig, "reengage_minutes"),
+    whatsapp_reengage_max_attempts: getNestedNumber(whatsappConfig, "reengage_max_attempts"),
+    whatsapp_escalate_minutes: getNestedNumber(whatsappConfig, "escalate_minutes"),
+    whatsapp_template_sales: getNestedString(whatsappTemplates, "sales"),
+    whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
+    whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),
+  }
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -145,12 +160,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="webchat">
-              <TabsList className="grid grid-cols-7">
+            <TabsList className="grid grid-cols-8">
                 <TabsTrigger value="webchat">Webchat</TabsTrigger>
                 <TabsTrigger value="calendar">Calendario</TabsTrigger>
                 <TabsTrigger value="mail">Correo</TabsTrigger>
-                <TabsTrigger value="twilio">Twilio</TabsTrigger>
-                <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
+              <TabsTrigger value="twilio">Twilio</TabsTrigger>
+              <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+              <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
                 <TabsTrigger value="routing">Routing</TabsTrigger>
                 <TabsTrigger value="secrets">Secretos</TabsTrigger>
               </TabsList>
@@ -178,6 +194,12 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               </TabsContent>
               <TabsContent value="twilio" className="pt-4">
                 <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
+              </TabsContent>
+              <TabsContent value="whatsapp" className="pt-4">
+                <TenantWhatsAppSettings
+                  tenantId={tenantId}
+                  initialValues={whatsappInitialValues}
+                />
               </TabsContent>
               <TabsContent value="config" className="pt-4">
                 <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />

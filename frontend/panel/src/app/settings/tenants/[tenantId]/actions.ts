@@ -471,6 +471,72 @@ export async function updateTwilioSettingsAction(_: CrudActionState, formData: F
   }
 }
 
+export async function updateWhatsAppSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+
+    const promptId = getText(formData, "whatsapp_prompt_id")
+    const promptVersion = getText(formData, "whatsapp_prompt_version")
+    const assistantId = getText(formData, "whatsapp_assistant_id")
+    const inactivityMinutesRaw = getText(formData, "whatsapp_inactivity_minutes")
+    const reengageMinutesRaw = getText(formData, "whatsapp_reengage_minutes")
+    const reengageMaxAttemptsRaw = getText(formData, "whatsapp_reengage_max_attempts")
+    const escalateMinutesRaw = getText(formData, "whatsapp_escalate_minutes")
+    const templateSales = getText(formData, "whatsapp_template_sales")
+    const templateAppointment = getText(formData, "whatsapp_template_appointment")
+    const templateCancel = getText(formData, "whatsapp_template_cancel")
+
+    const whatsappPatch: Record<string, unknown> = {}
+    if (promptId) whatsappPatch.prompt_id = promptId
+    if (promptVersion) whatsappPatch.prompt_version = promptVersion
+    if (assistantId) whatsappPatch.assistant_id = assistantId
+    const inactivityMinutes = parseNumber(inactivityMinutesRaw)
+    if (inactivityMinutes !== undefined) whatsappPatch.inactivity_minutes = inactivityMinutes
+    const reengageMinutes = parseNumber(reengageMinutesRaw)
+    if (reengageMinutes !== undefined) whatsappPatch.reengage_minutes = reengageMinutes
+    const reengageMaxAttempts = parseNumber(reengageMaxAttemptsRaw)
+    if (reengageMaxAttempts !== undefined) whatsappPatch.reengage_max_attempts = reengageMaxAttempts
+    const escalateMinutes = parseNumber(escalateMinutesRaw)
+    if (escalateMinutes !== undefined) whatsappPatch.escalate_minutes = escalateMinutes
+
+    const templatesPatch: Record<string, unknown> = {}
+    if (templateSales) templatesPatch.sales = templateSales
+    if (templateAppointment) templatesPatch.appointment = templateAppointment
+    if (templateCancel) templatesPatch.cancel = templateCancel
+    if (Object.keys(templatesPatch).length) {
+      whatsappPatch.templates = templatesPatch
+    }
+
+    if (!Object.keys(whatsappPatch).length) {
+      throw new Error("Debes completar al menos un campo de la configuración de WhatsApp.")
+    }
+
+    const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
+      method: "GET",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!getResp.ok) throw new Error(getResp.error)
+
+    const currentConfig = getResp.data.config ?? {}
+    const patch: Record<string, unknown> = { whatsapp: whatsappPatch }
+    const merged = mergeDeep({ ...currentConfig }, patch)
+
+    const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+      method: "PUT",
+      organizacionId: null,
+      withUserToken: true,
+      body: { config: merged },
+    })
+    if (!putResp.ok) throw new Error(putResp.error)
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de WhatsApp guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración de WhatsApp.")
+  }
+}
+
 export async function validateTenantAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)
