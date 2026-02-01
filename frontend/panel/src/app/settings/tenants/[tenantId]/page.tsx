@@ -15,7 +15,6 @@ import {
   TenantTwilioSettings,
   TenantWhatsAppSettings,
   TenantConfigEditor,
-  TenantRoutingManager,
   TenantSecretsManager,
   TenantWebchatSettings,
   type RouteItem,
@@ -168,7 +167,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="webchat">
-            <TabsList className="grid grid-cols-9">
+            <TabsList className="grid grid-cols-8">
                 <TabsTrigger value="webchat">Webchat</TabsTrigger>
                 <TabsTrigger value="calendar">Calendario</TabsTrigger>
                 <TabsTrigger value="mail">Correo</TabsTrigger>
@@ -176,8 +175,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
               <TabsTrigger value="messenger">Messenger</TabsTrigger>
               <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
-                <TabsTrigger value="routing">Routing</TabsTrigger>
-                <TabsTrigger value="secrets">Secretos</TabsTrigger>
+              <TabsTrigger value="secrets">Secretos</TabsTrigger>
               </TabsList>
               <TabsContent value="webchat" className="pt-4">
                 <TenantWebchatSettings
@@ -208,16 +206,18 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 <TenantWhatsAppSettings
                   tenantId={tenantId}
                   initialValues={whatsappInitialValues}
+                  routes={routes}
                 />
               </TabsContent>
               <TabsContent value="messenger" className="pt-4">
-                <TenantMessengerSettings tenantId={tenantId} initialValues={messengerInitialValues} />
+                <TenantMessengerSettings
+                  tenantId={tenantId}
+                  initialValues={messengerInitialValues}
+                  routes={routes}
+                />
               </TabsContent>
               <TabsContent value="config" className="pt-4">
                 <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />
-              </TabsContent>
-              <TabsContent value="routing" className="pt-4">
-                <TenantRoutingManager tenantId={tenantId} routes={routes} />
               </TabsContent>
               <TabsContent value="secrets" className="pt-4">
                 <TenantSecretsManager tenantId={tenantId} secrets={secrets} />

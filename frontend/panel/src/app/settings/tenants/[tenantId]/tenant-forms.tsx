@@ -961,11 +961,19 @@ export function TenantTwilioSettings({
 export function TenantWhatsAppSettings({
   tenantId,
   initialValues,
+  routes,
 }: {
   tenantId: string
   initialValues: WhatsAppInitialValues
+  routes: RouteItem[]
 }) {
   const [state, formAction] = useActionState(updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
+  const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
+    createTenantRouteAction,
+  )
+  const { state: deleteState, formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
+  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
 
   return (
     <div className="space-y-6">
@@ -1083,6 +1091,55 @@ export function TenantWhatsAppSettings({
           <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
         </div>
       </form>
+
+      <form ref={createRouteRef} action={createRouteAction} className="space-y-3">
+        <h3 className="text-sm font-medium">Ruta (WhatsApp)</h3>
+        <p className="text-xs text-muted-foreground">Asocia un número E.164 al tenant para recibir webhooks.</p>
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="canal" value="whatsapp" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_route_clave">clave (número)</Label>
+            <Input
+              id="whatsapp_route_clave"
+              name="clave"
+              placeholder="+5214443354450"
+              required
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={routeState} />
+          <SubmitButton label="Agregar ruta" pendingLabel="Guardando..." />
+        </div>
+      </form>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium">Rutas de WhatsApp</h3>
+        {channelRoutes.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No hay rutas registradas.</p>
+        ) : (
+          <div className="space-y-2">
+            {channelRoutes.map((route) => (
+              <div key={route.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm">
+                <div className="font-mono">{route.clave}</div>
+                <form action={deleteRouteAction}>
+                  <input type="hidden" name="tenant_id" value={tenantId} />
+                  <input type="hidden" name="route_id" value={route.id} />
+                  <Button type="submit" variant="ghost" size="xs">
+                    Eliminar
+                  </Button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <form action={validateAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="scope" value="whatsapp" />
+      </form>
     </div>
   )
 }
@@ -1090,11 +1147,18 @@ export function TenantWhatsAppSettings({
 export function TenantMessengerSettings({
   tenantId,
   initialValues,
+  routes,
 }: {
   tenantId: string
   initialValues: MessengerInitialValues
+  routes: RouteItem[]
 }) {
   const [state, formAction] = useActionState(updateMessengerSettingsAction, INITIAL_CRUD_STATE)
+  const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
+    createTenantRouteAction,
+  )
+  const { state: deleteState, formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
+  const channelRoutes = routes.filter((route) => route.canal === "messenger")
   const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
@@ -1183,6 +1247,50 @@ export function TenantMessengerSettings({
           <FormStatusMessage state={state} />
           <SubmitButton label="Guardar Messenger" pendingLabel="Guardando..." />
         </div>
+      </form>
+
+      <form ref={createRouteRef} action={createRouteAction} className="space-y-3">
+        <h3 className="text-sm font-medium">Ruta (Messenger)</h3>
+        <p className="text-xs text-muted-foreground">Relaciona el page_id con este tenant.</p>
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="canal" value="messenger" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="messenger_route_clave">clave (page_id)</Label>
+            <Input id="messenger_route_clave" name="clave" placeholder="123456789" required />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={routeState} />
+          <SubmitButton label="Agregar ruta" pendingLabel="Guardando..." />
+        </div>
+      </form>
+
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium">Rutas de Messenger</h3>
+        {channelRoutes.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No hay rutas registradas.</p>
+        ) : (
+          <div className="space-y-2">
+            {channelRoutes.map((route) => (
+              <div key={route.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm">
+                <div className="font-mono">{route.clave}</div>
+                <form action={deleteRouteAction}>
+                  <input type="hidden" name="tenant_id" value={tenantId} />
+                  <input type="hidden" name="route_id" value={route.id} />
+                  <Button type="submit" variant="ghost" size="xs">
+                    Eliminar
+                  </Button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <form action={validateAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="scope" value="messenger" />
       </form>
 
       <form action={validateAction} className="space-y-3">
