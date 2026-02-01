@@ -224,6 +224,10 @@ Twilio / Voz (ejemplos):
 
 > ✅ La pestaña “Twilio” del panel ya configura estos bloques (config + secretos) y ofrece validación por canal.
 
+OpenAI (General + Voz):
+- `TALIA_OPENAI_API_KEY`, `TALIA_OPENAI_PROJECT_ID` → pestaña “Openai General / General”: credenciales del proyecto que guardan las referencias a los prompts/assistant_id (config + secretos; sólo platform admin puede editarlas por tenant).
+- `OPENAI_API_KEY`, `OPENAI_PROMPT_ID` (más metadata: `OPENAI_MODEL`, `OPENAI_MAX_TOKENS`, `OPENAI_STT_MODEL`) → subsección “Voz Openai”: controla el comportamiento del canal de voz (Twilio + Realtime); estos valores también se deben rotar por tenant y leer desde `tenant_runtime` antes de caer al fallback global.
+
 ## 4) Secretos por tenant (BD: `public.secretos`)
 
 Valores sensibles que NO deben vivir en `.env` por tenant y que la UI debe manejar sin mostrar el valor una vez guardado (solo “actualizar/rotar”).
@@ -271,7 +275,9 @@ Por tenant (a mover a BD, si aplica al producto):
 En `/settings/tenants`, por tenant:
 - Tab **General**: nombre/dominio/estado + `organizaciones.config` (no sensible).
 - Tab **Routing**: CRUD de `organizacion_rutas_canal`.
+- Tab **Config**: agrupa flags/features y campos generales (`webchat.*`, `whatsapp.*`, `messenger.*`, `branding.*`).
 - Tab **Secretos**: CRUD/rotación de `secretos` (nunca leer el valor).
+- Tab **Openai General**: primera sección “General” para `TALIA_OPENAI_API_KEY`/`TALIA_OPENAI_PROJECT_ID` y segunda sección “Voz Openai” para `OPENAI_API_KEY`/`OPENAI_PROMPT_ID` (y model metadata) con su validación respectiva.
 - Tab **Validación**: botones de “probar” por canal (webchat/whatsapp/messenger).
 
 ## Estado actual (enero 2026)

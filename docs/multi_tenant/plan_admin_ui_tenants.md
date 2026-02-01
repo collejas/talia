@@ -52,6 +52,11 @@ Tab **Config** (`organizaciones.config` JSONB)
 - [ ] `whatsapp.*` (prompt_id/version, templates, tiempos)
 - [ ] `messenger.*` (prompt_id/version)
 - [ ] `branding.*` (public_name, logo_url, theme)
+- [ ] `openai.general` (TALIA_OPENAI_API_KEY, TALIA_OPENAI_PROJECT_ID) y validación de asistente
+
+Tab **Openai General** (organizaciones.config + secretos)
+- [ ] **General:** guarda `TALIA_OPENAI_API_KEY` y `TALIA_OPENAI_PROJECT_ID` como secretos/config dentro del tenant, siempre por nivel admin y con rotación controlada desde la UI.
+- [ ] **Voz Openai:** agrupa los valores que controlan el canal de voz (`OPENAI_API_KEY`, `OPENAI_PROMPT_ID`, `OPENAI_MODEL`, `OPENAI_MAX_TOKENS`, `OPENAI_STT_MODEL`, etc.) para que cada tenant pueda rotarlos/editar el prompt, y el runtime los lea desde la base antes de caer al fallback global.
 
 Tab **Secretos** (`secretos`)
 - [ ] OpenAI `openai.api_key` (si aplica por tenant)
