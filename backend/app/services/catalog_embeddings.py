@@ -13,6 +13,7 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services import tenant_runtime
 from app.services.openai import get_openai_client
 
 logger = get_logger("app.services.catalog_embeddings")
@@ -106,7 +107,6 @@ class CatalogEmbeddingService:
 
     def __init__(self, repo: CRMRepository) -> None:
         self._repo = repo
-        self._client = get_openai_client()
         self._model = settings.embeddings_model or "text-embedding-ada-002"
 
     async def reindex_catalog(
@@ -321,7 +321,7 @@ class CatalogEmbeddingService:
         text = str(contenido).strip()
         if not text:
             return
-        embedding = await self._create_embedding(text)
+        embedding = await self._create_embedding(text, organizacion_id)
         payload = {
             "organizacion_id": str(organizacion_id),
             "entity_type": entity_type,
@@ -333,9 +333,11 @@ class CatalogEmbeddingService:
         }
         await self._repo.upsert_catalog_document_embeddings(rows=[payload])
 
-    async def _create_embedding(self, text: str) -> Sequence[float]:
+    async def _create_embedding(self, text: str, organizacion_id: UUID | None = None) -> Sequence[float]:
         try:
-            response = await self._client.embeddings.create(input=text, model=self._model)
+            api_key = await tenant_runtime.get_openai_api_key(organizacion_id=organizacion_id)
+            client = get_openai_client(api_key=api_key)
+            response = await client.embeddings.create(input=text, model=self._model)
         except Exception as exc:  # pragma: no cover - depende del proveedor externo
             logger.exception(
                 "vector_store.embedding_failed",
@@ -363,7 +365,7 @@ class CatalogEmbeddingService:
         prompt = query.strip()
         if not prompt:
             return []
-        embedding = await self._create_embedding(prompt)
+        embedding = await self._create_embedding(prompt, organizacion_id)
         rows = await self._repo.search_catalog_document_embeddings(
             organizacion_id=organizacion_id,
             embedding=embedding,
