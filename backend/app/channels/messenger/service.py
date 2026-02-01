@@ -11,7 +11,9 @@ from typing import Any
 
 import httpx
 
-from app.assistants import registry
+from uuid import UUID
+
+from app.assistants.manager import AssistantConfig
 from app.assistants.runtime import build_prompt_payload, resolve_assistant_spec
 from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
 from app.channels.booking_context import build_booking_context_message
@@ -22,8 +24,10 @@ from app.services import conversation_summary, storage
 from app.services.context_formatter import build_crm_context_lines
 from app.services.time_utils import get_current_time_reference
 from app.services import openai as openai_service
+from app.services import tenant_runtime
 from app.services.storage import StorageError
 from app.services.catalog_context import build_catalog_context
+from app.channels.messenger.routing import resolve_messenger_organizacion
 
 logger = get_logger("app.channels.messenger")
 
@@ -56,9 +60,9 @@ def _ht_digest(payload: bytes, secret: str, algorithm: str) -> str:
     return hmac.new(secret_bytes, payload, getattr(hashlib, algorithm)).hexdigest()
 
 
-def verify_signature(payload: bytes, signature: str | None) -> bool:
-    secret_value = settings.messenger_app_secret
-    if not secret_value:
+def verify_signature(payload: bytes, signature: str | None, secret_value: str | None) -> bool:
+    secret = secret_value or settings.messenger_app_secret
+    if not secret:
         return True
     if not signature:
         return False
@@ -81,15 +85,6 @@ def _normalize_page_id(value: str | None) -> str | None:
         return None
     candidate = str(value).strip()
     return candidate or None
-
-
-def _resolve_messenger_organizacion(page_id: str | None) -> str | None:
-    normalized_id = _normalize_page_id(page_id)
-    if normalized_id:
-        mapped = settings.messenger_page_organizacion_map.get(normalized_id.lower())
-        if mapped:
-            return mapped
-    return settings.messenger_default_organizacion_id
 
 
 def _build_openai_input(
@@ -198,8 +193,14 @@ async def _execute_lead_tool(
     return result
 
 
-async def _send_messenger_reply(*, page_id: str, recipient_id: str, text: str) -> bool:
-    token = settings.messenger_page_access_token
+async def _send_messenger_reply(
+    *,
+    page_id: str,
+    recipient_id: str,
+    text: str,
+    access_token: str | None = None,
+) -> bool:
+    token = access_token or settings.messenger_page_access_token
     if not token:
         logger.warning("messenger.reply_skipped_no_token")
         return False
@@ -259,7 +260,7 @@ async def _handle_message(
         log_event(logger, "messenger.page_missing", sender_id=sender_id)
         return
 
-    org_id = _resolve_messenger_organizacion(page_id)
+    org_id = await resolve_messenger_organizacion(page_id=page_key)
     if not org_id:
         log_event(
             logger,
@@ -268,6 +269,18 @@ async def _handle_message(
             page_id=page_id,
         )
         return
+    try:
+        org_uuid = UUID(org_id)
+    except (TypeError, ValueError):
+        log_event(
+            logger,
+            "messenger.organizacion_invalid",
+            sender_id=sender_id,
+            page_id=page_id,
+            organizacion_id=org_id,
+        )
+        return
+    messenger_settings = await tenant_runtime.get_messenger_runtime_settings(organizacion_id=org_uuid)
 
     raw_text = message.get("text")
     if isinstance(raw_text, dict):
@@ -301,7 +314,11 @@ async def _handle_message(
             text=payload.text,
             direction="entrante",
             metadata={"messenger_event": message},
-            inactivity_hours=settings.messenger_inactivity_hours,
+            inactivity_hours=(
+                messenger_settings.inactivity_hours
+                if messenger_settings.inactivity_hours is not None
+                else settings.messenger_inactivity_hours
+            ),
             attachments=payload.attachments,
             organizacion_id=org_id,
         )
@@ -367,8 +384,12 @@ async def _handle_message(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
-    assistant = registry.resolve_assistant("messenger")
-    client = openai_service.get_assistant_client()
+    openai_key = await tenant_runtime.get_secret_plaintext(
+        organizacion_id=org_uuid,
+        clave="openai.api_key",
+    )
+    assistant = _build_messenger_assistant_from_runtime(messenger_settings)
+    client = openai_service.get_assistant_client(api_key=openai_key)
     assistant_spec = None
     if not assistant.is_prompt:
         if not assistant.assistant_id:
@@ -531,6 +552,7 @@ async def _handle_message(
             page_id=payload.recipient_id,
             recipient_id=payload.sender_id,
             text=reply_text,
+            access_token=messenger_settings.page_access_token,
         )
         if sent_ok:
             outgoing_metadata = {
@@ -571,6 +593,23 @@ async def _handle_message(
                     "messenger.conversation_update_failed",
                     extra={"conversation_id": conversation_id, "error": str(exc)},
                 )
+def _build_messenger_assistant_from_runtime(
+    settings_values: tenant_runtime.MessengerRuntimeSettings,
+) -> AssistantConfig:
+    if settings_values.prompt_id:
+        return AssistantConfig(
+            assistant_id=None,
+            prompt_id=settings_values.prompt_id,
+            prompt_version=settings_values.prompt_version or settings.openai_prompt_version,
+            project_id=settings.openai_project_id,
+        )
+    target_id = settings_values.assistant_id or settings.openai_assistant_id
+    if not target_id:
+        raise RuntimeError("No se configuró un ASSISTANT_ID para Messenger")
+    return AssistantConfig(
+        assistant_id=target_id,
+        project_id=settings.openai_project_id,
+    )
 
 
 async def handle_webhook(payload: dict[str, Any]) -> None:

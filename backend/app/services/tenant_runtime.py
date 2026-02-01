@@ -529,6 +529,24 @@ def _coerce_positive_int(value: Any, default: int) -> int:
     return default
 
 
+def _coerce_positive_int_or_none(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        candidate = int(value)
+        return candidate if candidate >= 0 else None
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            parsed = int(candidate)
+        except ValueError:
+            return None
+        return parsed if parsed >= 0 else None
+    return None
+
+
 def _coerce_str_or_none(value: Any) -> str | None:
     if isinstance(value, str):
         trimmed = value.strip()
@@ -620,7 +638,79 @@ async def get_whatsapp_runtime_settings(
     return settings_payload
 
 
-async def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:
+@dataclass(slots=True)
+class MessengerRuntimeSettings:
+    page_access_token: str | None
+    verify_token: str | None
+    app_secret: str | None
+    assistant_id: str | None
+    prompt_id: str | None
+    prompt_version: str | None
+    inactivity_hours: int | None
+
+
+async def get_messenger_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> MessengerRuntimeSettings:
+    settings_payload = MessengerRuntimeSettings(
+        page_access_token=settings.messenger_page_access_token,
+        verify_token=settings.messenger_verify_token,
+        app_secret=settings.messenger_app_secret,
+        assistant_id=settings.messenger_assistant_id,
+        prompt_id=settings.messenger_prompt_id,
+        prompt_version=settings.messenger_prompt_version,
+        inactivity_hours=settings.messenger_inactivity_hours,
+    )
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    messenger_cfg = _as_dict(config.get("messenger")) or {}
+
+    assistant_id = _coerce_str_or_none(messenger_cfg.get("assistant_id"))
+    if assistant_id is not None:
+        settings_payload.assistant_id = assistant_id
+
+    prompt_id = _coerce_str_or_none(messenger_cfg.get("prompt_id"))
+    if prompt_id is not None:
+        settings_payload.prompt_id = prompt_id
+
+    prompt_version = _coerce_str_or_none(messenger_cfg.get("prompt_version"))
+    if prompt_version is not None:
+        settings_payload.prompt_version = prompt_version
+
+    inactivity_value = messenger_cfg.get("inactivity_hours")
+    if inactivity_value is not None:
+        coerced_inactivity = _coerce_positive_int_or_none(inactivity_value)
+        if coerced_inactivity is not None:
+            settings_payload.inactivity_hours = coerced_inactivity
+
+    page_token_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="meta.messenger.page_access_token",
+    )
+    if page_token_secret:
+        settings_payload.page_access_token = page_token_secret
+
+    verify_token_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="meta.messenger.verify_token",
+    )
+    if verify_token_secret:
+        settings_payload.verify_token = verify_token_secret
+
+    app_secret = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave="meta.messenger.app_secret",
+    )
+    if app_secret:
+        settings_payload.app_secret = app_secret
+
+    return settings_payload
+
+
+def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:
     """Devuelve el alias principal (primera ruta activa) para webchat."""
     data = await _supabase_get(
         "/rest/v1/organizacion_rutas_canal",

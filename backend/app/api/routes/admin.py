@@ -484,11 +484,22 @@ async def validate_tenant(
         "mail.use_ssl",
         "mail.use_tls",
     ]
+    messenger_config_keys = [
+        "messenger.prompt_id",
+        "messenger.prompt_version",
+        "messenger.assistant_id",
+        "messenger.inactivity_hours",
+    ]
 
     required_config: list[str]
     if scope == "full":
         required_config = (
-            webchat_config_keys + calendar_config_keys + mail_config_keys + twilio_config_keys + voice_config_keys
+            webchat_config_keys
+            + calendar_config_keys
+            + mail_config_keys
+            + twilio_config_keys
+            + voice_config_keys
+            + messenger_config_keys
         )
     elif scope == "calendar":
         required_config = calendar_config_keys
