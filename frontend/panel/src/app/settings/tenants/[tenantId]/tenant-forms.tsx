@@ -971,8 +971,8 @@ export function TenantWhatsAppSettings({
   const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
     createTenantRouteAction,
   )
-  const { state: deleteState, formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const { formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
+  const [, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
 
   return (
@@ -1126,7 +1126,7 @@ export function TenantWhatsAppSettings({
                 <form action={deleteRouteAction}>
                   <input type="hidden" name="tenant_id" value={tenantId} />
                   <input type="hidden" name="route_id" value={route.id} />
-                  <Button type="submit" variant="ghost" size="xs">
+                  <Button type="submit" variant="ghost" size="sm">
                     Eliminar
                   </Button>
                 </form>
@@ -1157,7 +1157,7 @@ export function TenantMessengerSettings({
   const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
     createTenantRouteAction,
   )
-  const { state: deleteState, formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
+  const { formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
   const channelRoutes = routes.filter((route) => route.canal === "messenger")
   const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
 
@@ -1278,7 +1278,7 @@ export function TenantMessengerSettings({
                 <form action={deleteRouteAction}>
                   <input type="hidden" name="tenant_id" value={tenantId} />
                   <input type="hidden" name="route_id" value={route.id} />
-                  <Button type="submit" variant="ghost" size="xs">
+                  <Button type="submit" variant="ghost" size="sm">
                     Eliminar
                   </Button>
                 </form>
