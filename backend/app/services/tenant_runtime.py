@@ -710,7 +710,7 @@ async def get_messenger_runtime_settings(
     return settings_payload
 
 
-def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:
+async def get_primary_webchat_alias(*, organizacion_id: UUID) -> str | None:
     """Devuelve el alias principal (primera ruta activa) para webchat."""
     data = await _supabase_get(
         "/rest/v1/organizacion_rutas_canal",

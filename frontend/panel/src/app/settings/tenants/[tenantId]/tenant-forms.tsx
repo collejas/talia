@@ -21,6 +21,7 @@ import {
   updateMailSettingsAction,
   updateTwilioSettingsAction,
   updateWhatsAppSettingsAction,
+  updateMessengerSettingsAction,
   updateTenantConfigAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -166,6 +167,13 @@ type WhatsAppInitialValues = {
   whatsapp_template_sales?: string
   whatsapp_template_appointment?: string
   whatsapp_template_cancel?: string
+}
+
+type MessengerInitialValues = {
+  messenger_prompt_id?: string
+  messenger_prompt_version?: string
+  messenger_assistant_id?: string
+  messenger_inactivity_hours?: number
 }
 
 export function TenantWebchatSettings({
@@ -1074,6 +1082,168 @@ export function TenantWhatsAppSettings({
           <FormStatusMessage state={state} />
           <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
         </div>
+      </form>
+    </div>
+  )
+}
+
+export function TenantMessengerSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: MessengerInitialValues
+}) {
+  const [state, formAction] = useActionState(updateMessengerSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <form action={formAction} className="space-y-6">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="messenger_prompt_id">messenger.prompt_id</Label>
+            <Input
+              id="messenger_prompt_id"
+              name="messenger_prompt_id"
+              placeholder="pmpt_..."
+              defaultValue={initialValues.messenger_prompt_id ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="messenger_prompt_version">messenger.prompt_version</Label>
+            <Input
+              id="messenger_prompt_version"
+              name="messenger_prompt_version"
+              defaultValue={initialValues.messenger_prompt_version ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="messenger_assistant_id">messenger.assistant_id</Label>
+            <Input
+              id="messenger_assistant_id"
+              name="messenger_assistant_id"
+              placeholder="assistant_..."
+              defaultValue={initialValues.messenger_assistant_id ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="messenger_inactivity_hours">messenger.inactivity_hours</Label>
+            <Input
+              id="messenger_inactivity_hours"
+              name="messenger_inactivity_hours"
+              type="number"
+              min={0}
+              defaultValue={initialValues.messenger_inactivity_hours ?? ""}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Cada token se guarda en <code>secretos.clave</code> como <code>meta.messenger.*</code>; los campos se mantienen vacíos después de guardar.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="messenger_page_access_token">meta.messenger.page_access_token (tier B)</Label>
+            <Input
+              id="messenger_page_access_token"
+              name="messenger_page_access_token"
+              type="password"
+              placeholder="Pega el page access token"
+              defaultValue=""
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="messenger_verify_token">meta.messenger.verify_token (tier A)</Label>
+            <Input
+              id="messenger_verify_token"
+              name="messenger_verify_token"
+              type="password"
+              placeholder="Pega el verify token"
+              defaultValue=""
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="messenger_app_secret">meta.messenger.app_secret (tier B)</Label>
+            <Input
+              id="messenger_app_secret"
+              name="messenger_app_secret"
+              type="password"
+              placeholder="Pega el app secret"
+              defaultValue=""
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar Messenger" pendingLabel="Guardando..." />
+        </div>
+      </form>
+
+      <form action={validateAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="scope" value="messenger" />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Validación</h3>
+            <p className="text-xs text-muted-foreground">Revisa faltantes de Messenger (config + secrets).</p>
+          </div>
+          <Button type="submit" variant="outline" size="sm">
+            Validar
+          </Button>
+        </div>
+        {validateState.report ? (
+          <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
+            <p className="font-medium">{validateState.message}</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_routes.length ? (
+                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_config.length ? (
+                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_secrets.length ? (
+                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              {validateState.report.notes.length ? (
+                <div className="space-y-1 md:col-span-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+                  <ul className="list-disc pl-5">
+                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <FormStatusMessage state={validateState} />
+        )}
       </form>
     </div>
   )

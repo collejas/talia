@@ -11,6 +11,7 @@ import { callCrmApi } from "@/lib/api/crm"
 import {
   TenantCalendarSettings,
   TenantMailSettings,
+  TenantMessengerSettings,
   TenantTwilioSettings,
   TenantWhatsAppSettings,
   TenantConfigEditor,
@@ -135,6 +136,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     whatsapp_template_appointment: getNestedString(whatsappTemplates, "appointment"),
     whatsapp_template_cancel: getNestedString(whatsappTemplates, "cancel"),
   }
+  const messengerConfig = getNestedRecord(config, "messenger") ?? {}
+  const messengerInitialValues = {
+    messenger_prompt_id: getNestedString(messengerConfig, "prompt_id"),
+    messenger_prompt_version: getNestedString(messengerConfig, "prompt_version"),
+    messenger_assistant_id: getNestedString(messengerConfig, "assistant_id"),
+    messenger_inactivity_hours: getNestedNumber(messengerConfig, "inactivity_hours"),
+  }
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -160,12 +168,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="webchat">
-            <TabsList className="grid grid-cols-8">
+            <TabsList className="grid grid-cols-9">
                 <TabsTrigger value="webchat">Webchat</TabsTrigger>
                 <TabsTrigger value="calendar">Calendario</TabsTrigger>
                 <TabsTrigger value="mail">Correo</TabsTrigger>
               <TabsTrigger value="twilio">Twilio</TabsTrigger>
               <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+              <TabsTrigger value="messenger">Messenger</TabsTrigger>
               <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
                 <TabsTrigger value="routing">Routing</TabsTrigger>
                 <TabsTrigger value="secrets">Secretos</TabsTrigger>
@@ -200,6 +209,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                   tenantId={tenantId}
                   initialValues={whatsappInitialValues}
                 />
+              </TabsContent>
+              <TabsContent value="messenger" className="pt-4">
+                <TenantMessengerSettings tenantId={tenantId} initialValues={messengerInitialValues} />
               </TabsContent>
               <TabsContent value="config" className="pt-4">
                 <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />

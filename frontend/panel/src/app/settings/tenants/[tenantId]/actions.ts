@@ -537,6 +537,71 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
   }
 }
 
+export async function updateMessengerSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+
+    const promptId = getText(formData, "messenger_prompt_id")
+    const promptVersion = getText(formData, "messenger_prompt_version")
+    const assistantId = getText(formData, "messenger_assistant_id")
+    const inactivityHoursRaw = getText(formData, "messenger_inactivity_hours")
+
+    const pageAccessToken = getText(formData, "messenger_page_access_token")
+    const verifyToken = getText(formData, "messenger_verify_token")
+    const appSecret = getText(formData, "messenger_app_secret")
+
+    const messengerPatch: Record<string, unknown> = {}
+    if (assistantId) messengerPatch.assistant_id = assistantId
+    if (promptId) messengerPatch.prompt_id = promptId
+    if (promptVersion) messengerPatch.prompt_version = promptVersion
+    const inactivityHours = parseNumber(inactivityHoursRaw)
+    if (inactivityHours !== undefined) messengerPatch.inactivity_hours = inactivityHours
+
+    if (!Object.keys(messengerPatch).length && !pageAccessToken && !verifyToken && !appSecret) {
+      throw new Error("Debes completar al menos un campo de Messenger.")
+    }
+
+    const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
+      method: "GET",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!getResp.ok) throw new Error(getResp.error)
+
+    const currentConfig = getResp.data.config ?? {}
+    const patch: Record<string, unknown> = {}
+    if (Object.keys(messengerPatch).length) {
+      patch.messenger = messengerPatch
+    }
+
+    if (Object.keys(patch).length) {
+      const merged = mergeDeep({ ...currentConfig }, patch)
+      const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+        method: "PUT",
+        organizacionId: null,
+        withUserToken: true,
+        body: { config: merged },
+      })
+      if (!putResp.ok) throw new Error(putResp.error)
+    }
+
+    if (pageAccessToken) {
+      await upsertTenantSecret(tenantId, "meta.messenger.page_access_token", pageAccessToken, "B")
+    }
+    if (verifyToken) {
+      await upsertTenantSecret(tenantId, "meta.messenger.verify_token", verifyToken, "A")
+    }
+    if (appSecret) {
+      await upsertTenantSecret(tenantId, "meta.messenger.app_secret", appSecret, "B")
+    }
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de Messenger guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración de Messenger.")
+  }
+}
+
 export async function validateTenantAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

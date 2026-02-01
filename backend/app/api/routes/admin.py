@@ -425,7 +425,7 @@ async def delete_tenant_secret(
 @router.post("/tenants/{organizacion_id}/validate", response_model=TenantValidationReport)
 async def validate_tenant(
     organizacion_id: UUID,
-    scope: Literal["webchat", "calendar", "mail", "twilio", "full"] = "full",
+    scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"] = "full",
     _: UUID = Depends(require_platform_admin),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
@@ -443,6 +443,8 @@ async def validate_tenant(
         required_route_canals.append("webchat")
     if scope in {"twilio", "full"}:
         required_route_canals.append("whatsapp")
+    if scope in {"messenger", "full"}:
+        required_route_canals.append("messenger")
     for canal in required_route_canals:
         has = any(isinstance(r, dict) and r.get("canal") == canal for r in routes)
         if not has:
@@ -507,6 +509,8 @@ async def validate_tenant(
         required_config = mail_config_keys
     elif scope == "twilio":
         required_config = twilio_config_keys + voice_config_keys
+    elif scope == "messenger":
+        required_config = messenger_config_keys
     else:
         required_config = webchat_config_keys
 
@@ -533,6 +537,12 @@ async def validate_tenant(
         required_secrets = ["mail.username", "mail.password"]
     elif scope == "twilio":
         required_secrets = ["twilio.account_sid", "twilio.auth_token", "voice.stream_jwt_secret"]
+    elif scope == "messenger":
+        required_secrets = [
+            "meta.messenger.page_access_token",
+            "meta.messenger.app_secret",
+            "meta.messenger.verify_token",
+        ]
     else:
         required_secrets = ["openai.api_key"]
 
