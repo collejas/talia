@@ -588,7 +588,7 @@ async def _generate_assistant_reply(
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
 ) -> AssistantReply:
     assistant = _build_assistant_from_runtime(whatsapp_settings)
-    client = openai_service.get_assistant_client()
+    client = openai_service.get_assistant_client(api_key=whatsapp_settings.voice_api_key)
     assistant_spec = None
     if not assistant.is_prompt:
         if not assistant.assistant_id:

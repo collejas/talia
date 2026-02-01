@@ -193,6 +193,20 @@ async def get_secret_plaintext(*, organizacion_id: UUID | None, clave: str) -> s
     return plaintext
 
 
+def _openai_secret_candidates(channel: str | None) -> list[str]:
+    if channel == "voice":
+        return ["openai.voice.api_key", "openai.general.api_key", "openai.api_key"]
+    return ["openai.general.api_key", "openai.api_key"]
+
+
+async def get_openai_api_key(*, organizacion_id: UUID | None, channel: str | None = None) -> str | None:
+    for key in _openai_secret_candidates(channel):
+        value = await get_secret_plaintext(organizacion_id=organizacion_id, clave=key)
+        if value:
+            return value
+    return settings.openai_api_key
+
+
 async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRuntimeSettings:
     config = await get_org_config(organizacion_id=organizacion_id)
     webchat = _as_dict(config.get("webchat")) or {}
@@ -206,9 +220,7 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
     elif isinstance(inactivity_hours_raw, float):
         inactivity_hours = int(inactivity_hours_raw)
 
-    openai_api_key = await get_secret_plaintext(organizacion_id=organizacion_id, clave="openai.api_key")
-    if not openai_api_key:
-        openai_api_key = settings.openai_api_key  # fallback legacy
+    openai_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
 
     return WebchatRuntimeSettings(
         openai_api_key=openai_api_key,
@@ -569,6 +581,11 @@ class WhatsappRuntimeSettings:
     sales_template_sid: str | None
     appointment_template_sid: str | None
     cancel_template_sid: str | None
+    project_id: str | None
+    voice_model: str | None
+    voice_max_tokens: int | None
+    voice_stt_model: str | None
+    voice_api_key: str | None
 
     @staticmethod
     def from_settings() -> "WhatsappRuntimeSettings":
@@ -583,6 +600,11 @@ class WhatsappRuntimeSettings:
             sales_template_sid=settings.whatsapp_sales_template_sid,
             appointment_template_sid=settings.whatsapp_sales_appointment_template_sid,
             cancel_template_sid=settings.whatsapp_sales_cancel_appointment_template_sid,
+            project_id=settings.openai_project_id,
+            voice_model=settings.openai_model,
+            voice_max_tokens=settings.openai_max_tokens,
+            voice_stt_model=settings.openai_stt_model,
+            voice_api_key=settings.openai_api_key,
         )
 
 
@@ -596,16 +618,25 @@ async def get_whatsapp_runtime_settings(
 
     config = await get_org_config(organizacion_id=organizacion_id)
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
+    openai_cfg = _as_dict(config.get("openai")) or {}
+    general_cfg = _as_dict(openai_cfg.get("general")) or {}
+    voice_cfg = _as_dict(openai_cfg.get("voice")) or {}
 
-    assistant_id = _coerce_str_or_none(whatsapp_cfg.get("assistant_id"))
+    assistant_id = _coerce_str_or_none(voice_cfg.get("assistant_id"))
+    if assistant_id is None:
+        assistant_id = _coerce_str_or_none(whatsapp_cfg.get("assistant_id"))
     if assistant_id is not None:
         settings_payload.assistant_id = assistant_id
 
-    prompt_id = _coerce_str_or_none(whatsapp_cfg.get("prompt_id"))
+    prompt_id = _coerce_str_or_none(voice_cfg.get("prompt_id"))
+    if prompt_id is None:
+        prompt_id = _coerce_str_or_none(whatsapp_cfg.get("prompt_id"))
     if prompt_id is not None:
         settings_payload.prompt_id = prompt_id
 
-    prompt_version = _coerce_str_or_none(whatsapp_cfg.get("prompt_version"))
+    prompt_version = _coerce_str_or_none(voice_cfg.get("prompt_version"))
+    if prompt_version is None:
+        prompt_version = _coerce_str_or_none(whatsapp_cfg.get("prompt_version"))
     if prompt_version is not None:
         settings_payload.prompt_version = prompt_version
 
@@ -634,6 +665,23 @@ async def get_whatsapp_runtime_settings(
     cancel_template = _coerce_str_or_none(templates.get("cancel"))
     if cancel_template is not None:
         settings_payload.cancel_template_sid = cancel_template
+
+    project_value = _coerce_str_or_none(general_cfg.get("project_id"))
+    if project_value is not None:
+        settings_payload.project_id = project_value
+
+    model_value = _coerce_str_or_none(voice_cfg.get("model"))
+    if model_value is not None:
+        settings_payload.voice_model = model_value
+    max_tokens_value = voice_cfg.get("max_tokens")
+    max_tokens_coerced = _coerce_positive_int_or_none(max_tokens_value)
+    if max_tokens_coerced is not None:
+        settings_payload.voice_max_tokens = max_tokens_coerced
+    stt_value = _coerce_str_or_none(voice_cfg.get("stt_model"))
+    if stt_value is not None:
+        settings_payload.voice_stt_model = stt_value
+
+    settings_payload.voice_api_key = await get_openai_api_key(organizacion_id=organizacion_id, channel="voice")
 
     return settings_payload
 

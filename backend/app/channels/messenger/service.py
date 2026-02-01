@@ -384,10 +384,7 @@ async def _handle_message(
             extra={"conversation_id": conversation_id, "error": str(exc)},
         )
 
-    openai_key = await tenant_runtime.get_secret_plaintext(
-        organizacion_id=org_uuid,
-        clave="openai.api_key",
-    )
+    openai_key = await tenant_runtime.get_openai_api_key(organizacion_id=org_uuid)
     assistant = _build_messenger_assistant_from_runtime(messenger_settings)
     client = openai_service.get_assistant_client(api_key=openai_key)
     assistant_spec = None

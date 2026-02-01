@@ -58,6 +58,24 @@ class Settings(BaseSettings):
         ),
     )
     openai_project_id: str | None = None
+    openai_model: str = Field(
+        default="gpt-4o",
+        validation_alias=AliasChoices(
+            "OPENAI_MODEL",
+        ),
+    )
+    openai_max_tokens: int = Field(
+        default=40,
+        validation_alias=AliasChoices(
+            "OPENAI_MAX_TOKENS",
+        ),
+    )
+    openai_stt_model: str | None = Field(
+        default="gpt-4o-mini-transcribe",
+        validation_alias=AliasChoices(
+            "OPENAI_STT_MODEL",
+        ),
+    )
     twilio_account_sid: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
