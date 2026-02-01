@@ -107,6 +107,11 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 
 > ✅ La pestaña “Twilio” del panel ahora persiste `twilio.*` y `voice.*` (incluidas las flags de streaming) y rota los secretos asociados.
 
+### `denue.*`
+- `denue.base_url` (string) ← `DENUE_BASE_URL` / `TALIA_DENUE_BASE_URL`
+
+> ✅ La pestaña “Búsqueda” guarda el endpoint (config) y activa la rotación de `denue.token` como secreto por tenant.
+
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`
 - `whatsapp.inactivity_minutes` / `whatsapp.reengage_minutes` / `whatsapp.escalate_minutes`
@@ -153,6 +158,8 @@ Ejemplos:
 
 ### DENUE
 - `denue.token` (nivel A)
+
+> ✅ El tab “Búsqueda” ahora orquesta la persistencia de `denue.base_url` y `denue.token` (el valor solo se rota desde la UI y nunca se expone).
 
 ---
 

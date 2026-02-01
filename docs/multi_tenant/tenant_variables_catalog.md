@@ -55,7 +55,7 @@ Canales (candidatos a **config**/**routing**/**secret**):
 
 Otros proveedores (según tenant):
 - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_PLACES_API_KEY`, `GOOGLE_REDIRECT_URI`
-- DENUE: `DENUE_BASE_URL`, `DENUE_TOKEN`
+ - DENUE: `DENUE_BASE_URL` → `organizaciones.config.denue.base_url`, `DENUE_TOKEN` → `secretos.denue.token`
 - Brevo: `BREVO_API_KEY`, `BREVO_BASE_URL`
 
 Correo/Calendario:

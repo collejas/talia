@@ -60,6 +60,7 @@ Tab **Config** (`organizaciones.config` JSONB)
 - [ ] `messenger.*` (prompt_id/version)
 - [ ] `branding.*` (public_name, logo_url, theme)
 - [ ] `openai.general` (TALIA_OPENAI_API_KEY, TALIA_OPENAI_PROJECT_ID) y validación de asistente
+- [ ] `denue.base_url` (configurable por tenant desde la nueva pestaña “Búsqueda`)
 
 Tab **Openai General** (organizaciones.config + secretos)
 - [ ] **General:** guarda `TALIA_OPENAI_API_KEY` y `TALIA_OPENAI_PROJECT_ID` como secretos/config dentro del tenant, siempre por nivel admin y con rotación controlada desde la UI.
@@ -73,6 +74,11 @@ Tab **Secretos** (`secretos`)
 - [ ] Calendar `calendar.username` / `calendar.password`
 - [ ] Google `google.places_api_key` / `google.oauth.client_secret`
 - [ ] DENUE `denue.token`
+
+Tab **Búsqueda** (`denue`)
+- [ ] `denue.base_url` (tupla config/secret similar a Brevo) almacenada en el tenant y editable desde la UI
+- [ ] `denue.token` (secreto, nivel A) rotado desde la pestaña sin exponer el valor y con indicador “Token registrado”
+- [ ] Validar que la API responde desde este scope antes de lanzar búsquedas
 
 Tab **Validación**
 - [ ] Probar webchat: resolver alias → org + endpoint de conversación
