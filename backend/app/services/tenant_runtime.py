@@ -681,7 +681,7 @@ async def get_whatsapp_runtime_settings(
     if stt_value is not None:
         settings_payload.voice_stt_model = stt_value
 
-    settings_payload.voice_api_key = await get_openai_api_key(organizacion_id=organizacion_id, channel="voice")
+    settings_payload.voice_api_key = await get_openai_api_key(organizacion_id=organizacion_id)
 
     return settings_payload
 

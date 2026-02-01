@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from uuid import UUID
 
 from openai import AsyncOpenAI
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services import openai as openai_service, storage
+from app.services import openai as openai_service, storage, tenant_runtime
 from app.services.context_formatter import build_crm_context_lines
 from app.services.storage import StorageError
 
@@ -103,14 +104,28 @@ def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _resolve_organizacion_uuid(value: str | UUID | None) -> UUID | None:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        try:
+            return UUID(value)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 async def _summarize_messages(
     messages: list[dict[str, Any]],
+    *,
+    organizacion_id: UUID | None = None,
     context_data: dict[str, Any] | None = None,
 ) -> str | None:
     if not messages:
         return None
     prompt_text = _build_prompt(messages, context_data=context_data)
-    client: AsyncOpenAI = openai_service.get_assistant_client()
+    api_key = await tenant_runtime.get_openai_api_key(organizacion_id=organizacion_id)
+    client: AsyncOpenAI = openai_service.get_assistant_client(api_key=api_key)
     try:
         response = await client.responses.create(
             model=settings.conversation_summary_model,
@@ -143,7 +158,7 @@ async def ensure_conversation_summary(
     *,
     conversation_id: str,
     contact_id: str | None = None,
-    organizacion_id: str | None = None,
+    organizacion_id: str | UUID | None = None,
     tipo: str = "conversation",
     context_data: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
@@ -173,6 +188,7 @@ async def ensure_conversation_summary(
         )
         messages = []
 
+    organizacion_uuid = _resolve_organizacion_uuid(organizacion_id)
     if not messages:
         if summary:
             summary["metadatos"] = _ensure_metadata_with_type(summary.get("metadatos"))
@@ -188,7 +204,11 @@ async def ensure_conversation_summary(
     else:
         metadata = {}
 
-    summary_text = await _summarize_messages(messages, context_data=context_data)
+    summary_text = await _summarize_messages(
+        messages,
+        organizacion_id=organizacion_uuid,
+        context_data=context_data,
+    )
     if not summary_text:
         if summary:
             summary["metadatos"] = metadata
@@ -201,11 +221,16 @@ async def ensure_conversation_summary(
     }
     new_metadata = _ensure_metadata_with_type(new_metadata)
     try:
+        resolved_org_id: str | None
+        if organizacion_uuid:
+            resolved_org_id = str(organizacion_uuid)
+        else:
+            resolved_org_id = None
         created = await storage.create_conversation_summary(
             conversation_id=conversation_id,
             resumen=summary_text,
             contacto_id=contact_id,
-            organizacion_id=organizacion_id,
+            organizacion_id=resolved_org_id,
             tipo=tipo,
             metadatos=new_metadata,
         )

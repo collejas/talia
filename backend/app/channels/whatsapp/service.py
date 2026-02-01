@@ -264,6 +264,7 @@ async def handle_incoming_message(
             catalog_context=catalog_context.text if catalog_context else None,
             booking_context=booking_context_text,
             whatsapp_settings=whatsapp_settings,
+            organizacion_id=org_uuid,
         )
         log_event(
             logger,
@@ -586,6 +587,7 @@ async def _generate_assistant_reply(
     catalog_context: str | None,
     booking_context: str | None,
     whatsapp_settings: tenant_runtime.WhatsappRuntimeSettings,
+    organizacion_id: UUID | None,
 ) -> AssistantReply:
     assistant = _build_assistant_from_runtime(whatsapp_settings)
     client = openai_service.get_assistant_client(api_key=whatsapp_settings.voice_api_key)
@@ -625,6 +627,7 @@ async def _generate_assistant_reply(
             conversation_id=conversation_id,
             contact_id=contact_id,
             context_data=context_payload,
+            organizacion_id=organizacion_id,
         )
         if summary_record:
             candidate = summary_record.get("resumen")
@@ -695,6 +698,7 @@ async def _generate_assistant_reply(
             conversation_id=conversation_id,
             contact_id=contact_id,
             context_data=context_payload,
+            organizacion_id=organizacion_id,
         )
     except Exception as exc:  # pragma: no cover
         logger.warning(
