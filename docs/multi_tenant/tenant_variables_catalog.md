@@ -55,7 +55,19 @@ Canales (candidatos a **config**/**routing**/**secret**):
 
 Otros proveedores (según tenant):
 - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_PLACES_API_KEY`, `GOOGLE_REDIRECT_URI`
- - DENUE: `DENUE_BASE_URL` → `organizaciones.config.denue.base_url`, `DENUE_TOKEN` → `secretos.denue.token`
+- Google Places:
+  - `GOOGLE_PLACES_API_KEY` → `secretos.google.places_api_key`
+  - `API_NEARBY_SEARCH`, `GOOGLE_PLACES_NEARBY_URL` → `organizaciones.config.google_places.nearby_url`
+  - `GOOGLE_PLACES_TEXT_URL` → `organizaciones.config.google_places.text_url`
+  - `GOOGLE_PLACES_DETAILS_URL` → `organizaciones.config.google_places.details_url`
+  - `PLACES_FIELD_MASK` → `organizaciones.config.google_places.field_mask`
+  - `PLACES_DETAILS_FIELD_MASK` → `organizaciones.config.google_places.details_field_mask`
+  - `GOOGLE_PLACES_GRID_MAX_TILE_RADIUS_M` → `organizaciones.config.google_places.grid_max_tile_radius_m`
+  - `GOOGLE_PLACES_PAUSE_BETWEEN_PAGES` → `organizaciones.config.google_places.pause_between_pages`
+  - `GOOGLE_PLACES_DENSE_GRID_MAX_TILE_RADIUS_M` → `organizaciones.config.google_places.dense_grid_max_tile_radius_m`
+  - `GOOGLE_PLACES_DENSE_PAUSE_BETWEEN_PAGES` → `organizaciones.config.google_places.dense_pause_between_pages`
+  - `GOOGLE_PLACES_DENSE_MAX_RESULTS` → `organizaciones.config.google_places.dense_max_results`
+- DENUE: `DENUE_BASE_URL` → `organizaciones.config.denue.base_url`, `DENUE_TOKEN` → `secretos.denue.token`
 - Brevo: `BREVO_API_KEY`, `BREVO_BASE_URL`
 
 Correo/Calendario:

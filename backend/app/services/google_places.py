@@ -30,6 +30,7 @@ class GooglePlacesClient:
         nearby_url: str | None = None,
         text_url: str | None = None,
         field_mask: str | None = None,
+        details_field_mask: str | None = None,
         default_language: str | None = None,
         default_region: str | None = None,
         timeout: float = 15.0,
@@ -42,7 +43,9 @@ class GooglePlacesClient:
         self.text_url = text_url or settings.google_places_text_url
         raw_field_mask = field_mask or settings.google_places_field_mask
         self.field_mask = _sanitize_field_mask(raw_field_mask)
-        self.details_field_mask = _sanitize_field_mask(settings.google_places_details_field_mask)
+        self.details_field_mask = _sanitize_field_mask(
+            details_field_mask or settings.google_places_details_field_mask
+        )
         self.default_language = default_language or settings.google_places_language_code
         self.default_region = default_region or settings.google_places_region_code
         self.timeout = timeout

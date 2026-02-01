@@ -79,6 +79,8 @@ Tab **Búsqueda** (`denue`)
 - [ ] `denue.base_url` (tupla config/secret similar a Brevo) almacenada en el tenant y editable desde la UI
 - [ ] `denue.token` (secreto, nivel A) rotado desde la pestaña sin exponer el valor y con indicador “Token registrado”
 - [ ] Validar que la API responde desde este scope antes de lanzar búsquedas
+- [ ] `google_places.*` (endpoints, field masks, límites) en `organizaciones.config.google_places`
+- [ ] `google.places_api_key` (secreto, nivel B) rotado desde la misma pestaña y usado por el job multitenant
 
 Tab **Validación**
 - [ ] Probar webchat: resolver alias → org + endpoint de conversación

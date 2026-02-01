@@ -191,6 +191,18 @@ type OpenaiInitialValues = {
 
 type BusquedaInitialValues = {
   denue_base_url?: string
+  google_nearby_url?: string
+  google_text_url?: string
+  google_details_url?: string
+  google_field_mask?: string
+  google_details_field_mask?: string
+  google_language_code?: string
+  google_region_code?: string
+  google_grid_max_tile_radius_m?: number
+  google_pause_between_pages?: number
+  google_dense_grid_max_tile_radius_m?: number
+  google_dense_pause_between_pages?: number
+  google_dense_max_results?: number
 }
 
 export function TenantWebchatSettings({
@@ -810,10 +822,12 @@ export function TenantBusquedaSettings({
   tenantId,
   initialValues,
   hasToken,
+  hasGoogleApiKey,
 }: {
   tenantId: string
   initialValues: BusquedaInitialValues
   hasToken: boolean
+  hasGoogleApiKey: boolean
 }) {
   const [state, formAction] = useActionState(updateBusquedaSettingsAction, INITIAL_CRUD_STATE)
 
@@ -842,6 +856,150 @@ export function TenantBusquedaSettings({
             ? "Token registrado; no se muestra el valor actual."
             : "Aún no hay token guardado para este tenant."}
         </p>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border/60 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Google Places</h3>
+            <p className="text-xs text-muted-foreground">
+              Configura los endpoints y límites que usa el buscador de Google por tenant.
+            </p>
+          </div>
+          <p className="text-xs font-medium text-muted-foreground">
+            {hasGoogleApiKey ? "API key registrada" : "Sin API key registrada"}
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="google_nearby_url">google_places_nearby_url</Label>
+            <Input
+              id="google_nearby_url"
+              name="google_nearby_url"
+              placeholder="https://places.googleapis.com/v1/places:searchNearby"
+              defaultValue={initialValues.google_nearby_url ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_text_url">google_places_text_url</Label>
+            <Input
+              id="google_text_url"
+              name="google_text_url"
+              placeholder="https://places.googleapis.com/v1/places:searchText"
+              defaultValue={initialValues.google_text_url ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_details_url">google_places_details_url</Label>
+            <Input
+              id="google_details_url"
+              name="google_details_url"
+              placeholder="https://places.googleapis.com/v1/places"
+              defaultValue={initialValues.google_details_url ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_field_mask">PLACES_FIELD_MASK</Label>
+            <Textarea
+              id="google_field_mask"
+              name="google_field_mask"
+              className="font-mono text-xs"
+              rows={3}
+              defaultValue={initialValues.google_field_mask ?? ""}
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="google_details_field_mask">PLACES_DETAILS_FIELD_MASK</Label>
+            <Textarea
+              id="google_details_field_mask"
+              name="google_details_field_mask"
+              className="font-mono text-xs"
+              rows={3}
+              defaultValue={initialValues.google_details_field_mask ?? ""}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="google_language_code">google_places_language_code</Label>
+            <Input
+              id="google_language_code"
+              name="google_language_code"
+              placeholder="es"
+              defaultValue={initialValues.google_language_code ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_region_code">google_places_region_code</Label>
+            <Input
+              id="google_region_code"
+              name="google_region_code"
+              placeholder="MX"
+              defaultValue={initialValues.google_region_code ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_places_api_key">google.places_api_key (secreto, tier B)</Label>
+            <Input id="google_places_api_key" name="google_places_api_key" type="password" placeholder="Pega la clave" />
+            <p className="text-xs text-muted-foreground">
+              Solo se guarda al pegar una nueva llave; el valor actual no se muestra.
+            </p>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="google_grid_max_tile_radius_m">google_places_grid_max_tile_radius_m</Label>
+            <Input
+              id="google_grid_max_tile_radius_m"
+              name="google_grid_max_tile_radius_m"
+              type="number"
+              min={200}
+              defaultValue={initialValues.google_grid_max_tile_radius_m ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_pause_between_pages">google_places_pause_between_pages</Label>
+            <Input
+              id="google_pause_between_pages"
+              name="google_pause_between_pages"
+              type="number"
+              step="0.1"
+              defaultValue={initialValues.google_pause_between_pages ?? ""}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="google_dense_grid_max_tile_radius_m">google_places_dense_grid_max_tile_radius_m</Label>
+            <Input
+              id="google_dense_grid_max_tile_radius_m"
+              name="google_dense_grid_max_tile_radius_m"
+              type="number"
+              min={200}
+              defaultValue={initialValues.google_dense_grid_max_tile_radius_m ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="google_dense_pause_between_pages">google_places_dense_pause_between_pages</Label>
+            <Input
+              id="google_dense_pause_between_pages"
+              name="google_dense_pause_between_pages"
+              type="number"
+              step="0.1"
+              defaultValue={initialValues.google_dense_pause_between_pages ?? ""}
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="google_dense_max_results">google_places_dense_max_results</Label>
+          <Input
+            id="google_dense_max_results"
+            name="google_dense_max_results"
+            type="number"
+            min={1}
+            defaultValue={initialValues.google_dense_max_results ?? ""}
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">

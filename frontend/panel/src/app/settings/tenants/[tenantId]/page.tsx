@@ -161,11 +161,31 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const denueInitialValues = {
     denue_base_url: getNestedString(denueConfig, "base_url"),
   }
+  const googlePlacesConfig = getNestedRecord(config, "google_places") ?? {}
+  const googleInitialValues = {
+    google_nearby_url: getNestedString(googlePlacesConfig, "nearby_url"),
+    google_text_url: getNestedString(googlePlacesConfig, "text_url"),
+    google_details_url: getNestedString(googlePlacesConfig, "details_url"),
+    google_field_mask: getNestedString(googlePlacesConfig, "field_mask"),
+    google_details_field_mask: getNestedString(googlePlacesConfig, "details_field_mask"),
+    google_language_code: getNestedString(googlePlacesConfig, "language_code"),
+    google_region_code: getNestedString(googlePlacesConfig, "region_code"),
+    google_grid_max_tile_radius_m: getNestedNumber(googlePlacesConfig, "grid_max_tile_radius_m"),
+    google_pause_between_pages: getNestedNumber(googlePlacesConfig, "pause_between_pages"),
+    google_dense_grid_max_tile_radius_m: getNestedNumber(googlePlacesConfig, "dense_grid_max_tile_radius_m"),
+    google_dense_pause_between_pages: getNestedNumber(googlePlacesConfig, "dense_pause_between_pages"),
+    google_dense_max_results: getNestedNumber(googlePlacesConfig, "dense_max_results"),
+  }
+  const searchInitialValues = {
+    ...denueInitialValues,
+    ...googleInitialValues,
+  }
   const secretKeys = new Set(secrets.map((item) => item.clave.trim().toLowerCase()))
   const hasGeneralApiKey = secretKeys.has("openai.general.api_key")
   const hasVoiceApiKey = secretKeys.has("openai.voice.api_key")
   const hasBrevoApiKey = secretKeys.has("brevo.api_key")
   const hasDenueToken = secretKeys.has("denue.token")
+  const hasGoogleApiKey = secretKeys.has("google.places_api_key")
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -249,8 +269,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <TabsContent value="busqueda" className="pt-4">
               <TenantBusquedaSettings
                 tenantId={tenantId}
-                initialValues={denueInitialValues}
+                initialValues={searchInitialValues}
                 hasToken={hasDenueToken}
+                hasGoogleApiKey={hasGoogleApiKey}
               />
             </TabsContent>
             <TabsContent value="config" className="pt-4">

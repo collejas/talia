@@ -66,6 +66,12 @@ function parseNumber(raw: string): number | undefined {
   return Number.isFinite(num) ? num : undefined
 }
 
+function parseFloatValue(raw: string): number | undefined {
+  if (!raw) return undefined
+  const num = Number(raw)
+  return Number.isFinite(num) ? num : undefined
+}
+
 async function upsertTenantSecret(
   tenantId: string,
   clave: string,
@@ -414,22 +420,97 @@ export async function updateBusquedaSettingsAction(_: CrudActionState, formData:
     const tenantId = requireTenantId(formData)
     const baseUrl = getText(formData, "denue_base_url")
     const token = getText(formData, "denue_token")
+    const googleNearbyUrl = getText(formData, "google_nearby_url")
+    const googleTextUrl = getText(formData, "google_text_url")
+    const googleDetailsUrl = getText(formData, "google_details_url")
+    const googleFieldMask = getText(formData, "google_field_mask")
+    const googleDetailsFieldMask = getText(formData, "google_details_field_mask")
+    const googleLanguageCode = getText(formData, "google_language_code")
+    const googleRegionCode = getText(formData, "google_region_code")
+    const googleGridRadius = parseNumber(getText(formData, "google_grid_max_tile_radius_m"))
+    const googlePauseBetweenPages = parseFloatValue(getText(formData, "google_pause_between_pages"))
+    const googleDenseGridRadius = parseNumber(getText(formData, "google_dense_grid_max_tile_radius_m"))
+    const googleDensePause = parseFloatValue(getText(formData, "google_dense_pause_between_pages"))
+    const googleDenseMaxResults = parseNumber(getText(formData, "google_dense_max_results"))
+    const googleApiKey = getText(formData, "google_places_api_key")
 
-    if (!baseUrl && !token) {
+    if (
+      !baseUrl &&
+      !token &&
+      !googleApiKey &&
+      !googleNearbyUrl &&
+      !googleTextUrl &&
+      !googleDetailsUrl &&
+      !googleFieldMask &&
+      !googleDetailsFieldMask &&
+      !googleLanguageCode &&
+      !googleRegionCode &&
+      googleGridRadius === undefined &&
+      googlePauseBetweenPages === undefined &&
+      googleDenseGridRadius === undefined &&
+      googleDensePause === undefined &&
+      googleDenseMaxResults === undefined
+    ) {
       throw new Error("Debes completar al menos un campo de la configuración de búsqueda.")
     }
 
-    if (baseUrl) {
-      const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
-        method: "GET",
-        organizacionId: null,
-        withUserToken: true,
-      })
+    let currentConfig: Record<string, unknown> = {}
+    const needConfigUpdate =
+      Boolean(baseUrl) ||
+      Boolean(googleNearbyUrl) ||
+      Boolean(googleTextUrl) ||
+      Boolean(googleDetailsUrl) ||
+      Boolean(googleFieldMask) ||
+      Boolean(googleDetailsFieldMask) ||
+      Boolean(googleLanguageCode) ||
+      Boolean(googleRegionCode) ||
+      googleGridRadius !== undefined ||
+      googlePauseBetweenPages !== undefined ||
+      googleDenseGridRadius !== undefined ||
+      googleDensePause !== undefined ||
+      googleDenseMaxResults !== undefined
+    if (needConfigUpdate) {
+      const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(
+        `/admin/tenants/${tenantId}/config`,
+        {
+          method: "GET",
+          organizacionId: null,
+          withUserToken: true,
+        },
+      )
       if (!getResp.ok) throw new Error(getResp.error)
+      currentConfig = getResp.data.config ?? {}
+    }
 
-      const currentConfig = getResp.data.config ?? {}
-      const merged = mergeDeep({ ...currentConfig }, { denue: { base_url: baseUrl } })
+    const patch: Record<string, unknown> = {}
+    if (baseUrl) {
+      patch.denue = { base_url: baseUrl }
+    }
+    const googlePatch: Record<string, unknown> = {}
+    if (googleNearbyUrl) googlePatch.nearby_url = googleNearbyUrl
+    if (googleTextUrl) googlePatch.text_url = googleTextUrl
+    if (googleDetailsUrl) googlePatch.details_url = googleDetailsUrl
+    if (googleFieldMask) googlePatch.field_mask = googleFieldMask
+    if (googleDetailsFieldMask) googlePatch.details_field_mask = googleDetailsFieldMask
+    if (googleLanguageCode) googlePatch.language_code = googleLanguageCode
+    if (googleRegionCode) googlePatch.region_code = googleRegionCode
+    if (googleGridRadius !== undefined) googlePatch.grid_max_tile_radius_m = googleGridRadius
+    if (googlePauseBetweenPages !== undefined) googlePatch.pause_between_pages = googlePauseBetweenPages
+    if (googleDenseGridRadius !== undefined) {
+      googlePatch.dense_grid_max_tile_radius_m = googleDenseGridRadius
+    }
+    if (googleDensePause !== undefined) {
+      googlePatch.dense_pause_between_pages = googleDensePause
+    }
+    if (googleDenseMaxResults !== undefined) {
+      googlePatch.dense_max_results = googleDenseMaxResults
+    }
+    if (Object.keys(googlePatch).length) {
+      patch.google_places = googlePatch
+    }
 
+    if (Object.keys(patch).length) {
+      const merged = mergeDeep({ ...currentConfig }, patch)
       const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
         method: "PUT",
         organizacionId: null,
@@ -441,6 +522,9 @@ export async function updateBusquedaSettingsAction(_: CrudActionState, formData:
 
     if (token) {
       await upsertTenantSecret(tenantId, "denue.token", token, "A")
+    }
+    if (googleApiKey) {
+      await upsertTenantSecret(tenantId, "google.places_api_key", googleApiKey, "B")
     }
 
     revalidatePath(`/settings/tenants/${tenantId}`)

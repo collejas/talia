@@ -112,6 +112,22 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 
 > ✅ La pestaña “Búsqueda” guarda el endpoint (config) y activa la rotación de `denue.token` como secreto por tenant.
 
+### `google_places.*`
+- `google_places_nearby_url` (string) ← `GOOGLE_PLACES_NEARBY_URL`
+- `google_places_text_url` (string) ← `GOOGLE_PLACES_TEXT_URL`
+- `google_places_details_url` (string) ← `GOOGLE_PLACES_DETAILS_URL`
+- `google_places_field_mask` (string) ← `PLACES_FIELD_MASK`
+- `google_places_details_field_mask` (string) ← `PLACES_DETAILS_FIELD_MASK`
+- `google_places_language_code` (string) ← `PLACES_LANGUAGE_CODE`
+- `google_places_region_code` (string) ← `PLACES_REGION_CODE`
+- `google_places_grid_max_tile_radius_m` (number) ← `GOOGLE_PLACES_GRID_MAX_TILE_RADIUS_M`
+- `google_places_pause_between_pages` (number) ← `GOOGLE_PLACES_PAUSE_BETWEEN_PAGES`
+- `google_places_dense_grid_max_tile_radius_m` (number) ← `GOOGLE_PLACES_DENSE_GRID_MAX_TILE_RADIUS_M`
+- `google_places_dense_pause_between_pages` (number) ← `GOOGLE_PLACES_DENSE_PAUSE_BETWEEN_PAGES`
+- `google_places_dense_max_results` (number) ← `GOOGLE_PLACES_DENSE_MAX_RESULTS`
+
+> ✅ La pestaña “Búsqueda” ahora permite editar los endpoints/límites de Google Places por tenant y rota `google.places_api_key`.
+
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`
 - `whatsapp.inactivity_minutes` / `whatsapp.reengage_minutes` / `whatsapp.escalate_minutes`

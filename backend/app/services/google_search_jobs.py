@@ -11,6 +11,7 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services import tenant_runtime
 from app.services.google_places import GooglePlacesClient, GooglePlacesError, normalize_place_for_result
 
 logger = get_logger(__name__)
@@ -53,20 +54,31 @@ class GoogleSearchJobManager:
                     extra={"busqueda_id": str(job.busqueda_id), "organizacion_id": organizacion_id_value},
                 )
         dense = bool(job.payload.get("dense_mode"))
+        google_settings = await tenant_runtime.get_google_places_runtime_settings(
+            organizacion_id=organizacion_id
+        )
         grid_radius = (
-            settings.google_places_dense_grid_max_tile_radius_m
+            google_settings.dense_grid_max_tile_radius_m
             if dense
-            else settings.google_places_grid_max_tile_radius_m
+            else google_settings.grid_max_tile_radius_m
         )
         pause_between = (
-            settings.google_places_dense_pause_between_pages if dense else settings.google_places_pause_between_pages
+            google_settings.dense_pause_between_pages
+            if dense
+            else google_settings.pause_between_pages
         )
-        max_results = (
-            settings.google_places_dense_max_results if dense else None
-        )
+        max_results = google_settings.dense_max_results if dense else None
         client = GooglePlacesClient(
+            api_key=google_settings.api_key,
+            nearby_url=google_settings.nearby_url,
+            text_url=google_settings.text_url,
+            field_mask=google_settings.field_mask,
+            default_language=google_settings.language_code,
+            default_region=google_settings.region_code,
             grid_max_tile_radius_m=grid_radius,
             pause_between_pages=pause_between,
+            details_url=google_settings.details_url,
+            details_concurrency=20,
         )
         try:
             places = await client.search_places(
