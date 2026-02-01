@@ -13,7 +13,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.services.tenant_runtime import MailRuntimeSettings
+from app.services.tenant_runtime import BrevoRuntimeSettings, MailRuntimeSettings
 
 logger = get_logger("app.services.email")
 
@@ -38,6 +38,24 @@ def _resolve_mail_settings(mail_settings: MailRuntimeSettings | None) -> MailRun
     return mail_settings or MailRuntimeSettings.from_settings()
 
 
+def _resolve_brevo_settings(brevo_settings: BrevoRuntimeSettings | None) -> BrevoRuntimeSettings:
+    if brevo_settings:
+        normalized_base = brevo_settings.base_url.strip() if brevo_settings.base_url else ""
+        if normalized_base:
+            normalized_base = normalized_base.rstrip("/")
+        return BrevoRuntimeSettings(
+            api_key=brevo_settings.api_key,
+            base_url=normalized_base or brevo_settings.base_url,
+        )
+    base_url_candidate = (settings.brevo_base_url or "https://api.brevo.com/v3").strip()
+    if base_url_candidate:
+        base_url_candidate = base_url_candidate.rstrip("/")
+    return BrevoRuntimeSettings(
+        api_key=settings.brevo_api_key,
+        base_url=base_url_candidate or settings.brevo_base_url or "https://api.brevo.com/v3",
+    )
+
+
 def send_email(
     *,
     subject: str,
@@ -46,6 +64,7 @@ def send_email(
     body_html: str | None = None,
     attachments: Sequence[dict[str, object]] | None = None,
     mail_settings: MailRuntimeSettings | None = None,
+    brevo_settings: BrevoRuntimeSettings | None = None,
 ) -> str:
     """Envía un correo y devuelve el Message-ID utilizado."""
 
@@ -54,9 +73,10 @@ def send_email(
         raise EmailSendError("No se proporcionaron destinatarios válidos.")
 
     mail_config = _resolve_mail_settings(mail_settings)
+    brevo_settings_resolved = _resolve_brevo_settings(brevo_settings)
 
     message_id = make_msgid()
-    if settings.brevo_api_key:
+    if brevo_settings_resolved.api_key:
         result = _send_email_brevo(
             message_id=message_id,
             subject=subject,
@@ -65,6 +85,7 @@ def send_email(
             recipients=to_recipients,
             attachments=attachments or (),
             mail_settings=mail_config,
+            brevo_settings=brevo_settings_resolved,
         )
     else:
         result = _send_email_smtp(
@@ -175,9 +196,10 @@ def _send_email_brevo(
     recipients: Sequence[str],
     attachments: Sequence[dict[str, object]],
     mail_settings: MailRuntimeSettings,
+    brevo_settings: BrevoRuntimeSettings,
 ) -> str:
-    api_key = (settings.brevo_api_key or "").strip()
-    base_url = (settings.brevo_base_url or "https://api.brevo.com/v3").strip().rstrip("/")
+    api_key = (brevo_settings.api_key or "").strip()
+    base_url = (brevo_settings.base_url or "https://api.brevo.com/v3").strip().rstrip("/")
     sender_email = (mail_settings.username or "").strip()
     if not api_key:
         raise EmailSendError("Configuración Brevo incompleta: falta API Key.")

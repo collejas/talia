@@ -146,6 +146,7 @@ type MailInitialValues = {
   mail_outgoing_port_smtp?: number
   mail_use_ssl?: boolean
   mail_use_tls?: boolean
+  brevo_base_url?: string
 }
 
 type TwilioInitialValues = {
@@ -609,9 +610,11 @@ export function TenantCalendarSettings({
 export function TenantMailSettings({
   tenantId,
   initialValues,
+  hasBrevoApiKey,
 }: {
   tenantId: string
   initialValues: MailInitialValues
+  hasBrevoApiKey: boolean
 }) {
   const [state, formAction] = useActionState(updateMailSettingsAction, INITIAL_CRUD_STATE)
   const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
@@ -659,6 +662,34 @@ export function TenantMailSettings({
               min={1}
               defaultValue={initialValues.mail_outgoing_port_smtp ?? ""}
             />
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-border/60 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-medium">Brevo</h3>
+              <p className="text-xs text-muted-foreground">Configuración del API de Brevo usada en los envíos.</p>
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {hasBrevoApiKey ? "Secreto registrado" : "Sin secreto registrado"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brevo_base_url">brevo.base_url</Label>
+            <Input
+              id="brevo_base_url"
+              name="brevo_base_url"
+              placeholder="https://api.brevo.com/v3"
+              defaultValue={initialValues.brevo_base_url ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brevo_api_key">brevo.api_key (secreto, tier B)</Label>
+            <Input id="brevo_api_key" name="brevo_api_key" type="password" placeholder="Pega la clave" />
+            <p className="text-xs text-muted-foreground">
+              El valor solo se guarda al pegar uno nuevo; el sistema nunca te muestra el valor existente.
+            </p>
           </div>
         </div>
 

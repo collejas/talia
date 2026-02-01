@@ -58,7 +58,7 @@ from app.services import (
     leads_geo,
     lookup_phone_number,
     normalize_denue_place,
-    send_email,
+            send_email,
     storage,
     tenant_runtime,
 )
@@ -8395,6 +8395,9 @@ async def send_lead_quote(
     mail_settings = await tenant_runtime.get_mail_runtime_settings(
         organizacion_id=organizacion_id
     )
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(
+        organizacion_id=organizacion_id
+    )
     lead_label = (
         oportunidad_row.get("titulo")
         or contact.get("nombre_completo")
@@ -8501,6 +8504,7 @@ async def send_lead_quote(
                     }
                 ],
                 mail_settings=mail_settings,
+                brevo_settings=brevo_settings,
             )
         except EmailSendError as exc:
             raise HTTPException(status_code=502, detail="quote_email_send_failed") from exc
@@ -8819,6 +8823,7 @@ async def crear_link_portal_cliente(
     body.update(_cliente_context(cliente_data))
 
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=organizacion_id)
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
 
     registro = await repo.create_portal_token(
         usuario_token=user_token,
@@ -8842,6 +8847,7 @@ async def crear_link_portal_cliente(
                     body_text=body_text,
                     recipients=recipients,
                     mail_settings=mail_settings,
+                    brevo_settings=brevo_settings,
                 )
                 email_summary.update({"sent": True, "recipients": recipients, "subject": subject})
             except EmailSendError as exc:

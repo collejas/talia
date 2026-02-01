@@ -345,6 +345,8 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     const useTls = formData.has("mail_use_tls")
     const mailUsername = getText(formData, "mail_username")
     const mailPassword = getText(formData, "mail_password")
+    const brevoBaseUrl = getText(formData, "brevo_base_url")
+    const brevoApiKey = getText(formData, "brevo_api_key")
 
     const mailPatch: Record<string, unknown> = {}
     if (incomingServer) mailPatch.incoming_server = incomingServer
@@ -357,8 +359,9 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     mailPatch.use_tls = useTls
 
     const hasMailConfig = Object.keys(mailPatch).length > 0
-    if (!hasMailConfig && !mailUsername && !mailPassword) {
-      throw new Error("Debes completar al menos un campo de la configuración de correo.")
+    const hasBrevoConfig = Boolean(brevoBaseUrl)
+    if (!hasMailConfig && !mailUsername && !mailPassword && !hasBrevoConfig && !brevoApiKey) {
+      throw new Error("Debes completar al menos un campo de la configuración de correo o Brevo.")
     }
 
     const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
@@ -372,6 +375,11 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     const patch: Record<string, unknown> = {}
     if (hasMailConfig) {
       patch.mail = mailPatch
+    }
+    const brevoPatch: Record<string, unknown> = {}
+    if (brevoBaseUrl) brevoPatch.base_url = brevoBaseUrl
+    if (Object.keys(brevoPatch).length) {
+      patch.brevo = brevoPatch
     }
 
     const merged = mergeDeep({ ...currentConfig }, patch)
@@ -389,6 +397,9 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     }
     if (mailPassword) {
       await upsertTenantSecret(tenantId, "mail.password", mailPassword, "B")
+    }
+    if (brevoApiKey) {
+      await upsertTenantSecret(tenantId, "brevo.api_key", brevoApiKey, "B")
     }
 
     revalidatePath(`/settings/tenants/${tenantId}`)

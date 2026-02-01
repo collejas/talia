@@ -294,6 +294,7 @@ async def _handle_information_email(
 
     mail_org_uuid = _contact_org_uuid(contact)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=mail_org_uuid)
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=mail_org_uuid)
 
     template_row: dict[str, Any] | None = None
     try:
@@ -342,6 +343,7 @@ async def _handle_information_email(
             body_html=None,
             attachments=None,
             mail_settings=mail_settings,
+            brevo_settings=brevo_settings,
         )
     except EmailSendError as exc:
         logger.error(

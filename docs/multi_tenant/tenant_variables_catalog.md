@@ -26,6 +26,7 @@ Se decidió que **todos** estos bloques son **POR_TENANT** (se guardan en BD por
 - [x] Twilio (cuenta + auth token)
 - [x] Meta/Messenger (app secret + page token + verify token)
 - [x] Correo (SMTP/IMAP credenciales)
+- [x] Brevo (API key + base_url)
 - [x] Calendario (usuario/contraseña/URLs)
 - [x] Google Places / OAuth client secret
 
@@ -72,6 +73,8 @@ Correo/Calendario:
 - `TALIA_MAIL_OUTGOING_PORT_SMTP` → `mail.outgoing_port_smtp`
 - `TALIA_MAIL_USE_SSL` → `mail.use_ssl`
 - `TALIA_MAIL_USE_TLS` → `mail.use_tls`
+- `BREVO_API_KEY` → `brevo.api_key` (secreto, nivel B)
+- `BREVO_BASE_URL` → `brevo.base_url`
 
 Inventario completo (lista plana):
 - `API_NEARBY_SEARCH`
@@ -249,6 +252,7 @@ Correo/Calendario:
 - `TALIA_MAIL_USERNAME`, `TALIA_MAIL_CONTRASENA`
 - `TALIA_CALENDARIO_USERNAME`, `TALIA_CALENDARIO_PASSWORD`
 - `TALIA_CALENDARIO_SERVER_URL` (puede ser config), etc.
+- `brevo.api_key`
 
 Google:
 - `GOOGLE_PLACES_API_KEY`

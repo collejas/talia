@@ -541,6 +541,7 @@ async def _send_booking_confirmation_email(
 
     org_uuid = _resolve_calendar_organizacion_uuid(org_hint)
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=org_uuid)
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=org_uuid)
     organizer_email = (mail_settings.username or email_value).strip() or email_value
     organizer_name = mail_settings.from_name or "Tal-IA"
     calendar_provider_settings = await tenant_runtime.get_calendar_provider_settings(
@@ -610,6 +611,7 @@ async def _send_booking_confirmation_email(
             recipients=[email_value],
             attachments=attachments,
             mail_settings=mail_settings,
+            brevo_settings=brevo_settings,
         )
     except EmailSendError as exc:
         await _mark_booking_invite_status(
@@ -820,6 +822,7 @@ async def _send_booking_cancellation_email(
 
     contact_org_uuid = _resolve_calendar_organizacion_uuid(_extract_contact_org(contact))
     mail_settings = await tenant_runtime.get_mail_runtime_settings(organizacion_id=contact_org_uuid)
+    brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=contact_org_uuid)
 
     timezone_name = booking.timezone or settings.webchat_calendar_timezone
     tz_label = timezone_name.replace("_", " ") if isinstance(timezone_name, str) else "UTC"
@@ -858,6 +861,7 @@ async def _send_booking_cancellation_email(
             body_text="\n".join(body_lines),
             recipients=[email_value],
             mail_settings=mail_settings,
+            brevo_settings=brevo_settings,
         )
     except EmailSendError as exc:
         await _patch_booking_metadata(

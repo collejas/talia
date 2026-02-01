@@ -103,6 +103,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     calendar_full_contact_list_url: getNestedString(calendarConfig, "full_contact_list_url") ?? "",
   }
   const mailConfig = getNestedRecord(config, "mail") ?? {}
+  const brevoConfig = getNestedRecord(config, "brevo") ?? {}
   const mailInitialValues = {
     mail_incoming_server: getNestedString(mailConfig, "incoming_server"),
     mail_incoming_port_imap: getNestedNumber(mailConfig, "incoming_port_imap"),
@@ -110,6 +111,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     mail_outgoing_port_smtp: getNestedNumber(mailConfig, "outgoing_port_smtp"),
     mail_use_ssl: getNestedBoolean(mailConfig, "use_ssl"),
     mail_use_tls: getNestedBoolean(mailConfig, "use_tls"),
+    brevo_base_url: getNestedString(brevoConfig, "base_url"),
   }
   const twilioConfig = getNestedRecord(config, "twilio") ?? {}
   const voiceConfig = getNestedRecord(config, "voice") ?? {}
@@ -157,6 +159,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const secretKeys = new Set(secrets.map((item) => item.clave.trim().toLowerCase()))
   const hasGeneralApiKey = secretKeys.has("openai.general.api_key")
   const hasVoiceApiKey = secretKeys.has("openai.voice.api_key")
+  const hasBrevoApiKey = secretKeys.has("brevo.api_key")
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -213,7 +216,11 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
             </TabsContent>
             <TabsContent value="mail" className="pt-4">
-              <TenantMailSettings tenantId={tenantId} initialValues={mailInitialValues} />
+              <TenantMailSettings
+                tenantId={tenantId}
+                initialValues={mailInitialValues}
+                hasBrevoApiKey={hasBrevoApiKey}
+              />
             </TabsContent>
             <TabsContent value="twilio" className="pt-4">
               <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />

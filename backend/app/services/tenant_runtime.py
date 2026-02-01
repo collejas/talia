@@ -447,6 +447,38 @@ async def get_mail_runtime_settings(
 
 
 @dataclass(slots=True)
+class BrevoRuntimeSettings:
+    api_key: str | None
+    base_url: str
+
+
+async def get_brevo_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> BrevoRuntimeSettings:
+    settings_payload = BrevoRuntimeSettings(
+        api_key=settings.brevo_api_key,
+        base_url=(settings.brevo_base_url or "https://api.brevo.com/v3").strip().rstrip("/"),
+    )
+    if organizacion_id is None:
+        return settings_payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    brevo_cfg = _as_dict(config.get("brevo")) or {}
+
+    base_url_candidate = _coerce_str(brevo_cfg.get("base_url"))
+    if base_url_candidate is not None:
+        normalized = base_url_candidate.strip()
+        settings_payload.base_url = normalized.rstrip("/") if normalized else normalized
+
+    api_key_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="brevo.api_key")
+    if api_key_secret:
+        settings_payload.api_key = api_key_secret
+
+    return settings_payload
+
+
+@dataclass(slots=True)
 class TwilioRuntimeSettings:
     phone_number: str | None
     phone_number_sid: str | None
