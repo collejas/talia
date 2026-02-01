@@ -602,6 +602,113 @@ export async function updateMessengerSettingsAction(_: CrudActionState, formData
   }
 }
 
+export async function updateOpenaiGeneralAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const generalProjectId = getText(formData, "openai_general_project_id")
+    const generalApiKey = getText(formData, "openai_general_api_key")
+
+    if (!generalProjectId && !generalApiKey) {
+      throw new Error("Debes completar al menos el project_id o la clave del bloque General.")
+    }
+
+    const configPatch: Record<string, unknown> = {}
+    const generalPatch: Record<string, unknown> = {}
+    if (generalProjectId) generalPatch.project_id = generalProjectId
+    if (Object.keys(generalPatch).length) {
+      configPatch.openai = { general: generalPatch }
+    }
+
+    if (Object.keys(configPatch).length) {
+      const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(
+        `/admin/tenants/${tenantId}/config`,
+        {
+          method: "GET",
+          organizacionId: null,
+          withUserToken: true,
+        },
+      )
+      if (!getResp.ok) throw new Error(getResp.error)
+
+      const currentConfig = getResp.data.config ?? {}
+      const merged = mergeDeep({ ...currentConfig }, configPatch)
+
+      const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+        method: "PUT",
+        organizacionId: null,
+        withUserToken: true,
+        body: { config: merged },
+      })
+      if (!putResp.ok) throw new Error(putResp.error)
+    }
+
+    if (generalApiKey) {
+      await upsertTenantSecret(tenantId, "openai.general.api_key", generalApiKey, "B")
+    }
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración general de OpenAI guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración general de OpenAI.")
+  }
+}
+
+export async function updateOpenaiVoiceAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const voicePromptId = getText(formData, "openai_voice_prompt_id")
+    const voicePromptVersion = getText(formData, "openai_voice_prompt_version")
+    const voiceModel = getText(formData, "openai_voice_model")
+    const voiceMaxTokensRaw = getText(formData, "openai_voice_max_tokens")
+    const voiceSttModel = getText(formData, "openai_voice_stt_model")
+    const voiceApiKey = getText(formData, "openai_voice_api_key")
+
+    const voicePatch: Record<string, unknown> = {}
+    if (voicePromptId) voicePatch.prompt_id = voicePromptId
+    if (voicePromptVersion) voicePatch.prompt_version = voicePromptVersion
+    if (voiceModel) voicePatch.model = voiceModel
+    const voiceMaxTokens = parseNumber(voiceMaxTokensRaw)
+    if (voiceMaxTokens !== undefined) voicePatch.max_tokens = voiceMaxTokens
+    if (voiceSttModel) voicePatch.stt_model = voiceSttModel
+
+    if (!Object.keys(voicePatch).length && !voiceApiKey) {
+      throw new Error("Debes completar al menos un campo del bloque Voz.")
+    }
+
+    if (Object.keys(voicePatch).length) {
+      const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(
+        `/admin/tenants/${tenantId}/config`,
+        {
+          method: "GET",
+          organizacionId: null,
+          withUserToken: true,
+        },
+      )
+      if (!getResp.ok) throw new Error(getResp.error)
+
+      const currentConfig = getResp.data.config ?? {}
+      const merged = mergeDeep({ ...currentConfig }, { openai: { voice: voicePatch } })
+
+      const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+        method: "PUT",
+        organizacionId: null,
+        withUserToken: true,
+        body: { config: merged },
+      })
+      if (!putResp.ok) throw new Error(putResp.error)
+    }
+
+    if (voiceApiKey) {
+      await upsertTenantSecret(tenantId, "openai.voice.api_key", voiceApiKey, "B")
+    }
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de voz de OpenAI guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración de voz de OpenAI.")
+  }
+}
+
 export async function validateTenantAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

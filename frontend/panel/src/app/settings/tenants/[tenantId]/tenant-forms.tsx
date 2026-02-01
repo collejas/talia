@@ -22,6 +22,8 @@ import {
   updateTwilioSettingsAction,
   updateWhatsAppSettingsAction,
   updateMessengerSettingsAction,
+  updateOpenaiGeneralAction,
+  updateOpenaiVoiceAction,
   updateTenantConfigAction,
   updateWebchatSettingsAction,
   validateTenantAction,
@@ -174,6 +176,15 @@ type MessengerInitialValues = {
   messenger_prompt_version?: string
   messenger_assistant_id?: string
   messenger_inactivity_hours?: number
+}
+
+type OpenaiInitialValues = {
+  general_project_id?: string
+  voice_prompt_id?: string
+  voice_prompt_version?: string
+  voice_model?: string
+  voice_max_tokens?: number
+  voice_stt_model?: string
 }
 
 export function TenantWebchatSettings({
@@ -1353,6 +1364,127 @@ export function TenantMessengerSettings({
           <FormStatusMessage state={validateState} />
         )}
       </form>
+    </div>
+  )
+}
+
+export function TenantOpenaiSettings({
+  tenantId,
+  initialValues,
+  hasGeneralApiKey,
+  hasVoiceApiKey,
+}: {
+  tenantId: string
+  initialValues: OpenaiInitialValues
+  hasGeneralApiKey: boolean
+  hasVoiceApiKey: boolean
+}) {
+  const [generalState, generalAction] = useActionState(updateOpenaiGeneralAction, INITIAL_CRUD_STATE)
+  const [voiceState, voiceAction] = useActionState(updateOpenaiVoiceAction, INITIAL_CRUD_STATE)
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Openai General</h3>
+            <p className="text-xs text-muted-foreground">Project ID y clave base del proyecto de prompts.</p>
+          </div>
+          <p className="text-xs font-medium text-muted-foreground">
+            {hasGeneralApiKey ? "Secreto registrado" : "Sin secreto registrado"}
+          </p>
+        </div>
+        <form action={generalAction} className="space-y-3">
+          <input type="hidden" name="tenant_id" value={tenantId} />
+          <div className="space-y-2">
+            <Label htmlFor="openai_general_project_id">TALIA_OPENAI_PROJECT_ID</Label>
+            <Input
+              id="openai_general_project_id"
+              name="openai_general_project_id"
+              placeholder="sk-proj-..."
+              defaultValue={initialValues.general_project_id ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="openai_general_api_key">TALIA_OPENAI_API_KEY (tier B)</Label>
+            <Input id="openai_general_api_key" name="openai_general_api_key" type="password" placeholder="Pega la clave" />
+            <p className="text-xs text-muted-foreground">
+              El valor no se muestra una vez guardado. Solo lo ve un admin si lo rota.
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <FormStatusMessage state={generalState} />
+            <SubmitButton label="Guardar general" pendingLabel="Guardando..." />
+          </div>
+        </form>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Voz Openai</h3>
+            <p className="text-xs text-muted-foreground">Prompt + modelo usados por Twilio / Realtime.</p>
+          </div>
+          <p className="text-xs font-medium text-muted-foreground">
+            {hasVoiceApiKey ? "Secreto registrado" : "Sin secreto registrado"}
+          </p>
+        </div>
+        <form action={voiceAction} className="space-y-3">
+          <input type="hidden" name="tenant_id" value={tenantId} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="openai_voice_prompt_id">OPENAI_PROMPT_ID</Label>
+              <Input
+                id="openai_voice_prompt_id"
+                name="openai_voice_prompt_id"
+                placeholder="pmpt_..."
+                defaultValue={initialValues.voice_prompt_id ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="openai_voice_prompt_version">OPENAI_PROMPT_VERSION</Label>
+              <Input
+                id="openai_voice_prompt_version"
+                name="openai_voice_prompt_version"
+                defaultValue={initialValues.voice_prompt_version ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="openai_voice_model">OPENAI_MODEL</Label>
+              <Input id="openai_voice_model" name="openai_voice_model" defaultValue={initialValues.voice_model ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="openai_voice_max_tokens">OPENAI_MAX_TOKENS</Label>
+              <Input
+                id="openai_voice_max_tokens"
+                name="openai_voice_max_tokens"
+                type="number"
+                min={1}
+                defaultValue={initialValues.voice_max_tokens ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="openai_voice_stt_model">OPENAI_STT_MODEL</Label>
+              <Input
+                id="openai_voice_stt_model"
+                name="openai_voice_stt_model"
+                defaultValue={initialValues.voice_stt_model ?? ""}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="openai_voice_api_key">OPENAI_API_KEY (tier B)</Label>
+            <Input id="openai_voice_api_key" name="openai_voice_api_key" type="password" placeholder="Pega la clave" />
+            <p className="text-xs text-muted-foreground">
+              El valor solo se guarda una vez; para rotarlo pega uno nuevo.
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <FormStatusMessage state={voiceState} />
+            <SubmitButton label="Guardar voz" pendingLabel="Guardando..." />
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

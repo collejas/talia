@@ -17,6 +17,7 @@ import {
   TenantConfigEditor,
   TenantSecretsManager,
   TenantWebchatSettings,
+  TenantOpenaiSettings,
   type RouteItem,
   type SecretItem,
 } from "./tenant-forms"
@@ -142,6 +143,20 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     messenger_assistant_id: getNestedString(messengerConfig, "assistant_id"),
     messenger_inactivity_hours: getNestedNumber(messengerConfig, "inactivity_hours"),
   }
+  const openaiConfig = getNestedRecord(config, "openai") ?? {}
+  const openaiGeneralConfig = getNestedRecord(openaiConfig, "general") ?? {}
+  const openaiVoiceConfig = getNestedRecord(openaiConfig, "voice") ?? {}
+  const openaiInitialValues = {
+    general_project_id: getNestedString(openaiGeneralConfig, "project_id"),
+    voice_prompt_id: getNestedString(openaiVoiceConfig, "prompt_id"),
+    voice_prompt_version: getNestedString(openaiVoiceConfig, "prompt_version"),
+    voice_model: getNestedString(openaiVoiceConfig, "model"),
+    voice_max_tokens: getNestedNumber(openaiVoiceConfig, "max_tokens"),
+    voice_stt_model: getNestedString(openaiVoiceConfig, "stt_model"),
+  }
+  const secretKeys = new Set(secrets.map((item) => item.clave.trim().toLowerCase()))
+  const hasGeneralApiKey = secretKeys.has("openai.general.api_key")
+  const hasVoiceApiKey = secretKeys.has("openai.voice.api_key")
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -165,67 +180,76 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <CardTitle>Organización</CardTitle>
             <CardDescription>ID: {tenantId}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="webchat">
-            <TabsList className="grid grid-cols-8">
-                <TabsTrigger value="webchat">Webchat</TabsTrigger>
-                <TabsTrigger value="calendar">Calendario</TabsTrigger>
-                <TabsTrigger value="mail">Correo</TabsTrigger>
+        <CardContent>
+          <Tabs defaultValue="webchat">
+            <TabsList className="grid grid-cols-9">
+              <TabsTrigger value="webchat">Webchat</TabsTrigger>
+              <TabsTrigger value="calendar">Calendario</TabsTrigger>
+              <TabsTrigger value="mail">Correo</TabsTrigger>
               <TabsTrigger value="twilio">Twilio</TabsTrigger>
               <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
               <TabsTrigger value="messenger">Messenger</TabsTrigger>
               <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
+              <TabsTrigger value="openai">OpenAI</TabsTrigger>
               <TabsTrigger value="secrets">Secretos</TabsTrigger>
-              </TabsList>
-              <TabsContent value="webchat" className="pt-4">
-                <TenantWebchatSettings
-                  tenantId={tenantId}
-                  initialValues={{
-                    enabled: webchatEnabled,
-                    assistant_id: getNestedString(webchatConfig, "assistant_id") ?? "",
-                    prompt_version: getNestedString(webchatConfig, "prompt_version") ?? "",
-                    inactivity_hours: getNestedNumber(webchatConfig, "inactivity_hours"),
-                    persist_session: getNestedBoolean(webchatConfig, "persist_session"),
-                    reengage_minutes: getNestedNumber(webchatConfig, "reengage_minutes"),
-                    reengage_max_attempts: getNestedNumber(webchatConfig, "reengage_max_attempts"),
-                    escalate_minutes: getNestedNumber(webchatConfig, "escalate_minutes"),
-                    webchat_alias: webchatRoute,
-                  }}
-                />
-              </TabsContent>
-              <TabsContent value="calendar" className="pt-4">
-                <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
-              </TabsContent>
-              <TabsContent value="mail" className="pt-4">
-                <TenantMailSettings tenantId={tenantId} initialValues={mailInitialValues} />
-              </TabsContent>
-              <TabsContent value="twilio" className="pt-4">
-                <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
-              </TabsContent>
-              <TabsContent value="whatsapp" className="pt-4">
-                <TenantWhatsAppSettings
-                  tenantId={tenantId}
-                  initialValues={whatsappInitialValues}
-                  routes={routes}
-                />
-              </TabsContent>
-              <TabsContent value="messenger" className="pt-4">
-                <TenantMessengerSettings
-                  tenantId={tenantId}
-                  initialValues={messengerInitialValues}
-                  routes={routes}
-                />
-              </TabsContent>
-              <TabsContent value="config" className="pt-4">
-                <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />
-              </TabsContent>
-              <TabsContent value="secrets" className="pt-4">
-                <TenantSecretsManager tenantId={tenantId} secrets={secrets} />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
-    </AppViewLayout>
+            </TabsList>
+            <TabsContent value="webchat" className="pt-4">
+              <TenantWebchatSettings
+                tenantId={tenantId}
+                initialValues={{
+                  enabled: webchatEnabled,
+                  assistant_id: getNestedString(webchatConfig, "assistant_id") ?? "",
+                  prompt_version: getNestedString(webchatConfig, "prompt_version") ?? "",
+                  inactivity_hours: getNestedNumber(webchatConfig, "inactivity_hours"),
+                  persist_session: getNestedBoolean(webchatConfig, "persist_session"),
+                  reengage_minutes: getNestedNumber(webchatConfig, "reengage_minutes"),
+                  reengage_max_attempts: getNestedNumber(webchatConfig, "reengage_max_attempts"),
+                  escalate_minutes: getNestedNumber(webchatConfig, "escalate_minutes"),
+                  webchat_alias: webchatRoute,
+                }}
+              />
+            </TabsContent>
+            <TabsContent value="calendar" className="pt-4">
+              <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
+            </TabsContent>
+            <TabsContent value="mail" className="pt-4">
+              <TenantMailSettings tenantId={tenantId} initialValues={mailInitialValues} />
+            </TabsContent>
+            <TabsContent value="twilio" className="pt-4">
+              <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
+            </TabsContent>
+            <TabsContent value="whatsapp" className="pt-4">
+              <TenantWhatsAppSettings
+                tenantId={tenantId}
+                initialValues={whatsappInitialValues}
+                routes={routes}
+              />
+            </TabsContent>
+            <TabsContent value="messenger" className="pt-4">
+              <TenantMessengerSettings
+                tenantId={tenantId}
+                initialValues={messengerInitialValues}
+                routes={routes}
+              />
+            </TabsContent>
+            <TabsContent value="config" className="pt-4">
+              <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />
+            </TabsContent>
+            <TabsContent value="openai" className="pt-4">
+              <TenantOpenaiSettings
+                tenantId={tenantId}
+                initialValues={openaiInitialValues}
+                hasGeneralApiKey={hasGeneralApiKey}
+                hasVoiceApiKey={hasVoiceApiKey}
+              />
+            </TabsContent>
+            <TabsContent value="secrets" className="pt-4">
+              <TenantSecretsManager tenantId={tenantId} secrets={secrets} />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  </AppViewLayout>
   )
 }
