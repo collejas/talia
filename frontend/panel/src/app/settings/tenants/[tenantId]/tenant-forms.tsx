@@ -19,6 +19,7 @@ import {
   setTenantSecretAction,
   updateCalendarSettingsAction,
   updateMailSettingsAction,
+  updateBusquedaSettingsAction,
   updateTwilioSettingsAction,
   updateWhatsAppSettingsAction,
   updateMessengerSettingsAction,
@@ -186,6 +187,10 @@ type OpenaiInitialValues = {
   voice_model?: string
   voice_max_tokens?: number
   voice_stt_model?: string
+}
+
+type BusquedaInitialValues = {
+  denue_base_url?: string
 }
 
 export function TenantWebchatSettings({
@@ -798,6 +803,52 @@ export function TenantMailSettings({
         )}
       </form>
     </div>
+  )
+}
+
+export function TenantBusquedaSettings({
+  tenantId,
+  initialValues,
+  hasToken,
+}: {
+  tenantId: string
+  initialValues: BusquedaInitialValues
+  hasToken: boolean
+}) {
+  const [state, formAction] = useActionState(updateBusquedaSettingsAction, INITIAL_CRUD_STATE)
+
+  return (
+    <form action={formAction} className="space-y-6">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+
+      <div className="space-y-2">
+        <Label htmlFor="denue_base_url">denue.base_url</Label>
+        <Input
+          id="denue_base_url"
+          name="denue_base_url"
+          placeholder="https://www.inegi.org.mx/app/api/denue/v1"
+          defaultValue={initialValues.denue_base_url ?? ""}
+        />
+        <p className="text-xs text-muted-foreground">
+          Se graba en <code>organizaciones.config.denue.base_url</code>.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="denue_token">denue.token (secreto, tier A)</Label>
+        <Input id="denue_token" name="denue_token" type="password" placeholder="Pega el token" />
+        <p className="text-xs text-muted-foreground">
+          {hasToken
+            ? "Token registrado; no se muestra el valor actual."
+            : "Aún no hay token guardado para este tenant."}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar Búsqueda" pendingLabel="Guardando..." />
+      </div>
+    </form>
   )
 }
 

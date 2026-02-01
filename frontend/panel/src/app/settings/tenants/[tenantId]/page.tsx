@@ -17,6 +17,7 @@ import {
   TenantConfigEditor,
   TenantSecretsManager,
   TenantWebchatSettings,
+  TenantBusquedaSettings,
   TenantOpenaiSettings,
   type RouteItem,
   type SecretItem,
@@ -156,10 +157,15 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     voice_max_tokens: getNestedNumber(openaiVoiceConfig, "max_tokens"),
     voice_stt_model: getNestedString(openaiVoiceConfig, "stt_model"),
   }
+  const denueConfig = getNestedRecord(config, "denue") ?? {}
+  const denueInitialValues = {
+    denue_base_url: getNestedString(denueConfig, "base_url"),
+  }
   const secretKeys = new Set(secrets.map((item) => item.clave.trim().toLowerCase()))
   const hasGeneralApiKey = secretKeys.has("openai.general.api_key")
   const hasVoiceApiKey = secretKeys.has("openai.voice.api_key")
   const hasBrevoApiKey = secretKeys.has("brevo.api_key")
+  const hasDenueToken = secretKeys.has("denue.token")
 
   return (
     <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
@@ -185,16 +191,17 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
         <CardContent>
           <Tabs defaultValue="webchat">
-            <TabsList className="grid grid-cols-9">
-              <TabsTrigger value="webchat">Webchat</TabsTrigger>
-              <TabsTrigger value="calendar">Calendario</TabsTrigger>
-              <TabsTrigger value="mail">Correo</TabsTrigger>
-              <TabsTrigger value="twilio">Twilio</TabsTrigger>
-              <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-              <TabsTrigger value="messenger">Messenger</TabsTrigger>
-              <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
-              <TabsTrigger value="openai">OpenAI</TabsTrigger>
-              <TabsTrigger value="secrets">Secretos</TabsTrigger>
+          <TabsList className="grid grid-cols-10">
+            <TabsTrigger value="webchat">Webchat</TabsTrigger>
+            <TabsTrigger value="calendar">Calendario</TabsTrigger>
+            <TabsTrigger value="mail">Correo</TabsTrigger>
+            <TabsTrigger value="twilio">Twilio</TabsTrigger>
+            <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+            <TabsTrigger value="messenger">Messenger</TabsTrigger>
+            <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
+            <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
+            <TabsTrigger value="openai">OpenAI</TabsTrigger>
+            <TabsTrigger value="secrets">Secretos</TabsTrigger>
             </TabsList>
             <TabsContent value="webchat" className="pt-4">
               <TenantWebchatSettings
@@ -237,6 +244,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 tenantId={tenantId}
                 initialValues={messengerInitialValues}
                 routes={routes}
+              />
+            </TabsContent>
+            <TabsContent value="busqueda" className="pt-4">
+              <TenantBusquedaSettings
+                tenantId={tenantId}
+                initialValues={denueInitialValues}
+                hasToken={hasDenueToken}
               />
             </TabsContent>
             <TabsContent value="config" className="pt-4">

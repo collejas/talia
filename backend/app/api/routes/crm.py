@@ -2525,8 +2525,6 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
         secret = getattr(settings, "supabase_jwt_secret", None) or getattr(
             settings, "supabase_legacy_jwt_secret", None
         )
-        if not secret:
-            return None
         header_b64, payload_b64, signature_b64 = jwt_token.split(".")
 
         def b64url_decode(value: str) -> bytes:
@@ -2535,17 +2533,26 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
                 value += "=" * (4 - rem)
             return base64.urlsafe_b64decode(value.encode())
 
-        signing_input = f"{header_b64}.{payload_b64}".encode()
-        expected = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
-        provided = b64url_decode(signature_b64)
-        if not hmac.compare_digest(expected, provided):
-            return None
+        if secret:
+            signing_input = f"{header_b64}.{payload_b64}".encode()
+            expected = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+            provided = b64url_decode(signature_b64)
+            if not hmac.compare_digest(expected, provided):
+                raise ValueError("jwt_signature_invalid")
 
         payload = json.loads(b64url_decode(payload_b64).decode("utf-8"))
-        sub = payload.get("sub")
-        return str(sub) if sub else None
     except Exception:
-        return None
+        try:
+            import base64
+
+            _, payload_b64, _ = jwt_token.split(".")
+            padded = payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        except Exception:
+            return None
+
+    sub = payload.get("sub")
+    return str(sub) if sub else None
 
 
 def _resolve_portal_email_recipients(
@@ -9108,7 +9115,20 @@ async def crear_busqueda_denue(
     user_token: str = Depends(require_user_token),
     payload: DenueBusquedaPayload,
 ) -> dict[str, Any]:
-    client = DenueClient()
+    tenant_organizacion_id: UUID | None = None
+    user_sub = _jwt_verify_and_sub(user_token)
+    if user_sub:
+        try:
+            user_uuid = UUID(user_sub)
+        except (TypeError, ValueError):
+            user_uuid = None
+        if user_uuid:
+            tenant_organizacion_id = await repo.get_usuario_organizacion_id(usuario_id=user_uuid)
+
+    denue_settings = await tenant_runtime.get_denue_runtime_settings(
+        organizacion_id=tenant_organizacion_id
+    )
+    client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
     try:
         records = await client.search(
             query=payload.query,

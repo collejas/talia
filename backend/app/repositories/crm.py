@@ -7564,6 +7564,13 @@ class CRMRepository:
             )
         return resp
 
+    async def get_usuario_organizacion_id(
+        self,
+        *,
+        usuario_id: UUID,
+    ) -> UUID | None:
+        return await self._get_usuario_organizacion_id(usuario_id=usuario_id)
+
     async def _get_usuario_organizacion_id(
         self,
         *,

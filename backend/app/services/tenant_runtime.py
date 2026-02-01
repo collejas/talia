@@ -45,6 +45,12 @@ class WebchatRuntimeSettings:
     inactivity_hours: int | None
 
 
+@dataclass(slots=True)
+class DenueRuntimeSettings:
+    token: str | None
+    base_url: str | None
+
+
 def _as_dict(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
@@ -444,6 +450,29 @@ async def get_mail_runtime_settings(
         settings_payload.password = password_secret
 
     return settings_payload
+
+
+async def get_denue_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> DenueRuntimeSettings:
+    base_url = settings.denue_base_url
+    token = settings.denue_token
+
+    if organizacion_id is None:
+        return DenueRuntimeSettings(token=token, base_url=base_url)
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    denue_cfg = _as_dict(config.get("denue")) or {}
+    base_url_candidate = _coerce_str(denue_cfg.get("base_url"))
+    if base_url_candidate is not None:
+        base_url = base_url_candidate
+
+    secret_token = await get_secret_plaintext(organizacion_id=organizacion_id, clave="denue.token")
+    if secret_token:
+        token = secret_token
+
+    return DenueRuntimeSettings(token=token, base_url=base_url)
 
 
 @dataclass(slots=True)

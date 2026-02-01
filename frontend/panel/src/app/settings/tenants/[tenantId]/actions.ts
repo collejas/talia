@@ -409,6 +409,47 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
   }
 }
 
+export async function updateBusquedaSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const baseUrl = getText(formData, "denue_base_url")
+    const token = getText(formData, "denue_token")
+
+    if (!baseUrl && !token) {
+      throw new Error("Debes completar al menos un campo de la configuración de búsqueda.")
+    }
+
+    if (baseUrl) {
+      const getResp = await callCrmApi<{ ok: boolean; config: Record<string, unknown> }>(`/admin/tenants/${tenantId}/config`, {
+        method: "GET",
+        organizacionId: null,
+        withUserToken: true,
+      })
+      if (!getResp.ok) throw new Error(getResp.error)
+
+      const currentConfig = getResp.data.config ?? {}
+      const merged = mergeDeep({ ...currentConfig }, { denue: { base_url: baseUrl } })
+
+      const putResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/config`, {
+        method: "PUT",
+        organizacionId: null,
+        withUserToken: true,
+        body: { config: merged },
+      })
+      if (!putResp.ok) throw new Error(putResp.error)
+    }
+
+    if (token) {
+      await upsertTenantSecret(tenantId, "denue.token", token, "A")
+    }
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Configuración de búsqueda guardada.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar la configuración de búsqueda.")
+  }
+}
+
 export async function updateTwilioSettingsAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)
