@@ -7,6 +7,7 @@ import {
   IconCircleCheck,
   IconDotsVertical,
   IconChevronDown,
+  IconCalendar,
   IconHistory,
   IconLoader,
   IconNotebook,
@@ -100,6 +101,9 @@ type Filters = {
   order: OrderOption
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
+  dateOption: DateRangeOption
+  customDateFrom: string
+  customDateTo: string
 }
 
 type BannerState = {
@@ -128,6 +132,9 @@ const initialFilters: Filters = {
   order: "creado",
   carrierType: "",
   contactFilters: [],
+  dateOption: "",
+  customDateFrom: "",
+  customDateTo: "",
 }
 
 const initialContactForm = {
@@ -230,6 +237,111 @@ const resolvePresenceFlag = (present: boolean, missing: boolean): boolean | unde
   if (present && !missing) return true
   if (!present && missing) return false
   return undefined
+}
+
+type DateRangeOption = "" | "today" | "week" | "month" | "last_30" | "custom"
+
+const DATE_RANGE_SELECT_OPTIONS: Array<{ value: Exclude<DateRangeOption, "">; label: string }> = [
+  { value: "today", label: "Hoy" },
+  { value: "week", label: "Esta semana" },
+  { value: "month", label: "Este mes" },
+  { value: "last_30", label: "Últimos 30 días" },
+  { value: "custom", label: "Personalizado" },
+]
+
+const DATE_RANGE_LABELS: Record<Exclude<DateRangeOption, "">, string> = DATE_RANGE_SELECT_OPTIONS.reduce(
+  (acc, option) => {
+    acc[option.value] = option.label
+    return acc
+  },
+  {} as Record<Exclude<DateRangeOption, "">, string>
+)
+
+const DATE_DISPLAY_FORMATTER = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" })
+
+const toLocalIsoDate = (value: Date) => {
+  const tzMs = value.getTimezoneOffset() * 60 * 1000
+  return new Date(value.getTime() - tzMs).toISOString().slice(0, 10)
+}
+
+const getDateRangeFromFilters = (
+  option: DateRangeOption,
+  customFrom: string,
+  customTo: string
+): { from?: string; to?: string } => {
+  if (!option) {
+    return {}
+  }
+  const today = new Date()
+  const toValue = toLocalIsoDate(today)
+  switch (option) {
+    case "today": {
+      return { from: toValue, to: toValue }
+    }
+    case "week": {
+      const start = new Date(today)
+      const day = start.getDay()
+      const diff = (day + 6) % 7
+      start.setDate(start.getDate() - diff)
+      return { from: toLocalIsoDate(start), to: toValue }
+    }
+    case "month": {
+      const start = new Date(today)
+      start.setDate(1)
+      return { from: toLocalIsoDate(start), to: toValue }
+    }
+    case "last_30": {
+      const start = new Date(today)
+      start.setDate(start.getDate() - 29)
+      return { from: toLocalIsoDate(start), to: toValue }
+    }
+    case "custom": {
+      const from = customFrom?.trim()
+      const to = customTo?.trim()
+      return { from: from || undefined, to: to || undefined }
+    }
+    default:
+      return {}
+  }
+}
+
+const formatDateForLabel = (value: string) => {
+  try {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) {
+      return value
+    }
+    return DATE_DISPLAY_FORMATTER.format(parsed)
+  } catch {
+    return value
+  }
+}
+
+const getDateFilterChipLabel = (
+  option: DateRangeOption,
+  customFrom: string,
+  customTo: string
+): string | null => {
+  if (!option) {
+    return null
+  }
+  if (option !== "custom") {
+    return DATE_RANGE_LABELS[option]
+  }
+  const from = customFrom?.trim()
+  const to = customTo?.trim()
+  const fromLabel = from ? formatDateForLabel(from) : null
+  const toLabel = to ? formatDateForLabel(to) : null
+  if (fromLabel && toLabel) {
+    return `Del ${fromLabel} al ${toLabel}`
+  }
+  if (fromLabel) {
+    return `Desde ${fromLabel}`
+  }
+  if (toLabel) {
+    return `Hasta ${toLabel}`
+  }
+  return DATE_RANGE_LABELS.custom
 }
 
 const FUENTE_LABELS: Record<string, string> = {
@@ -432,6 +544,10 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         chips.push(CONTACT_FILTER_LABELS[filterKey])
       })
     }
+    const dateChip = getDateFilterChipLabel(filters.dateOption, filters.customDateFrom, filters.customDateTo)
+    if (dateChip) {
+      chips.push(`Fecha: ${dateChip}`)
+    }
     return chips
   }, [filters])
 
@@ -452,6 +568,11 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         filters.contactFilters.includes("website_has"),
         filters.contactFilters.includes("website_missing")
       )
+      const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+        filters.dateOption,
+        filters.customDateFrom,
+        filters.customDateTo
+      )
       const response = await listProspectos({
         limit,
         offset: nextOffset,
@@ -464,6 +585,8 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         phonePresent,
         emailPresent,
         websitePresent,
+        dateFrom,
+        dateTo,
       })
         const rows = response.items ?? []
         setItems(rows)
@@ -1703,6 +1826,62 @@ useEffect(() => {
                   <SelectItem value="voip">VoIP</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1">
+                <IconCalendar className="size-3" />
+                Fecha
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={filters.dateOption || "all"}
+                  onValueChange={(value) =>
+                    setFilters((prev) => {
+                      const nextOption = value === "all" ? "" : (value as DateRangeOption)
+                      return {
+                        ...prev,
+                        dateOption: nextOption,
+                        customDateFrom: nextOption === "custom" ? prev.customDateFrom : "",
+                        customDateTo: nextOption === "custom" ? prev.customDateTo : "",
+                      }
+                    })
+                  }
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {DATE_RANGE_SELECT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {filters.dateOption === "custom" && (
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      type="date"
+                      value={filters.customDateFrom}
+                      onChange={(event) =>
+                        setFilters((prev) => ({ ...prev, customDateFrom: event.target.value }))
+                      }
+                      className="w-[150px]"
+                      placeholder="Desde"
+                    />
+                    <Input
+                      type="date"
+                      value={filters.customDateTo}
+                      onChange={(event) =>
+                        setFilters((prev) => ({ ...prev, customDateTo: event.target.value }))
+                      }
+                      className="w-[150px]"
+                      placeholder="Hasta"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <Label>Datos de contacto</Label>

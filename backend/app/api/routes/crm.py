@@ -1387,6 +1387,8 @@ class ProspectoListQuery(BaseModel):
     phone_present: bool | None = Field(default=None)
     email_present: bool | None = Field(default=None)
     website_present: bool | None = Field(default=None)
+    date_from: date | None = Field(default=None)
+    date_to: date | None = Field(default=None)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -9475,6 +9477,8 @@ async def listar_prospectos(
             phone_present=params.phone_present,
             email_present=params.email_present,
             website_present=params.website_present,
+            date_from=params.date_from,
+            date_to=params.date_to,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

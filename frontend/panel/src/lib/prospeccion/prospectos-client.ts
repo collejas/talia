@@ -363,6 +363,8 @@ export async function listProspectos(params: {
   phonePresent?: boolean
   emailPresent?: boolean
   websitePresent?: boolean
+  dateFrom?: string
+  dateTo?: string
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -388,6 +390,12 @@ export async function listProspectos(params: {
   }
   if (typeof params.websitePresent === "boolean") {
     url.searchParams.set("website_present", params.websitePresent ? "true" : "false")
+  }
+  if (params.dateFrom) {
+    url.searchParams.set("date_from", params.dateFrom)
+  }
+  if (params.dateTo) {
+    url.searchParams.set("date_to", params.dateTo)
   }
   return requestJson<ProspectosResponse>(url.toString())
 }

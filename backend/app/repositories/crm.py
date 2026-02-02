@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, Sequence
 from uuid import UUID
@@ -5769,6 +5769,8 @@ class CRMRepository:
         phone_present: bool | None = None,
         email_present: bool | None = None,
         website_present: bool | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -5805,6 +5807,12 @@ class CRMRepository:
             params["website"] = "not.is.null"
         elif website_present is False:
             params["website"] = "is.null"
+        if date_from and date_to:
+            params["and"] = f"(creado_en.gte.{date_from.isoformat()},creado_en.lte.{date_to.isoformat()})"
+        elif date_from:
+            params["creado_en"] = f"gte.{date_from.isoformat()}"
+        elif date_to:
+            params["creado_en"] = f"lte.{date_to.isoformat()}"
 
         if search:
             sanitized = search.strip()
