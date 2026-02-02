@@ -1389,6 +1389,8 @@ class ProspectoListQuery(BaseModel):
     website_present: bool | None = Field(default=None)
     date_from: date | None = Field(default=None)
     date_to: date | None = Field(default=None)
+    metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = Field(default=None)
+    actividad: Annotated[list[str] | None, Query(alias="actividad")] = Field(default=None)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -9479,6 +9481,8 @@ async def listar_prospectos(
             website_present=params.website_present,
             date_from=params.date_from,
             date_to=params.date_to,
+            metadata_queries=params.metadata_query,
+            actividades=params.actividad,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -9489,6 +9493,29 @@ async def listar_prospectos(
         "total": total,
         "limit": params.limit,
         "offset": params.offset,
+    }
+
+
+@router.get("/prospeccion/prospectos/queries")
+async def listar_prospectos_query_metadata(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    query: Annotated[list[str] | None, Query(alias="query")] = None,
+) -> dict[str, Any]:
+    """Lista nombres de consulta y actividades asociadas para los prospectos guardados."""
+
+    try:
+        metadata = await repo.list_prospecto_query_metadata(
+            usuario_token=user_token,
+            query_filters=query,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "queries": metadata.get("queries", []),
+        "activities": metadata.get("activities", []),
     }
 
 

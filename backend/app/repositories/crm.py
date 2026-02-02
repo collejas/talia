@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Literal, Sequence
+from typing import Any, Iterable, Literal, Sequence
+from urllib.parse import quote as urlquote
 from uuid import UUID
 
 import httpx
@@ -39,6 +40,19 @@ def _ensure_metadata(value: Any) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {}
     return {}
+
+
+def _postgrest_in_clause(values: Iterable[str]) -> str:
+    quoted: list[str] = []
+    for value in values:
+        text = str(value or "")
+        escaped = text.replace('"', '""')
+        quoted.append(f'"{escaped}"')
+    return f"in.({','.join(quoted)})"
+
+
+def _postgrest_eq_literal(value: str) -> str:
+    return urlquote(value, safe="")
 
 
 def _make_json_serializable(value: Any) -> Any:
@@ -5771,6 +5785,8 @@ class CRMRepository:
         website_present: bool | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        metadata_queries: list[str] | None = None,
+        actividades: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -5780,6 +5796,7 @@ class CRMRepository:
             "offset": str(offset),
             "order": order or "creado_en.desc",
         }
+        and_filters: list[str] = []
 
         if fuente:
             params["fuente"] = f"eq.{fuente}"
@@ -5808,7 +5825,9 @@ class CRMRepository:
         elif website_present is False:
             params["website"] = "is.null"
         if date_from and date_to:
-            params["and"] = f"(creado_en.gte.{date_from.isoformat()},creado_en.lte.{date_to.isoformat()})"
+            and_filters.append(
+                f"(creado_en.gte.{date_from.isoformat()},creado_en.lte.{date_to.isoformat()})"
+            )
         elif date_from:
             params["creado_en"] = f"gte.{date_from.isoformat()}"
         elif date_to:
@@ -5819,19 +5838,48 @@ class CRMRepository:
             for char in "(),*":
                 sanitized = sanitized.replace(char, " ")
             pattern = f"*{sanitized}*"
-            params["or"] = (
-                "("
-                + ",".join(
-                    [
-                        f"display_name.ilike.{pattern}",
-                        f"actividad.ilike.{pattern}",
-                        f"phone.ilike.{pattern}",
-                        f"email.ilike.{pattern}",
-                        f"website.ilike.{pattern}",
-                    ]
-                )
-                + ")"
+            or_filters = ",".join(
+                [
+                    f"display_name.ilike.{pattern}",
+                    f"actividad.ilike.{pattern}",
+                    f"phone.ilike.{pattern}",
+                    f"email.ilike.{pattern}",
+                    f"website.ilike.{pattern}",
+                ]
             )
+            and_filters.append(f"or({or_filters})")
+
+        if metadata_queries:
+            unique_queries: list[str] = []
+            seen_queries: set[str] = set()
+            for value in metadata_queries:
+                candidate = str(value or "").strip()
+                if not candidate or candidate in seen_queries:
+                    continue
+                seen_queries.add(candidate)
+                unique_queries.append(candidate)
+            metadata_conditions: list[str] = []
+            for value in unique_queries:
+                literal = _postgrest_eq_literal(value)
+                metadata_conditions.append(f"metadata->>query.eq.{literal}")
+                metadata_conditions.append(f"metadata->>busqueda_query.eq.{literal}")
+            if metadata_conditions:
+                and_filters.append(f"or({','.join(metadata_conditions)})")
+
+        if actividades:
+            unique_activities = []
+            seen_acts: set[str] = set()
+            for activity in actividades:
+                candidate = str(activity or "").strip()
+                if not candidate or candidate in seen_acts:
+                    continue
+                seen_acts.add(candidate)
+                unique_activities.append(candidate)
+            if unique_activities:
+                params["actividad"] = _postgrest_in_clause(unique_activities)
+
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
 
         resp = await self._request_with_user(
             "GET",
@@ -5845,6 +5893,62 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
+
+    async def list_prospecto_query_metadata(
+        self,
+        *,
+        usuario_token: str,
+        query_filters: list[str] | None = None,
+    ) -> dict[str, list[str]]:
+        params: dict[str, str] = {
+            "select": "actividad,metadata->>query as metadata_query,metadata->>busqueda_query as metadata_busqueda_query",
+            "order": "metadata->>query.asc,actividad.asc",
+            "limit": "5000",
+        }
+        if query_filters:
+            unique_queries: list[str] = []
+            seen: set[str] = set()
+            for value in query_filters:
+                candidate = str(value or "").strip()
+                if not candidate or candidate in seen:
+                    continue
+                seen.add(candidate)
+                unique_queries.append(candidate)
+            metadata_conditions: list[str] = []
+            for value in unique_queries:
+                literal = _postgrest_eq_literal(value)
+                metadata_conditions.append(f"metadata->>query.eq.{literal}")
+                metadata_conditions.append(f"metadata->>busqueda_query.eq.{literal}")
+            if metadata_conditions:
+                params["or"] = f"({','.join(metadata_conditions)})"
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_prospectos",
+            token=usuario_token,
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar metadata de prospectos: {data!r}")
+        query_values: set[str] = set()
+        activity_values: set[str] = set()
+        for row in data:
+            for key in ("metadata_query", "metadata_busqueda_query"):
+                value = row.get(key)
+                if isinstance(value, str):
+                    candidate = value.strip()
+                    if candidate:
+                        query_values.add(candidate)
+            actividad = row.get("actividad")
+            if isinstance(actividad, str):
+                candidate = actividad.strip()
+                if candidate:
+                    activity_values.add(candidate)
+        return {
+            "queries": sorted(query_values),
+            "activities": sorted(activity_values),
+        }
 
     async def worker_get_prospecto(
         self,

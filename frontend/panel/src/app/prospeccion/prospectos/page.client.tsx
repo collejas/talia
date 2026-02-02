@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import {
   IconAlertTriangle,
   IconBolt,
@@ -68,6 +68,7 @@ import {
   convertirProspectoAContacto,
   type ConvertirProspectoPayload,
   listProspectos,
+  listProspectosQueryMetadata,
   listContactoEnviosPorProspecto,
   listContactoLogs,
   listContactoTemplates,
@@ -101,6 +102,8 @@ type Filters = {
   order: OrderOption
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
+  queryFilters: string[]
+  actividadFilters: string[]
   dateOption: DateRangeOption
   customDateFrom: string
   customDateTo: string
@@ -132,6 +135,8 @@ const initialFilters: Filters = {
   order: "creado",
   carrierType: "",
   contactFilters: [],
+  queryFilters: [],
+  actividadFilters: [],
   dateOption: "",
   customDateFrom: "",
   customDateTo: "",
@@ -232,6 +237,8 @@ const CONTACT_FILTER_LABELS: Record<ContactPresenceFilter, string> = CONTACT_FIL
 
 const CONTACT_FILTER_ORDER = CONTACT_FILTER_OPTIONS.map((option) => option.value)
 const CONTACT_FILTER_PLACEHOLDER = "Teléfono, correo o sitio web"
+const QUERY_FILTER_PLACEHOLDER = "Todas las consultas"
+const ACTIVITY_FILTER_PLACEHOLDER = "Todas las actividades"
 
 const resolvePresenceFlag = (present: boolean, missing: boolean): boolean | undefined => {
   if (present && !missing) return true
@@ -490,6 +497,11 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
   const [recentBatches, setRecentBatches] = useState<ContactoBatch[]>([])
   const [recentBatchLoading, setRecentBatchLoading] = useState(false)
   const [recentBatchError, setRecentBatchError] = useState<string | null>(null)
+  const [queryOptions, setQueryOptions] = useState<string[]>([])
+  const [activityOptions, setActivityOptions] = useState<string[]>([])
+  const [queryOptionsLoading, setQueryOptionsLoading] = useState(false)
+  const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
+  const [derivedQueryOptions, setDerivedQueryOptions] = useState<string[]>([])
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
@@ -519,11 +531,29 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
   })
   const [convertError, setConvertError] = useState<string | null>(null)
   const [convertSubmitting, setConvertSubmitting] = useState(false)
+  const queryFiltersInitialEffect = useRef(true)
 
   const currentIds = useMemo(() => items.map((item) => item.id).filter(Boolean) as string[], [items])
   const selectedIds = useMemo(() => Array.from(selected.values()), [selected])
   const selectedCount = selectedIds.length
   const canUseQuickPlan = selectedCount > 0
+  const orderSelectedByOptions = (selection: Set<string>, options: string[]) => {
+    const ordered: string[] = []
+    const seen = new Set<string>()
+    options.forEach((option) => {
+      if (selection.has(option)) {
+        ordered.push(option)
+        seen.add(option)
+      }
+    })
+    for (const value of selection) {
+      if (!seen.has(value)) {
+        ordered.push(value)
+      }
+    }
+    return ordered
+  }
+
   const selectionChips = useMemo(() => {
     const chips: string[] = []
     if (filters.fuente) {
@@ -544,12 +574,19 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         chips.push(CONTACT_FILTER_LABELS[filterKey])
       })
     }
+    if (filters.queryFilters.length) {
+      chips.push(`Consulta: ${filters.queryFilters.join(", ")}`)
+    }
+    if (filters.actividadFilters.length) {
+      chips.push(`Actividad: ${filters.actividadFilters.join(", ")}`)
+    }
     const dateChip = getDateFilterChipLabel(filters.dateOption, filters.customDateFrom, filters.customDateTo)
     if (dateChip) {
       chips.push(`Fecha: ${dateChip}`)
     }
     return chips
   }, [filters])
+  const visibleQueryOptions = queryOptions.length ? queryOptions : derivedQueryOptions
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
@@ -573,23 +610,26 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         filters.customDateFrom,
         filters.customDateTo
       )
-      const response = await listProspectos({
-        limit,
-        offset: nextOffset,
-        search: filters.search || undefined,
-        fuente: filters.fuente || undefined,
-        lookupStatus: filters.lookupStatus || undefined,
-        segmento: filters.segmento || undefined,
-        carrierType: filters.carrierType || undefined,
-        order: filters.order,
-        phonePresent,
-        emailPresent,
-        websitePresent,
-        dateFrom,
-        dateTo,
-      })
+        const response = await listProspectos({
+          limit,
+          offset: nextOffset,
+          search: filters.search || undefined,
+          fuente: filters.fuente || undefined,
+          lookupStatus: filters.lookupStatus || undefined,
+          segmento: filters.segmento || undefined,
+          carrierType: filters.carrierType || undefined,
+          order: filters.order,
+          phonePresent,
+          emailPresent,
+          websitePresent,
+          metadataQueries: filters.queryFilters.length ? filters.queryFilters : undefined,
+          actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
+          dateFrom,
+          dateTo,
+        })
         const rows = response.items ?? []
         setItems(rows)
+        setDerivedQueryOptions(deriveQueryOptionsFromRows(rows))
         setTotal(typeof response.total === "number" ? response.total : rows.length)
         setOffset(nextOffset)
         setSelected((prev) => {
@@ -615,6 +655,68 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
   useEffect(() => {
     void fetchProspectos(0)
   }, [fetchProspectos])
+
+  const loadQueryOptions = useCallback(async () => {
+    setQueryOptionsLoading(true)
+    try {
+      const response = await listProspectosQueryMetadata()
+      const queries = response.queries ?? []
+      const activities = response.activities ?? []
+      setQueryOptions(queries)
+      setActivityOptions(activities)
+      setFilters((prev) => ({
+        ...prev,
+        actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
+      }))
+    } catch {
+      setQueryOptions([])
+      setActivityOptions([])
+      setFilters((prev) => ({
+        ...prev,
+        actividadFilters: [],
+      }))
+    } finally {
+      setQueryOptionsLoading(false)
+    }
+  }, [])
+
+  const loadActivitiesForQueries = useCallback(
+    async (selectedQueries: string[]) => {
+      setActivityOptionsLoading(true)
+      try {
+        const response = await listProspectosQueryMetadata({
+          queries: selectedQueries.length ? selectedQueries : undefined,
+        })
+        const activities = response.activities ?? []
+        setActivityOptions(activities)
+        setFilters((prev) => ({
+          ...prev,
+          actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
+        }))
+      } catch {
+        setActivityOptions([])
+        setFilters((prev) => ({
+          ...prev,
+          actividadFilters: [],
+        }))
+      } finally {
+        setActivityOptionsLoading(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    void loadQueryOptions()
+  }, [loadQueryOptions])
+
+  useEffect(() => {
+    if (queryFiltersInitialEffect.current) {
+      queryFiltersInitialEffect.current = false
+      return
+    }
+    void loadActivitiesForQueries(filters.queryFilters)
+  }, [filters.queryFilters, loadActivitiesForQueries])
 
   const refreshChecklist = useCallback(async () => {
     setChecklistLoading(true)
@@ -1021,6 +1123,37 @@ useEffect(() => {
       return {
         ...prev,
         contactFilters: CONTACT_FILTER_ORDER.filter((filter) => next.has(filter)),
+      }
+    })
+  }
+
+  const handleQueryFilterToggle = (value: string, enabled: boolean) => {
+    setFilters((prev) => {
+      const next = new Set(prev.queryFilters)
+      if (enabled) {
+        next.add(value)
+      } else {
+        next.delete(value)
+      }
+      const orderingOptions = queryOptions.length ? queryOptions : derivedQueryOptions
+      return {
+        ...prev,
+        queryFilters: orderSelectedByOptions(next, orderingOptions),
+      }
+    })
+  }
+
+  const handleActividadFilterToggle = (value: string, enabled: boolean) => {
+    setFilters((prev) => {
+      const next = new Set(prev.actividadFilters)
+      if (enabled) {
+        next.add(value)
+      } else {
+        next.delete(value)
+      }
+      return {
+        ...prev,
+        actividadFilters: orderSelectedByOptions(next, activityOptions),
       }
     })
   }
@@ -1884,6 +2017,76 @@ useEffect(() => {
               </div>
             </div>
             <div className="space-y-1">
+              <Label>Consulta</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-w-[220px] justify-between text-sm normal-case"
+                  >
+                    <span className="max-w-[160px] truncate text-left text-sm">
+                      {filters.queryFilters.length ? filters.queryFilters.join(", ") : QUERY_FILTER_PLACEHOLDER}
+                    </span>
+                    <IconChevronDown className="size-4 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[260px]">
+                {queryOptionsLoading ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas …</div>
+                ) : visibleQueryOptions.length ? (
+                  visibleQueryOptions.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option}
+                      checked={filters.queryFilters.includes(option)}
+                      onCheckedChange={(checked) => handleQueryFilterToggle(option, Boolean(checked))}
+                    >
+                      {option}
+                    </DropdownMenuCheckboxItem>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">No hay consultas registradas.</div>
+                )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="space-y-1">
+              <Label>Actividad</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-w-[220px] justify-between text-sm normal-case"
+                  >
+                    <span className="max-w-[160px] truncate text-left text-sm">
+                      {filters.actividadFilters.length ? filters.actividadFilters.join(", ") : ACTIVITY_FILTER_PLACEHOLDER}
+                    </span>
+                    <IconChevronDown className="size-4 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[260px]">
+                  {activityOptionsLoading ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">Cargando actividades …</div>
+                  ) : activityOptions.length ? (
+                    activityOptions.map((option) => (
+                      <DropdownMenuCheckboxItem
+                        key={option}
+                        checked={filters.actividadFilters.includes(option)}
+                        onCheckedChange={(checked) => handleActividadFilterToggle(option, Boolean(checked))}
+                      >
+                        {option}
+                      </DropdownMenuCheckboxItem>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      No hay actividades registradas.
+                    </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="space-y-1">
               <Label>Datos de contacto</Label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2187,6 +2390,7 @@ useEffect(() => {
               {!loading
                 ? items.map((prospecto) => {
                     const notas = extractProspectoNotes(prospecto.metadata)
+                    const consulta = extractProspectoQuery(prospecto.metadata)
                     return (
                       <TableRow key={prospecto.id}>
                         <TableCell>
@@ -2256,6 +2460,11 @@ useEffect(() => {
                         </div>
                         {prospecto.website ? (
                           <p className="mt-1 text-xs text-muted-foreground">{prospecto.website}</p>
+                        ) : null}
+                        {consulta ? (
+                          <p className="mt-1 max-w-full break-words text-xs text-muted-foreground">
+                            Consulta: <span className="text-foreground">{consulta}</span>
+                          </p>
                         ) : null}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">
@@ -3239,6 +3448,33 @@ function extractProspectoNotes(metadata: unknown): string | null {
   }
   const trimmed = value.trim()
   return trimmed.length ? trimmed : null
+}
+
+function extractProspectoQuery(metadata: unknown): string | null {
+  if (!isRecord(metadata)) {
+    return null
+  }
+  for (const key of ["query", "busqueda_query"] as const) {
+    const value = metadata[key]
+    if (typeof value === "string") {
+      const trimmed = value.trim()
+      if (trimmed.length) {
+        return trimmed
+      }
+    }
+  }
+  return null
+}
+
+function deriveQueryOptionsFromRows(rows: ProspectoItem[]): string[] {
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const query = extractProspectoQuery(row.metadata)
+    if (query && !seen.has(query)) {
+      seen.add(query)
+    }
+  }
+  return Array.from(seen)
 }
 
 function auditActionLabel(action: string): string {

@@ -363,6 +363,8 @@ export async function listProspectos(params: {
   phonePresent?: boolean
   emailPresent?: boolean
   websitePresent?: boolean
+  metadataQueries?: string[]
+  actividades?: string[]
   dateFrom?: string
   dateTo?: string
 } = {}): Promise<ProspectosResponse> {
@@ -397,7 +399,38 @@ export async function listProspectos(params: {
   if (params.dateTo) {
     url.searchParams.set("date_to", params.dateTo)
   }
+  if (params.metadataQueries?.length) {
+    for (const value of params.metadataQueries) {
+      const trimmed = value?.trim()
+      if (trimmed) {
+        url.searchParams.append("metadata_query", trimmed)
+      }
+    }
+  }
+  if (params.actividades?.length) {
+    for (const value of params.actividades) {
+      const trimmed = value?.trim()
+      if (trimmed) {
+        url.searchParams.append("actividad", trimmed)
+      }
+    }
+  }
   return requestJson<ProspectosResponse>(url.toString())
+}
+
+export async function listProspectosQueryMetadata(params?: {
+  queries?: string[]
+}): Promise<{ queries: string[]; activities: string[] }> {
+  const url = buildClientUrl("/api/prospeccion/prospectos/queries")
+  if (params?.queries?.length) {
+    for (const query of params.queries) {
+      const trimmed = query?.trim()
+      if (trimmed) {
+        url.searchParams.append("query", trimmed)
+      }
+    }
+  }
+  return requestJson<{ queries: string[]; activities: string[] }>(url.toString())
 }
 
 /**
