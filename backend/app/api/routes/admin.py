@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from email_validator import EmailNotValidError, validate_email
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import settings
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
@@ -133,15 +134,27 @@ class TenantSeedPayload(BaseModel):
     puesto: str = Field(..., min_length=1)
     rol_nombre: str = Field(..., min_length=1)
     rol_descripcion: str | None = None
-    permisos: list[TenantSeedPermission] = Field(..., min_items=1)
+    permisos: list[TenantSeedPermission] = Field(..., min_length=1)
 
 
 class TenantAdminPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    correo: EmailStr
+    correo: str
     nombre_completo: str | None = None
     telefono: str | None = None
     estado: str = Field(default="activo")
+
+    @field_validator("correo")
+    @classmethod
+    def _validate_correo(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("correo_invalid")
+        try:
+            validated = validate_email(cleaned, test_environment=True)
+        except EmailNotValidError as exc:
+            raise ValueError("correo_invalid") from exc
+        return validated.normalized
 
 
 class CreateTenantWithAdminRequest(BaseModel):
