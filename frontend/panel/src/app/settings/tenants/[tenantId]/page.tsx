@@ -14,7 +14,6 @@ import {
   TenantMessengerSettings,
   TenantTwilioSettings,
   TenantWhatsAppSettings,
-  TenantConfigEditor,
   TenantSecretsManager,
   TenantWebchatSettings,
   TenantBusquedaSettings,
@@ -80,7 +79,6 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
 
-  const initialConfigJson = configResp.ok ? JSON.stringify(configResp.data.config ?? {}, null, 2) : "{}"
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
   const config = configResp.ok ? asRecord(configResp.data.config ?? {}) ?? {} : {}
@@ -205,7 +203,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           </CardHeader>
         <CardContent>
           <Tabs defaultValue="webchat">
-          <TabsList className="grid grid-cols-10">
+          <TabsList className="grid grid-cols-9">
             <TabsTrigger value="webchat">Webchat</TabsTrigger>
             <TabsTrigger value="calendar">Calendario</TabsTrigger>
             <TabsTrigger value="mail">Correo</TabsTrigger>
@@ -213,7 +211,6 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
             <TabsTrigger value="messenger">Messenger</TabsTrigger>
             <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
-            <TabsTrigger value="config">Config (avanzado)</TabsTrigger>
             <TabsTrigger value="openai">OpenAI</TabsTrigger>
             <TabsTrigger value="secrets">Secretos</TabsTrigger>
             </TabsList>
@@ -267,9 +264,6 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 hasToken={hasDenueToken}
                 hasGoogleApiKey={hasGoogleApiKey}
               />
-            </TabsContent>
-            <TabsContent value="config" className="pt-4">
-              <TenantConfigEditor tenantId={tenantId} initialConfigJson={initialConfigJson} />
             </TabsContent>
             <TabsContent value="openai" className="pt-4">
               <TenantOpenaiSettings

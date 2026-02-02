@@ -224,6 +224,7 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     })
     if (!putResp.ok) throw new Error(putResp.error)
 
+    let aliasWarning: string | null = null
     if (webchatAlias) {
       const routeResp = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}/routes`, {
         method: "POST",
@@ -231,9 +232,12 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
         withUserToken: true,
         body: { canal: "webchat", clave: webchatAlias },
       })
-      if (!routeResp.ok && routeResp.status !== 409) {
-        // No bloqueamos todo el guardado si la ruta ya existe o choca; solo avisamos.
-        console.warn("[settings/tenants] webchat route warning", routeResp.error)
+      if (!routeResp.ok) {
+        if (routeResp.status === 409) {
+          aliasWarning = `Alias "${webchatAlias}" ya está registrado; revisa las rutas.`
+        } else {
+          throw new Error(routeResp.error)
+        }
       }
     }
 
@@ -248,7 +252,8 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     }
 
     revalidatePath(`/settings/tenants/${tenantId}`)
-    return success("Webchat guardado (config/routing/secretos).")
+    const baseMessage = "Webchat guardado (config/routing/secretos)."
+    return success(aliasWarning ? `${baseMessage} ${aliasWarning}` : baseMessage)
   } catch (error) {
     return failure(error, "No se pudo guardar la configuración de Webchat.")
   }

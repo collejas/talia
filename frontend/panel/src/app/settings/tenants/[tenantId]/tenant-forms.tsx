@@ -1223,7 +1223,7 @@ export function TenantWhatsAppSettings({
     createTenantRouteAction,
   )
   const { formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
-  const [, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
 
   return (
@@ -1390,6 +1390,64 @@ export function TenantWhatsAppSettings({
       <form action={validateAction} className="space-y-3">
         <input type="hidden" name="tenant_id" value={tenantId} />
         <input type="hidden" name="scope" value="whatsapp" />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Validación</h3>
+            <p className="text-xs text-muted-foreground">Revisa faltantes de config/rutas/secretos para WhatsApp.</p>
+          </div>
+          <Button type="submit" variant="outline" size="sm">
+            Validar
+          </Button>
+        </div>
+        {validateState.report ? (
+          <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
+            <p className="font-medium">{validateState.message}</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_routes.length ? (
+                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_config.length ? (
+                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
+                <ul className="list-disc pl-5">
+                  {validateState.report.missing_secrets.length ? (
+                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                  ) : (
+                    <li>—</li>
+                  )}
+                </ul>
+              </div>
+              {validateState.report.notes.length ? (
+                <div className="space-y-1 md:col-span-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+                  <ul className="list-disc pl-5">
+                    {validateState.report.notes.map((x) => (
+                      <li key={x}>{x}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <FormStatusMessage state={validateState} />
+        )}
       </form>
     </div>
   )
