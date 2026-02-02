@@ -2,15 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.routes.admin import ChannelRoute, get_platform_repo, require_user_token
+from app.api.routes.admin import (
+    ChannelRoute,
+    CreateRouteRequest,
+    CreateRouteResponse,
+    TenantRoutesResponse,
+    TenantValidationReport,
+    SecretMetadata,
+    TenantSecretsResponse,
+    _get_master_key_for_tier,
+    _normalize_secret_key,
+    build_validation_report,
+    get_platform_repo,
+    require_user_token,
+)
+from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
+from app.services import channel_routing
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 
@@ -113,6 +128,28 @@ class TenantScopedUpdateRequest(BaseModel):
     estado_onboarding: str | None = None
 
 
+class TenantSecretEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clave: str
+    valor: str = Field(..., min_length=1)
+    tier: Literal["A", "B"] = Field(
+        default="A",
+        description="A=normal (master key primaria), B=seguridad extendida",
+    )
+    etiqueta: str | None = Field(default=None, max_length=200)
+
+
+class TenantSecretsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    secrets: list[TenantSecretEntry] = Field(..., min_length=1)
+
+
+class TenantValidationPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"] = "full"
+
+
 async def _build_tenant_response(
     organizacion_id: UUID,
     row: dict[str, Any],
@@ -167,3 +204,131 @@ async def update_tenant_settings(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+@router.post("/me/secrets", response_model=TenantSecretsResponse)
+async def upsert_tenant_secrets(
+    payload: TenantSecretsPayload,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantSecretsResponse:
+    items: list[SecretMetadata] = []
+    for entry in payload.secrets:
+        secret_key = _normalize_secret_key(entry.clave)
+        master_key = _get_master_key_for_tier(entry.tier)
+        aad = f"org:{context.organizacion_id}:key:{secret_key}:tier:{entry.tier}"
+        try:
+            nonce_b64, ciphertext_b64 = encrypt_secret(
+                plaintext=entry.valor, master_key=master_key, aad=aad
+            )
+        except SecretsCryptoError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        existing = await repo.get_secret_row(
+            organizacion_id=context.organizacion_id, clave=secret_key
+        )
+        version = 1
+        if isinstance(existing, dict):
+            try:
+                version = int(existing.get("version") or 1) + 1
+            except (TypeError, ValueError):
+                version = 2
+
+        etiqueta = entry.etiqueta or f"aesgcm:v1:tier:{entry.tier}"
+        try:
+            row = await repo.upsert_secret(
+                organizacion_id=context.organizacion_id,
+                clave=secret_key,
+                valor_cifrado=ciphertext_b64,
+                nonce=nonce_b64,
+                etiqueta=etiqueta,
+                version=version,
+                updated_by=context.user_id,
+            )
+        except PlatformRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        safe_row = {
+            "id": row.get("id"),
+            "organizacion_id": row.get("organizacion_id"),
+            "clave": row.get("clave"),
+            "etiqueta": row.get("etiqueta"),
+            "version": row.get("version"),
+            "creado_por": row.get("creado_por"),
+            "actualizado_por": row.get("actualizado_por"),
+            "creado_en": row.get("creado_en"),
+            "actualizado_en": row.get("actualizado_en"),
+        }
+        items.append(SecretMetadata.model_validate(safe_row))
+
+    return TenantSecretsResponse(items=items)
+
+
+@router.get("/me/routes", response_model=TenantRoutesResponse)
+async def list_tenant_routes(
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantRoutesResponse:
+    routes = await repo.list_channel_routes(organizacion_id=context.organizacion_id)
+    return TenantRoutesResponse(items=[ChannelRoute.model_validate(row) for row in routes])
+
+
+@router.post("/me/routes", response_model=CreateRouteResponse)
+async def create_tenant_route(
+    payload: CreateRouteRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CreateRouteResponse:
+    canal = payload.canal.strip().lower()
+    clave = payload.clave.strip().lower()
+    if not canal or not clave:
+        raise HTTPException(status_code=400, detail="invalid_route_key")
+    try:
+        route = await repo.create_channel_route(
+            payload={
+                "organizacion_id": str(context.organizacion_id),
+                "canal": canal,
+                "clave": clave,
+                "metadata": payload.metadata or {},
+                "activo": bool(payload.activo),
+            }
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    channel_routing.invalidate_cache(canal=canal, clave=clave)
+    return CreateRouteResponse(route=ChannelRoute.model_validate(route))
+
+
+@router.delete("/me/routes/{route_id}", status_code=204)
+async def delete_tenant_route(
+    route_id: UUID,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> Response:
+    try:
+        await repo.delete_channel_route(organizacion_id=context.organizacion_id, route_id=route_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/me/validate", response_model=TenantValidationReport)
+async def tenant_validate(
+    payload: TenantValidationPayload,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantValidationReport:
+    config = await repo.get_organizacion_config(organizacion_id=context.organizacion_id)
+    if config is None:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+
+    routes = await repo.list_channel_routes(organizacion_id=context.organizacion_id)
+    secrets = await repo.list_secret_metadata(organizacion_id=context.organizacion_id)
+
+    return build_validation_report(
+        organizacion_id=context.organizacion_id,
+        config=config,
+        routes=routes,
+        secrets=secrets,
+        scope=payload.scope,
+    )

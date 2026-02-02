@@ -736,6 +736,22 @@ async def validate_tenant(
     routes = await repo.list_channel_routes(organizacion_id=organizacion_id)
     secrets = await repo.list_secret_metadata(organizacion_id=organizacion_id)
 
+    return build_validation_report(
+        organizacion_id=organizacion_id,
+        config=config,
+        routes=routes,
+        secrets=secrets,
+        scope=scope,
+    )
+
+
+def build_validation_report(
+    organizacion_id: UUID,
+    config: dict[str, Any],
+    routes: list[dict[str, Any]],
+    secrets: list[dict[str, Any]],
+    scope: Literal["webchat", "calendar", "mail", "twilio", "messenger", "full"],
+) -> TenantValidationReport:
     report = TenantValidationReport(organizacion_id=organizacion_id)
 
     required_route_canals: list[str] = []
@@ -793,7 +809,6 @@ async def validate_tenant(
         "messenger.inactivity_hours",
     ]
 
-    required_config: list[str]
     if scope == "full":
         required_config = (
             webchat_config_keys
@@ -814,7 +829,6 @@ async def validate_tenant(
     else:
         required_config = webchat_config_keys
 
-    required_secrets: list[str]
     if scope == "full":
         required_secrets = [
             "openai.api_key",

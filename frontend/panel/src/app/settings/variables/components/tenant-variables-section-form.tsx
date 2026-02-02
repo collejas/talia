@@ -18,10 +18,19 @@ type FieldSpec = {
   control?: "checkbox"
 }
 
+type SecretField = {
+  clave: string
+  label: string
+  tier?: "A" | "B"
+  placeholder?: string
+  note?: string
+}
+
 type SectionConfig = {
   title: string
   description?: string
   fields: FieldSpec[]
+  secrets?: SecretField[]
 }
 
 type SectionFormProps = {
@@ -51,6 +60,12 @@ function setNestedValue(target: Record<string, unknown>, path: string[], value: 
 }
 
 type FieldValue = string | boolean
+type SecretPayload = {
+  clave: string
+  valor: string
+  tier: "A" | "B"
+  etiqueta?: string
+}
 
 export function TenantSectionForm({ section, config }: SectionFormProps) {
   const initialValues = useMemo(() => {
@@ -66,16 +81,33 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
     return values
   }, [config, section.fields])
 
+  const initialSecretValues = useMemo<Record<string, string>>(() => {
+    const values: Record<string, string> = {}
+    section.secrets?.forEach((secret) => {
+      values[secret.clave] = ""
+    })
+    return values
+  }, [section.secrets])
+
   const [values, setValues] = useState<Record<string, FieldValue>>(initialValues)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [secretValues, setSecretValues] = useState(initialSecretValues)
 
   useEffect(() => {
     setValues(initialValues)
   }, [initialValues])
 
+  useEffect(() => {
+    setSecretValues(initialSecretValues)
+  }, [initialSecretValues])
+
   const handleChange = (path: string, value: FieldValue) => {
     setValues((prev) => ({ ...prev, [path]: value }))
+  }
+
+  const handleSecretChange = (clave: string, value: string) => {
+    setSecretValues((prev) => ({ ...prev, [clave]: value }))
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -91,29 +123,72 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
           return
         }
 
-      const rawValue = values[field.path]
-      if (typeof rawValue !== "string") return
-      const raw = rawValue.trim()
-      if (!raw) return
-      const parsed =
-        field.type === "number" ? (isNaN(Number(raw)) ? undefined : Number(raw)) : raw
+        const rawValue = values[field.path]
+        if (typeof rawValue !== "string") return
+        const raw = rawValue.trim()
+        if (!raw) return
+        const parsed =
+          field.type === "number" ? (isNaN(Number(raw)) ? undefined : Number(raw)) : raw
         if (parsed === undefined) return
         setNestedValue(patch, field.path.split("."), parsed)
       })
-      if (!Object.keys(patch).length) {
+      const secretsToSave: SecretPayload[] =
+        section.secrets
+          ?.map((secret) => {
+            const raw = (secretValues[secret.clave] ?? "").trim()
+            if (!raw) return null
+            return {
+              clave: secret.clave,
+              valor: raw,
+              tier: secret.tier ?? "B",
+              etiqueta: secret.note ?? secret.label,
+            }
+          })
+          .filter((item): item is SecretPayload => Boolean(item)) ?? []
+
+      if (!Object.keys(patch).length && !secretsToSave.length) {
         setMessage({ type: "error", text: "Completa al menos un campo para guardar." })
         return
       }
-      const response = await fetch("/api/settings/variables/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: patch }),
-      })
-      const payload = await response.json()
-      if (!response.ok) {
-        throw new Error(payload.error || "No se pudo guardar la sección.")
+
+      const successParts: string[] = []
+      if (Object.keys(patch).length) {
+        const response = await fetch("/api/settings/variables/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config: patch }),
+        })
+        const payload = await response.json()
+        if (!response.ok) {
+          throw new Error(payload.error || "No se pudo guardar la sección.")
+        }
+        successParts.push("Configuración guardada")
       }
-      setMessage({ type: "success", text: "Cambios guardados" })
+
+      if (secretsToSave.length) {
+        const response = await fetch("/api/settings/variables/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ secrets: secretsToSave }),
+        })
+        const payload = await response.json()
+        if (!response.ok) {
+          throw new Error(payload.error || "No se pudieron guardar los secretos.")
+        }
+        successParts.push("Secretos guardados")
+        setSecretValues((prev) => {
+          const next = { ...prev }
+          secretsToSave.forEach((secret) => {
+            next[secret.clave] = ""
+          })
+          return next
+        })
+      }
+
+      setMessage({
+        type: "success",
+        text: successParts.length ? successParts.join(" y ") : "Cambios guardados",
+      })
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message })
     } finally {
@@ -182,6 +257,32 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
               )
             })}
           </div>
+          {section.secrets?.length ? (
+            <div className="space-y-2 border-t border-border/60 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Secretos</p>
+                <p className="text-xs text-muted-foreground">Los valores se ocultan después de guardarlos.</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {section.secrets.map((secret) => (
+                  <div key={secret.clave} className="space-y-1">
+                    <Label htmlFor={`secret-${secret.clave}`}>{secret.label}</Label>
+                    <Input
+                      id={`secret-${secret.clave}`}
+                      type="password"
+                      value={secretValues[secret.clave] ?? ""}
+                      onChange={(event) => handleSecretChange(secret.clave, event.target.value)}
+                      placeholder={secret.placeholder ?? "Pega la clave"}
+                    />
+                    {secret.note ? (
+                      <p className="text-xs text-muted-foreground">{secret.note}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {message && (
             <p className={`text-sm ${message.type === "success" ? "text-emerald-600" : "text-destructive"}`}>
               {message.text}
