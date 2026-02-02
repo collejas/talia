@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { TenantVariablesConfigPanel } from "./components/tenant-variables-config-panel"
-import { TenantVariablesDetailsPanel } from "./components/tenant-variables-details-panel"
+import { TenantVariablesSectionsPanel } from "./components/tenant-variables-sections-panel"
 import { callCrmApi } from "@/lib/api/crm"
 
 export const metadata: Metadata = {
@@ -38,8 +37,17 @@ export default async function SettingsVariablesPage() {
   return (
     <AppViewLayout title="Variables del tenant" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
-        <TenantVariablesConfigPanel data={data} />
-        <TenantVariablesDetailsPanel data={data} />
+        <header className="space-y-2">
+          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Configuración / Variables
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">Variables del tenant</h1>
+          <p className="text-muted-foreground max-w-3xl text-sm">
+            Esta vista replica las secciones de variables que ve el administrador global para mantener coherencia
+            en la experiencia y permitir que el tenant admin configure exactamente las mismas opciones.
+          </p>
+        </header>
+        <TenantVariablesSectionsPanel data={data} />
       </div>
     </AppViewLayout>
   )
