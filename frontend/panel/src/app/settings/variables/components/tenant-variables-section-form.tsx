@@ -31,6 +31,7 @@ type SectionConfig = {
   description?: string
   fields: FieldSpec[]
   secrets?: SecretField[]
+  notes?: string[]
 }
 
 type SectionFormProps = {
@@ -257,6 +258,15 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
               )
             })}
           </div>
+          {section.notes?.length ? (
+            <div className="space-y-2 border-t border-border/60 pt-4">
+              <div className="space-y-1 text-xs text-muted-foreground">
+                {section.notes.map((note) => (
+                  <p key={note}>{note}</p>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {section.secrets?.length ? (
             <div className="space-y-2 border-t border-border/60 pt-4">
               <div className="flex items-center justify-between">

@@ -26,13 +26,15 @@ type SectionConfig = {
   routeDescription?: string
   validationScope?: "webchat" | "calendar" | "mail" | "twilio" | "whatsapp" | "messenger"
   validationDescription?: string
+  notes?: string[]
 }
 
 const SECTIONS: SectionConfig[] = [
   {
     title: "Webchat",
-    description: "Ajusta los prompts y reenganches del chat web.",
+    description: "Ajusta prompts, reenganches y habilita el canal Webchat.",
     fields: [
+      { label: "Webchat habilitado", path: "features.webchat.enabled", control: "checkbox" },
       { label: "Assistant ID", path: "webchat.assistant_id" },
       { label: "Prompt version", path: "webchat.prompt_version" },
       { label: "Inactivity hours", path: "webchat.inactivity_hours", type: "number" },
@@ -41,14 +43,26 @@ const SECTIONS: SectionConfig[] = [
       { label: "Reengage max attempts", path: "webchat.reengage_max_attempts", type: "number" },
       { label: "Escalate minutes", path: "webchat.escalate_minutes", type: "number" },
     ],
+    secrets: [
+      {
+        clave: "openai.api_key",
+        label: "openai.api_key (tier B)",
+        tier: "B",
+        placeholder: "Pega la clave",
+        note: "El valor no se muestra una vez guardado.",
+      },
+    ],
     routeChannel: "webchat",
     routeDescription: "Registra el alias que usará el canal webchat.",
     validationScope: "webchat",
     validationDescription: "Detecta rutas/configuración/secrets faltantes para Webchat.",
+    notes: [
+      'La pestaña "Calendario" administra los recursos, zonas horarias y ventanas que usa el webchat para agendar citas.',
+    ],
   },
   {
     title: "Calendario",
-    description: "Configura el recurso de calendar y los servidores asociados.",
+    description: "Configura el recurso calendar y los servidores asociados.",
     fields: [
       { label: "Calendar resource ID", path: "webchat.calendar.resource_id" },
       { label: "Calendar timezone", path: "webchat.calendar.timezone" },
@@ -62,123 +76,133 @@ const SECTIONS: SectionConfig[] = [
       { label: "Contact list URL", path: "calendar.full_contact_list_url" },
     ],
     secrets: [
-      { clave: "calendar.username", label: "calendar.username", tier: "A", placeholder: "usuario" },
+      { clave: "calendar.username", label: "calendar.username (tier A)", tier: "A", placeholder: "usuario" },
       {
         clave: "calendar.password",
-        label: "calendar.password",
+        label: "calendar.password (tier B)",
         tier: "B",
         placeholder: "contraseña",
         note: "El valor solo se guarda una vez.",
       },
     ],
     validationScope: "calendar",
-    validationDescription: "Valida las configuraciones del calendario y sus secretos.",
+    validationDescription: "Valida las credenciales, recursos y secretos del calendario.",
+    notes: ["Las credenciales se guardan como secretos y no se muestran tras el guardado."],
   },
   {
     title: "Mail y Brevo",
-    description: "Servidores y URLs para correo y Brevo.",
+    description: "Servidores de correo y la API de Brevo.",
     fields: [
-      { label: "Incoming server", path: "mail.incoming_server" },
-      { label: "Incoming port IMAP", path: "mail.incoming_port_imap", type: "number" },
-      { label: "Outgoing server", path: "mail.outgoing_server" },
-      { label: "Outgoing port SMTP", path: "mail.outgoing_port_smtp", type: "number" },
-      { label: "Use SSL", path: "mail.use_ssl", control: "checkbox" },
-      { label: "Use TLS", path: "mail.use_tls", control: "checkbox" },
-      { label: "Brevo base URL", path: "brevo.base_url" },
+      { label: "mail.incoming_server", path: "mail.incoming_server" },
+      { label: "mail.incoming_port_imap", path: "mail.incoming_port_imap", type: "number" },
+      { label: "mail.outgoing_server", path: "mail.outgoing_server" },
+      { label: "mail.outgoing_port_smtp", path: "mail.outgoing_port_smtp", type: "number" },
+      { label: "mail.use_ssl", path: "mail.use_ssl", control: "checkbox" },
+      { label: "mail.use_tls", path: "mail.use_tls", control: "checkbox" },
+      { label: "brevo.base_url", path: "brevo.base_url" },
     ],
     secrets: [
-      { clave: "mail.username", label: "mail.username", tier: "A", placeholder: "usuario" },
+      { clave: "mail.username", label: "mail.username (tier A)", tier: "A", placeholder: "usuario" },
       {
         clave: "mail.password",
-        label: "mail.password",
+        label: "mail.password (tier B)",
         tier: "B",
         placeholder: "contraseña",
-        note: "El valor no se muestra nuevamente.",
+        note: "Solo se guarda la nueva clave.",
       },
       {
         clave: "brevo.api_key",
-        label: "brevo.api_key",
+        label: "brevo.api_key (tier B)",
         tier: "B",
         placeholder: "API key",
-        note: "Pega una clave nueva para rotarla.",
+        note: "Solo se guarda el valor si se pega uno nuevo.",
       },
     ],
     validationScope: "mail",
-    validationDescription: "Verifica configuración de correo, Brevo y sus secretos.",
+    validationDescription: "Verifica los hosts, puertos y secretos de correo/Brevo.",
+    notes: ["Esta sección guarda la configuración no sensible de `organizaciones.config.mail` y `organizaciones.config.brevo`."],
   },
   {
     title: "Twilio & Voice",
-    description: "Números, verificaciones y streaming de voz.",
+    description: "Números de teléfono, validaciones y streaming de voz.",
     fields: [
-      { label: "Twilio phone number", path: "twilio.phone_number" },
-      { label: "Twilio phone number SID", path: "twilio.phone_number_sid" },
-      { label: "Validate signatures", path: "twilio.validate_signatures", control: "checkbox" },
-      { label: "Voice webhook path", path: "voice.webhook_path" },
-      { label: "Voice full duplex", path: "voice.full_duplex", control: "checkbox" },
-      { label: "Voice debug verbose", path: "voice.debug_verbose", control: "checkbox" },
-      { label: "Voice energy every N", path: "voice.energy_every_n", type: "number" },
+      { label: "twilio.phone_number", path: "twilio.phone_number" },
+      { label: "twilio.phone_number_sid", path: "twilio.phone_number_sid" },
+      { label: "twilio.validate_signatures", path: "twilio.validate_signatures", control: "checkbox" },
+      { label: "voice.webhook_path", path: "voice.webhook_path" },
+      { label: "voice.full_duplex", path: "voice.full_duplex", control: "checkbox" },
+      { label: "voice.debug_verbose", path: "voice.debug_verbose", control: "checkbox" },
+      { label: "voice.energy_every_n", path: "voice.energy_every_n", type: "number" },
     ],
     secrets: [
-      { clave: "twilio.account_sid", label: "twilio.account_sid", tier: "A", placeholder: "AC..." },
-      { clave: "twilio.auth_token", label: "twilio.auth_token", tier: "B", placeholder: "Auth token" },
+      { clave: "twilio.account_sid", label: "twilio.account_sid (tier A)", tier: "A", placeholder: "AC..." },
+      {
+        clave: "twilio.auth_token",
+        label: "twilio.auth_token (tier B)",
+        tier: "B",
+        placeholder: "Auth token",
+      },
       {
         clave: "voice.stream_jwt_secret",
-        label: "voice.stream_jwt_secret",
+        label: "voice.stream_jwt_secret (tier B)",
         tier: "B",
         placeholder: "Stream JWT",
-        note: "Valor sensible para el streaming de voz.",
+        note: "Usado por realtime/streaming; no se muestra después de guardar.",
       },
     ],
     validationScope: "twilio",
-    validationDescription: "Validaciones del bloque Twilio/Voz y sus secretos.",
+    validationDescription: "Valida Twilio, voz y secretos relacionados.",
+    notes: [
+      'Esta sección guarda la configuración de `organizaciones.config.twilio` y `organizaciones.config.voice`.',
+    ],
   },
   {
     title: "WhatsApp",
-    description: "Prompts y plantillas activas para WhatsApp.",
+    description: "Prompts, reglas de reengage y templates para WhatsApp.",
     fields: [
-      { label: "Prompt ID", path: "whatsapp.prompt_id" },
-      { label: "Prompt version", path: "whatsapp.prompt_version" },
-      { label: "Assistant ID", path: "whatsapp.assistant_id" },
-      { label: "Inactivity minutes", path: "whatsapp.inactivity_minutes", type: "number" },
-      { label: "Reengage minutes", path: "whatsapp.reengage_minutes", type: "number" },
-      { label: "Reengage max attempts", path: "whatsapp.reengage_max_attempts", type: "number" },
-      { label: "Escalate minutes", path: "whatsapp.escalate_minutes", type: "number" },
-      { label: "Template sales", path: "whatsapp.templates.sales" },
-      { label: "Template appointment", path: "whatsapp.templates.appointment" },
-      { label: "Template cancel", path: "whatsapp.templates.cancel" },
+      { label: "whatsapp.prompt_id", path: "whatsapp.prompt_id" },
+      { label: "whatsapp.prompt_version", path: "whatsapp.prompt_version" },
+      { label: "whatsapp.assistant_id", path: "whatsapp.assistant_id" },
+      { label: "whatsapp.inactivity_minutes", path: "whatsapp.inactivity_minutes", type: "number" },
+      { label: "whatsapp.reengage_minutes", path: "whatsapp.reengage_minutes", type: "number" },
+      { label: "whatsapp.reengage_max_attempts", path: "whatsapp.reengage_max_attempts", type: "number" },
+      { label: "whatsapp.escalate_minutes", path: "whatsapp.escalate_minutes", type: "number" },
+      { label: "whatsapp.templates.sales", path: "whatsapp.templates.sales" },
+      { label: "whatsapp.templates.appointment", path: "whatsapp.templates.appointment" },
+      { label: "whatsapp.templates.cancel", path: "whatsapp.templates.cancel" },
     ],
     routeChannel: "whatsapp",
     routeDescription: "Registra el número que recibirá mensajes de WhatsApp.",
     validationScope: "whatsapp",
     validationDescription: "Detecta faltantes en config/rutas/secretos para WhatsApp.",
+    notes: ["Esta sección guarda la configuración no sensible de `organizaciones.config.whatsapp`."],
   },
   {
     title: "Messenger",
     description: "Prompts e inactividad para Messenger.",
     fields: [
-      { label: "Prompt ID", path: "messenger.prompt_id" },
-      { label: "Prompt version", path: "messenger.prompt_version" },
-      { label: "Assistant ID", path: "messenger.assistant_id" },
-      { label: "Inactivity hours", path: "messenger.inactivity_hours", type: "number" },
+      { label: "messenger.prompt_id", path: "messenger.prompt_id" },
+      { label: "messenger.prompt_version", path: "messenger.prompt_version" },
+      { label: "messenger.assistant_id", path: "messenger.assistant_id" },
+      { label: "messenger.inactivity_hours", path: "messenger.inactivity_hours", type: "number" },
     ],
     secrets: [
       {
         clave: "meta.messenger.page_access_token",
-        label: "meta.messenger.page_access_token",
+        label: "meta.messenger.page_access_token (tier B)",
         tier: "B",
         placeholder: "Page access token",
-        note: "Pega un token válido para el page_id.",
+        note: "Se valida cuando Facebook llama al webhook.",
       },
       {
         clave: "meta.messenger.verify_token",
-        label: "meta.messenger.verify_token",
+        label: "meta.messenger.verify_token (tier A)",
         tier: "A",
         placeholder: "Verify token",
-        note: "Se valida cuando Facebook hace el webhook.",
       },
       {
         clave: "meta.messenger.app_secret",
-        label: "meta.messenger.app_secret",
+        label: "meta.messenger.app_secret (tier B)",
         tier: "B",
         placeholder: "App secret",
       },
@@ -186,62 +210,86 @@ const SECTIONS: SectionConfig[] = [
     routeChannel: "messenger",
     routeDescription: "Relaciona el page_id y habilita el webhook de Messenger.",
     validationScope: "messenger",
-    validationDescription: "Revisa rutas/configuración/secrets de Messenger.",
+    validationDescription: "Revisa rutas, configuración y secretos de Messenger.",
   },
   {
     title: "Búsqueda",
-    description: "URLs y límites para Denue / Google Places.",
+    description: "URLs y límites para Denue y Google Places.",
     fields: [
-      { label: "DENUE base URL", path: "denue.base_url" },
-      { label: "Google nearby URL", path: "google_places.nearby_url" },
-      { label: "Google text URL", path: "google_places.text_url" },
-      { label: "Google details URL", path: "google_places.details_url" },
-      { label: "Google field mask", path: "google_places.field_mask" },
-      { label: "Google details field mask", path: "google_places.details_field_mask" },
-      { label: "Google language code", path: "google_places.language_code" },
-      { label: "Google region code", path: "google_places.region_code" },
-      { label: "Grid radius (m)", path: "google_places.grid_max_tile_radius_m", type: "number" },
-      { label: "Pause between pages", path: "google_places.pause_between_pages", type: "number" },
-      { label: "Dense grid radius (m)", path: "google_places.dense_grid_max_tile_radius_m", type: "number" },
-      { label: "Dense pause between pages", path: "google_places.dense_pause_between_pages", type: "number" },
-      { label: "Dense max results", path: "google_places.dense_max_results", type: "number" },
+      { label: "denue.base_url", path: "denue.base_url" },
+      { label: "google_places.nearby_url", path: "google_places.nearby_url" },
+      { label: "google_places.text_url", path: "google_places.text_url" },
+      { label: "google_places.details_url", path: "google_places.details_url" },
+      { label: "google_places.field_mask", path: "google_places.field_mask", multiline: true },
+      {
+        label: "google_places.details_field_mask",
+        path: "google_places.details_field_mask",
+        multiline: true,
+      },
+      { label: "google_places.language_code", path: "google_places.language_code" },
+      { label: "google_places.region_code", path: "google_places.region_code" },
+      {
+        label: "google_places.grid_max_tile_radius_m",
+        path: "google_places.grid_max_tile_radius_m",
+        type: "number",
+      },
+      {
+        label: "google_places.pause_between_pages",
+        path: "google_places.pause_between_pages",
+        type: "number",
+      },
+      {
+        label: "google_places.dense_grid_max_tile_radius_m",
+        path: "google_places.dense_grid_max_tile_radius_m",
+        type: "number",
+      },
+      {
+        label: "google_places.dense_pause_between_pages",
+        path: "google_places.dense_pause_between_pages",
+        type: "number",
+      },
+      {
+        label: "google_places.dense_max_results",
+        path: "google_places.dense_max_results",
+        type: "number",
+      },
     ],
     secrets: [
-      { clave: "denue.token", label: "denue.token", tier: "A", placeholder: "Token Denue" },
+      { clave: "denue.token", label: "denue.token (tier A)", tier: "A", placeholder: "Token Denue" },
       {
         clave: "google.places_api_key",
-        label: "google.places_api_key",
+        label: "google.places_api_key (tier B)",
         tier: "B",
         placeholder: "Google Places API key",
-        note: "Solo se guarda al pegar una clave nueva.",
+        note: "El valor solo se guarda si pegas una clave nueva.",
       },
     ],
   },
   {
     title: "OpenAI",
-    description: "Project ID y prompts/voz configurados.",
+    description: "Project ID, prompts y secretos para OpenAI.",
     fields: [
-      { label: "Project ID", path: "openai.general.project_id", placeholder: "openai-project-id" },
-      { label: "Voice prompt ID", path: "openai.voice.prompt_id", placeholder: "voice-prompt" },
-      { label: "Voice prompt version", path: "openai.voice.prompt_version" },
-      { label: "Voice model", path: "openai.voice.model" },
-      { label: "Voice max tokens", path: "openai.voice.max_tokens", type: "number" },
-      { label: "Voice STT model", path: "openai.voice.stt_model" },
+      { label: "openai.general.project_id", path: "openai.general.project_id", placeholder: "openai-project-id" },
+      { label: "openai.voice.prompt_id", path: "openai.voice.prompt_id", placeholder: "voice-prompt" },
+      { label: "openai.voice.prompt_version", path: "openai.voice.prompt_version" },
+      { label: "openai.voice.model", path: "openai.voice.model" },
+      { label: "openai.voice.max_tokens", path: "openai.voice.max_tokens", type: "number" },
+      { label: "openai.voice.stt_model", path: "openai.voice.stt_model" },
     ],
     secrets: [
       {
         clave: "openai.general.api_key",
-        label: "openai.general.api_key",
+        label: "openai.general.api_key (tier B)",
         tier: "B",
         placeholder: "OpenAI API key",
         note: "No se muestra el valor guardado.",
       },
       {
         clave: "openai.voice.api_key",
-        label: "openai.voice.api_key",
+        label: "openai.voice.api_key (tier B)",
         tier: "B",
         placeholder: "OpenAI voice key",
-        note: "Pega una clave nueva para rotar.",
+        note: "Pega una clave nueva para rotarla.",
       },
     ],
   },
@@ -252,47 +300,47 @@ export function TenantVariablesSectionsPanel({ data }: { data: TenantScopedSetti
   const routes = data?.routes ?? []
 
   return (
-  <Tabs defaultValue={SECTIONS[0]?.title ?? ""} className="space-y-6">
-    <TabsList className="grid grid-cols-1 gap-2 rounded-full border border-input bg-card/50 p-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+    <Tabs defaultValue={SECTIONS[0]?.title ?? ""} className="space-y-6">
+      <TabsList className="grid grid-cols-2 gap-2 rounded-full border border-input bg-card/50 p-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9">
+        {SECTIONS.map((section) => (
+          <TabsTrigger
+            key={section.title}
+            value={section.title}
+            className="data-[state=active]:bg-card data-[state=active]:shadow"
+          >
+            {section.title}
+          </TabsTrigger>
+        ))}
+      </TabsList>
       {SECTIONS.map((section) => (
-        <TabsTrigger
-          key={section.title}
-          value={section.title}
-          className="data-[state=active]:bg-card data-[state=active]:shadow"
-        >
-          {section.title}
-        </TabsTrigger>
+        <TabsContent key={section.title} value={section.title}>
+          <div className="space-y-6">
+            <TenantSectionForm section={section} config={config} />
+            {section.routeChannel ? (
+              <TenantRoutesManager
+                channel={section.routeChannel}
+                title={`Rutas ${section.title}`}
+                description={section.routeDescription}
+                routes={routes}
+                placeholder={
+                  section.routeChannel === "webchat"
+                    ? "ej. cliente-x"
+                    : section.routeChannel === "whatsapp"
+                    ? "+521..."
+                    : "page_id"
+                }
+              />
+            ) : null}
+            {section.validationScope ? (
+              <TenantValidationPanel
+                scope={section.validationScope}
+                label={`Validación ${section.title}`}
+                description={section.validationDescription}
+              />
+            ) : null}
+          </div>
+        </TabsContent>
       ))}
-    </TabsList>
-    {SECTIONS.map((section) => (
-      <TabsContent key={section.title} value={section.title}>
-        <div className="space-y-6">
-          <TenantSectionForm section={section} config={config} />
-          {section.routeChannel ? (
-            <TenantRoutesManager
-              channel={section.routeChannel}
-              title={`Rutas ${section.title}`}
-              description={section.routeDescription}
-              routes={routes}
-              placeholder={
-                section.routeChannel === "webchat"
-                  ? "ej. cliente-x"
-                  : section.routeChannel === "whatsapp"
-                  ? "+521..."
-                  : "page_id"
-              }
-            />
-          ) : null}
-          {section.validationScope ? (
-            <TenantValidationPanel
-              scope={section.validationScope}
-              label={`Validación ${section.title}`}
-              description={section.validationDescription}
-            />
-          ) : null}
-        </div>
-      </TabsContent>
-    ))}
-  </Tabs>
+    </Tabs>
   )
 }

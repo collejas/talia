@@ -179,6 +179,12 @@ El backend envía errores claros (`403 platform_admin_required`, `409 alias_conf
 - La entrada “Account” del menú inferior (`NavUser`) ya redirige a `/settings/account`, por lo que ese botón inferior reutiliza la misma vista organizacional que `/settings/variables` y mantiene consistente la experiencia para tenant admins.
 - La configuración de nginx en `NGINX_TALIA_CONF.md` ya proxy las rutas `/settings/` y `/panel/` a `http://127.0.0.1:3001`, así que no se requieren cambios adicionales al activar estos botones: solo asegurar que el servidor de Next esté corriendo en ese puerto.
 
+## Alineación de la vista tenant `/settings/variables`
+- La vista que ve un admin de organización se replica con las mismas pestañas y bloques del panel que existe en `/settings/tenants/[tenantId]`. El componente `TenantVariablesSectionsPanel` ahora se basa en `frontend/panel/src/app/settings/variables/components/tenant-variables-sections-panel.tsx` y define los mismos campos, secretos y validaciones que cada pestaña del administrador global (Webchat, Calendario, Mail/Brevo, Twilio/Voz, WhatsApp, Messenger, Búsqueda y OpenAI).
+- Cada sección usa `TenantSectionForm` para editar el fragmento correspondiente de `organizaciones.config`, `TenantRoutesManager` para crear y eliminar rutas (por ejemplo, alias webchat, números de WhatsApp y page_id de Messenger) y `TenantValidationPanel` para ejecutar las validaciones que ya existen en la vista global, pero con el contexto `/tenant/me/`.
+- Los secretos sensibles (OpenAI keys, Twilio, Messenger, Brevo, Denue/Google) se ingresan en el mismo bloque que en el panel global, y se guardan usando los endpoints tenant-scoped (`/api/settings/variables/config`, `/api/settings/variables/secrets`, `/api/settings/variables/routes`, `/api/settings/variables/validate`).
+- No se expone la pestaña global “Secretos” porque desde el scope del tenant no se pueden listar claves existentes; en su lugar cada sección ofrece su propio formulario de `secretos` para rotar solo las claves necesarias para que su asistente funcione.
+
 ## Validaciones y pruebas
 - Mantener pruebas automatizadas como `tests/api/test_admin_tenant_flow.py` con mocks (como ya se creó).
 - Anotar en la documentación qué errores devuelve el endpoint para facilitar el flujo (`409 alias_conflict`, `502 repo_error`, etc.).
