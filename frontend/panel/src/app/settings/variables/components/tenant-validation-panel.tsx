@@ -5,7 +5,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-type ValidationScope = "webchat" | "calendar" | "mail" | "twilio" | "messenger" | "full"
+type ValidationScope = "webchat" | "calendar" | "mail" | "twilio" | "messenger" | "whatsapp" | "full"
 
 type Report = {
   missing_routes: string[]

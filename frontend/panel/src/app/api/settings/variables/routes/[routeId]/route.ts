@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 import { callCrmApi } from "@/lib/api/crm"
 
-export async function DELETE(request: Request, { params }: { params: { routeId: string } }) {
-  const { routeId } = params
+export async function DELETE(request: NextRequest, context: { params: Promise<{ routeId: string }> }) {
+  const { routeId } = await context.params
   if (!routeId) {
     return NextResponse.json({ error: "routeId faltante." }, { status: 400 })
   }

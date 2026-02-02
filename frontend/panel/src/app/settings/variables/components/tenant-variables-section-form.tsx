@@ -134,18 +134,18 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
         setNestedValue(patch, field.path.split("."), parsed)
       })
       const secretsToSave: SecretPayload[] =
-        section.secrets
-          ?.map((secret) => {
-            const raw = (secretValues[secret.clave] ?? "").trim()
-            if (!raw) return null
-            return {
-              clave: secret.clave,
-              valor: raw,
-              tier: secret.tier ?? "B",
-              etiqueta: secret.note ?? secret.label,
-            }
+      section.secrets
+        ?.reduce<SecretPayload[]>((acc, secret) => {
+          const raw = (secretValues[secret.clave] ?? "").trim()
+          if (!raw) return acc
+          acc.push({
+            clave: secret.clave,
+            valor: raw,
+            tier: secret.tier ?? "B",
+            etiqueta: secret.note ?? secret.label,
           })
-          .filter((item): item is SecretPayload => Boolean(item)) ?? []
+          return acc
+        }, []) ?? []
 
       if (!Object.keys(patch).length && !secretsToSave.length) {
         setMessage({ type: "error", text: "Completa al menos un campo para guardar." })
@@ -226,8 +226,8 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
                 )
               }
 
-              const fieldValue =
-                typeof values[field.path] === "string" ? values[field.path] : ""
+              const fieldValue: string =
+                typeof values[field.path] === "string" ? (values[field.path] as string) : ""
 
               if (field.multiline) {
                 return (
