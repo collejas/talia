@@ -28,12 +28,15 @@ import {
   IconUsersGroup,
   IconBriefcase,
   IconHierarchy,
+  IconAdjustments,
   IconBuilding,
   IconShieldCheck,
   IconShieldLock,
+  type Icon,
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
+import { usePlatformAdminStatus } from "@/hooks/use-platform-admin-status"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
@@ -115,7 +118,6 @@ const NAVIGATION = {
         { title: "Empleados", url: "/settings/empleados", icon: IconUsersGroup },
         { title: "Departamentos", url: "/settings/empleados/departamentos", icon: IconHierarchy },
         { title: "Puestos", url: "/settings/empleados/puestos", icon: IconBriefcase },
-        { title: "Tenants", url: "/settings/tenants", icon: IconDatabase },
         {
           title: "Plantillas de contacto",
           url: "/settings/prospeccion/plantillas",
@@ -139,6 +141,15 @@ const NAVIGATION = {
   ],
 }
 
+type SettingsChildNavItem = {
+  title: string
+  url: string
+  icon?: Icon
+}
+
+const SETTINGS_CHILDREN_TEMPLATE: SettingsChildNavItem[] =
+  (NAVIGATION.navMain.find((item) => item.title === "Settings")?.children ?? []) as SettingsChildNavItem[]
+
 export function AppSidebar({
   collapsible = "icon",
   ...props
@@ -146,6 +157,27 @@ export function AppSidebar({
   const router = useRouter()
   const { user, loading } = useCurrentUser()
   const [hydrated, setHydrated] = useState(false)
+
+  const { isPlatformAdmin } = usePlatformAdminStatus()
+  const settingsChildren = useMemo(() => {
+    const base = SETTINGS_CHILDREN_TEMPLATE.map((child) => ({ ...child }))
+    base.unshift({
+      title: "Variables",
+      url: "/settings/variables",
+      icon: IconAdjustments,
+    })
+    if (isPlatformAdmin) {
+      base.push({ title: "Tenants", url: "/settings/tenants", icon: IconDatabase })
+    }
+    return base
+  }, [isPlatformAdmin])
+  const navItems = useMemo(
+    () =>
+      NAVIGATION.navMain.map((item) =>
+        item.title === "Settings" ? { ...item, children: settingsChildren } : item,
+      ),
+    [settingsChildren],
+  )
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setHydrated(true))
@@ -240,7 +272,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={NAVIGATION.navMain} />
+        <NavMain items={navItems} />
         <NavDocuments items={NAVIGATION.documents} />
         <NavSecondary items={NAVIGATION.navSecondary} className="mt-auto" />
       </SidebarContent>

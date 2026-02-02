@@ -12,6 +12,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.crm import router as crm_router
 from app.api.routes.propuesta import router as propuesta_router
 from app.api.routes.health import router as health_router
+from app.api.routes.tenant import router as tenant_router
 from app.channels.messenger.router import router as messenger_router
 from app.channels.voice.router import router as voice_router
 from app.channels.webchat.router import router as webchat_router
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(admin_router)
+    app.include_router(tenant_router)
     app.include_router(crm_router)
     app.include_router(propuesta_router)
     app.include_router(webchat_router)

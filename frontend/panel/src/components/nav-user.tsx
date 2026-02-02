@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   IconCreditCard,
   IconDotsVertical,
@@ -45,6 +46,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const router = useRouter()
 
   const initials = useMemo(() => {
     const source = user.name?.trim() || user.email || ""
@@ -111,7 +113,12 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault()
+                  void router.push("/settings/variables")
+                }}
+              >
                 <IconUserCircle />
                 Account
               </DropdownMenuItem>

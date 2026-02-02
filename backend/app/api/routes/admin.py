@@ -63,6 +63,28 @@ async def require_platform_admin(
     return user_id
 
 
+@router.get("/me/platform-admin")
+async def get_my_platform_admin_status(
+    user_token: str = Depends(require_user_token),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> dict[str, bool]:
+    try:
+        user = await repo.auth_get_user(user_token=user_token)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    raw_id = user.get("id")
+    try:
+        user_id = UUID(str(raw_id))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
+
+    try:
+        allowed = await repo.is_platform_admin(user_id=user_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"is_platform_admin": bool(allowed)}
+
+
 class TenantSummary(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

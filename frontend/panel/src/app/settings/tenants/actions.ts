@@ -8,6 +8,7 @@ type TenantPayload = {
   nombre: string
   razon_social?: string
   dominio_principal?: string
+  rfc?: string
   webchat_alias?: string
   pais?: string
   estado?: string
@@ -88,6 +89,7 @@ export async function createTenantWithAdmin(
     sitio_web: payload.tenant.sitio_web?.trim() || undefined,
     activo: payload.tenant.activo,
     estado_onboarding: payload.tenant.estado_onboarding?.trim() || undefined,
+    rfc: payload.tenant.rfc?.trim() || undefined,
     config: payload.tenant.config,
   }
 
