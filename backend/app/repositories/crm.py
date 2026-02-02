@@ -5867,9 +5867,10 @@ class CRMRepository:
             metadata_conditions: list[str] = []
             for value in unique_queries:
                 literal = _postgrest_ilike_literal(value)
-                metadata_conditions.append(f"metadata->>'query'.ilike.{literal}")
-                metadata_conditions.append(f"metadata->>'busqueda_query'.ilike.{literal}")
-                metadata_conditions.append(f"metadata->'busqueda_meta'->>'query'.ilike.{literal}")
+                # PostgREST JSON path syntax does not use SQL quotes around keys.
+                metadata_conditions.append(f"metadata->>query.ilike.{literal}")
+                metadata_conditions.append(f"metadata->>busqueda_query.ilike.{literal}")
+                metadata_conditions.append(f"metadata->busqueda_meta->>query.ilike.{literal}")
             if metadata_conditions:
                 and_filters.append(f"or({','.join(metadata_conditions)})")
 
@@ -5909,7 +5910,7 @@ class CRMRepository:
     ) -> dict[str, list[str]]:
         params: dict[str, str] = {
             "select": "actividad,metadata",
-            "order": "metadata->>'query'.asc,actividad.asc",
+            "order": "metadata->>query.asc,actividad.asc",
             "limit": "5000",
         }
 

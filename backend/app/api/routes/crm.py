@@ -1389,8 +1389,6 @@ class ProspectoListQuery(BaseModel):
     website_present: bool | None = Field(default=None)
     date_from: date | None = Field(default=None)
     date_to: date | None = Field(default=None)
-    metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = Field(default=None)
-    actividad: Annotated[list[str] | None, Query(alias="actividad")] = Field(default=None)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -9458,6 +9456,8 @@ async def listar_prospectos(
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
     params: ProspectoListQuery = Depends(),
+    metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
+    actividad: Annotated[list[str] | None, Query(alias="actividad")] = None,
 ) -> dict[str, Any]:
     """Devuelve prospectos guardados con paginación y filtros básicos."""
 
@@ -9481,8 +9481,8 @@ async def listar_prospectos(
             website_present=params.website_present,
             date_from=params.date_from,
             date_to=params.date_to,
-            metadata_queries=params.metadata_query,
-            actividades=params.actividad,
+            metadata_queries=metadata_query,
+            actividades=actividad,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
