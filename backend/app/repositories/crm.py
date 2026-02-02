@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Iterable, Literal, Sequence
 from urllib.parse import quote as urlquote
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -5830,14 +5831,20 @@ class CRMRepository:
             params["website"] = "not.is.null"
         elif website_present is False:
             params["website"] = "is.null"
-        if date_from and date_to:
-            and_filters.append(
-                f"(creado_en.gte.{date_from.isoformat()},creado_en.lte.{date_to.isoformat()})"
-            )
-        elif date_from:
-            params["creado_en"] = f"gte.{date_from.isoformat()}"
-        elif date_to:
-            params["creado_en"] = f"lte.{date_to.isoformat()}"
+        # `creado_en` is a timestamptz. The UI sends dates (YYYY-MM-DD) in the user's local
+        # timezone; we convert those local-day boundaries into UTC instants so filtering by
+        # "Hoy" behaves as expected (e.g. America/Mexico_City vs UTC).
+        if date_from or date_to:
+            tz_name = settings.webchat_calendar_timezone or "America/Mexico_City"
+            zone = ZoneInfo(tz_name)
+            if date_from:
+                start_local = datetime.combine(date_from, datetime.min.time(), tzinfo=zone)
+                start_utc = start_local.astimezone(timezone.utc).isoformat()
+                and_filters.append(f"creado_en.gte.{start_utc}")
+            if date_to:
+                end_local = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=zone)
+                end_utc = end_local.astimezone(timezone.utc).isoformat()
+                and_filters.append(f"creado_en.lt.{end_utc}")
 
         if search:
             sanitized = search.strip()
