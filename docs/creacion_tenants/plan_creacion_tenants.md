@@ -174,6 +174,11 @@ El backend envía errores claros (`403 platform_admin_required`, `409 alias_conf
 - En el drawer inferior (logo con “Account”, “Billing”, “Notifications”, “Cerrar sesión”), activar el botón “Account” para que lleve a los mismos formularios organizacionales de “Variables”. El resto de opciones del drawer siguen relacionadas con el usuario, pero “Account” duplica la edición del tenant para evitar tener que navegar por otros menús.
 - La vista “Variables/Account” reutiliza el mismo diseño (campos organizacionales y validaciones) y solo se muestra cuando el token pertenece a un tenant admin; en caso contrario puede ocultarse o redirigir al panel global. Esto permite a los tenant admins configurar su organización sin tocar `/settings/tenants` que queda reservado al platform-admin.
 
+### Botones Variables y Account
+- El sidebar (`frontend/panel/src/components/AppSidebar.tsx`) unifica los hijos de Settings insertando el botón **Variables** para todos (tenant admins y platform admins) y dejando **Tenants** solo para `platform_admins`. Así se cumple la idea de ocultar `/settings/tenants` a los tenants y darles acceso directo a `/settings/variables`.
+- La entrada “Account” del menú inferior (`NavUser`) ya redirige a `/settings/account`, por lo que ese botón inferior reutiliza la misma vista organizacional que `/settings/variables` y mantiene consistente la experiencia para tenant admins.
+- La configuración de nginx en `NGINX_TALIA_CONF.md` ya proxy las rutas `/settings/` y `/panel/` a `http://127.0.0.1:3001`, así que no se requieren cambios adicionales al activar estos botones: solo asegurar que el servidor de Next esté corriendo en ese puerto.
+
 ## Validaciones y pruebas
 - Mantener pruebas automatizadas como `tests/api/test_admin_tenant_flow.py` con mocks (como ya se creó).
 - Anotar en la documentación qué errores devuelve el endpoint para facilitar el flujo (`409 alias_conflict`, `502 repo_error`, etc.).

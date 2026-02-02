@@ -15,6 +15,7 @@ type FieldSpec = {
   type?: "text" | "number"
   placeholder?: string
   multiline?: boolean
+  control?: "checkbox"
 }
 
 type SectionConfig = {
@@ -49,17 +50,23 @@ function setNestedValue(target: Record<string, unknown>, path: string[], value: 
   setNestedValue(target[head] as Record<string, unknown>, rest, value)
 }
 
+type FieldValue = string | boolean
+
 export function TenantSectionForm({ section, config }: SectionFormProps) {
   const initialValues = useMemo(() => {
-    const values: Record<string, string> = {}
+    const values: Record<string, FieldValue> = {}
     section.fields.forEach((field) => {
       const raw = getNestedValue(config, field.path)
-      values[field.path] = raw !== undefined && raw !== null ? String(raw) : ""
+      if (field.control === "checkbox") {
+        values[field.path] = Boolean(raw)
+      } else {
+        values[field.path] = raw !== undefined && raw !== null ? String(raw) : ""
+      }
     })
     return values
   }, [config, section.fields])
 
-  const [values, setValues] = useState(initialValues)
+  const [values, setValues] = useState<Record<string, FieldValue>>(initialValues)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
@@ -67,7 +74,7 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
     setValues(initialValues)
   }, [initialValues])
 
-  const handleChange = (path: string, value: string) => {
+  const handleChange = (path: string, value: FieldValue) => {
     setValues((prev) => ({ ...prev, [path]: value }))
   }
 
@@ -78,10 +85,18 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
     try {
       const patch: Record<string, unknown> = {}
       section.fields.forEach((field) => {
-        const raw = values[field.path]?.trim()
-        if (!raw) return
-        const parsed =
-          field.type === "number" ? (isNaN(Number(raw)) ? undefined : Number(raw)) : raw
+        if (field.control === "checkbox") {
+          const checkboxValue = Boolean(values[field.path])
+          setNestedValue(patch, field.path.split("."), checkboxValue)
+          return
+        }
+
+      const rawValue = values[field.path]
+      if (typeof rawValue !== "string") return
+      const raw = rawValue.trim()
+      if (!raw) return
+      const parsed =
+        field.type === "number" ? (isNaN(Number(raw)) ? undefined : Number(raw)) : raw
         if (parsed === undefined) return
         setNestedValue(patch, field.path.split("."), parsed)
       })
@@ -115,31 +130,57 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
       <CardContent className="space-y-4">
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
-            {section.fields.map((field) =>
-              field.multiline ? (
-                <div key={field.path} className="space-y-1 md:col-span-2">
-                  <Label htmlFor={field.path}>{field.label}</Label>
-                  <Textarea
-                    id={field.path}
-                    value={values[field.path]}
-                    onChange={(event) => handleChange(field.path, event.target.value)}
-                    placeholder={field.placeholder}
-                    rows={4}
-                  />
-                </div>
-              ) : (
+            {section.fields.map((field) => {
+              if (field.control === "checkbox") {
+                return (
+                  <div key={field.path} className="space-y-1 md:col-span-2">
+                    <div className="flex items-center gap-3">
+                      <input
+                        id={field.path}
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        checked={Boolean(values[field.path])}
+                        onChange={(event) => handleChange(field.path, event.target.checked)}
+                      />
+                      <Label htmlFor={field.path} className="mb-0 text-sm">
+                        {field.label}
+                      </Label>
+                    </div>
+                  </div>
+                )
+              }
+
+              const fieldValue =
+                typeof values[field.path] === "string" ? values[field.path] : ""
+
+              if (field.multiline) {
+                return (
+                  <div key={field.path} className="space-y-1 md:col-span-2">
+                    <Label htmlFor={field.path}>{field.label}</Label>
+                    <Textarea
+                      id={field.path}
+                      value={fieldValue}
+                      onChange={(event) => handleChange(field.path, event.target.value)}
+                      placeholder={field.placeholder}
+                      rows={4}
+                    />
+                  </div>
+                )
+              }
+
+              return (
                 <div key={field.path} className="space-y-1">
                   <Label htmlFor={field.path}>{field.label}</Label>
                   <Input
                     id={field.path}
-                    value={values[field.path]}
+                    value={fieldValue}
                     onChange={(event) => handleChange(field.path, event.target.value)}
                     placeholder={field.placeholder}
                     type={field.type === "number" ? "number" : "text"}
                   />
                 </div>
-              ),
-            )}
+              )
+            })}
           </div>
           {message && (
             <p className={`text-sm ${message.type === "success" ? "text-emerald-600" : "text-destructive"}`}>
