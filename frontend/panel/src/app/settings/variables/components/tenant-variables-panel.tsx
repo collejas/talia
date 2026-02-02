@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 
-type TenantScopedSettings = {
+export type TenantScopedSettings = {
   organizacion_id: string
   nombre: string
   razon_social?: string | null
@@ -41,9 +41,15 @@ type TenantScopedSettings = {
 export function TenantVariablesPanel({
   data,
   error,
+  title = "Variables del tenant",
+  description = "Configura los datos organizacionales que puedes modificar desde tu cuenta.",
+  showRoutes = true,
 }: {
   data: TenantScopedSettings | null
   error?: string | null
+  title?: string
+  description?: string
+  showRoutes?: boolean
 }) {
   const [form, setForm] = useState(() => ({
     nombre: data?.nombre ?? "",
@@ -97,11 +103,8 @@ export function TenantVariablesPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Variables del tenant</CardTitle>
-        <CardDescription>
-          Configura los datos organizacionales que puedes modificar desde tu
-          cuenta.
-        </CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         {error && (
@@ -233,7 +236,7 @@ export function TenantVariablesPanel({
             </Button>
           </div>
         </form>
-        {routeSummary.length ? (
+        {showRoutes && routeSummary.length ? (
           <div className="mt-4 space-y-2">
             <p className="text-xs font-semibold">Rutas registradas</p>
             <div className="flex flex-wrap gap-2">
