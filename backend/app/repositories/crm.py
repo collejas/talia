@@ -5766,6 +5766,9 @@ class CRMRepository:
         stage: str | None = None,
         whatsapp_permitido: bool | None = None,
         llamada_permitida: bool | None = None,
+        phone_present: bool | None = None,
+        email_present: bool | None = None,
+        website_present: bool | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -5790,6 +5793,18 @@ class CRMRepository:
             params["whatsapp_permitido"] = f"eq.{str(whatsapp_permitido).lower()}"
         if llamada_permitida is not None:
             params["llamada_permitida"] = f"eq.{str(llamada_permitida).lower()}"
+        if phone_present is True:
+            params["phone"] = "not.is.null"
+        elif phone_present is False:
+            params["phone"] = "is.null"
+        if email_present is True:
+            params["email"] = "not.is.null"
+        elif email_present is False:
+            params["email"] = "is.null"
+        if website_present is True:
+            params["website"] = "not.is.null"
+        elif website_present is False:
+            params["website"] = "is.null"
 
         if search:
             sanitized = search.strip()

@@ -1384,6 +1384,9 @@ class ProspectoListQuery(BaseModel):
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
     whatsapp_permitido: bool | None = Field(default=None)
     llamada_permitida: bool | None = Field(default=None)
+    phone_present: bool | None = Field(default=None)
+    email_present: bool | None = Field(default=None)
+    website_present: bool | None = Field(default=None)
 
 
 class ProspectoFiltroPayload(BaseModel):
@@ -9469,6 +9472,9 @@ async def listar_prospectos(
             stage=params.stage or None,
             whatsapp_permitido=params.whatsapp_permitido,
             llamada_permitida=params.llamada_permitida,
+            phone_present=params.phone_present,
+            email_present=params.email_present,
+            website_present=params.website_present,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

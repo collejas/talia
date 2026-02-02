@@ -360,6 +360,9 @@ export async function listProspectos(params: {
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
   whatsappPermitido?: boolean
   llamadaPermitida?: boolean
+  phonePresent?: boolean
+  emailPresent?: boolean
+  websitePresent?: boolean
 } = {}): Promise<ProspectosResponse> {
   const url = buildClientUrl("/api/prospeccion/prospectos")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -376,6 +379,15 @@ export async function listProspectos(params: {
   }
   if (typeof params.llamadaPermitida === "boolean") {
     url.searchParams.set("llamada_permitida", params.llamadaPermitida ? "true" : "false")
+  }
+  if (typeof params.phonePresent === "boolean") {
+    url.searchParams.set("phone_present", params.phonePresent ? "true" : "false")
+  }
+  if (typeof params.emailPresent === "boolean") {
+    url.searchParams.set("email_present", params.emailPresent ? "true" : "false")
+  }
+  if (typeof params.websitePresent === "boolean") {
+    url.searchParams.set("website_present", params.websitePresent ? "true" : "false")
   }
   return requestJson<ProspectosResponse>(url.toString())
 }

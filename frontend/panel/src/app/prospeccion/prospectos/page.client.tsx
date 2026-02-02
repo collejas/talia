@@ -6,6 +6,7 @@ import {
   IconBolt,
   IconCircleCheck,
   IconDotsVertical,
+  IconChevronDown,
   IconHistory,
   IconLoader,
   IconNotebook,
@@ -38,6 +39,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -97,6 +99,7 @@ type Filters = {
   segmento: string
   order: OrderOption
   carrierType: "" | "mobile" | "landline" | "voip"
+  contactFilters: ContactPresenceFilter[]
 }
 
 type BannerState = {
@@ -124,6 +127,7 @@ const initialFilters: Filters = {
   segmento: "",
   order: "creado",
   carrierType: "",
+  contactFilters: [],
 }
 
 const initialContactForm = {
@@ -192,6 +196,40 @@ const LOOKUP_STATUS_VARIANTS: Record<string, "default" | "secondary" | "destruct
   verificado: "default",
   sin_numero: "outline",
   error: "destructive",
+}
+
+type ContactPresenceFilter =
+  | "phone_has"
+  | "phone_missing"
+  | "email_has"
+  | "email_missing"
+  | "website_has"
+  | "website_missing"
+
+const CONTACT_FILTER_OPTIONS: Array<{ value: ContactPresenceFilter; label: string }> = [
+  { value: "phone_has", label: "Tiene teléfono" },
+  { value: "phone_missing", label: "No tiene teléfono" },
+  { value: "email_has", label: "Tiene correo electrónico" },
+  { value: "email_missing", label: "No tiene correo electrónico" },
+  { value: "website_has", label: "Tiene sitio web" },
+  { value: "website_missing", label: "No tiene sitio web" },
+]
+
+const CONTACT_FILTER_LABELS: Record<ContactPresenceFilter, string> = CONTACT_FILTER_OPTIONS.reduce(
+  (acc, option) => {
+    acc[option.value] = option.label
+    return acc
+  },
+  {} as Record<ContactPresenceFilter, string>
+)
+
+const CONTACT_FILTER_ORDER = CONTACT_FILTER_OPTIONS.map((option) => option.value)
+const CONTACT_FILTER_PLACEHOLDER = "Teléfono, correo o sitio web"
+
+const resolvePresenceFlag = (present: boolean, missing: boolean): boolean | undefined => {
+  if (present && !missing) return true
+  if (!present && missing) return false
+  return undefined
 }
 
 const FUENTE_LABELS: Record<string, string> = {
@@ -389,6 +427,11 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       const label = carrierLabel(filters.carrierType)
       chips.push(`Línea: ${label || filters.carrierType}`)
     }
+    if (filters.contactFilters.length) {
+      filters.contactFilters.forEach((filterKey) => {
+        chips.push(CONTACT_FILTER_LABELS[filterKey])
+      })
+    }
     return chips
   }, [filters])
 
@@ -396,17 +439,32 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     async (nextOffset = 0) => {
       setLoading(true)
       setError(null)
-      try {
-        const response = await listProspectos({
-          limit,
-          offset: nextOffset,
-          search: filters.search || undefined,
-          fuente: filters.fuente || undefined,
-          lookupStatus: filters.lookupStatus || undefined,
-          segmento: filters.segmento || undefined,
-          carrierType: filters.carrierType || undefined,
-          order: filters.order,
-        })
+    try {
+      const phonePresent = resolvePresenceFlag(
+        filters.contactFilters.includes("phone_has"),
+        filters.contactFilters.includes("phone_missing")
+      )
+      const emailPresent = resolvePresenceFlag(
+        filters.contactFilters.includes("email_has"),
+        filters.contactFilters.includes("email_missing")
+      )
+      const websitePresent = resolvePresenceFlag(
+        filters.contactFilters.includes("website_has"),
+        filters.contactFilters.includes("website_missing")
+      )
+      const response = await listProspectos({
+        limit,
+        offset: nextOffset,
+        search: filters.search || undefined,
+        fuente: filters.fuente || undefined,
+        lookupStatus: filters.lookupStatus || undefined,
+        segmento: filters.segmento || undefined,
+        carrierType: filters.carrierType || undefined,
+        order: filters.order,
+        phonePresent,
+        emailPresent,
+        websitePresent,
+      })
         const rows = response.items ?? []
         setItems(rows)
         setTotal(typeof response.total === "number" ? response.total : rows.length)
@@ -827,6 +885,21 @@ useEffect(() => {
   const handleClearFilters = () => {
     setFilters(initialFilters)
     setSearchInput(initialFilters.search)
+  }
+
+  const handleContactFilterToggle = (value: ContactPresenceFilter, enabled: boolean) => {
+    setFilters((prev) => {
+      const next = new Set(prev.contactFilters)
+      if (enabled) {
+        next.add(value)
+      } else {
+        next.delete(value)
+      }
+      return {
+        ...prev,
+        contactFilters: CONTACT_FILTER_ORDER.filter((filter) => next.has(filter)),
+      }
+    })
   }
 
   const handleLimitChange = (value: string) => {
@@ -1630,6 +1703,36 @@ useEffect(() => {
                   <SelectItem value="voip">VoIP</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Datos de contacto</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-w-[220px] justify-between text-sm normal-case"
+                  >
+                    <span className="max-w-[160px] truncate text-left text-sm">
+                      {filters.contactFilters.length
+                        ? filters.contactFilters.map((filterKey) => CONTACT_FILTER_LABELS[filterKey]).join(", ")
+                        : CONTACT_FILTER_PLACEHOLDER}
+                    </span>
+                    <IconChevronDown className="size-4 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[220px]">
+                  {CONTACT_FILTER_OPTIONS.map((option) => (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={filters.contactFilters.includes(option.value)}
+                      onCheckedChange={(checked) => handleContactFilterToggle(option.value, Boolean(checked))}
+                    >
+                      {option.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="space-y-1">
               <Label>Segmento</Label>
