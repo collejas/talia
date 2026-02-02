@@ -501,7 +501,6 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
   const [activityOptions, setActivityOptions] = useState<string[]>([])
   const [queryOptionsLoading, setQueryOptionsLoading] = useState(false)
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
-  const [derivedQueryOptions, setDerivedQueryOptions] = useState<string[]>([])
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
   const [campaignWizardOpen, setCampaignWizardOpen] = useState(false)
@@ -586,8 +585,6 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     }
     return chips
   }, [filters])
-  const visibleQueryOptions = queryOptions.length ? queryOptions : derivedQueryOptions
-
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       setLoading(true)
@@ -629,7 +626,6 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         })
         const rows = response.items ?? []
         setItems(rows)
-        setDerivedQueryOptions(deriveQueryOptionsFromRows(rows))
         setTotal(typeof response.total === "number" ? response.total : rows.length)
         setOffset(nextOffset)
         setSelected((prev) => {
@@ -1135,10 +1131,9 @@ useEffect(() => {
       } else {
         next.delete(value)
       }
-      const orderingOptions = queryOptions.length ? queryOptions : derivedQueryOptions
       return {
         ...prev,
-        queryFilters: orderSelectedByOptions(next, orderingOptions),
+        queryFilters: orderSelectedByOptions(next, queryOptions),
       }
     })
   }
@@ -2034,8 +2029,8 @@ useEffect(() => {
                 <DropdownMenuContent align="start" className="w-[260px]">
                 {queryOptionsLoading ? (
                   <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas …</div>
-                ) : visibleQueryOptions.length ? (
-                  visibleQueryOptions.map((option) => (
+                ) : queryOptions.length ? (
+                  queryOptions.map((option) => (
                     <DropdownMenuCheckboxItem
                       key={option}
                       checked={filters.queryFilters.includes(option)}
@@ -3464,17 +3459,6 @@ function extractProspectoQuery(metadata: unknown): string | null {
     }
   }
   return null
-}
-
-function deriveQueryOptionsFromRows(rows: ProspectoItem[]): string[] {
-  const seen = new Set<string>()
-  for (const row of rows) {
-    const query = extractProspectoQuery(row.metadata)
-    if (query && !seen.has(query)) {
-      seen.add(query)
-    }
-  }
-  return Array.from(seen)
 }
 
 function auditActionLabel(action: string): string {

@@ -5861,8 +5861,9 @@ class CRMRepository:
             metadata_conditions: list[str] = []
             for value in unique_queries:
                 literal = _postgrest_eq_literal(value)
-                metadata_conditions.append(f"metadata->>query.eq.{literal}")
-                metadata_conditions.append(f"metadata->>busqueda_query.eq.{literal}")
+                metadata_conditions.append(f"metadata->>'query'.eq.{literal}")
+                metadata_conditions.append(f"metadata->>'busqueda_query'.eq.{literal}")
+                metadata_conditions.append(f"metadata->'busqueda_meta'->>'query'.eq.{literal}")
             if metadata_conditions:
                 and_filters.append(f"or({','.join(metadata_conditions)})")
 
@@ -5901,8 +5902,8 @@ class CRMRepository:
         query_filters: list[str] | None = None,
     ) -> dict[str, list[str]]:
         params: dict[str, str] = {
-            "select": "actividad,metadata->>query as metadata_query,metadata->>busqueda_query as metadata_busqueda_query",
-            "order": "metadata->>query.asc,actividad.asc",
+            "select": "actividad,metadata",
+            "order": "metadata->>'query'.asc,actividad.asc",
             "limit": "5000",
         }
         if query_filters:
@@ -5917,8 +5918,9 @@ class CRMRepository:
             metadata_conditions: list[str] = []
             for value in unique_queries:
                 literal = _postgrest_eq_literal(value)
-                metadata_conditions.append(f"metadata->>query.eq.{literal}")
-                metadata_conditions.append(f"metadata->>busqueda_query.eq.{literal}")
+                metadata_conditions.append(f"metadata->>'query'.eq.{literal}")
+                metadata_conditions.append(f"metadata->>'busqueda_query'.eq.{literal}")
+                metadata_conditions.append(f"metadata->'busqueda_meta'->>'query'.eq.{literal}")
             if metadata_conditions:
                 params["or"] = f"({','.join(metadata_conditions)})"
 
@@ -5934,12 +5936,21 @@ class CRMRepository:
         query_values: set[str] = set()
         activity_values: set[str] = set()
         for row in data:
-            for key in ("metadata_query", "metadata_busqueda_query"):
-                value = row.get(key)
-                if isinstance(value, str):
-                    candidate = value.strip()
-                    if candidate:
-                        query_values.add(candidate)
+            metadata = row.get("metadata")
+            if isinstance(metadata, dict):
+                for key in ("query", "busqueda_query"):
+                    value = metadata.get(key)
+                    if isinstance(value, str):
+                        candidate = value.strip()
+                        if candidate:
+                            query_values.add(candidate)
+                busqueda_meta = metadata.get("busqueda_meta")
+                if isinstance(busqueda_meta, dict):
+                    value = busqueda_meta.get("query")
+                    if isinstance(value, str):
+                        candidate = value.strip()
+                        if candidate:
+                            query_values.add(candidate)
             actividad = row.get("actividad")
             if isinstance(actividad, str):
                 candidate = actividad.strip()
