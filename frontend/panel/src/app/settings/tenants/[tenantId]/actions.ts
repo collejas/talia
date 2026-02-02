@@ -66,12 +66,6 @@ function parseNumber(raw: string): number | undefined {
   return Number.isFinite(num) ? num : undefined
 }
 
-function parseFloatValue(raw: string): number | undefined {
-  if (!raw) return undefined
-  const num = Number(raw)
-  return Number.isFinite(num) ? num : undefined
-}
-
 async function upsertTenantSecret(
   tenantId: string,
   clave: string,
@@ -428,9 +422,9 @@ export async function updateBusquedaSettingsAction(_: CrudActionState, formData:
     const googleLanguageCode = getText(formData, "google_language_code")
     const googleRegionCode = getText(formData, "google_region_code")
     const googleGridRadius = parseNumber(getText(formData, "google_grid_max_tile_radius_m"))
-    const googlePauseBetweenPages = parseFloatValue(getText(formData, "google_pause_between_pages"))
+    const googlePauseBetweenPages = parseNumber(getText(formData, "google_pause_between_pages"))
     const googleDenseGridRadius = parseNumber(getText(formData, "google_dense_grid_max_tile_radius_m"))
-    const googleDensePause = parseFloatValue(getText(formData, "google_dense_pause_between_pages"))
+    const googleDensePause = parseNumber(getText(formData, "google_dense_pause_between_pages"))
     const googleDenseMaxResults = parseNumber(getText(formData, "google_dense_max_results"))
     const googleApiKey = getText(formData, "google_places_api_key")
 

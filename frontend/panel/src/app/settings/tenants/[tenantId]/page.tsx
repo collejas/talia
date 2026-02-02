@@ -158,11 +158,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     voice_stt_model: getNestedString(openaiVoiceConfig, "stt_model"),
   }
   const denueConfig = getNestedRecord(config, "denue") ?? {}
-  const denueInitialValues = {
-    denue_base_url: getNestedString(denueConfig, "base_url"),
-  }
   const googlePlacesConfig = getNestedRecord(config, "google_places") ?? {}
-  const googleInitialValues = {
+  const searchInitialValues = {
+    denue_base_url: getNestedString(denueConfig, "base_url"),
     google_nearby_url: getNestedString(googlePlacesConfig, "nearby_url"),
     google_text_url: getNestedString(googlePlacesConfig, "text_url"),
     google_details_url: getNestedString(googlePlacesConfig, "details_url"),
@@ -175,10 +173,6 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     google_dense_grid_max_tile_radius_m: getNestedNumber(googlePlacesConfig, "dense_grid_max_tile_radius_m"),
     google_dense_pause_between_pages: getNestedNumber(googlePlacesConfig, "dense_pause_between_pages"),
     google_dense_max_results: getNestedNumber(googlePlacesConfig, "dense_max_results"),
-  }
-  const searchInitialValues = {
-    ...denueInitialValues,
-    ...googleInitialValues,
   }
   const secretKeys = new Set(secrets.map((item) => item.clave.trim().toLowerCase()))
   const hasGeneralApiKey = secretKeys.has("openai.general.api_key")

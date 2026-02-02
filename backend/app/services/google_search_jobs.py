@@ -123,7 +123,7 @@ class GoogleSearchJobManager:
             logger.exception("google_job_update_final_failed", extra={"busqueda_id": str(job.busqueda_id), "error": str(exc)})
 
     async def _mark_failed(self, repo: CRMRepository, busqueda_id: UUID, error: str) -> None:
-        failed_meta = {"status": "failed"}
+        failed_meta = {"status": "failed", "error": error}
         try:
             await repo.worker_update_busqueda(
                 busqueda_id=busqueda_id,

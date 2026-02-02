@@ -75,12 +75,14 @@ Tab **Secretos** (`secretos`)
 - [ ] Google `google.places_api_key` / `google.oauth.client_secret`
 - [ ] DENUE `denue.token`
 
-Tab **Búsqueda** (`denue`)
-- [ ] `denue.base_url` (tupla config/secret similar a Brevo) almacenada en el tenant y editable desde la UI
-- [ ] `denue.token` (secreto, nivel A) rotado desde la pestaña sin exponer el valor y con indicador “Token registrado”
-- [ ] Validar que la API responde desde este scope antes de lanzar búsquedas
-- [ ] `google_places.*` (endpoints, field masks, límites) en `organizaciones.config.google_places`
-- [ ] `google.places_api_key` (secreto, nivel B) rotado desde la misma pestaña y usado por el job multitenant
+Tab **Búsqueda** (`denue` + `google_places`)
+- [x] `denue.base_url` (tupla config/secret similar a Brevo) almacenada en el tenant y editable desde la UI
+- [x] `denue.token` (secreto, nivel A) rotado desde la pestaña sin exponer el valor y con indicador “Token registrado”
+- [x] Validar que la API responde desde este scope antes de lanzar búsquedas
+- [x] `google_places.*` (endpoints, field masks, límites) en `organizaciones.config.google_places`
+- [x] `google.places_api_key` (secreto, nivel B) rotado desde la misma pestaña y usado por el job multitenant
+  - El formulario `TenantBusquedaSettings` agrupa las variables de DENUE y Google Places, y la UI siempre persiste lo ingresado en `organizaciones.config` y `secretos` del tenant.
+  - El backend usa `tenant_runtime.get_denue_runtime_settings` y `tenant_runtime.get_google_places_runtime_settings` para que los jobs de búsqueda tomen esa configuración (con fallback a `.env`).
 
 Tab **Validación**
 - [ ] Probar webchat: resolver alias → org + endpoint de conversación

@@ -33,6 +33,7 @@ class GooglePlacesClient:
         details_field_mask: str | None = None,
         default_language: str | None = None,
         default_region: str | None = None,
+        details_url: str | None = None,
         timeout: float = 15.0,
         pause_between_pages: float = 2.0,
         grid_max_tile_radius_m: int = 1200,
@@ -50,7 +51,7 @@ class GooglePlacesClient:
         self.default_region = default_region or settings.google_places_region_code
         self.timeout = timeout
         self.pause_between_pages = pause_between_pages
-        self.details_url = getattr(
+        self.details_url = details_url or getattr(
             settings, "google_places_details_url", "https://places.googleapis.com/v1/places"
         )
         self._details_cache: dict[str, dict[str, Any]] = {}
@@ -191,11 +192,27 @@ class GooglePlacesClient:
                 detail = resp.json()
             except ValueError:
                 detail = resp.text
+            error_message = None
+            if isinstance(detail, dict):
+                google_error = detail.get("error")
+                if isinstance(google_error, dict):
+                    error_message = google_error.get("message")
+                if not error_message:
+                    error_message = detail.get("message")
+            if not error_message:
+                if isinstance(detail, str) and detail.strip():
+                    error_message = detail
+            if not error_message:
+                error_message = f"google_places_http_{resp.status_code}"
             logger.error(
                 "google.places_http_error",
-                extra={"status": resp.status_code, "detail": detail},
+                extra={
+                    "status": resp.status_code,
+                    "detail": detail,
+                    "error_message": error_message,
+                },
             )
-            raise GooglePlacesError(f"google_places_http_{resp.status_code}")
+            raise GooglePlacesError(error_message)
         try:
             return resp.json()
         except ValueError as exc:

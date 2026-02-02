@@ -371,15 +371,21 @@ export function GoogleBusquedaView() {
       });
       setQueuedBusquedaId(null);
     } else if (status === "failed") {
+      const rawError = activeBusqueda?.meta?.error;
+      const detail =
+        typeof rawError === "string" && rawError.trim()
+          ? rawError
+          : "La búsqueda falló. Intenta nuevamente.";
       setFeedback({
         type: "error",
-        message: "La búsqueda falló. Intenta nuevamente.",
+        message: detail,
       });
       setQueuedBusquedaId(null);
     }
   }, [
     activeBusquedaId,
     activeBusqueda?.meta?.status,
+    activeBusqueda?.meta?.error,
     activeBusqueda?.total_encontrados,
     resultadosCount,
     queuedBusquedaId,

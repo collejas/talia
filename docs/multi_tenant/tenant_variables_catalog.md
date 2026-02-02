@@ -67,6 +67,7 @@ Otros proveedores (según tenant):
   - `GOOGLE_PLACES_DENSE_GRID_MAX_TILE_RADIUS_M` → `organizaciones.config.google_places.dense_grid_max_tile_radius_m`
   - `GOOGLE_PLACES_DENSE_PAUSE_BETWEEN_PAGES` → `organizaciones.config.google_places.dense_pause_between_pages`
   - `GOOGLE_PLACES_DENSE_MAX_RESULTS` → `organizaciones.config.google_places.dense_max_results`
+  > `API_NEARBY_SEARCH` y `GOOGLE_PLACES_NEARBY_URL` son alias para el mismo valor (`nearby_url`); el formulario “Búsqueda” los expone como un solo campo y guarda los endpoints/límites por tenant para las búsquedas de `/api/prospeccion/google/*`.
 - DENUE: `DENUE_BASE_URL` → `organizaciones.config.denue.base_url`, `DENUE_TOKEN` → `secretos.denue.token`
 - Brevo: `BREVO_API_KEY`, `BREVO_BASE_URL`
 

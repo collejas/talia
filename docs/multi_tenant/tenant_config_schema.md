@@ -113,7 +113,7 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 > ✅ La pestaña “Búsqueda” guarda el endpoint (config) y activa la rotación de `denue.token` como secreto por tenant.
 
 ### `google_places.*`
-- `google_places_nearby_url` (string) ← `GOOGLE_PLACES_NEARBY_URL`
+- `google_places_nearby_url` (string) ← `API_NEARBY_SEARCH` / `GOOGLE_PLACES_NEARBY_URL`
 - `google_places_text_url` (string) ← `GOOGLE_PLACES_TEXT_URL`
 - `google_places_details_url` (string) ← `GOOGLE_PLACES_DETAILS_URL`
 - `google_places_field_mask` (string) ← `PLACES_FIELD_MASK`
@@ -127,6 +127,7 @@ Referencia: `docs/multi_tenant/secrets_security.md`.
 - `google_places_dense_max_results` (number) ← `GOOGLE_PLACES_DENSE_MAX_RESULTS`
 
 > ✅ La pestaña “Búsqueda” ahora permite editar los endpoints/límites de Google Places por tenant y rota `google.places_api_key`.
+> ℹ️ `tenant_runtime.get_google_places_runtime_settings` combina `organizaciones.config.google_places` + `secretos.google.places_api_key` antes de caer al `.env`, así que lo que configuras desde la UI alimenta los jobs de `/api/prospeccion/google/*`.
 
 ### `whatsapp.*`
 - `whatsapp.prompt_id` / `whatsapp.prompt_version`
