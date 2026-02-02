@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 from uuid import UUID
 
 import httpx
@@ -238,6 +238,147 @@ class PlatformRepository:
             return None
         value = row.get("organizacion_id")
         return str(value) if value else None
+
+    async def create_permissions(
+        self, *, organizacion_id: UUID, permisos: Sequence[dict[str, str]]
+    ) -> list[dict[str, Any]]:
+        if not permisos:
+            return []
+        payload = []
+        for permiso in permisos:
+            payload.append(
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "codigo": permiso.get("codigo"),
+                    "descripcion": permiso.get("descripcion"),
+                }
+            )
+        data = await self._rest(
+            "POST",
+            "/rest/v1/permisos",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("permisos_create_failed")
+        return data
+
+    async def create_role(
+        self, *, organizacion_id: UUID, nombre: str, descripcion: str | None
+    ) -> dict[str, Any]:
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "nombre": nombre,
+            "descripcion": descripcion,
+        }
+        data = await self._rest(
+            "POST",
+            "/rest/v1/roles",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("role_create_failed")
+        return data[0]
+
+    async def create_role_permission(
+        self, *, organizacion_id: UUID, rol_id: UUID, permiso_id: UUID
+    ) -> None:
+        await self._rest(
+            "POST",
+            "/rest/v1/roles_permisos",
+            json={
+                "organizacion_id": str(organizacion_id),
+                "rol_id": str(rol_id),
+                "permiso_id": str(permiso_id),
+            },
+        )
+
+    async def create_department(self, *, organizacion_id: UUID, nombre: str) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/departamentos",
+            json={
+                "organizacion_id": str(organizacion_id),
+                "nombre": nombre,
+            },
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("department_create_failed")
+        return data[0]
+
+    async def create_position(self, *, organizacion_id: UUID, nombre: str) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/puestos",
+            json={
+                "organizacion_id": str(organizacion_id),
+                "nombre": nombre,
+            },
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("position_create_failed")
+        return data[0]
+
+    async def upsert_usuario(
+        self,
+        *,
+        usuario_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/usuarios",
+            params={"id": f"eq.{usuario_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("usuario_upsert_failed")
+        return data[0]
+
+    async def assign_user_role(self, *, usuario_id: UUID, rol_id: UUID, organizacion_id: UUID) -> dict[str, Any]:
+        data = await self._rest(
+            "POST",
+            "/rest/v1/usuarios_roles",
+            json={
+                "usuario_id": str(usuario_id),
+                "rol_id": str(rol_id),
+                "organizacion_id": str(organizacion_id),
+            },
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("usuario_role_assign_failed")
+        return data[0]
+
+    async def create_employee(
+        self,
+        *,
+        usuario_id: UUID,
+        departamento_id: UUID | None,
+        puesto_id: UUID | None,
+        organizacion_id: UUID,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "usuario_id": str(usuario_id),
+            "organizacion_id": str(organizacion_id),
+        }
+        if departamento_id:
+            payload["departamento_id"] = str(departamento_id)
+        if puesto_id:
+            payload["puesto_id"] = str(puesto_id)
+        data = await self._rest(
+            "POST",
+            "/rest/v1/empleados",
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("empleado_create_failed")
+        return data[0]
 
     async def _rest(
         self,

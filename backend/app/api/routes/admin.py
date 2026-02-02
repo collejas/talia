@@ -6,12 +6,13 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.core.config import settings
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
+from app.services.supabase_admin import SupabaseAdminError, create_supabase_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -118,6 +119,52 @@ class TenantBasicInfo(BaseModel):
     telefono: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
+
+
+class TenantSeedPermission(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    codigo: str = Field(..., min_length=1)
+    descripcion: str | None = None
+
+
+class TenantSeedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    departamento: str = Field(..., min_length=1)
+    puesto: str = Field(..., min_length=1)
+    rol_nombre: str = Field(..., min_length=1)
+    rol_descripcion: str | None = None
+    permisos: list[TenantSeedPermission] = Field(..., min_items=1)
+
+
+class TenantAdminPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    correo: EmailStr
+    nombre_completo: str | None = None
+    telefono: str | None = None
+    estado: str = Field(default="activo")
+
+
+class CreateTenantWithAdminRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant: CreateTenantRequest
+    admin: TenantAdminPayload
+    seed: TenantSeedPayload
+
+
+class TenantSeedSummary(BaseModel):
+    rol_id: UUID
+    permisos_ids: list[UUID]
+    departamento_id: UUID
+    puesto_id: UUID
+    empleado_id: UUID
+
+
+class CreateTenantWithAdminResponse(BaseModel):
+    ok: bool = True
+    tenant_id: UUID
+    usuario_id: UUID
+    seed: TenantSeedSummary
+    recovery_email_sent: bool
     activo: bool | None = None
 
 
@@ -319,6 +366,130 @@ async def create_tenant(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return CreateTenantResponse(tenant=TenantSummary.model_validate(tenant))
+
+
+@router.post("/tenants/con_usuario", response_model=CreateTenantWithAdminResponse)
+async def create_tenant_with_admin(
+    payload: CreateTenantWithAdminRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> CreateTenantWithAdminResponse:
+    try:
+        tenant_payload: dict[str, Any] = {"nombre": payload.tenant.nombre}
+        if payload.tenant.razon_social:
+            tenant_payload["razon_social"] = payload.tenant.razon_social
+        if payload.tenant.dominio_principal:
+            tenant_payload["dominio_principal"] = payload.tenant.dominio_principal
+        if payload.tenant.rfc:
+            tenant_payload["rfc"] = payload.tenant.rfc
+        if payload.tenant.pais:
+            tenant_payload["pais"] = payload.tenant.pais
+        if payload.tenant.estado:
+            tenant_payload["estado"] = payload.tenant.estado
+        if payload.tenant.ciudad:
+            tenant_payload["ciudad"] = payload.tenant.ciudad
+        if payload.tenant.telefono:
+            tenant_payload["telefono"] = payload.tenant.telefono
+        if payload.tenant.sitio_web:
+            tenant_payload["sitio_web"] = payload.tenant.sitio_web
+        if payload.tenant.activo is not None:
+            tenant_payload["activo"] = bool(payload.tenant.activo)
+        if payload.tenant.estado_onboarding:
+            tenant_payload["estado_onboarding"] = payload.tenant.estado_onboarding
+        if payload.tenant.config is not None:
+            tenant_payload["config"] = payload.tenant.config
+
+        tenant = await repo.create_organizacion(payload=tenant_payload)
+        tenant_id = UUID(str(tenant["id"]))
+
+        alias = payload.tenant.webchat_alias.strip().lower() if payload.tenant.webchat_alias else None
+        if alias:
+            try:
+                await repo.create_channel_route(
+                    payload={
+                        "organizacion_id": str(tenant_id),
+                        "canal": "webchat",
+                        "clave": alias,
+                        "metadata": {"source": "admin.create_tenant_with_admin"},
+                        "activo": True,
+                    }
+                )
+                channel_routing.invalidate_cache(canal="webchat", clave=alias)
+            except PlatformRepositoryError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        permisos_input = []
+        for permiso in payload.seed.permisos:
+            permisos_input.append(
+                {"codigo": permiso.codigo.strip(), "descripcion": permiso.descripcion}
+            )
+        permisos_rows = await repo.create_permissions(organizacion_id=tenant_id, permisos=permisos_input)
+        permiso_ids = [UUID(str(row["id"])) for row in permisos_rows]
+
+        role = await repo.create_role(
+            organizacion_id=tenant_id,
+            nombre=payload.seed.rol_nombre,
+            descripcion=payload.seed.rol_descripcion,
+        )
+        role_id = UUID(str(role["id"]))
+        for permiso_id in permiso_ids:
+            await repo.create_role_permission(
+                organizacion_id=tenant_id, rol_id=role_id, permiso_id=permiso_id
+            )
+
+        departamento = await repo.create_department(
+            organizacion_id=tenant_id, nombre=payload.seed.departamento
+        )
+        departamento_id = UUID(str(departamento["id"]))
+        puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
+        puesto_id = UUID(str(puesto["id"]))
+
+        usuario_id_str, telefono_value = await create_supabase_user(
+            email=payload.admin.correo,
+            nombre=payload.admin.nombre_completo,
+            telefono=payload.admin.telefono,
+            organizacion_id=str(tenant_id),
+        )
+        usuario_id = UUID(usuario_id_str)
+
+        await repo.upsert_usuario(
+            usuario_id=usuario_id,
+            payload={
+                "correo": payload.admin.correo,
+                "nombre_completo": payload.admin.nombre_completo,
+                "telefono_e164": telefono_value,
+                "estado": payload.admin.estado,
+                "organizacion_id": str(tenant_id),
+            },
+        )
+
+        await repo.assign_user_role(
+            usuario_id=usuario_id, rol_id=role_id, organizacion_id=tenant_id
+        )
+
+        await repo.create_employee(
+            usuario_id=usuario_id,
+            departamento_id=departamento_id,
+            puesto_id=puesto_id,
+            organizacion_id=tenant_id,
+        )
+
+        return CreateTenantWithAdminResponse(
+            tenant_id=tenant_id,
+            usuario_id=usuario_id,
+            seed=TenantSeedSummary(
+                rol_id=role_id,
+                permisos_ids=permiso_ids,
+                departamento_id=departamento_id,
+                puesto_id=puesto_id,
+                empleado_id=usuario_id,
+            ),
+            recovery_email_sent=True,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except SupabaseAdminError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/tenants/{organizacion_id}", response_model=TenantDetailResponse)

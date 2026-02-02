@@ -138,6 +138,11 @@ class Settings(BaseSettings):
     )
     supabase_jwt_secret: str | None = None
     supabase_legacy_jwt_secret: str | None = None
+    supabase_reset_redirect_url: str | None = Field(
+        default=None,
+        description="URL a la que redirige el correo de recuperación (opcional).",
+        validation_alias=AliasChoices("SUPABASE_RESET_REDIRECT_URL", "RESET_REDIRECT_URL"),
+    )
     secrets_master_key: str | None = Field(
         default=None,
         description="Master key (base64-url o hex) para cifrar secretos en `public.secretos`.",
