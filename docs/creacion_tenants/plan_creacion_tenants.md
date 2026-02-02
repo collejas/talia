@@ -149,7 +149,12 @@ El backend envía errores claros (`403 platform_admin_required`, `409 alias_conf
 | --- | --- | --- | --- |
 | Tenant | Nombre | sí | mínimo 2 caracteres. |
 |  | Alias webchat | opcional pero sugerido | se guarda en `organizacion_rutas_canal`, se muestra error si backend responde `409 alias_conflict`. |
-|  | Config JSON | opcional | editor JSON ligero (sugerir plantillas de flags como `features.webchat.enabled`). |
+|  | Razón social | no | texto libre. |
+|  | Dominio principal | no | host para branding. |
+|  | RFC | no | texto alfanumérico. |
+|  | País / Estado / Ciudad | no | campos separados. |
+|  | Teléfono | no | formato E.164. |
+|  | Sitio web | no | URL pública. |
 |  | Activo (checkbox) | no | default true. |
 |  | Estado onboarding (select) | no | valores: `pendiente`, `en_progreso`, `completado`, `pausado`, `cancelado`. |
 | Usuario admin | Correo | sí | correo válido, normaliza, se usa para Supabase. |
@@ -163,6 +168,11 @@ El backend envía errores claros (`403 platform_admin_required`, `409 alias_conf
 3. Al enviar, la interfaz muestra un loader e invoca `POST /admin/tenants/con_usuario`.
 4. Si el request falla (alias ocupado, validación, falta de privilegios), se presenta un toast/error en el bloque correspondiente. Si pasa, se muestra un panel de confirmación con: ID del tenant, ID del usuario, lista de seeds aplicados (mismo resumen que devuelve el backend) y la advertencia de que el correo de recuperación ya fue mandado.
 5. Opcional: un segundo botón “Ir a configuración del tenant” redirige al dashboard interno del tenant para continuar con tareas de HR/roles/empleados una vez que el nuevo admin haya iniciado sesión.
+
+### Navegación del tenant admin
+- Reemplazar el botón “Tenants” del sidebar por “Variables” para los tenant admins (el botón sigue oculto para platform-admins o se mantiene solo en esa vista). “Variables” apunta a la nueva ruta/frontend interno que consume el endpoint tenant-scoped (`/tenant/me/settings`) y permite editar alias, contacto y estado.
+- En el drawer inferior (logo con “Account”, “Billing”, “Notifications”, “Cerrar sesión”), activar el botón “Account” para que lleve a los mismos formularios organizacionales de “Variables”. El resto de opciones del drawer siguen relacionadas con el usuario, pero “Account” duplica la edición del tenant para evitar tener que navegar por otros menús.
+- La vista “Variables/Account” reutiliza el mismo diseño (campos organizacionales y validaciones) y solo se muestra cuando el token pertenece a un tenant admin; en caso contrario puede ocultarse o redirigir al panel global. Esto permite a los tenant admins configurar su organización sin tocar `/settings/tenants` que queda reservado al platform-admin.
 
 ## Validaciones y pruebas
 - Mantener pruebas automatizadas como `tests/api/test_admin_tenant_flow.py` con mocks (como ya se creó).
