@@ -84,6 +84,14 @@ class CreateTenantRequest(BaseModel):
     nombre: str = Field(..., min_length=2)
     razon_social: str | None = None
     dominio_principal: str | None = None
+    rfc: str | None = None
+    pais: str | None = None
+    estado: str | None = None
+    ciudad: str | None = None
+    telefono: str | None = None
+    sitio_web: str | None = None
+    activo: bool | None = None
+    estado_onboarding: str | None = None
     config: dict[str, Any] | None = None
     webchat_alias: str | None = Field(
         default=None,
@@ -94,6 +102,44 @@ class CreateTenantRequest(BaseModel):
 class CreateTenantResponse(BaseModel):
     ok: bool = True
     tenant: TenantSummary
+
+
+class TenantBasicInfo(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    nombre: str
+    razon_social: str | None = None
+    rfc: str | None = None
+    pais: str | None = None
+    estado: str | None = None
+    ciudad: str | None = None
+    dominio_principal: str | None = None
+    telefono: str | None = None
+    sitio_web: str | None = None
+    estado_onboarding: str | None = None
+    activo: bool | None = None
+
+
+class TenantDetailResponse(BaseModel):
+    ok: bool = True
+    tenant: TenantBasicInfo
+
+
+class UpdateTenantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str | None = None
+    razon_social: str | None = None
+    dominio_principal: str | None = None
+    rfc: str | None = None
+    pais: str | None = None
+    estado: str | None = None
+    ciudad: str | None = None
+    telefono: str | None = None
+    sitio_web: str | None = None
+    activo: bool | None = None
+    estado_onboarding: str | None = None
 
 
 class ChannelRoute(BaseModel):
@@ -235,6 +281,22 @@ async def create_tenant(
         tenant_payload["razon_social"] = payload.razon_social
     if payload.dominio_principal:
         tenant_payload["dominio_principal"] = payload.dominio_principal
+    if payload.rfc:
+        tenant_payload["rfc"] = payload.rfc
+    if payload.pais:
+        tenant_payload["pais"] = payload.pais
+    if payload.estado:
+        tenant_payload["estado"] = payload.estado
+    if payload.ciudad:
+        tenant_payload["ciudad"] = payload.ciudad
+    if payload.telefono:
+        tenant_payload["telefono"] = payload.telefono
+    if payload.sitio_web:
+        tenant_payload["sitio_web"] = payload.sitio_web
+    if payload.activo is not None:
+        tenant_payload["activo"] = bool(payload.activo)
+    if payload.estado_onboarding:
+        tenant_payload["estado_onboarding"] = payload.estado_onboarding
     if payload.config is not None:
         tenant_payload["config"] = payload.config
 
@@ -257,6 +319,38 @@ async def create_tenant(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return CreateTenantResponse(tenant=TenantSummary.model_validate(tenant))
+
+
+@router.get("/tenants/{organizacion_id}", response_model=TenantDetailResponse)
+async def get_tenant_info(
+    organizacion_id: UUID,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantDetailResponse:
+    row = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+    return TenantDetailResponse(tenant=TenantBasicInfo.model_validate(row))
+
+
+@router.patch("/tenants/{organizacion_id}", response_model=TenantDetailResponse)
+async def update_tenant_info(
+    organizacion_id: UUID,
+    payload: UpdateTenantRequest,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantDetailResponse:
+    update_payload = payload.model_dump(exclude_none=True)
+    if not update_payload:
+        raise HTTPException(status_code=400, detail="nothing_to_update")
+    try:
+        row = await repo.update_organizacion_details(
+            organizacion_id=organizacion_id,
+            payload=update_payload,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return TenantDetailResponse(tenant=TenantBasicInfo.model_validate(row))
 
 
 @router.get("/tenants/{organizacion_id}/routes", response_model=TenantRoutesResponse)

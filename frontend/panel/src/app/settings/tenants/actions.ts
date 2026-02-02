@@ -9,6 +9,14 @@ export async function createTenant(formData: FormData): Promise<void> {
   const razonSocial = String(formData.get("razon_social") ?? "").trim()
   const dominio = String(formData.get("dominio_principal") ?? "").trim()
   const webchatAlias = String(formData.get("webchat_alias") ?? "").trim()
+  const rfc = String(formData.get("rfc") ?? "").trim()
+  const pais = String(formData.get("pais") ?? "").trim()
+  const estado = String(formData.get("estado") ?? "").trim()
+  const ciudad = String(formData.get("ciudad") ?? "").trim()
+  const telefono = String(formData.get("telefono") ?? "").trim()
+  const sitioWeb = String(formData.get("sitio_web") ?? "").trim()
+  const activo = formData.has("activo")
+  const estadoOnboarding = String(formData.get("estado_onboarding") ?? "").trim()
 
   if (!nombre) {
     throw new Error("El nombre es obligatorio.")
@@ -25,6 +33,14 @@ export async function createTenant(formData: FormData): Promise<void> {
         razon_social: razonSocial || undefined,
         dominio_principal: dominio || undefined,
         webchat_alias: webchatAlias || undefined,
+        rfc: rfc || undefined,
+        pais: pais || undefined,
+        estado: estado || undefined,
+        ciudad: ciudad || undefined,
+        telefono: telefono || undefined,
+        sitio_web: sitioWeb || undefined,
+        activo,
+        estado_onboarding: estadoOnboarding || undefined,
       },
     },
   )

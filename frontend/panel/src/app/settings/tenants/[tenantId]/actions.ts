@@ -115,6 +115,50 @@ export async function updateTenantConfigAction(_: CrudActionState, formData: For
   }
 }
 
+export async function updateTenantInfoAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const payload: Record<string, unknown> = {}
+    const addString = (key: string, value: string | undefined) => {
+      if (value) {
+        payload[key] = value
+      }
+    }
+
+    addString("nombre", getText(formData, "tenant_nombre"))
+    addString("razon_social", getText(formData, "tenant_razon_social"))
+    addString("rfc", getText(formData, "tenant_rfc"))
+    addString("pais", getText(formData, "tenant_pais"))
+    addString("estado", getText(formData, "tenant_estado"))
+    addString("ciudad", getText(formData, "tenant_ciudad"))
+    addString("dominio_principal", getText(formData, "tenant_dominio"))
+    addString("telefono", getText(formData, "tenant_telefono"))
+    addString("sitio_web", getText(formData, "tenant_sitio"))
+    const onboarding = getText(formData, "tenant_estado_onboarding")
+    if (onboarding) {
+      payload.estado_onboarding = onboarding
+    }
+    payload.activo = formData.has("tenant_activo")
+
+    if (!Object.keys(payload).length) {
+      throw new Error("Completa al menos un campo para actualizar.")
+    }
+
+    const response = await callCrmApi<{ ok: boolean }>(`/admin/tenants/${tenantId}`, {
+      method: "PATCH",
+      organizacionId: null,
+      withUserToken: true,
+      body: payload,
+    })
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Datos generales actualizados.")
+  } catch (error) {
+    return failure(error, "No se pudieron guardar los datos generales.")
+  }
+}
+
 export async function setTenantSecretAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

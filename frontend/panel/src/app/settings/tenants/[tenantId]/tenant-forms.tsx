@@ -26,6 +26,7 @@ import {
   updateOpenaiGeneralAction,
   updateOpenaiVoiceAction,
   updateTenantConfigAction,
+  updateTenantInfoAction,
   updateWebchatSettingsAction,
   validateTenantAction,
 } from "./actions"
@@ -113,6 +114,111 @@ export type RouteItem = {
   canal: string
   clave: string
   activo?: boolean | null
+}
+
+export type TenantOrganizationInfo = {
+  nombre?: string | null
+  razon_social?: string | null
+  rfc?: string | null
+  pais?: string | null
+  estado?: string | null
+  ciudad?: string | null
+  dominio_principal?: string | null
+  telefono?: string | null
+  sitio_web?: string | null
+  estado_onboarding?: string | null
+  activo?: boolean | null
+}
+
+export function TenantOrganizationInfoForm({
+  tenantId,
+  info,
+}: {
+  tenantId: string
+  info: TenantOrganizationInfo | null
+}) {
+  const [state, formAction] = useActionState(updateTenantInfoAction, INITIAL_CRUD_STATE)
+  const defaultOnboarding = info?.estado_onboarding ?? "pendiente"
+
+  return (
+    <form action={formAction} className="space-y-6">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="tenant_nombre">Nombre</Label>
+          <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_razon_social">Razón social</Label>
+          <Input id="tenant_razon_social" name="tenant_razon_social" defaultValue={info?.razon_social ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_rfc">RFC</Label>
+          <Input id="tenant_rfc" name="tenant_rfc" defaultValue={info?.rfc ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_pais">País</Label>
+          <Input id="tenant_pais" name="tenant_pais" defaultValue={info?.pais ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_estado">Estado</Label>
+          <Input id="tenant_estado" name="tenant_estado" defaultValue={info?.estado ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_ciudad">Ciudad</Label>
+          <Input id="tenant_ciudad" name="tenant_ciudad" defaultValue={info?.ciudad ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_dominio">Dominio principal</Label>
+          <Input id="tenant_dominio" name="tenant_dominio" defaultValue={info?.dominio_principal ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_telefono">Teléfono</Label>
+          <Input id="tenant_telefono" name="tenant_telefono" defaultValue={info?.telefono ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_sitio">Sitio web</Label>
+          <Input id="tenant_sitio" name="tenant_sitio" defaultValue={info?.sitio_web ?? ""} />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Activo</Label>
+          <div className="flex items-center gap-3">
+            <input
+              id="tenant_activo"
+              name="tenant_activo"
+              type="checkbox"
+              className="size-4"
+              defaultChecked={info?.activo ?? true}
+            />
+            <span className="text-sm text-muted-foreground">El tenant puede iniciar sesión y recibir tráfico.</span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant_estado_onboarding">Estado de onboarding</Label>
+          <select
+            id="tenant_estado_onboarding"
+            name="tenant_estado_onboarding"
+            defaultValue={defaultOnboarding}
+            className="rounded-md border border-border px-3 py-2 text-sm"
+          >
+            <option value="pendiente">Pendiente</option>
+            <option value="en_progreso">En progreso</option>
+            <option value="completado">Completado</option>
+            <option value="pausado">Pausado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar datos" pendingLabel="Guardando..." />
+      </div>
+    </form>
+  )
 }
 
 type WebchatInitialValues = {

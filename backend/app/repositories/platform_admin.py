@@ -133,6 +133,32 @@ class PlatformRepository:
             raise PlatformRepositoryError("organizacion_update_failed")
         return data[0]
 
+    async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        params = {
+            "select": "id,nombre,razon_social,rfc,pais,estado,ciudad,dominio_principal,telefono,sitio_web,estado_onboarding,activo,fecha_alta,fecha_pausa,fecha_cancelacion",
+            "id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def update_organizacion_details(
+        self, *, organizacion_id: UUID, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/organizaciones",
+            params={"id": f"eq.{organizacion_id}"},
+            json=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("organizacion_update_failed")
+        return data[0]
+
     async def list_secret_metadata(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
         params = {
             "select": "id,organizacion_id,clave,etiqueta,version,creado_por,actualizado_por,creado_en,actualizado_en",

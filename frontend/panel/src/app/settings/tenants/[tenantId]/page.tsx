@@ -12,14 +12,16 @@ import {
   TenantCalendarSettings,
   TenantMailSettings,
   TenantMessengerSettings,
-  TenantTwilioSettings,
-  TenantWhatsAppSettings,
+  TenantOrganizationInfoForm,
   TenantSecretsManager,
   TenantWebchatSettings,
   TenantBusquedaSettings,
   TenantOpenaiSettings,
+  TenantTwilioSettings,
+  TenantWhatsAppSettings,
   type RouteItem,
   type SecretItem,
+  type TenantOrganizationInfo,
 } from "./tenant-forms"
 
 export const metadata: Metadata = {
@@ -32,7 +34,7 @@ export const revalidate = 0
 type TenantConfigResponse = { ok: boolean; organizacion_id: string; config: Record<string, unknown> }
 type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: string }> }
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
-type TenantSummaryLite = { id: string; nombre: string | null }
+type TenantDetailResponse = { ok: boolean; tenant: TenantOrganizationInfo }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -74,20 +76,21 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     organizacionId: null,
     withUserToken: true,
   })
+  const infoResp = await callCrmApi<TenantDetailResponse>(`/admin/tenants/${tenantId}`, {
+    organizacionId: null,
+    withUserToken: true,
+  })
 
   const errors: string[] = []
   if (!configResp.ok) errors.push(configResp.error)
   if (!secretsResp.ok) errors.push(secretsResp.error)
   if (!routesResp.ok) errors.push(routesResp.error)
+  if (!infoResp.ok) errors.push(infoResp.error)
 
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
   const config = configResp.ok ? asRecord(configResp.data.config ?? {}) ?? {} : {}
-  const tenantsResp = await callCrmApi<{ ok: boolean; items: TenantSummaryLite[] }>("/admin/tenants", {
-    organizacionId: null,
-    withUserToken: true,
-  })
-  const tenantMeta = tenantsResp.ok ? tenantsResp.data.items.find((item) => item.id === tenantId) : null
+  const tenantInfo: TenantOrganizationInfo | null = infoResp.ok ? infoResp.data.tenant : null
   const webchatConfig = getNestedRecord(config, "webchat") ?? {}
   const webchatCalendar = getNestedRecord(webchatConfig, "calendar") ?? {}
   const webchatRoute = routes.find((r) => r.canal === "webchat")?.clave ?? ""
@@ -204,10 +207,20 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
 
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle>{tenantMeta?.nombre ?? "Organización"}</CardTitle>
+            <CardTitle>Datos generales</CardTitle>
+            <CardDescription>Actualiza los campos de `public.organizaciones` del tenant.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="space-y-1">
+            <CardTitle>{tenantInfo?.nombre ?? "Organización"}</CardTitle>
             <CardDescription>
               ID: {tenantId}
-              {tenantMeta?.nombre ? ` · ${tenantMeta.nombre}` : ""}
+              {tenantInfo?.nombre ? ` · ${tenantInfo.nombre}` : ""}
             </CardDescription>
           </CardHeader>
         <CardContent>
