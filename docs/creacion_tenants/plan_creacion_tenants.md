@@ -44,19 +44,69 @@ Darle al usuario platform-admin (tu cuenta actual) la capacidad de:
 6. Registrar auditoría/log indicando qué tenant+usuario se creó y quién lo hizo (opcionalmente en `eventos_auditoria`).
 
 ## Flujo sugerido
-1. Frontend: formulario con dos secciones (tenant + admin). El submit llama a nuevo endpoint `/admin/tenants/con_usuario`.
+1. Frontend: formulario con dos secciones (tenant + admin). El submit llama al nuevo endpoint `POST /admin/tenants/con_usuario`.
 2. Backend:
    - Requiere `require_platform_admin`.
-   - Usa transacción lógica para:
-     a. Insertar en `public.organizaciones`.
-     b. Crear ruta webchat (si `alias`).
-     c. Insertar `organizaciones.config` y secretos (si vienen).
-     d. Llamar a helper `createSupabaseAuthUser` para crear identity y enviar email de recuperación.
-     e. Insertar/patch en `public.usuarios` con `organizacion_id`, estado, teléfono y nombre.
-     f. Asociar rol admin en `public.usuarios_roles`.
-   - Devuelve metadata del tenant creado y el `id` del usuario (pero sin secrets).
-3. Frontend muestra resumen y pasos restantes para el admin (roles, empleados, variables).
-4. El nuevo admin, con `rol=admin` pero sin `platform_admin`, puede entrar a su propia org y completar HR, departments, configuraciones (views existentes `/settings/usuarios`, `/settings/empleados`, `/settings/tenants/{id}` pero restringidas a su tenant vía RLS).
+   - Validar payload: tenant mínimo + admin email/teléfono + lista `seed` (permisos/roles/departamento/puesto).
+   - En orden:
+     a. Crear tenant con `repo.create_organizacion`; si llega `webchat_alias`, crear ruta (`repo.create_channel_route`) y cache invalidation.
+     b. Aplicar configuración (`organizaciones.config`) y secretos.
+     c. Sembrar seeds: insertar en `public.permisos`, `public.roles` (disparando `roles_autofill_codigo()`), `public.roles_permisos`, `public.departamentos`, `public.puestos`.
+     d. Llamar a `createSupabaseAuthUser` para crear identidad Supabase con `user/app_metadata.organizacion_id`.
+     e. Disparar `triggerSupabaseRecovery` (como hace `createSupabaseAuthUser`) para que el admin reciba el correo de set-password.
+     f. Insertar/actualizar `public.usuarios`, `public.usuarios_roles` apuntando al rol “Admin”, y registrar fila en `public.empleados` apuntando al departamento/puesto semeado.
+     g. Registrar auditoría en `eventos_auditoria` (opcional según trigger).
+   - Devuelve metadata del tenant + `usuario_id` creado + resumen de seeds aplicados (permisos/roles/departamentos).
+3. Frontend muestra resumen/pasos faltantes para el admin (roles posteriores, configuraciones) y confirma que el correo de recuperación fue disparado.
+4. El nuevo admin, con `rol=admin` pero sin `platform_admin`, entra solo a su org y completa roles/empleados/varios via las vistas del tenant (respetando RLS).
+
+## Diseño del endpoint `/admin/tenants/con_usuario`
+
+### Payload propuesto
+| Campo | Tipo | Obligatorio | Comentario |
+| --- | --- | --- | --- |
+| `tenant.nombre` | `string` | sí | mínimo 2 caracteres. |
+| `tenant.razon_social` | `string` | no | se guarda en `public.organizaciones`. |
+| `tenant.dominio_principal` | `string` | no | opcional, se usa para branding/routing. |
+| `tenant.webchat_alias` | `string` | no | se normaliza `lower()` y se guarda en `organizacion_rutas_canal`. |
+| `tenant.activo` | `boolean` | no | default `true`. |
+| `tenant.estado_onboarding` | `enum` | no | `pendiente`/`en_progreso`/`completado`/... |
+| `tenant.config` | `object` | no | JSON inicial, se valida que sea objeto. |
+| `admin.correo` | `string` | sí | se valida como email y se usa para crear la cuenta Supabase. |
+| `admin.nombre_completo` | `string` | no | fallback al email si falta. |
+| `admin.telefono` | `string` | no | se normaliza/valida en E.164 (`^\+[0-9]{7,15}$`). |
+| `admin.estado` | `string` | no | `activo` o `bloqueado` (default `activo`). |
+| `seed.departamento` | `string` | sí | se crea fila en `public.departamentos`. |
+| `seed.puesto` | `string` | sí | se crea fila en `public.puestos`. |
+| `seed.rol_nombre` | `string` | sí | se insertará en `public.roles` y se usará para `usuarios_roles`. |
+| `seed.rol_descripcion` | `string` | no | ayuda en la UI. |
+| `seed.permisos` | `array<{ codigo, descripcion }>` | sí | se insertan en `public.permisos` y se asocian al rol ( `public.roles_permisos`). |
+
+### Validaciones del endpoint
+1. `tenant.nombre` no vacío; `webchat_alias` no debe colisionar con rutas existentes.
+2. `tenant.config`, si viene, debe ser objeto plano.
+3. `admin.correo` debe pasar validación `EmailStr`; `telefono` en E.164.
+4. `seed.permisos` no puede repetir `codigo` por tenant; `seed.rol_nombre` no debe duplicarse.
+5. `seed.departamento` y `seed.puesto` deben crearse en `public.departamentos`/`public.puestos`.
+
+### Ejemplo de respuesta
+```json
+{
+  "ok": true,
+  "tenant_id": "uuid",
+  "usuario_id": "uuid",
+  "seed": {
+     "rol_id": "uuid",
+     "permisos_ids": ["uuid1","uuid2"],
+     "departamento_id": "uuid",
+     "puesto_id": "uuid",
+     "empleado_id": "uuid"
+  },
+  "recovery_email_sent": true
+}
+```
+
+El backend envía errores claros (`403 platform_admin_required`, `409 alias_conflict`, `400 validation`, `502 repo error`).
 
 ## Checklist de post-creation (para el tenant admin)
 - Confirmar rutas (webchat, WhatsApp, messenger) y secretos (OpenAI, Twilio, mail, calendar).
