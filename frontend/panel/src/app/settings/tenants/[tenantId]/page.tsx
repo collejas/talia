@@ -32,6 +32,7 @@ export const revalidate = 0
 type TenantConfigResponse = { ok: boolean; organizacion_id: string; config: Record<string, unknown> }
 type TenantSecretsResponse = { ok: boolean; items: Array<SecretItem & { id?: string }> }
 type TenantRoutesResponse = { ok: boolean; items: Array<RouteItem & { id: string }> }
+type TenantSummaryLite = { id: string; nombre: string | null }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
@@ -82,6 +83,11 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
   const config = configResp.ok ? asRecord(configResp.data.config ?? {}) ?? {} : {}
+  const tenantsResp = await callCrmApi<{ ok: boolean; items: TenantSummaryLite[] }>("/admin/tenants", {
+    organizacionId: null,
+    withUserToken: true,
+  })
+  const tenantMeta = tenantsResp.ok ? tenantsResp.data.items.find((item) => item.id === tenantId) : null
   const webchatConfig = getNestedRecord(config, "webchat") ?? {}
   const webchatCalendar = getNestedRecord(webchatConfig, "calendar") ?? {}
   const webchatRoute = routes.find((r) => r.canal === "webchat")?.clave ?? ""
@@ -198,8 +204,11 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
 
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle>Organización</CardTitle>
-            <CardDescription>ID: {tenantId}</CardDescription>
+            <CardTitle>{tenantMeta?.nombre ?? "Organización"}</CardTitle>
+            <CardDescription>
+              ID: {tenantId}
+              {tenantMeta?.nombre ? ` · ${tenantMeta.nombre}` : ""}
+            </CardDescription>
           </CardHeader>
         <CardContent>
           <Tabs defaultValue="webchat">
