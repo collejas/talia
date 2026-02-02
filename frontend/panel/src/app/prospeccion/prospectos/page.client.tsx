@@ -652,16 +652,21 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     void fetchProspectos(0)
   }, [fetchProspectos])
 
-  const loadQueryOptions = useCallback(async () => {
+  const loadQueryOptions = useCallback(async (scope: { fuente?: FuenteFilter; dateFrom?: string; dateTo?: string }) => {
     setQueryOptionsLoading(true)
     try {
-      const response = await listProspectosQueryMetadata()
+      const response = await listProspectosQueryMetadata({
+        fuente: scope.fuente || undefined,
+        dateFrom: scope.dateFrom,
+        dateTo: scope.dateTo,
+      })
       const queries = response.queries ?? []
       const activities = response.activities ?? []
       setQueryOptions(queries)
       setActivityOptions(activities)
       setFilters((prev) => ({
         ...prev,
+        queryFilters: prev.queryFilters.filter((value) => queries.includes(value)),
         actividadFilters: prev.actividadFilters.filter((value) => activities.includes(value)),
       }))
     } catch {
@@ -669,6 +674,7 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
       setActivityOptions([])
       setFilters((prev) => ({
         ...prev,
+        queryFilters: [],
         actividadFilters: [],
       }))
     } finally {
@@ -680,8 +686,16 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
     async (selectedQueries: string[]) => {
       setActivityOptionsLoading(true)
       try {
+        const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+          filters.dateOption,
+          filters.customDateFrom,
+          filters.customDateTo
+        )
         const response = await listProspectosQueryMetadata({
           queries: selectedQueries.length ? selectedQueries : undefined,
+          fuente: filters.fuente || undefined,
+          dateFrom,
+          dateTo,
         })
         const activities = response.activities ?? []
         setActivityOptions(activities)
@@ -699,12 +713,17 @@ const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string
         setActivityOptionsLoading(false)
       }
     },
-    []
+    [filters.customDateFrom, filters.customDateTo, filters.dateOption, filters.fuente]
   )
 
   useEffect(() => {
-    void loadQueryOptions()
-  }, [loadQueryOptions])
+    const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(
+      filters.dateOption,
+      filters.customDateFrom,
+      filters.customDateTo
+    )
+    void loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo })
+  }, [filters.customDateFrom, filters.customDateTo, filters.dateOption, filters.fuente, loadQueryOptions])
 
   useEffect(() => {
     if (queryFiltersInitialEffect.current) {

@@ -9502,6 +9502,9 @@ async def listar_prospectos_query_metadata(
     repo: CRMRepository = Depends(get_repository),
     user_token: str = Depends(require_user_token),
     query: Annotated[list[str] | None, Query(alias="query")] = None,
+    fuente: Annotated[Literal["google_places", "denue", "usuario", ""] | None, Query(alias="fuente")] = None,
+    date_from: Annotated[date | None, Query(alias="date_from")] = None,
+    date_to: Annotated[date | None, Query(alias="date_to")] = None,
 ) -> dict[str, Any]:
     """Lista nombres de consulta y actividades asociadas para los prospectos guardados."""
 
@@ -9509,6 +9512,9 @@ async def listar_prospectos_query_metadata(
         metadata = await repo.list_prospecto_query_metadata(
             usuario_token=user_token,
             query_filters=query,
+            fuente=fuente or None,
+            date_from=date_from,
+            date_to=date_to,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

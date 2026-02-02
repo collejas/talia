@@ -5914,12 +5914,31 @@ class CRMRepository:
         *,
         usuario_token: str,
         query_filters: list[str] | None = None,
+        fuente: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> dict[str, list[str]]:
         params: dict[str, str] = {
             "select": "actividad,metadata",
             "order": "metadata->>query.asc,actividad.asc",
             "limit": "5000",
         }
+        if fuente:
+            params["fuente"] = f"eq.{fuente}"
+        if date_from or date_to:
+            and_filters: list[str] = []
+            tz_name = settings.webchat_calendar_timezone or "America/Mexico_City"
+            zone = ZoneInfo(tz_name)
+            if date_from:
+                start_local = datetime.combine(date_from, datetime.min.time(), tzinfo=zone)
+                start_utc = start_local.astimezone(timezone.utc).isoformat()
+                and_filters.append(f"creado_en.gte.{start_utc}")
+            if date_to:
+                end_local = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=zone)
+                end_utc = end_local.astimezone(timezone.utc).isoformat()
+                and_filters.append(f"creado_en.lt.{end_utc}")
+            if and_filters:
+                params["and"] = "(" + ",".join(and_filters) + ")"
 
         resp = await self._request_with_user(
             "GET",

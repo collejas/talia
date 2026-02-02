@@ -420,6 +420,9 @@ export async function listProspectos(params: {
 
 export async function listProspectosQueryMetadata(params?: {
   queries?: string[]
+  fuente?: "google_places" | "denue" | "usuario"
+  dateFrom?: string
+  dateTo?: string
 }): Promise<{ queries: string[]; activities: string[] }> {
   const url = buildClientUrl("/api/prospeccion/prospectos/queries")
   if (params?.queries?.length) {
@@ -429,6 +432,15 @@ export async function listProspectosQueryMetadata(params?: {
         url.searchParams.append("query", trimmed)
       }
     }
+  }
+  if (params?.fuente) {
+    url.searchParams.set("fuente", params.fuente)
+  }
+  if (params?.dateFrom) {
+    url.searchParams.set("date_from", params.dateFrom)
+  }
+  if (params?.dateTo) {
+    url.searchParams.set("date_to", params.dateTo)
   }
   return requestJson<{ queries: string[]; activities: string[] }>(url.toString())
 }
