@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal, Sequence
 from uuid import UUID
 
@@ -406,4 +407,9 @@ class PlatformRepository:
             raise PlatformRepositoryError(f"supabase_error:{resp.status_code}:{path}:{resp.text}")
         if resp.status_code == 204:
             return None
-        return resp.json()
+        if not resp.text:
+            return None
+        try:
+            return resp.json()
+        except json.JSONDecodeError:
+            return None

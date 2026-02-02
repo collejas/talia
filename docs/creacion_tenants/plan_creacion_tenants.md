@@ -114,8 +114,63 @@ El backend envía errores claros (`403 platform_admin_required`, `409 alias_conf
 - Revisar `settings/hr` del tenant para crear roles/empleados/departamentos según se necesite.
 - Completar `organizaciones.config` con branding, flags y conectores.
 
-## Siguientes pasos
-1. Diseñar el endpoint combinado y el formulario (decidir payload JSON).
-2. Documentar en este archivo los campos exactos del formulario y las validaciones.
-3. Implementar pruebas manuales: crear tenant + admin, revisar que el admin no tenga acceso cross-tenant.
-4. Añadir sección de “validación” en la UI para marcar qué steps faltan después de crear el tenant.
+## Punto 1 – Diseñar el endpoint `/admin/tenants/con_usuario`
+- Validar que solo `platform_admin` (tú) pueda invocar la ruta. El payload ya debe incluir `tenant` + `admin` + `seed`.
+- Payload mínimos: `tenant.nombre`, `tenant.webchat_alias?` (detecta conflictos), `tenant.config`, `admin.correo`, `admin.telefono`, `seed:{departamento, puesto, rol_nombre, permisos}`. Se debe guardar `estado_onboarding` y `activo` si vienen.
+- Validaciones: correo normalizado (con `email_validator` en `test_environment=True` para los dominios `.test` de las pruebas), teléfono E.164 opcional, alias único (campos `canal=webchat`, `clave=lower()`), `seed.permisos` con `min_length=1`, `seed.rol_nombre` único por organización, `seed.departamento` y `seed.puesto` se insertan y se asocian.
+- Orden lógico:
+  1. Crear `organizaciones` + `organizacion_rutas_canal` (webchat alias).
+  2. Sembrar seeds: `permisos`, `roles`, `roles_permisos`, `departamentos`, `puestos`.
+  3. Crear usuario Supabase + metadata `organizacion_id` + disparar `/auth/v1/recover` para enviar correo con `RESET_REDIRECT_URL`.
+  4. Insertar/actualizar `public.usuarios`, `usuarios_roles`, `empleados` (usuario admin = empleado with highest privileges within tenant).
+  5. Registrar auditoría (optional, en `eventos_auditoria` o logs).
+- Respuesta propuesta: `{ok, tenant_id, usuario_id, seed:{rol_id, permisos_ids, departamento_id, puesto_id, empleado_id}, recovery_email_sent:true}` y `activo` del tenant si se necesita.
+
+## Punto 2 – Revisión de la base de datos y triggers (backup + Supabase)
+- Abre la copia de respaldo en `/var/www/talia/backups/postgres_20260126_203110` para inspección de esquemas:
+  - Tablas clave: `organizaciones`, `organizacion_rutas_canal`, `permisos`, `roles`, `roles_permisos`, `departamentos`, `puestos`, `usuarios`, `usuarios_roles`, `empleados`, `secretos`, `eventos_auditoria`.
+  - Revisa funciones/triggers que ya manejen semillas al crear un tenant. Si existen `RCP` (procedimientos almacenados), documenta cómo se disparan (por ejemplo, trigger `-after insert` en `organizaciones`).
+  - Verifica procedimientos que cifran secretos (`secrets_crypto`) y cómo se almacenan en `secretos` con `master_key`.
+  - Confirma que no hay triggers que puedan dar acceso global a los nuevos admins (el permiso de crear tenants debe quedarse restringido).
+- Mapear `roles_permisos` base: el rol inicial debe tener el conjunto mínimo de permisos (admin del tenant) y la cuenta del tenant no puede crear nuevos tenants.
+- Ver qué datos se deben escribir en `organizaciones.config` y `secretos` para habilitar webchat, Twilio, messenger, etc.
+- Anotar cualquier vista/procedimiento (RCP) en ese backup que se pueda reutilizar para sembrar roles/permisos/empleados desde el backend.
+
+## Punto 3 – Frontend y experiencia en `/settings/tenants`
+- El formulario actual debe tener dos secciones claramente diferenciadas: **tenant** y **usuario administrador**. Todo lo relacionado con las “seed” (permisos, rol, departamento, puesto y empleado) se crea automáticamente en el backend, no se pide nada adicional al usuario.
+- Recolectar los campos listados en el endpoint (`tenant.nombre`, `tenant.config`, `tenant.webchat_alias`, `tenant.activo`, `tenant.estado_onboarding`, `admin.correo`, `admin.nombre_completo`, `admin.telefono`, `admin.estado`). El formulario debe insistir en que el alias se normaliza en minúsculas y que el correo debe ser válido.
+- Validaciones en frontend: feedback inmediato para campos obligatorios, formato de teléfono en E.164, alias único (puede validarse en vivo contra el backend `409 alias_conflict`). Mostrar también errores del backend (`403 platform_admin_required`, `400 invalid data`, `502 repo_error`).
+- Al guardar, el panel confirma que se disparó el correo de recuperación y muestra los pasos que le faltan al tenant admin (crear más roles, empleados o departamentos, configurar canales) sin exponer que las semillas ya vienen preparadas.
+- El nuevo tenant admin solo ve sus datos organizacionales y módulos autorizados (sin opciones de multi-tenant). El panel puede mostrar un mensaje de advertencia “este usuario no puede crear nuevos tenants; contacta al platform-admin para más organizaciones”.
+- Interacciones clave: botón “Crear tenant + admin” deshabilitado hasta que pase validaciones; spinner/estado “Creando tenant…” y después pantalla de resumen con IDs devueltos por el endpoint (`tenant_id`, `usuario_id`) más el aviso de correo enviado.
+
+### Campos y layout recomendados
+| Sección | Campo | Requerido | Validación/explicación |
+| --- | --- | --- | --- |
+| Tenant | Nombre | sí | mínimo 2 caracteres. |
+|  | Alias webchat | opcional pero sugerido | se guarda en `organizacion_rutas_canal`, se muestra error si backend responde `409 alias_conflict`. |
+|  | Config JSON | opcional | editor JSON ligero (sugerir plantillas de flags como `features.webchat.enabled`). |
+|  | Activo (checkbox) | no | default true. |
+|  | Estado onboarding (select) | no | valores: `pendiente`, `en_progreso`, `completado`, `pausado`, `cancelado`. |
+| Usuario admin | Correo | sí | correo válido, normaliza, se usa para Supabase. |
+|  | Nombre completo | no | opción: si falta, usar el correo como etiqueta. |
+|  | Teléfono | no | captura en formato E.164; se puede usar máscara `+521234567890`. |
+|  | Estado | no | select `activo`/`bloqueado`. |
+
+### Flujo UX esperado
+1. El usuario `platform-admin` abre `/settings/tenants` y ve la tarjeta “Nuevo tenant” con ambos bloques y el botón de acción.
+2. Llena los datos. Las validaciones de alias/correo se muestran en tiempo real apoyadas por respuestas del backend.
+3. Al enviar, la interfaz muestra un loader e invoca `POST /admin/tenants/con_usuario`.
+4. Si el request falla (alias ocupado, validación, falta de privilegios), se presenta un toast/error en el bloque correspondiente. Si pasa, se muestra un panel de confirmación con: ID del tenant, ID del usuario, lista de seeds aplicados (mismo resumen que devuelve el backend) y la advertencia de que el correo de recuperación ya fue mandado.
+5. Opcional: un segundo botón “Ir a configuración del tenant” redirige al dashboard interno del tenant para continuar con tareas de HR/roles/empleados una vez que el nuevo admin haya iniciado sesión.
+
+## Validaciones y pruebas
+- Mantener pruebas automatizadas como `tests/api/test_admin_tenant_flow.py` con mocks (como ya se creó).
+- Anotar en la documentación qué errores devuelve el endpoint para facilitar el flujo (`409 alias_conflict`, `502 repo_error`, etc.).
+- Durante la ejecución real, habilitar logs en `/var/www/talia/logs/*.log` asegurando permisos (o usar `TALIA_LOG_FILE_PATH=/tmp/api.log` durante pruebas automáticas).
+
+## Checklist operativo (post-creación)
+- Confirmar rutas (`webchat`, `whatsapp`, `messenger`) y secretos (OpenAI, Twilio, mail, calendar).
+- Usar `/admin/tenants/{id}/validate?scope=...` para detectar `missing_routes/secrets`.
+- Ir a `/settings/hr` para crear roles/empleados/departamentos extra que la organización necesite.
+- Completar `organizaciones.config` con branding y conectores (calendario, Twilio, etc.).

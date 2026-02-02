@@ -5,12 +5,10 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { callCrmApi } from "@/lib/api/crm"
 
-import { createTenant } from "./actions"
+import { TenantCreationPanel } from "./components/tenant-creation-panel"
 
 export const metadata: Metadata = {
   title: "Tenants · Settings",
@@ -51,84 +49,7 @@ export default async function TenantsSettingsPage() {
           </p>
         </header>
 
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle>Crear tenant</CardTitle>
-            <CardDescription>
-              Crea la organización y, si indicas un alias, se registra como ruta <code>canal=webchat</code>.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createTenant} className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input id="nombre" name="nombre" placeholder="Cliente / Organización" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="razon_social">Razón social</Label>
-                <Input id="razon_social" name="razon_social" placeholder="Opcional" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dominio_principal">Dominio principal</Label>
-                <Input id="dominio_principal" name="dominio_principal" placeholder="cliente.com" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="rfc">RFC</Label>
-                <Input id="rfc" name="rfc" placeholder="Opcional" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pais">País</Label>
-                <Input id="pais" name="pais" placeholder="México" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="estado">Estado</Label>
-                <Input id="estado" name="estado" placeholder="Jalisco" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
-                <Input id="ciudad" name="ciudad" placeholder="Guadalajara" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="telefono">Teléfono</Label>
-                <Input id="telefono" name="telefono" placeholder="+525512345678" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sitio_web">Sitio web</Label>
-                <Input id="sitio_web" name="sitio_web" placeholder="https://cliente.com" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="webchat_alias">Alias webchat</Label>
-                <Input id="webchat_alias" name="webchat_alias" placeholder="cliente" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <div className="flex items-center gap-3">
-                  <input id="activo" name="activo" type="checkbox" className="size-4" defaultChecked />
-                  <Label htmlFor="activo">Activo</Label>
-                </div>
-                <div>
-                  <Label htmlFor="estado_onboarding" className="text-sm">
-                    Estado de onboarding
-                  </Label>
-                  <select
-                    id="estado_onboarding"
-                    name="estado_onboarding"
-                    defaultValue="pendiente"
-                    className="mt-1 block w-full rounded-md border border-border px-3 py-2 text-sm"
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_progreso">En progreso</option>
-                    <option value="completado">Completado</option>
-                    <option value="pausado">Pausado</option>
-                    <option value="cancelado">Cancelado</option>
-                  </select>
-                </div>
-              </div>
-              <div className="sm:col-span-2 flex justify-end">
-                <Button type="submit">Crear</Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <TenantCreationPanel />
 
         <Card>
           <CardHeader className="space-y-1">
