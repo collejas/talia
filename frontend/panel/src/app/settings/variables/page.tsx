@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
-import { TenantVariablesPanel } from "./components/tenant-variables-panel"
+import { TenantVariablesConfigPanel } from "./components/tenant-variables-config-panel"
+import { TenantVariablesDetailsPanel } from "./components/tenant-variables-details-panel"
 import { callCrmApi } from "@/lib/api/crm"
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default async function SettingsVariablesPage() {
     sitio_web?: string | null
     estado_onboarding?: string | null
     activo?: boolean | null
+    config?: Record<string, unknown> | null
     routes: Array<{ canal: string; clave: string }>
   }>("/tenant/me/settings", {
     organizacionId: null,
@@ -32,12 +34,12 @@ export default async function SettingsVariablesPage() {
   })
 
   const data = response.ok ? response.data : null
-  const error = response.ok ? null : response.error
 
   return (
     <AppViewLayout title="Variables del tenant" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
-        <TenantVariablesPanel data={data} error={error} />
+        <TenantVariablesConfigPanel data={data} />
+        <TenantVariablesDetailsPanel data={data} />
       </div>
     </AppViewLayout>
   )
