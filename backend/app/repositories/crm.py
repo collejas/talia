@@ -55,6 +55,12 @@ def _postgrest_eq_literal(value: str) -> str:
     return urlquote(value, safe="")
 
 
+def _postgrest_ilike_literal(value: str) -> str:
+    """Build a PostgREST literal for case-insensitive ilike filters."""
+    literal = _postgrest_eq_literal(value)
+    return f"*{literal}*"
+
+
 def _make_json_serializable(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
@@ -5860,10 +5866,10 @@ class CRMRepository:
                 unique_queries.append(candidate)
             metadata_conditions: list[str] = []
             for value in unique_queries:
-                literal = _postgrest_eq_literal(value)
-                metadata_conditions.append(f"metadata->>'query'.eq.{literal}")
-                metadata_conditions.append(f"metadata->>'busqueda_query'.eq.{literal}")
-                metadata_conditions.append(f"metadata->'busqueda_meta'->>'query'.eq.{literal}")
+                literal = _postgrest_ilike_literal(value)
+                metadata_conditions.append(f"metadata->>'query'.ilike.{literal}")
+                metadata_conditions.append(f"metadata->>'busqueda_query'.ilike.{literal}")
+                metadata_conditions.append(f"metadata->'busqueda_meta'->>'query'.ilike.{literal}")
             if metadata_conditions:
                 and_filters.append(f"or({','.join(metadata_conditions)})")
 
@@ -5906,23 +5912,6 @@ class CRMRepository:
             "order": "metadata->>'query'.asc,actividad.asc",
             "limit": "5000",
         }
-        if query_filters:
-            unique_queries: list[str] = []
-            seen: set[str] = set()
-            for value in query_filters:
-                candidate = str(value or "").strip()
-                if not candidate or candidate in seen:
-                    continue
-                seen.add(candidate)
-                unique_queries.append(candidate)
-            metadata_conditions: list[str] = []
-            for value in unique_queries:
-                literal = _postgrest_eq_literal(value)
-                metadata_conditions.append(f"metadata->>'query'.eq.{literal}")
-                metadata_conditions.append(f"metadata->>'busqueda_query'.eq.{literal}")
-                metadata_conditions.append(f"metadata->'busqueda_meta'->>'query'.eq.{literal}")
-            if metadata_conditions:
-                params["or"] = f"({','.join(metadata_conditions)})"
 
         resp = await self._request_with_user(
             "GET",
@@ -5933,10 +5922,20 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar metadata de prospectos: {data!r}")
+        selected_queries: set[str] | None = None
+        if query_filters:
+            normalized: set[str] = set()
+            for value in query_filters:
+                candidate = str(value or "").strip()
+                if candidate:
+                    normalized.add(candidate.casefold())
+            selected_queries = normalized if normalized else None
+
         query_values: set[str] = set()
         activity_values: set[str] = set()
         for row in data:
             metadata = row.get("metadata")
+            row_queries: list[str] = []
             if isinstance(metadata, dict):
                 for key in ("query", "busqueda_query"):
                     value = metadata.get(key)
@@ -5944,6 +5943,7 @@ class CRMRepository:
                         candidate = value.strip()
                         if candidate:
                             query_values.add(candidate)
+                            row_queries.append(candidate)
                 busqueda_meta = metadata.get("busqueda_meta")
                 if isinstance(busqueda_meta, dict):
                     value = busqueda_meta.get("query")
@@ -5951,11 +5951,25 @@ class CRMRepository:
                         candidate = value.strip()
                         if candidate:
                             query_values.add(candidate)
+                            row_queries.append(candidate)
+            if selected_queries is not None:
+                # When the UI requests activities for specific queries, filter in Python
+                # instead of relying on PostgREST OR filters (which can be brittle with JSON ops).
+                matched = False
+                for candidate in row_queries:
+                    if candidate.casefold() in selected_queries:
+                        matched = True
+                        break
+                if not matched:
+                    continue
             actividad = row.get("actividad")
             if isinstance(actividad, str):
                 candidate = actividad.strip()
                 if candidate:
                     activity_values.add(candidate)
+        if selected_queries is not None:
+            # Keep original casing as received from the UI where possible.
+            query_values = {str(value).strip() for value in (query_filters or []) if str(value or "").strip()}
         return {
             "queries": sorted(query_values),
             "activities": sorted(activity_values),
