@@ -203,105 +203,178 @@
       line-height: 1.5;
     }
 
-    .activation-section {
+    .problem-section,
+    .benefit-section,
+    .reframe-section,
+    .future-section,
+    .final-cta-panel {
       margin-top: 3rem;
-      background: linear-gradient(140deg, rgba(59, 130, 246, 0.18), rgba(14, 165, 233, 0.08));
       border-radius: 32px;
       border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(5, 6, 15, 0.8);
       padding: clamp(2rem, 3vw, 3rem);
-      box-shadow: 0 35px 90px rgba(5, 6, 15, 0.35);
-      overflow: hidden;
-      position: relative;
+      box-shadow: 0 45px 100px rgba(5, 6, 15, 0.45);
     }
 
-    .activation-section::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 32px;
-      background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.15), transparent 55%),
-        radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.35), transparent 60%);
-      opacity: 0.55;
-      pointer-events: none;
-      z-index: -1;
+    .problem-section h3,
+    .benefit-section h3,
+    .reframe-section h3,
+    .future-section h3 {
+      margin: 0 0 0.8rem;
+      font-size: clamp(1.8rem, 2.4vw, 2.3rem);
+      color: #f8fafc;
+      line-height: 1.2;
     }
 
-    .activation-grid {
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .problem-card {
+      background: rgba(17, 24, 39, 0.92);
+      border-radius: 22px;
+      padding: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+      justify-content: center;
+      box-shadow: 0 20px 60px rgba(2, 6, 23, 0.55);
+    }
+
+    .problem-card strong {
+      color: #22d3ee;
+      font-size: 1.2rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .problem-card p {
+      margin: 0;
+      color: rgba(226, 232, 240, 0.85);
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+
+    .problem-solution {
+      margin-top: 0.4rem;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .benefit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .benefit-card {
+      background: linear-gradient(150deg, rgba(59, 130, 246, 0.25), rgba(99, 102, 241, 0.08));
+      border-radius: 20px;
+      padding: 1.4rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: 0 15px 45px rgba(3, 7, 18, 0.45);
+    }
+
+    .benefit-card h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      color: #f8fafc;
+    }
+
+    .benefit-card span {
+      color: rgba(226, 232, 240, 0.8);
+      font-size: 0.95rem;
+      line-height: 1.35;
+    }
+
+    .reframe-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1.25rem;
-      margin: 1.5rem 0 1.75rem;
+      gap: 1rem;
     }
 
-    .activation-card {
-      background: rgba(15, 23, 42, 0.85);
+    .reframe-card {
+      background: rgba(17, 24, 39, 0.92);
       border-radius: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       padding: 1.25rem;
       min-height: 140px;
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
-      box-shadow: 0 20px 50px rgba(2, 6, 23, 0.45);
+      box-shadow: 0 20px 55px rgba(2, 6, 23, 0.5);
     }
 
-    .activation-card h4 {
+    .reframe-card h5 {
       margin: 0;
-      font-size: 1.05rem;
-      color: #f8fafc;
-      line-height: 1.4;
-    }
-
-    .activation-card p {
-      margin: 0;
-      color: rgba(226, 232, 240, 0.85);
-      font-size: 0.95rem;
-      line-height: 1.4;
-    }
-
-    .activation-section h3 {
-      margin-bottom: 0.4rem;
-      font-size: clamp(1.6rem, 2.2vw, 2rem);
-      color: #f8fafc;
-      line-height: 1.2;
-    }
-
-    .activation-section p {
-      margin: 0;
-      color: rgba(226, 232, 240, 0.85);
       font-size: 1rem;
-      max-width: 740px;
+      color: #22d3ee;
     }
 
-    .activation-footer {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .activation-cta {
-      border-radius: 999px;
-      padding: 0.85rem 1.8rem;
-      font-weight: 600;
+    .reframe-card p {
+      margin: 0;
+      color: rgba(226, 232, 240, 0.85);
       font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .future-section {
+      text-align: center;
+    }
+
+    .future-section p {
+      margin: 0;
+      color: rgba(226, 232, 240, 0.85);
+      font-size: 1.1rem;
+      line-height: 1.4;
+    }
+
+    .final-cta-panel {
+      border: 1px solid rgba(59, 130, 246, 0.9);
+      background: rgba(14, 165, 233, 0.08);
+      text-align: center;
+      position: relative;
+    }
+
+    .final-cta-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 32px;
+      background: linear-gradient(180deg, rgba(59, 130, 246, 0.3), transparent 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .final-cta-panel > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .final-cta-panel h3 {
+      margin-bottom: 0.5rem;
+    }
+
+    .final-cta-panel button {
+      border-radius: 999px;
       border: none;
+      padding: 1rem 2.5rem;
+      font-size: 1rem;
+      font-weight: 600;
       cursor: pointer;
       background: var(--accent);
       color: #05060f;
-      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .activation-link {
-      color: #f8fafc;
-      font-weight: 500;
-      text-decoration: underline;
-      cursor: pointer;
+      box-shadow: 0 20px 60px rgba(99, 102, 241, 0.35);
+      margin-top: 0.8rem;
     }
 
     .landing-stage-hidden {
@@ -339,13 +412,12 @@
     <div class="hero-wrapper">
       <section class="hero-card">
       <p class="hero-label">TalIA · agente IA nativo multitenant</p>
-      <h1>Convierte la automatización tradicional en IA que actúa como agente humano.</h1>
+      <h1>No es un chatbot.<br />Es un agente de IA que atiende, decide y actúa por tu negocio 24/7.</h1>
       <p>
-        Dile adiós a bots lineales: TalIA entiende tu negocio, califica leads, prioriza, agenda y negocia
-        con cada cliente sin scripts rígidos. Disponible 24/7 y entrenada con tu propia data.
+        Mientras tu equipo duerme, esta IA responde, califica clientes, agenda citas y da seguimiento hasta cerrar.
       </p>
       <div class="hero-actions">
-        <button id="open-webchat">Abrir webchat (modal)</button>
+        <button type="button" data-open-webchat>Ver al agente IA en acción</button>
         <a href="/dashboard">Explorar panel</a>
       </div>
         <div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
@@ -415,37 +487,70 @@
       </section>
     </div>
 
-    <section class="activation-section" aria-label="Activadores mentales">
-      <div class="activation-grid">
-        <article class="activation-card">
-          <h4>Deja de lidiar con respuestas frías</h4>
-          <p>
-            TalIA conversa con contexto real, decide el siguiente paso y actúa como un colega senior sin perder energía.
-          </p>
+    <section class="problem-section" aria-label="Problema y urgencia">
+      <h3>Problema → Pérdida</h3>
+      <div class="problem-grid">
+        <article class="problem-card">
+          <strong>Tus clientes escriben.<br />Preguntan.<br />Piden información.</strong>
+          <p>El silencio no es indiferencia; es pérdida de confianza.</p>
         </article>
-        <article class="activation-card">
-          <h4>Multiplica tu cobertura 24/7</h4>
-          <p>
-            Obtén un asistente que responde en segundos, nunca se cansa y actúa como vendedor o atención real cuando el cliente lo requiere.
-          </p>
-        </article>
-        <article class="activation-card">
-          <h4>Construye confianza automática</h4>
-          <p>
-            Recuerda cada detalle del cliente y responde con tono humano para que cada conversación avance hacia una solución.
-          </p>
-        </article>
-        <article class="activation-card">
-          <h4>Cierra más rápido sin scripts</h4>
-          <p>
-            Flujos inteligentes que reaccionan al comportamiento real del contacto y convierten ventas, servicio y seguimiento en decisiones que escalan.
-          </p>
+        <article class="problem-card">
+          <strong>Pero si no respondes en minutos…</strong>
+          <p>Ya están hablando con tu competencia.</p>
+          <p class="problem-solution">Por eso no creamos otro CRM. Creamos un agente de IA que se hace cargo de la conversación.</p>
         </article>
       </div>
-      <div class="activation-footer">
-        <a class="activation-cta" href="/demo">Ver demo activa</a>
-        <span class="activation-link" role="link" tabindex="0">¿Quieres que te mostremos cómo funciona?</span>
+    </section>
+
+    <section class="benefit-section" aria-label="Razones para actuar">
+      <h3>Razones para actuar</h3>
+      <div class="benefit-grid">
+        <article class="benefit-card">
+          <h4>IA que decide</h4>
+          <span>No automatiza tareas: toma decisiones, mueve leads y empuja la siguiente acción.</span>
+        </article>
+        <article class="benefit-card">
+          <h4>No deja conversaciones en visto</h4>
+          <span>Cada mensaje sin respuesta es dinero perdido; esta IA sigue el hilo hasta cerrar.</span>
+        </article>
+        <article class="benefit-card">
+          <h4>Con contexto real</h4>
+          <span>Recuerda tono, historial y prioridades para responder como un humano que entiende.</span>
+        </article>
+        <article class="benefit-card">
+          <h4>Todo el ciclo completo</h4>
+          <span>Atiende, vende y da seguimiento sin flujos rotos, respuestas copiadas o herramientas parchadas.</span>
+        </article>
       </div>
+    </section>
+
+    <section class="reframe-section" aria-label="Multiplica, no reemplaza">
+      <h3>Esto no es automation; multiplica tu equipo</h3>
+      <div class="reframe-grid">
+        <article class="reframe-card">
+          <h5>Esto no es automatización</h5>
+          <p>Es delegar conversaciones reales a una inteligencia que entiende tu negocio.</p>
+        </article>
+        <article class="reframe-card">
+          <h5>No reemplaza a tu equipo</h5>
+          <p>Lo multiplica: responde, califica y agenda mientras ellos se enfocan en lo estratégico.</p>
+        </article>
+        <article class="reframe-card">
+          <h5>No responde por responder</h5>
+          <p>Avanza cada conversación hacia una acción con decisiones contextuales, no scripts heredados.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="future-section" aria-label="Future-proof">
+      <h3>Las empresas con mejores agentes de IA marcan el ritmo</h3>
+      <p>En 2026 ya no compiten las que tienen más vendedores, compiten las que entrenan agentes inteligentes.</p>
+    </section>
+
+    <section class="final-cta-panel" aria-label="Demuestra el agente IA">
+      <h3>No te explicamos cómo funciona.</h3>
+      <p>Te lo mostramos conversando.</p>
+      <button type="button" data-open-webchat>Hablar con el agente IA ahora</button>
     </section>
   </main>
 
@@ -499,11 +604,14 @@
   </footer>
 
     <script>
-      document.getElementById('open-webchat')?.addEventListener('click', () => {
-        document.querySelector('.landing-stage')?.classList.add('landing-stage-hidden');
-        document.querySelectorAll('.chat-hidden').forEach((el) => el.classList.remove('chat-hidden'));
-        document.querySelectorAll('.layout-hidden').forEach((el) => el.classList.remove('layout-hidden'));
-        document.querySelector('.chat-shell')?.scrollIntoView({ behavior: 'smooth' });
+      const openWebchatTriggers = document.querySelectorAll('[data-open-webchat]');
+      openWebchatTriggers.forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+          document.querySelector('.landing-stage')?.classList.add('landing-stage-hidden');
+          document.querySelectorAll('.chat-hidden').forEach((el) => el.classList.remove('chat-hidden'));
+          document.querySelectorAll('.layout-hidden').forEach((el) => el.classList.remove('layout-hidden'));
+          document.querySelector('.chat-shell')?.scrollIntoView({ behavior: 'smooth' });
+        });
       });
       const currentYearEl = document.getElementById('current-year');
       if (currentYearEl) {
