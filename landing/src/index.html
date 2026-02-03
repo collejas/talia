@@ -289,6 +289,17 @@
       align-items: start;
     }
 
+    .problem-column {
+      border-radius: 28px;
+      border: 1px solid rgba(15, 23, 42, 0.15);
+      background: #ffffff;
+      padding: clamp(1.25rem, 1.8vw, 1.75rem);
+      box-shadow: var(--blend-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
     .problem-list {
       display: flex;
       flex-direction: column;
@@ -628,7 +639,6 @@
               <h4>Solución</h4>
               <p>Activa el agente IA y observa cómo responde.</p>
             </div>
-            <span class="solution-label">Solución</span>
             <h3 class="solution-title"></h3>
             <ul class="solution-bullets" role="list"></ul>
             <div class="solution-how">
