@@ -59,9 +59,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <main className="flex flex-1 flex-col-reverse items-center gap-12 px-6 pb-10 sm:px-10 md:flex-row md:items-stretch md:justify-center md:pb-16">
         <section className="flex w-full max-w-lg flex-col justify-between gap-10 rounded-3xl border border-border/40 bg-surface-alt/80 p-8 shadow-panel-soft backdrop-blur-sm md:h-auto md:max-w-sm lg:max-w-md">
           <div className="space-y-4">
-            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Webchat Tal-IA
-            </span>
             <h1 className="text-3xl font-semibold leading-tight md:text-4xl">
               Todo tu panel en un solo lugar
             </h1>
