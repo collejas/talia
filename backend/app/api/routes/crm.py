@@ -85,6 +85,7 @@ router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
 import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
+tenant_access_logger = get_logger("app.api.crm.tenant_access")
 
 MAPBOX_LOG_DIR = Path("/var/www/talia/logs")
 MAPBOX_LOG_FILE = MAPBOX_LOG_DIR / "mapbox-debug.log"
@@ -2284,14 +2285,26 @@ def get_repository() -> CRMRepository:
 
 def require_organizacion_id(
     x_organizacion_id: Annotated[str, Header(alias="X-Organizacion-Id")],
+    request: Request,
 ) -> UUID:
     try:
-        return UUID(x_organizacion_id)
+        organizacion_id = UUID(x_organizacion_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Encabezado X-Organizacion-Id inválido",
         ) from exc
+
+    tenant_access_logger.info(
+        "tenant_access",
+        extra={
+            "organizacion_id": str(organizacion_id),
+            "path": request.url.path,
+            "method": request.method,
+            "user_id": request.headers.get("X-Usuario-Id"),
+        },
+    )
+    return organizacion_id
 
 
 def optional_usuario_id(

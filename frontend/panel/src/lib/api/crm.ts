@@ -39,13 +39,10 @@ export async function callCrmApi<T = unknown>(
 ): Promise<CrmResult<T>> {
   let baseUrl: string;
   let token: string;
-  let userAccessToken: string | null = null;
+  const userAccessToken = await resolveCurrentAccessToken();
   try {
     baseUrl = getPanelApiBaseUrl();
     token = await resolvePanelApiToken();
-    if (options.withUserToken) {
-      userAccessToken = await resolveCurrentAccessToken();
-    }
   } catch (error) {
     return {
       ok: false,
@@ -54,8 +51,13 @@ export async function callCrmApi<T = unknown>(
   }
 
   const usuarioId = options.usuarioId ?? (await resolveCurrentUsuarioId());
-  const resolvedOrganizacionId =
-    options.organizacionId === undefined ? resolveDefaultOrganizacionId() : options.organizacionId;
+  let resolvedOrganizacionId: string | null | undefined;
+  if (options.organizacionId !== undefined) {
+    resolvedOrganizacionId = options.organizacionId;
+  } else {
+    const tenantOrgId = decodeJwtOrganizacionId(userAccessToken);
+    resolvedOrganizacionId = tenantOrgId ?? resolveDefaultOrganizacionId();
+  }
 
   const sanitizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = new URL(`${baseUrl}${sanitizedPath}`);
@@ -254,20 +256,49 @@ async function resolveCurrentAccessToken(): Promise<string | null> {
 }
 
 function decodeJwtUserId(token: string | null | undefined): string | null {
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+  if (payload.sub && typeof payload.sub === "string") return payload.sub;
+  if (payload.user_id && typeof payload.user_id === "string") return payload.user_id;
+  return null;
+}
+
+type SupabaseJwtPayload = {
+  sub?: string;
+  user_id?: string;
+  user_metadata?: Record<string, unknown>;
+  app_metadata?: Record<string, unknown>;
+} & Record<string, unknown>;
+
+function decodeJwtPayload(token: string | null | undefined): SupabaseJwtPayload | null {
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length < 2) return null;
   const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   try {
-    const decoded = Buffer.from(padded, "base64").toString("utf8");
-    const payload = JSON.parse(decoded) as { sub?: string; user_id?: string };
-    if (payload.sub && typeof payload.sub === "string") return payload.sub;
-    if (payload.user_id && typeof payload.user_id === "string") return payload.user_id;
-    return null;
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as SupabaseJwtPayload;
   } catch {
     return null;
   }
+}
+
+function decodeJwtOrganizacionId(token: string | null | undefined): string | null {
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+  const metadata =
+    (payload.user_metadata && typeof payload.user_metadata === "object"
+      ? payload.user_metadata
+      : null) ??
+    (payload.app_metadata && typeof payload.app_metadata === "object"
+      ? payload.app_metadata
+      : null);
+  if (!metadata) return null;
+  const value = metadata.organizacion_id;
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  return null;
 }
 
 async function mapResponseError(response: Response): Promise<string> {

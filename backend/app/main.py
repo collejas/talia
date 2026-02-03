@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
         "app.analytics.visitas": str(log_dir / "visitas.log"),
         "app.services.whatsapp_followups": str(log_dir / "whatsapp.log"),
         "app.api.crm.import": str(log_dir / "propiedades-import.log"),
+        "app.api.crm.tenant_access": str(log_dir / "tenant-access.log"),
     }
 
     configure_logging(
