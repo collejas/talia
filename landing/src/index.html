@@ -98,6 +98,25 @@
       background: rgba(255, 255, 255, 0.95);
     }
 
+    .header-link {
+      border-radius: 999px;
+      padding: 0.65rem 0.9rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted-strong);
+      text-decoration: none;
+      transition: border 0.2s ease, color 0.2s ease, background 0.2s ease;
+    }
+
+    .header-link:hover {
+      color: var(--text-main);
+      border-color: rgba(15, 23, 42, 0.15);
+      background: rgba(255, 255, 255, 0.8);
+      transform: translateY(-2px);
+    }
+
     .header-controls {
       display: flex;
       align-items: center;
@@ -515,14 +534,84 @@
       font-weight: 600;
     }
 
-    .future-section {
-      text-align: center;
+    .products-section {
+      border-radius: 32px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: linear-gradient(160deg, rgba(37, 99, 235, 0.04), rgba(255, 255, 255, 0.92));
+      padding: clamp(2rem, 3vw, 3rem);
+      box-shadow: var(--blend-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
     }
 
-    .future-section p {
+    .products-header h2 {
+      margin: 0;
+      font-size: clamp(1.7rem, 2.6vw, 2.35rem);
+      line-height: 1.2;
+      color: var(--text-main);
+    }
+
+    .products-header p {
       margin: 0;
       color: var(--text-muted-strong);
-      font-size: 1.1rem;
+      line-height: 1.6;
+      max-width: 70ch;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem;
+    }
+
+    .product-card {
+      border-radius: 22px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 1.25rem;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-height: 170px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 255, 0.9));
+    }
+
+    .product-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 15% 20%, rgba(37, 99, 235, 0.25), transparent 55%),
+                  radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.18), transparent 45%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .product-card:hover::after,
+    .product-card:focus-within::after {
+      opacity: 1;
+    }
+
+    .product-card > h3 {
+      font-size: 1.15rem;
+      margin: 0;
+      color: var(--text-main);
+    }
+
+    .product-card span {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: rgba(15, 23, 42, 0.5);
+    }
+
+    .product-card p {
+      margin: 0;
+      color: var(--text-muted-strong);
+      flex: 1;
       line-height: 1.4;
     }
 
@@ -566,6 +655,18 @@
     .chat-hidden,
     .layout-hidden {
       display: none !important;
+    }
+
+    @media (max-width: 900px) {
+      .products-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (min-width: 1100px) {
+      .products-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
 
     @media (max-width: 768px) {
@@ -723,7 +824,8 @@
       <span>Tal-IA</span>
     </a>
     <div class="header-controls">
-      <a class="hero-cta" href="#open-webchat">Conecta con IA</a>
+      <a class="header-link" href="#productos">Productos</a>
+      <a class="hero-cta" href="#open-webchat">Conecta con Tal-IA</a>
       <a class="header-panel" href="https://talia.mx/auth/login" target="_blank" rel="noopener noreferrer">Panel</a>
     </div>
   </header>
@@ -740,7 +842,7 @@
                 Mientras tu equipo duerme, esta IA responde, califica clientes, agenda citas y da seguimiento hasta cerrar.
               </p>
               <div class="hero-actions">
-                <button type="button" data-open-webchat>Ver al agente IA en acción</button>
+                <button type="button" data-open-webchat>Ver a Tal-IA en acción</button>
               </div>
             </div>
             <div class="hero-card-banner">
@@ -828,7 +930,7 @@
         <div class="problem-solution-inner">
           <div class="problem-column">
             <div class="column-header">
-              <h4>Lo que hoy te frena</h4>
+              <h4>Problemas</h4>
               <p>Fricciones reales que hacen perder ventas todos los días.</p>
             </div>
           <div class="problem-list" role="listbox" aria-label="Lista de problemas">
@@ -864,7 +966,7 @@
           </div>
           <div class="solution-panel">
             <div class="column-header">
-              <h4>Cómo responde el agente IA</h4>
+              <h4>Soluciones de IA</h4>
               <p>Acciones reales, automáticas y con contexto.</p>
             </div>
             <p class="solution-placeholder"><span class="solution-arrow">←</span>Da clic en un problema para ver la solución del agente IA.</p>
@@ -876,7 +978,7 @@
                 <p class="solution-how-copy"></p>
               </div>
               <ul class="solution-bullets" role="list"></ul>
-              <button type="button" class="solution-cta" data-open-webchat>Ver al agente IA en acción</button>
+              <button type="button" class="solution-cta" data-open-webchat>Ver a Tal-IA en acción</button>
             </div>
           </div>
         </div>
@@ -895,7 +997,40 @@
       <section class="final-cta-panel" aria-label="Demuestra el agente IA">
         <h3>No te explicamos cómo funciona.</h3>
         <p>Te lo mostramos conversando.</p>
-        <button type="button" data-open-webchat>Deja que el agente IA te lo demuestre</button>
+        <button type="button" data-open-webchat>Deja que Tal-IA te lo demuestre</button>
+      </section>
+
+      <section class="products-section" id="productos" aria-label="Productos de TalIA">
+        <div class="products-header">
+          <p class="hero-label">TalIA · Productos</p>
+          <h2>Explora los agentes y herramientas que puedes activar.</h2>
+        </div>
+        <div class="products-grid">
+          <article class="product-card">
+            <h3>CRM para Recursos Humanos con IA multicanal</h3>
+            <p>Automatiza la atención de candidatos y colaboradores en WhatsApp, correo y teléfono mientras la IA clasifica perfiles, agenda entrevistas y notifica a RR.HH. en tiempo real.</p>
+          </article>
+          <article class="product-card">
+            <h3>Búsqueda de leads en Google y DENUE</h3>
+            <p>Convierte puntos de datos públicos en prospectos enriquecidos: filtra sectores, geolocalización y señales de compra; exporta listas y activa outreach sin duplicar esfuerzos manuales.</p>
+          </article>
+          <article class="product-card">
+            <h3>Tal-IA CRM para negocios B2B e inmobiliarias</h3>
+            <p>Combina scoring, pipeline y seguimiento automático con conversaciones inteligentes que mantienen el contexto comercial y detectan oportunidades en cada hilo.</p>
+          </article>
+          <article class="product-card">
+            <h3>CRM para desarrolladores y bienes raíces</h3>
+            <p>Administra preventas, inventario, contratos y comunicación con compradores desde un agente IA que coordina con brokers, cobranza y seguimiento de documentación.</p>
+          </article>
+          <article class="product-card">
+            <h3>Sistema de gestión y asistente multicanal para condominios</h3>
+            <p>Gestiona reportes, solicitudes y mantenimiento con respuestas automáticas, recordatorios y dashboards de estado para administradores y residentes, todo potenciado por IA.</p>
+          </article>
+          <article class="product-card">
+            <h3>CRM para experiencias inteligentes de turismo</h3>
+            <p>Orquesta reservas, campañas y atención multiplataforma como un CRM que personaliza recordatorios, upsells y seguimiento según las intenciones detectadas por la IA.</p>
+          </article>
+        </div>
       </section>
     </div>
   </main>
