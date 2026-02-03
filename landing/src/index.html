@@ -531,6 +531,9 @@
       background: rgba(255, 255, 255, 0.95);
       text-align: center;
       position: relative;
+      border-radius: 28px;
+      padding: clamp(1.5rem, 2vw, 2.2rem);
+      box-shadow: var(--blend-shadow);
     }
 
     .final-cta-panel h3 {
@@ -539,7 +542,7 @@
     }
 
     .final-cta-panel p {
-      color: var(--text-muted);
+      color: var(--text-muted-strong);
       margin: 0;
     }
 
@@ -701,8 +704,7 @@
     .final-cta-panel::before {
       content: "";
       position: absolute;
-      inset: -30% -10% auto -10%;
-      height: 220px;
+      inset: -35% -10% -12% -10%;
       background: radial-gradient(circle at 25% 30%, rgba(37,99,235,0.20), transparent 55%),
                   radial-gradient(circle at 75% 10%, rgba(124,58,237,0.16), transparent 50%);
       pointer-events: none;
