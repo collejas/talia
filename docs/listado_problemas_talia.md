@@ -24,7 +24,7 @@
 - **Registrar tareas/actividades y recordatorios con prioridades/SLA**  
   El modelo ERD incluye la tabla `actividades` (tipo llamada, email, tarea, nota) y define campos obligatorios como `prioridad`, `fecha_vencimiento`, `sla_horas` y `recordatorio_en`, lo que permite disparar recordatorios multicanal y medir el cumplimiento de tareas del equipo comercial/operativo.
 
-## Problemas que resolvemos
+## Resumen 1 de problemas TalIA
 
 - Los equipos se pierden leads porque cada canal (WhatsApp, voz, Instagram, webchat) vive en su propio stack y nadie puede atender todo simultáneamente.
 - El embudo comercial es manual y copia datos entre herramientas, por lo que convertir leads en clientes lleva más tiempo del necesario.
@@ -37,3 +37,14 @@
 - Las campañas y lotes multicanal se ejecutan de forma síncrona sin historial ni reintentos automatizados, por lo que es difícil medir su salud y reaccionar a fallos.
 - Los vendedores no tienen una asignación confiable ni alertas cuando un lead queda inactivo, así que se pierde seguimiento y se repite trabajo.
 - No existe un modelo de tareas/recordatorios con prioridades y SLA, con lo que las acciones críticas se olvidan o se duplican.
+
+
+# Resumen 2 de problemas TalIA
+
+1. Los clientes se comunican y nadie atiende a tiempo.
+2. El seguimiento falla porque no hay un sistema que piense y actúe.
+3. Las decisiones se toman sin datos claros ni alertas oportunas.
+4. La operación se sostiene con parches, hojas de cálculo y memoria humana.
+5. Integrar o escalar significa más costo, más fricción y más retrasos.
+6. No puedes enviar mensajes o correos masivos.
+7. No tienes como conseguir más prospectos.

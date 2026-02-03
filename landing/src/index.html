@@ -14,15 +14,15 @@
   <link rel="stylesheet" href="./assets/css/styles.css" />
   <style>
     :root {
-      --surface: rgba(255, 255, 255, 0.95);
-      --surface-soft: rgba(247, 250, 255, 0.7);
-      --accent: linear-gradient(135deg, #2563eb, #7c3aed);
-      --glass-border: rgba(15, 23, 42, 0.12);
-      --header-h: 74px;
-      --text-main: #0f172a;
-      --text-muted: rgba(15, 23, 42, 0.85);
-      --text-muted-strong: rgba(15, 23, 42, 0.95);
-      --blend-shadow: 0 30px 80px rgba(15, 23, 42, 0.05);
+    --surface: rgba(255, 255, 255, 0.95);
+    --surface-soft: rgba(247, 250, 255, 0.7);
+    --accent: linear-gradient(135deg, #2563eb, #7c3aed);
+    --glass-border: rgba(15, 23, 42, 0.12);
+    --header-h: 74px;
+    --text-main: #0f172a;
+    --text-muted: #1f2937;
+    --text-muted-strong: #0f172a;
+    --blend-shadow: 0 30px 80px rgba(15, 23, 42, 0.05);
     }
 
     * {
@@ -253,81 +253,168 @@
       background: transparent;
       border-radius: 32px;
       padding: clamp(2rem, 3vw, 3rem);
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
     }
 
-    .story-flow {
-      display: grid;
-      gap: 1.5rem;
-    }
-
-    .story-panel {
-      padding: clamp(1.75rem, 2.5vw, 2.25rem);
-      border-radius: 28px;
-      border: 1px solid rgba(15, 23, 42, 0.08);
+    .problem-solution-section {
+      width: 100%;
+      border-radius: 32px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
       background: #ffffff;
-      position: relative;
-      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
+      box-shadow: var(--blend-shadow);
+      padding: clamp(1.5rem, 2vw, 2.5rem);
     }
 
-    .story-panel h3 {
-      margin: 0;
-      font-size: clamp(1.8rem, 2.4vw, 2.4rem);
-      color: #0f172a;
-      line-height: 1.25;
-    }
-
-    .story-panel p {
-      margin: 0;
-      color: var(--text-muted-strong);
-      font-size: 1rem;
-      line-height: 1.5;
-    }
-
-    .panel-label {
-      font-size: 0.75rem;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: rgba(15, 23, 42, 0.6);
-      margin-bottom: 0.5rem;
-    }
-
-    .story-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-
-    .story-grid-card {
-      background: transparent;
-      border-radius: 16px;
-      padding: 1rem;
-      border-left: 3px solid rgba(37, 99, 235, 0.6);
+    .column-header {
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.3rem;
     }
 
-    .story-grid-card h4 {
+    .column-header h4 {
       margin: 0;
-      font-size: 1.05rem;
+      font-size: 1.1rem;
       color: #0f172a;
     }
 
-    .story-grid-card span {
+    .column-header p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .problem-solution-inner {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .problem-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .problem-tab {
+      text-align: left;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      border-radius: 16px;
+      background: #f8fafc;
+      padding: 0.85rem 1rem;
+      font-size: 0.95rem;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: border 0.2s ease, background 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .problem-tab::before {
+      content: '•';
+      font-size: 1.2rem;
+      color: rgba(15, 23, 42, 0.7);
+      margin-right: 0.35rem;
+    }
+
+    .problem-tab span {
+      font-weight: 600;
+    }
+
+    .problem-tab ul {
+      margin: 0;
+      padding-left: 1.15rem;
+      display: none;
+      flex-direction: column;
+      gap: 0.25rem;
       color: var(--text-muted-strong);
+      font-size: 0.9rem;
       line-height: 1.4;
     }
 
-    .story-panel-solution .story-grid-card {
-      border-left-color: rgba(16, 185, 129, 0.8);
+    .problem-tab.active {
+      border-color: rgba(37, 99, 235, 0.6);
+      background: #ffffff;
+      font-weight: 600;
     }
 
-    .story-panel-reframe {
-      border-color: rgba(236, 72, 153, 0.2);
+    .problem-tab.active ul {
+      display: flex;
+    }
+
+    .solution-panel {
+      border-radius: 20px;
+      border: 1px solid rgba(15, 23, 42, 0.15);
+      padding: 1.5rem;
+      background: #fdfdff;
+      min-height: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .solution-label {
+      font-size: 0.8rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(15, 23, 42, 0.6);
+    }
+
+    .solution-title {
+      margin: 0;
+      font-size: clamp(1.5rem, 2vw, 2rem);
+      color: #0f172a;
+    }
+
+    .solution-bullets {
+      margin: 0;
+      padding-left: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .solution-bullets li {
+      font-size: 0.95rem;
+      color: var(--text-muted-strong);
+      line-height: 1.5;
+    }
+
+    .solution-how {
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 16px;
+      padding: 0.9rem 1rem;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .solution-how h4 {
+      margin: 0;
+      font-size: 1rem;
+      color: #0f172a;
+    }
+
+    .solution-how p {
+      margin: 0.4rem 0 0;
+      color: var(--text-muted-strong);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .solution-cta {
+      margin-top: auto;
+      border-radius: 999px;
+      border: none;
+      padding: 0.95rem 2rem;
+      font-weight: 600;
+      font-size: 1rem;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #ffffff;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .solution-cta:hover {
+      transform: translateY(-2px);
     }
 
     .problem-solution {
@@ -496,46 +583,58 @@
       </div>
     </section>
     <div class="content-wrapper">
-      <section class="story-section" aria-label="Problema, soluciones y reencuadre">
-        <div class="story-flow">
-          <article class="story-panel story-panel-problem">
-            <div class="panel-label">01 · Problema</div>
-            <h3>Problema → Pérdida</h3>
-            <p>Tus clientes escriben, preguntan y piden información mientras tu equipo responde con retraso.</p>
-            <p>El silencio se convierte en otra venta que se va con la competencia y deja una mala señal en el pipeline.</p>
-            <p class="problem-solution">Por eso no construimos otro CRM: creamos un agente IA que mantiene vivo cada hilo con decisiones propias.</p>
-          </article>
-
-          <article class="story-panel story-panel-solution">
-            <div class="panel-label">02 · Soluciones</div>
-            <h3>Esto debe ocurrir ahora</h3>
-            <div class="story-grid">
-              <div class="story-grid-card">
-                <h4>IA que decide</h4>
-                <span>No automatiza tareas: mueve leads, califica y empuja la siguiente acción con contexto real.</span>
-              </div>
-              <div class="story-grid-card">
-                <h4>No deja conversaciones en visto</h4>
-                <span>Seguimiento continuo y calificación inmediata, incluso cuando el equipo descansa.</span>
-              </div>
-              <div class="story-grid-card">
-                <h4>Con contexto real</h4>
-                <span>Recuerda tono, historial y prioridades. Responde como alguien que conoce al cliente.</span>
-              </div>
-              <div class="story-grid-card">
-                <h4>Todo el ciclo completo</h4>
-                <span>Atiende, vende y da seguimiento sin flujos rotos o respuestas copiadas.</span>
-              </div>
+      <section class="problem-solution-section" aria-label="Problema-Solución interactiva">
+        <div class="problem-solution-inner">
+          <div class="problem-column">
+            <div class="column-header">
+              <h4>Problemas</h4>
+              <p>Explora cada fricción que detiene tus ventas.</p>
             </div>
-          </article>
-
-          <article class="story-panel story-panel-reframe">
-            <div class="panel-label">03 · Reencuadre</div>
-            <h3>Multiplica, no reemplaza</h3>
-            <p>Esto no es automation: es delegar conversaciones reales a quien entiende tu negocio sin dejar clientes en visto.</p>
-            <p>La IA no sustituye: multiplica. Responde, califica y agenda mientras tu equipo piensa en la estrategia.</p>
-            <p>Suena como humano, actúa como experto y avanza cada conversación hacia una acción real.</p>
-          </article>
+          <div class="problem-list" role="listbox" aria-label="Lista de problemas">
+            <button type="button" class="problem-tab" data-problem-index="0" aria-label="Seleccionar problema 1">
+              <span>Los clientes se comunican y nadie atiende a tiempo.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+            <button type="button" class="problem-tab" data-problem-index="1" aria-label="Seleccionar problema 2">
+              <span>El seguimiento falla porque no hay un sistema que piense y actúe.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+            <button type="button" class="problem-tab" data-problem-index="2" aria-label="Seleccionar problema 3">
+              <span>Las decisiones se toman sin datos claros ni alertas oportunas.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+            <button type="button" class="problem-tab" data-problem-index="3" aria-label="Seleccionar problema 4">
+              <span>La operación se sostiene con parches, hojas de cálculo y memoria humana.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+            <button type="button" class="problem-tab" data-problem-index="4" aria-label="Seleccionar problema 5">
+              <span>Integrar o escalar significa más costo, más fricción y más retrasos.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+            <button type="button" class="problem-tab" data-problem-index="5" aria-label="Seleccionar problema 6">
+              <span>No puedes enviar mensajes o correos masivos.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+            <button type="button" class="problem-tab" data-problem-index="6" aria-label="Seleccionar problema 7">
+              <span>No tienes como conseguir más prospectos.</span>
+              <ul class="problem-bullets"></ul>
+            </button>
+          </div>
+          </div>
+          <div class="solution-panel">
+            <div class="column-header">
+              <h4>Solución</h4>
+              <p>Activa el agente IA y observa cómo responde.</p>
+            </div>
+            <span class="solution-label">Solución</span>
+            <h3 class="solution-title"></h3>
+            <ul class="solution-bullets" role="list"></ul>
+            <div class="solution-how">
+              <h4>Cómo funciona</h4>
+              <p class="solution-how-copy"></p>
+            </div>
+            <button type="button" class="solution-cta" data-open-webchat>Ver al agente IA en acción</button>
+          </div>
         </div>
       </section>
 
@@ -615,6 +714,165 @@
       if (currentYearEl) {
         currentYearEl.textContent = new Date().getFullYear();
       }
+
+      const problemData = [
+        {
+          title: 'Los clientes se comunican y nadie atiende a tiempo.',
+          bullets: [
+            'Mensajes que se acumulan sin dueño.',
+            'Clientes que se sienten ignorados antes de recibir respuesta.'
+          ]
+        },
+        {
+          title: 'El seguimiento falla porque no hay un sistema que piense y actúe.',
+          bullets: [
+            'Recordatorios manuales que se borran o se olvidan.',
+            'Falta de continuidad entre pasos humanos y automáticos.'
+          ]
+        },
+        {
+          title: 'Las decisiones se toman sin datos claros ni alertas oportunas.',
+          bullets: [
+            'No hay quién detecte cuándo un contacto cambia de intención.',
+            'Los equipos reaccionan tarde porque nadie avisó.'
+          ]
+        },
+        {
+          title: 'La operación se sostiene con parches, hojas de cálculo y memoria humana.',
+          bullets: [
+            'Procesos manuales que se rompen con cada cambio de equipo.',
+            'No hay un repositorio central de qué y cuándo se hizo.'
+          ]
+        },
+        {
+          title: 'Integrar o escalar significa más costo, más fricción y más retrasos.',
+          bullets: [
+            'Sumar nuevas herramientas crea más ruido que eficiencia.',
+            'La configuración toma semanas y sigue incompleta.'
+          ]
+        },
+        {
+          title: 'No puedes enviar mensajes o correos masivos.',
+          bullets: [
+            'Los clientes pierden seguimiento porque no se automatiza outreach.',
+            'La personalización se queda en la imaginación del equipo.'
+          ]
+        },
+        {
+          title: 'No tienes como conseguir más prospectos.',
+          bullets: [
+            'Falta un radar que detecte señales de compra en frío.',
+            'El equipo depende de referencias esporádicas.'
+          ]
+        }
+      ];
+      const solutionData = [
+        {
+          title: 'Atención inmediata en cualquier canal',
+          bullets: [
+            'Rutas automáticas que detectan nuevos mensajes y los ponen en cola inmediata.',
+            'Alertas proactivas al equipo cuando un hilo requiere atención humana.',
+            'Prioriza respuestas de alto valor usando scoring inteligente.'
+          ],
+          how: 'TalIA escucha cada canal, entiende el mensaje y dispara la acción correcta sin que tú tengas que tocar una nota.'
+        },
+        {
+          title: 'Seguimiento sin caídas ni excusas',
+          bullets: [
+            'Pipeline vivo que se actualiza con cada interacción del agente.',
+            'Pasos automáticos que calientan prospectos sin dejar tareas colgadas.',
+            'Reglas dinámicas que ejecutan follow-ups cuando el cliente responde.'
+          ],
+          how: 'El agente se encarga de mover leads, agendar citas y pedir confirmaciones sin depender de hojas de cálculo.'
+        },
+        {
+          title: 'Decisiones con contexto y datos reales',
+          bullets: [
+            'Panel de insights que muestra riesgos y oportunidades en tiempo real.',
+            'Alertas configurables para cuando un cliente queda en silencio o cambia de intención.',
+            'Recomendaciones de acción respaldadas por el contexto completo de la conversación.'
+          ],
+          how: 'TalIA convierte cada interacción en datos accionables y avisos inteligentes para que tú decidas con información limpia.'
+        },
+        {
+          title: 'Operación sin parches ni múltiples herramientas',
+          bullets: [
+            'Un solo agente que reemplaza chips, hojas de cálculo y disparadores manuales.',
+            'Integraciones que se viven como parte del flujo y no como trabajo extra.',
+            'Audit trail y registros automáticos para nunca depender de memoria humana.'
+          ],
+          how: 'La operación se reconstruye sobre TalIA: una sola vista y un solo agente que mantiene todo sincronizado.'
+        },
+        {
+          title: 'Escala sin fricción ni sobrecostos',
+          bullets: [
+            'Modularidad que permite replicar flujos para nuevos equipos.',
+            'La inteligencia se adapta a nuevos canales sin reinventar procesos.',
+            'Costos variables por uso: creces con confianza, no con licencias.'
+          ],
+          how: 'Más agentes, más datos y más automatización sin duplicar esfuerzos ni pantallas.'
+        },
+        {
+          title: 'Mensajería masiva que se siente humana',
+          bullets: [
+            'Plantillas inteligentes que combinan contexto y personalización.',
+            'Segmentación dinámica para enviar sólo a prospectos listos.',
+            'Seguimiento automático para cada envío.'
+          ],
+          how: 'TalIA coordina cada campaña y responde con el mismo tono que tus equipos.'
+        },
+        {
+          title: 'Prospección que atrae nuevos leads',
+          bullets: [
+            'Detecta señales de compra y recomienda nuevos prospectos.',
+            'Automatiza outreach en múltiples canales con seguimiento inteligente.',
+            'Aprende qué tipos de mensajes convierten y los reproduce.'
+          ],
+          how: 'El agente se convierte en tu radar de oportunidades y ejecuta contactos cuando hay chance.'
+        }
+      ];
+
+      const renderSolution = (index) => {
+        const target = solutionData[index] || solutionData[0];
+        const titleEl = document.querySelector('.solution-title');
+        const bulletsEl = document.querySelector('.solution-bullets');
+        const howCopy = document.querySelector('.solution-how-copy');
+        if (!titleEl || !bulletsEl || !howCopy) return;
+        titleEl.textContent = target.title;
+        bulletsEl.innerHTML = '';
+        target.bullets.forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          bulletsEl.appendChild(li);
+        });
+        howCopy.textContent = target.how;
+      };
+
+      const tabs = document.querySelectorAll('.problem-tab');
+      const populateProblemBullets = () => {
+        tabs.forEach((tab, index) => {
+          const list = tab.querySelector('.problem-bullets');
+          const info = problemData[index];
+          if (!list || !info?.bullets?.length) return;
+          list.innerHTML = '';
+          info.bullets.forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            list.appendChild(li);
+          });
+        });
+      };
+      populateProblemBullets();
+      tabs[0]?.classList.add('active');
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          tabs.forEach((btn) => btn.classList.remove('active'));
+          tab.classList.add('active');
+          const index = Number(tab.dataset.problemIndex ?? 0);
+          renderSolution(index);
+        });
+      });
+      renderSolution(0);
 
     (function animateMarquee() {
       const track = document.querySelector('.marquee-track');
