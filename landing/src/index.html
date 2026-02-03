@@ -49,17 +49,20 @@
     }
 
     header {
-      position: sticky;
+      position: fixed;
       top: 0;
+      left: 0;
+      right: 0;
       height: var(--header-h);
       display: flex;
       align-items: center;
       padding: 0 1.25rem;
       justify-content: space-between;
-      z-index: 10;
+      z-index: 20;
       backdrop-filter: blur(18px);
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.95);
       border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
     }
 
 
@@ -126,8 +129,8 @@
     main {
       min-height: calc(100vh - var(--header-h));
       padding: 1.75rem clamp(1rem, 3vw, 3rem) 2.5rem;
+      margin-top: var(--header-h);
       width: 100%;
-      margin: 0;
       display: block;
     }
 
@@ -519,14 +522,16 @@
       padding: 0.95rem 2rem;
       font-weight: 600;
       font-size: 1rem;
-      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      background: var(--accent);
       color: #ffffff;
       cursor: pointer;
-      transition: transform 0.2s ease;
+      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .solution-cta:hover {
       transform: translateY(-2px);
+      box-shadow: 0 20px 55px rgba(99, 102, 241, 0.45);
     }
 
     .problem-solution {
