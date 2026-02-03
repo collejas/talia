@@ -91,7 +91,10 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
+codex resume 019c24bb-ab03-7f61-846f-45d44f5d007d
+
 codex resume 019c20ee-cbcb-7b73-ab25-65d072f9798d
+
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 

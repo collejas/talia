@@ -249,127 +249,90 @@
       gap: clamp(2rem, 2vw, 2.75rem);
     }
 
-    .problem-section,
-    .benefit-section,
-    .reframe-section,
-    .future-section,
-    .final-cta-panel {
+    .story-section {
+      background: transparent;
       border-radius: 32px;
-      border: 1px solid rgba(15, 23, 42, 0.1);
-      background: var(--surface);
       padding: clamp(2rem, 3vw, 3rem);
-      box-shadow: var(--blend-shadow);
-    }
-
-    .problem-section h3,
-    .benefit-section h3,
-    .reframe-section h3,
-    .future-section h3 {
-      margin: 0 0 0.8rem;
-      font-size: clamp(1.8rem, 2.4vw, 2.3rem);
-      color: var(--text-main);
-      line-height: 1.2;
-    }
-
-    .problem-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.25rem;
-    }
-
-    .problem-card {
-      background: #f8fafc;
-      border-radius: 22px;
-      padding: 1.5rem;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      min-height: 220px;
       display: flex;
       flex-direction: column;
-      gap: 0.8rem;
-      justify-content: center;
-      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+      gap: 1.5rem;
     }
 
-    .problem-card strong {
-      color: #2563eb;
-      font-size: 1.2rem;
-      font-weight: 700;
-      line-height: 1.35;
+    .story-flow {
+      display: grid;
+      gap: 1.5rem;
     }
 
-    .problem-card p {
+    .story-panel {
+      padding: clamp(1.75rem, 2.5vw, 2.25rem);
+      border-radius: 28px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: #ffffff;
+      position: relative;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
+    }
+
+    .story-panel h3 {
+      margin: 0;
+      font-size: clamp(1.8rem, 2.4vw, 2.4rem);
+      color: #0f172a;
+      line-height: 1.25;
+    }
+
+    .story-panel p {
       margin: 0;
       color: var(--text-muted-strong);
       font-size: 1rem;
       line-height: 1.5;
     }
 
-    .problem-solution {
-      margin-top: 0.4rem;
-      color: var(--accent);
-      font-weight: 600;
-      font-size: 1rem;
+    .panel-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(15, 23, 42, 0.6);
+      margin-bottom: 0.5rem;
     }
 
-    .benefit-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-    }
-
-    .benefit-card {
-      background: #ffffff;
-      border-radius: 20px;
-      padding: 1.4rem;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      min-height: 160px;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
-    }
-
-    .benefit-card h4 {
-      margin: 0;
-      font-size: 1.05rem;
-      color: var(--text-main);
-    }
-
-    .benefit-card span {
-      color: var(--text-muted-strong);
-      font-size: 0.95rem;
-      line-height: 1.35;
-    }
-
-    .reframe-grid {
+    .story-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 1rem;
+      margin-top: 1rem;
     }
 
-    .reframe-card {
-      background: #f8fafc;
-      border-radius: 20px;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      padding: 1.25rem;
-      min-height: 140px;
+    .story-grid-card {
+      background: transparent;
+      border-radius: 16px;
+      padding: 1rem;
+      border-left: 3px solid rgba(37, 99, 235, 0.6);
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+      gap: 0.4rem;
     }
 
-    .reframe-card h5 {
+    .story-grid-card h4 {
       margin: 0;
-      font-size: 1rem;
-      color: #2563eb;
+      font-size: 1.05rem;
+      color: #0f172a;
     }
 
-    .reframe-card p {
-      margin: 0;
+    .story-grid-card span {
       color: var(--text-muted-strong);
-      font-size: 0.95rem;
       line-height: 1.4;
+    }
+
+    .story-panel-solution .story-grid-card {
+      border-left-color: rgba(16, 185, 129, 0.8);
+    }
+
+    .story-panel-reframe {
+      border-color: rgba(236, 72, 153, 0.2);
+    }
+
+    .problem-solution {
+      color: #2563eb;
+      font-weight: 600;
     }
 
     .future-section {
@@ -533,71 +496,59 @@
       </div>
     </section>
     <div class="content-wrapper">
-      <section class="problem-section" aria-label="Problema y urgencia">
-      <h3>Problema → Pérdida</h3>
-      <div class="problem-grid">
-        <article class="problem-card">
-          <strong>Tus clientes escriben.<br />Preguntan.<br />Piden información.</strong>
-          <p>El silencio no es indiferencia; es pérdida de confianza.</p>
-        </article>
-        <article class="problem-card">
-          <strong>Pero si no respondes en minutos…</strong>
-          <p>Ya están hablando con tu competencia.</p>
-          <p class="problem-solution">Por eso no creamos otro CRM. Creamos un agente de IA que se hace cargo de la conversación.</p>
-        </article>
-      </div>
-    </section>
+      <section class="story-section" aria-label="Problema, soluciones y reencuadre">
+        <div class="story-flow">
+          <article class="story-panel story-panel-problem">
+            <div class="panel-label">01 · Problema</div>
+            <h3>Problema → Pérdida</h3>
+            <p>Tus clientes escriben, preguntan y piden información mientras tu equipo responde con retraso.</p>
+            <p>El silencio se convierte en otra venta que se va con la competencia y deja una mala señal en el pipeline.</p>
+            <p class="problem-solution">Por eso no construimos otro CRM: creamos un agente IA que mantiene vivo cada hilo con decisiones propias.</p>
+          </article>
 
-    <section class="benefit-section" aria-label="Razones para actuar">
-      <h3>Razones para actuar</h3>
-      <div class="benefit-grid">
-        <article class="benefit-card">
-          <h4>IA que decide</h4>
-          <span>No automatiza tareas: toma decisiones, mueve leads y empuja la siguiente acción.</span>
-        </article>
-        <article class="benefit-card">
-          <h4>No deja conversaciones en visto</h4>
-          <span>Cada mensaje sin respuesta es dinero perdido; esta IA sigue el hilo hasta cerrar.</span>
-        </article>
-        <article class="benefit-card">
-          <h4>Con contexto real</h4>
-          <span>Recuerda tono, historial y prioridades para responder como un humano que entiende.</span>
-        </article>
-        <article class="benefit-card">
-          <h4>Todo el ciclo completo</h4>
-          <span>Atiende, vende y da seguimiento sin flujos rotos, respuestas copiadas o herramientas parchadas.</span>
-        </article>
-      </div>
-    </section>
+          <article class="story-panel story-panel-solution">
+            <div class="panel-label">02 · Soluciones</div>
+            <h3>Esto debe ocurrir ahora</h3>
+            <div class="story-grid">
+              <div class="story-grid-card">
+                <h4>IA que decide</h4>
+                <span>No automatiza tareas: mueve leads, califica y empuja la siguiente acción con contexto real.</span>
+              </div>
+              <div class="story-grid-card">
+                <h4>No deja conversaciones en visto</h4>
+                <span>Seguimiento continuo y calificación inmediata, incluso cuando el equipo descansa.</span>
+              </div>
+              <div class="story-grid-card">
+                <h4>Con contexto real</h4>
+                <span>Recuerda tono, historial y prioridades. Responde como alguien que conoce al cliente.</span>
+              </div>
+              <div class="story-grid-card">
+                <h4>Todo el ciclo completo</h4>
+                <span>Atiende, vende y da seguimiento sin flujos rotos o respuestas copiadas.</span>
+              </div>
+            </div>
+          </article>
 
-    <section class="reframe-section" aria-label="Multiplica, no reemplaza">
-      <h3>Esto no es automation; multiplica tu equipo</h3>
-      <div class="reframe-grid">
-        <article class="reframe-card">
-          <h5>Esto no es automatización</h5>
-          <p>Es delegar conversaciones reales a una inteligencia que entiende tu negocio.</p>
-        </article>
-        <article class="reframe-card">
-          <h5>No reemplaza a tu equipo</h5>
-          <p>Lo multiplica: responde, califica y agenda mientras ellos se enfocan en lo estratégico.</p>
-        </article>
-        <article class="reframe-card">
-          <h5>No responde por responder</h5>
-          <p>Avanza cada conversación hacia una acción con decisiones contextuales, no scripts heredados.</p>
-        </article>
-      </div>
-    </section>
+          <article class="story-panel story-panel-reframe">
+            <div class="panel-label">03 · Reencuadre</div>
+            <h3>Multiplica, no reemplaza</h3>
+            <p>Esto no es automation: es delegar conversaciones reales a quien entiende tu negocio sin dejar clientes en visto.</p>
+            <p>La IA no sustituye: multiplica. Responde, califica y agenda mientras tu equipo piensa en la estrategia.</p>
+            <p>Suena como humano, actúa como experto y avanza cada conversación hacia una acción real.</p>
+          </article>
+        </div>
+      </section>
 
-    <section class="future-section" aria-label="Future-proof">
-      <h3>Las empresas con mejores agentes de IA marcan el ritmo</h3>
-      <p>En 2026 ya no compiten las que tienen más vendedores, compiten las que entrenan agentes inteligentes.</p>
-    </section>
+      <section class="future-section" aria-label="Future-proof">
+        <h3>Las empresas con mejores agentes de IA marcan el ritmo</h3>
+        <p>En 2026 ya no compiten las que tienen más vendedores; compiten las que entrenan agentes inteligentes.</p>
+      </section>
 
-    <section class="final-cta-panel" aria-label="Demuestra el agente IA">
-      <h3>No te explicamos cómo funciona.</h3>
-      <p>Te lo mostramos conversando.</p>
-      <button type="button" data-open-webchat>Hablar con el agente IA ahora</button>
-    </section>
+      <section class="final-cta-panel" aria-label="Demuestra el agente IA">
+        <h3>No te explicamos cómo funciona.</h3>
+        <p>Te lo mostramos conversando.</p>
+        <button type="button" data-open-webchat>Hablar con el agente IA ahora</button>
+      </section>
     </div>
   </main>
 
