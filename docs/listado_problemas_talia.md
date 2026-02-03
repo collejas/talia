@@ -41,10 +41,51 @@
 
 # Resumen 2 de problemas TalIA
 
-1. Los clientes se comunican y nadie atiende a tiempo.
-2. El seguimiento falla porque no hay un sistema que piense y actúe.
-3. Las decisiones se toman sin datos claros ni alertas oportunas.
-4. La operación se sostiene con parches, hojas de cálculo y memoria humana.
-5. Integrar o escalar significa más costo, más fricción y más retrasos.
-6. No puedes enviar mensajes o correos masivos.
-7. No tienes como conseguir más prospectos.
+1. **Los clientes se comunican y nadie atiende a tiempo.**  
+   **Solución:**  
+   - Rutas automáticas que detectan nuevos mensajes y los priorizan en cola inmediata.  
+   - Alertas proactivas para avisar al equipo cuando un hilo necesita atención humana.  
+   - Scoring inteligente que prioriza respuestas de alto valor.  
+   **Cómo funciona:** TalIA escucha cada canal, entiende el mensaje y dispara la acción correcta sin que tú tengas que intervenir.
+
+2. **El seguimiento falla porque no hay un sistema que piense y actúe.**  
+   **Solución:**  
+   - Pipeline vivo que se actualiza con cada interacción del agente.  
+   - Pasos automáticos que calientan prospectos sin dejar tareas colgadas.  
+   - Reglas dinámicas que ejecutan follow-ups cuando el cliente responde.  
+   **Cómo funciona:** El agente mueve leads, agenda citas y pide confirmaciones sin depender de hojas de cálculo manuales.
+
+3. **Las decisiones se toman sin datos claros ni alertas oportunas.**  
+   **Solución:**  
+   - Panel de insights con riesgos y oportunidades en tiempo real.  
+   - Alertas configurables cuando un cliente queda en silencio o cambia de intención.  
+   - Recomendaciones respaldadas por el contexto completo de la conversación.  
+   **Cómo funciona:** TalIA convierte cada interacción en datos accionables y avisos inteligentes para decisiones limpias.
+
+4. **La operación se sostiene con parches, hojas de cálculo y memoria humana.**  
+   **Solución:**  
+   - Un solo agente que reemplaza chips, hojas de cálculo y disparadores manuales.  
+   - Integraciones que operan como parte del flujo y no como trabajo extra.  
+   - Registros automáticos para eliminar la dependencia de la memoria humana.  
+   **Cómo funciona:** La operación se reconstruye sobre TalIA: una sola vista y un solo agente que mantiene todo sincronizado.
+
+5. **Integrar o escalar significa más costo, más fricción y más retrasos.**  
+   **Solución:**  
+   - Modularidad que replica flujos para nuevos equipos sin rehacer procesos.  
+   - Inteligencia que se adapta a nuevos canales sin volver a escribir reglas.  
+   - Costos variables basados en uso, no en licencias fijas.  
+   **Cómo funciona:** Más agentes, más datos y más automatización sin duplicar interfaces ni esfuerzos.
+
+6. **No puedes enviar mensajes o correos masivos.**  
+   **Solución:**  
+   - Plantillas inteligentes que combinan contexto y personalización.  
+   - Segmentación dinámica para enviar solo a prospectos listos.  
+   - Seguimiento automático después de cada envío.  
+   **Cómo funciona:** TalIA coordina campañas y responde con el mismo tono que tu equipo humano.
+
+7. **No tienes como conseguir más prospectos.**  
+   **Solución:**  
+   - Detecta señales de compra y recomienda nuevos prospectos.  
+   - Automatiza outreach multicanal con seguimiento inteligente.  
+   - Aprende qué mensajes convierten y los replica.  
+   **Cómo funciona:** El agente se convierte en tu radar, ejecutando contactos cuando hay oportunidad.
