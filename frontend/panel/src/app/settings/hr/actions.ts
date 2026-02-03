@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache"
 
 import { callSupabaseRest } from "@/lib/supabase/rest"
 import { createSupabaseAuthUser, deleteSupabaseAuthUser } from "@/lib/supabase/auth-admin"
-import { getDefaultOrganizacionId } from "@/lib/settings/org"
+import { resolveOrganizacionId } from "@/lib/settings/org"
 
 export type CrudActionState = {
   status: "idle" | "success" | "error"
@@ -39,8 +39,8 @@ function failure(error: unknown, fallback = "No se pudo completar la acción."):
   return { status: "error", message }
 }
 
-function requireOrgId(): string {
-  const orgId = getDefaultOrganizacionId()
+async function requireOrgId(): Promise<string> {
+  const orgId = await resolveOrganizacionId()
   if (!orgId) {
     throw new Error("Configura PANEL_ORGANIZACION_ID para gestionar registros.")
   }
@@ -92,7 +92,7 @@ async function callAndValidate(
 
 export const createEmployeeAction: CrudActionHandler = async (_, formData) => {
   try {
-    const orgId = requireOrgId()
+    const orgId = await requireOrgId()
     const usuarioId = getText(formData, "usuario_id")
     const departamentoId = getOptionalText(formData, "departamento_id")
     const puestoId = getOptionalText(formData, "puesto_id")
@@ -170,7 +170,7 @@ export const deleteEmployeeAction: CrudActionHandler = async (_, formData) => {
 
 export const createDepartmentAction: CrudActionHandler = async (_, formData) => {
   try {
-    const orgId = requireOrgId()
+    const orgId = await requireOrgId()
     const nombre = getText(formData, "nombre")
     const padreId = getOptionalText(formData, "departamento_padre_id")
     await callAndValidate("/rest/v1/departamentos", {
@@ -239,7 +239,7 @@ export const deleteDepartmentAction: CrudActionHandler = async (_, formData) => 
 
 export const createPositionAction: CrudActionHandler = async (_, formData) => {
   try {
-    const orgId = requireOrgId()
+    const orgId = await requireOrgId()
     const nombre = getText(formData, "nombre")
     const descripcion = getOptionalText(formData, "descripcion")
     const departamentoId = getOptionalText(formData, "departamento_id")
@@ -328,7 +328,7 @@ function parseTelefonoE164(raw: string | null): string | null {
 
 export const createUserAction: CrudActionHandler = async (_, formData) => {
   try {
-    const orgId = requireOrgId()
+    const orgId = await requireOrgId()
     const idInput = getOptionalText(formData, "id")
     const correo = getOptionalText(formData, "correo")
     const nombre = getOptionalText(formData, "nombre_completo")
@@ -431,7 +431,7 @@ export const deleteUserAction: CrudActionHandler = async (_, formData) => {
 
 export const createRoleAction: CrudActionHandler = async (_, formData) => {
   try {
-    const orgId = requireOrgId()
+    const orgId = await requireOrgId()
     const nombre = getText(formData, "nombre")
     const descripcion = getOptionalText(formData, "descripcion")
     const body: Record<string, unknown> = {
@@ -504,7 +504,7 @@ export const deleteRoleAction: CrudActionHandler = async (_, formData) => {
 
 export const createPermissionAction: CrudActionHandler = async (_, formData) => {
   try {
-    const orgId = requireOrgId()
+    const orgId = await requireOrgId()
     const codigo = getText(formData, "codigo")
     const descripcion = getOptionalText(formData, "descripcion")
     await callAndValidate("/rest/v1/permisos", {

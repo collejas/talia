@@ -89,7 +89,7 @@ npm run build --webpack && npm start
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
-codex resume 019c1bb8-0ad5-7c53-b2eb-2cbcd1ea049b
+codex resume 019c20ee-cbcb-7b73-ab25-65d072f9798d
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 

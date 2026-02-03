@@ -3,8 +3,7 @@ import { NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
-
-const ORGANIZACION_ENV_KEYS = ["PANEL_ORGANIZACION_ID", "TALIA_ORGANIZACION_ID", "NEXT_PUBLIC_ORGANIZACION_ID"] as const
+import { resolveOrganizacionId } from "@/lib/settings/org"
 
 export async function resolveProspeccionAccessToken(): Promise<string | null> {
   const store = await cookies()
@@ -57,7 +56,7 @@ export async function proxyProspeccionRequest(
   const shouldSendBody = init.method !== "GET"
   const rawBody = shouldSendBody ? await request.text() : null
   const body = rawBody && rawBody.length ? rawBody : undefined
-  const organizacionId = resolveOrganizacionId()
+  const organizacionId = await resolveOrganizacionId()
 
   let backendResponse: Response
   try {
@@ -94,7 +93,7 @@ export async function proxyProspeccionStreamingRequest(backendPath: string): Pro
   }
   const backendBase = getPanelApiBaseUrl()
   const target = new URL(`${backendBase}${backendPath}`)
-  const organizacionId = resolveOrganizacionId()
+  const organizacionId = await resolveOrganizacionId()
   const backendResponse = await fetch(target, {
     method: "GET",
     headers: {
@@ -115,14 +114,4 @@ export async function proxyProspeccionStreamingRequest(backendPath: string): Pro
     status: backendResponse.status,
     headers,
   })
-}
-
-function resolveOrganizacionId(): string | null {
-  for (const key of ORGANIZACION_ENV_KEYS) {
-    const value = process.env[key]
-    if (value && value.trim().length) {
-      return value.trim()
-    }
-  }
-  return null
 }

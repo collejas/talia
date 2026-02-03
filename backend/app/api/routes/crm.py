@@ -11731,6 +11731,7 @@ async def demografia_resumen(
             nivel=nivel_normalizado,
             date_from=date_from,
             date_to=date_to,
+            jwt=user_token,
         )
     except DemografiaServiceError as exc:
         logger.exception("crm.demografia.resumen_failed")
@@ -11796,6 +11797,7 @@ async def demografia_mapa(
             nivel=nivel_normalizado,
             date_from=date_from,
             date_to=date_to,
+            jwt=user_token,
         )
         dataset = demografia_service.build_map_dataset(
             nivel=nivel_normalizado,

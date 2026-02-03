@@ -4,7 +4,7 @@ import { cookies } from "next/headers"
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 import { getSupabaseConfig } from "@/lib/auth/supabase"
-import { getDefaultOrganizacionId } from "@/lib/settings/org"
+import { resolveOrganizacionId } from "@/lib/settings/org"
 
 type SupabaseRestMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
@@ -59,7 +59,7 @@ export async function callSupabaseRest<T = unknown>(
   }
 
   if (options.enforceOrganization && !url.searchParams.has("organizacion_id")) {
-    const organizacionId = getDefaultOrganizacionId()
+    const organizacionId = await resolveOrganizacionId()
     if (organizacionId) {
       url.searchParams.set("organizacion_id", `eq.${organizacionId}`)
     }

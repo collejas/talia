@@ -252,6 +252,7 @@ async def fetch_visitantes_resumen(
     nivel: str,
     date_from: datetime | None,
     date_to: datetime | None,
+    jwt: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"p_nivel": nivel}
     if date_from:
@@ -259,7 +260,7 @@ async def fetch_visitantes_resumen(
     if date_to:
         payload["p_to"] = date_to.isoformat()
 
-    rows = await _call_rpc("panel_visitantes_geo_resumen_ext", payload)
+    rows = await _call_rpc("panel_visitantes_geo_resumen_ext", payload, jwt=jwt)
     if not isinstance(rows, list):
         raise DemografiaServiceError(
             f"Respuesta inesperada de panel_visitantes_geo_resumen_ext: {rows!r}"
