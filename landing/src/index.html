@@ -77,7 +77,8 @@
       border-radius: 12px;
     }
 
-    .hero-cta {
+    .hero-cta,
+    .header-panel {
       border-radius: 999px;
       padding: 0.65rem 1.25rem;
       font-weight: 600;
@@ -89,10 +90,17 @@
       transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
     }
 
-    .hero-cta:hover {
+    .hero-cta:hover,
+    .header-panel:hover {
       transform: translateY(-2px);
       border-color: rgba(37, 99, 235, 0.5);
       background: rgba(255, 255, 255, 0.95);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     main {
@@ -433,7 +441,10 @@
       <img src="/assets/logos/Logo8.png" alt="TalIA" class="brand-icon" />
       <span>Tal-IA</span>
     </a>
-    <a class="hero-cta" href="#open-webchat">Conecta con IA</a>
+    <div class="header-controls">
+      <a class="hero-cta" href="#open-webchat">Conecta con IA</a>
+      <a class="header-panel" href="https://talia.mx/auth/login" target="_blank" rel="noopener noreferrer">Panel</a>
+    </div>
   </header>
 
   <main class="landing-stage">
@@ -442,14 +453,13 @@
         <section class="hero-card">
           <div class="hero-card-pair">
             <div class="hero-card-copy">
-              <p class="hero-label">TalIA · CRM con agente de IA multicanal</p>
+              <p class="hero-label">Talia · Agente de IA multicanal</p>
               <h1>CRM con agente IA que atiende, decide y actúa por tu negocio 24/7.</h1>
               <p>
                 Mientras tu equipo duerme, esta IA responde, califica clientes, agenda citas y da seguimiento hasta cerrar.
               </p>
               <div class="hero-actions">
                 <button type="button" data-open-webchat>Ver al agente IA en acción</button>
-                <a href="/dashboard">Explorar panel</a>
               </div>
             </div>
             <div class="hero-card-banner">
