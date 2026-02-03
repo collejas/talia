@@ -69,12 +69,12 @@
    - Registros automáticos para eliminar la dependencia de la memoria humana.  
    **Cómo funciona:** La operación se reconstruye sobre TalIA: una sola vista y un solo agente que mantiene todo sincronizado.
 
-5. **Integrar o escalar significa más costo, más fricción y más retrasos.**  
+5. **Escalar implica añadir usuarios extra con licencias caras y procesos nuevos.**  
    **Solución:**  
-   - Modularidad que replica flujos para nuevos equipos sin rehacer procesos.  
-   - Inteligencia que se adapta a nuevos canales sin volver a escribir reglas.  
-   - Costos variables basados en uso, no en licencias fijas.  
-   **Cómo funciona:** Más agentes, más datos y más automatización sin duplicar interfaces ni esfuerzos.
+   - No cobramos por usuarios extra: agrega cualquier miembro que necesites sin cargos adicionales.  
+   - Roles y permisos se configuran con un clic, sin implementar nuevas infraestructuras.  
+   - El crecimiento se mide por uso real, no por licencias por persona.  
+   **Cómo funciona:** La misma cuenta se comparte entre equipos y TalIA escala canales sin cobrar por cada voz adicional.
 
 6. **No puedes enviar mensajes o correos masivos.**  
    **Solución:**  
@@ -85,7 +85,7 @@
 
 7. **No tienes como conseguir más prospectos.**  
    **Solución:**  
-   - Detecta señales de compra y recomienda nuevos prospectos.  
-   - Automatiza outreach multicanal con seguimiento inteligente.  
-   - Aprende qué mensajes convierten y los replica.  
-   **Cómo funciona:** El agente se convierte en tu radar, ejecutando contactos cuando hay oportunidad.
+   - Convierte búsquedas de Google Places y DENUE en prospectos seccionados.  
+   - Conserva filtros, fuentes y metadatos para campañas posteriores.  
+   - Dispara outreach multicanal con seguimiento sin duplicar datos.  
+   **Cómo funciona:** Las búsquedas se guardan automáticamente como prospectos enriquecidos y la IA coordina el contacto con base en esos datos.
