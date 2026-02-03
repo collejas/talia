@@ -546,6 +546,142 @@
         min-width: 220px;
       }
     }
+
+    /* --- Enhancements: make sections after hero more punchy (no layout change) --- */
+    .story-section {
+      background: linear-gradient(180deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04));
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: var(--blend-shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .story-section::before {
+      content: "";
+      position: absolute;
+      inset: -40% -20% auto -20%;
+      height: 220px;
+      background: radial-gradient(circle at 20% 40%, rgba(37,99,235,0.22), transparent 55%),
+                  radial-gradient(circle at 80% 20%, rgba(124,58,237,0.18), transparent 52%);
+      pointer-events: none;
+    }
+
+    .story-section > * {
+      position: relative;
+    }
+
+    .story-section h2 {
+      margin: 0.55rem 0 0.75rem;
+      font-size: clamp(1.9rem, 2.6vw, 2.5rem);
+      line-height: 1.18;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+
+    .story-section p {
+      margin: 0;
+      max-width: 62ch;
+      color: var(--text-muted-strong);
+      font-size: 1.05rem;
+      line-height: 1.65;
+    }
+
+    .problem-solution-section {
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.7));
+    }
+
+    .problem-column,
+    .solution-panel {
+      box-shadow: 0 18px 55px rgba(15, 23, 42, 0.08);
+    }
+
+    .problem-tab {
+      background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border 0.2s ease, background 0.2s ease;
+    }
+
+    .problem-tab:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      border-color: rgba(37, 99, 235, 0.25);
+    }
+
+    .problem-tab.active {
+      background: linear-gradient(135deg, #ffffff, #eef2ff);
+      box-shadow: 0 14px 34px rgba(37, 99, 235, 0.14);
+    }
+
+    .solution-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 700;
+    }
+
+    .solution-label::before {
+      content: "●";
+      color: rgba(37, 99, 235, 0.9);
+      font-size: 0.9rem;
+    }
+
+    .solution-panel {
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .solution-content.visible {
+      animation: solutionPop 0.25s ease both;
+    }
+
+    @keyframes solutionPop {
+      from { transform: translateY(6px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    .future-section {
+      border-radius: 32px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: radial-gradient(circle at 20% 0%, rgba(37,99,235,0.12), transparent 45%),
+                  radial-gradient(circle at 90% 20%, rgba(124,58,237,0.10), transparent 55%),
+                  rgba(255,255,255,0.85);
+      box-shadow: var(--blend-shadow);
+      padding: clamp(2rem, 3vw, 3rem);
+      text-align: left;
+    }
+
+    .future-section h2 {
+      margin: 0;
+      font-size: clamp(1.85rem, 2.8vw, 2.6rem);
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+    }
+
+    .future-section p {
+      margin-top: 0.85rem;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      color: var(--text-muted-strong);
+      max-width: 70ch;
+    }
+
+    .final-cta-panel {
+      overflow: hidden;
+    }
+
+    .final-cta-panel::before {
+      content: "";
+      position: absolute;
+      inset: -30% -10% auto -10%;
+      height: 220px;
+      background: radial-gradient(circle at 25% 30%, rgba(37,99,235,0.20), transparent 55%),
+                  radial-gradient(circle at 75% 10%, rgba(124,58,237,0.16), transparent 50%);
+      pointer-events: none;
+    }
+
+    .final-cta-panel > * {
+      position: relative;
+    }
+
   </style>
 </head>
 <body>
@@ -646,12 +782,22 @@
       </div>
     </section>
     <div class="content-wrapper">
+
+      <section class="story-section" aria-label="Contexto antes de problema-solución">
+        <p class="hero-label">La realidad hoy</p>
+        <h2>Tu negocio ya habla con clientes.<br>El problema es que nadie piensa mientras conversa.</h2>
+        <p>
+          Los mensajes llegan. Las oportunidades existen.
+          Pero sin contexto, sin prioridad y sin acción automática, se pierden.
+        </p>
+      </section>
+
       <section class="problem-solution-section" aria-label="Problema-Solución interactiva">
         <div class="problem-solution-inner">
           <div class="problem-column">
             <div class="column-header">
-              <h4>Problemas</h4>
-              <p>Explora cada fricción que detiene tus ventas.</p>
+              <h4>Lo que hoy te frena</h4>
+              <p>Fricciones reales que hacen perder ventas todos los días.</p>
             </div>
           <div class="problem-list" role="listbox" aria-label="Lista de problemas">
             <button type="button" class="problem-tab" data-problem-index="0" aria-label="Seleccionar problema 1">
@@ -686,11 +832,12 @@
           </div>
           <div class="solution-panel">
             <div class="column-header">
-              <h4>Solución</h4>
-              <p>Activa el agente IA y observa cómo responde.</p>
+              <h4>Cómo responde el agente IA</h4>
+              <p>Acciones reales, automáticas y con contexto.</p>
             </div>
             <p class="solution-placeholder"><span class="solution-arrow">←</span>Da clic en un problema para ver la solución del agente IA.</p>
             <div class="solution-content">
+              <span class="solution-label">AGENTE EN ACCIÓN</span>
               <h3 class="solution-title"></h3>
               <div class="solution-how">
                 <h4>Cómo funciona</h4>
@@ -703,15 +850,20 @@
         </div>
       </section>
 
+      
       <section class="future-section" aria-label="Future-proof">
-        <h3>Las empresas con mejores agentes de IA marcan el ritmo</h3>
-        <p>En 2026 ya no compiten las que tienen más vendedores; compiten las que entrenan agentes inteligentes.</p>
+        <h2>
+          En 2026 no competirán las empresas con más vendedores.<br>
+          <span class="problem-solution">Competirán las que tengan mejores agentes de IA.</span>
+        </h2>
+        <p>La pregunta no es si lo vas a usar. Es cuándo vas a empezar.</p>
       </section>
+
 
       <section class="final-cta-panel" aria-label="Demuestra el agente IA">
         <h3>No te explicamos cómo funciona.</h3>
         <p>Te lo mostramos conversando.</p>
-        <button type="button" data-open-webchat>Hablar con el agente IA ahora</button>
+        <button type="button" data-open-webchat>Deja que el agente IA te lo demuestre</button>
       </section>
     </div>
   </main>
