@@ -179,13 +179,10 @@
       gap: 1.4rem;
       padding: 0 1rem;
       will-change: transform;
-      min-width: max-content;
-      animation: marquee-scroll var(--marquee-duration, 32s) linear infinite;
     }
 
     .marquee-item {
       min-width: 260px;
-      flex: 0 0 auto;
       background: rgba(17, 24, 39, 0.9);
       border-radius: 18px;
       padding: 1.1rem 1.3rem;
@@ -204,15 +201,6 @@
       color: rgba(226, 232, 240, 0.85);
       font-size: 0.92rem;
       line-height: 1.5;
-    }
-
-    @keyframes marquee-scroll {
-      from {
-        transform: translateX(0);
-      }
-      to {
-        transform: translateX(-50%);
-      }
     }
 
     .positioning {
@@ -285,7 +273,7 @@
         <a href="/dashboard">Explorar panel</a>
       </div>
         <div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
-        <div class="marquee-track" aria-hidden="true" data-speed="1.4">
+        <div class="marquee-track" aria-hidden="true" data-speed="0.8">
           <article class="marquee-item">
             <h3>🧠 La automatización tradicional se transforma en IA agente humano.</h3>
             <p>
@@ -411,25 +399,68 @@
     </div>
   </footer>
 
-  <script>
-    document.getElementById('open-webchat')?.addEventListener('click', () => {
-      document.querySelector('.landing-stage')?.classList.add('landing-stage-hidden');
-      document.querySelectorAll('.chat-hidden').forEach((el) => el.classList.remove('chat-hidden'));
-      document.querySelectorAll('.layout-hidden').forEach((el) => el.classList.remove('layout-hidden'));
-      document.querySelector('.chat-shell')?.scrollIntoView({ behavior: 'smooth' });
-    });
-    document.getElementById('current-year')?.textContent = new Date().getFullYear();
+    <script>
+      document.getElementById('open-webchat')?.addEventListener('click', () => {
+        document.querySelector('.landing-stage')?.classList.add('landing-stage-hidden');
+        document.querySelectorAll('.chat-hidden').forEach((el) => el.classList.remove('chat-hidden'));
+        document.querySelectorAll('.layout-hidden').forEach((el) => el.classList.remove('layout-hidden'));
+        document.querySelector('.chat-shell')?.scrollIntoView({ behavior: 'smooth' });
+      });
+      const currentYearEl = document.getElementById('current-year');
+      if (currentYearEl) {
+        currentYearEl.textContent = new Date().getFullYear();
+      }
 
-    (function syncMarqueeDuration() {
+    (function animateMarquee() {
       const track = document.querySelector('.marquee-track');
       if (!track) return;
-      const speedValue = Number(track.dataset.speed ?? 1);
-      if (!Number.isFinite(speedValue) || speedValue <= 0) {
-        return;
+
+      const parseGap = () => {
+        const computedGap = getComputedStyle(track).gap;
+        const gapValue = Number.parseFloat(computedGap);
+        return Number.isFinite(gapValue) ? gapValue : 0;
+      };
+      const speedAttr = Number(track.dataset.speed);
+      const speedValue = Number.isFinite(speedAttr) ? Math.max(0.1, speedAttr) : 0.35;
+
+      const originals = Array.from(track.children);
+      originals.forEach((item) => {
+        track.appendChild(item.cloneNode(true));
+      });
+
+      let offset = 0;
+      let animationFrame;
+      let nextShift = getNextShift();
+
+      function getNextShift() {
+        const first = track.firstElementChild;
+        if (!first) return 0;
+        return first.getBoundingClientRect().width + parseGap();
       }
-      const baseDuration = 32;
-      const durationSeconds = (baseDuration / speedValue).toFixed(2);
-      track.style.setProperty('--marquee-duration', `${durationSeconds}s`);
+
+      function step() {
+        offset -= speedValue;
+        while (nextShift > 0 && -offset >= nextShift) {
+          offset += nextShift;
+          const first = track.firstElementChild;
+          if (first) {
+            track.appendChild(first);
+          }
+          nextShift = getNextShift();
+        }
+        track.style.transform = `translateX(${offset}px)`;
+        animationFrame = requestAnimationFrame(step);
+      }
+
+      step();
+
+      window.addEventListener('resize', () => {
+        cancelAnimationFrame(animationFrame);
+        offset = 0;
+        track.style.transform = 'translateX(0)';
+        nextShift = getNextShift();
+        step();
+      });
     })();
   </script>
 
