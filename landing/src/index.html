@@ -312,18 +312,46 @@
     }
 
     .problem-tab {
+      --problem-accent: rgba(37, 99, 235, 0.85);
+      position: relative;
+      overflow: hidden;
       text-align: left;
       border: 1px solid rgba(15, 23, 42, 0.1);
       border-radius: 16px;
+      border-left-width: 6px;
+      border-left-color: var(--problem-accent, rgba(15, 23, 42, 0.15));
+      border-left-style: solid;
       background: #f8fafc;
-      padding: 0.85rem 1rem;
+      padding: 0.85rem 1rem 0.85rem 1.1rem;
       font-size: 0.95rem;
       color: var(--text-main);
       cursor: pointer;
-      transition: border 0.2s ease, background 0.2s ease;
+      transition: border 0.2s ease, background 0.2s ease, box-shadow 0.3s ease;
       display: flex;
       flex-direction: column;
       gap: 0.35rem;
+    }
+
+    .problem-tab::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 15px;
+      background: linear-gradient(135deg, var(--problem-accent, rgba(37, 99, 235, 0.35)) 0%, transparent 70%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .problem-tab:hover::after,
+    .problem-tab.active::after {
+      opacity: 0.2;
+    }
+
+    .problem-tab span,
+    .problem-tab ul {
+      position: relative;
+      z-index: 1;
     }
 
     .problem-tab span {
@@ -336,7 +364,7 @@
     .problem-tab span::before {
       content: '•';
       font-size: 1.2rem;
-      color: rgba(15, 23, 42, 0.7);
+      color: var(--problem-accent, rgba(15, 23, 42, 0.7));
     }
 
     .problem-tab ul {
@@ -353,8 +381,10 @@
     }
 
     .problem-tab.active {
-      border-color: rgba(37, 99, 235, 0.6);
+      border-color: rgba(15, 23, 42, 0.3);
+      border-left-color: var(--problem-accent, rgba(37, 99, 235, 0.6));
       background: #ffffff;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
     }
 
     .problem-tab.active ul {
@@ -983,6 +1013,16 @@
           ]
         }
       ];
+
+      const problemAccentColors = [
+        '#7c3aed',
+        '#0ea5e9',
+        '#16a34a',
+        '#fb923c',
+        '#f472b6',
+        '#a3e635',
+        '#2563eb'
+      ];
       const solutionData = [
         {
           title: 'Atención inmediata en cualquier canal',
@@ -1077,6 +1117,8 @@
       const tabs = document.querySelectorAll('.problem-tab');
       const populateProblemBullets = () => {
         tabs.forEach((tab, index) => {
+          const accent = problemAccentColors[index] ?? '#2563eb';
+          tab.style.setProperty('--problem-accent', accent);
           const list = tab.querySelector('.problem-bullets');
           const info = problemData[index];
           if (!list || !info?.bullets?.length) return;
