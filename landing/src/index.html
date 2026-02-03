@@ -178,11 +178,14 @@
       display: flex;
       gap: 1.4rem;
       padding: 0 1rem;
-      animation: scroll-left 28s linear infinite;
+      will-change: transform;
+      min-width: max-content;
+      animation: marquee-scroll var(--marquee-duration, 32s) linear infinite;
     }
 
     .marquee-item {
       min-width: 260px;
+      flex: 0 0 auto;
       background: rgba(17, 24, 39, 0.9);
       border-radius: 18px;
       padding: 1.1rem 1.3rem;
@@ -201,6 +204,15 @@
       color: rgba(226, 232, 240, 0.85);
       font-size: 0.92rem;
       line-height: 1.5;
+    }
+
+    @keyframes marquee-scroll {
+      from {
+        transform: translateX(0);
+      }
+      to {
+        transform: translateX(-50%);
+      }
     }
 
     .positioning {
@@ -235,15 +247,6 @@
     .chat-hidden,
     .layout-hidden {
       display: none !important;
-    }
-
-    @keyframes scroll-left {
-      0% {
-        transform: translateX(0);
-      }
-      100% {
-        transform: translateX(-50%);
-      }
     }
 
     @media (max-width: 768px) {
@@ -281,8 +284,8 @@
         <button id="open-webchat">Abrir webchat (modal)</button>
         <a href="/dashboard">Explorar panel</a>
       </div>
-      <div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
-        <div class="marquee-track" aria-hidden="true">
+        <div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
+        <div class="marquee-track" aria-hidden="true" data-speed="1.4">
           <article class="marquee-item">
             <h3>🧠 La automatización tradicional se transforma en IA agente humano.</h3>
             <p>
@@ -416,6 +419,18 @@
       document.querySelector('.chat-shell')?.scrollIntoView({ behavior: 'smooth' });
     });
     document.getElementById('current-year')?.textContent = new Date().getFullYear();
+
+    (function syncMarqueeDuration() {
+      const track = document.querySelector('.marquee-track');
+      if (!track) return;
+      const speedValue = Number(track.dataset.speed ?? 1);
+      if (!Number.isFinite(speedValue) || speedValue <= 0) {
+        return;
+      }
+      const baseDuration = 32;
+      const durationSeconds = (baseDuration / speedValue).toFixed(2);
+      track.style.setProperty('--marquee-duration', `${durationSeconds}s`);
+    })();
   </script>
 
   <script type="module" src="./assets/js/main.js"></script>
