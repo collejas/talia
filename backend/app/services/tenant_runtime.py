@@ -660,18 +660,18 @@ async def get_twilio_runtime_settings(
     if not voice_stream:
         voice_stream = settings.voice_stream_jwt_secret
 
-        return TwilioRuntimeSettings(
-            phone_number=phone_number,
-            phone_number_sid=phone_number_sid,
-            validate_signatures=validate_signatures,
-            voice_webhook_path=webhook_path,
-            voice_full_duplex=full_duplex,
-            voice_debug_verbose=debug_verbose,
-            voice_debug_energy_every_n=debug_energy,
-            account_sid=account_sid,
-            auth_token=auth_token,
-            voice_stream_jwt_secret=voice_stream,
-        )
+    return TwilioRuntimeSettings(
+        phone_number=phone_number,
+        phone_number_sid=phone_number_sid,
+        validate_signatures=validate_signatures,
+        voice_webhook_path=webhook_path,
+        voice_full_duplex=full_duplex,
+        voice_debug_verbose=debug_verbose,
+        voice_debug_energy_every_n=debug_energy,
+        account_sid=account_sid,
+        auth_token=auth_token,
+        voice_stream_jwt_secret=voice_stream,
+    )
 
 
 def _coerce_positive_int(value: Any, default: int) -> int:
