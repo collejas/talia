@@ -12,8 +12,15 @@ const defaultConfig = {
   persistSession: true,
   tenantAlias: null,
   getScrollContainer: () => {
-    const layout = document.querySelector('.layout');
-    return layout || document.scrollingElement || document.documentElement;
+    return (
+      document.getElementById('chat-log') ||
+      document.querySelector('.webchat-widget__messages') ||
+      document.querySelector('.webchat-widget__panel') ||
+      document.querySelector('.layout') ||
+      document.scrollingElement ||
+      document.documentElement ||
+      document.body
+    );
   },
 };
 
