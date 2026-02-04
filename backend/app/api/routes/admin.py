@@ -687,7 +687,6 @@ async def set_tenant_secret(
             nonce=nonce_b64,
             etiqueta=etiqueta,
             version=version,
-            updated_by=user_id,
         )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

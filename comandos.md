@@ -91,6 +91,9 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
+* Instructivo creacion Tenants:
+codex resume 019c290c-c0c6-7983-bbf0-e281b8027004
+
 codex resume 019c24bb-ab03-7f61-846f-45d44f5d007d
 
 codex resume 019c20ee-cbcb-7b73-ab25-65d072f9798d
