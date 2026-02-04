@@ -295,11 +295,22 @@ async function mapResponseError(response: Response): Promise<string> {
       const json = JSON.parse(text);
       if (typeof json === "string") return json;
       if (json && typeof json === "object") {
+        const formatErrorValue = (value: unknown): string | null => {
+          if (typeof value === "string") return value;
+          if (typeof value === "number" || typeof value === "boolean") return value.toString();
+          if (value === null || value === undefined) return null;
+          try {
+            return JSON.stringify(value);
+          } catch {
+            return String(value);
+          }
+        };
+
         return (
-          json.error_description ||
-          json.message ||
-          json.detail ||
-          json.error ||
+          formatErrorValue(json.error_description) ||
+          formatErrorValue(json.message) ||
+          formatErrorValue(json.detail) ||
+          formatErrorValue(json.error) ||
           `Error ${response.status}`
         );
       }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { formatApiError } from "@/app/settings/variables/utils/format-error"
 
 type RouteItem = {
   id?: string
@@ -46,7 +47,9 @@ export function TenantRoutesManager({ channel, title, description, placeholder, 
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || "No se pudo crear la ruta.")
+        const errorMessage =
+          formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo crear la ruta."
+        throw new Error(errorMessage)
       }
       setMessage({ type: "success", text: "Ruta creada." })
       setClave("")
@@ -68,7 +71,9 @@ export function TenantRoutesManager({ channel, title, description, placeholder, 
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || "No se pudo eliminar la ruta.")
+        const errorMessage =
+          formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo eliminar la ruta."
+        throw new Error(errorMessage)
       }
       setMessage({ type: "success", text: "Ruta eliminada." })
       router.refresh()

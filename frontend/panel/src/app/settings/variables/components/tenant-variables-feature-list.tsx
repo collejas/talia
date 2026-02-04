@@ -4,6 +4,7 @@ import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Toggle } from "@/components/ui/toggle"
+import { formatApiError } from "@/app/settings/variables/utils/format-error"
 
 type FeatureConfig = Record<string, Record<string, unknown> | null>
 
@@ -40,7 +41,8 @@ export function TenantFeatureToggleList({ features }: Props) {
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || "No se pudo actualizar el feature")
+        const errorMessage = formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo actualizar el feature"
+        throw new Error(errorMessage)
       }
       setMessage({ type: "success", text: `Feature ${featureKey} ${nextValue ? "activado" : "desactivado"}` })
     } catch (err) {

@@ -893,7 +893,7 @@ export async function validateTenantAction(_: CrudActionState, formData: FormDat
       method: "POST",
       organizacionId: null,
       withUserToken: true,
-      searchParams: { scope },
+      body: { scope },
     })
     if (!resp.ok) throw new Error(resp.error)
     const report = resp.data

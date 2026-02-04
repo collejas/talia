@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { formatApiError } from "@/app/settings/variables/utils/format-error"
 
 type FieldSpec = {
   label: string
@@ -159,10 +160,12 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ config: patch }),
         })
-        const payload = await response.json()
-        if (!response.ok) {
-          throw new Error(payload.error || "No se pudo guardar la sección.")
-        }
+      const payload = await response.json()
+      if (!response.ok) {
+        const errorMessage =
+          formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo guardar la sección."
+        throw new Error(errorMessage)
+      }
         successParts.push("Configuración guardada")
       }
 
@@ -174,7 +177,9 @@ export function TenantSectionForm({ section, config }: SectionFormProps) {
         })
         const payload = await response.json()
         if (!response.ok) {
-          throw new Error(payload.error || "No se pudieron guardar los secretos.")
+          const errorMessage =
+            formatApiError((payload as { error?: unknown })?.error) ?? "No se pudieron guardar los secretos."
+          throw new Error(errorMessage)
         }
         successParts.push("Secretos guardados")
         setSecretValues((prev) => {

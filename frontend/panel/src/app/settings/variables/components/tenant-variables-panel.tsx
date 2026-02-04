@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { formatApiError } from "@/app/settings/variables/utils/format-error"
 
 export type TenantScopedSettings = {
   organizacion_id: string
@@ -89,7 +90,8 @@ export function TenantVariablesPanel({
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || "No se pudo actualizar el tenant")
+        const errorMessage = formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo actualizar el tenant"
+        throw new Error(errorMessage)
       }
       setMessage({ type: "success", text: "Cambios guardados" })
       setForm((prev) => ({ ...prev, ...payload }))

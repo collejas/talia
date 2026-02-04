@@ -4,14 +4,17 @@ import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatApiError } from "@/app/settings/variables/utils/format-error"
 
 type ValidationScope = "webchat" | "calendar" | "mail" | "twilio" | "messenger" | "whatsapp" | "full"
 
+type ReportItem = string | number | Record<string, unknown> | readonly unknown[]
+
 type Report = {
-  missing_routes: string[]
-  missing_config: string[]
-  missing_secrets: string[]
-  notes: string[]
+  missing_routes: ReportItem[]
+  missing_config: ReportItem[]
+  missing_secrets: ReportItem[]
+  notes: ReportItem[]
 }
 
 type Props = {
@@ -36,7 +39,8 @@ export function TenantValidationPanel({ scope, label, description }: Props) {
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error || "No se pudo validar.")
+        const errorMessage = formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo validar."
+        throw new Error(errorMessage)
       }
       setReport(payload)
       setError(null)
@@ -47,13 +51,26 @@ export function TenantValidationPanel({ scope, label, description }: Props) {
     }
   }
 
-  const renderList = (items: string[]) => {
+  const formatReportItem = (item: ReportItem): string => {
+    if (typeof item === "string") return item
+    if (typeof item === "number") return item.toString()
+    if (Array.isArray(item)) {
+      return item.map((child) => formatReportItem(child as ReportItem)).join(", ")
+    }
+    try {
+      return JSON.stringify(item)
+    } catch {
+      return String(item)
+    }
+  }
+
+  const renderList = (items: ReportItem[]) => {
     if (!items.length) {
       return <li className="text-xs text-muted-foreground">—</li>
     }
-    return items.map((item) => (
-      <li key={item} className="text-xs text-muted-foreground">
-        {item}
+    return items.map((item, index) => (
+      <li key={`${index}-${formatReportItem(item)}`} className="text-xs text-muted-foreground">
+        {formatReportItem(item)}
       </li>
     ))
   }

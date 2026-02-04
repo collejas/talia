@@ -87,19 +87,33 @@ export function useTenantSettingsActions() {
 
 const INITIAL_CRUD_STATE: CrudActionState = { status: "idle" }
 
+function formatCrudMessage(value: unknown): string | null {
+  if (value == null) return null
+  if (typeof value === "string") return value
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
 function FormStatusMessage({ state }: { state: CrudActionState }) {
   if (state.status === "idle") return null
+  const message = formatCrudMessage(state.message)
   if (state.status === "success") {
     return (
       <p className="rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-200">
-        {state.message ?? "Cambios guardados."}
+        {message ?? "Cambios guardados."}
       </p>
     )
   }
   if (state.status === "error") {
     return (
       <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-        {state.message ?? "No se pudo completar la acción."}
+        {message ?? "No se pudo completar la acción."}
       </p>
     )
   }
