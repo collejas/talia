@@ -653,14 +653,6 @@
       margin-top: 0.8rem;
     }
 
-    .landing-stage-hidden {
-      display: none;
-    }
-
-    .chat-hidden,
-    .layout-hidden {
-      display: none !important;
-    }
 
     @media (max-width: 900px) {
       .products-grid {
@@ -1040,42 +1032,64 @@
     </div>
   </main>
 
-  <main class="layout chat-hidden layout-hidden" aria-live="polite">
-    <section class="chat-shell">
-      <div class="intro">
-        <h1>Hola, soy la TaL-IA</h1>
-        <p>
-          <span>¿Quieres saber qué hago?</span>
-          <span>¿Y cómo puede ayudarte?</span>
-          <span class="callout">¡Pregúúúúúúntameeee!</span>
-        </p>
-      </div>
-      <div id="chat-log" class="chat-log" aria-label="Conversación con TalIA"></div>
-    </section>
-  </main>
-
-  <section class="composer chat-hidden" role="region" aria-label="Área de composición">
-    <div class="composer-content">
-      <div class="composer-disclaimer">Talia Es La inteligencia que entiende tu lenguaje de negocio!!!</div>
-      <form id="chat-form" class="composer-form" autocomplete="off">
-        <div class="composer-input-row">
-          <button type="button" id="chat-attachment-button" class="composer-attach" aria-label="Adjuntar archivo">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-            <span class="sr-only">Adjuntar archivo</span>
-          </button>
-          <input id="chat-input" type="text" name="message" placeholder="Escribe tu pregunta" />
-          <button type="submit" id="chat-submit">Enviar</button>
+  <div class="webchat-widget" id="open-webchat" aria-live="polite" data-open="false">
+    <button
+      type="button"
+      class="webchat-widget__toggle"
+      data-open-webchat
+      aria-expanded="false"
+      aria-controls="webchat-panel"
+    >
+      <span>Chatear con TalIA</span>
+      <span class="webchat-widget__toggle-subtitle">Agente multicanal</span>
+    </button>
+    <div class="webchat-widget__panel" id="webchat-panel" role="dialog" aria-label="Conversación con TalIA">
+      <div class="webchat-widget__header">
+        <div>
+          <p class="eyebrow">Webchat</p>
+          <h2>Asistente TalIA</h2>
         </div>
-        <input type="file" id="chat-file-input" class="composer-file-input" multiple hidden />
-        <div id="chat-attachments" class="composer-attachments" aria-live="polite"></div>
-      </form>
+        <button type="button" class="webchat-widget__close" data-close-webchat aria-label="Cerrar chat">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <main class="layout" aria-live="polite">
+        <section class="chat-shell">
+          <div class="intro">
+            <h1>Hola, soy la TaL-IA</h1>
+            <p>
+              <span>¿Quieres saber qué hago?</span>
+              <span>¿Y cómo puede ayudarte?</span>
+              <span class="callout">¡Pregúúúúúúntameeee!</span>
+            </p>
+          </div>
+          <div id="chat-log" class="chat-log" aria-label="Conversación con TalIA"></div>
+        </section>
+      </main>
+      <section class="composer" role="region" aria-label="Área de composición">
+        <div class="composer-content">
+          <div class="composer-disclaimer">Talia Es La inteligencia que entiende tu lenguaje de negocio!!!</div>
+          <form id="chat-form" class="composer-form" autocomplete="off">
+            <div class="composer-input-row">
+              <button type="button" id="chat-attachment-button" class="composer-attach" aria-label="Adjuntar archivo">
+                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+                <span class="sr-only">Adjuntar archivo</span>
+              </button>
+              <input id="chat-input" type="text" name="message" placeholder="Escribe tu pregunta" />
+              <button type="submit" id="chat-submit">Enviar</button>
+            </div>
+            <input type="file" id="chat-file-input" class="composer-file-input" multiple hidden />
+            <div id="chat-attachments" class="composer-attachments" aria-live="polite"></div>
+          </form>
+        </div>
+      </section>
     </div>
-  </section>
+  </div>
 
-  <footer class="site-footer chat-hidden" aria-label="Enlaces legales y contacto">
+  <footer class="site-footer" aria-label="Enlaces legales y contacto">
     <div class="container footer-content">
       <div class="footer-left">
         <span class="logo">TalIA</span>
@@ -1090,14 +1104,30 @@
   </footer>
 
     <script>
+      const landingStage = document.querySelector('.landing-stage');
+      const webchatWidget = document.querySelector('.webchat-widget');
+      const toggleButton = document.querySelector('.webchat-widget__toggle');
+      const closeButton = document.querySelector('[data-close-webchat]');
       const openWebchatTriggers = document.querySelectorAll('[data-open-webchat]');
+      const setWebchatState = (open) => {
+        if (!webchatWidget) return;
+        webchatWidget.setAttribute('data-open', open ? 'true' : 'false');
+        toggleButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
+        landingStage?.classList.toggle('landing-stage-dimmed', open);
+      };
+      const handleOpenWebchat = (event) => {
+        event?.preventDefault?.();
+        setWebchatState(true);
+      };
+      const handleCloseWebchat = () => setWebchatState(false);
       openWebchatTriggers.forEach((trigger) => {
-        trigger.addEventListener('click', () => {
-          document.querySelector('.landing-stage')?.classList.add('landing-stage-hidden');
-          document.querySelectorAll('.chat-hidden').forEach((el) => el.classList.remove('chat-hidden'));
-          document.querySelectorAll('.layout-hidden').forEach((el) => el.classList.remove('layout-hidden'));
-          document.querySelector('.chat-shell')?.scrollIntoView({ behavior: 'smooth' });
-        });
+        trigger.addEventListener('click', handleOpenWebchat);
+      });
+      closeButton?.addEventListener('click', handleCloseWebchat);
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && webchatWidget?.getAttribute('data-open') === 'true') {
+          handleCloseWebchat();
+        }
       });
       const currentYearEl = document.getElementById('current-year');
       if (currentYearEl) {
