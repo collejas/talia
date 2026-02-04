@@ -12,6 +12,8 @@ from app.api.routes.admin import (
     ChannelRoute,
     CreateRouteRequest,
     CreateRouteResponse,
+    SetTenantConfigRequest,
+    TenantConfigResponse,
     TenantRoutesResponse,
     TenantValidationReport,
     SecretMetadata,
@@ -310,6 +312,26 @@ async def delete_tenant_route(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+@router.put("/me/config", response_model=TenantConfigResponse)
+async def set_my_tenant_config(
+    payload: SetTenantConfigRequest,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantConfigResponse:
+    try:
+        row = await repo.set_organizacion_config(
+            organizacion_id=context.organizacion_id,
+            config=payload.config,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    config = row.get("config")
+    return TenantConfigResponse(
+        organizacion_id=context.organizacion_id,
+        config=config if isinstance(config, dict) else {},
+    )
 
 
 @router.post("/me/validate", response_model=TenantValidationReport)

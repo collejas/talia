@@ -36,12 +36,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: settingsResp.error }, { status: settingsResp.status ?? 400 })
   }
 
-  const organizacionId = settingsResp.data.organizacion_id
   const currentConfig = settingsResp.data.config ?? {}
   const mergedConfig = mergeDeep({ ...currentConfig }, body.config)
 
   const updateResp = await callCrmApi<{ ok: boolean; organizacion_id: string; config: Record<string, unknown> }>(
-    `/admin/tenants/${organizacionId}/config`,
+    "/tenant/me/config",
     {
       method: "PUT",
       organizacionId: null,
