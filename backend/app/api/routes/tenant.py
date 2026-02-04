@@ -266,6 +266,29 @@ async def upsert_tenant_secrets(
     return TenantSecretsResponse(items=items)
 
 
+@router.get("/me/secrets", response_model=TenantSecretsResponse)
+async def list_tenant_secrets(
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantSecretsResponse:
+    items = await repo.list_secret_metadata(organizacion_id=context.organizacion_id)
+    return TenantSecretsResponse(items=[SecretMetadata.model_validate(row) for row in items])
+
+
+@router.delete("/me/secrets/{clave:path}", status_code=204)
+async def delete_tenant_secret(
+    clave: str,
+    context: TenantContext = Depends(require_tenant_context),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> Response:
+    secret_key = _normalize_secret_key(clave)
+    try:
+        await repo.delete_secret(organizacion_id=context.organizacion_id, clave=secret_key)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
 @router.get("/me/routes", response_model=TenantRoutesResponse)
 async def list_tenant_routes(
     context: TenantContext = Depends(require_tenant_context),

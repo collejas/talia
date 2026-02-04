@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState } from "react"
+import { createContext, ReactNode, useActionState, useContext, useEffect, useRef, useState } from "react"
 import { useFormStatus } from "react-dom"
 
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,60 @@ import {
   updateWebchatSettingsAction,
   validateTenantAction,
 } from "./actions"
+
+export type TenantSettingsActions = {
+  updateTenantConfigAction: CrudActionHandler
+  updateTenantInfoAction: CrudActionHandler
+  setTenantSecretAction: CrudActionHandler
+  deleteTenantSecretAction: CrudActionHandler
+  updateWebchatSettingsAction: CrudActionHandler
+  updateCalendarSettingsAction: CrudActionHandler
+  updateMailSettingsAction: CrudActionHandler
+  updateBusquedaSettingsAction: CrudActionHandler
+  updateTwilioSettingsAction: CrudActionHandler
+  updateWhatsAppSettingsAction: CrudActionHandler
+  updateMessengerSettingsAction: CrudActionHandler
+  updateOpenaiGeneralAction: CrudActionHandler
+  updateOpenaiVoiceAction: CrudActionHandler
+  validateTenantAction: CrudActionHandler
+  createTenantRouteAction: CrudActionHandler
+  deleteTenantRouteAction: CrudActionHandler
+}
+
+const defaultTenantSettingsActions: TenantSettingsActions = {
+  updateTenantConfigAction,
+  updateTenantInfoAction,
+  setTenantSecretAction,
+  deleteTenantSecretAction,
+  updateWebchatSettingsAction,
+  updateCalendarSettingsAction,
+  updateMailSettingsAction,
+  updateBusquedaSettingsAction,
+  updateTwilioSettingsAction,
+  updateWhatsAppSettingsAction,
+  updateMessengerSettingsAction,
+  updateOpenaiGeneralAction,
+  updateOpenaiVoiceAction,
+  validateTenantAction,
+  createTenantRouteAction,
+  deleteTenantRouteAction,
+}
+
+const TenantSettingsActionsContext = createContext<TenantSettingsActions>(defaultTenantSettingsActions)
+
+export function TenantSettingsActionsProvider({
+  value,
+  children,
+}: {
+  value: TenantSettingsActions
+  children: ReactNode
+}) {
+  return <TenantSettingsActionsContext.Provider value={value}>{children}</TenantSettingsActionsContext.Provider>
+}
+
+export function useTenantSettingsActions() {
+  return useContext(TenantSettingsActionsContext)
+}
 
 const INITIAL_CRUD_STATE: CrudActionState = { status: "idle" }
 
@@ -77,7 +131,8 @@ export function TenantConfigEditor({
   tenantId: string
   initialConfigJson: string
 }) {
-  const [state, formAction] = useActionState(updateTenantConfigAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateTenantConfigAction, INITIAL_CRUD_STATE)
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="tenant_id" value={tenantId} />
@@ -137,7 +192,8 @@ export function TenantOrganizationInfoForm({
   tenantId: string
   info: TenantOrganizationInfo | null
 }) {
-  const [state, formAction] = useActionState(updateTenantInfoAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateTenantInfoAction, INITIAL_CRUD_STATE)
   const defaultOnboarding = info?.estado_onboarding ?? "pendiente"
 
   return (
@@ -318,8 +374,9 @@ export function TenantWebchatSettings({
   tenantId: string
   initialValues: WebchatInitialValues
 }) {
-  const [state, formAction] = useActionState(updateWebchatSettingsAction, INITIAL_CRUD_STATE)
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateWebchatSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
     <div className="space-y-6">
@@ -472,7 +529,7 @@ export function TenantWebchatSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -482,7 +539,7 @@ export function TenantWebchatSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -492,7 +549,7 @@ export function TenantWebchatSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -502,7 +559,7 @@ export function TenantWebchatSettings({
                 <div className="space-y-1 md:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
                   <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                    {validateState.report.notes.map((x: string) => <li key={x}>{x}</li>)}
                   </ul>
                 </div>
               ) : null}
@@ -523,8 +580,9 @@ export function TenantCalendarSettings({
   tenantId: string
   initialValues: CalendarInitialValues
 }) {
-  const [state, formAction] = useActionState(updateCalendarSettingsAction, INITIAL_CRUD_STATE)
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateCalendarSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
     <div className="space-y-6">
@@ -686,7 +744,7 @@ export function TenantCalendarSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -696,7 +754,7 @@ export function TenantCalendarSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -706,7 +764,7 @@ export function TenantCalendarSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -716,7 +774,7 @@ export function TenantCalendarSettings({
                 <div className="space-y-1 md:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
                   <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                    {validateState.report.notes.map((x: string) => <li key={x}>{x}</li>)}
                   </ul>
                 </div>
               ) : null}
@@ -739,8 +797,9 @@ export function TenantMailSettings({
   initialValues: MailInitialValues
   hasBrevoApiKey: boolean
 }) {
-  const [state, formAction] = useActionState(updateMailSettingsAction, INITIAL_CRUD_STATE)
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateMailSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
     <div className="space-y-6">
@@ -880,7 +939,7 @@ export function TenantMailSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -890,7 +949,7 @@ export function TenantMailSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -900,7 +959,7 @@ export function TenantMailSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -910,7 +969,7 @@ export function TenantMailSettings({
                 <div className="space-y-1 md:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
                   <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                    {validateState.report.notes.map((x: string) => <li key={x}>{x}</li>)}
                   </ul>
                 </div>
               ) : null}
@@ -935,7 +994,8 @@ export function TenantBusquedaSettings({
   hasToken: boolean
   hasGoogleApiKey: boolean
 }) {
-  const [state, formAction] = useActionState(updateBusquedaSettingsAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateBusquedaSettingsAction, INITIAL_CRUD_STATE)
 
   return (
     <form action={formAction} className="space-y-6">
@@ -1123,8 +1183,9 @@ export function TenantTwilioSettings({
   tenantId: string
   initialValues: TwilioInitialValues
 }) {
-  const [state, formAction] = useActionState(updateTwilioSettingsAction, INITIAL_CRUD_STATE)
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateTwilioSettingsAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
     <div className="space-y-6">
@@ -1271,7 +1332,7 @@ export function TenantTwilioSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1281,7 +1342,7 @@ export function TenantTwilioSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1291,7 +1352,7 @@ export function TenantTwilioSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1301,7 +1362,7 @@ export function TenantTwilioSettings({
                 <div className="space-y-1 md:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
                   <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                    {validateState.report.notes.map((x: string) => <li key={x}>{x}</li>)}
                   </ul>
                 </div>
               ) : null}
@@ -1324,12 +1385,13 @@ export function TenantWhatsAppSettings({
   initialValues: WhatsAppInitialValues
   routes: RouteItem[]
 }) {
-  const [state, formAction] = useActionState(updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
   const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
-    createTenantRouteAction,
+    actions.createTenantRouteAction,
   )
-  const { formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const { formAction: deleteRouteAction } = useCrudForm(actions.deleteTenantRouteAction)
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
 
   return (
@@ -1513,7 +1575,7 @@ export function TenantWhatsAppSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1523,7 +1585,7 @@ export function TenantWhatsAppSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1533,7 +1595,7 @@ export function TenantWhatsAppSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1543,7 +1605,7 @@ export function TenantWhatsAppSettings({
                 <div className="space-y-1 md:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
                   <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x) => (
+                    {validateState.report.notes.map((x: string) => (
                       <li key={x}>{x}</li>
                     ))}
                   </ul>
@@ -1568,13 +1630,14 @@ export function TenantMessengerSettings({
   initialValues: MessengerInitialValues
   routes: RouteItem[]
 }) {
-  const [state, formAction] = useActionState(updateMessengerSettingsAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateMessengerSettingsAction, INITIAL_CRUD_STATE)
   const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
-    createTenantRouteAction,
+    actions.createTenantRouteAction,
   )
-  const { formAction: deleteRouteAction } = useCrudForm(deleteTenantRouteAction)
+  const { formAction: deleteRouteAction } = useCrudForm(actions.deleteTenantRouteAction)
   const channelRoutes = routes.filter((route) => route.canal === "messenger")
-  const [validateState, validateAction] = useActionState(validateTenantAction, INITIAL_CRUD_STATE)
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
     <div className="space-y-6">
@@ -1728,7 +1791,7 @@ export function TenantMessengerSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1738,7 +1801,7 @@ export function TenantMessengerSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1748,7 +1811,7 @@ export function TenantMessengerSettings({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
                 <ul className="list-disc pl-5">
                   {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x) => <li key={x}>{x}</li>)
+                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
                   ) : (
                     <li>—</li>
                   )}
@@ -1758,7 +1821,7 @@ export function TenantMessengerSettings({
                 <div className="space-y-1 md:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
                   <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x) => <li key={x}>{x}</li>)}
+                    {validateState.report.notes.map((x: string) => <li key={x}>{x}</li>)}
                   </ul>
                 </div>
               ) : null}
@@ -1783,8 +1846,9 @@ export function TenantOpenaiSettings({
   hasGeneralApiKey: boolean
   hasVoiceApiKey: boolean
 }) {
-  const [generalState, generalAction] = useActionState(updateOpenaiGeneralAction, INITIAL_CRUD_STATE)
-  const [voiceState, voiceAction] = useActionState(updateOpenaiVoiceAction, INITIAL_CRUD_STATE)
+  const actions = useTenantSettingsActions()
+  const [generalState, generalAction] = useActionState(actions.updateOpenaiGeneralAction, INITIAL_CRUD_STATE)
+  const [voiceState, voiceAction] = useActionState(actions.updateOpenaiVoiceAction, INITIAL_CRUD_STATE)
 
   return (
     <div className="space-y-6">
@@ -1894,8 +1958,11 @@ export function TenantOpenaiSettings({
 }
 
 export function TenantRoutingManager({ tenantId, routes }: { tenantId: string; routes: RouteItem[] }) {
-  const { state: createState, formAction: createAction, formRef: createRef } = useCrudForm(createTenantRouteAction)
-  const { state: deleteState, formAction: deleteAction } = useCrudForm(deleteTenantRouteAction)
+  const actions = useTenantSettingsActions()
+  const { state: createState, formAction: createAction, formRef: createRef } = useCrudForm(
+    actions.createTenantRouteAction,
+  )
+  const { state: deleteState, formAction: deleteAction } = useCrudForm(actions.deleteTenantRouteAction)
 
   return (
     <div className="space-y-6">
@@ -1970,8 +2037,9 @@ export function TenantRoutingManager({ tenantId, routes }: { tenantId: string; r
 }
 
 export function TenantSecretsManager({ tenantId, secrets }: { tenantId: string; secrets: SecretItem[] }) {
-  const { state: setState, formAction: setAction, formRef: setRef } = useCrudForm(setTenantSecretAction)
-  const { state: deleteState, formAction: deleteAction } = useCrudForm(deleteTenantSecretAction)
+  const actions = useTenantSettingsActions()
+  const { state: setState, formAction: setAction, formRef: setRef } = useCrudForm(actions.setTenantSecretAction)
+  const { state: deleteState, formAction: deleteAction } = useCrudForm(actions.deleteTenantSecretAction)
   const [tier, setTier] = useState<"A" | "B">("A")
 
   return (
