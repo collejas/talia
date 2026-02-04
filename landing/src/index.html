@@ -549,38 +549,40 @@
 
     .products-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: clamp(1rem, 2vw, 1.5rem);
     }
 
     .product-card {
-      border-radius: 22px;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      padding: 1.25rem;
-      background: #ffffff;
+      border-radius: 24px;
+      padding: 1.4rem;
+      background: rgba(255, 255, 255, 0.08);
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      min-height: 170px;
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      gap: 0.65rem;
+      min-height: 190px;
+      box-shadow: 0 25px 45px rgba(12, 12, 25, 0.55);
       position: relative;
       overflow: hidden;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 255, 0.9));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(18px);
+      background-image: radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.2), transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(99, 102, 241, 0.25), transparent 35%);
     }
 
     .product-card::after {
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 15% 20%, rgba(37, 99, 235, 0.25), transparent 55%),
-                  radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.18), transparent 45%);
-      opacity: 0;
-      transition: opacity 0.3s ease;
+      border-radius: inherit;
+      border: 1px solid transparent;
+      pointer-events: none;
+      transition: border-color 0.3s ease;
     }
 
     .product-card:hover::after,
     .product-card:focus-within::after {
-      opacity: 1;
+      border-color: rgba(255, 255, 255, 0.35);
     }
 
     .product-card > h3 {
@@ -589,18 +591,22 @@
       color: var(--text-main);
     }
 
-    .product-card span {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
-      color: rgba(15, 23, 42, 0.5);
+    .product-card__icon {
+      font-size: 1.8rem;
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 12px 25px rgba(15, 23, 42, 0.45);
     }
 
     .product-card p {
       margin: 0;
-      color: var(--text-muted-strong);
-      flex: 1;
-      line-height: 1.4;
+      color: #475569;
+      line-height: 1.5;
     }
 
     .final-cta-panel {
@@ -986,26 +992,32 @@
         </div>
         <div class="products-grid">
           <article class="product-card">
-            <h3>CRM negocios B2B</h3>
+            <span class="product-card__icon">🧭</span>
+            <h3>CRM negocios B2B B2C</h3>
             <p>Combina scoring, pipeline y seguimiento automático con conversaciones inteligentes que mantienen el contexto comercial y detectan oportunidades en cada hilo.</p>
           </article>
           <article class="product-card">
+            <span class="product-card__icon">🧑‍💻</span>
             <h3>CRM bienes raíces</h3>
             <p>Administra preventas, inventario, contratos y comunicación con compradores desde un agente IA que coordina con brokers, cobranza y seguimiento de documentación.</p>
           </article>
           <article class="product-card">
-            <h3>CRM turismo</h3>
+            <span class="product-card__icon">🌎</span>
+            <h3>CRM de turismo</h3>
             <p>Orquesta reservas, campañas y atención multiplataforma como un CRM que personaliza recordatorios, upsells y seguimiento según las intenciones detectadas por la IA.</p>
           </article>
           <article class="product-card">
+            <span class="product-card__icon">🤝</span>
             <h3>CRM para Recursos Humanos</h3>
             <p>Automatiza la atención de candidatos y colaboradores en WhatsApp, correo y teléfono mientras la IA clasifica perfiles, agenda entrevistas y notifica a RR.HH. en tiempo real.</p>
           </article>
           <article class="product-card">
-            <h3>Búsqueda de leads en Google y DENUE</h3>
+            <span class="product-card__icon">🔍</span>
+            <h3>Búsqueda de prospectos en Google y DENUE</h3>
             <p>Convierte puntos de datos públicos en prospectos enriquecidos: filtra sectores, geolocalización y señales de compra; exporta listas y activa outreach sin duplicar esfuerzos manuales.</p>
           </article>
           <article class="product-card">
+            <span class="product-card__icon">🏙️</span>
             <h3>Sistema de gestión por IA para condominios</h3>
             <p>Gestiona reportes, solicitudes y mantenimiento con respuestas automáticas, recordatorios y dashboards de estado para administradores y residentes, todo potenciado por IA.</p>
           </article>
