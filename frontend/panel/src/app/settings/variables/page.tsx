@@ -19,7 +19,6 @@ import {
   TenantBusquedaSettings,
   TenantOpenaiSettings,
   TenantSecretsManager,
-  TenantRoutingManager,
   type RouteItem,
   type SecretItem,
   type TenantOrganizationInfo,
@@ -345,7 +344,6 @@ export default async function SettingsVariablesPage() {
             </CardContent>
           </Card>
 
-          <TenantRoutingManager tenantId={tenantId} routes={routes} />
         </TenantSettingsActionsProvider>
       </div>
     </AppViewLayout>
