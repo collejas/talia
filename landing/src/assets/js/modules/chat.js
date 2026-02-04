@@ -67,6 +67,25 @@ function normaliseTimezoneLabel(timezone) {
   return timezone.replace(/_/g, ' ');
 }
 
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+  const cleaned = hex.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return null;
+  const value = parseInt(cleaned, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+function rgbaFromHex(hex, alpha = 1) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return null;
+  const { r, g, b } = rgb;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function handleCalendarSlotSelection(slot, fallbackTimezone) {
   if (!elements.chatInput) return;
   const inputTimezone = slot.timezone || fallbackTimezone || 'America/Mexico_City';

@@ -397,10 +397,12 @@
     }
 
     .solution-panel {
+      --solution-accent: #2563eb;
+      --solution-accent-soft: rgba(37, 99, 235, 0.15);
       border-radius: 20px;
       border: 1px solid rgba(15, 23, 42, 0.15);
       padding: 1.5rem;
-      background: #fdfdff;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), var(--solution-accent-soft));
       display: flex;
       flex-direction: column;
       gap: 1rem;
@@ -454,13 +456,19 @@
       font-size: 0.8rem;
       letter-spacing: 0.35em;
       text-transform: uppercase;
-      color: rgba(15, 23, 42, 0.6);
+      color: var(--solution-accent, rgba(15, 23, 42, 0.6));
+    }
+
+    .solution-label::before {
+      content: "•";
+      margin-right: 0.35rem;
+      color: var(--solution-accent, #2563eb);
     }
 
     .solution-title {
       margin: 0;
       font-size: clamp(1.5rem, 2vw, 2rem);
-      color: #0f172a;
+      color: var(--solution-accent, #0f172a);
     }
 
     .solution-bullets {
@@ -488,7 +496,7 @@
     .solution-how h4 {
       margin: 0;
       font-size: 1rem;
-      color: #0f172a;
+      color: var(--solution-accent, #0f172a);
     }
 
     .solution-how p {
@@ -505,7 +513,7 @@
       padding: 0.95rem 2rem;
       font-weight: 600;
       font-size: 1rem;
-      background: var(--accent);
+      background: linear-gradient(135deg, var(--solution-accent, var(--accent)), #a855f7);
       color: #ffffff;
       cursor: pointer;
       box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
@@ -731,6 +739,39 @@
       box-shadow: 0 14px 34px rgba(37, 99, 235, 0.14);
     }
 
+    .problem-solution-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .problem-solution-header h2 {
+      margin: 0;
+      font-size: clamp(1.5rem, 2vw, 2rem);
+      color: var(--text-main);
+    }
+
+    .problem-solution-header__cta {
+      border-radius: 999px;
+      padding: 0.65rem 1.4rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .problem-solution-header__cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 24px 60px rgba(99, 102, 241, 0.45);
+    }
+
     .solution-label {
       display: inline-flex;
       align-items: center;
@@ -810,8 +851,9 @@
       <span>Tal-IA</span>
     </a>
     <div class="header-controls">
+      <a class="header-link" href="#problemas">Soluciones</a>
       <a class="header-link" href="#productos">Productos</a>
-      <a class="header-panel" href="https://talia.mx/auth/login" target="_blank" rel="noopener noreferrer">Panel</a>
+      <a class="header-panel" href="https://talia.mx/auth/login">Panel</a>
     </div>
   </header>
 
@@ -911,12 +953,18 @@
         </p>
       </section>
 
-      <section class="problem-solution-section" aria-label="Problema-Solución interactiva">
+      <section class="problem-solution-section" id="problemas" aria-label="Problema-Solución interactiva">
+        <div class="problem-solution-header">
+          <div>
+            <p class="hero-label">¿Qué duele?</p>
+            <h2>Solución inmediata, para problemas reales.</h2>
+          </div>
+        </div>
         <div class="problem-solution-inner">
           <div class="problem-column">
             <div class="column-header">
-              <h4>Problemas</h4>
-              <p>Fricciones reales que hacen perder ventas todos los días.</p>
+              <h2>Problemas</h2>
+              <p>Que hacen perder ventas todos los días.</p>
             </div>
           <div class="problem-list" role="listbox" aria-label="Lista de problemas">
             <button type="button" class="problem-tab" data-problem-index="0" aria-label="Seleccionar problema 1">
@@ -951,7 +999,7 @@
           </div>
           <div class="solution-panel">
             <div class="column-header">
-              <h4>Soluciones de IA</h4>
+              <h2>Soluciones de IA</h2>
               <p>Acciones reales, automáticas y con contexto.</p>
             </div>
             <p class="solution-placeholder"><span class="solution-arrow">←</span>Da clic en un problema para ver la solución del agente IA.</p>
@@ -993,7 +1041,7 @@
         <div class="products-grid">
           <article class="product-card">
             <span class="product-card__icon">🧭</span>
-            <h3>CRM negocios B2B B2C</h3>
+            <h3>CRM negocios B2B y B2C</h3>
             <p>Combina scoring, pipeline y seguimiento automático con conversaciones inteligentes que mantienen el contexto comercial y detectan oportunidades en cada hilo.</p>
           </article>
           <article class="product-card">
@@ -1079,6 +1127,24 @@
   </footer>
 
     <script>
+      function hexToRgb(hex) {
+        if (!hex || typeof hex !== 'string') return null;
+        const cleaned = hex.trim().replace(/^#/, '');
+        if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return null;
+        const value = parseInt(cleaned, 16);
+        return {
+          r: (value >> 16) & 255,
+          g: (value >> 8) & 255,
+          b: value & 255,
+        };
+      }
+
+      function rgbaFromHex(hex, alpha = 1) {
+        const rgb = hexToRgb(hex);
+        if (!rgb) return null;
+        return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+      }
+
       const landingStage = document.querySelector('.landing-stage');
       const webchatWidget = document.querySelector('.webchat-widget');
       const toggleButton = document.querySelector('.webchat-widget__toggle');
@@ -1238,6 +1304,7 @@
       ];
 
       const solutionContent = document.querySelector('.solution-content');
+      const solutionPanel = document.querySelector('.solution-panel');
       const solutionPlaceholder = document.querySelector('.solution-placeholder');
       const showSolutionDetail = () => {
         solutionPlaceholder?.classList.add('hidden');
@@ -1250,6 +1317,10 @@
         const bulletsEl = document.querySelector('.solution-bullets');
         const howCopy = document.querySelector('.solution-how-copy');
         if (!titleEl || !bulletsEl || !howCopy) return;
+        const accent = problemAccentColors[index] ?? '#2563eb';
+        solutionPanel?.style.setProperty('--solution-accent', accent);
+        const accentSoft = rgbaFromHex(accent, 0.12) || 'rgba(37, 99, 235, 0.15)';
+        solutionPanel?.style.setProperty('--solution-accent-soft', accentSoft);
         titleEl.textContent = target.title;
         bulletsEl.innerHTML = '';
         target.bullets.forEach((item) => {
