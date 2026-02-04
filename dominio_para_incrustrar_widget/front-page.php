@@ -87,6 +87,7 @@ get_header(); ?>
 			chatAttachmentButton: document.getElementById("chat-attachment-button"),
 			chatFileInput: document.getElementById("chat-file-input"),
 			chatAttachments: document.getElementById("chat-attachments"),
+			getScrollContainer: () => document.getElementById("talia-webchat-widget"),
 		});
 	};
 	loadWebchat().catch((error) => {
