@@ -69,7 +69,7 @@ get_header(); ?>
 		<div id="chat-attachments" class="composer-attachments"></div>
 	</div>
 	<button id="talia-webchat-toggle" class="talia-webchat-toggle" type="button" aria-expanded="false">
-		Chatea con nosotros
+		Habla Con L-IA
 	</button>
 </div>
 
@@ -110,7 +110,7 @@ get_header(); ?>
 			widget.classList.toggle(openClass, open);
 			widget.classList.toggle(collapsedClass, !open);
 			toggle.setAttribute("aria-expanded", open ? "true" : "false");
-			toggle.textContent = open ? "Cerrar chat" : "Chatea con nosotros";
+			toggle.textContent = open ? "Cerrar chat" : "Habla Con L-IA";
 		};
 
 		setState(false);
