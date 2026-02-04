@@ -3263,9 +3263,6 @@ export function PropertyMap() {
               <div className="pointer-events-auto">
                 <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
                   <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
-                      Mapbox 3D
-                    </p>
                     {!mapboxToken && (
                       <p className="text-[0.65rem] text-rose-400">
                         Configura `NEXT_PUBLIC_MAPBOX_TOKEN` para activar esta vista.
@@ -3492,9 +3489,6 @@ export function PropertyMap() {
                     </p>
                   )}
                   <div className="mt-5 border-t border-slate-800 pt-4">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                      Vista Mapbox
-                    </div>
                     <div className="mt-3 space-y-3 text-[0.7rem] text-slate-300">
                       <div className="flex items-center justify-between">
                         <span>Pitch</span>
@@ -3522,9 +3516,6 @@ export function PropertyMap() {
                       />
                     </div>
                   </div>
-                </div>
-                <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
-                  La vista 3D utiliza los datos de altura y color del RPC `crm_propiedades_geojson`.
                 </div>
               </div>
             </div>
