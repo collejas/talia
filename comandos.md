@@ -91,12 +91,12 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
+codex resume 019c293a-b36e-7923-9121-7978fdceb363
+
+* Variables
+codex resume 019c293a-b36e-7923-9121-7978fdceb363
 * Instructivo creacion Tenants:
 codex resume 019c290c-c0c6-7983-bbf0-e281b8027004
-
-codex resume 019c24bb-ab03-7f61-846f-45d44f5d007d
-
-codex resume 019c20ee-cbcb-7b73-ab25-65d072f9798d
 
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
@@ -955,3 +955,28 @@ export NEXT_PUBLIC_SUPABASE_URL=https://qnimyamtczbbwmlrlejc.supabase.co
 
   Si te late esta propuesta, el siguiente paso sería decidir si enriquecemos la RPC existente o preferimos un endpoint de detalle bajo
   demanda; a partir de eso, implementamos el componente para el drawer.
+
+
+
+
+  # Configuracion de variables desde administrador general y tenant normal: 
+  • Vista general (administrador global)
+
+  - Ruta: /settings/tenants/[tenantId] → manejada por frontend/panel/src/app/settings/tenants/[tenantId]/page.tsx. Esa página monta los tabs (Webchat, Mail, WhatsApp, OpenAI,
+    Secrets, etc.) que envuelven los formularios de TenantOrganizationInfoForm, TenantWebchatSettings, TenantMailSettings, TenantWhatsAppSettings, TenantOpenaiSettings, etc.,
+    definidos en frontend/panel/src/app/settings/tenants/[tenantId]/tenant-forms.tsx.
+  - Acciones server-side: frontend/panel/src/app/settings/tenants/[tenantId]/actions.ts, donde se encuentran todos los handlers (updateTenantConfigAction, setTenantSecretAction,
+    validateTenantAction, createTenantRouteAction, etc.) que llaman al CRM (/admin/tenants/...) para leer o escribir variables, rutas o secretos del tenant seleccionado.
+
+  Vista tenant normal (su propio espacio)
+
+  - Ruta: /settings/variables → controlada por frontend/panel/src/app/settings/variables/page.tsx. Esta página reusa los mismos formularios gracias a
+    TenantSettingsActionsProvider y al componente TenantVariablesSectionsPanel (frontend/panel/src/app/settings/variables/components/tenant-variables-sections-panel.tsx), que
+    define las secciones, campos, rutas y validaciones idénticas a la vista global.
+  - Acciones client/server: frontend/panel/src/app/settings/variables/actions.ts contiene los handlers que llaman a los endpoints tenant-scoped (/tenant/me/settings, /tenant/me/
+    config, /tenant/me/secrets, /tenant/me/validate, etc.).
+  - Utilitarios auxiliares: TenantSectionForm, TenantRoutesManager, TenantValidationPanel, TenantVariablesPanel y TenantValidationPanel, todos bajo frontend/panel/src/app/
+    settings/variables/components/, coordinan el layout de pestañas, formularios y sombras de errores (también hay utilidades como format-error.ts para normalizar mensajes).
+
+  Así, el administrador general manipula variables a través de /settings/tenants/[tenantId] y tenant-forms.tsx/actions.ts, mientras que cualquier tenant lo hace desde /settings/
+  variables apoyándose en tenant-variables-* y actions.ts.

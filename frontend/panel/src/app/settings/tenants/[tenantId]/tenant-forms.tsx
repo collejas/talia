@@ -202,9 +202,11 @@ export type TenantOrganizationInfo = {
 export function TenantOrganizationInfoForm({
   tenantId,
   info,
+  showActiveToggle = true,
 }: {
   tenantId: string
   info: TenantOrganizationInfo | null
+  showActiveToggle?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateTenantInfoAction, INITIAL_CRUD_STATE)
@@ -253,19 +255,22 @@ export function TenantOrganizationInfoForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Activo</Label>
-          <div className="flex items-center gap-3">
-            <input
-              id="tenant_activo"
-              name="tenant_activo"
-              type="checkbox"
-              className="size-4"
-              defaultChecked={info?.activo ?? true}
-            />
-            <span className="text-sm text-muted-foreground">El tenant puede iniciar sesión y recibir tráfico.</span>
+        {showActiveToggle ? (
+          <div className="space-y-2">
+            <Label>Activo</Label>
+            <input type="hidden" name="tenant_activo_present" value="1" />
+            <div className="flex items-center gap-3">
+              <input
+                id="tenant_activo"
+                name="tenant_activo"
+                type="checkbox"
+                className="size-4"
+                defaultChecked={info?.activo ?? true}
+              />
+              <span className="text-sm text-muted-foreground">El tenant puede iniciar sesión y recibir tráfico.</span>
+            </div>
           </div>
-        </div>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="tenant_estado_onboarding">Estado de onboarding</Label>
           <select

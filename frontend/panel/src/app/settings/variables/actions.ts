@@ -134,14 +134,16 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     if (onboarding) {
       payload.estado_onboarding = onboarding
     }
-    payload.activo = formData.has("tenant_activo")
+    if (formData.get("tenant_activo_present") === "1") {
+      payload.activo = formData.has("tenant_activo")
+    }
 
     if (!Object.keys(payload).length) {
       throw new Error("Completa al menos un campo para actualizar.")
     }
 
     const response = await callCrmApi<{ ok: boolean }>("/tenant/me/settings", {
-      method: "PATCH",
+      method: "PUT",
       organizacionId: null,
       withUserToken: true,
       body: payload,

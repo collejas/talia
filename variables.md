@@ -8,6 +8,7 @@ TALIA_LOG_LEVEL=debug
 TALIA_REQUEST_LOG_LEVEL=debug
 TALIA_REQUEST_LOG_SKIP_PREFIXES=["/shared","/api/shared","/favicon","/site","/robots.txt","/docs","/openapi"]
 TALIA_LOG_FILE_PATH=/var/www/talia/logs/api.log
+TALIA_CORS_ALLOWED_ORIGINS=["https://geoactiv.mx"]
 
 ## =========================
 ## OpenAI

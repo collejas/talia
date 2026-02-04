@@ -163,6 +163,14 @@ class Settings(BaseSettings):
             "TALIA_PORTAL_CLIENTE_URL",
         ),
     )
+    cors_allowed_origins: tuple[str, ...] = Field(
+        default=("https://geoactiv.mx",),
+        description="Dominios autorizados para CORS hacia el backend.",
+        validation_alias=AliasChoices(
+            "TALIA_CORS_ALLOWED_ORIGINS",
+            "CORS_ALLOWED_ORIGINS",
+        ),
+    )
     geolocation_api_url: str | None = None
     geolocation_api_token: str | None = None
     geolocation_cache_ttl_seconds: int = Field(

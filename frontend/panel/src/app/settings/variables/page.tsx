@@ -253,7 +253,7 @@ export default async function SettingsVariablesPage() {
               <CardDescription>Actualiza los campos de <code>public.organizaciones</code> del tenant.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} />
+            <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} showActiveToggle={false} />
             </CardContent>
           </Card>
 
