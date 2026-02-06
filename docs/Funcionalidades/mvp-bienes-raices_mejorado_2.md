@@ -220,4 +220,3 @@ y el inventario deja de ser un punto de fricción en la venta.
 
 *Tu equipo se enfoca en la negociación y el cierre*, mientras Tal-IA automatiza la captación, calificación, agenda y documentación, reduciendo fugas de prospectos y acelerando ventas.
 
-¿Listo para ver una demo o hablar detalles técnicos?
