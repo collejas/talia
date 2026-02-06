@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Mapping
 from base64 import b64encode
 
 from weasyprint import HTML as WeasyHTML
@@ -56,6 +56,16 @@ def _load_qr_image_data_url() -> str:
     return f"data:image/png;base64,{encoded}"
 
 
+def _normalize_input_rows(
+    rows_data: Sequence[Mapping[str, Sequence[str]]] | None,
+    default_rows: Sequence[tuple[str, Sequence[str]]],
+) -> list[tuple[str, list[str]]]:
+    if not rows_data:
+        return [(label, list(cells)) for label, cells in default_rows]
+    normalized = []
+    for row in rows_data:
+        normalized.append((row["label"], list(row["cells"])))
+    return normalized
 
 
 def _render_rows(rows: Sequence[tuple[str, Sequence[str]]]) -> str:
@@ -81,10 +91,14 @@ def _render_cards() -> str:
     return "".join(result)
 
 
-def _build_html() -> str:
-    header_columns = "".join(f"<th class='table-header'>{column}</th>" for column in COLUMN_HEADERS)
-    renta_rows = _render_rows(RENTA_ROWS)
-    config_rows = _render_rows(CONFIGURACION_ROWS)
+def _build_html(
+    column_headers: Sequence[str],
+    renta_rows: Sequence[tuple[str, Sequence[str]]],
+    configuracion_rows: Sequence[tuple[str, Sequence[str]]],
+) -> str:
+    header_columns = "".join(f"<th class='table-header'>{column}</th>" for column in column_headers)
+    renta_rows_html = _render_rows(renta_rows)
+    config_rows_html = _render_rows(configuracion_rows)
     cards = _render_cards()
     qr_data_url = _load_qr_image_data_url()
     qr_html = (
@@ -269,7 +283,7 @@ def _build_html() -> str:
             </tr>
           </thead>
           <tbody>
-            {renta_rows}
+            {renta_rows_html}
           </tbody>
         </table>
       </div>
@@ -286,7 +300,7 @@ def _build_html() -> str:
             </tr>
           </thead>
           <tbody>
-            {config_rows}
+            {config_rows_html}
           </tbody>
         </table>
       </div>
@@ -332,8 +346,15 @@ def _build_html() -> str:
 """
 
 
-async def render_propuesta_pdf() -> PropuestaDocument:
-    html = _build_html()
+async def render_propuesta_pdf(
+    column_headers: Sequence[str] | None = None,
+    renta_rows: Sequence[Mapping[str, Sequence[str]]] | None = None,
+    configuracion_rows: Sequence[Mapping[str, Sequence[str]]] | None = None,
+) -> PropuestaDocument:
+    headers = list(column_headers) if column_headers else list(COLUMN_HEADERS)
+    renta_rows_normalized = _normalize_input_rows(renta_rows, RENTA_ROWS)
+    configuracion_rows_normalized = _normalize_input_rows(configuracion_rows, CONFIGURACION_ROWS)
+    html = _build_html(headers, renta_rows_normalized, configuracion_rows_normalized)
     try:
         pdf_bytes = await asyncio.to_thread(lambda: WeasyHTML(string=html).write_pdf())
         filename = f"propuesta-tal-ia-{datetime.now(timezone.utc):%Y%m%d}.pdf"

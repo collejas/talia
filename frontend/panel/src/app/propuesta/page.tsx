@@ -5,14 +5,19 @@ import { useCallback, useMemo, useState } from "react"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 
-const columnHeaders = [
+type TableRow = {
+  label: string
+  cells: string[]
+}
+
+const defaultColumnHeaders = [
   "Plan mensual 0%",
   "Plan trimestral 10%",
   "Plan semestral 15%",
   "Precio mínimo anual objetivo 20%",
 ]
 
-const rentaRows = [
+const defaultRentaRows: TableRow[] = [
   {
     label: "",
     cells: [
@@ -28,7 +33,7 @@ const rentaRows = [
   },
 ]
 
-const configuracionRows = [
+const defaultConfiguracionRows: TableRow[] = [
   {
     label: "",
     cells: [
@@ -44,6 +49,107 @@ const configuracionRows = [
   },
 ]
 
+const cloneHeaders = (headers: string[]) => [...headers]
+
+const cloneRows = (rows: TableRow[]) =>
+  rows.map((row) => ({
+    ...row,
+    cells: [...row.cells],
+  }))
+
+type ColumnEditorProps = {
+  headers: string[]
+  onHeaderChange: (index: number, value: string) => void
+  onReset: () => void
+}
+
+function ColumnEditor({ headers, onHeaderChange, onReset }: ColumnEditorProps) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/5 p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-muted-foreground">
+          Encabezados editables
+        </p>
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+        >
+          Restaurar
+        </button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {headers.map((header, index) => (
+          <label key={`header-${index}`} className="space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+            <span className="text-xs font-semibold text-foreground">Columna {index + 1}</span>
+            <input
+              type="text"
+              value={header}
+              onChange={(event) => onHeaderChange(index, event.target.value)}
+              className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type RowEditorProps = {
+  title: string
+  rows: TableRow[]
+  onRowLabelChange: (rowIndex: number, value: string) => void
+  onCellChange: (rowIndex: number, cellIndex: number, value: string) => void
+  onReset: () => void
+}
+
+function RowEditor({ title, rows, onRowLabelChange, onCellChange, onReset }: RowEditorProps) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-border/60 bg-white/80 p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-muted-foreground">
+          {title}
+        </p>
+        <button
+          type="button"
+          onClick={onReset}
+          className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+        >
+          Restaurar
+        </button>
+      </div>
+      <div className="space-y-3">
+        {rows.map((row, rowIndex) => (
+          <div key={`row-${rowIndex}`} className="space-y-2 rounded-xl border border-border/40 bg-muted/5 p-3">
+            <label className="block space-y-1 text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground">
+              <span className="text-xs font-semibold text-foreground">Concepto</span>
+              <input
+                type="text"
+                value={row.label}
+                onChange={(event) => onRowLabelChange(rowIndex, event.target.value)}
+                className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </label>
+            <div className="grid gap-2 md:grid-cols-2">
+              {row.cells.map((cell, cellIndex) => (
+                <label key={`cell-${rowIndex}-${cellIndex}`} className="space-y-1 text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground">
+                  <span className="text-[0.65rem] font-semibold text-foreground">Columna {cellIndex + 1}</span>
+                  <input
+                    type="text"
+                    value={cell}
+                    onChange={(event) => onCellChange(rowIndex, cellIndex, event.target.value)}
+                    className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Page() {
   const [expanded, setExpanded] = useState(false)
   const [mvpOpen, setMvpOpen] = useState(false)
@@ -53,6 +159,23 @@ export default function Page() {
   )
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailFeedback, setEmailFeedback] = useState<string | null>(null)
+  const [columnHeaders, setColumnHeaders] = useState(() =>
+    cloneHeaders(defaultColumnHeaders),
+  )
+  const [rentaRows, setRentaRows] = useState<TableRow[]>(() =>
+    cloneRows(defaultRentaRows),
+  )
+  const [configuracionRows, setConfiguracionRows] = useState<TableRow[]>(() =>
+    cloneRows(defaultConfiguracionRows),
+  )
+  const proposalPayload = useMemo(
+    () => ({
+      columnHeaders,
+      rentaRows,
+      configuracionRows,
+    }),
+    [columnHeaders, rentaRows, configuracionRows],
+  )
   const today = useMemo(
     () =>
       new Date().toLocaleDateString("es-MX", {
@@ -63,12 +186,42 @@ export default function Page() {
       }),
     [],
   )
-  const handleExport = useCallback(() => {
+  const resetColumnHeaders = () => setColumnHeaders(cloneHeaders(defaultColumnHeaders))
+  const resetRentaRows = () => setRentaRows(cloneRows(defaultRentaRows))
+  const resetConfiguracionRows = () =>
+    setConfiguracionRows(cloneRows(defaultConfiguracionRows))
+  const handleHeaderChange = (index: number, value: string) => {
+    setColumnHeaders((prev) =>
+      prev.map((header, headerIndex) => (headerIndex === index ? value : header)),
+    )
+  }
+  const handleExport = useCallback(async () => {
     if (typeof window === "undefined") {
       return
     }
-    window.open("/api/propuesta/tal-ia/pdf", "_blank")
-  }, [])
+    try {
+      const response = await fetch("/api/propuesta/tal-ia/pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/pdf",
+        },
+        body: JSON.stringify(proposalPayload),
+      })
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => null)
+        throw new Error(errorText || "No se pudo generar el PDF.")
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, "_blank")
+      setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo exportar la propuesta."
+      window.alert(message)
+    }
+  }, [proposalPayload])
   const handleSendEmail = useCallback(async () => {
     if (!recipientEmail.trim()) {
       setEmailFeedback("Ingresa un correo válido para enviar la propuesta.")
@@ -86,6 +239,7 @@ export default function Page() {
           recipients: [recipientEmail.trim()],
           subject: "Propuesta Tal-IA · Gran Peñón",
           message: messageBody.trim(),
+          proposal: proposalPayload,
         }),
       })
       if (!response.ok) {
@@ -101,7 +255,7 @@ export default function Page() {
     } finally {
       setSendingEmail(false)
     }
-  }, [recipientEmail, messageBody])
+  }, [recipientEmail, messageBody, proposalPayload])
   return (
     <AppViewLayout title="Propuesta" contentClassName="max-w-full">
       <div className="propuesta-print space-y-8 px-4 pb-8 lg:px-6">
@@ -176,6 +330,11 @@ export default function Page() {
           </button>
           {expanded && (
             <div className="mt-6 space-y-8">
+              <ColumnEditor
+                headers={columnHeaders}
+                onHeaderChange={handleHeaderChange}
+                onReset={resetColumnHeaders}
+              />
               <section className="space-y-4">
                 <div className="flex flex-wrap items-baseline gap-3">
                   <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -198,11 +357,11 @@ export default function Page() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                      {rentaRows.map((row) => (
-                        <tr key={row.label || JSON.stringify(row.cells)} className="even:bg-muted/5">
+                      {rentaRows.map((row, rowIndex) => (
+                        <tr key={`renta-row-${rowIndex}`} className="even:bg-muted/5">
                           <td className="px-4 py-4 font-medium text-foreground">{row.label}</td>
-                          {row.cells.map((cell, index) => (
-                            <td key={`${row.label}-${index}`} className="px-4 py-4 text-foreground">
+                          {row.cells.map((cell, cellIndex) => (
+                            <td key={`renta-${rowIndex}-${cellIndex}`} className="px-4 py-4 text-foreground">
                               {cell}
                             </td>
                           ))}
@@ -211,6 +370,30 @@ export default function Page() {
                     </tbody>
                   </table>
                 </div>
+                <RowEditor
+                  title="Montos editables · Precio renta"
+                  rows={rentaRows}
+                  onRowLabelChange={(rowIndex, value) =>
+                    setRentaRows((prev) =>
+                      prev.map((row, index) => (index === rowIndex ? { ...row, label: value } : row)),
+                    )
+                  }
+                  onCellChange={(rowIndex, cellIndex, value) =>
+                    setRentaRows((prev) =>
+                      prev.map((row, index) =>
+                        index === rowIndex
+                          ? {
+                              ...row,
+                              cells: row.cells.map((cell, cIndex) =>
+                                cIndex === cellIndex ? value : cell,
+                              ),
+                            }
+                          : row,
+                      ),
+                    )
+                  }
+                  onReset={resetRentaRows}
+                />
               </section>
 
               <section className="space-y-4">
@@ -235,11 +418,14 @@ export default function Page() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                      {configuracionRows.map((row) => (
-                        <tr key={row.label || JSON.stringify(row.cells)} className="even:bg-muted/5">
+                      {configuracionRows.map((row, rowIndex) => (
+                        <tr key={`config-row-${rowIndex}`} className="even:bg-muted/5">
                           <td className="px-4 py-4 font-medium text-foreground">{row.label}</td>
-                          {row.cells.map((cell, index) => (
-                            <td key={`${row.label}-${index}`} className="px-4 py-4 text-foreground">
+                          {row.cells.map((cell, cellIndex) => (
+                            <td
+                              key={`config-${rowIndex}-${cellIndex}`}
+                              className="px-4 py-4 text-foreground"
+                            >
                               {cell}
                             </td>
                           ))}
@@ -248,6 +434,30 @@ export default function Page() {
                     </tbody>
                   </table>
                 </div>
+                <RowEditor
+                  title="Montos editables · Configuración"
+                  rows={configuracionRows}
+                  onRowLabelChange={(rowIndex, value) =>
+                    setConfiguracionRows((prev) =>
+                      prev.map((row, index) => (index === rowIndex ? { ...row, label: value } : row)),
+                    )
+                  }
+                  onCellChange={(rowIndex, cellIndex, value) =>
+                    setConfiguracionRows((prev) =>
+                      prev.map((row, index) =>
+                        index === rowIndex
+                          ? {
+                              ...row,
+                              cells: row.cells.map((cell, cIndex) =>
+                                cIndex === cellIndex ? value : cell,
+                              ),
+                            }
+                          : row,
+                      ),
+                    )
+                  }
+                  onReset={resetConfiguracionRows}
+                />
                 <p className="text-sm text-muted-foreground">
                   La configuración incluye workshops de discovery, ajuste de workflows y
                   la parametrización de reglas de negocio para los tres módulos mencionados.
