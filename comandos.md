@@ -91,7 +91,9 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
+# Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
 codex resume 019c293a-b36e-7923-9121-7978fdceb363
+codex resume 019c29fa-047b-7ec2-8d30-ce4a6c8bbe76
 
 * Variables
 codex resume 019c293a-b36e-7923-9121-7978fdceb363

@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.services.propuesta_pdf import render_propuesta_pdf
 from app.services import EmailSendError, send_email
+from app.services.tenant_runtime import MASTER_ORGANIZACION_ID, get_mail_runtime_settings
 
 router = APIRouter(prefix="/propuesta", tags=["propuesta"])
 
@@ -31,6 +32,7 @@ async def email_propuesta(payload: ProposalEmailPayload) -> dict[str, str]:
     """Envía la propuesta Tal-IA como PDF adjunto."""
 
     document = await render_propuesta_pdf()
+    mail_settings = await get_mail_runtime_settings(organizacion_id=MASTER_ORGANIZACION_ID)
     try:
         message_id = send_email(
             subject=payload.subject,
@@ -44,6 +46,7 @@ async def email_propuesta(payload: ProposalEmailPayload) -> dict[str, str]:
                     "subtype": "pdf",
                 },
             ],
+            mail_settings=mail_settings,
         )
     except EmailSendError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
