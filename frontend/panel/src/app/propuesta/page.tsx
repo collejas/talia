@@ -12,9 +12,9 @@ type TableRow = {
 
 const defaultColumnHeaders = [
   "Plan mensual 0%",
-  "Plan trimestral 10%",
-  "Plan semestral 15%",
-  "Precio mínimo anual objetivo 20%",
+  "Plan trimestral -10%",
+  "Plan semestral -15%",
+  "Precio mínimo anual -20%",
 ]
 
 const defaultRentaRows: TableRow[] = [
