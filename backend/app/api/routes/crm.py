@@ -84,6 +84,7 @@ from app.data.geo.locations import list_states_with_municipalities
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
+search_logger = get_logger("app.prospeccion.busquedas")
 import_debug_logger = get_logger("app.api.crm.import")
 sale_logger = get_logger("app.api.crm.sales")
 tenant_access_logger = get_logger("app.api.crm.tenant_access")
@@ -1775,7 +1776,7 @@ class DenueBusquedaPayload(BaseModel):
         description="Registro inicial para paginación en los endpoints avanzados.",
     )
     registro_final: int = Field(
-        default=15,
+        default=3549,
         ge=1,
         description="Registro final para paginación en los endpoints avanzados.",
     )
@@ -9231,8 +9232,22 @@ async def crear_busqueda_denue(
         organizacion_id=tenant_organizacion_id
     )
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
+    advanced_meta = _build_advanced_meta(payload)
     modo = payload.modo or "radio"
     text_query = (payload.texto_busqueda or payload.query).strip()
+    search_logger.info(
+        "denue.search_requested",
+        extra={
+            "modo": modo,
+            "meta": payload.meta or {},
+            "filters": advanced_meta,
+            "texto_busqueda": payload.texto_busqueda,
+            "actividad_codigos": payload.actividad_codigos,
+            "geo_estados": payload.geo_estados,
+            "geo_municipios": payload.geo_municipios,
+            "estrato_ids": payload.estrato_ids,
+        },
+    )
     try:
         if modo == "entidad":
             entidad = _first_state_from_payload(payload)
@@ -9281,6 +9296,7 @@ async def crear_busqueda_denue(
             )
     except DenueError as exc:
         detail = str(exc) or "denue_error"
+        search_logger.error("denue.search_failed", extra={"modo": modo, "detail": detail})
         raise HTTPException(status_code=502, detail=detail) from exc
 
     normalized_items = [normalize_denue_place(item) for item in records]
@@ -9288,7 +9304,6 @@ async def crear_busqueda_denue(
     if payload.meta:
         meta_payload.update(payload.meta)
     meta_payload["modo"] = modo
-    advanced_meta = _build_advanced_meta(payload)
     if modo != "radio" and advanced_meta:
         meta_payload["advanced_filters"] = advanced_meta
 

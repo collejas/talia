@@ -68,7 +68,7 @@ const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
-const LIST_PAGE_SIZE = 250;
+const LIST_PAGE_SIZE = 500;
 
 const ACTIONS = [
   { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },
@@ -642,27 +642,38 @@ export function DenueBusquedaView() {
       .map((value) => value.trim())
       .filter(Boolean);
     const texto = textParts.join(" ").trim();
-    const actividad = filters.actividad.length ? filters.actividad : undefined;
+    const actividadCodes = filters.allActivitiesSelected
+      ? ["0"]
+      : filters.actividad.map((value) => value.trim()).filter((value) => value.length >= 6);
     const estrato = filters.estrato.filter((value) => value !== "0");
     const geoEstados = filters.geografia.estados.length ? filters.geografia.estados : undefined;
     const geoMunicipios = filters.geografia.municipios.length ? filters.geografia.municipios : undefined;
-    const hasActividad = Boolean(actividad && actividad.length);
+    const hasSpecificActivity = Boolean(actividadCodes && actividadCodes.some((value) => value !== "0"));
     const hasEstrato = Boolean(estrato.length);
+    const hasEstados = Boolean(geoEstados?.length);
+    const hasMunicipios = Boolean(geoMunicipios?.length);
+    const shouldUseAreaMode = hasSpecificActivity || hasMunicipios;
     let modo: AdvancedSearchPayload["modo"] = "radio";
-    if (hasEstrato && hasActividad) {
+    if (hasEstrato && hasSpecificActivity) {
       modo = "area_act_estr";
-    } else if (hasActividad) {
+    } else if (shouldUseAreaMode) {
       modo = "area_act";
-    } else if (geoEstados || geoMunicipios) {
+    } else if (hasEstados || hasMunicipios) {
       modo = "entidad";
     }
     if (modo === "radio") {
-      return undefined;
+      if (!texto) {
+        return undefined;
+      }
+      return {
+        modo,
+        texto_busqueda: texto,
+      };
     }
     return {
       modo,
       texto_busqueda: texto || undefined,
-      actividad_codigos: actividad,
+      actividad_codigos: actividadCodes,
       estrato_ids: estrato.length ? estrato : undefined,
       geo_estados: geoEstados,
       geo_municipios: geoMunicipios,
@@ -672,14 +683,17 @@ export function DenueBusquedaView() {
   const runBusqueda = useCallback(
     async (overrideFilters?: DenueAdvancedFilters | null) => {
       setFeedback(null);
-      if (!formValues.query.trim().length) {
+      const activeAdvanced = overrideFilters ?? advancedFilters;
+      const advancedPayload = buildAdvancedPayload(activeAdvanced);
+      const isAdvanced = Boolean(activeAdvanced && advancedPayload);
+      if (!isAdvanced && !formValues.query.trim().length) {
         setFeedback({ type: "error", message: "Captura el texto o palabra clave a buscar." });
         return;
       }
-      const activeAdvanced = overrideFilters ?? advancedFilters;
-      const advancedPayload = buildAdvancedPayload(activeAdvanced);
+      const advancedText = advancedPayload?.texto_busqueda?.trim() || "";
+      const queryValue = isAdvanced ? advancedText || "todos" : formValues.query.trim();
       const payload: CreateDenueSearchPayload = {
-        query: formValues.query.trim(),
+        query: queryValue,
         lat: formValues.lat,
         lng: formValues.lng,
         radio_m: formValues.radio_m,

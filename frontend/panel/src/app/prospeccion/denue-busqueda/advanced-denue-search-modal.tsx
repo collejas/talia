@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, RefreshCw } from "lucide-react"
 
@@ -32,6 +31,7 @@ export type DenueAdvancedFilters = {
     cp: string
   }
   actividad: string[]
+  allActivitiesSelected: boolean
   estrato: string[]
   geografia: {
     estados: string[]
@@ -123,6 +123,20 @@ function buildScianTree(scian: DenueCatalogosResponse["scian"] | null): ScianTre
   return roots
 }
 
+function flattenScianCodes(nodes: ScianTreeNode[]): string[] {
+  const codes: string[] = []
+  const visit = (items: ScianTreeNode[]) => {
+    for (const item of items) {
+      codes.push(item.codigo)
+      if (item.children.length) {
+        visit(item.children)
+      }
+    }
+  }
+  visit(nodes)
+  return codes
+}
+
 export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props) {
   const [catalogs, setCatalogs] = useState<DenueCatalogosResponse | null>(null)
   const [loadingCatalogs, setLoadingCatalogs] = useState(false)
@@ -147,6 +161,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
   const [expandedStates, setExpandedStates] = useState<Set<string>>(() => new Set())
   const [claseIndice, setClaseIndice] = useState<Record<string, string[]>>({})
   const [loadingClaseIndice, setLoadingClaseIndice] = useState<Set<string>>(() => new Set())
+  const [allActivitiesSelected, setAllActivitiesSelected] = useState(false)
 
   useEffect(() => {
     if (!open || catalogs) {
@@ -169,9 +184,31 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
     () => buildScianTree(catalogs?.scian ?? null),
     [catalogs?.scian],
   )
+  const allScianCodes = useMemo(() => flattenScianCodes(scianTree), [scianTree])
+  const toggleSelectAllActivities = useCallback(() => {
+    if (allActivitiesSelected) {
+      setSelectedScianCodes(new Set())
+      setAllActivitiesSelected(false)
+      return
+    }
+    setSelectedScianCodes(new Set(allScianCodes))
+    setAllActivitiesSelected(true)
+  }, [allActivitiesSelected, allScianCodes])
 
   const toggleSection = useCallback((section: AdvancedSection) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
+    setExpandedSections((prev) => {
+      const currently = prev[section]
+      const next: Record<AdvancedSection, boolean> = {
+        search: false,
+        activity: false,
+        size: false,
+        geography: false,
+      }
+      if (!currently) {
+        next[section] = true
+      }
+      return next
+    })
   }, [])
 
   const handleFieldChange = useCallback((key: keyof typeof searchFields, value: string) => {
@@ -188,6 +225,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
       }
       return next
     })
+    setAllActivitiesSelected(false)
   }, [])
 
   const toggleScianExpansion = useCallback(
@@ -279,6 +317,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
     const filters: DenueAdvancedFilters = {
       search: { ...searchFields },
       actividad: Array.from(selectedScianCodes),
+      allActivitiesSelected,
       estrato: Array.from(sizeSelections),
       geografia: {
         estados: Array.from(selectedStates),
@@ -287,7 +326,16 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
     }
     onApply?.(filters)
     onOpenChange(false)
-  }, [onApply, onOpenChange, searchFields, selectedScianCodes, sizeSelections, selectedStates, selectedMunicipalities])
+  }, [
+    onApply,
+    onOpenChange,
+    searchFields,
+    selectedScianCodes,
+    sizeSelections,
+    selectedStates,
+    selectedMunicipalities,
+    allActivitiesSelected,
+  ])
 
   const renderScianNodes = useCallback(
     (nodes: ScianTreeNode[], level = 0) =>
@@ -315,13 +363,10 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
               </button>
               <Checkbox checked={checked} onCheckedChange={() => toggleScianSelection(node.codigo)} />
               <div className="flex flex-col">
-                <div className="flex items-baseline gap-2 text-sm font-semibold">
-                  <span className="text-xs text-muted-foreground">{node.codigo}</span>
+                <div className="flex items-baseline gap-2 text-xs font-semibold">
+                  <span className="text-[11px] text-muted-foreground">{node.codigo}</span>
                   <span>{node.titulo ?? "Sin título"}</span>
                 </div>
-                {node.descripcion ? (
-                  <p className="text-[11px] text-muted-foreground">{node.descripcion}</p>
-                ) : null}
               </div>
             </div>
             {isLeaf && isExpanded ? (
@@ -367,16 +412,16 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+        <DialogHeader className="space-y-1">
           <DialogTitle>Búsqueda avanzada</DialogTitle>
           <DialogDescription>
             Combina filtros por texto, actividad, tamaño y geografía para acotar los resultados de DENUE.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-3 max-h-[calc(90vh-10rem)] overflow-auto pr-1 text-[11px]">
           {/* Section 1 - Búsqueda */}
-          <section className="space-y-2 rounded-lg border border-border/70 p-3">
+          <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
             <button
               type="button"
               className="flex w-full items-center justify-between text-left text-sm font-semibold"
@@ -388,49 +433,55 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
               />
             </button>
             {expandedSections.search ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="advanced-nombre">Nombre o razón social</Label>
-                  <Input
-                    id="advanced-nombre"
-                    value={searchFields.nombre}
-                    onChange={(event) => handleFieldChange("nombre", event.target.value)}
-                    placeholder="Ej. OXXO, hospital"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="advanced-calle">Calle o avenida</Label>
-                  <Input
-                    id="advanced-calle"
-                    value={searchFields.calle}
-                    onChange={(event) => handleFieldChange("calle", event.target.value)}
-                    placeholder="Ej. Reforma"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="advanced-colonia">Colonia o fraccionamiento</Label>
-                  <Input
-                    id="advanced-colonia"
-                    value={searchFields.colonia}
-                    onChange={(event) => handleFieldChange("colonia", event.target.value)}
-                    placeholder="Ej. Roma Norte"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="advanced-cp">Código postal</Label>
-                  <Input
-                    id="advanced-cp"
-                    value={searchFields.cp}
-                    onChange={(event) => handleFieldChange("cp", event.target.value)}
-                    placeholder="Ej. 06000"
-                  />
+              <div className="max-h-36 overflow-auto pr-1 text-xs">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="advanced-nombre" className="text-[11px]">Nombre o razón social</Label>
+                    <Input
+                      id="advanced-nombre"
+                      value={searchFields.nombre}
+                      onChange={(event) => handleFieldChange("nombre", event.target.value)}
+                      placeholder="Ej. OXXO, hospital"
+                      className="text-[11px] py-2"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="advanced-calle" className="text-[11px]">Calle o avenida</Label>
+                    <Input
+                      id="advanced-calle"
+                      value={searchFields.calle}
+                      onChange={(event) => handleFieldChange("calle", event.target.value)}
+                      placeholder="Ej. Reforma"
+                      className="text-[11px] py-2"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="advanced-colonia" className="text-[11px]">Colonia o fraccionamiento</Label>
+                    <Input
+                      id="advanced-colonia"
+                      value={searchFields.colonia}
+                      onChange={(event) => handleFieldChange("colonia", event.target.value)}
+                      placeholder="Ej. Roma Norte"
+                      className="text-[11px] py-2"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="advanced-cp" className="text-[11px]">Código postal</Label>
+                    <Input
+                      id="advanced-cp"
+                      value={searchFields.cp}
+                      onChange={(event) => handleFieldChange("cp", event.target.value)}
+                      placeholder="Ej. 06000"
+                      className="text-[11px] py-2"
+                    />
+                  </div>
                 </div>
               </div>
             ) : null}
           </section>
 
           {/* Section 2 - Actividad Económica */}
-          <section className="space-y-2 rounded-lg border border-border/70 p-3">
+          <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
             <button
               type="button"
               className="flex w-full items-center justify-between text-left text-sm font-semibold"
@@ -442,30 +493,50 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
               />
             </button>
             {expandedSections.activity ? (
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="actividad-busqueda">Buscar actividad</Label>
-                  <Input id="actividad-busqueda" placeholder="Ej. servicios, comercio" />
-                </div>
-                <div className="rounded-lg border border-border/60">
-                  {loadingCatalogs ? (
-                    <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
-                      Cargando catálogo SCIAN…
+              <div className="max-h-[50vh] overflow-auto pr-1 text-xs">
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="actividad-busqueda" className="text-[11px]">
+                        Buscar actividad
+                      </Label>
+                      {allScianCodes.length ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-[11px]"
+                          onClick={toggleSelectAllActivities}
+                        >
+                          {allActivitiesSelected ? "Deseleccionar todas" : "Seleccionar todas"}
+                        </Button>
+                      ) : null}
                     </div>
-                  ) : catalogError ? (
-                    <div className="p-4 text-sm text-destructive">{catalogError}</div>
-                  ) : (
-                    <ScrollArea className="max-h-[50vh] px-2 py-3">
-                      <div className="space-y-3">{renderScianNodes(scianTree)}</div>
-                    </ScrollArea>
-                  )}
+                    <Input id="actividad-busqueda" placeholder="Ej. servicios, comercio" className="text-[11px] py-2" />
+                  </div>
+                    <div className="rounded-lg border border-border/60">
+                      {loadingCatalogs ? (
+                        <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
+                          Cargando catálogo SCIAN…
+                        </div>
+                      ) : catalogError ? (
+                        <div className="p-4 text-sm text-destructive">{catalogError}</div>
+                      ) : (
+                        <div className="max-h-[40vh] overflow-auto px-2 py-3 text-xs">
+                          <label className="flex items-center gap-2 rounded-md border-b border-border/60 pb-2 text-[11px]">
+                            <Checkbox checked={allActivitiesSelected} onCheckedChange={toggleSelectAllActivities} />
+                            <span>Seleccionar todas las actividades económicas</span>
+                          </label>
+                          <div className="space-y-2 pt-2">{renderScianNodes(scianTree)}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
             ) : null}
           </section>
 
           {/* Section 3 - Tamaño */}
-          <section className="space-y-2 rounded-lg border border-border/70 p-3">
+          <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
             <button
               type="button"
               className="flex w-full items-center justify-between text-left text-sm font-semibold"
@@ -477,28 +548,30 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
               />
             </button>
             {expandedSections.size ? (
-              <div className="grid grid-cols-2 gap-2">
-                {SIZE_OPTIONS.map((option) => {
-                  const checked = sizeSelections.has(option.value)
-                  return (
-                    <label
-                      key={option.value}
-                      className={cn(
-                        "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-                        checked ? "border-primary bg-primary/5" : "border-border/60",
-                      )}
-                    >
-                      <Checkbox checked={checked} onCheckedChange={() => toggleSize(option.value)} />
-                      <span>{option.label}</span>
-                    </label>
-                  )
-                })}
+              <div className="max-h-48 overflow-auto pr-1 text-xs">
+                <div className="grid grid-cols-2 gap-1">
+                  {SIZE_OPTIONS.map((option) => {
+                    const checked = sizeSelections.has(option.value)
+                    return (
+                      <label
+                        key={option.value}
+                        className={cn(
+                          "flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px]",
+                          checked ? "border-primary bg-primary/5" : "border-border/60",
+                        )}
+                      >
+                        <Checkbox checked={checked} onCheckedChange={() => toggleSize(option.value)} />
+                        <span>{option.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
             ) : null}
           </section>
 
           {/* Section 4 - Área geográfica */}
-          <section className="space-y-2 rounded-lg border border-border/70 p-3">
+          <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
             <button
               type="button"
               className="flex w-full items-center justify-between text-left text-sm font-semibold"
@@ -510,23 +583,23 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
               />
             </button>
             {expandedSections.geography ? (
-              <div className="rounded-lg border border-border/60">
-                {loadingCatalogs ? (
-                  <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
-                    Cargando estados y municipios…
-                  </div>
-                ) : catalogError ? (
-                  <div className="p-4 text-sm text-destructive">{catalogError}</div>
-                ) : (
-                  <ScrollArea className="max-h-[50vh] px-2 py-3">
-                    <div className="space-y-3">
+              <div className="max-h-[50vh] overflow-auto pr-1 text-xs">
+                <div className="rounded-lg border border-border/60 px-2 py-1 text-[11px]">
+                  {loadingCatalogs ? (
+                    <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
+                      Cargando estados y municipios…
+                    </div>
+                  ) : catalogError ? (
+                    <div className="p-4 text-sm text-destructive">{catalogError}</div>
+                  ) : (
+                    <div className="space-y-3 text-xs">
                       {geoStates.map((state) => {
                         const stateExpanded = expandedStates.has(state.code)
                         const stateSelected = selectedStates.has(state.code)
                         return (
                           <div key={state.code} className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-sm">
+                              <div className="flex items-center gap-2 text-xs">
                                 <button
                                   type="button"
                                   className={cn(
@@ -550,7 +623,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
                               </span>
                             </div>
                             {stateExpanded ? (
-                              <div className="space-y-1 pl-10 text-sm">
+                              <div className="space-y-1 pl-10 text-xs">
                                 {state.municipalities.map((municipio) => {
                                   const key = encodeMunicipalityKey(state.code, municipio.code)
                                   const checked = selectedMunicipalities.has(key)
@@ -572,8 +645,8 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
                         )
                       })}
                     </div>
-                  </ScrollArea>
-                )}
+                  )}
+                </div>
               </div>
             ) : null}
           </section>

@@ -62,6 +62,7 @@ Documentar el diseño y los pasos necesarios para agregar a `/prospeccion/denue-
 - [ ] Diseñar el mock del árbol SCIAN para la búsqueda avanzada (Responsable: frontend). 
 - [ ] Extender `DenueClient` con nuevos métodos y propagar `modo` al RPC de `crear_busqueda`. (Responsable: backend) 
 - [ ] Validar que los resultados normalizados se muestren y se puedan guardar como prospectos. (Responsable: QA)
+- [x] Instrumentar `app.prospeccion.busquedas` para registrar cada solicitud DENUE (modo, filtros, path y errores) en `logs/busquedas/busquedas.log` y ayudar a depurar las búsquedas avanzadas. (Responsable: backend)
 
 ## Referencias
 - `docs/Busqueda_denue/INSTRUCTIVO_DENUE.md` – repertorio de endpoints y parámetros. 

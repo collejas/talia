@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+search_logger = get_logger("app.prospeccion.busquedas")
 
 _ALLOWED_DENUE_RADII = [250, 500, 1000, 5000]
 
@@ -60,17 +61,33 @@ class DenueClient:
             f"{self.base_url}/consulta/Buscar/{encoded_query}/"
             f"{lat},{lng}/{radius}/{self.token}/?type=json"
         )
+        search_logger.info(
+            "denue.request_path",
+            extra={
+                "method": "Buscar",
+                "query": query,
+                "lat": lat,
+                "lng": lng,
+                "radius": radius,
+                "url": url,
+            },
+        )
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.get(url)
         except httpx.RequestError as exc:  # pragma: no cover - depende de red
             logger.exception("denue.request_error", extra={"error": str(exc)})
+            search_logger.exception("denue.request_error", extra={"error": str(exc)})
             raise DenueError("denue_request_failed") from exc
         if resp.status_code >= 400:
             detail = await self._safe_text(resp)
             logger.error(
                 "denue.http_error",
                 extra={"status": resp.status_code, "detail": detail},
+            )
+            search_logger.error(
+                "denue.http_error",
+                extra={"status": resp.status_code, "detail": detail, "url": url},
             )
             raise DenueError(f"denue_http_{resp.status_code}")
         try:
@@ -80,11 +97,13 @@ class DenueClient:
             text = detail.strip()
             if not text:
                 logger.warning("denue.empty_response")
+                search_logger.warning("denue.empty_response", extra={"url": url})
                 return []
             try:
                 data = json.loads(text)
             except ValueError as exc:
                 logger.exception("denue.invalid_json", extra={"detail": text[:500]})
+                search_logger.exception("denue.invalid_json", extra={"detail": text[:500], "url": url})
                 raise DenueError("denue_invalid_response") from exc
         if isinstance(data, dict) and data.get("error"):
             message = data.get("error") or data.get("message") or "denue_error"
@@ -176,17 +195,26 @@ class DenueClient:
 
     async def _request_list(self, method: str, segments: list[str]) -> list[dict[str, Any]]:
         path = f"{self.base_url}/consulta/{method}/{'/'.join(segments)}/{self.token}/?type=json"
+        search_logger.info(
+            "denue.request_path",
+            extra={"method": method, "segments": segments, "url": path},
+        )
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.get(path)
         except httpx.RequestError as exc:  # pragma: no cover - depende de red
             logger.exception("denue.request_error", extra={"error": str(exc)})
+            search_logger.exception("denue.request_error", extra={"error": str(exc), "method": method})
             raise DenueError("denue_request_failed") from exc
         if resp.status_code >= 400:
             detail = await self._safe_text(resp)
             logger.error(
                 "denue.http_error",
                 extra={"status": resp.status_code, "detail": detail},
+            )
+            search_logger.error(
+                "denue.http_error",
+                extra={"status": resp.status_code, "detail": detail, "method": method, "url": path},
             )
             raise DenueError(f"denue_http_{resp.status_code}")
         try:
@@ -196,11 +224,19 @@ class DenueClient:
             text = detail.strip()
             if not text:
                 logger.warning("denue.empty_response")
+                search_logger.warning(
+                    "denue.empty_response",
+                    extra={"method": method, "segments": segments, "url": path},
+                )
                 return []
             try:
                 data = json.loads(text)
             except ValueError as exc:
                 logger.exception("denue.invalid_json", extra={"detail": text[:500]})
+                search_logger.exception(
+                    "denue.invalid_json",
+                    extra={"detail": text[:500], "method": method, "segments": segments, "url": path},
+                )
                 raise DenueError("denue_invalid_response") from exc
         if isinstance(data, dict) and data.get("error"):
             message = data.get("error") or data.get("message") or "denue_error"
