@@ -1745,6 +1745,40 @@ class DenueBusquedaPayload(BaseModel):
         default=None,
         description="Metadatos adicionales para guardar en public.busquedas.meta.",
     )
+    modo: Literal["radio", "entidad", "area_act", "area_act_estr"] = Field(
+        default="radio",
+        description="Selecciona qué endpoint DENUE utilizar.",
+    )
+    texto_busqueda: str | None = Field(
+        default=None,
+        description="Texto libre (nombre/calle/colonia/CP) para el endpoint avanzado.",
+    )
+    actividad_codigos: list[str] | None = Field(
+        default=None,
+        description="Lista de códigos SCIAN seleccionados.",
+    )
+    estrato_ids: list[str] | None = Field(
+        default=None,
+        description="Lista de estratos seleccionados (valores 1-7).",
+    )
+    geo_estados: list[str] | None = Field(
+        default=None,
+        description="Estados seleccionados (clave de dos dígitos).",
+    )
+    geo_municipios: list[str] | None = Field(
+        default=None,
+        description="Municipios seleccionados (formato `estado::municipio`).",
+    )
+    registro_inicial: int = Field(
+        default=1,
+        ge=1,
+        description="Registro inicial para paginación en los endpoints avanzados.",
+    )
+    registro_final: int = Field(
+        default=15,
+        ge=1,
+        description="Registro final para paginación en los endpoints avanzados.",
+    )
 
     model_config = ConfigDict(extra="ignore")
 
@@ -1756,11 +1790,60 @@ class DenueBusquedaPayload(BaseModel):
             raise ValueError("query_required")
         return trimmed
 
+    @model_validator(mode="after")
+    def validate_paginacion(self) -> "DenueBusquedaPayload":
+        if self.registro_final < self.registro_inicial:
+            raise ValueError("registro_final_menor")
+        return self
+
 
 class ManualOverridePayload(BaseModel):
     """Payload para activar/desactivar modo manual."""
 
     manual: bool = Field(..., description="True para pausar al asistente")
+
+
+def _first_state_from_payload(payload: DenueBusquedaPayload) -> str | None:
+    if payload.geo_estados:
+        return str(payload.geo_estados[0]).zfill(2)
+    if payload.geo_municipios:
+        first = payload.geo_municipios[0]
+        parts = first.split("::")
+        if parts:
+            return parts[0].zfill(2)
+    return None
+
+
+def _first_municipality_from_payload(payload: DenueBusquedaPayload) -> str | None:
+    if not payload.geo_municipios:
+        return None
+    first = payload.geo_municipios[0]
+    parts = first.split("::")
+    if len(parts) >= 2 and parts[1]:
+        return parts[1].zfill(3)
+    return None
+
+
+def _most_specific_activity(payload: DenueBusquedaPayload) -> str | None:
+    codes = [str(value).strip() for value in (payload.actividad_codigos or []) if value and str(value).strip()]
+    if not codes:
+        return None
+    return sorted(codes, key=lambda value: len(value), reverse=True)[0]
+
+
+def _build_advanced_meta(payload: DenueBusquedaPayload) -> dict[str, Any]:
+    meta: dict[str, Any] = {"modo": payload.modo}
+    if payload.texto_busqueda:
+        meta["texto_busqueda"] = payload.texto_busqueda
+    if payload.actividad_codigos:
+        meta["actividad_codigos"] = payload.actividad_codigos
+    if payload.estrato_ids:
+        meta["estrato_ids"] = payload.estrato_ids
+    if payload.geo_estados:
+        meta["geo_estados"] = payload.geo_estados
+    if payload.geo_municipios:
+        meta["geo_municipios"] = payload.geo_municipios
+    return meta
 
 
 class ConversationReplyPayload(BaseModel):
@@ -9148,13 +9231,54 @@ async def crear_busqueda_denue(
         organizacion_id=tenant_organizacion_id
     )
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
+    modo = payload.modo or "radio"
+    text_query = (payload.texto_busqueda or payload.query).strip()
     try:
-        records = await client.search(
-            query=payload.query,
-            latitude=payload.lat,
-            longitude=payload.lng,
-            radius_m=payload.radio_m,
-        )
+        if modo == "entidad":
+            entidad = _first_state_from_payload(payload)
+            if not entidad:
+                raise HTTPException(status_code=400, detail="entidad_required")
+            records = await client.search_by_entidad(
+                condicion=text_query or payload.query,
+                entidad=entidad,
+                registro_inicial=payload.registro_inicial,
+                registro_final=payload.registro_final,
+            )
+        elif modo == "area_act" or modo == "area_act_estr":
+            actividad_codigo = _most_specific_activity(payload)
+            if not actividad_codigo:
+                raise HTTPException(status_code=400, detail="actividad_required")
+            entidad = _first_state_from_payload(payload)
+            municipio = _first_municipality_from_payload(payload)
+            if modo == "area_act_estr":
+                estrato = payload.estrato_ids and payload.estrato_ids[0]
+                if not estrato:
+                    raise HTTPException(status_code=400, detail="estrato_required")
+                records = await client.search_area_act_estr(
+                    entidad=entidad,
+                    municipio=municipio,
+                    actividad_codigo=actividad_codigo,
+                    texto=text_query or payload.query,
+                    registro_inicial=payload.registro_inicial,
+                    registro_final=payload.registro_final,
+                    estrato=estrato,
+                )
+            else:
+                records = await client.search_area_act(
+                    entidad=entidad,
+                    municipio=municipio,
+                    actividad_codigo=actividad_codigo,
+                    texto=text_query or payload.query,
+                    registro_inicial=payload.registro_inicial,
+                    registro_final=payload.registro_final,
+                )
+        else:
+            records = await client.search(
+                query=payload.query,
+                latitude=payload.lat,
+                longitude=payload.lng,
+                radius_m=payload.radio_m,
+            )
     except DenueError as exc:
         detail = str(exc) or "denue_error"
         raise HTTPException(status_code=502, detail=detail) from exc
@@ -9163,6 +9287,10 @@ async def crear_busqueda_denue(
     meta_payload: dict[str, Any] = {"query": payload.query}
     if payload.meta:
         meta_payload.update(payload.meta)
+    meta_payload["modo"] = modo
+    advanced_meta = _build_advanced_meta(payload)
+    if modo != "radio" and advanced_meta:
+        meta_payload["advanced_filters"] = advanced_meta
 
     crear_body = {
         "p_fuente": "denue",

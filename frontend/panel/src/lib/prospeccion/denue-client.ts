@@ -8,6 +8,14 @@ export type CreateDenueSearchPayload = {
   lng: number;
   radio_m: number;
   meta?: Record<string, unknown> | null;
+  modo?: "radio" | "entidad" | "area_act" | "area_act_estr";
+  texto_busqueda?: string;
+  actividad_codigos?: string[];
+  estrato_ids?: string[];
+  geo_estados?: string[];
+  geo_municipios?: string[];
+  registro_inicial?: number;
+  registro_final?: number;
 };
 
 export type DenueBusquedaItem = {

@@ -91,6 +91,11 @@ type FeedbackState = {
   message: string;
 } | null;
 
+type AdvancedSearchPayload = Pick<
+  CreateDenueSearchPayload,
+  "modo" | "texto_busqueda" | "actividad_codigos" | "estrato_ids" | "geo_estados" | "geo_municipios"
+>;
+
 export function DenueBusquedaView() {
   const [formValues, setFormValues] = useState<FormValues>({
     query: "",
@@ -120,6 +125,7 @@ export function DenueBusquedaView() {
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
   const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -623,48 +629,97 @@ export function DenueBusquedaView() {
     updateFormValue("lng", Number(coords.lng.toFixed(6)));
   }, [updateFormValue]);
 
-  const runBusqueda = useCallback(async () => {
-    setFeedback(null);
-    if (!formValues.query.trim().length) {
-      setFeedback({ type: "error", message: "Captura el texto o palabra clave a buscar." });
-      return;
+  const buildAdvancedPayload = useCallback((filters: DenueAdvancedFilters | null): AdvancedSearchPayload | undefined => {
+    if (!filters) {
+      return undefined;
     }
-
-    const payload: CreateDenueSearchPayload = {
-      query: formValues.query.trim(),
-      lat: formValues.lat,
-      lng: formValues.lng,
-      radio_m: formValues.radio_m,
-      meta: {
-        source: "panel",
-      },
+    const textParts = [
+      filters.search.nombre,
+      filters.search.calle,
+      filters.search.colonia,
+      filters.search.cp,
+    ]
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const texto = textParts.join(" ").trim();
+    const actividad = filters.actividad.length ? filters.actividad : undefined;
+    const estrato = filters.estrato.filter((value) => value !== "0");
+    const geoEstados = filters.geografia.estados.length ? filters.geografia.estados : undefined;
+    const geoMunicipios = filters.geografia.municipios.length ? filters.geografia.municipios : undefined;
+    const hasActividad = Boolean(actividad && actividad.length);
+    const hasEstrato = Boolean(estrato.length);
+    let modo: AdvancedSearchPayload["modo"] = "radio";
+    if (hasEstrato && hasActividad) {
+      modo = "area_act_estr";
+    } else if (hasActividad) {
+      modo = "area_act";
+    } else if (geoEstados || geoMunicipios) {
+      modo = "entidad";
+    }
+    if (modo === "radio") {
+      return undefined;
+    }
+    return {
+      modo,
+      texto_busqueda: texto || undefined,
+      actividad_codigos: actividad,
+      estrato_ids: estrato.length ? estrato : undefined,
+      geo_estados: geoEstados,
+      geo_municipios: geoMunicipios,
     };
-
-    setIsSearching(true);
-    try {
-      const response: CreateDenueSearchResponse = await createDenueBusqueda(payload);
-      setFeedback({
-        type: "success",
-        message: `Se guardaron ${response.upserted} resultados desde DENUE (${response.denue_results ?? response.upserted} encontrados).`,
-      });
-      await loadBusquedas();
-      await loadResultadosForBusqueda(response.busqueda_id);
-    } catch (error) {
-      setFeedback({
-        type: "error",
-        message: error instanceof Error ? error.message : "No fue posible ejecutar la búsqueda.",
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  }, [formValues, loadBusquedas, loadResultadosForBusqueda]);
-
-  const handleAdvancedApply = useCallback((filters: DenueAdvancedFilters) => {
-    setFeedback({
-      type: "info",
-      message: `Filtros avanzados listos (actividad: ${filters.actividad.length}, zonas: ${filters.geografia.estados.length}).`,
-    });
   }, []);
+
+  const runBusqueda = useCallback(
+    async (overrideFilters?: DenueAdvancedFilters | null) => {
+      setFeedback(null);
+      if (!formValues.query.trim().length) {
+        setFeedback({ type: "error", message: "Captura el texto o palabra clave a buscar." });
+        return;
+      }
+      const activeAdvanced = overrideFilters ?? advancedFilters;
+      const advancedPayload = buildAdvancedPayload(activeAdvanced);
+      const payload: CreateDenueSearchPayload = {
+        query: formValues.query.trim(),
+        lat: formValues.lat,
+        lng: formValues.lng,
+        radio_m: formValues.radio_m,
+        meta: {
+          source: "panel",
+        },
+        ...(advancedPayload ?? {}),
+      };
+      setIsSearching(true);
+      try {
+        const response: CreateDenueSearchResponse = await createDenueBusqueda(payload);
+        setFeedback({
+          type: "success",
+          message: `Se guardaron ${response.upserted} resultados desde DENUE (${response.denue_results ?? response.upserted} encontrados).`,
+        });
+        await loadBusquedas();
+        await loadResultadosForBusqueda(response.busqueda_id);
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "No fue posible ejecutar la búsqueda.",
+        });
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [formValues, loadBusquedas, loadResultadosForBusqueda, buildAdvancedPayload, advancedFilters],
+  );
+
+  const handleStandardSearch = useCallback(() => {
+    void runBusqueda();
+  }, [runBusqueda]);
+
+  const handleAdvancedApply = useCallback(
+    (filters: DenueAdvancedFilters) => {
+      setAdvancedFilters(filters);
+      void runBusqueda(filters);
+    },
+    [runBusqueda],
+  );
 
   const handleAction = useCallback(
     (action: (typeof ACTIONS)[number]["key"]) => {
@@ -798,7 +853,7 @@ export function DenueBusquedaView() {
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={runBusqueda} disabled={isSearching} className="flex-1 min-w-[140px]">
+              <Button onClick={handleStandardSearch} disabled={isSearching} className="flex-1 min-w-[140px]">
                 {isSearching ? (
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 ) : (

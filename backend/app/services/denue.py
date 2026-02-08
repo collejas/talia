@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
@@ -99,6 +99,182 @@ class DenueClient:
             return resp.text
         except Exception:  # pragma: no cover - acceso improbable
             return ""
+
+    async def search_by_entidad(
+        self,
+        *,
+        condicion: str,
+        entidad: str | None = None,
+        registro_inicial: int = 1,
+        registro_final: int = 15,
+    ) -> list[dict[str, Any]]:
+        cleaned = (condicion or "").strip() or "todos"
+        entidad_code = self._normalize_geo_segment(entidad, 2, default="00")
+        segments = [
+            quote(cleaned, safe=""),
+            entidad_code,
+            str(registro_inicial),
+            str(max(registro_final, registro_inicial)),
+        ]
+        return await self._request_list("BuscarEntidad", segments)
+
+    async def search_area_act(
+        self,
+        *,
+        entidad: str | None = None,
+        municipio: str | None = None,
+        localidad: str | None = None,
+        ageb: str | None = None,
+        manzana: str | None = None,
+        actividad_codigo: str | None = None,
+        texto: str | None = None,
+        registro_inicial: int = 1,
+        registro_final: int = 15,
+    ) -> list[dict[str, Any]]:
+        segments = self._build_area_segments(
+            entidad=entidad,
+            municipio=municipio,
+            localidad=localidad,
+            ageb=ageb,
+            manzana=manzana,
+            actividad_codigo=actividad_codigo,
+            texto=texto,
+            registro_inicial=registro_inicial,
+            registro_final=registro_final,
+            tipo="BuscarAreaAct",
+        )
+        return await self._request_list("BuscarAreaAct", segments)
+
+    async def search_area_act_estr(
+        self,
+        *,
+        entidad: str | None = None,
+        municipio: str | None = None,
+        localidad: str | None = None,
+        ageb: str | None = None,
+        manzana: str | None = None,
+        actividad_codigo: str | None = None,
+        texto: str | None = None,
+        registro_inicial: int = 1,
+        registro_final: int = 15,
+        estrato: str | None = None,
+    ) -> list[dict[str, Any]]:
+        segments = self._build_area_segments(
+            entidad=entidad,
+            municipio=municipio,
+            localidad=localidad,
+            ageb=ageb,
+            manzana=manzana,
+            actividad_codigo=actividad_codigo,
+            texto=texto,
+            registro_inicial=registro_inicial,
+            registro_final=registro_final,
+            tipo="BuscarAreaActEstr",
+            estrato=estrato,
+        )
+        return await self._request_list("BuscarAreaActEstr", segments)
+
+    async def _request_list(self, method: str, segments: list[str]) -> list[dict[str, Any]]:
+        path = f"{self.base_url}/consulta/{method}/{'/'.join(segments)}/{self.token}/?type=json"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(path)
+        except httpx.RequestError as exc:  # pragma: no cover - depende de red
+            logger.exception("denue.request_error", extra={"error": str(exc)})
+            raise DenueError("denue_request_failed") from exc
+        if resp.status_code >= 400:
+            detail = await self._safe_text(resp)
+            logger.error(
+                "denue.http_error",
+                extra={"status": resp.status_code, "detail": detail},
+            )
+            raise DenueError(f"denue_http_{resp.status_code}")
+        try:
+            data = resp.json()
+        except ValueError:
+            detail = await self._safe_text(resp)
+            text = detail.strip()
+            if not text:
+                logger.warning("denue.empty_response")
+                return []
+            try:
+                data = json.loads(text)
+            except ValueError as exc:
+                logger.exception("denue.invalid_json", extra={"detail": text[:500]})
+                raise DenueError("denue_invalid_response") from exc
+        if isinstance(data, dict) and data.get("error"):
+            message = data.get("error") or data.get("message") or "denue_error"
+            raise DenueError(message)
+        if not isinstance(data, list):
+            return []
+        return data
+
+    @staticmethod
+    def _normalize_geo_segment(value: str | None, length: int, default: str = "0") -> str:
+        if not value:
+            return default
+        normalized = "".join(ch for ch in value if ch.isdigit())
+        if not normalized:
+            return default
+        return normalized.zfill(length)[:length]
+
+    @staticmethod
+    def _build_activity_segments(codigo: str | None) -> tuple[str, str, str, str, str]:
+        if not codigo:
+            return ("00", "000", "0000", "00000", "000000")
+        only_digits = "".join(ch for ch in codigo if ch.isdigit())
+        return (
+            only_digits[:2].ljust(2, "0"),
+            only_digits[:3].ljust(3, "0"),
+            only_digits[:4].ljust(4, "0"),
+            only_digits[:5].ljust(5, "0"),
+            only_digits[:6].ljust(6, "0"),
+        )
+
+    def _build_area_segments(
+        self,
+        *,
+        entidad: str | None,
+        municipio: str | None,
+        localidad: str | None,
+        ageb: str | None,
+        manzana: str | None,
+        actividad_codigo: str | None,
+        texto: str | None,
+        registro_inicial: int,
+        registro_final: int,
+        tipo: Literal["BuscarAreaAct", "BuscarAreaActEstr"],
+        estrato: str | None = None,
+    ) -> list[str]:
+        entidad_code = self._normalize_geo_segment(entidad, 2, default="00")
+        municipio_code = self._normalize_geo_segment(municipio, 3, default="000")
+        localidad_code = self._normalize_geo_segment(localidad, 4, default="0000")
+        ageb_code = self._normalize_geo_segment(ageb, 4, default="0000")
+        manzana_code = self._normalize_geo_segment(manzana, 3, default="000")
+        segmento_sector, segmento_subsector, segmento_rama, segmento_subrama, segmento_clase = self._build_activity_segments(
+            actividad_codigo,
+        )
+        nombre = (texto or "").strip() or "0"
+        segments = [
+            entidad_code,
+            municipio_code,
+            localidad_code,
+            ageb_code,
+            manzana_code,
+            segmento_sector,
+            segmento_subsector,
+            segmento_rama,
+            segmento_subrama,
+            segmento_clase,
+            quote(nombre, safe=""),
+            str(registro_inicial),
+            str(max(registro_final, registro_inicial)),
+            "0",
+        ]
+        if tipo == "BuscarAreaActEstr":
+            estrato_code = (estrato or "").strip() or "0"
+            segments.append(estrato_code)
+        return segments
 
 
 def normalize_denue_place(place: dict[str, Any]) -> dict[str, Any]:
