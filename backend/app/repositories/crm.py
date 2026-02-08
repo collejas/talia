@@ -5696,6 +5696,41 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar contactables: {data!r}")
         return data
 
+    async def list_scian_catalogs(self) -> dict[str, list[dict[str, Any]]]:
+        """Consulta los catálogos SCIAN (sector → clase) desde Supabase."""
+
+        return {
+            "sector": await self._list_scian_table(table="scian_sector"),
+            "subsector": await self._list_scian_table(table="scian_subsector"),
+            "rama": await self._list_scian_table(table="scian_rama"),
+            "subrama": await self._list_scian_table(table="scian_subrama"),
+            "clase": await self._list_scian_table(table="scian_clase"),
+        }
+
+    async def list_scian_clase_indice(
+        self,
+        *,
+        codigo_clase: str,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Obtiene los ítems de índice para una clase específica."""
+
+        params: dict[str, Any] = {
+            "select": "id,codigo_clase,item",
+            "codigo_clase": f"eq.{codigo_clase}",
+            "order": "item.asc",
+        }
+        if limit is not None:
+            params["limit"] = str(limit)
+        if offset is not None:
+            params["offset"] = str(offset)
+        resp = await self._request("GET", "/rest/v1/scian_clase_indice", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar índice SCIAN: {data!r}")
+        return data
+
     async def upsert_prospeccion_prospectos(
         self,
         *,
@@ -7532,6 +7567,16 @@ class CRMRepository:
             prefer="count=exact",
         )
         return self._extract_total_count(resp.headers.get("content-range")) or 0
+
+    async def _list_scian_table(self, *, table: str) -> list[dict[str, Any]]:
+        """Helper que obtiene todas las filas de una tabla SCIAN ordenadas por código."""
+
+        params = {"select": "*", "order": "codigo.asc"}
+        resp = await self._request("GET", f"/rest/v1/{table}", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar {table}: {data!r}")
+        return data
 
     async def _request(
         self,

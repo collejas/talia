@@ -54,6 +54,46 @@ export type DenueResultadosResponse = {
   offset: number;
 };
 
+export type DenueScianNode = {
+  codigo: string;
+  titulo: string | null;
+  descripcion: string | null;
+  incluye: string | null;
+  excluye: string | null;
+};
+
+export type DenueCatalogosResponse = {
+  ok: boolean;
+  scian: {
+    sector: DenueScianNode[];
+    subsector: DenueScianNode[];
+    rama: DenueScianNode[];
+    subrama: DenueScianNode[];
+    clase: DenueScianNode[];
+  };
+  geo: {
+    states: {
+      code: string;
+      name: string;
+      municipalities: {
+        code: string;
+        name: string;
+      }[];
+    }[];
+  };
+};
+
+export type DenueScianClaseIndiceItem = {
+  id: number;
+  codigo_clase: string;
+  item: string;
+};
+
+export type DenueScianClaseIndiceResponse = {
+  ok: boolean;
+  items: DenueScianClaseIndiceItem[];
+};
+
 async function requestJson<T>(
   input: string,
   init?: RequestInit,
@@ -199,6 +239,27 @@ export async function deleteDenueResultados(ids: string[]) {
     method: "DELETE",
     body: JSON.stringify({ ids }),
   });
+}
+
+export async function listDenueCatalogos(): Promise<DenueCatalogosResponse> {
+  const url = buildClientUrl("/api/prospeccion/denue/catalogos");
+  return requestJson<DenueCatalogosResponse>(url.toString());
+}
+
+export async function listScianClaseIndice(params: {
+  codigoClase: string;
+  limit?: number;
+  offset?: number;
+}): Promise<DenueScianClaseIndiceResponse> {
+  const url = buildClientUrl("/api/prospeccion/denue/scian/clase-indice");
+  url.searchParams.set("codigo_clase", params.codigoClase);
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit));
+  }
+  if (typeof params.offset === "number") {
+    url.searchParams.set("offset", String(params.offset));
+  }
+  return requestJson<DenueScianClaseIndiceResponse>(url.toString());
 }
 
 function extractStringField(payload: unknown, key: string): string | undefined {

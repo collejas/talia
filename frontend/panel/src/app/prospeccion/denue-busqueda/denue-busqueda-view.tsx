@@ -59,6 +59,10 @@ import {
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import {
+  DenueAdvancedFilters,
+  DenueAdvancedSearchModal,
+} from "./advanced-denue-search-modal";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -115,6 +119,7 @@ export function DenueBusquedaView() {
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
+  const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
   const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -654,6 +659,13 @@ export function DenueBusquedaView() {
     }
   }, [formValues, loadBusquedas, loadResultadosForBusqueda]);
 
+  const handleAdvancedApply = useCallback((filters: DenueAdvancedFilters) => {
+    setFeedback({
+      type: "info",
+      message: `Filtros avanzados listos (actividad: ${filters.actividad.length}, zonas: ${filters.geografia.estados.length}).`,
+    });
+  }, []);
+
   const handleAction = useCallback(
     (action: (typeof ACTIONS)[number]["key"]) => {
       if (!selectedIds.size) {
@@ -785,21 +797,29 @@ export function DenueBusquedaView() {
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={runBusqueda} disabled={isSearching} className="flex-1 min-w-[140px]">
-                  {isSearching ? (
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="mr-2 h-4 w-4" />
-                  )}
-                  Buscar y guardar
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    updateFormValue("lat", DEFAULT_CENTER.lat);
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={runBusqueda} disabled={isSearching} className="flex-1 min-w-[140px]">
+                {isSearching ? (
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-4 w-4" />
+                )}
+                Buscar y guardar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 min-w-[140px]"
+                onClick={() => setAdvancedModalOpen(true)}
+              >
+                Búsqueda avanzada
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  updateFormValue("lat", DEFAULT_CENTER.lat);
                     updateFormValue("lng", DEFAULT_CENTER.lng);
                     updateFormValue("radio_m", 1500);
                   }}
@@ -1327,6 +1347,11 @@ export function DenueBusquedaView() {
           )}
         </CardContent>
       </Card>
+      <DenueAdvancedSearchModal
+        open={advancedModalOpen}
+        onOpenChange={setAdvancedModalOpen}
+        onApply={handleAdvancedApply}
+      />
     </div>
   );
 }

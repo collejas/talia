@@ -80,6 +80,7 @@ from app.services.prospeccion_contact_sender import contact_sender
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
+from app.data.geo.locations import list_states_with_municipalities
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 logger = get_logger(__name__)
@@ -9461,6 +9462,48 @@ async def eliminar_resultados_denue(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "deleted": deleted}
+
+
+@router.get("/prospeccion/denue/catalogos")
+async def listar_catalogos_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    """Devuelve los catálogos SCIAN y geográficos necesarios para la búsqueda avanzada."""
+
+    try:
+        scian_catalogs = await repo.list_scian_catalogs()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    states = list_states_with_municipalities()
+    return {
+        "ok": True,
+        "scian": scian_catalogs,
+        "geo": {"states": states},
+    }
+
+
+@router.get("/prospeccion/denue/scian/clase-indice")
+async def listar_scian_clase_indice(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    codigo_clase: Annotated[str, Query(..., min_length=2)],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    """Obtiene ítems del índice SCIAN para una clase específica."""
+
+    try:
+        items = await repo.list_scian_clase_indice(
+            codigo_clase=codigo_clase,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "items": items}
 
 
 @router.get("/prospeccion/prospectos")

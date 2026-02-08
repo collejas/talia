@@ -37,6 +37,19 @@ Documentar el diseño y los pasos necesarios para agregar a `/prospeccion/denue-
 3. El endpoint `crear_busqueda_denue` decide qué método invocar según `payload.modo` y qué filtros están presentes; publica la metadata en `p_meta` y marca `meta` en `busquedas` para saber qué filtros se usaron.
 4. Limitar la paginación: `BuscarAreaAct*` puede devolver muchos resultados, así que en el frontend hay que controlar offset/limit (DENUE usa `registro inicial/final`), probablemente con `limit=1000` y `registroInicial` multiplo de `limit`.
 5. Guardar en `meta` o `busquedas.meta` los parámetros usados para poder re-ejecutar el mismo filtro desde el historial.
+6. **Payload avanzado**:
+   - `modo`: `radio` (default), `entidad`, `area_act`, `area_act_estr`. Determina qué endpoint de DENUE se invoca:
+     * `radio`: mantiene el flujo actual (`Buscar` + parámetros `query`, `lat`, `lng`, `radio_m`).
+     * `entidad`: usa `BuscarEntidad` y requiere `condicion` y `entidad` (clave dos dígitos). Si el usuario sólo rellenó un campo textual del modal, ese texto será la `condicion`; si también seleccionó geografía, la clave `entidad` se extrae del estado seleccionado.
+     * `area_act`: usa `BuscarAreaAct` con filtros de actividad (lista de códigos `actividad_codigos`) y geografía (entidad, municipio). Si se selecciona estrato también, el backend lo pasa junto a la actividad.
+     * `area_act_estr`: similar a `area_act` pero exige una selección de estrato/ tamaño (`estrato_ids`). Se puede decidir activar este modo cuando el usuario marque al menos un estrato distinto de “Todos”.
+   - Campos adicionales:
+     * `texto_busqueda`: combinación de nombre/razón social, calle, colonia y CP para enviar a `condicion`.
+     * `actividad_codigos`: lista de códigos SCIAN seleccionados (cada nivel aporta su código completo; se ordenan de longitud creciente).
+     * `estrato_ids`: lista de valores `0`-`7`; denominan el parámetro `Estrato` en `BuscarAreaActEstr`.
+     * `geo_estados` y `geo_municipios`: claves elegidas, así se construye la `entidad` y `municipio` de los endpoints.
+     * `meta_avanzado`: copia de estos filtros para guardar en `busquedas.meta`.
+   - El backend debe validar que al menos un filtro útil se ha enviado al modo correspondiente, y devolver 400 si falta el parámetro requerido (p. ej. `entidad` en `modo=entidad`).
 
 ## Acciones posteriores
 1. Crear componente del modal y árbol SCIAN `frontend/panel/src/app/prospeccion/denue-busqueda/advanced-search-modal.tsx` (o similar). Reusar componentes de UI (`Accordion` o `Disclosure`) para los toggles, `CheckboxTree` para árbol.
