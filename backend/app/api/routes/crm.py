@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Literal, Mapping, Sequence
+from typing import Annotated, Any, Awaitable, Callable, Literal, Mapping, Sequence
 from uuid import UUID, uuid4
 from urllib.parse import urlparse
 import time
@@ -9248,64 +9248,22 @@ async def crear_busqueda_denue(
             "estrato_ids": payload.estrato_ids,
         },
     )
-    try:
-        if modo == "entidad":
-            entidad = _first_state_from_payload(payload)
-            if not entidad:
-                raise HTTPException(status_code=400, detail="entidad_required")
-            records = await client.search_by_entidad(
-                condicion=text_query or payload.query,
-                entidad=entidad,
-                registro_inicial=payload.registro_inicial,
-                registro_final=payload.registro_final,
-            )
-        elif modo == "area_act" or modo == "area_act_estr":
-            actividad_codigo = _most_specific_activity(payload)
-            if not actividad_codigo:
-                raise HTTPException(status_code=400, detail="actividad_required")
-            entidad = _first_state_from_payload(payload)
-            municipio = _first_municipality_from_payload(payload)
-            if modo == "area_act_estr":
-                estrato = payload.estrato_ids and payload.estrato_ids[0]
-                if not estrato:
-                    raise HTTPException(status_code=400, detail="estrato_required")
-                records = await client.search_area_act_estr(
-                    entidad=entidad,
-                    municipio=municipio,
-                    actividad_codigo=actividad_codigo,
-                    texto=text_query or payload.query,
-                    registro_inicial=payload.registro_inicial,
-                    registro_final=payload.registro_final,
-                    estrato=estrato,
-                )
-            else:
-                records = await client.search_area_act(
-                    entidad=entidad,
-                    municipio=municipio,
-                    actividad_codigo=actividad_codigo,
-                    texto=text_query or payload.query,
-                    registro_inicial=payload.registro_inicial,
-                    registro_final=payload.registro_final,
-                )
-        else:
-            records = await client.search(
-                query=payload.query,
-                latitude=payload.lat,
-                longitude=payload.lng,
-                radius_m=payload.radio_m,
-            )
-    except DenueError as exc:
-        detail = str(exc) or "denue_error"
-        search_logger.error("denue.search_failed", extra={"modo": modo, "detail": detail})
-        raise HTTPException(status_code=502, detail=detail) from exc
+    batch_base_size = max(payload.registro_final - payload.registro_inicial + 1, 1)
+    batch_size = min(batch_base_size, settings.denue_batch_size)
+    if batch_size <= 0:
+        batch_size = settings.denue_batch_size
+    max_batches = settings.denue_max_batches or None
 
-    normalized_items = [normalize_denue_place(item) for item in records]
-    meta_payload: dict[str, Any] = {"query": payload.query}
-    if payload.meta:
-        meta_payload.update(payload.meta)
-    meta_payload["modo"] = modo
-    if modo != "radio" and advanced_meta:
-        meta_payload["advanced_filters"] = advanced_meta
+    def _build_meta_payload(total: int) -> dict[str, Any]:
+        meta: dict[str, Any] = {"query": payload.query}
+        if payload.meta:
+            meta.update(payload.meta)
+        meta["modo"] = modo
+        if modo != "radio" and advanced_meta:
+            meta["advanced_filters"] = advanced_meta
+        meta["denue_batch_size"] = batch_size
+        meta["total_encontrados"] = total
+        return meta
 
     crear_body = {
         "p_fuente": "denue",
@@ -9313,8 +9271,8 @@ async def crear_busqueda_denue(
         "p_radio_m": payload.radio_m,
         "p_lat": payload.lat,
         "p_lng": payload.lng,
-        "p_total": len(normalized_items),
-        "p_meta": meta_payload,
+        "p_total": 0,
+        "p_meta": _build_meta_payload(0),
     }
     try:
         crear_data = await repo.create_prospeccion_busqueda(
@@ -9329,34 +9287,148 @@ async def crear_busqueda_denue(
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="busqueda_id_invalid") from exc
 
+    preview_items: list[dict[str, Any]] = []
+    total_records = 0
     upserted = 0
-    if normalized_items:
+
+    async def _upsert_normals(items: list[dict[str, Any]]) -> int:
+        if not items:
+            return 0
         try:
             upsert_data = await repo.upsert_prospeccion_resultados(
                 usuario_token=user_token,
                 payload={
                     "p_busqueda_id": str(busqueda_uuid),
                     "p_fuente": "denue",
-                    "p_items": normalized_items,
+                    "p_items": items,
                 },
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if isinstance(upsert_data, dict):
-            upserted = (
-                upsert_data.get("upserted") or upsert_data.get("total") or len(normalized_items)
-            )
-        else:
-            try:
-                upserted = int(upsert_data or 0)
-            except (TypeError, ValueError):
-                upserted = len(normalized_items)
+            return upsert_data.get("upserted") or upsert_data.get("total") or len(items)
+        try:
+            return int(upsert_data or 0)
+        except (TypeError, ValueError):
+            return len(items)
 
-    preview = [_result_preview(item) for item in normalized_items[: min(10, len(normalized_items))]]
+    async def _iterate_batches(
+        search_fn: Callable[[int, int], Awaitable[list[dict[str, Any]]]]
+    ):
+        start = payload.registro_inicial
+        batch_index = 0
+        while True:
+            registro_final = start + batch_size - 1
+            batch = await search_fn(registro_inicial=start, registro_final=registro_final)
+            yield batch, start, registro_final, batch_index + 1
+            if len(batch) < batch_size:
+                break
+            batch_index += 1
+            if max_batches and batch_index >= max_batches:
+                search_logger.warning(
+                    "denue.batch_limit_reached",
+                    extra={
+                        "modo": modo,
+                        "batches": batch_index,
+                        "batch_size": batch_size,
+                    },
+                )
+                break
+            start += batch_size
+
+    try:
+        if modo == "radio":
+            records = await client.search(
+                query=payload.query,
+                latitude=payload.lat,
+                longitude=payload.lng,
+                radius_m=payload.radio_m,
+            )
+            normalized_items = [normalize_denue_place(item) for item in records]
+            total_records = len(normalized_items)
+            if normalized_items:
+                upserted += await _upsert_normals(normalized_items)
+            preview_items = normalized_items[:10]
+        else:
+            if modo == "entidad":
+                entidad = _first_state_from_payload(payload)
+                if not entidad:
+                    raise HTTPException(status_code=400, detail="entidad_required")
+
+                async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
+                    return await client.search_by_entidad(
+                        condicion=text_query or payload.query,
+                        entidad=entidad,
+                        registro_inicial=registro_inicial,
+                        registro_final=registro_final,
+                    )
+            elif modo == "area_act" or modo == "area_act_estr":
+                actividad_codigo = _most_specific_activity(payload)
+                if not actividad_codigo:
+                    raise HTTPException(status_code=400, detail="actividad_required")
+                entidad = _first_state_from_payload(payload)
+                municipio = _first_municipality_from_payload(payload)
+                if modo == "area_act_estr":
+                    estrato = payload.estrato_ids and payload.estrato_ids[0]
+                    if not estrato:
+                        raise HTTPException(status_code=400, detail="estrato_required")
+
+                    async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
+                        return await client.search_area_act_estr(
+                            entidad=entidad,
+                            municipio=municipio,
+                            actividad_codigo=actividad_codigo,
+                            texto=text_query or payload.query,
+                            registro_inicial=registro_inicial,
+                            registro_final=registro_final,
+                            estrato=estrato,
+                        )
+                else:
+                    async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
+                        return await client.search_area_act(
+                            entidad=entidad,
+                            municipio=municipio,
+                            actividad_codigo=actividad_codigo,
+                            texto=text_query or payload.query,
+                            registro_inicial=registro_inicial,
+                            registro_final=registro_final,
+                        )
+            else:
+                raise HTTPException(status_code=400, detail="modo_desconocido")
+
+            async for batch_records, start, end, batch_index in _iterate_batches(search_batch):
+                normalized_batch = [normalize_denue_place(item) for item in batch_records]
+                total_records += len(normalized_batch)
+                if len(preview_items) < 10:
+                    preview_items.extend(normalized_batch[: max(0, 10 - len(preview_items))])
+                if normalized_batch:
+                    upserted += await _upsert_normals(normalized_batch)
+                search_logger.info(
+                    "denue.batch_processed",
+                    extra={
+                        "modo": modo,
+                        "batch_index": batch_index,
+                        "start": start,
+                        "end": end,
+                        "batch_size": len(batch_records),
+                    },
+                )
+    except DenueError as exc:
+        detail = str(exc) or "denue_error"
+        search_logger.error("denue.search_failed", extra={"modo": modo, "detail": detail})
+        raise HTTPException(status_code=502, detail=detail) from exc
+
+    await repo.update_prospeccion_busqueda_total(
+        usuario_token=user_token,
+        busqueda_id=busqueda_uuid,
+        total_encontrados=total_records,
+    )
+
+    preview = [_result_preview(item) for item in preview_items[: min(10, len(preview_items))]]
     return {
         "ok": True,
         "busqueda_id": str(busqueda_uuid),
-        "denue_results": len(normalized_items),
+        "denue_results": total_records,
         "upserted": upserted,
         "preview": preview,
     }

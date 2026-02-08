@@ -5540,6 +5540,22 @@ class CRMRepository:
         except ValueError as exc:  # pragma: no cover
             raise CRMRepositoryError("crear_busqueda_response_invalid") from exc
 
+    async def update_prospeccion_busqueda_total(
+        self,
+        *,
+        usuario_token: str,
+        busqueda_id: UUID,
+        total_encontrados: int,
+    ) -> None:
+        payload = {"total_encontrados": total_encontrados}
+        await self._request_with_user(
+            "PATCH",
+            "/rest/v1/busquedas",
+            token=usuario_token,
+            params={"id": f"eq.{busqueda_id}"},
+            json=payload,
+        )
+
     async def get_prospeccion_busqueda(
         self,
         *,

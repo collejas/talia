@@ -274,6 +274,17 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DENUE_BASE_URL", "TALIA_DENUE_BASE_URL"),
     )
     log_file_path: str = "/var/www/talia/logs/api.log"
+    denue_batch_size: int = Field(
+        default=500,
+        ge=1,
+        le=2000,
+        description="Número de registros que se procesan por lote cuando se recorren múltiples páginas de DENUE.",
+    )
+    denue_max_batches: int = Field(
+        default=0,
+        ge=0,
+        description="Cantidad máxima de lotes consecutivos que descargamos (0 = sin límite práctico).",
+    )
     webchat_inactivity_hours: int | None = Field(
         default=None,
         description="Número de horas para reiniciar conversación webchat; usa default SQL cuando no se define.",

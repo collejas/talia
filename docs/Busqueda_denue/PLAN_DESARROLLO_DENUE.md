@@ -63,6 +63,8 @@ Documentar el diseño y los pasos necesarios para agregar a `/prospeccion/denue-
 - [ ] Extender `DenueClient` con nuevos métodos y propagar `modo` al RPC de `crear_busqueda`. (Responsable: backend) 
 - [ ] Validar que los resultados normalizados se muestren y se puedan guardar como prospectos. (Responsable: QA)
 - [x] Instrumentar `app.prospeccion.busquedas` para registrar cada solicitud DENUE (modo, filtros, path y errores) en `logs/busquedas/busquedas.log` y ayudar a depurar las búsquedas avanzadas. (Responsable: backend)
+- [x] Cargar resultados por lotes (1‑500, 501‑1000, …) en el backend, guardar cada lote antes de solicitar el siguiente y actualizar el total en `public.busquedas` para evitar timeouts (ver `backend/app/api/routes/crm.py` y las nuevas settings `denue_batch_size`/`denue_max_batches`).
+- [ ] Documentar en el plan cómo funcionan las settings `denue_batch_size` y `denue_max_batches`, y qué indicador de progreso mostrar en la UI para señalar que “la búsqueda sigue cargando”.
 
 ## Referencias
 - `docs/Busqueda_denue/INSTRUCTIVO_DENUE.md` – repertorio de endpoints y parámetros. 
