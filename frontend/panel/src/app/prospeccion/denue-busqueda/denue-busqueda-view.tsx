@@ -653,17 +653,15 @@ export function DenueBusquedaView() {
     const estrato = filters.estrato.filter((value) => value !== "0");
     const geoEstados = filters.geografia.estados.length ? filters.geografia.estados : undefined;
     const geoMunicipios = filters.geografia.municipios.length ? filters.geografia.municipios : undefined;
-    const hasSpecificActivity = Boolean(actividadCodes && actividadCodes.some((value) => value !== "0"));
+    const hasActivitySelection = actividadCodes.some((value) => Boolean(value) && value !== "0");
+    const hasGeo = Boolean(geoEstados?.length || geoMunicipios?.length);
     const hasEstrato = Boolean(estrato.length);
-    const hasEstados = Boolean(geoEstados?.length);
-    const hasMunicipios = Boolean(geoMunicipios?.length);
-    const shouldUseAreaMode = hasSpecificActivity || hasMunicipios;
     let modo: AdvancedSearchPayload["modo"] = "radio";
-    if (hasEstrato && hasSpecificActivity) {
+    if (hasActivitySelection && hasEstrato) {
       modo = "area_act_estr";
-    } else if (shouldUseAreaMode) {
+    } else if (hasActivitySelection) {
       modo = "area_act";
-    } else if (hasEstados || hasMunicipios) {
+    } else if (hasGeo) {
       modo = "entidad";
     }
     if (modo === "radio") {
