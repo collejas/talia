@@ -5,6 +5,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "
 import {
   ArrowUpRight,
   Globe,
+  Info,
   ListChecks,
   Mail,
   MapPin,
@@ -63,12 +64,16 @@ import {
   DenueAdvancedFilters,
   DenueAdvancedSearchModal,
 } from "./advanced-denue-search-modal";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
 const LIST_PAGE_SIZE = 500;
+const QUERY_TOOLTIP_ID = "denue-query-tooltip";
+const QUERY_TOOLTIP_TEXT =
+  "Palabra(s) a buscar en el nombre del establecimiento, razón social, calle, colonia, clase de la actividad económica, entidad federativa, municipio y localidad. Para buscar más de una palabra se deberán separar con una coma. Para buscar todos los establecimientos se deberá ingresar la palabra \"todos\".";
 
 const ACTIONS = [
   { key: "email", label: "Enviar correo", icon: <Mail className="h-4 w-4" /> },
@@ -813,12 +818,42 @@ export function DenueBusquedaView() {
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_repeat(2,minmax(0,1fr))_minmax(0,1fr)]">
             <div className="space-y-2">
-              <Label htmlFor="query">Palabra clave o giro</Label>
+              <div className="flex items-start gap-2">
+                <Label htmlFor="query">Palabra clave o giro</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        aria-label="Instrucciones de búsqueda DENUE"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      align="start"
+                      className="max-w-xs text-justify text-sm leading-snug"
+                      id={QUERY_TOOLTIP_ID}
+                    >
+                      <span>
+                        Palabra(s) a buscar en el nombre del establecimiento, razón social, calle, colonia, clase de la actividad económica, entidad federativa, municipio y localidad.
+                      </span>
+                      <span className="mt-1 block">
+                        Para buscar más de una palabra se deberán separar con una coma. Para buscar todos los establecimientos se deberá ingresar la palabra &quot;todos&quot;.
+                      </span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Input
                 id="query"
                 placeholder="Ej. cafeterías, autolavado, ferretería"
                 value={formValues.query}
                 onChange={(event) => updateFormValue("query", event.target.value)}
+                title={QUERY_TOOLTIP_TEXT}
+                aria-describedby={QUERY_TOOLTIP_ID}
               />
               <p className="text-xs text-muted-foreground">
                 DENUE buscará negocios cuyo nombre o actividad coincida con este texto.
