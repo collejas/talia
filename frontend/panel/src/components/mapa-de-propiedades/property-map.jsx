@@ -3834,38 +3834,58 @@ export function PropertyMap() {
                       Selecciona un marcador o una unidad de la lista para mostrarla en Mapbox.
                     </p>
                   )}
-                  <div className="mt-5 border-t border-slate-800 pt-4">
-                    <div className="mt-3 space-y-3 text-[0.7rem] text-slate-300">
-                      <div className="flex items-center justify-between">
-                        <span>Pitch</span>
-                        <span className="font-mono">{pitch}°</span>
-                      </div>
-                      <input
-                        className="h-2 w-full appearance-none rounded-full bg-slate-700"
-                        type="range"
-                        min="0"
-                        max="80"
-                        value={pitch}
-                        onChange={(event) => setPitch(Number(event.target.value))}
-                      />
-                      <div className="flex items-center justify-between">
-                        <span>Rotación</span>
-                        <span className="font-mono">{bearing}°</span>
-                      </div>
-                      <input
-                        className="h-2 w-full appearance-none rounded-full bg-slate-700"
-                        type="range"
-                        min="-180"
-                        max="180"
-                        value={bearing}
-                        onChange={(event) => setBearing(Number(event.target.value))}
-                      />
+                </div>
+              </div>
+            </div>
+          </div>
+          {mapboxActive && (
+            <div className="absolute bottom-4 left-4 z-40 pointer-events-auto">
+              <div className="w-36 rounded-md border border-slate-800/40 bg-slate-950/45 p-2 text-[0.55rem] text-slate-200 shadow-sm backdrop-blur">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Inclinación</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="h-5 w-5 rounded border border-slate-700/60 text-[0.6rem] text-slate-200 hover:bg-slate-800/60"
+                        onClick={() => setPitch((prev) => Math.max(0, prev - 5))}
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center font-mono">{pitch}°</span>
+                      <button
+                        type="button"
+                        className="h-5 w-5 rounded border border-slate-700/60 text-[0.6rem] text-slate-200 hover:bg-slate-800/60"
+                        onClick={() => setPitch((prev) => Math.min(80, prev + 5))}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Rotación</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="h-5 w-5 rounded border border-slate-700/60 text-[0.6rem] text-slate-200 hover:bg-slate-800/60"
+                        onClick={() => setBearing((prev) => Math.max(-180, prev - 10))}
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center font-mono">{bearing}°</span>
+                      <button
+                        type="button"
+                        className="h-5 w-5 rounded border border-slate-700/60 text-[0.6rem] text-slate-200 hover:bg-slate-800/60"
+                        onClick={() => setBearing((prev) => Math.min(180, prev + 10))}
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
     </div>
