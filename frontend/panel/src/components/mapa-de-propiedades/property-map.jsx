@@ -1535,6 +1535,36 @@ export function PropertyMap() {
       const normalized = String(value).trim().toLowerCase();
       return normalized.length ? normalized : null;
     };
+    const sumPricesByStatus = (items) => {
+      const totals = {
+        total: 0,
+        vendido: 0,
+        disponible: 0,
+        apartado: 0,
+        reservado: 0,
+      };
+      for (const item of items) {
+        const props = item?.properties ?? {};
+        const price = Number(props.precio ?? 0);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        totals.total += price;
+        const status = (props.status ?? "").toString().trim().toLowerCase();
+        if (totals[status] != null) {
+          totals[status] += price;
+        }
+      }
+      return totals;
+    };
+    const countByStatus = (items) => {
+      const counts = { disponible: 0, apartado: 0, vendido: 0, reservado: 0 };
+      for (const item of items) {
+        const status = (item?.properties?.status ?? "").toString().trim().toLowerCase();
+        if (status && counts[status] != null) {
+          counts[status] += 1;
+        }
+      }
+      return counts;
+    };
     const sumPrices = (items, onlySold) => {
       let total = 0;
       for (const item of items) {
@@ -1587,19 +1617,30 @@ export function PropertyMap() {
         ? getUnitsForDesarrollo()
         : [];
     const totalUnits = units.length;
-    const soldUnits = units.filter(
-      (item) => (item?.properties?.status ?? "").toString().trim().toLowerCase() === "vendido",
-    ).length;
+    const statusCounts = countByStatus(units);
+    const soldUnits = statusCounts.vendido;
+    const availableUnits = statusCounts.disponible;
     const percentSold =
       totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0;
-    const totalValue = sumPrices(units, false);
-    const soldValue = sumPrices(units, true);
+    const percentAvailable =
+      totalUnits > 0 ? Math.round((availableUnits / totalUnits) * 100) : 0;
+    const totals = sumPricesByStatus(units);
+    const totalValue = totals.total;
+    const soldValue = totals.vendido;
+    const apartadoValue = totals.apartado;
+    const reservadoValue = totals.reservado;
+    const remainingValue = Math.max(totalValue - soldValue, 0);
     return {
       totalUnits,
       soldUnits,
+      availableUnits,
       percentSold,
+      percentAvailable,
       totalValue,
       soldValue,
+      apartadoValue,
+      reservadoValue,
+      remainingValue,
     };
   }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
   const mapboxStatusLabel =
@@ -1631,6 +1672,18 @@ export function PropertyMap() {
   const mapboxSoldValueLabel = useMemo(() => {
     if (!mapboxSalesSummary) return null;
     return formatMoney(mapboxSalesSummary.soldValue);
+  }, [formatMoney, mapboxSalesSummary]);
+  const mapboxRemainingValueLabel = useMemo(() => {
+    if (!mapboxSalesSummary) return null;
+    return formatMoney(mapboxSalesSummary.remainingValue);
+  }, [formatMoney, mapboxSalesSummary]);
+  const mapboxApartadoValueLabel = useMemo(() => {
+    if (!mapboxSalesSummary) return null;
+    return formatMoney(mapboxSalesSummary.apartadoValue);
+  }, [formatMoney, mapboxSalesSummary]);
+  const mapboxReservadoValueLabel = useMemo(() => {
+    if (!mapboxSalesSummary) return null;
+    return formatMoney(mapboxSalesSummary.reservadoValue);
   }, [formatMoney, mapboxSalesSummary]);
   const mapboxAreaLabel =
     mapboxProps?.area_m2 != null ? `${Number(mapboxProps.area_m2)} m²` : "Sin área registrada";
@@ -3562,9 +3615,31 @@ export function PropertyMap() {
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Disponibles:</span>
+                              <span className="font-semibold">
+                                {mapboxSalesSummary
+                                  ? `${mapboxSalesSummary.availableUnits}/${mapboxSalesSummary.totalUnits} · ${mapboxSalesSummary.percentAvailable}%`
+                                  : "0/0 · 0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Valor total:</span>
                               <span className="font-semibold text-red-400">
                                 {mapboxTotalValueLabel ?? "Sin precio"}
+                                {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
+                                  ? " · 100%"
+                                  : " · 0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Por vender:</span>
+                              <span className="font-semibold">
+                                {mapboxRemainingValueLabel ?? "Sin precio"}
+                                {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
+                                  ? ` · ${Math.round(
+                                      (mapboxSalesSummary.remainingValue / mapboxSalesSummary.totalValue) * 100,
+                                    )}%`
+                                  : " · 0%"}
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
@@ -3574,6 +3649,28 @@ export function PropertyMap() {
                                 {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
                                   ? ` · ${Math.round(
                                       (mapboxSalesSummary.soldValue / mapboxSalesSummary.totalValue) * 100,
+                                    )}%`
+                                  : " · 0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Apartado:</span>
+                              <span className="font-semibold">
+                                {mapboxApartadoValueLabel ?? "Sin precio"}
+                                {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
+                                  ? ` · ${Math.round(
+                                      (mapboxSalesSummary.apartadoValue / mapboxSalesSummary.totalValue) * 100,
+                                    )}%`
+                                  : " · 0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Reservado:</span>
+                              <span className="font-semibold">
+                                {mapboxReservadoValueLabel ?? "Sin precio"}
+                                {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
+                                  ? ` · ${Math.round(
+                                      (mapboxSalesSummary.reservadoValue / mapboxSalesSummary.totalValue) * 100,
                                     )}%`
                                   : " · 0%"}
                               </span>
