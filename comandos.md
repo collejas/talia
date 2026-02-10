@@ -83,8 +83,7 @@ sudo systemctl daemon-reload
 
 npx tsc --noEmit
 npm run lint
-npm run build --webpack
-npm run build --webpack && npm start
+npm run build
 
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
