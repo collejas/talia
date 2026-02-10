@@ -3553,7 +3553,7 @@ export function PropertyMap() {
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Valor total:</span>
-                              <span className="font-semibold">
+                              <span className="font-semibold text-red-400">
                                 {mapboxTotalValueLabel ?? "Sin precio"}
                               </span>
                             </div>
