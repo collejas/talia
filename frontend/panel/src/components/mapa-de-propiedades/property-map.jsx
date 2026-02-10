@@ -1427,12 +1427,7 @@ export function PropertyMap() {
     const panel = mapboxPanelRef.current ?? {};
     const isolatedId = selectedMapboxUnitIdRef.current;
     if (isolatedId) {
-      const unitLabel =
-        panel.selectedUnitLabel ??
-        mapboxProps?.unidad ??
-        mapboxProps?.nombre ??
-        isolatedId;
-      return `Mostrando: 1 unidad · ${unitLabel}`;
+      return null;
     }
     const kindCounts = panel.kindCounts ?? {};
     const parts = Object.entries(kindCounts)
@@ -1462,7 +1457,7 @@ export function PropertyMap() {
     let disponibles = 0;
 
     if (mapboxKind === "unidad") {
-      return "Unidad seleccionada";
+      return null;
     }
     if (mapboxKind === "desarrollo") {
       const rawFeatureId = getFeatureId(mapboxPanelFeature);
@@ -1547,22 +1542,14 @@ export function PropertyMap() {
   const mapboxCatalogLabel = [
     mapboxProps?.linea_nombre ? `Línea ${mapboxProps.linea_nombre}` : null,
     mapboxProps?.familia_nombre ? `Familia ${mapboxProps.familia_nombre}` : null,
-    mapboxProps?.modelo_nombre ? `Modelo ${mapboxProps.modelo_nombre}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
   const mapboxLocationLabel = mapboxProps
     ? [
-        mapboxProps.pais_nombre || mapboxProps.pais_codigo
-          ? `País ${mapboxProps.pais_nombre ?? mapboxProps.pais_codigo}`
-          : null,
-        mapboxProps.estado_nombre || mapboxProps.estado_cve
-          ? `Estado ${mapboxProps.estado_nombre ?? mapboxProps.estado_cve}`
-          : null,
-        mapboxProps.municipio_nombre || mapboxProps.municipio_cve
-          ? `Municipio ${mapboxProps.municipio_nombre ?? mapboxProps.municipio_cve}`
-          : null,
-        mapboxProps.colonia ? mapboxProps.colonia : null,
+        mapboxProps.municipio_nombre ?? mapboxProps.municipio_cve ?? null,
+        mapboxProps.estado_nombre ?? mapboxProps.estado_cve ?? null,
+        mapboxProps.pais_nombre ?? mapboxProps.pais_codigo ?? null,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -1738,22 +1725,21 @@ export function PropertyMap() {
   })();
   const activeLocationSummary = activeFeatureProps
     ? [
-        typeof activeFeatureProps.pais_nombre === "string"
-          ? `País ${activeFeatureProps.pais_nombre}`
-          : typeof activeFeatureProps.pais_codigo === "string"
-          ? `País ${activeFeatureProps.pais_codigo}`
+        typeof activeFeatureProps.municipio_nombre === "string"
+          ? activeFeatureProps.municipio_nombre
+          : typeof activeFeatureProps.municipio_cve === "string"
+          ? activeFeatureProps.municipio_cve
           : null,
         typeof activeFeatureProps.estado_nombre === "string"
-          ? `Estado ${activeFeatureProps.estado_nombre}`
+          ? activeFeatureProps.estado_nombre
           : typeof activeFeatureProps.estado_cve === "string"
-          ? `Estado ${activeFeatureProps.estado_cve}`
+          ? activeFeatureProps.estado_cve
           : null,
-        typeof activeFeatureProps.municipio_nombre === "string"
-          ? `Municipio ${activeFeatureProps.municipio_nombre}`
-          : typeof activeFeatureProps.municipio_cve === "string"
-          ? `Municipio ${activeFeatureProps.municipio_cve}`
+        typeof activeFeatureProps.pais_nombre === "string"
+          ? activeFeatureProps.pais_nombre
+          : typeof activeFeatureProps.pais_codigo === "string"
+          ? activeFeatureProps.pais_codigo
           : null,
-        typeof activeFeatureProps.colonia === "string" ? activeFeatureProps.colonia : null,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -3088,6 +3074,7 @@ export function PropertyMap() {
                   : "Unidad seleccionada"}
                 {activeLocationSummary && (
                   <div className="mt-0.5 text-[0.65rem] text-slate-500 dark:text-slate-400">
+                    <span className="font-semibold">Ubicación:</span>{" "}
                     {activeLocationSummary}
                   </div>
                 )}
@@ -3418,7 +3405,10 @@ export function PropertyMap() {
                         </p>
                       )}
                       {mapboxLocationLabel && (
-                        <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
+                        <p className="mt-1 text-[0.65rem] text-slate-400">
+                          <span className="font-semibold">Ubicación:</span>{" "}
+                          {mapboxLocationLabel}
+                        </p>
                       )}
                       <div className="mt-4 space-y-2 text-slate-200">
                         {mapboxKind === "unidad" && (
