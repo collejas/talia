@@ -3556,7 +3556,9 @@ export function PropertyMap() {
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Vendidas:</span>
                               <span className="font-semibold">
-                                {mapboxSalesSummary ? `${mapboxSalesSummary.percentSold}%` : "0%"}
+                                {mapboxSalesSummary
+                                  ? `${mapboxSalesSummary.soldUnits}/${mapboxSalesSummary.totalUnits} · ${mapboxSalesSummary.percentSold}%`
+                                  : "0/0 · 0%"}
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
@@ -3569,6 +3571,11 @@ export function PropertyMap() {
                               <span>Vendido:</span>
                               <span className="font-semibold">
                                 {mapboxSoldValueLabel ?? "Sin precio"}
+                                {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
+                                  ? ` · ${Math.round(
+                                      (mapboxSalesSummary.soldValue / mapboxSalesSummary.totalValue) * 100,
+                                    )}%`
+                                  : " · 0%"}
                               </span>
                             </div>
                           </>
