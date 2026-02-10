@@ -739,27 +739,24 @@ export function PropertyMap() {
         props.__original_id = f.id ?? props.id ?? null;
         // Normaliza numéricos. Si el backend pone el volumen en metadata, úsalo como respaldo.
         const meta = props.metadata ?? props.poligono_metadata ?? {};
-        props.height = Number(
-          props.height ??
-            meta?.height ??
-            props.levels ??
-            meta?.levels ??
-            props.altura ??
-            0,
-        );
-        props.min_height = Number(
-          props.min_height ??
-            meta?.min_height ??
-            props.base ??
-            0,
-        );
-        props.levels = Number(
-          props.levels ??
-            meta?.levels ??
-            props.nivel ??
-            props.height ??
-            0,
-        );
+        const toNum = (value) => {
+          const num = Number(value);
+          return Number.isFinite(num) ? num : 0;
+        };
+        const heightValue = toNum(props.height);
+        const metaHeight = toNum(meta?.height);
+        const levelsValue = toNum(props.levels);
+        const metaLevels = toNum(meta?.levels);
+        const alturaValue = toNum(props.altura);
+        const minHeightValue = toNum(props.min_height);
+        const metaMinHeight = toNum(meta?.min_height);
+        const baseValue = toNum(props.base);
+
+        props.height =
+          heightValue || metaHeight || levelsValue || metaLevels || alturaValue || 0;
+        props.min_height = minHeightValue || metaMinHeight || baseValue || 0;
+        props.levels =
+          levelsValue || metaLevels || toNum(props.nivel) || props.height || 0;
         // Si es capa y no viene min_height, calcularlo según nivel*height para que se apilen.
         if (kind === "capa" && (!props.min_height || Number.isNaN(props.min_height))) {
           const nivelNum = Number(props.nivel ?? props.levels ?? 0);
