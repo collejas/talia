@@ -933,15 +933,22 @@ export function PropertyMap() {
           const unitNivel = toFiniteNumber(props?.nivel);
           const unitCapaNombre = normalizeLooseString(props?.capa_nombre);
           const unitDesarrolloId = props?.desarrollo_id ?? props?.target_id ?? null;
+          const sameDesarrollo =
+            parentDesarrolloId && unitDesarrolloId
+              ? parentDesarrolloId === unitDesarrolloId
+              : Boolean(parentDesarrolloId ? unitDesarrolloId === parentDesarrolloId : true);
           return (
             (parentId && (props.nivel_id === parentId || props.capa_id === parentId)) ||
             props.parent_id === parentId ||
             props.target_parent_id === parentId ||
-            (parentNivel !== null && unitNivel !== null && unitNivel === parentNivel) ||
+            (sameDesarrollo &&
+              parentNivel !== null &&
+              unitNivel !== null &&
+              unitNivel === parentNivel) ||
             (parentNombre &&
               unitCapaNombre &&
               parentNombre === unitCapaNombre &&
-              (!parentDesarrolloId || !unitDesarrolloId || parentDesarrolloId === unitDesarrolloId))
+              sameDesarrollo)
           );
         }
         if (parentKind === "unidad") {
