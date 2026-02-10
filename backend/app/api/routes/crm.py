@@ -1990,6 +1990,21 @@ class CRMPropertySaleRequest(BaseModel):
         return value.upper()
 
 
+class CRMPropertySalesVendorRequest(BaseModel):
+    unidad_ids: list[UUID] = Field(default_factory=list)
+
+
+class CRMPropertySalesVendorEntry(BaseModel):
+    vendedor_id: UUID | None = None
+    vendedor_nombre: str | None = None
+    ventas: int = 0
+    monto: Decimal | None = None
+
+
+class CRMPropertySalesVendorResponse(BaseModel):
+    vendedores: list[CRMPropertySalesVendorEntry]
+
+
 class PropiedadCapaCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     desarrollo_id: UUID
@@ -13073,6 +13088,27 @@ async def list_propiedades_sale_logs(
     except Exception as exc:  # pragma: no cover - fallback
         raise HTTPException(status_code=502, detail="sale_logs_unavailable") from exc
     return CRMSaleLogsResponse(logs=logs)
+
+
+@router.post(
+    "/propiedades/ventas/vendedores",
+    response_model=CRMPropertySalesVendorResponse,
+)
+async def propiedades_ventas_vendedores(
+    *,
+    payload: CRMPropertySalesVendorRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> CRMPropertySalesVendorResponse:
+    try:
+        rows = await repo.list_propiedades_ventas_vendedores(
+            organizacion_id=organizacion_id,
+            unidad_ids=payload.unidad_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    vendedores = [CRMPropertySalesVendorEntry.model_validate(row) for row in rows]
+    return CRMPropertySalesVendorResponse(vendedores=vendedores)
 
 
 @router.post("/propiedades/importar")

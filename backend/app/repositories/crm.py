@@ -248,6 +248,24 @@ class CRMRepository:
             raise CRMRepositoryError("crm_propiedades_geojson_invalid_response")
         return result
 
+    async def list_propiedades_ventas_vendedores(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_ids: Sequence[UUID],
+    ) -> list[dict[str, Any]]:
+        payload: dict[str, Any] = {"p_organizacion": str(organizacion_id)}
+        if unidad_ids:
+            payload["p_unidades"] = [str(value) for value in unidad_ids]
+        else:
+            payload["p_unidades"] = []
+        result = await self._rpc("crm_propiedades_ventas_vendedores", payload)
+        if result is None:
+            return []
+        if not isinstance(result, list):
+            raise CRMRepositoryError("crm_propiedades_ventas_vendedores_invalid_response")
+        return result
+
     async def get_propiedad_hierarquia(self, *, organizacion_id: UUID) -> dict[str, Any]:
         payload = {"p_organizacion": str(organizacion_id)}
         result = await self._rpc("crm_propiedad_hierarquia", payload)

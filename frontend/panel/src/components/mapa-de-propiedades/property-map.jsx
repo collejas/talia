@@ -422,6 +422,8 @@ export function PropertyMap() {
   const [saleError, setSaleError] = useState(null);
   const [saleSuccess, setSaleSuccess] = useState(null);
   const [saleLogs, setSaleLogs] = useState([]);
+  const [salesVendors, setSalesVendors] = useState([]);
+  const [salesVendorsLoading, setSalesVendorsLoading] = useState(false);
   const [isSaleModalOpen, setSaleModalOpen] = useState(false);
   const [saleModalPrice, setSaleModalPrice] = useState("");
   const [saleModalOpportunityId, setSaleModalOpportunityId] = useState(null);
@@ -1557,6 +1559,9 @@ export function PropertyMap() {
         : mapboxKind === "desarrollo"
         ? getUnitsForDesarrollo()
         : [];
+    const unitIds = units
+      .map((item) => getFeatureId(item))
+      .filter((value) => typeof value === "string" && value.length);
     const totalUnits = units.length;
     const statusCounts = countByStatus(units);
     const soldUnits = statusCounts.vendido;
@@ -1582,6 +1587,7 @@ export function PropertyMap() {
       apartadoValue,
       reservadoValue,
       remainingValue,
+      unitIds,
     };
   }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
   const mapboxStatusLabel =
@@ -1624,6 +1630,52 @@ export function PropertyMap() {
     if (!mapboxSalesSummary) return null;
     return formatMoney(mapboxSalesSummary.reservadoValue);
   }, [formatMoney, mapboxSalesSummary]);
+
+  const salesVendorKey = useMemo(() => {
+    const ids = mapboxSalesSummary?.unitIds ?? [];
+    return ids.length ? ids.join("|") : "";
+  }, [mapboxSalesSummary]);
+
+  useEffect(() => {
+    if (mapboxKind === "unidad") {
+      setSalesVendors([]);
+      setSalesVendorsLoading(false);
+      return;
+    }
+    if (!salesVendorKey) {
+      setSalesVendors([]);
+      setSalesVendorsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSalesVendorsLoading(true);
+    fetch("/api/crm/propiedades/ventas/vendedores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unidad_ids: mapboxSalesSummary?.unitIds ?? [] }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("ventas_vendedores_failed");
+        }
+        return response.json();
+      })
+      .then((payload) => {
+        const vendedores = Array.isArray(payload?.vendedores) ? payload.vendedores : [];
+        setSalesVendors(vendedores);
+      })
+      .catch(() => {
+        setSalesVendors([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSalesVendorsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [mapboxKind, mapboxSalesSummary, salesVendorKey]);
   const mapboxAreaLabel =
     mapboxProps?.area_m2 != null ? `${Number(mapboxProps.area_m2)} m²` : "Sin área registrada";
   const mapboxLevelsLabel =
@@ -3616,6 +3668,35 @@ export function PropertyMap() {
                                   : "0/0 · 0%"}
                               </span>
                             </div>
+                            {(salesVendorsLoading || salesVendors.length > 0) && (
+                              <div className="mt-3 border-t border-slate-800/60 pt-3">
+                                <div className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400">
+                                  Vendedores
+                                </div>
+                                {salesVendorsLoading ? (
+                                  <div className="mt-2 text-[0.7rem] text-slate-300">
+                                    Cargando vendedores...
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 space-y-2 text-[0.7rem] text-slate-200">
+                                    {salesVendors.map((vendor, index) => (
+                                      <div
+                                        key={vendor?.vendedor_id ?? `vendor-${index}`}
+                                        className="flex items-center justify-between gap-2"
+                                      >
+                                        <span className="truncate">
+                                          {vendor?.vendedor_nombre ?? "Sin vendedor"}
+                                        </span>
+                                        <span className="shrink-0 font-mono text-[0.65rem] text-slate-300">
+                                          {(vendor?.ventas ?? 0).toString()} ·{" "}
+                                          {formatMoney(Number(vendor?.monto ?? 0))}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </>
                         )}
                         {mapboxKind === "unidad" && mapboxProps?.descripcion && (
