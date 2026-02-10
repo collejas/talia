@@ -224,19 +224,6 @@ function normalizeTipoLabel(value) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
-function toFiniteNumber(value) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed.length) return null;
-    const numeric = Number(trimmed);
-    return Number.isFinite(numeric) ? numeric : null;
-  }
-  return null;
-}
-
 function normalizeLooseString(value) {
   if (value === null || value === undefined) return null;
   const str = String(value).trim();
@@ -907,7 +894,6 @@ export function PropertyMap() {
       const parentId = getFeatureId(node);
       const parentProps = node?.properties ?? {};
       const parentNombre = normalizeLooseString(parentProps?.nombre);
-      const parentNivel = toFiniteNumber(parentProps?.nivel);
       const parentDesarrolloId = parentProps?.desarrollo_id ?? parentProps?.target_id ?? null;
       const parentDesarrolloKey = normalizeLooseString(
         parentProps?.desarrollo_nombre ??
@@ -936,7 +922,6 @@ export function PropertyMap() {
           );
         }
         if (parentKind === "capa") {
-          const unitNivel = toFiniteNumber(props?.nivel);
           const unitCapaNombre = normalizeLooseString(props?.capa_nombre);
           const unitDesarrolloId = props?.desarrollo_id ?? props?.target_id ?? null;
           const unitDesarrolloKey = normalizeLooseString(
@@ -1430,39 +1415,11 @@ export function PropertyMap() {
   const unidadId = mapboxProps?.id ?? mapboxProps?.unidad_id ?? mapboxProps?.unidad ?? null;
   const propiedadId =
     mapboxProps?.desarrollo_id ?? mapboxProps?.propiedad_id ?? mapboxProps?.target_id ?? null;
-  const mapboxPanelLabel = useMemo(() => {
-    void mapboxPanelVersion;
-    const panel = mapboxPanelRef.current ?? {};
-    const isolatedId = selectedMapboxUnitIdRef.current;
-    if (isolatedId) {
-      return null;
-    }
-    const kindCounts = panel.kindCounts ?? {};
-    const parts = Object.entries(kindCounts)
-      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-      .map(([kind, count]) => `${count} ${kind}`);
-    if (parts.length) {
-      return `Mostrando: ${parts.join(" · ")}`;
-    }
-    const total = panel.visibleTotal ?? 0;
-    return total ? `Mostrando: ${total} elementos` : "Mostrando: 0 elementos";
-  }, [mapboxPanelVersion, mapboxProps]);
   const mapboxUnitsSummaryLabel = useMemo(() => {
     void mapboxPanelVersion;
     const list = featuresRef.current ?? [];
-    const countStatus = (items) => {
-      const counts = { disponible: 0, apartado: 0, vendido: 0, reservado: 0 };
-      for (const item of items) {
-        const status = (item?.properties?.status ?? "").toString().trim().toLowerCase();
-        if (status && counts[status] != null) {
-          counts[status] += 1;
-        }
-      }
-      return counts;
-    };
     let unitTotal = 0;
     let capaTotal = 0;
-    let disponibles = 0;
 
     if (mapboxKind === "unidad") {
       return null;
@@ -1514,7 +1471,6 @@ export function PropertyMap() {
       });
       unitTotal = unidades.length;
       capaTotal = capas.length;
-      disponibles = countStatus(unidades).disponible;
       return `Capas: ${capaTotal} · Unidades: ${unitTotal}`;
     }
     if (mapboxKind === "capa") {
@@ -1522,7 +1478,6 @@ export function PropertyMap() {
         (child) => inferFeatureKind(child) === "unidad",
       );
       unitTotal = children.length;
-      disponibles = countStatus(children).disponible;
       return `Unidades: ${unitTotal}`;
     }
     return null;
@@ -1564,20 +1519,6 @@ export function PropertyMap() {
         }
       }
       return counts;
-    };
-    const sumPrices = (items, onlySold) => {
-      let total = 0;
-      for (const item of items) {
-        const props = item?.properties ?? {};
-        const price = Number(props.precio ?? 0);
-        if (!Number.isFinite(price) || price <= 0) continue;
-        if (onlySold) {
-          const status = (props.status ?? "").toString().trim().toLowerCase();
-          if (status !== "vendido") continue;
-        }
-        total += price;
-      }
-      return total;
     };
     const getUnitsForDesarrollo = () => {
       const rawFeatureId = getFeatureId(mapboxPanelFeature);
