@@ -3504,9 +3504,9 @@ export function PropertyMap() {
                 : "pointer-events-none opacity-0"
             }`}
           >
-            <div className="absolute inset-y-4 right-2 z-50 flex w-full max-w-[310px] flex-col rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl max-h-[calc(100vh-120px)]">
+            <div className="absolute inset-y-4 right-2 z-50 flex w-full max-w-[315px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl max-h-[calc(100vh-120px)]">
               <div className="pointer-events-auto">
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
+                <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-xl border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
                   <div>
                     {!mapboxToken && (
                       <p className="text-[0.65rem] text-rose-400">
