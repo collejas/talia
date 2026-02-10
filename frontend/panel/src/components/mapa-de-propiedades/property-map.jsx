@@ -1410,6 +1410,7 @@ export function PropertyMap() {
     : "Selecciona un polígono";
 
   const mapboxPanelFeature = mapboxFeature ?? activeNode ?? null;
+  const mapboxKind = mapboxPanelFeature ? inferFeatureKind(mapboxPanelFeature) : null;
   const mapboxProps = mapboxPanelFeature?.properties ?? null;
   const mapboxMetadata = mapboxProps?.metadata ?? {};
   const catalogItemId =
@@ -1459,6 +1460,10 @@ export function PropertyMap() {
     (mapboxProps?.levels ?? mapboxProps?.altura ?? mapboxProps?.height) != null
       ? `${Number(mapboxProps?.levels ?? mapboxProps?.altura ?? mapboxProps?.height)} niveles`
       : "Niveles no definidos";
+  const mapboxUnitLabel = mapboxProps?.unidad ?? mapboxProps?.nombre ?? null;
+  const mapboxProductoLabel = mapboxProps?.nombre ?? mapboxUnitLabel ?? null;
+  const mapboxModeloLabel = mapboxProps?.modelo_nombre ?? mapboxProductoLabel ?? null;
+  const mapboxTipoLabel = mapboxProps?.tipo ?? null;
   const mapboxCatalogLabel = [
     mapboxProps?.linea_nombre ? `Línea ${mapboxProps.linea_nombre}` : null,
     mapboxProps?.familia_nombre ? `Familia ${mapboxProps.familia_nombre}` : null,
@@ -3322,6 +3327,28 @@ export function PropertyMap() {
                         <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
                       )}
                       <div className="mt-4 space-y-2 text-slate-200">
+                        {mapboxKind === "unidad" && (
+                          <>
+                            {mapboxTipoLabel && (
+                              <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                                <span>Tipo:</span>
+                                <span className="font-semibold">{mapboxTipoLabel}</span>
+                              </div>
+                            )}
+                            {mapboxProductoLabel && (
+                              <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                                <span>Producto:</span>
+                                <span className="font-semibold">{mapboxProductoLabel}</span>
+                              </div>
+                            )}
+                            {mapboxModeloLabel && (
+                              <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                                <span>Modelo:</span>
+                                <span className="font-semibold">{mapboxModeloLabel}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
                         <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                           <span>Status:</span>
                           <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
