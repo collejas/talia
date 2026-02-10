@@ -3175,7 +3175,7 @@ export function PropertyMap() {
                 {activeDevelopmentSummary
                   ? `Desarrollo seleccionado: ${activeDevelopmentSummary}`
                   : "Unidad seleccionada"}
-                {activeLocationSummary && (
+                    {activeLocationSummary && (
                   <div className="mt-0.5 text-[0.65rem] text-slate-500 dark:text-slate-400">
                     <span className="font-semibold">Ubicación:</span>{" "}
                     {activeLocationSummary}
@@ -3499,18 +3499,18 @@ export function PropertyMap() {
                           }}
                         />
                       </div>
+                      {mapboxLocationLabel && (
+                        <p className="mt-1 text-[0.65rem] text-slate-400">
+                          <span className="font-semibold">Ubicación:</span>{" "}
+                          {mapboxLocationLabel}
+                        </p>
+                      )}
                       {mapboxCatalogLabel && (
                         <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
                       )}
                       {(mapboxUnitsSummaryLabel || mapboxPanelLabel) && (
                         <p className="mt-2 text-[0.7rem] uppercase tracking-[0.2em] text-slate-400">
                           {mapboxUnitsSummaryLabel ?? mapboxPanelLabel}
-                        </p>
-                      )}
-                      {mapboxLocationLabel && (
-                        <p className="mt-1 text-[0.65rem] text-slate-400">
-                          <span className="font-semibold">Ubicación:</span>{" "}
-                          {mapboxLocationLabel}
                         </p>
                       )}
                       <div className="mt-4 space-y-2 text-slate-200">
