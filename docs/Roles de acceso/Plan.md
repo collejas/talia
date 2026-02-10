@@ -73,16 +73,17 @@ Decision
 - Usar relacion explicita entre empleados para soportar jerarquia por arbol.
 
 Cambios DB
-- Crear tabla public.empleados_supervisores:
+- [check] Crear tabla public.empleados_supervisores:
   - empleado_id uuid
   - supervisor_id uuid
   - organizacion_id uuid
   - constraints y FK a public.empleados y public.usuarios
-- Crear funcion recursiva public.equipo_usuario_ids(uid uuid) que devuelva todos los subordinados directos e indirectos.
-- Crear helper public.current_user_team_ids() que use auth.uid().
+- [check] Crear funcion recursiva public.equipo_usuario_ids(uid uuid) que devuelva todos los subordinados directos e indirectos.
+- [check] Crear helper public.current_user_team_ids() que use auth.uid().
+- [check] Crear helper public.current_user_scope_ids() (self + equipo).
 
 Entregables
-- Migracion con DDL y funciones.
+- [check] Migracion con DDL y funciones.
 - Pruebas SQL basicas para validar arbol.
 
 Fase 3: Permisos y helpers
@@ -116,7 +117,7 @@ Reglas base
 - supervisor ve registros del equipo completo (arbol).
 
 Entregables
-- Migracion con nuevas policies o actualizacion de policies existentes.
+- [check] Migracion con nuevas policies o actualizacion de policies existentes (contactos/conversaciones via funciones, oportunidades, clientes, empleados, usuarios).
 - Lista de policies aplicadas por tabla.
 
 Fase 5: Backend
@@ -144,7 +145,7 @@ Cambios
 - Hook usePermissions() que consuma mi_contexto_permisos.
 - Guardias por ruta en layouts de settings y secciones sensibles.
 - Filtrado de menu segun permisos (ver_panel, ver_inbox, etc).
-- Vista administrativa para asignar permisos a roles (checkboxes por permiso/rol).
+- [check] Vista administrativa para asignar permisos a roles (checkboxes por permiso/rol).
 
 Archivos candidatos
 - frontend/panel/src/lib/api/crm.ts
