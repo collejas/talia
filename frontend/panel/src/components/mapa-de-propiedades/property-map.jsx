@@ -1515,7 +1515,7 @@ export function PropertyMap() {
       unitTotal = unidades.length;
       capaTotal = capas.length;
       disponibles = countStatus(unidades).disponible;
-      return `Capas: ${capaTotal} · Unidades: ${unitTotal} · Disponibles: ${disponibles}`;
+      return `Capas: ${capaTotal} · Unidades: ${unitTotal}`;
     }
     if (mapboxKind === "capa") {
       const children = getChildrenForNode(mapboxPanelFeature ?? null).filter(
@@ -1523,7 +1523,7 @@ export function PropertyMap() {
       );
       unitTotal = children.length;
       disponibles = countStatus(children).disponible;
-      return `Unidades: ${unitTotal} · Disponibles: ${disponibles}`;
+      return `Unidades: ${unitTotal}`;
     }
     return null;
   }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
@@ -1665,9 +1665,7 @@ export function PropertyMap() {
   }, []);
   const mapboxTotalValueLabel = useMemo(() => {
     if (!mapboxSalesSummary) return null;
-    if (!mapboxSalesSummary.totalValue) return "Sin precio";
-    const formatted = formatMoney(mapboxSalesSummary.totalValue);
-    return formatted === "Sin precio" ? formatted : `-${formatted}`;
+    return formatMoney(mapboxSalesSummary.totalValue);
   }, [formatMoney, mapboxSalesSummary]);
   const mapboxSoldValueLabel = useMemo(() => {
     if (!mapboxSalesSummary) return null;
@@ -3561,9 +3559,9 @@ export function PropertyMap() {
                       {mapboxCatalogLabel && (
                         <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
                       )}
-                      {(mapboxUnitsSummaryLabel || mapboxPanelLabel) && (
+                      {mapboxUnitsSummaryLabel && (
                         <p className="mt-2 text-[0.7rem] uppercase tracking-[0.2em] text-slate-400">
-                          {mapboxUnitsSummaryLabel ?? mapboxPanelLabel}
+                          {mapboxUnitsSummaryLabel}
                         </p>
                       )}
                       <div className="mt-4 space-y-2 text-slate-200">
@@ -3607,24 +3605,8 @@ export function PropertyMap() {
                         ) : (
                           <>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                              <span>Vendidas:</span>
-                              <span className="font-semibold">
-                                {mapboxSalesSummary
-                                  ? `${mapboxSalesSummary.soldUnits}/${mapboxSalesSummary.totalUnits} · ${mapboxSalesSummary.percentSold}%`
-                                  : "0/0 · 0%"}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                              <span>Disponibles:</span>
-                              <span className="font-semibold">
-                                {mapboxSalesSummary
-                                  ? `${mapboxSalesSummary.availableUnits}/${mapboxSalesSummary.totalUnits} · ${mapboxSalesSummary.percentAvailable}%`
-                                  : "0/0 · 0%"}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Valor total:</span>
-                              <span className="font-semibold text-red-400">
+                              <span className="font-semibold">
                                 {mapboxTotalValueLabel ?? "Sin precio"}
                                 {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
                                   ? " · 100%"
@@ -3633,8 +3615,10 @@ export function PropertyMap() {
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Por vender:</span>
-                              <span className="font-semibold">
-                                {mapboxRemainingValueLabel ?? "Sin precio"}
+                              <span className="font-semibold text-red-400">
+                                {mapboxRemainingValueLabel && mapboxRemainingValueLabel !== "Sin precio"
+                                  ? `-${mapboxRemainingValueLabel}`
+                                  : mapboxRemainingValueLabel ?? "Sin precio"}
                                 {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
                                   ? ` · ${Math.round(
                                       (mapboxSalesSummary.remainingValue / mapboxSalesSummary.totalValue) * 100,
@@ -3673,6 +3657,22 @@ export function PropertyMap() {
                                       (mapboxSalesSummary.reservadoValue / mapboxSalesSummary.totalValue) * 100,
                                     )}%`
                                   : " · 0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Vendidas:</span>
+                              <span className="font-semibold">
+                                {mapboxSalesSummary
+                                  ? `${mapboxSalesSummary.soldUnits}/${mapboxSalesSummary.totalUnits} · ${mapboxSalesSummary.percentSold}%`
+                                  : "0/0 · 0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Disponibles:</span>
+                              <span className="font-semibold">
+                                {mapboxSalesSummary
+                                  ? `${mapboxSalesSummary.availableUnits}/${mapboxSalesSummary.totalUnits} · ${mapboxSalesSummary.percentAvailable}%`
+                                  : "0/0 · 0%"}
                               </span>
                             </div>
                           </>
