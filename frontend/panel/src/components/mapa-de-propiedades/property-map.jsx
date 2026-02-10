@@ -909,6 +909,12 @@ export function PropertyMap() {
       const parentNombre = normalizeLooseString(parentProps?.nombre);
       const parentNivel = toFiniteNumber(parentProps?.nivel);
       const parentDesarrolloId = parentProps?.desarrollo_id ?? parentProps?.target_id ?? null;
+      const parentDesarrolloKey = normalizeLooseString(
+        parentProps?.desarrollo_nombre ??
+          parentProps?.desarrollo ??
+          parentProps?.fraccionamiento ??
+          parentProps?.fraccionamiento_nombre,
+      );
       const parentKind = inferFeatureKind(node);
       const list = featuresRef.current ?? [];
       return list.filter((child) => {
@@ -933,22 +939,24 @@ export function PropertyMap() {
           const unitNivel = toFiniteNumber(props?.nivel);
           const unitCapaNombre = normalizeLooseString(props?.capa_nombre);
           const unitDesarrolloId = props?.desarrollo_id ?? props?.target_id ?? null;
+          const unitDesarrolloKey = normalizeLooseString(
+            props?.desarrollo_nombre ??
+              props?.desarrollo ??
+              props?.fraccionamiento ??
+              props?.fraccionamiento_nombre,
+          );
           const sameDesarrollo =
-            parentDesarrolloId && unitDesarrolloId
-              ? parentDesarrolloId === unitDesarrolloId
-              : Boolean(parentDesarrolloId ? unitDesarrolloId === parentDesarrolloId : true);
+            parentDesarrolloId
+              ? Boolean(unitDesarrolloId && unitDesarrolloId === parentDesarrolloId)
+              : parentDesarrolloKey
+              ? Boolean(unitDesarrolloKey && unitDesarrolloKey === parentDesarrolloKey)
+              : false;
           return (
-            (parentId && (props.nivel_id === parentId || props.capa_id === parentId)) ||
-            props.parent_id === parentId ||
-            props.target_parent_id === parentId ||
             (sameDesarrollo &&
-              parentNivel !== null &&
-              unitNivel !== null &&
-              unitNivel === parentNivel) ||
-            (parentNombre &&
-              unitCapaNombre &&
-              parentNombre === unitCapaNombre &&
-              sameDesarrollo)
+              ((parentId && (props.nivel_id === parentId || props.capa_id === parentId)) ||
+                props.parent_id === parentId ||
+                props.target_parent_id === parentId ||
+                (parentNombre && unitCapaNombre && parentNombre === unitCapaNombre)))
           );
         }
         if (parentKind === "unidad") {
