@@ -1553,9 +1553,15 @@ export function PropertyMap() {
     .join(" · ");
   const mapboxLocationLabel = mapboxProps
     ? [
-        mapboxProps.pais_codigo ? `País ${mapboxProps.pais_codigo}` : null,
-        mapboxProps.estado_cve ? `Estado ${mapboxProps.estado_cve}` : null,
-        mapboxProps.municipio_cve ? `Municipio ${mapboxProps.municipio_cve}` : null,
+        mapboxProps.pais_nombre || mapboxProps.pais_codigo
+          ? `País ${mapboxProps.pais_nombre ?? mapboxProps.pais_codigo}`
+          : null,
+        mapboxProps.estado_nombre || mapboxProps.estado_cve
+          ? `Estado ${mapboxProps.estado_nombre ?? mapboxProps.estado_cve}`
+          : null,
+        mapboxProps.municipio_nombre || mapboxProps.municipio_cve
+          ? `Municipio ${mapboxProps.municipio_nombre ?? mapboxProps.municipio_cve}`
+          : null,
         mapboxProps.colonia ? mapboxProps.colonia : null,
       ]
         .filter(Boolean)
@@ -1732,13 +1738,19 @@ export function PropertyMap() {
   })();
   const activeLocationSummary = activeFeatureProps
     ? [
-        typeof activeFeatureProps.pais_codigo === "string"
+        typeof activeFeatureProps.pais_nombre === "string"
+          ? `País ${activeFeatureProps.pais_nombre}`
+          : typeof activeFeatureProps.pais_codigo === "string"
           ? `País ${activeFeatureProps.pais_codigo}`
           : null,
-        typeof activeFeatureProps.estado_cve === "string"
+        typeof activeFeatureProps.estado_nombre === "string"
+          ? `Estado ${activeFeatureProps.estado_nombre}`
+          : typeof activeFeatureProps.estado_cve === "string"
           ? `Estado ${activeFeatureProps.estado_cve}`
           : null,
-        typeof activeFeatureProps.municipio_cve === "string"
+        typeof activeFeatureProps.municipio_nombre === "string"
+          ? `Municipio ${activeFeatureProps.municipio_nombre}`
+          : typeof activeFeatureProps.municipio_cve === "string"
           ? `Municipio ${activeFeatureProps.municipio_cve}`
           : null,
         typeof activeFeatureProps.colonia === "string" ? activeFeatureProps.colonia : null,

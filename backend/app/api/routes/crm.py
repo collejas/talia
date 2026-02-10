@@ -48,6 +48,7 @@ from app.channels.whatsapp import service as whatsapp_service
 from app.channels.whatsapp.routing import resolve_whatsapp_organizacion
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.data.geo.locations import get_municipality_name, get_state_name
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services import (
     DenueClient,
@@ -12162,10 +12163,80 @@ async def propiedades_geojson(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    _enrich_geojson_location_names(payload)
+
     try:
         return GeoJSONFeatureCollection(**payload)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=f"geojson_invalid:{exc}") from exc
+
+
+def _normalize_state_code(value: Any) -> str | None:
+    if value is None:
+        return None
+    code = str(value).strip()
+    if not code:
+        return None
+    if len(code) < 2:
+        code = code.zfill(2)
+    return code
+
+
+def _normalize_municipio_code(value: Any) -> str | None:
+    if value is None:
+        return None
+    code = str(value).strip()
+    if not code:
+        return None
+    if len(code) < 3:
+        code = code.zfill(3)
+    return code
+
+
+def _split_cvegeo(value: Any) -> tuple[str | None, str | None]:
+    if value is None:
+        return None, None
+    raw = str(value).strip()
+    if len(raw) < 5:
+        return None, None
+    return raw[:2], raw[-3:]
+
+
+def _enrich_geojson_location_names(payload: dict[str, Any]) -> None:
+    features = payload.get("features")
+    if not isinstance(features, list):
+        return
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        props = feature.get("properties")
+        if not isinstance(props, dict):
+            continue
+        pais_codigo = props.get("pais_codigo")
+        if pais_codigo and not props.get("pais_nombre"):
+            if str(pais_codigo).strip().upper() == "MX":
+                props["pais_nombre"] = "México"
+
+        estado_code = _normalize_state_code(
+            props.get("estado_cve") or props.get("cve_ent") or props.get("cve_entidad")
+        )
+        municipio_code = _normalize_municipio_code(
+            props.get("municipio_cve") or props.get("cve_mun")
+        )
+        if not estado_code or not municipio_code:
+            cvegeo_state, cvegeo_muni = _split_cvegeo(props.get("cvegeo"))
+            estado_code = estado_code or cvegeo_state
+            municipio_code = municipio_code or cvegeo_muni
+
+        if estado_code and not props.get("estado_nombre"):
+            estado_nombre = get_state_name(estado_code)
+            if estado_nombre:
+                props["estado_nombre"] = estado_nombre
+
+        if estado_code and municipio_code and not props.get("municipio_nombre"):
+            municipio_nombre = get_municipality_name(estado_code, municipio_code)
+            if municipio_nombre:
+                props["municipio_nombre"] = municipio_nombre
 
 
 @router.get("/propiedades/tipos")
