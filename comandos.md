@@ -91,8 +91,6 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
-› Perfecto!!! ahora dime, cuando immportas el archivo CSV de propiedades, tengo entenedido que esas propiedades se guardan en la base de datos y se crea un archvo vectorial (embeddings) para que el asistente de whatsapp, pueda dar informacion de las propiedades, asi esta mi prompt y funciones que viven en openai: docs/openai/demos/bienes_raices/las aguilas/funciones/funciones_las_aguilas.md y docs/openai/demos/bienes_raices/las aguilas/Prompt/prompr_whatsapp_las_aguilas.md  cual es la tabla vectorial  en donde se guaradan esos datos vectoriales para la consulta del asistente de whastapp?
-
 codex resume 019c4454-833a-7c71-954d-ea813e5e21c1
 codex resume 019c43d8-9511-74a3-ab0d-b70e640a9089
 codex resume 019c4029-a7aa-7343-b397-00864b465103

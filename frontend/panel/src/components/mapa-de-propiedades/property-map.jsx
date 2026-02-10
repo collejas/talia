@@ -1444,6 +1444,53 @@ export function PropertyMap() {
     const total = panel.visibleTotal ?? 0;
     return total ? `Mostrando: ${total} elementos` : "Mostrando: 0 elementos";
   }, [mapboxPanelVersion, mapboxProps]);
+  const mapboxUnitsSummaryLabel = useMemo(() => {
+    void mapboxPanelVersion;
+    const list = featuresRef.current ?? [];
+    const countStatus = (items) => {
+      const counts = { disponible: 0, apartado: 0, vendido: 0, reservado: 0 };
+      for (const item of items) {
+        const status = (item?.properties?.status ?? "").toString().trim().toLowerCase();
+        if (status && counts[status] != null) {
+          counts[status] += 1;
+        }
+      }
+      return counts;
+    };
+    let unitTotal = 0;
+    let capaTotal = 0;
+    let disponibles = 0;
+
+    if (mapboxKind === "unidad") {
+      return "Unidad seleccionada";
+    }
+    if (mapboxKind === "desarrollo") {
+      const desarrolloId = mapboxProps?.id ?? mapboxProps?.desarrollo_id ?? mapboxProps?.target_id ?? null;
+      const unidades = list.filter((f) => {
+        if (inferFeatureKind(f) !== "unidad") return false;
+        const props = f?.properties ?? {};
+        return props.desarrollo_id === desarrolloId;
+      });
+      const capas = list.filter((f) => {
+        if (inferFeatureKind(f) !== "capa") return false;
+        const props = f?.properties ?? {};
+        return props.desarrollo_id === desarrolloId;
+      });
+      unitTotal = unidades.length;
+      capaTotal = capas.length;
+      disponibles = countStatus(unidades).disponible;
+      return `Capas: ${capaTotal} · Unidades: ${unitTotal} · Disponibles: ${disponibles}`;
+    }
+    if (mapboxKind === "capa") {
+      const children = getChildrenForNode(mapboxPanelFeature ?? null).filter(
+        (child) => inferFeatureKind(child) === "unidad",
+      );
+      unitTotal = children.length;
+      disponibles = countStatus(children).disponible;
+      return `Unidades: ${unitTotal} · Disponibles: ${disponibles}`;
+    }
+    return null;
+  }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
   const mapboxStatusLabel =
     typeof mapboxProps?.status === "string" ? mapboxProps.status.toUpperCase() : null;
   const mapboxPriceLabel =
@@ -3271,9 +3318,9 @@ export function PropertyMap() {
                 : "pointer-events-none opacity-0"
             }`}
           >
-            <div className="absolute inset-y-4 right-4 z-50 w-full max-w-sm rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl">
+            <div className="absolute inset-y-4 right-4 z-50 flex w-full max-w-sm flex-col rounded-xl border border-slate-800 bg-gradient-to-b from-slate-950/80 via-slate-950/60 to-slate-950/40 p-0 shadow-xl max-h-[calc(100vh-120px)]">
               <div className="pointer-events-auto">
-                <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4 py-3 backdrop-blur">
                   <div>
                     {!mapboxToken && (
                       <p className="text-[0.65rem] text-rose-400">
@@ -3303,9 +3350,6 @@ export function PropertyMap() {
                 <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
                   {mapboxPanelFeature ? (
                     <>
-                      <p className="text-[0.65rem] uppercase tracking-[0.25em] text-slate-400">
-                        {mapboxPanelLabel}
-                      </p>
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-lg font-semibold text-white">
                           {mapboxProps?.desarrollo_nombre ?? mapboxProps?.nombre ?? "Propiedad"}
@@ -3322,6 +3366,11 @@ export function PropertyMap() {
                       </div>
                       {mapboxCatalogLabel && (
                         <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxCatalogLabel}</p>
+                      )}
+                      {(mapboxUnitsSummaryLabel || mapboxPanelLabel) && (
+                        <p className="mt-2 text-[0.7rem] uppercase tracking-[0.2em] text-slate-400">
+                          {mapboxUnitsSummaryLabel ?? mapboxPanelLabel}
+                        </p>
                       )}
                       {mapboxLocationLabel && (
                         <p className="mt-1 text-[0.65rem] text-slate-400">{mapboxLocationLabel}</p>
