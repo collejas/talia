@@ -1519,6 +1519,81 @@ export function PropertyMap() {
     }
     return null;
   }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
+  const mapboxSalesSummary = useMemo(() => {
+    void mapboxPanelVersion;
+    const list = featuresRef.current ?? [];
+    const normalizeName = (value) => {
+      if (value == null) return null;
+      const normalized = String(value).trim().toLowerCase();
+      return normalized.length ? normalized : null;
+    };
+    const sumPrices = (items, onlySold) => {
+      let total = 0;
+      for (const item of items) {
+        const props = item?.properties ?? {};
+        const price = Number(props.precio ?? 0);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        if (onlySold) {
+          const status = (props.status ?? "").toString().trim().toLowerCase();
+          if (status !== "vendido") continue;
+        }
+        total += price;
+      }
+      return total;
+    };
+    const getUnitsForDesarrollo = () => {
+      const rawFeatureId = getFeatureId(mapboxPanelFeature);
+      const poligonoId = mapboxProps?.poligono_id ?? null;
+      const preferredId =
+        mapboxProps?.desarrollo_id ??
+        mapboxProps?.target_id ??
+        mapboxProps?.id ??
+        null;
+      const desarrolloId =
+        preferredId ??
+        (rawFeatureId && rawFeatureId !== poligonoId ? rawFeatureId : null);
+      const desarrolloNombre =
+        mapboxProps?.desarrollo_nombre ??
+        mapboxProps?.nombre ??
+        null;
+      const desarrolloKey = normalizeName(desarrolloNombre);
+      return list.filter((f) => {
+        if (inferFeatureKind(f) !== "unidad") return false;
+        const props = f?.properties ?? {};
+        if (desarrolloId) {
+          return props.desarrollo_id === desarrolloId;
+        }
+        if (!desarrolloKey) return false;
+        const candidate = normalizeName(
+          props.desarrollo_nombre ?? props.desarrollo ?? props.fraccionamiento ?? props.fraccionamiento_nombre,
+        );
+        return Boolean(candidate && candidate === desarrolloKey);
+      });
+    };
+    const units =
+      mapboxKind === "capa"
+        ? getChildrenForNode(mapboxPanelFeature ?? null).filter(
+            (child) => inferFeatureKind(child) === "unidad",
+          )
+        : mapboxKind === "desarrollo"
+        ? getUnitsForDesarrollo()
+        : [];
+    const totalUnits = units.length;
+    const soldUnits = units.filter(
+      (item) => (item?.properties?.status ?? "").toString().trim().toLowerCase() === "vendido",
+    ).length;
+    const percentSold =
+      totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0;
+    const totalValue = sumPrices(units, false);
+    const soldValue = sumPrices(units, true);
+    return {
+      totalUnits,
+      soldUnits,
+      percentSold,
+      totalValue,
+      soldValue,
+    };
+  }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
   const mapboxStatusLabel =
     typeof mapboxProps?.status === "string" ? mapboxProps.status.toUpperCase() : null;
   const mapboxPriceLabel =
@@ -1529,6 +1604,26 @@ export function PropertyMap() {
           maximumFractionDigits: 0,
         }).format(Number(mapboxProps.precio))
       : "Sin precio";
+  const formatMoney = useCallback((value) => {
+    if (!Number.isFinite(value) || value === 0) {
+      return "Sin precio";
+    }
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 0,
+    }).format(value);
+  }, []);
+  const mapboxTotalValueLabel = useMemo(() => {
+    if (!mapboxSalesSummary) return null;
+    if (!mapboxSalesSummary.totalValue) return "Sin precio";
+    const formatted = formatMoney(mapboxSalesSummary.totalValue);
+    return formatted === "Sin precio" ? formatted : `-${formatted}`;
+  }, [formatMoney, mapboxSalesSummary]);
+  const mapboxSoldValueLabel = useMemo(() => {
+    if (!mapboxSalesSummary) return null;
+    return formatMoney(mapboxSalesSummary.soldValue);
+  }, [formatMoney, mapboxSalesSummary]);
   const mapboxAreaLabel =
     mapboxProps?.area_m2 != null ? `${Number(mapboxProps.area_m2)} m²` : "Sin área registrada";
   const mapboxLevelsLabel =
@@ -3411,7 +3506,7 @@ export function PropertyMap() {
                         </p>
                       )}
                       <div className="mt-4 space-y-2 text-slate-200">
-                        {mapboxKind === "unidad" && (
+                        {mapboxKind === "unidad" ? (
                           <>
                             {mapboxTipoLabel && (
                               <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
@@ -3431,25 +3526,46 @@ export function PropertyMap() {
                                 <span className="font-semibold">{mapboxModeloLabel}</span>
                               </div>
                             )}
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Status:</span>
+                              <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Precio:</span>
+                              <span className="font-semibold">{mapboxPriceLabel}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Área:</span>
+                              <span className="font-semibold">{mapboxAreaLabel}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Niveles:</span>
+                              <span className="font-semibold">{mapboxLevelsLabel}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Vendidas:</span>
+                              <span className="font-semibold">
+                                {mapboxSalesSummary ? `${mapboxSalesSummary.percentSold}%` : "0%"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Valor total:</span>
+                              <span className="font-semibold">
+                                {mapboxTotalValueLabel ?? "Sin precio"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
+                              <span>Vendido:</span>
+                              <span className="font-semibold">
+                                {mapboxSoldValueLabel ?? "Sin precio"}
+                              </span>
+                            </div>
                           </>
                         )}
-                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                          <span>Status:</span>
-                          <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                          <span>Precio:</span>
-                          <span className="font-semibold">{mapboxPriceLabel}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                          <span>Área:</span>
-                          <span className="font-semibold">{mapboxAreaLabel}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                          <span>Niveles:</span>
-                          <span className="font-semibold">{mapboxLevelsLabel}</span>
-                        </div>
-                        {mapboxProps?.descripcion && (
+                        {mapboxKind === "unidad" && mapboxProps?.descripcion && (
                           <div>
                             <p className="text-xs text-slate-300">Descripción:</p>
                             <p className="text-[0.75rem] text-slate-200">{mapboxProps.descripcion}</p>
