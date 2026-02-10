@@ -2,10 +2,11 @@ import type { Metadata } from "next"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { RoleCreateSection, RoleInlineRow } from "@/components/settings/hr/role-inline-row"
+import { RolePermissionMatrix } from "@/components/settings/hr/role-permission-matrix"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { fetchRolesDirectory, type HrRolesDirectory } from "@/lib/settings/hr-directory"
+import { fetchRolePermissionMatrix, fetchRolesDirectory, type HrRolesDirectory } from "@/lib/settings/hr-directory"
 
 export const metadata: Metadata = {
   title: "Roles · Settings",
@@ -16,6 +17,7 @@ export const revalidate = 0
 
 export default async function RolesSettingsPage() {
   const rolesDirectory = await fetchRolesDirectory()
+  const matrix = await fetchRolePermissionMatrix()
 
   return (
     <AppViewLayout
@@ -36,6 +38,12 @@ export default async function RolesSettingsPage() {
           </p>
         </header>
         <RolesDirectoryCard data={rolesDirectory} />
+        <RolePermissionMatrix
+          roles={matrix.roles}
+          permisos={matrix.permisos}
+          assignments={matrix.assignments}
+          errors={matrix.errors}
+        />
       </div>
     </AppViewLayout>
   )

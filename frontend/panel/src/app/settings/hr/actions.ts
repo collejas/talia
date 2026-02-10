@@ -572,3 +572,74 @@ export const deletePermissionAction: CrudActionHandler = async (_, formData) => 
     return failure(error)
   }
 }
+
+export const updateRolePermissionsAction: CrudActionHandler = async (_, formData) => {
+  try {
+    const orgId = await requireOrgId()
+    const roleId = getText(formData, "role_id")
+    const selected = formData
+      .getAll("permiso_ids")
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+
+    const currentRes = await callSupabaseRest<{ permiso_id: string }[]>(
+      "/rest/v1/roles_permisos",
+      {
+        searchParams: {
+          select: "permiso_id",
+          rol_id: `eq.${roleId}`,
+          limit: "1000",
+        },
+        enforceOrganization: true,
+        forceServiceToken: true,
+      },
+    )
+    if (!currentRes.ok) {
+      throw new Error(currentRes.error || "No se pudo leer los permisos actuales del rol.")
+    }
+
+    const currentIds = new Set(
+      (Array.isArray(currentRes.data) ? currentRes.data : [])
+        .map((row) => row?.permiso_id)
+        .filter((value): value is string => Boolean(value)),
+    )
+    const selectedIds = new Set(selected)
+
+    const toAdd = Array.from(selectedIds).filter((id) => !currentIds.has(id))
+    const toRemove = Array.from(currentIds).filter((id) => !selectedIds.has(id))
+
+    if (toAdd.length) {
+      const body = toAdd.map((permisoId) => ({
+        rol_id: roleId,
+        permiso_id: permisoId,
+        organizacion_id: orgId,
+      }))
+      await callAndValidate("/rest/v1/roles_permisos", {
+        method: "POST",
+        body,
+        prefer: "return=representation",
+        forceServiceToken: true,
+      })
+    }
+
+    if (toRemove.length) {
+      const inClause = `in.(${toRemove.map((id) => `"${id}"`).join(",")})`
+      await callAndValidate("/rest/v1/roles_permisos", {
+        method: "DELETE",
+        searchParams: {
+          rol_id: `eq.${roleId}`,
+          permiso_id: inClause,
+        },
+        enforceOrganization: true,
+        forceServiceToken: true,
+      })
+    }
+
+    revalidatePath(PATHS.roles)
+    revalidatePath(PATHS.permisos)
+    return success("Permisos actualizados.")
+  } catch (error) {
+    return failure(error)
+  }
+}

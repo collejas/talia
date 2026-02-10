@@ -110,6 +110,13 @@ export type HrRolesDirectory = {
   errors: string[]
 }
 
+export type HrRolePermissionMatrix = {
+  roles: { id: string; codigo: string; nombre: string }[]
+  permisos: { id: string; codigo: string; descripcion: string }[]
+  assignments: Record<string, string[]>
+  errors: string[]
+}
+
 export type HrPermissionItem = {
   id: string
   codigo: string

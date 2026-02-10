@@ -12,6 +12,7 @@ import {
   HrPositionItem,
   HrPositionsDirectory,
   HrRoleItem,
+  HrRolePermissionMatrix,
   HrRolesDirectory,
   HrUserItem,
   HrUsersDirectory,
@@ -31,6 +32,7 @@ export type {
   HrPositionOption,
   HrPositionsDirectory,
   HrRoleItem,
+  HrRolePermissionMatrix,
   HrRolesDirectory,
   HrUserItem,
   HrUsersDirectory,
@@ -721,6 +723,76 @@ export async function fetchPermissionsDirectory(): Promise<HrPermissionsDirector
     items,
     total,
     stats: { sinRol },
+    errors,
+  }
+}
+
+export async function fetchRolePermissionMatrix(): Promise<HrRolePermissionMatrix> {
+  const errors: string[] = []
+
+  const [rolesRes, permisosRes, rolesPermisosRes] = await Promise.all([
+    callSupabaseRest<SupabaseRoleRow[]>("/rest/v1/roles", {
+      searchParams: {
+        select: "id,codigo,nombre",
+        order: "creado_en.asc",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<SupabasePermissionRow[]>("/rest/v1/permisos", {
+      searchParams: {
+        select: "id,codigo,descripcion",
+        order: "codigo.asc",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<SupabaseRolePermissionRow[]>("/rest/v1/roles_permisos", {
+      searchParams: {
+        select: "rol_id,permiso_id",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+  ])
+
+  const roles = rolesRes.ok && Array.isArray(rolesRes.data) ? rolesRes.data : []
+  if (!rolesRes.ok) {
+    errors.push(rolesRes.error)
+  }
+
+  const permisos = permisosRes.ok && Array.isArray(permisosRes.data) ? permisosRes.data : []
+  if (!permisosRes.ok) {
+    errors.push(permisosRes.error)
+  }
+
+  const assignments: Record<string, string[]> = {}
+  if (rolesPermisosRes.ok && Array.isArray(rolesPermisosRes.data)) {
+    rolesPermisosRes.data.forEach((entry) => {
+      if (!entry?.rol_id || !entry?.permiso_id) return
+      const list = assignments[entry.rol_id] ?? []
+      list.push(entry.permiso_id)
+      assignments[entry.rol_id] = list
+    })
+  } else if (!rolesPermisosRes.ok) {
+    errors.push(rolesPermisosRes.error)
+  }
+
+  return {
+    roles: roles.map((rol) => ({
+      id: rol.id,
+      codigo: sanitizeText(rol.codigo) || rol.id,
+      nombre: sanitizeText(rol.nombre) || sanitizeText(rol.codigo) || "Sin nombre",
+    })),
+    permisos: permisos.map((permiso) => ({
+      id: permiso.id,
+      codigo: sanitizeText(permiso.codigo) || permiso.id,
+      descripcion: sanitizeText(permiso.descripcion) || "—",
+    })),
+    assignments,
     errors,
   }
 }
