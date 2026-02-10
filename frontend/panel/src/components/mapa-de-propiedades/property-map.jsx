@@ -737,26 +737,10 @@ export function PropertyMap() {
         }
         // Conserva el id original para cuando Mapbox pierda feature.id en eventos de clic.
         props.__original_id = f.id ?? props.id ?? null;
-        // Normaliza numéricos. Si el backend pone el volumen en metadata, úsalo como respaldo.
-        const meta = props.metadata ?? props.poligono_metadata ?? {};
-        const toNum = (value) => {
-          const num = Number(value);
-          return Number.isFinite(num) ? num : 0;
-        };
-        const heightValue = toNum(props.height);
-        const metaHeight = toNum(meta?.height);
-        const levelsValue = toNum(props.levels);
-        const metaLevels = toNum(meta?.levels);
-        const alturaValue = toNum(props.altura);
-        const minHeightValue = toNum(props.min_height);
-        const metaMinHeight = toNum(meta?.min_height);
-        const baseValue = toNum(props.base);
-
-        props.height =
-          heightValue || metaHeight || levelsValue || metaLevels || alturaValue || 0;
-        props.min_height = minHeightValue || metaMinHeight || baseValue || 0;
-        props.levels =
-          levelsValue || metaLevels || toNum(props.nivel) || props.height || 0;
+        // Normaliza numéricos sin forzar a cero; deja que el dato decida la extrusión.
+        props.height = Number(props.height ?? props.levels ?? props.altura ?? 0);
+        props.min_height = Number(props.min_height ?? props.base ?? 0);
+        props.levels = Number(props.levels ?? props.nivel ?? props.height ?? 0);
         // Si es capa y no viene min_height, calcularlo según nivel*height para que se apilen.
         if (kind === "capa" && (!props.min_height || Number.isNaN(props.min_height))) {
           const nivelNum = Number(props.nivel ?? props.levels ?? 0);
