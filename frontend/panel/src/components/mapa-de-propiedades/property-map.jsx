@@ -1465,16 +1465,49 @@ export function PropertyMap() {
       return "Unidad seleccionada";
     }
     if (mapboxKind === "desarrollo") {
-      const desarrolloId = mapboxProps?.id ?? mapboxProps?.desarrollo_id ?? mapboxProps?.target_id ?? null;
+      const rawFeatureId = getFeatureId(mapboxPanelFeature);
+      const poligonoId = mapboxProps?.poligono_id ?? null;
+      const preferredId =
+        mapboxProps?.desarrollo_id ??
+        mapboxProps?.target_id ??
+        mapboxProps?.id ??
+        null;
+      const desarrolloId =
+        preferredId ??
+        (rawFeatureId && rawFeatureId !== poligonoId ? rawFeatureId : null);
+      const desarrolloNombre =
+        mapboxProps?.desarrollo_nombre ??
+        mapboxProps?.nombre ??
+        null;
+      const normalizeName = (value) => {
+        if (value == null) return null;
+        const normalized = String(value).trim().toLowerCase();
+        return normalized.length ? normalized : null;
+      };
+      const desarrolloKey = normalizeName(desarrolloNombre);
       const unidades = list.filter((f) => {
         if (inferFeatureKind(f) !== "unidad") return false;
         const props = f?.properties ?? {};
-        return props.desarrollo_id === desarrolloId;
+        if (desarrolloId) {
+          return props.desarrollo_id === desarrolloId;
+        }
+        if (!desarrolloKey) return false;
+        const candidate = normalizeName(
+          props.desarrollo_nombre ?? props.desarrollo ?? props.fraccionamiento ?? props.fraccionamiento_nombre,
+        );
+        return Boolean(candidate && candidate === desarrolloKey);
       });
       const capas = list.filter((f) => {
         if (inferFeatureKind(f) !== "capa") return false;
         const props = f?.properties ?? {};
-        return props.desarrollo_id === desarrolloId;
+        if (desarrolloId) {
+          return props.desarrollo_id === desarrolloId;
+        }
+        if (!desarrolloKey) return false;
+        const candidate = normalizeName(
+          props.desarrollo_nombre ?? props.desarrollo ?? props.fraccionamiento ?? props.fraccionamiento_nombre,
+        );
+        return Boolean(candidate && candidate === desarrolloKey);
       });
       unitTotal = unidades.length;
       capaTotal = capas.length;
