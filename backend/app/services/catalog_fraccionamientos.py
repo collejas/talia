@@ -225,6 +225,11 @@ async def list_catalog_modelos(
         include_inactive=include_inactive,
         limit=limit,
     )
+    modelos = await repo.list_modelos_productos(
+        organizacion_id=organizacion_id,
+        include_inactive=include_inactive,
+        limit=limit,
+    )
     location_resolver = LocationResolver(repo, str(organizacion_id))
     development_ids: list[str] = []
     for item in catalog_items:
@@ -282,6 +287,12 @@ async def list_catalog_modelos(
             "modelos": [],
         }
 
+    modelos_lookup = {
+        str(modelo.get("id")): _safe_text(modelo.get("nombre")) or ""
+        for modelo in modelos
+        if modelo.get("id")
+    }
+
     for item in catalog_items:
         familia_id_raw = item.get("familia_id")
         if not familia_id_raw:
@@ -298,9 +309,15 @@ async def list_catalog_modelos(
         tipo_id, tipo_nombre = _resolve_property_type(
             item.get("tipo"), property_types
         )
+        modelo_id = item.get("modelo_id")
+        modelo_name = None
+        if modelo_id:
+            modelo_name = modelos_lookup.get(str(modelo_id)) or None
         model_entry = {
             "id": str(item.get("id")),
             "nombre": item.get("nombre"),
+            "modelo": modelo_name or item.get("nombre"),
+            "modelo_id": str(modelo_id) if modelo_id else None,
             "slug": item.get("slug"),
             "unidad": item.get("unidad"),
             "precio_base": item.get("precio_base"),
