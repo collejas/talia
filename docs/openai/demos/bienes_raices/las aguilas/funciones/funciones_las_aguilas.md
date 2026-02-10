@@ -1,4 +1,4 @@
- d{
+{
   "name": "set_full_name",
   "description": "Guardar o actualizar el nombre completo del contacto asociado a esta conversación.",
   "strict": true,
@@ -423,11 +423,12 @@
         "minimum": 1,
         "maximum": 20
       }
-  },
-  "required": [
-    "organizacion_id"
-  ],
-  "additionalProperties": false
+    },
+    "required": [
+      "organizacion_id"
+    ],
+    "additionalProperties": false
+  }
 }
 
 ---
@@ -461,4 +462,4 @@
     "additionalProperties": false
   }
 }
-}
+

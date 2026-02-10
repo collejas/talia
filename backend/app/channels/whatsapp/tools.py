@@ -69,6 +69,27 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+async def _resolve_org_for_catalog(
+    context: ToolRuntimeContext,
+    arguments: dict[str, Any],
+) -> UUID:
+    """Resuelve organizacion_id de forma segura para tools de catálogo."""
+    contact = await _resolve_contact(context.contact_id)
+    if contact:
+        org_value = webchat_service._extract_contact_org(contact)
+        resolved = webchat_service._resolve_org_uuid(org_value)
+        if resolved:
+            return UUID(resolved)
+
+    org_value = arguments.get("organizacion_id")
+    if not org_value:
+        raise ValueError("organizacion_id requerido para catálogo")
+    resolved = webchat_service._resolve_org_uuid(str(org_value))
+    if not resolved:
+        raise ValueError("organizacion_id inválido")
+    return UUID(resolved)
+
+
 async def execute_tool(
     name: str | None, arguments: Any, context: ToolRuntimeContext
 ) -> dict[str, Any]:
@@ -136,16 +157,7 @@ async def execute_tool(
         return await _handle_cancel_demo(arguments, context)
 
     if func == "list_catalog_fraccionamientos":
-        org_value = arguments.get("organizacion_id")
-        if not org_value:
-            contact = await _resolve_contact(context.contact_id)
-            org_value = webchat_service._extract_contact_org(contact)
-        if not org_value:
-            raise ValueError("organizacion_id requerido para listar fraccionamientos")
-        resolved = webchat_service._resolve_org_uuid(org_value)
-        if not resolved:
-            raise ValueError("organizacion_id inválido")
-        org_uuid = UUID(resolved)
+        org_uuid = await _resolve_org_for_catalog(context, arguments)
 
         include_inactive_raw = arguments.get("include_inactive")
         if isinstance(include_inactive_raw, str):
@@ -201,16 +213,7 @@ async def execute_tool(
         return {"status": "ok", "fraccionamientos": rows}
 
     if func == "list_catalog_modelos":
-        org_value = arguments.get("organizacion_id")
-        if not org_value:
-            contact = await _resolve_contact(context.contact_id)
-            org_value = webchat_service._extract_contact_org(contact)
-        if not org_value:
-            raise ValueError("organizacion_id requerido para list_catalog_modelos")
-        resolved = webchat_service._resolve_org_uuid(org_value)
-        if not resolved:
-            raise ValueError("organizacion_id inválido")
-        org_uuid = UUID(resolved)
+        org_uuid = await _resolve_org_for_catalog(context, arguments)
         include_inactive_raw = arguments.get("include_inactive")
         if isinstance(include_inactive_raw, str):
             include_inactive = include_inactive_raw.strip().lower() in {
@@ -259,16 +262,7 @@ async def execute_tool(
         return {"status": "ok", **result}
 
     if func == "fetch_catalog_item_details":
-        org_value = arguments.get("organizacion_id")
-        if not org_value:
-            contact = await _resolve_contact(context.contact_id)
-            org_value = webchat_service._extract_contact_org(contact)
-        if not org_value:
-            raise ValueError("organizacion_id requerido para fetch_catalog_item_details")
-        resolved = webchat_service._resolve_org_uuid(org_value)
-        if not resolved:
-            raise ValueError("organizacion_id inválido")
-        org_uuid = UUID(resolved)
+        org_uuid = await _resolve_org_for_catalog(context, arguments)
 
         query = str(arguments.get("query") or "").strip()
         if not query:
