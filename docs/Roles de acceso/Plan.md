@@ -198,6 +198,8 @@ Entregables
 - Checklist de pruebas.
 - Datos de prueba de jerarquia.
 - [check] Correccion de asignacion: oportunidad sigue propietario del contacto cuando existe.
+- [check] Sincronizacion automatica de matriz rol-permisos (hash + script + arranque).
+- [check] Boton de sincronizacion de matriz en UI (roles).
 
 Checklist de pruebas (minimo)
 - Vendedor solo ve: contactos propios, conversaciones propias, oportunidades asignadas, agenda propia.

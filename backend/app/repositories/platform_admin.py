@@ -63,6 +63,50 @@ class PlatformRepository:
             raise PlatformRepositoryError("organizaciones_invalid_response")
         return data
 
+    async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,nombre,codigo,descripcion",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        data = await self._rest("GET", "/rest/v1/roles", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("roles_invalid_response")
+        return data
+
+    async def list_permissions(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,codigo,descripcion",
+            "organizacion_id": f"eq.{organizacion_id}",
+        }
+        data = await self._rest("GET", "/rest/v1/permisos", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("permisos_invalid_response")
+        return data
+
+    async def list_role_permissions(self, *, organizacion_id: UUID, rol_id: UUID) -> list[dict[str, Any]]:
+        params = {
+            "select": "rol_id,permiso_id",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "rol_id": f"eq.{rol_id}",
+        }
+        data = await self._rest("GET", "/rest/v1/roles_permisos", params=params)
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("roles_permisos_invalid_response")
+        return data
+
+    async def delete_role_permission(
+        self, *, organizacion_id: UUID, rol_id: UUID, permiso_id: UUID
+    ) -> None:
+        await self._rest(
+            "DELETE",
+            "/rest/v1/roles_permisos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "rol_id": f"eq.{rol_id}",
+                "permiso_id": f"eq.{permiso_id}",
+            },
+        )
+
     async def create_organizacion(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest(
             "POST",

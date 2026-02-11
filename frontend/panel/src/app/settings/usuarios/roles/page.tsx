@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { RoleCreateSection, RoleInlineRow } from "@/components/settings/hr/role-inline-row"
 import { RolePermissionMatrix } from "@/components/settings/hr/role-permission-matrix"
+import { RolePermissionsSyncButton } from "@/components/settings/hr/role-permissions-sync-button"
 import { SettingsErrorCallout, SettingsStatCard } from "@/components/settings/settings-helpers"
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -52,11 +53,16 @@ export default async function RolesSettingsPage() {
 function RolesDirectoryCard({ data }: { data: HrRolesDirectory }) {
   return (
     <Card>
-      <CardHeader className="space-y-1">
-        <CardTitle>Roles configurados</CardTitle>
-        <CardDescription>
-          Mostramos hasta {data.items.length} registros ({data.total} totales).
-        </CardDescription>
+      <CardHeader className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <CardTitle>Roles configurados</CardTitle>
+            <CardDescription>
+              Mostramos hasta {data.items.length} registros ({data.total} totales).
+            </CardDescription>
+          </div>
+          <RolePermissionsSyncButton />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <SettingsErrorCallout

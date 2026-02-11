@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -13,9 +14,21 @@ from app.core.config import settings
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
+from app.services.role_permissions_sync import (
+    compute_matrix_hash,
+    parse_role_permissions_matrix,
+    sync_role_permissions,
+)
 from app.services.supabase_admin import SupabaseAdminError, create_supabase_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _resolve_matrix_path(value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return (Path(__file__).resolve().parents[3] / path).resolve()
 
 
 def get_platform_repo() -> PlatformRepository:
@@ -100,6 +113,89 @@ class TenantSummary(BaseModel):
 class TenantsResponse(BaseModel):
     ok: bool = True
     items: list[TenantSummary] = Field(default_factory=list)
+
+
+class RolePermissionsSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    organizacion_id: UUID | None = None
+    matrix_path: str | None = None
+    prune: bool | None = None
+    dry_run: bool | None = None
+    force: bool | None = None
+
+
+class RolePermissionsSyncResponse(BaseModel):
+    ok: bool = True
+    skipped: bool = False
+    reason: str | None = None
+    organizacion_id: UUID | None = None
+    matrix_path: str | None = None
+    matrix_hash: str | None = None
+    added: int | None = None
+    removed: int | None = None
+
+
+@router.post("/roles/permissions/sync", response_model=RolePermissionsSyncResponse)
+async def sync_role_permissions_from_matrix(
+    payload: RolePermissionsSyncRequest,
+    _: UUID = Depends(require_platform_admin),
+) -> RolePermissionsSyncResponse:
+    matrix_path = payload.matrix_path or settings.role_permissions_matrix_path
+    resolved_path = _resolve_matrix_path(matrix_path)
+    if not resolved_path.exists():
+        raise HTTPException(status_code=404, detail="matrix_not_found")
+
+    content = resolved_path.read_text(encoding="utf-8")
+    matrix_hash = compute_matrix_hash(content)
+
+    state_path = _resolve_matrix_path(settings.role_permissions_sync_state_path)
+    if not payload.force and state_path.exists():
+        stored = state_path.read_text(encoding="utf-8").strip()
+        if stored == matrix_hash:
+            return RolePermissionsSyncResponse(
+                skipped=True,
+                reason="hash_unchanged",
+                matrix_path=str(resolved_path),
+                matrix_hash=matrix_hash,
+            )
+
+    try:
+        plans = parse_role_permissions_matrix(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    org_id = (
+        payload.organizacion_id
+        or settings.webchat_default_organizacion_id
+        or settings.whatsapp_default_organizacion_id
+    )
+    if not org_id:
+        raise HTTPException(status_code=400, detail="organizacion_id_missing")
+
+    prune = payload.prune if payload.prune is not None else settings.role_permissions_sync_prune
+    dry_run = bool(payload.dry_run)
+
+    try:
+        summary = await sync_role_permissions(
+            organizacion_id=UUID(str(org_id)),
+            plans=plans,
+            prune=bool(prune),
+            dry_run=dry_run,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not dry_run:
+        state_path.write_text(matrix_hash, encoding="utf-8")
+
+    return RolePermissionsSyncResponse(
+        organizacion_id=UUID(str(org_id)),
+        matrix_path=str(resolved_path),
+        matrix_hash=matrix_hash,
+        added=summary["added"],
+        removed=summary["removed"],
+    )
 
 
 class CreateTenantRequest(BaseModel):

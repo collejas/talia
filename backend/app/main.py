@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
 from app.services.prospeccion_contact_sender import contact_sender
+from app.services.role_permissions_sync import maybe_sync_role_permissions_on_start
 from app.services.whatsapp_followups import followup_runner
 
 
@@ -28,6 +29,7 @@ from app.services.whatsapp_followups import followup_runner
 async def app_lifespan(_: FastAPI):
     """Administra recursos de inicio/cierre sin usar on_event."""
 
+    await maybe_sync_role_permissions_on_start()
     await contact_sender.start()
     await followup_runner.start()
     try:
