@@ -206,6 +206,10 @@ Checklist regresion permisos (minimo)
   - POST `/api/crm/prospeccion/denue/busquedas` devuelve 403.
   - POST `/api/crm/prospeccion/google/busquedas` devuelve 403.
   - POST `/api/crm/prospeccion/buscador/run` devuelve 403.
+  - DELETE `/api/crm/prospeccion/denue/busquedas/{id}` devuelve 403.
+  - DELETE `/api/crm/prospeccion/google/busquedas/{id}` devuelve 403.
+  - DELETE `/api/crm/prospeccion/denue/resultados` devuelve 403.
+  - DELETE `/api/crm/prospeccion/google/resultados` devuelve 403.
 - Usuario con solo `ver_busquedas_*`:
   - GET `/api/crm/prospeccion/denue/busquedas` devuelve 200.
   - GET `/api/crm/prospeccion/google/busquedas` devuelve 200.

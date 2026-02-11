@@ -797,6 +797,8 @@ def _extract_metadata_from_content(content: str) -> dict[str, Any] | None:
 @router.post("/catalog/item-details")
 async def fetch_catalog_item_details(
     payload: CatalogItemDetailsRequest,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.view")),
 ) -> dict[str, Any]:
     try:
         organizacion_uuid = UUID(payload.organizacion_id)
@@ -806,7 +808,6 @@ async def fetch_catalog_item_details(
             detail="organizacion_id inválido.",
         )
 
-    repo = CRMRepository()
     service = CatalogEmbeddingService(repo)
     try:
         matches = await service.query_documents(
@@ -9684,6 +9685,7 @@ async def eliminar_busqueda_google(
     *,
     repo: CRMRepository = Depends(get_repository),
     admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     busqueda_id: UUID,
 ) -> dict[str, Any]:
     try:
@@ -9701,6 +9703,7 @@ async def eliminar_busqueda_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
     admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     busqueda_id: UUID,
 ) -> dict[str, Any]:
     try:
@@ -9829,6 +9832,7 @@ async def eliminar_resultados_google(
     *,
     repo: CRMRepository = Depends(get_repository),
     admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     payload: DeleteResultadosPayload,
 ) -> dict[str, Any]:
     try:
@@ -9846,6 +9850,7 @@ async def eliminar_resultados_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
     admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     payload: DeleteResultadosPayload,
 ) -> dict[str, Any]:
     try:
@@ -12193,6 +12198,7 @@ async def analytics_catalog_sales_export(
 async def dashboard_kpis(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_panel")),
     user_token: str = Depends(require_user_token),
     rango: str | None = Query(default=None),
     desde: str | None = Query(default=None),
@@ -12222,6 +12228,7 @@ async def dashboard_kpis(
 async def demografia_resumen(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     canales: str | None = Query(default=None),
@@ -12271,6 +12278,7 @@ async def demografia_resumen(
 async def demografia_mapa(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     nivel: Annotated[str, Query(pattern="^(pais|estado|municipio)$")] = "estado",
     estado: str | None = Query(default=None),
@@ -12368,6 +12376,7 @@ async def demografia_mapa(
 async def demografia_geo_estados(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
 ) -> dict[str, Any]:
     try:
         geojson = leads_geo.load_states_geojson()
@@ -12381,6 +12390,7 @@ async def demografia_geo_estados(
 async def demografia_geo_municipios(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
     estado: str,
 ) -> dict[str, Any]:
     code = _ensure_state_code(estado)
@@ -12395,6 +12405,7 @@ async def demografia_geo_municipios(
 async def demografia_geo_paises(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("reports.view")),
 ) -> dict[str, Any]:
     try:
         geojson = leads_geo.load_world_countries_geojson()
@@ -12409,6 +12420,7 @@ async def propiedades_geojson(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     nivel: Annotated[int | None, Query(gt=0)] = None,
     tipo_id: UUID | None = Query(default=None),
 ) -> GeoJSONFeatureCollection:
@@ -12502,6 +12514,7 @@ async def propiedades_tipos(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
 ) -> list[dict[str, Any]]:
     try:
         return await repo.list_propiedad_tipos(organizacion_id=organizacion_id)
@@ -12514,6 +12527,7 @@ async def propiedades_hierarquia(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
 ) -> dict[str, Any]:
     try:
         return await repo.get_propiedad_hierarquia(organizacion_id=organizacion_id)
@@ -12527,6 +12541,7 @@ async def crear_propiedad_desarrollo(
     payload: PropiedadDesarrolloCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
     body: dict[str, Any] = {
@@ -12566,6 +12581,7 @@ async def editar_propiedad_desarrollo(
     payload: PropiedadDesarrolloUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     if not any(
         getattr(payload, field) is not None
@@ -12623,6 +12639,7 @@ async def eliminar_propiedad_desarrollo(
     desarrollo_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
         record = await repo.delete_propiedad_desarrollo(
@@ -12640,6 +12657,7 @@ async def crear_propiedad_desarrollo_mix(
     payload: PropiedadDesarrolloMixCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
     body: dict[str, Any] = {
@@ -12676,6 +12694,7 @@ async def crear_propiedad_desarrollo_mix_item(
     payload: PropiedadDesarrolloMixItemCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
     body: dict[str, Any] = {
@@ -12708,6 +12727,7 @@ async def crear_propiedad_capa(
     payload: PropiedadCapaCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
     body: dict[str, Any] = {
@@ -12739,6 +12759,7 @@ async def editar_propiedad_capa(
     payload: PropiedadCapaUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     if not any(
         getattr(payload, field) is not None
@@ -12780,6 +12801,7 @@ async def eliminar_propiedad_capa(
     capa_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
         record = await repo.delete_propiedad_capa(
@@ -12797,6 +12819,7 @@ async def crear_propiedad_poligono(
     payload: PropiedadPoligonoCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "target_type": payload.target_type.value,
@@ -12823,6 +12846,7 @@ async def editar_propiedad_poligono(
     payload: PropiedadPoligonoUpdateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     if payload.geom is None and not payload.status and not (payload.metadata):
         raise HTTPException(status_code=400, detail="at_least_one_field_required")
@@ -12851,6 +12875,7 @@ async def eliminar_propiedad_poligono(
     poligono_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
         record = await repo.delete_propiedad_poligono(
@@ -12869,6 +12894,7 @@ async def obtener_propiedad_poligono(
     target_id: UUID = Query(...),
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
 ) -> dict[str, Any]:
     request_payload = {
         "organizacion_id": str(organizacion_id),
@@ -12903,6 +12929,7 @@ async def crear_propiedad(
     payload: PropiedadUnidadCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
     body: dict[str, Any] = {
@@ -12991,6 +13018,7 @@ async def editar_propiedad_unidad(
     payload: PropiedadUnidadCreateRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     metadata = _normalize_metadata_value(payload.metadata) or {}
     body: dict[str, Any] = {
@@ -13035,6 +13063,7 @@ async def actualizar_status_propiedad_unidad(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
         record = await repo.update_propiedad_unidad(
@@ -13062,6 +13091,7 @@ async def eliminar_propiedad_unidad(
     unidad_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
         record = await repo.delete_propiedad_unidad(
@@ -13084,6 +13114,7 @@ async def registrar_venta_propiedad(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> CRMQuote:
     catalog_item = await repo.get_catalog_item(
         organizacion_id=organizacion_id, item_id=payload.catalog_item_id
@@ -13325,6 +13356,7 @@ async def registrar_venta_propiedad(
 async def list_propiedades_sale_logs(
     *,
     limit: Annotated[int, Query(ge=1, le=200)] = DEFAULT_SALE_LOG_LIMIT,
+    _: str = Depends(require_permission("reports.view")),
 ) -> CRMSaleLogsResponse:
     try:
         logs = _read_propiedad_sale_log_records(limit)
@@ -13342,6 +13374,7 @@ async def propiedades_ventas_vendedores(
     payload: CRMPropertySalesVendorRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
 ) -> CRMPropertySalesVendorResponse:
     try:
         rows = await repo.list_propiedades_ventas_vendedores(
@@ -13360,6 +13393,7 @@ async def importar_propiedades(
     payload: ImportPropiedadesRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     try:
         result = await _process_import_request(payload, repo, organizacion_id)
@@ -13377,6 +13411,7 @@ async def importar_propiedades_csv(
     file: UploadFile = File(...),
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
     start = time.perf_counter()
     file_name = getattr(file, "filename", "csv")
@@ -15493,6 +15528,7 @@ async def prospeccion_buscador_guardar_prospectos(
 @router.get("/prospeccion/stage-resumen")
 async def prospeccion_stage_resumen(
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     try:
@@ -15505,6 +15541,7 @@ async def prospeccion_stage_resumen(
 @router.get("/prospeccion/prospectos/checklist")
 async def prospeccion_prospectos_checklist(
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     try:
