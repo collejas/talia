@@ -28,6 +28,7 @@ import {
   IconUsersGroup,
   IconAdjustments,
   IconBuilding,
+  IconHierarchy,
   type Icon,
 } from "@tabler/icons-react"
 
@@ -83,6 +84,7 @@ const NAVIGATION: {
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
     { title: "Leads", url: "/leads", icon: IconUsers, permission: "leads.view" },
+    { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },
     { title: "Contactos", url: "/contactos", icon: IconAddressBook, permission: "contacts.read" },
     { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
     {
@@ -92,7 +94,6 @@ const NAVIGATION: {
       permission: "conv.read",
       children: [
         { title: "Cuentas", url: "/crm", permission: "clientes.view" },
-        { title: "Oportunidades", url: "/crm/oportunidades", permission: "pipeline.view" },
         { title: "Actividades", url: "/crm/actividades", permission: "activities.view" },
         { title: "Tickets", url: "/crm/tickets", permission: "tickets.view" },
         { title: "Campañas", url: "/crm/campanas", permission: "campaigns.view" },

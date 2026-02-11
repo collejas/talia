@@ -240,7 +240,7 @@ export function LeadRestartDetails({ row, salesReps }: Props) {
                 </div>
                 {cycle.oportunidad_id ? (
                   <Link
-                    href={`/crm/oportunidades?contactId=${raw.contacto_id ?? ""}`}
+                    href={`/oportunidades?contactId=${raw.contacto_id ?? ""}`}
                     className="text-sm font-medium text-primary hover:underline"
                   >
                     Ver oportunidad
@@ -256,7 +256,7 @@ export function LeadRestartDetails({ row, salesReps }: Props) {
         <h3 className="text-sm font-semibold text-slate-900">Acciones rápidas</h3>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="secondary" asChild>
-            <Link href={`/crm/oportunidades?contactId=${raw.contacto_id ?? ""}`}>
+            <Link href={`/oportunidades?contactId=${raw.contacto_id ?? ""}`}>
               Ir a oportunidades
             </Link>
           </Button>
