@@ -64,3 +64,6 @@ Notas recientes
     - DB: recrear funcion public.current_user_has_perm con parametro perm_code y comparar lower(p.codigo)=lower(perm_code).
     - Backend: RPC ahora envia {perm_code} en lugar de {codigo}.
     - Verificacion: current_user_has_perm('ejecutar_busquedas') devuelve false para rol Agente y el endpoint /api/crm/prospeccion/denue/busquedas responde 403.
+- Estandar busquedas (2026-02-11):
+  - Se definio el modelo busquedas.view/run/delete para separar ver/ejecutar/eliminar.
+  - La lista final de vistas usa busquedas.view para /prospeccion/*-busqueda y busquedas.run para /prospeccion/buscador y /prospeccion/prospectos.

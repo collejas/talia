@@ -21,14 +21,14 @@ Entregables
 - Lista de vistas y permisos requeridos.
 - Prototipo de vista "Roles y permisos" para asignar permisos a roles.
 
-Matriz rol-permisos (propuesta inicial)
-Nota: usar solo permisos existentes; si falta uno, se crea antes de asignar.
+Matriz rol-permisos (lista final)
+Nota: permisos definitivos para la matriz. Los permisos legacy de busquedas se mantienen, pero la UI y endpoints usan busquedas.view/run/delete.
 
 | Rol | Permisos clave |
 | --- | --- |
-| Admin | ver_panel, ver_inbox, ver_busquedas_google, ver_busquedas_inegi, ejecutar_busquedas, conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, role.manage, user.manage, settings.view, settings.manage |
-| Supervisor | ver_panel, ver_inbox, ejecutar_busquedas, conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, leads.view, pipeline.view, agenda.view, propuesta.view |
-| Agente | ver_panel, ver_inbox, ejecutar_busquedas, conv.read, conv.write, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, leads.view, pipeline.view, agenda.view, propuesta.view |
+| Admin | ver_panel, ver_inbox, busquedas.view, busquedas.run, busquedas.delete, conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, role.manage, user.manage, settings.view, settings.manage |
+| Supervisor | ver_panel, ver_inbox, busquedas.view, busquedas.run, conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, leads.view, pipeline.view, agenda.view, propuesta.view |
+| Agente | ver_panel, ver_inbox, busquedas.view, busquedas.run, conv.read, conv.write, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, leads.view, pipeline.view, agenda.view, propuesta.view |
 | Invitado | ver_panel, conv.read, contacts.read, messages.read |
 
 Reglas de visibilidad por entidad (jerarquia por arbol)
@@ -39,17 +39,17 @@ Reglas de visibilidad por entidad (jerarquia por arbol)
 - Agenda: admin ve todo; usuario ve citas propias o ligadas a sus contactos; supervisor ve citas del equipo.
 - Clientes: admin ve todo; usuario ve clientes ligados a oportunidades o contactos propios; supervisor ve clientes del equipo.
 
-Lista inicial de vistas y permisos sugeridos
-Nota: se usan permisos ya existentes cuando aplican. Si falta alguno, se propone uno nuevo.
+Lista final de vistas y permisos
+Nota: lista definitiva para integrar en la matriz.
 
 | Vista (ruta) | Permiso sugerido |
 | --- | --- |
 | /dashboard | ver_panel |
 | /inbox | ver_inbox |
-| /prospeccion/google-busqueda | ver_busquedas_google |
-| /prospeccion/denue-busqueda | ver_busquedas_inegi |
-| /prospeccion/buscador | ejecutar_busquedas |
-| /prospeccion/prospectos | ejecutar_busquedas |
+| /prospeccion/google-busqueda | busquedas.view |
+| /prospeccion/denue-busqueda | busquedas.view |
+| /prospeccion/buscador | busquedas.run |
+| /prospeccion/prospectos | busquedas.run |
 | /prospeccion/contactos | contacts.read |
 | /prospeccion/mensajes | messages.read |
 | /prospeccion/campanas | reports.view (o proponer campaigns.view) |
@@ -85,6 +85,32 @@ Nota: se usan permisos ya existentes cuando aplican. Si falta alguno, se propone
 | /settings/formato-cotizacion | settings.manage (nuevo) |
 | /settings/reminders | settings.manage (nuevo) |
 | /settings/prospeccion | settings.manage (nuevo) |
+
+Permisos CRUD + acciones especiales por modulo (adoptado)
+Objetivo: permitir configurar desde la UI si un rol puede ver/crear/editar/eliminar y ejecutar acciones especiales.
+
+Convencion sugerida
+- {modulo}.view
+- {modulo}.create
+- {modulo}.edit
+- {modulo}.delete
+- {modulo}.export (opcional)
+- {modulo}.assign (opcional)
+- {modulo}.import (opcional)
+- {modulo}.run (procesos automáticos)
+
+Aplicacion inmediata (prospeccion/busquedas) - lista final
+- busquedas.view (ver listas/resultados)
+- busquedas.run (ejecutar nuevas busquedas)
+- busquedas.delete (eliminar busquedas/resultados)
+
+Impacto en backend
+- GET /prospeccion/* -> busquedas.view
+- POST /prospeccion/* (crear) -> busquedas.run
+- DELETE /prospeccion/* -> busquedas.delete
+
+Impacto en frontend
+- Mostrar/ocultar botones según permisos CRUD/acciones.
 
 Fase 2: Modelo de jerarquia
 Decision
@@ -172,6 +198,18 @@ Cambios
 - Guardias por ruta en layouts de settings y secciones sensibles.
 - Filtrado de menu segun permisos (ver_panel, ver_inbox, etc).
 - [check] Vista administrativa para asignar permisos a roles (checkboxes por permiso/rol).
+
+Fase 7: Limpieza de permisos legacy (final)
+Objetivo
+- [pending] Retirar permisos legacy de busquedas una vez validado el nuevo esquema.
+
+Pasos
+1. [pending] Confirmar que UI y backend usan solo busquedas.view/run/delete.
+2. [pending] Validar que ningun rol depende de ver_busquedas_google, ver_busquedas_inegi o ejecutar_busquedas.
+3. [pending] Eliminar permisos legacy de public.permisos y limpiar roles_permisos.
+
+Entregables
+- [pending] Migracion de limpieza y respaldo de cambios.
 
 Archivos candidatos
 - frontend/panel/src/lib/api/crm.ts

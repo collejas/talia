@@ -125,6 +125,7 @@ sudo systemctl status talia-panel.service
 sudo systemctl status talia-api.service
 
 sudo journalctl -u talia-api.service -n 50 -l --no-pager
+sudo journalctl -u talia-api.service -n 200 -l --no-pager | grep -E "permission.check|denue/busquedas|prospeccion"
 
 # Dejar git GLOBL
 git config --global user.name collejas
