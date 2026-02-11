@@ -203,15 +203,15 @@ Cambios
 
 Fase 8: Limpieza de permisos legacy (final)
 Objetivo
-- [pending] Retirar permisos legacy de busquedas una vez validado el nuevo esquema.
+- [check] Retirar permisos legacy de busquedas una vez validado el nuevo esquema.
 
 Pasos
-1. [pending] Confirmar que UI y backend usan solo busquedas.view/run/delete.
-2. [pending] Validar que ningun rol depende de ver_busquedas_google, ver_busquedas_inegi o ejecutar_busquedas.
-3. [pending] Eliminar permisos legacy de public.permisos y limpiar roles_permisos.
+1. [check] Confirmar que UI y backend usan solo busquedas.view/run/delete.
+2. [check] Validar que ningun rol depende de ver_busquedas_google, ver_busquedas_inegi o ejecutar_busquedas.
+3. [check] Eliminar permisos legacy de public.permisos y limpiar roles_permisos.
 
 Entregables
-- [pending] Migracion de limpieza y respaldo de cambios.
+- [check] Migracion de limpieza y respaldo de cambios.
 
 Archivos candidatos
 - frontend/panel/src/lib/api/crm.ts
