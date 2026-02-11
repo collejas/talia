@@ -65,6 +65,7 @@ import {
   DenueAdvancedSearchModal,
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { usePermissions } from "@/hooks/use-permissions";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -102,6 +103,10 @@ type AdvancedSearchPayload = Pick<
 >;
 
 export function DenueBusquedaView() {
+  const { context } = usePermissions();
+  const canRunBusquedas = context.es_admin || context.permisos.includes("busquedas.run");
+  const canDeleteBusquedas = context.es_admin || context.permisos.includes("busquedas.delete");
+  const canSaveProspectos = context.es_admin || context.permisos.includes("prospectos.create");
   const [formValues, setFormValues] = useState<FormValues>({
     query: "",
     radio_m: 1500,
@@ -900,22 +905,26 @@ export function DenueBusquedaView() {
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={handleStandardSearch} disabled={isSearching} className="flex-1 min-w-[140px]">
-                {isSearching ? (
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="mr-2 h-4 w-4" />
-                )}
-                Buscar y guardar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 min-w-[140px]"
-                onClick={() => setAdvancedModalOpen(true)}
-              >
-                Búsqueda avanzada
-              </Button>
+              {canRunBusquedas ? (
+                <Button onClick={handleStandardSearch} disabled={isSearching} className="flex-1 min-w-[140px]">
+                  {isSearching ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Buscar y guardar
+                </Button>
+              ) : null}
+              {canRunBusquedas ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 min-w-[140px]"
+                  onClick={() => setAdvancedModalOpen(true)}
+                >
+                  Búsqueda avanzada
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -1194,35 +1203,39 @@ export function DenueBusquedaView() {
           </CardHeader>
           <CardContent className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleGuardarSeleccion}
-                  disabled={!selectedIds.size || isSavingProspectos}
-                  className="flex items-center gap-2"
-                >
-                  {isSavingProspectos ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Guardar como prospectos
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleDeleteSelectedResultados}
-                  disabled={!selectedIds.size || isDeletingResultados}
-                  className="flex items-center gap-2"
-                >
-                  {isDeletingResultados ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Eliminar seleccionados
-                </Button>
+                {canSaveProspectos ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleGuardarSeleccion}
+                    disabled={!selectedIds.size || isSavingProspectos}
+                    className="flex items-center gap-2"
+                  >
+                    {isSavingProspectos ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Guardar como prospectos
+                  </Button>
+                ) : null}
+                {canDeleteBusquedas ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleDeleteSelectedResultados}
+                    disabled={!selectedIds.size || isDeletingResultados}
+                    className="flex items-center gap-2"
+                  >
+                    {isDeletingResultados ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Eliminar seleccionados
+                  </Button>
+                ) : null}
                 {ACTIONS.map((action) => (
                   <Button
                     key={action.key}
@@ -1421,21 +1434,23 @@ export function DenueBusquedaView() {
                     >
                       Ver
                     </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Eliminar búsqueda"
-                      onClick={() => handleDeleteBusqueda(item.id)}
-                      disabled={deletingBusquedaId === item.id}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {deletingBusquedaId === item.id ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
+                    {canDeleteBusquedas ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Eliminar búsqueda"
+                        onClick={() => handleDeleteBusqueda(item.id)}
+                        disabled={deletingBusquedaId === item.id}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingBusquedaId === item.id ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1453,6 +1468,7 @@ export function DenueBusquedaView() {
         open={advancedModalOpen}
         onOpenChange={setAdvancedModalOpen}
         onApply={handleAdvancedApply}
+        canApply={canRunBusquedas}
       />
     </div>
   );

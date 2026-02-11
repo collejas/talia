@@ -103,6 +103,8 @@ Aplicacion inmediata (prospeccion/busquedas) - lista final
 - busquedas.view (ver listas/resultados)
 - busquedas.run (ejecutar nuevas busquedas)
 - busquedas.delete (eliminar busquedas/resultados)
+Aplicacion inmediata (prospeccion/prospectos) - UI
+- prospectos.create (guardar resultados como prospectos)
 
 Impacto en backend
 - GET /prospeccion/* -> busquedas.view
@@ -199,7 +201,7 @@ Cambios
 - Filtrado de menu segun permisos (ver_panel, ver_inbox, etc).
 - [check] Vista administrativa para asignar permisos a roles (checkboxes por permiso/rol).
 
-Fase 7: Limpieza de permisos legacy (final)
+Fase 8: Limpieza de permisos legacy (final)
 Objetivo
 - [pending] Retirar permisos legacy de busquedas una vez validado el nuevo esquema.
 
@@ -224,15 +226,15 @@ Entregables
 
 Fase 7: Pruebas
 DB
-- Caso vendedor no ve otros vendedores.
-- Caso supervisor ve equipo completo.
-- Caso admin ve todo.
+- [check] Caso vendedor no ve otros vendedores.
+- [check] Caso supervisor ve equipo completo.
+- [check] Caso admin ve todo.
 
 Backend
-- Endpoints retornan 403 cuando falta permiso.
+- [check] Endpoints retornan 403 cuando falta permiso.
 
 Frontend
-- Vistas restringidas no aparecen ni se pueden acceder.
+- [check] Vistas restringidas no aparecen ni se pueden acceder.
 
 Entregables
 - Checklist de pruebas.

@@ -9314,8 +9314,8 @@ async def portal_actualizar_responsable(
 async def crear_busqueda_google(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_google")),
-    __: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("busquedas.view")),
+    __: str = Depends(require_permission("busquedas.run")),
     user_token: str = Depends(require_user_token),
     payload: GoogleProspeccionBusquedaPayload,
 ) -> dict[str, Any]:
@@ -9392,8 +9392,8 @@ async def crear_busqueda_google(
 async def crear_busqueda_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_inegi")),
-    __: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("busquedas.view")),
+    __: str = Depends(require_permission("busquedas.run")),
     user_token: str = Depends(require_user_token),
     payload: DenueBusquedaPayload,
 ) -> dict[str, Any]:
@@ -9617,7 +9617,7 @@ async def crear_busqueda_denue(
 async def listar_busquedas_google(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_google")),
+    _: str = Depends(require_permission("busquedas.view")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -9652,7 +9652,7 @@ async def listar_busquedas_google(
 async def listar_busquedas_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_inegi")),
+    _: str = Depends(require_permission("busquedas.view")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -9687,8 +9687,7 @@ async def listar_busquedas_denue(
 async def eliminar_busqueda_google(
     *,
     repo: CRMRepository = Depends(get_repository),
-    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
-    _: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("busquedas.delete")),
     busqueda_id: UUID,
 ) -> dict[str, Any]:
     try:
@@ -9705,8 +9704,7 @@ async def eliminar_busqueda_google(
 async def eliminar_busqueda_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
-    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
-    _: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("busquedas.delete")),
     busqueda_id: UUID,
 ) -> dict[str, Any]:
     try:
@@ -9723,7 +9721,7 @@ async def eliminar_busqueda_denue(
 async def listar_resultados_google(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_google")),
+    _: str = Depends(require_permission("busquedas.view")),
     user_token: str = Depends(require_user_token),
     busqueda_id: UUID | None = Query(default=None),
     q: str | None = Query(default=None),
@@ -9782,7 +9780,7 @@ async def listar_resultados_google(
 async def listar_resultados_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_inegi")),
+    _: str = Depends(require_permission("busquedas.view")),
     user_token: str = Depends(require_user_token),
     busqueda_id: UUID | None = Query(default=None),
     q: str | None = Query(default=None),
@@ -9834,8 +9832,7 @@ async def listar_resultados_denue(
 async def eliminar_resultados_google(
     *,
     repo: CRMRepository = Depends(get_repository),
-    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
-    _: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("busquedas.delete")),
     payload: DeleteResultadosPayload,
 ) -> dict[str, Any]:
     try:
@@ -9852,8 +9849,7 @@ async def eliminar_resultados_google(
 async def eliminar_resultados_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
-    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
-    _: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("busquedas.delete")),
     payload: DeleteResultadosPayload,
 ) -> dict[str, Any]:
     try:
@@ -9870,7 +9866,7 @@ async def eliminar_resultados_denue(
 async def listar_catalogos_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_inegi")),
+    _: str = Depends(require_permission("busquedas.view")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     """Devuelve los catálogos SCIAN y geográficos necesarios para la búsqueda avanzada."""
@@ -9891,7 +9887,7 @@ async def listar_catalogos_denue(
 async def listar_scian_clase_indice(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ver_busquedas_inegi")),
+    _: str = Depends(require_permission("busquedas.view")),
     user_token: str = Depends(require_user_token),
     codigo_clase: Annotated[str, Query(..., min_length=2)],
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,

@@ -44,6 +44,7 @@ type Props = {
   open: boolean
   onOpenChange: (value: boolean) => void
   onApply?: (filters: DenueAdvancedFilters) => void
+  canApply?: boolean
 }
 
 type AdvancedSection = "search" | "activity" | "size" | "geography"
@@ -138,7 +139,7 @@ function flattenScianCodes(nodes: ScianTreeNode[]): string[] {
   return codes
 }
 
-export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props) {
+export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply = true }: Props) {
   const [catalogs, setCatalogs] = useState<DenueCatalogosResponse | null>(null)
   const [loadingCatalogs, setLoadingCatalogs] = useState(false)
   const [catalogError, setCatalogError] = useState<string | null>(null)
@@ -315,6 +316,9 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
   }, [])
 
   const handleApply = useCallback(() => {
+    if (!canApply) {
+      return
+    }
     const filters: DenueAdvancedFilters = {
       search: { ...searchFields },
       actividad: Array.from(selectedScianCodes),
@@ -336,6 +340,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
     selectedStates,
     selectedMunicipalities,
     allActivitiesSelected,
+    canApply,
   ])
 
   const renderScianNodes = useCallback(
@@ -656,7 +661,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply }: Props)
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>
-          <Button type="button" onClick={handleApply}>
+          <Button type="button" onClick={handleApply} disabled={!canApply}>
             Aplicar filtros
           </Button>
         </DialogFooter>
