@@ -145,6 +145,7 @@ const NAVIGATION: {
           icon: IconBuilding,
           permission: "settings.manage",
         },
+        { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
         { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers, permission: "user.manage" },
         { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck, permission: "role.manage" },
         { title: "Permisos", url: "/settings/usuarios/permisos", icon: IconShieldLock, permission: "role.manage" },
