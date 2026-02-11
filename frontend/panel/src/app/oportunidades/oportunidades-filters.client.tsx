@@ -61,9 +61,13 @@ const EMPTY_FILTERS: OportunidadesFiltersState = {
 export function OportunidadesFiltersClient({
   options,
   initial,
+  variant = "panel",
+  onApplied,
 }: {
   options: OportunidadesFilterOptions;
   initial?: Partial<OportunidadesFiltersState>;
+  variant?: "panel" | "modal";
+  onApplied?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,7 +77,11 @@ export function OportunidadesFiltersClient({
   });
 
   const isDirty = useMemo(() => {
-    return JSON.stringify(filters) !== JSON.stringify({ ...EMPTY_FILTERS, ...initial });
+    return Object.keys(EMPTY_FILTERS).some((key) => {
+      const k = key as keyof OportunidadesFiltersState;
+      const baseValue = (initial?.[k] ?? EMPTY_FILTERS[k]) ?? "";
+      return filters[k] !== baseValue;
+    });
   }, [filters, initial]);
 
   function updateFilter<K extends keyof OportunidadesFiltersState>(key: K, value: string) {
@@ -113,6 +121,7 @@ export function OportunidadesFiltersClient({
     if (filters.reinicioMin) params.set("reinicio_min", filters.reinicioMin);
 
     router.push(`/oportunidades?${params.toString()}`);
+    onApplied?.();
   }
 
   function clearFilters() {
@@ -126,8 +135,8 @@ export function OportunidadesFiltersClient({
     router.push(`/oportunidades${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
-  return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
+  const content = (
+    <div className={variant === "modal" ? "space-y-4" : "rounded-xl border bg-white p-4 shadow-sm"}>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="space-y-1">
           <Label htmlFor="search">Búsqueda</Label>
@@ -223,6 +232,8 @@ export function OportunidadesFiltersClient({
       </div>
     </div>
   );
+
+  return content;
 }
 
 function SelectField({

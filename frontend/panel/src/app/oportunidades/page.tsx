@@ -4,7 +4,6 @@ import { callCrmApi } from "@/lib/api/crm";
 import { loadCrmOpportunities } from "@/lib/crm/opportunities";
 import { loadRestartKpis } from "@/lib/leads/data";
 import {
-  OportunidadesFiltersClient,
   type OportunidadesFilterOptions,
   type OportunidadesFiltersState,
 } from "./oportunidades-filters.client";
@@ -48,7 +47,6 @@ export default async function OportunidadesPage({
             ))}
           </div>
         ) : null}
-        <OportunidadesFiltersClient options={mergedOptions} initial={filters} />
         {payload.errors.length > 0 ? (
           <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             {payload.errors.map((error) => (
@@ -59,6 +57,8 @@ export default async function OportunidadesPage({
           <OportunidadesTableClient
             rows={filteredRows}
             filters={filters}
+            filterOptions={mergedOptions}
+            filterInitial={filters}
             columnLabels={{
               header: "Oportunidad",
               type: "Contacto",

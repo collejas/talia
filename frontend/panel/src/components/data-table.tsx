@@ -524,6 +524,7 @@ export function DataTable({
   columnLabels,
   metricColumns = [],
   renderRowDetails,
+  toolbarActions,
 }: {
   data: TableRowData[]
   extraColumns?: ColumnDef<TableRowData>[]
@@ -532,6 +533,7 @@ export function DataTable({
   columnLabels?: ColumnLabels
   metricColumns?: MetricColumnConfig[]
   renderRowDetails?: (row: TableRowData) => React.ReactNode
+  toolbarActions?: React.ReactNode
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
@@ -731,6 +733,7 @@ export function DataTable({
           <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
+          {toolbarActions}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">

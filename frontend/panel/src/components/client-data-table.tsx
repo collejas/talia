@@ -13,6 +13,7 @@ type Props = {
   extraColumns?: ColumnDef<DataTableRow>[];
   initialVisibility?: Record<string, boolean>;
   storageKey?: string;
+  toolbarActions?: React.ReactNode;
 };
 
 export function ClientDataTable({
@@ -21,6 +22,7 @@ export function ClientDataTable({
   extraColumns,
   initialVisibility,
   storageKey,
+  toolbarActions,
 }: Props) {
   return (
     <DataTable
@@ -29,6 +31,7 @@ export function ClientDataTable({
       extraColumns={extraColumns}
       initialVisibility={initialVisibility}
       storageKey={storageKey}
+      toolbarActions={toolbarActions}
     />
   );
 }

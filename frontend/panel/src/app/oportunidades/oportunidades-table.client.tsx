@@ -2,7 +2,21 @@
 
 import { ClientDataTable } from "@/components/client-data-table";
 import type { DataTableColumnLabels, DataTableRow } from "@/components/data-table";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  OportunidadesFiltersClient,
+  type OportunidadesFilterOptions,
+  type OportunidadesFiltersState,
+} from "./oportunidades-filters.client";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useState } from "react";
 
 type Props = {
   rows: DataTableRow[];
@@ -23,12 +37,42 @@ type Props = {
     creadoHasta?: string;
     reinicioMin?: string;
   };
+  filterOptions?: OportunidadesFilterOptions;
+  filterInitial?: Partial<OportunidadesFiltersState>;
 };
 
-export function OportunidadesTableClient({ rows, columnLabels, filters }: Props) {
+export function OportunidadesTableClient({
+  rows,
+  columnLabels,
+  filters,
+  filterOptions,
+  filterInitial,
+}: Props) {
   const extraColumns: ColumnDef<DataTableRow>[] = buildExtraColumns();
   const initialVisibility = buildInitialVisibility();
   const filteredRows = filters ? applyClientFilters(rows, filters) : rows;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const toolbarActions = filterOptions ? (
+    <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          Filtros
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Filtros de oportunidades</DialogTitle>
+        </DialogHeader>
+        <OportunidadesFiltersClient
+          options={filterOptions}
+          initial={filterInitial}
+          variant="modal"
+          onApplied={() => setFiltersOpen(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  ) : null;
 
   return (
     <ClientDataTable
@@ -37,6 +81,7 @@ export function OportunidadesTableClient({ rows, columnLabels, filters }: Props)
       extraColumns={extraColumns}
       initialVisibility={initialVisibility}
       storageKey="oportunidades-table-columns"
+      toolbarActions={toolbarActions}
     />
   );
 }
