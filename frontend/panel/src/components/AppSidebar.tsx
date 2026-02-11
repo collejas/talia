@@ -26,12 +26,8 @@ import {
   IconBell,
   IconTargetArrow,
   IconUsersGroup,
-  IconBriefcase,
-  IconHierarchy,
   IconAdjustments,
   IconBuilding,
-  IconShieldCheck,
-  IconShieldLock,
   type Icon,
 } from "@tabler/icons-react"
 
@@ -146,12 +142,7 @@ const NAVIGATION: {
           permission: "settings.manage",
         },
         { title: "Recursos Humanos", url: "/settings/rh", icon: IconUsersGroup, permission: "user.manage" },
-        { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers, permission: "user.manage" },
-        { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck, permission: "role.manage" },
-        { title: "Permisos", url: "/settings/usuarios/permisos", icon: IconShieldLock, permission: "role.manage" },
-        { title: "Empleados", url: "/settings/empleados", icon: IconUsersGroup, permission: "user.manage" },
-        { title: "Departamentos", url: "/settings/empleados/departamentos", icon: IconHierarchy, permission: "user.manage" },
-        { title: "Puestos", url: "/settings/empleados/puestos", icon: IconBriefcase, permission: "user.manage" },
+        
         {
           title: "Plantillas de contacto",
           url: "/settings/prospeccion/plantillas",
