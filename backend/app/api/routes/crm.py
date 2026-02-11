@@ -4598,6 +4598,42 @@ class CRMPipelineStage(BaseModel):
     actualizado_en: str
 
 
+class CRMUserSummary(BaseModel):
+    id: UUID
+    nombre_completo: str | None = None
+    correo: str | None = None
+    telefono_e164: str | None = None
+
+
+class CRMPipelineStageSummary(BaseModel):
+    id: UUID
+    nombre: str
+    codigo: str | None = None
+    categoria: str | None = None
+    orden: int | None = None
+    metadata: dict | None = None
+
+
+class CRMContactSummary(BaseModel):
+    id: UUID
+    nombre_completo: str | None = None
+    correo: str | None = None
+    telefono_e164: str | None = None
+    company_name: str | None = None
+    notes: str | None = None
+    necesidad_proposito: str | None = None
+    estado: str | None = None
+    captura_estado: str | None = None
+    organizacion_id: UUID | None = None
+
+
+class CRMAccountSummary(BaseModel):
+    id: UUID
+    nombre: str | None = None
+    telefono: str | None = None
+    correo: str | None = None
+
+
 class CRMOpportunity(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -4618,6 +4654,11 @@ class CRMOpportunity(BaseModel):
     creado_en: str
     actualizado_en: str
     cerrado_en: str | None = None
+    asignado: CRMUserSummary | None = None
+    propietario: CRMUserSummary | None = None
+    etapa: CRMPipelineStageSummary | None = None
+    contacto: CRMContactSummary | None = None
+    cuenta: CRMAccountSummary | None = None
 
 
 class CRMSaleReadyOpportunity(BaseModel):

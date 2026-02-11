@@ -1,12 +1,12 @@
 import Link from "next/link";
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
-import { ClientDataTable } from "@/components/client-data-table";
 import { RestartKpiCards } from "@/components/leads/restart-kpi-cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadCrmOpportunities } from "@/lib/crm/opportunities";
 import { loadRestartKpis } from "@/lib/leads/data";
+import { OportunidadesTableClient } from "./oportunidades-table.client";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,17 @@ export default async function OportunidadesPage({
             ))}
           </div>
         ) : (
-          <ClientDataTable rows={payload.rows} />
+          <OportunidadesTableClient
+            rows={payload.rows}
+            columnLabels={{
+              header: "Oportunidad",
+              type: "Contacto/Empresa",
+              status: "Etapa",
+              target: "Monto",
+              limit: "Cierre probable",
+              reviewer: "Asignado",
+            }}
+          />
         )}
       </div>
     </AppViewLayout>

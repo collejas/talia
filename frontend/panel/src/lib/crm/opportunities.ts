@@ -8,6 +8,30 @@ type CRMOpportunityContact = {
   nombre_completo: string | null;
   correo: string | null;
   telefono_e164: string | null;
+  company_name?: string | null;
+};
+
+type CRMOpportunityStage = {
+  id: string;
+  nombre: string;
+  codigo: string | null;
+  categoria: string | null;
+  orden: number | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type CRMOpportunityUser = {
+  id: string;
+  nombre_completo: string | null;
+  correo: string | null;
+  telefono_e164: string | null;
+};
+
+type CRMOpportunityAccount = {
+  id: string;
+  nombre: string | null;
+  telefono: string | null;
+  correo: string | null;
 };
 
 type CRMOpportunity = {
@@ -15,6 +39,8 @@ type CRMOpportunity = {
   cuenta_id: string | null;
   contacto_principal_id: string | null;
   contacto?: CRMOpportunityContact | null;
+  cuenta?: CRMOpportunityAccount | null;
+  etapa?: CRMOpportunityStage | null;
   etapa_id: string;
   titulo: string;
   descripcion: string | null;
@@ -26,6 +52,7 @@ type CRMOpportunity = {
   motivo_perdida: string | null;
   propietario_usuario_id: string | null;
   asignado_a_usuario_id: string | null;
+  asignado?: CRMOpportunityUser | null;
   metadata: Record<string, unknown> | null;
   creado_en: string;
   actualizado_en: string;
@@ -70,6 +97,10 @@ export async function loadCrmOpportunities(
     const stageLabel = formatEtapa(op);
     const statusLabel =
       restartSequence > 1 ? `${stageLabel} · Reinicio #${restartSequence}` : stageLabel;
+    const assignedLabel =
+      op.asignado?.nombre_completo?.trim() ||
+      op.asignado_a_usuario_id ||
+      "Sin asignar";
 
     return {
       id: index + 1,
@@ -78,8 +109,15 @@ export async function loadCrmOpportunities(
       status: statusLabel,
       target: formatCurrency(op.monto_estimado, op.moneda),
       limit: op.fecha_cierre_probable || "Sin fecha",
-      reviewer: op.asignado_a_usuario_id || "Sin asignar",
-      raw: { ...op, restartSequence },
+      reviewer: assignedLabel,
+      raw: {
+        ...op,
+        restartSequence,
+        status_meta: {
+          label: statusLabel,
+          variant: "outline",
+        },
+      },
     };
   });
 
@@ -91,6 +129,9 @@ export async function loadCrmOpportunities(
 }
 
 function formatEtapa(op: CRMOpportunity): string {
+  if (op.etapa?.nombre && op.etapa.nombre.trim().length) {
+    return op.etapa.nombre.trim();
+  }
   const metadata = op.metadata;
   if (metadata && typeof metadata === "object") {
     const stageName = metadata.etapa_nombre;
@@ -105,6 +146,9 @@ function buildContactLabel(op: CRMOpportunity): string {
   const contactName = op.contacto?.nombre_completo || op.metadata?.contacto_nombre;
   if (typeof contactName === "string" && contactName.trim().length) {
     return contactName.trim();
+  }
+  if (op.cuenta?.nombre && op.cuenta.nombre.trim().length) {
+    return op.cuenta.nombre.trim();
   }
   if (op.contacto_principal_id) {
     return `Contacto ${op.contacto_principal_id.slice(0, 8)}`;

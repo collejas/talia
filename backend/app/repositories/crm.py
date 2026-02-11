@@ -823,6 +823,7 @@ class CRMRepository:
             "order": "creado_en.desc",
             "limit": str(limit),
             "offset": str(offset),
+            "select": self._PIPELINE_SELECT,
         }
         if contacto_id:
             params["contacto_principal_id"] = f"eq.{contacto_id}"
