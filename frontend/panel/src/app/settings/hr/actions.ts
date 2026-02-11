@@ -108,6 +108,7 @@ export const createEmployeeAction: CrudActionHandler = async (_, formData) => {
     const usuarioId = getText(formData, "usuario_id")
     const departamentoId = getOptionalText(formData, "departamento_id")
     const puestoId = getOptionalText(formData, "puesto_id")
+    const supervisorId = getOptionalText(formData, "supervisor_id")
     const esGestor = parseBoolean(formData.get("es_gestor"))
     const esVendedor = parseBoolean(formData.get("es_vendedor"))
 
@@ -124,6 +125,18 @@ export const createEmployeeAction: CrudActionHandler = async (_, formData) => {
       prefer: "return=representation",
       forceServiceToken: true,
     })
+    if (supervisorId !== null && supervisorId !== "") {
+      await callAndValidate("/rest/v1/empleados_supervisores", {
+        method: "POST",
+        body: {
+          organizacion_id: orgId,
+          empleado_id: usuarioId,
+          supervisor_id: supervisorId,
+        },
+        prefer: "resolution=merge-duplicates,return=representation",
+        forceServiceToken: true,
+      })
+    }
     revalidatePath(PATHS.empleados)
     return success("Empleado registrado.")
   } catch (error) {
@@ -136,6 +149,8 @@ export const updateEmployeeAction: CrudActionHandler = async (_, formData) => {
     const usuarioId = getText(formData, "usuario_id")
     const departamentoId = getOptionalText(formData, "departamento_id")
     const puestoId = getOptionalText(formData, "puesto_id")
+    const supervisorId = getOptionalText(formData, "supervisor_id")
+    const orgId = supervisorId !== null ? await requireOrgId() : null
     const body: Record<string, unknown> = {
       es_gestor: parseBoolean(formData.get("es_gestor")),
       es_vendedor: parseBoolean(formData.get("es_vendedor")),
@@ -156,6 +171,30 @@ export const updateEmployeeAction: CrudActionHandler = async (_, formData) => {
       prefer: "return=representation",
       enforceOrganization: true,
     })
+
+    if (supervisorId !== null) {
+      await callAndValidate("/rest/v1/empleados_supervisores", {
+        method: "DELETE",
+        searchParams: {
+          empleado_id: `eq.${usuarioId}`,
+        },
+        enforceOrganization: true,
+        forceServiceToken: true,
+      })
+      if (supervisorId !== "") {
+        await callAndValidate("/rest/v1/empleados_supervisores", {
+          method: "POST",
+          body: {
+            organizacion_id: orgId,
+            empleado_id: usuarioId,
+            supervisor_id: supervisorId,
+          },
+          prefer: "resolution=merge-duplicates,return=representation",
+          enforceOrganization: true,
+          forceServiceToken: true,
+        })
+      }
+    }
     revalidatePath(PATHS.empleados)
     return success("Empleado actualizado.")
   } catch (error) {

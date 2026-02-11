@@ -75,6 +75,7 @@ function EmployeesDirectoryCard({
           departments={lookups.departamentos}
           positions={lookups.puestos}
           userOptions={lookups.usuarios}
+          supervisors={lookups.supervisores}
         />
         <div className="grid gap-3 sm:grid-cols-3">
           <SettingsStatCard label="Empleados" value={data.total} />
@@ -91,6 +92,7 @@ function EmployeesDirectoryCard({
                   <TableHead className="hidden lg:table-cell">Puesto</TableHead>
                   <TableHead>Gestor</TableHead>
                   <TableHead>Vendedor</TableHead>
+                  <TableHead className="hidden xl:table-cell">Supervisor</TableHead>
                   <TableHead className="hidden lg:table-cell">Estado</TableHead>
                   <TableHead className="hidden xl:table-cell">Creado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -99,7 +101,7 @@ function EmployeesDirectoryCard({
               <TableBody>
                 {data.items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-sm text-muted-foreground">
                       No hay empleados registrados en esta organización.
                     </TableCell>
                   </TableRow>
@@ -110,6 +112,7 @@ function EmployeesDirectoryCard({
                       employee={employee}
                       departments={lookups.departamentos}
                       positions={lookups.puestos}
+                      supervisors={lookups.supervisores}
                     />
                   ))
                 )}

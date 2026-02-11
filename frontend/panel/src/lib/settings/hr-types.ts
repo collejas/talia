@@ -4,6 +4,9 @@ export type HrEmployeeItem = {
   correo: string
   telefono: string
   estado: string
+  supervisorId: string | null
+  supervisorNombre: string | null
+  supervisorCorreo: string | null
   departamento: string
   departamentoId: string | null
   puesto: string
@@ -144,5 +147,6 @@ export type HrAssignmentLookups = {
   departamentos: HrDepartmentOption[]
   puestos: HrPositionOption[]
   usuarios: HrEmployeeUserOption[]
+  supervisores: HrEmployeeUserOption[]
   errors: string[]
 }

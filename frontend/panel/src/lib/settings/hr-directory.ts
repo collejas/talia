@@ -6,6 +6,7 @@ import {
   HrDepartmentOption,
   HrDepartmentsDirectory,
   HrEmployeeItem,
+  HrEmployeeUserOption,
   HrEmployeesDirectory,
   HrPermissionItem,
   HrPermissionsDirectory,
@@ -60,6 +61,16 @@ type SupabaseEmployeeRow = {
   } | null
   departamento: { id: string; nombre: string | null } | null
   puesto: { id: string; nombre: string | null } | null
+}
+
+type SupabaseSupervisorRow = {
+  empleado_id: string
+  supervisor_id: string
+  supervisor: {
+    id: string
+    correo: string | null
+    nombre_completo: string | null
+  } | null
 }
 
 type SupabaseDepartmentRow = {
@@ -130,37 +141,59 @@ function summarizeResult<T>(result: SupabaseRestResult<T[]>): RestSummary {
 export async function fetchEmployeesDirectory(
   limit = DEFAULT_LIMIT,
 ): Promise<HrEmployeesDirectory> {
-  const response = await callSupabaseRest<SupabaseEmployeeRow[]>("/rest/v1/empleados", {
-    searchParams: {
-      select:
-        "usuario_id,departamento_id,puesto_id,es_gestor,es_vendedor,ultimo_lead_asignado_en,creado_en,usuario:usuarios(id,correo,nombre_completo,estado,telefono_e164),departamento:departamentos(id,nombre),puesto:puestos(id,nombre)",
-      order: "creado_en.desc",
-      limit: String(limit),
-    },
-    prefer: "count=exact",
-    enforceOrganization: true,
-  })
+  const [employeesRes, supervisorsRes] = await Promise.all([
+    callSupabaseRest<SupabaseEmployeeRow[]>("/rest/v1/empleados", {
+      searchParams: {
+        select:
+          "usuario_id,departamento_id,puesto_id,es_gestor,es_vendedor,ultimo_lead_asignado_en,creado_en,usuario:usuarios(id,correo,nombre_completo,estado,telefono_e164),departamento:departamentos(id,nombre),puesto:puestos(id,nombre)",
+        order: "creado_en.desc",
+        limit: String(limit),
+      },
+      prefer: "count=exact",
+      enforceOrganization: true,
+    }),
+    callSupabaseRest<SupabaseSupervisorRow[]>("/rest/v1/empleados_supervisores", {
+      searchParams: {
+        select:
+          "empleado_id,supervisor_id,supervisor:usuarios!empleados_supervisores_supervisor_fk(id,correo,nombre_completo)",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+  ])
 
-  if (!response.ok) {
+  if (!employeesRes.ok) {
     return {
       items: [],
       total: 0,
       stats: { gestores: 0, vendedores: 0 },
-      errors: [response.error],
+      errors: [employeesRes.error],
     }
   }
 
-  const rows = Array.isArray(response.data) ? response.data : []
-  const items = rows.map(mapEmployeeRow).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  const supervisorMap = new Map<string, SupabaseSupervisorRow>()
+  if (supervisorsRes.ok && Array.isArray(supervisorsRes.data)) {
+    supervisorsRes.data.forEach((row) => {
+      if (row?.empleado_id) {
+        supervisorMap.set(row.empleado_id, row)
+      }
+    })
+  }
+
+  const rows = Array.isArray(employeesRes.data) ? employeesRes.data : []
+  const items = rows
+    .map((row) => mapEmployeeRow(row, supervisorMap.get(row.usuario_id)))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
   const gestores = items.filter((item) => item.esGestor).length
   const vendedores = items.filter((item) => item.esVendedor).length
-  const total = parseTotalFromRange(response.headers.get("content-range"))
+  const total = parseTotalFromRange(employeesRes.headers.get("content-range"))
 
   return {
     items,
     total,
     stats: { gestores, vendedores },
-    errors: [],
+    errors: supervisorsRes.ok ? [] : [supervisorsRes.error],
   }
 }
 
@@ -838,7 +871,7 @@ export async function fetchDepartmentOptions(): Promise<{
 export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
   const errors: string[] = []
 
-  const [departamentosRes, puestosRes, usuariosRes, empleadosRes] = await Promise.all([
+  const [departamentosRes, puestosRes, usuariosRes, empleadosRes, supervisorsRes] = await Promise.all([
     callSupabaseRest<SupabaseDepartmentRow[]>("/rest/v1/departamentos", {
       searchParams: {
         select: "id,nombre",
@@ -869,6 +902,14 @@ export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
     callSupabaseRest<SupabaseSimpleEmployeeRow[]>("/rest/v1/empleados", {
       searchParams: {
         select: "usuario_id",
+        limit: String(LARGE_LIMIT),
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    }),
+    callSupabaseRest<SupabaseEmployeeRow[]>("/rest/v1/empleados", {
+      searchParams: {
+        select: "usuario_id,usuario:usuarios(id,correo,nombre_completo)",
         limit: String(LARGE_LIMIT),
       },
       enforceOrganization: true,
@@ -927,21 +968,46 @@ export async function fetchAssignmentLookups(): Promise<HrAssignmentLookups> {
     errors.push(usuariosRes.error)
   }
 
+  const supervisores =
+    supervisorsRes.ok && Array.isArray(supervisorsRes.data)
+      ? supervisorsRes.data
+          .map((row) => {
+            const user = row.usuario
+            if (!user?.id) return null
+            return {
+              id: user.id,
+              nombre: sanitizeText(user.nombre_completo) || "Sin nombre",
+              correo: sanitizeText(user.correo).toLowerCase(),
+            }
+          })
+          .filter((item): item is HrEmployeeUserOption => Boolean(item))
+      : []
+  if (!supervisorsRes.ok) {
+    errors.push(supervisorsRes.error)
+  }
+
   return {
     departamentos,
     puestos,
     usuarios,
+    supervisores,
     errors,
   }
 }
 
-function mapEmployeeRow(row: SupabaseEmployeeRow): HrEmployeeItem {
+function mapEmployeeRow(
+  row: SupabaseEmployeeRow,
+  supervisor: SupabaseSupervisorRow | undefined,
+): HrEmployeeItem {
   return {
     id: row.usuario_id,
     nombre: sanitizeText(row.usuario?.nombre_completo) || "Sin nombre",
     correo: sanitizeText(row.usuario?.correo).toLowerCase(),
     telefono: sanitizeText(row.usuario?.telefono_e164) || "—",
     estado: normalizeEstado(row.usuario?.estado),
+    supervisorId: supervisor?.supervisor_id ?? null,
+    supervisorNombre: sanitizeText(supervisor?.supervisor?.nombre_completo) || null,
+    supervisorCorreo: sanitizeText(supervisor?.supervisor?.correo).toLowerCase() || null,
     departamento: row.departamento?.nombre
       ? sanitizeText(row.departamento.nombre) || "Sin departamento"
       : "Sin departamento",

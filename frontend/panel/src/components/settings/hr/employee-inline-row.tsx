@@ -35,6 +35,7 @@ const INITIAL_STATE: CrudActionState = { status: "idle" }
 type AssignmentOptions = {
   departments: HrDepartmentOption[]
   positions: HrPositionOption[]
+  supervisors: HrEmployeeUserOption[]
 }
 
 type EmployeeCreateOptions = AssignmentOptions & {
@@ -49,6 +50,7 @@ export function EmployeeCreateSection({
   departments,
   positions,
   userOptions,
+  supervisors,
 }: EmployeeCreateOptions) {
   const [state, action] = useActionState(createEmployeeAction, INITIAL_STATE)
   const [blockingMessage, setBlockingMessage] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export function EmployeeCreateSection({
   return (
     <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
       <form action={action} className="space-y-4" onSubmit={handleSubmit}>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div className="space-y-1">
             <Label htmlFor="employee-new-user">Usuario</Label>
             <AssignmentSelect
@@ -113,6 +115,18 @@ export function EmployeeCreateSection({
               }))}
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="employee-new-supervisor">Supervisor</Label>
+            <AssignmentSelect
+              id="employee-new-supervisor"
+              name="supervisor_id"
+              placeholder="Sin supervisor"
+              options={supervisors.map((supervisor) => ({
+                id: supervisor.id,
+                label: `${supervisor.nombre}${supervisor.correo ? ` · ${supervisor.correo}` : ""}`,
+              }))}
+            />
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 rounded-md border border-border/60 p-3">
           <InlineCheckbox id="employee-new-gestor" name="es_gestor" label="Gestor" />
@@ -143,7 +157,12 @@ export function EmployeeCreateSection({
   )
 }
 
-export function EmployeeInlineRow({ employee, departments, positions }: EmployeeInlineRowProps) {
+export function EmployeeInlineRow({
+  employee,
+  departments,
+  positions,
+  supervisors,
+}: EmployeeInlineRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -167,6 +186,18 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
       "Sin puesto"
     )
   }, [employee.puesto, employee.puestoId, positions])
+  const supervisorLabel = useMemo(() => {
+    if (!employee.supervisorId) return "Sin supervisor"
+    return (
+      employee.supervisorNombre ??
+      employee.supervisorCorreo ??
+      "Supervisor"
+    )
+  }, [employee.supervisorCorreo, employee.supervisorId, employee.supervisorNombre])
+  const supervisorOptions = useMemo(
+    () => supervisors.filter((option) => option.id !== employee.id),
+    [employee.id, supervisors],
+  )
 
   return (
     <>
@@ -192,6 +223,9 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
           <Badge variant={employee.esVendedor ? "secondary" : "outline"}>
             {employee.esVendedor ? "Sí" : "No"}
           </Badge>
+        </TableCell>
+        <TableCell className="hidden xl:table-cell max-w-[220px] whitespace-normal">
+          {supervisorLabel}
         </TableCell>
         <TableCell className="hidden lg:table-cell">
           <Badge variant={estadoVariant}>{employee.estado}</Badge>
@@ -254,7 +288,7 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
       </TableRow>
       {isEditing && (
         <TableRow className="bg-muted/40">
-          <TableCell colSpan={8}>
+          <TableCell colSpan={9}>
             <form action={editAction} className="space-y-4">
               <input type="hidden" name="usuario_id" value={employee.id} />
               <div className="grid gap-4 md:grid-cols-2">
@@ -281,6 +315,19 @@ export function EmployeeInlineRow({ employee, departments, positions }: Employee
                     options={positions.map((puesto) => ({
                       id: puesto.id,
                       label: `${puesto.nombre} · ${puesto.departamentoNombre}`,
+                    }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`employee-edit-supervisor-${employee.id}`}>Supervisor</Label>
+                  <AssignmentSelect
+                    id={`employee-edit-supervisor-${employee.id}`}
+                    name="supervisor_id"
+                    defaultValue={employee.supervisorId ?? ""}
+                    placeholder="Sin supervisor"
+                    options={supervisorOptions.map((supervisor) => ({
+                      id: supervisor.id,
+                      label: `${supervisor.nombre}${supervisor.correo ? ` · ${supervisor.correo}` : ""}`,
                     }))}
                   />
                 </div>

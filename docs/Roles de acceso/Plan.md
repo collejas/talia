@@ -218,6 +218,7 @@ Riesgos y mitigaciones
   - Mitigacion: misma fuente de permisos desde DB.
 
 Siguientes pasos
-- Confirmar estructura de jerarquia (tabla empleados_supervisores).
+- [check] Confirmar estructura de jerarquia (tabla empleados_supervisores).
+- [check] UI para asignar supervisor en /settings/empleados.
 - Aprobar lista de permisos obligatorios por vista.
 - Definir orden de aplicacion por modulos.
