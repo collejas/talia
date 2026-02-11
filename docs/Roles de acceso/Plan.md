@@ -88,8 +88,8 @@ Entregables
 
 Fase 3: Permisos y helpers
 Cambios DB
-- Crear funcion public.current_user_has_perm(codigo text) que verifique permisos por roles.
-- Crear view o RPC public.mi_contexto_permisos() que devuelva:
+- [check] Crear funcion public.current_user_has_perm(codigo text) que verifique permisos por roles.
+- [check] Crear view o RPC public.mi_contexto_permisos() que devuelva:
   - usuario_id
   - organizacion_id
   - roles
@@ -97,7 +97,7 @@ Cambios DB
   - es_admin
 
 Entregables
-- Migracion con funciones y view/RPC.
+- [check] Migracion con funciones y view/RPC.
 - Consulta de prueba con usuario real.
 
 Fase 4: RLS por jerarquia

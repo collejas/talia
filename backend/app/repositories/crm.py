@@ -204,12 +204,13 @@ class CRMRepository:
         ]
     )
 
-    def __init__(self, *, timeout: float = 10.0) -> None:
+    def __init__(self, *, timeout: float = 10.0, user_token: str | None = None) -> None:
         if not settings.supabase_url or not settings.supabase_service_role:
             raise CRMRepositoryError("Supabase no está configurado (SUPABASE_URL/SERVICE_ROLE)")
         self._base_url = settings.supabase_url.rstrip("/")
         self._service_role = settings.supabase_service_role
         self._timeout = timeout
+        self._user_token = user_token.strip() if isinstance(user_token, str) and user_token.strip() else None
 
     async def list_accounts(
         self,
@@ -5188,6 +5189,27 @@ class CRMRepository:
                 return True
         return False
 
+    async def current_user_has_perm(self, *, codigo: str) -> bool:
+        perm_code = (codigo or "").strip()
+        if not perm_code:
+            return False
+        data = await self._rpc("current_user_has_perm", {"codigo": perm_code})
+        if isinstance(data, bool):
+            return data
+        if isinstance(data, dict):
+            value = data.get("current_user_has_perm")
+            if isinstance(value, bool):
+                return value
+        return False
+
+    async def get_permission_context(self) -> dict[str, Any]:
+        data = await self._rpc("mi_contexto_permisos", {})
+        if isinstance(data, list) and data:
+            return data[0] if isinstance(data[0], dict) else {}
+        if isinstance(data, dict):
+            return data
+        return {}
+
     async def list_clientes(
         self,
         *,
@@ -7622,6 +7644,16 @@ class CRMRepository:
         prefer: str | None = None,
         organizacion_id: UUID | None = None,
     ) -> httpx.Response:
+        if self._user_token:
+            return await self._request_with_user(
+                method,
+                path,
+                token=self._user_token,
+                params=params,
+                json=json,
+                prefer=prefer,
+                organizacion_id=organizacion_id,
+            )
         url = f"{self._base_url}{path}"
         headers = {
             "Accept": "application/json",
@@ -7758,6 +7790,19 @@ class CRMRepository:
 
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
         url = f"{self._base_url}/rest/v1/rpc/{function_name}"
+        if self._user_token:
+            resp = await self._request_with_user(
+                "POST",
+                f"/rest/v1/rpc/{function_name}",
+                token=self._user_token,
+                json=payload,
+            )
+            if resp.status_code == 204:
+                return {}
+            try:
+                return resp.json()
+            except ValueError as exc:
+                raise CRMRepositoryError(f"Respuesta inválida de RPC {function_name}: {exc}") from exc
         headers = {
             "Accept": "application/json",
             "apikey": self._service_role,
@@ -7800,6 +7845,7 @@ class CRMRepository:
         params: dict[str, Any] | None = None,
         json: Any = None,
         prefer: str | None = None,
+        organizacion_id: UUID | None = None,
     ) -> httpx.Response:
         if not settings.supabase_url or not settings.supabase_anon:
             raise CRMRepositoryError("Supabase no está configurado (anon key)")
@@ -7809,6 +7855,8 @@ class CRMRepository:
             "apikey": settings.supabase_anon,
             "Authorization": f"Bearer {token}",
         }
+        if organizacion_id:
+            headers["X-Organizacion-Id"] = str(organizacion_id)
         if prefer:
             headers["Prefer"] = prefer
         try:

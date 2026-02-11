@@ -1,6 +1,7 @@
 "use server"
 import { revalidatePath } from "next/cache"
 
+import { requirePermission } from "@/lib/auth/permissions"
 import { callSupabaseRest } from "@/lib/supabase/rest"
 import { createSupabaseAuthUser, deleteSupabaseAuthUser } from "@/lib/supabase/auth-admin"
 import { resolveOrganizacionId } from "@/lib/settings/org"
@@ -83,6 +84,17 @@ async function callAndValidate(
   path: string,
   options: Parameters<typeof callSupabaseRest>[1],
 ): Promise<void> {
+  const normalizedPath = path.toLowerCase()
+  if (
+    normalizedPath.includes("/roles") ||
+    normalizedPath.includes("/roles_permisos") ||
+    normalizedPath.includes("/permisos")
+  ) {
+    await requirePermission("role.manage")
+  } else {
+    await requirePermission("user.manage")
+  }
+
   const response = await callSupabaseRest(path, options)
   if (!response.ok) {
     const context = path.startsWith("/rest/v1/") ? path.replace("/rest/v1/", "") : path
@@ -328,6 +340,7 @@ function parseTelefonoE164(raw: string | null): string | null {
 
 export const createUserAction: CrudActionHandler = async (_, formData) => {
   try {
+    await requirePermission("user.manage")
     const orgId = await requireOrgId()
     const idInput = getOptionalText(formData, "id")
     const correo = getOptionalText(formData, "correo")

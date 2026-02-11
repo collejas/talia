@@ -2374,14 +2374,31 @@ class ImportPropiedadesRequest(BaseModel):
     mixtos: list[ImportDesarrolloMixto] | None = None
 
 
-def get_repository() -> CRMRepository:
+# Helpers -----------------------------------------------------------------------
+
+
+def optional_user_token(
+    x_user_token: Annotated[str | None, Header(alias="X-User-Token")] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> str | None:
+    if x_user_token:
+        token = x_user_token.strip()
+        if token:
+            return token
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            return token
+    return None
+
+
+def get_repository(
+    user_token: str | None = Depends(optional_user_token),
+) -> CRMRepository:
     try:
-        return CRMRepository()
+        return CRMRepository(user_token=user_token)
     except CRMRepositoryError as exc:  # pragma: no cover - falla de config
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-# Helpers -----------------------------------------------------------------------
 
 
 def require_organizacion_id(
@@ -4338,6 +4355,17 @@ async def require_admin_user(
     if not has_role:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     return usuario_id
+
+
+def require_permission(permission_code: str):
+    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+        repo = CRMRepository(user_token=user_token)
+        allowed = await repo.current_user_has_perm(codigo=permission_code)
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+        return user_token
+
+    return _dependency
 
 
 def _coerce_metadata(value: Any) -> dict[str, Any] | None:
@@ -7202,11 +7230,23 @@ async def delete_contact(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/me/permissions")
+async def get_my_permissions(
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    repo = CRMRepository(user_token=user_token)
+    try:
+        context = await repo.get_permission_context()
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return context
+
+
 @router.get("/settings/logos", response_model=CRMLogoAssetList)
 async def list_settings_logos(
     *,
     repo: CRMRepository = Depends(get_repository),
-    admin_id: UUID = Depends(require_admin_user),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.view")),
 ) -> CRMLogoAssetList:
     try:
         rows = await repo.list_logos()
@@ -7225,7 +7265,8 @@ async def list_settings_logos(
 async def upload_settings_logo(
     *,
     repo: CRMRepository = Depends(get_repository),
-    admin_id: UUID = Depends(require_admin_user),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
     file: UploadFile = File(...),
     nombre: Annotated[str, Form()],
     descripcion: Annotated[str | None, Form()] = None,
@@ -7252,7 +7293,7 @@ async def upload_settings_logo(
             "mime": upload.get("mime"),
             "original_name": upload.get("name") or file.filename,
         },
-        "uploaded_by": str(admin_id),
+        "uploaded_by": str(usuario_id) if usuario_id else None,
     }
 
     try:
@@ -7269,6 +7310,7 @@ async def upload_settings_logo(
 @router.post("/settings/media/upload", response_model=CRMMediaAssetUpload)
 async def upload_settings_media(
     *,
+    _: str = Depends(require_permission("settings.manage")),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     file: UploadFile = File(...),
@@ -7297,6 +7339,7 @@ async def get_email_template(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.view")),
     slug: str = DEFAULT_TEMPLATE_SLUG,
 ) -> CRMEmailTemplate:
     try:
@@ -7313,6 +7356,7 @@ async def update_email_template(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMEmailTemplateUpdate,
     slug: str = DEFAULT_TEMPLATE_SLUG,
 ) -> CRMEmailTemplate:
@@ -7329,6 +7373,7 @@ async def get_quote_template(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.view")),
     slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
 ) -> CRMQuoteTemplate:
     try:
@@ -7348,6 +7393,7 @@ async def update_quote_template(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMQuoteTemplateUpdate,
     usuario_id: UUID | None = Depends(optional_usuario_id),
     slug: str = DEFAULT_QUOTE_TEMPLATE_SLUG,
@@ -7370,6 +7416,7 @@ async def get_reminder_settings(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.view")),
     slug: str = DEFAULT_REMINDER_SLUG,
 ) -> CRMReminderSettings:
     try:
@@ -7386,6 +7433,7 @@ async def update_reminder_settings(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),  # noqa: ARG001
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMReminderSettingsUpdate,
     slug: str = DEFAULT_REMINDER_SLUG,
 ) -> CRMReminderSettings:

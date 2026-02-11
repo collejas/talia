@@ -36,6 +36,7 @@ import {
 } from "@tabler/icons-react"
 
 import { useCurrentUser } from "@/hooks/use-current-user"
+import { usePermissions } from "@/hooks/use-permissions"
 import { usePlatformAdminStatus } from "@/hooks/use-platform-admin-status"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
@@ -51,29 +52,57 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 
-const NAVIGATION = {
+type NavPermission = string | string[]
+
+type NavItem = {
+  title: string
+  url: string
+  icon?: Icon
+  permission?: NavPermission
+  children?: NavItem[]
+}
+
+type NavDocItem = {
+  name: string
+  url: string
+  icon: Icon
+}
+
+type NavSecondaryItem = {
+  title: string
+  url: string
+  icon: Icon
+  children?: { title: string; url: string; icon?: Icon }[]
+}
+
+const NAVIGATION: {
+  navMain: NavItem[]
+  documents: NavDocItem[]
+  navSecondary: NavSecondaryItem[]
+} = {
   navMain: [
-    { title: "Dashboard", url: "/dashboard", icon: IconChartBar },
-    { title: "Embudo", url: "/embudo", icon: IconListDetails },
-    { title: "Inbox", url: "/inbox", icon: IconInbox },
-    { title: "Agenda", url: "/agenda", icon: IconCalendar },
-    { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap },
-    { title: "Leads", url: "/leads", icon: IconUsers },
-    { title: "Contactos", url: "/contactos", icon: IconAddressBook },
-    { title: "Clientes", url: "/clientes", icon: IconUsersGroup },
+    { title: "Dashboard", url: "/dashboard", icon: IconChartBar, permission: "ver_panel" },
+    { title: "Embudo", url: "/embudo", icon: IconListDetails, permission: "pipeline.view" },
+    { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
+    { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
+    { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
+    { title: "Leads", url: "/leads", icon: IconUsers, permission: "leads.view" },
+    { title: "Contactos", url: "/contactos", icon: IconAddressBook, permission: "contacts.read" },
+    { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
     {
       title: "CRM (beta)",
       url: "/crm",
       icon: IconFolder,
+      permission: "conv.read",
       children: [
-        { title: "Cuentas", url: "/crm" },
-        { title: "Oportunidades", url: "/crm/oportunidades" },
-        { title: "Actividades", url: "/crm/actividades" },
-        { title: "Tickets", url: "/crm/tickets" },
-        { title: "Campañas", url: "/crm/campanas" },
-        { title: "Leads", url: "/crm/leads" },
-        { title: "Notas", url: "/crm/notas" },
-        { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones" },
+        { title: "Cuentas", url: "/crm", permission: "clientes.view" },
+        { title: "Oportunidades", url: "/crm/oportunidades", permission: "pipeline.view" },
+        { title: "Actividades", url: "/crm/actividades", permission: "activities.view" },
+        { title: "Tickets", url: "/crm/tickets", permission: "tickets.view" },
+        { title: "Campañas", url: "/crm/campanas", permission: "campaigns.view" },
+        { title: "Leads", url: "/crm/leads", permission: "leads.view" },
+        { title: "Notas", url: "/crm/notas", permission: "notes.view" },
+        { title: "Asignaciones WhatsApp", url: "/crm/whatsapp/asignaciones", permission: "conv.assign" },
       ],
     },
     {
@@ -81,54 +110,59 @@ const NAVIGATION = {
       url: "/prospeccion",
       icon: IconTargetArrow,
       children: [
-        { title: "Google búsqueda", url: "/prospeccion/google-busqueda" },
-        { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda" },
-        { title: "Buscador web", url: "/prospeccion/buscador" },
-        { title: "Prospectos", url: "/prospeccion/prospectos" },
-        { title: "Contactos", url: "/prospeccion/contactos" },
-        { title: "Campañas", url: "/prospeccion/campanas" },
-        { title: "Mensajes automatizados", url: "/prospeccion/mensajes" },
+        { title: "Google búsqueda", url: "/prospeccion/google-busqueda", permission: "ver_busquedas_google" },
+        { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda", permission: "ver_busquedas_inegi" },
+        { title: "Buscador web", url: "/prospeccion/buscador", permission: "ejecutar_busquedas" },
+        { title: "Prospectos", url: "/prospeccion/prospectos", permission: "ejecutar_busquedas" },
+        { title: "Contactos", url: "/prospeccion/contactos", permission: "contacts.read" },
+        { title: "Campañas", url: "/prospeccion/campanas", permission: "campaigns.view" },
+        { title: "Mensajes automatizados", url: "/prospeccion/mensajes", permission: "messages.read" },
       ],
     },
     {
       title: "Settings",
       url: "/settings",
       icon: IconSettings,
+      permission: ["settings.view", "settings.manage"],
       children: [
-        { title: "Formato de correos", url: "/settings/email", icon: IconMail },
-        { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell },
+        { title: "Formato de correos", url: "/settings/email", icon: IconMail, permission: "settings.manage" },
+        { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell, permission: "settings.manage" },
         {
           title: "Formato de cotización",
           url: "/settings/formato-cotizacion",
           icon: IconFileDescription,
+          permission: "settings.manage",
         },
         {
           title: "Productos y servicios",
           url: "/settings/productos",
           icon: IconHierarchy,
+          permission: "settings.manage",
         },
         {
           title: "Propiedades",
           url: "/settings/propiedades",
           icon: IconBuilding,
+          permission: "settings.manage",
         },
-        { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers },
-        { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck },
-        { title: "Permisos", url: "/settings/usuarios/permisos", icon: IconShieldLock },
-        { title: "Empleados", url: "/settings/empleados", icon: IconUsersGroup },
-        { title: "Departamentos", url: "/settings/empleados/departamentos", icon: IconHierarchy },
-        { title: "Puestos", url: "/settings/empleados/puestos", icon: IconBriefcase },
+        { title: "Usuarios", url: "/settings/usuarios", icon: IconUsers, permission: "user.manage" },
+        { title: "Roles", url: "/settings/usuarios/roles", icon: IconShieldCheck, permission: "role.manage" },
+        { title: "Permisos", url: "/settings/usuarios/permisos", icon: IconShieldLock, permission: "role.manage" },
+        { title: "Empleados", url: "/settings/empleados", icon: IconUsersGroup, permission: "user.manage" },
+        { title: "Departamentos", url: "/settings/empleados/departamentos", icon: IconHierarchy, permission: "user.manage" },
+        { title: "Puestos", url: "/settings/empleados/puestos", icon: IconBriefcase, permission: "user.manage" },
         {
           title: "Plantillas de contacto",
           url: "/settings/prospeccion/plantillas",
           icon: IconMessageCircle,
+          permission: "settings.manage",
         },
       ],
     },
     { title: "Proyectos", url: "#", icon: IconFolder },
-    { title: "Propuesta", url: "/propuesta", icon: IconLayoutGrid },
-    { title: "Visita 2", url: "/vista-2", icon: IconLayoutKanban },
-    { title: "Visitas", url: "/visitas", icon: IconMessageCircle },
+    { title: "Propuesta", url: "/propuesta", icon: IconLayoutGrid, permission: "propuesta.view" },
+    { title: "Visita 2", url: "/vista-2", icon: IconLayoutKanban, permission: "reports.view" },
+    { title: "Visitas", url: "/visitas", icon: IconMessageCircle, permission: "reports.view" },
   ],
   documents: [
     { name: "Data Library", url: "#", icon: IconDatabase },
@@ -145,6 +179,7 @@ type SettingsChildNavItem = {
   title: string
   url: string
   icon?: Icon
+  permission?: NavPermission
 }
 
 const SETTINGS_CHILDREN_TEMPLATE: SettingsChildNavItem[] =
@@ -156,6 +191,7 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter()
   const { user, loading } = useCurrentUser()
+  const { context: permissionContext, loading: permissionsLoading } = usePermissions()
   const [hydrated, setHydrated] = useState(false)
 
   const { isPlatformAdmin } = usePlatformAdminStatus()
@@ -165,19 +201,43 @@ export function AppSidebar({
       title: "Variables",
       url: "/settings/variables",
       icon: IconAdjustments,
+      permission: "settings.manage",
     })
     if (isPlatformAdmin) {
       base.push({ title: "Tenants", url: "/settings/tenants", icon: IconDatabase })
     }
     return base
   }, [isPlatformAdmin])
-  const navItems = useMemo(
-    () =>
-      NAVIGATION.navMain.map((item) =>
-        item.title === "Settings" ? { ...item, children: settingsChildren } : item,
-      ),
-    [settingsChildren],
-  )
+  const navItems = useMemo(() => {
+    const items = NAVIGATION.navMain.map((item) =>
+      item.title === "Settings" ? { ...item, children: settingsChildren } : item,
+    )
+
+    if (permissionsLoading) {
+      return items
+    }
+
+    const perms = new Set((permissionContext.permisos ?? []).map((perm) => perm.toLowerCase()))
+    const isAdmin = permissionContext.es_admin
+
+    const hasPermission = (permission?: NavPermission) => {
+      if (!permission) return true
+      if (isAdmin) return true
+      const required = Array.isArray(permission) ? permission : [permission]
+      return required.some((perm) => perms.has(perm.toLowerCase()))
+    }
+
+    const filterItems = (list: NavItem[]): NavItem[] =>
+      list.reduce<NavItem[]>((acc, item) => {
+        const children = item.children ? filterItems(item.children) : undefined
+        const allowed = hasPermission(item.permission) || (children && children.length > 0)
+        if (!allowed) return acc
+        acc.push({ ...item, children })
+        return acc
+      }, [])
+
+    return filterItems(items)
+  }, [settingsChildren, permissionsLoading, permissionContext])
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setHydrated(true))

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { callCrmApi } from "@/lib/api/crm"
+import { redirect } from "next/navigation"
 
 import { TenantCreationPanel } from "./components/tenant-creation-panel"
 
@@ -27,6 +28,13 @@ type TenantSummary = {
 }
 
 export default async function TenantsSettingsPage() {
+  const access = await callCrmApi<{ is_platform_admin: boolean }>("/admin/me/platform-admin", {
+    withUserToken: true,
+  })
+  if (!access.ok || !access.data.is_platform_admin) {
+    redirect("/unauthorized")
+  }
+
   const response = await callCrmApi<{ ok: boolean; items: TenantSummary[] }>("/admin/tenants", {
     organizacionId: null,
     withUserToken: true,

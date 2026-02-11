@@ -86,6 +86,13 @@ async def require_tenant_context(
     return TenantContext(user_id=user_id, organizacion_id=organizacion_id)
 
 
+async def require_permission(user_token: str, code: str) -> None:
+    repo = CRMRepository(user_token=user_token)
+    allowed = await repo.current_user_has_perm(codigo=code)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+
 def _format_route_rows(rows: list[dict[str, Any]]) -> list[ChannelRoute]:
     routes: list[ChannelRoute] = []
     for row in rows:
@@ -179,8 +186,10 @@ async def _build_tenant_response(
 @router.get("/me/settings", response_model=TenantScopedSettings)
 async def get_tenant_settings(
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     platform_repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantScopedSettings:
+    await require_permission(user_token, "settings.view")
     row = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
     if not row:
         raise HTTPException(status_code=404, detail="tenant_not_found")
@@ -192,8 +201,10 @@ async def get_tenant_settings(
 async def update_tenant_settings(
     payload: TenantScopedUpdateRequest,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     platform_repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantScopedSettings:
+    await require_permission(user_token, "settings.manage")
     update_payload = payload.model_dump(exclude_none=True)
     if not update_payload:
         raise HTTPException(status_code=400, detail="nothing_to_update")
@@ -212,8 +223,10 @@ async def update_tenant_settings(
 async def upsert_tenant_secrets(
     payload: TenantSecretsPayload,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantSecretsResponse:
+    await require_permission(user_token, "settings.manage")
     items: list[SecretMetadata] = []
     for entry in payload.secrets:
         secret_key = _normalize_secret_key(entry.clave)
@@ -269,8 +282,10 @@ async def upsert_tenant_secrets(
 @router.get("/me/secrets", response_model=TenantSecretsResponse)
 async def list_tenant_secrets(
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantSecretsResponse:
+    await require_permission(user_token, "settings.view")
     items = await repo.list_secret_metadata(organizacion_id=context.organizacion_id)
     return TenantSecretsResponse(items=[SecretMetadata.model_validate(row) for row in items])
 
@@ -279,8 +294,10 @@ async def list_tenant_secrets(
 async def delete_tenant_secret(
     clave: str,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> Response:
+    await require_permission(user_token, "settings.manage")
     secret_key = _normalize_secret_key(clave)
     try:
         await repo.delete_secret(organizacion_id=context.organizacion_id, clave=secret_key)
@@ -292,8 +309,10 @@ async def delete_tenant_secret(
 @router.get("/me/routes", response_model=TenantRoutesResponse)
 async def list_tenant_routes(
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantRoutesResponse:
+    await require_permission(user_token, "settings.view")
     routes = await repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return TenantRoutesResponse(items=[ChannelRoute.model_validate(row) for row in routes])
 
@@ -302,8 +321,10 @@ async def list_tenant_routes(
 async def create_tenant_route(
     payload: CreateRouteRequest,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> CreateRouteResponse:
+    await require_permission(user_token, "settings.manage")
     canal = payload.canal.strip().lower()
     clave = payload.clave.strip().lower()
     if not canal or not clave:
@@ -328,8 +349,10 @@ async def create_tenant_route(
 async def delete_tenant_route(
     route_id: UUID,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> Response:
+    await require_permission(user_token, "settings.manage")
     try:
         await repo.delete_channel_route(organizacion_id=context.organizacion_id, route_id=route_id)
     except PlatformRepositoryError as exc:
@@ -341,8 +364,10 @@ async def delete_tenant_route(
 async def set_my_tenant_config(
     payload: SetTenantConfigRequest,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantConfigResponse:
+    await require_permission(user_token, "settings.manage")
     try:
         row = await repo.set_organizacion_config(
             organizacion_id=context.organizacion_id,
@@ -361,8 +386,10 @@ async def set_my_tenant_config(
 async def tenant_validate(
     payload: TenantValidationPayload,
     context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
+    await require_permission(user_token, "settings.view")
     config = await repo.get_organizacion_config(organizacion_id=context.organizacion_id)
     if config is None:
         raise HTTPException(status_code=404, detail="tenant_not_found")

@@ -80,7 +80,8 @@ export async function callCrmApi<T = unknown>(
   if (usuarioId) {
     headers["X-Usuario-Id"] = usuarioId;
   }
-  if (options.withUserToken && userAccessToken) {
+  const shouldSendUserToken = options.withUserToken ?? true;
+  if (shouldSendUserToken && userAccessToken) {
     headers["X-User-Token"] = userAccessToken;
   }
 

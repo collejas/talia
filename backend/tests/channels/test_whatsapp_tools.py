@@ -36,6 +36,14 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     dummy_repo = DummySalesRepo()
     monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
     monkeypatch.setattr(tools.settings, "whatsapp_sales_template_sid", "HXexample")
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return tools.tenant_runtime.WhatsappRuntimeSettings.from_settings()
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        fake_get_whatsapp_runtime_settings,
+    )
 
     sent: dict[str, str] = {}
 
@@ -45,6 +53,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         body: str | None = None,
         template_sid: str | None = None,
         template_variables: dict | None = None,
+        organizacion_id: str | None = None,
     ) -> object:
         sent["to"] = to_number
         sent["body"] = body

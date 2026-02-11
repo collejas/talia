@@ -2917,9 +2917,28 @@ async def _execute_function_call(
         }
 
     if name == "schedule_demo":
-        conversation_meta = await _resolve_conversation_metadata(context.conversation_id)
+        contact = await _resolve_contact(context.contact_id)
+        try:
+            tarjeta_id = await _ensure_opportunity_when_contact_ready(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                channel="webchat",
+                contact=contact,
+            )
+        except storage.StorageError as exc:
+            logger.exception(
+                "calendar.ensure_opportunity_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+            raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
+
+        organizacion_hint = _extract_contact_org(contact) if contact else None
+        if not organizacion_hint:
+            conversation_meta = await _resolve_conversation_metadata(context.conversation_id)
+            organizacion_hint = conversation_meta.get("organizacion_id")
+
         calendar_settings = await get_calendar_runtime_settings_for_organizacion(
-            conversation_meta.get("organizacion_id")
+            organizacion_hint
         )
         resource_id = calendar_settings.resource_id
         if not resource_id:
@@ -2935,21 +2954,6 @@ async def _execute_function_call(
         slot_identifier = slot_id or _build_slot_identifier(resource_id, slot_datetime)
         notes = (arguments.get("notes") or "").strip() or None
 
-        try:
-            tarjeta_id = await _ensure_opportunity_when_contact_ready(
-                conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
-                channel="webchat",
-            )
-        except storage.StorageError as exc:
-            logger.exception(
-                "calendar.ensure_opportunity_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
-            )
-            raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
-
-        contact = await _resolve_contact(context.contact_id)
-        organizacion_hint = _extract_contact_org(contact)
         hold_metadata = {
             "slot_id": slot_identifier,
             "source": "webchat",
