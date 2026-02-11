@@ -55,7 +55,7 @@ export default async function OportunidadesPage({
             rows={payload.rows}
             columnLabels={{
               header: "Oportunidad",
-              type: "Contacto/Empresa",
+              type: "Contacto",
               status: "Etapa",
               target: "Monto",
               limit: "Cierre probable",
