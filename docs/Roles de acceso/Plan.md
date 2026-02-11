@@ -113,6 +113,7 @@ Cambios DB
   - roles
   - permisos
   - es_admin
+- [check] Fix de current_user_has_perm: parametro renombrado a perm_code y comparacion correcta con p.codigo.
 
 Entregables
 - [check] Migracion con funciones y view/RPC.
@@ -152,6 +153,7 @@ Cambios
 - Agregar validacion de permisos por endpoint critico.
 - Crear helper require_perm en backend para centralizar checks.
 - [check] Requerir user token en endpoints de embudo/leads/agenda y evitar service_role en headers.
+- [check] Ajustar RPC current_user_has_perm a {perm_code} y validar 403 en busquedas Denue.
 
 Archivos candidatos
 - backend/app/repositories/crm.py
@@ -198,6 +200,18 @@ Entregables
 - Checklist de pruebas.
 - Datos de prueba de jerarquia.
 - [check] Correccion de asignacion: oportunidad sigue propietario del contacto cuando existe.
+
+Checklist regresion permisos (minimo)
+- Usuario sin `ejecutar_busquedas`:
+  - POST `/api/crm/prospeccion/denue/busquedas` devuelve 403.
+  - POST `/api/crm/prospeccion/google/busquedas` devuelve 403.
+  - POST `/api/crm/prospeccion/buscador/run` devuelve 403.
+- Usuario con solo `ver_busquedas_*`:
+  - GET `/api/crm/prospeccion/denue/busquedas` devuelve 200.
+  - GET `/api/crm/prospeccion/google/busquedas` devuelve 200.
+- Confirmar `current_user_has_perm('ejecutar_busquedas')`:
+  - Con rol Agente -> false.
+  - Con rol Supervisor/Admin -> true.
 - [check] Sincronizacion automatica de matriz rol-permisos (hash + script + arranque).
 - [check] Boton de sincronizacion de matriz en UI (roles).
 

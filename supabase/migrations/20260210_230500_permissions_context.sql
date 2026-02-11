@@ -1,11 +1,19 @@
 -- Adds permission helpers for role-based access checks.
 
-create or replace function public.current_user_has_perm(codigo text)
+create or replace function public.current_user_has_perm(perm_code text)
 returns boolean
 language sql
 security definer
 set search_path = public
 as $$
+  with ctx as (
+    select
+      auth.uid() as usuario_id,
+      coalesce(
+        public.usuario_organizacion_id(auth.uid()),
+        (select ur.organizacion_id from public.usuarios_roles ur where ur.usuario_id = auth.uid() limit 1)
+      ) as organizacion_id
+  )
   select
     public.es_admin(auth.uid())
     or exists (
@@ -17,9 +25,10 @@ as $$
       join public.permisos p
         on p.id = rp.permiso_id
        and p.organizacion_id = ur.organizacion_id
-      where ur.usuario_id = auth.uid()
-        and ur.organizacion_id = public.usuario_organizacion_id(auth.uid())
-        and lower(p.codigo) = lower(codigo)
+      cross join ctx
+      where ur.usuario_id = ctx.usuario_id
+        and ur.organizacion_id = ctx.organizacion_id
+        and lower(p.codigo) = lower(perm_code)
     );
 $$;
 

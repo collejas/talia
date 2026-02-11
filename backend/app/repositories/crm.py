@@ -5242,7 +5242,7 @@ class CRMRepository:
         perm_code = (codigo or "").strip()
         if not perm_code:
             return False
-        data = await self._rpc("current_user_has_perm", {"codigo": perm_code})
+        data = await self._rpc("current_user_has_perm", {"perm_code": perm_code})
         if isinstance(data, bool):
             return data
         if isinstance(data, dict):

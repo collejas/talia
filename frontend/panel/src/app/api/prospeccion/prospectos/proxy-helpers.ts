@@ -15,9 +15,7 @@ export async function resolveProspeccionAccessToken(): Promise<string | null> {
   if (cookieToken && cookieToken.trim().length) {
     return cookieToken.trim()
   }
-  const fallback =
-    process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_API_KEY
-  return fallback?.trim().length ? fallback.trim() : null
+  return null
 }
 
 function buildBackendUrl(request: Request, backendPath: string, forwardSearch: boolean): URL {

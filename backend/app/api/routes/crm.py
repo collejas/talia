@@ -4384,7 +4384,16 @@ async def require_admin_user(
 def require_permission(permission_code: str):
     async def _dependency(user_token: str = Depends(require_user_token)) -> str:
         repo = CRMRepository(user_token=user_token)
+        user_id = _jwt_verify_and_sub(user_token)
         allowed = await repo.current_user_has_perm(codigo=permission_code)
+        logger.info(
+            "permission.check",
+            extra={
+                "user_id": user_id,
+                "permission": permission_code,
+                "allowed": allowed,
+            },
+        )
         if not allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
         return user_token
@@ -5692,6 +5701,7 @@ async def list_accounts(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMAccountsResponse:
@@ -5712,6 +5722,7 @@ async def create_account(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
     payload: CRMAccountCreate,
 ) -> CRMAccount:
     try:
@@ -5729,6 +5740,7 @@ async def get_account(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
     cuenta_id: UUID,
 ) -> CRMAccount:
     try:
@@ -5745,6 +5757,7 @@ async def list_clientes(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("clientes.view")),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ClienteListResponse:
@@ -5765,6 +5778,7 @@ async def list_pipeline_stages(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
 ) -> list[CRMPipelineStage]:
     try:
         rows = await repo.list_pipelines(organizacion_id=organizacion_id)
@@ -5778,6 +5792,7 @@ async def list_opportunities(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     contacto_id: UUID | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -5801,6 +5816,7 @@ async def list_sale_ready_opportunities(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     contacto_captura_estado: str | None = Query(default="completo"),
@@ -5854,6 +5870,7 @@ async def create_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMOpportunityCreate,
 ) -> CRMOpportunity:
@@ -5891,6 +5908,7 @@ async def get_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     oportunidad_id: UUID,
 ) -> CRMOpportunity:
     try:
@@ -5915,6 +5933,7 @@ async def pipeline_create_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     payload: CRMOpportunityCreate,
 ) -> CRMPipelineCardResponse:
     try:
@@ -5942,6 +5961,7 @@ async def pipeline_update_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     oportunidad_id: UUID,
     payload: CRMPipelineOpportunityPatch,
@@ -6011,6 +6031,7 @@ async def pipeline_delete_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     oportunidad_id: UUID,
 ) -> Response:
     try:
@@ -6031,6 +6052,7 @@ async def import_product_catalog_items(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     scheme_id: UUID = Form(...),
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks,
@@ -6236,6 +6258,7 @@ async def pipeline_get_card(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     oportunidad_id: UUID,
 ) -> CRMPipelineCardResponse:
     return await _build_pipeline_card_response(
@@ -6253,6 +6276,7 @@ async def pipeline_get_history(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     oportunidad_id: UUID,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -6276,6 +6300,7 @@ async def pipeline_append_history_note(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     oportunidad_id: UUID,
     payload: CRMHistoryNoteCreate,
@@ -6320,6 +6345,7 @@ async def pipeline_append_history_note(
 async def list_catalog_items(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     tipo: Literal["producto", "servicio", "paquete"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
@@ -6341,6 +6367,7 @@ async def list_catalog_items(
 async def create_catalog_item(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMCatalogItemCreate,
     usuario_id: UUID | None = Depends(optional_usuario_id),
     background_tasks: BackgroundTasks,
@@ -6366,6 +6393,7 @@ async def create_catalog_item(
 async def update_catalog_item(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.manage")),
     item_id: UUID,
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMCatalogItemUpdate,
@@ -6395,6 +6423,7 @@ async def update_catalog_item(
 async def delete_catalog_item(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("settings.manage")),
     item_id: UUID,
     hard: bool = Query(default=False),
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6447,6 +6476,7 @@ async def catalog_vector_store_status(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
 ) -> CatalogVectorStoreStatus:
     reindex_rows = await repo.list_catalog_embeddings_audit(
         organizacion_id=organizacion_id,
@@ -6478,6 +6508,7 @@ async def catalog_vector_store_audit(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> list[CatalogVectorStoreAuditEntry]:
     rows = await repo.list_catalog_embeddings_audit(
@@ -6495,6 +6526,7 @@ async def catalog_fraccionamientos(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     prototipos_limit: Annotated[int, Query(ge=1, le=20)] = 6,
 ) -> list[CRMCatalogFraccionamiento]:
@@ -6533,6 +6565,7 @@ async def catalog_modelos(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     limit: Annotated[int, Query(ge=1, le=500)] = 500,
 ) -> dict[str, Any]:
@@ -6563,6 +6596,7 @@ async def list_product_lineas(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
@@ -6588,6 +6622,7 @@ async def create_product_linea(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMLineaDeNegocioCreate,
     background_tasks: BackgroundTasks,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6616,6 +6651,7 @@ async def update_product_linea(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     linea_id: UUID,
     payload: CRMLineaDeNegocioUpdate,
     background_tasks: BackgroundTasks,
@@ -6655,6 +6691,7 @@ async def delete_product_linea(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     linea_id: UUID,
     background_tasks: BackgroundTasks,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6682,6 +6719,7 @@ async def list_product_familias(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     linea_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
@@ -6709,6 +6747,7 @@ async def create_product_familia(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMFamiliaProductoCreate,
     background_tasks: BackgroundTasks,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6735,6 +6774,7 @@ async def update_product_familia(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     familia_id: UUID,
     payload: CRMFamiliaProductoUpdate,
     background_tasks: BackgroundTasks,
@@ -6774,6 +6814,7 @@ async def delete_product_familia(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     familia_id: UUID,
     background_tasks: BackgroundTasks,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6801,6 +6842,7 @@ async def list_product_modelos(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     include_inactive: bool = Query(default=False),
     search: str | None = Query(default=None, max_length=200),
     limit: Annotated[int, Query(ge=1, le=500)] = 500,
@@ -6826,6 +6868,7 @@ async def create_product_modelo(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMModeloProductoCreate,
     background_tasks: BackgroundTasks,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6852,6 +6895,7 @@ async def update_product_modelo(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     modelo_id: UUID,
     payload: CRMModeloProductoUpdate,
     background_tasks: BackgroundTasks,
@@ -6891,6 +6935,7 @@ async def delete_product_modelo(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     modelo_id: UUID,
     background_tasks: BackgroundTasks,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -6921,6 +6966,7 @@ async def list_product_metadata_schemes(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
 ) -> list[CRMProductMetadataScheme]:
     try:
         rows = await repo.list_product_metadata_schemes(organizacion_id=organizacion_id)
@@ -6938,6 +6984,7 @@ async def create_product_metadata_scheme(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMProductMetadataSchemeCreate,
 ) -> CRMProductMetadataScheme:
     try:
@@ -6955,6 +7002,7 @@ async def update_product_metadata_scheme(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     scheme_id: UUID,
     payload: CRMProductMetadataSchemeUpdate,
 ) -> CRMProductMetadataScheme:
@@ -6982,6 +7030,7 @@ async def delete_product_metadata_scheme(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     scheme_id: UUID,
 ) -> Response:
     try:
@@ -7165,6 +7214,7 @@ async def search_contacts(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.read")),
     query: Annotated[str, Query(min_length=2, alias="q")],
     limit: Annotated[int, Query(ge=1, le=25)] = 8,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -7197,6 +7247,7 @@ async def create_contact(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
     payload: CRMContactCreate,
 ) -> CRMContact:
     body = payload.model_dump(mode="json", exclude_unset=True)
@@ -7218,6 +7269,7 @@ async def update_contact(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
     contacto_id: UUID,
     payload: CRMContactUpdate,
 ) -> CRMContact:
@@ -7244,6 +7296,7 @@ async def delete_contact(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
     contacto_id: UUID,
 ) -> Response:
     try:
@@ -7475,6 +7528,7 @@ async def update_reminder_settings(
 async def get_contacts_summary(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
 ) -> CRMContactSummary:
     try:
@@ -7488,6 +7542,7 @@ async def get_contacts_summary(
 async def get_contacts_timeline(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
 ) -> list[CRMContactTimelineEntry]:
     try:
@@ -7501,6 +7556,7 @@ async def get_contacts_timeline(
 async def get_contacts_list(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("contacts.read")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_CONTACTS_LIMIT,
 ) -> list[CRMContactListRow]:
@@ -7515,6 +7571,7 @@ async def get_contacts_list(
 async def get_inbox_summary(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_inbox")),
     user_token: str = Depends(require_user_token),
 ) -> CRMInboxSummary:
     row = await repo.inbox_summary(usuario_token=user_token)
@@ -7542,6 +7599,7 @@ async def get_inbox_summary(
 async def get_inbox_threads(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_inbox")),
     user_token: str = Depends(require_user_token),
     estado: str | None = Query(default=None, max_length=50),
     asignado_id: UUID | None = Query(default=None),
@@ -7564,6 +7622,7 @@ async def get_inbox_threads(
 async def get_inbox_messages(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("messages.read")),
     user_token: str = Depends(require_user_token),
     conversacion_id: UUID,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
@@ -7581,6 +7640,7 @@ async def get_inbox_messages(
 @router.post("/inbox/conversations/{conversacion_id}/manual")
 async def set_inbox_manual_mode(
     *,
+    _: str = Depends(require_permission("conv.assign")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     conversacion_id: UUID,
     payload: ManualOverridePayload,
@@ -7599,6 +7659,7 @@ async def set_inbox_manual_mode(
 async def reply_inbox_conversation(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("messages.write")),
     user_token: str = Depends(require_user_token),
     conversacion_id: UUID,
     payload: ConversationReplyPayload,
@@ -7940,6 +8001,7 @@ async def reply_inbox_conversation(
 @router.post("/inbox/conversations/{conversacion_id}/attachments")
 async def upload_inbox_attachment(
     *,
+    _: str = Depends(require_permission("messages.write")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     conversacion_id: UUID,
     file: UploadFile = File(...),
@@ -8088,6 +8150,7 @@ async def _persist_opportunity_conversation_metadata(
 async def list_agenda_bookings(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("agenda.view")),
     user_token: str = Depends(require_user_token),
     rango: str | None = Query(default=None),
     fecha_desde: str | None = Query(default=None, alias="from"),
@@ -8246,6 +8309,7 @@ async def list_agenda_bookings(
 async def create_agenda_booking(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("agenda.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     payload: AgendaBookingCreatePayload,
 ) -> dict[str, Any]:
@@ -8332,6 +8396,7 @@ async def create_agenda_booking(
 @router.get("/agenda/availability")
 async def get_agenda_availability(
     *,
+    _: str = Depends(require_permission("agenda.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     resource_id: str | None = Query(default=None),
     fecha_desde: str | None = Query(default=None, alias="from"),
@@ -8385,6 +8450,7 @@ async def get_agenda_availability(
 async def reschedule_agenda_booking(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("agenda.view")),
     user_token: str = Depends(require_user_token),
     booking_id: UUID,
     payload: AgendaReschedulePayload,
@@ -8422,6 +8488,7 @@ async def reschedule_agenda_booking(
 async def cancel_agenda_booking(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("agenda.view")),
     user_token: str = Depends(require_user_token),
     booking_id: UUID,
     payload: AgendaCancelPayload,
@@ -8457,6 +8524,7 @@ async def obtener_cliente_de_oportunidad(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     oportunidad_id: UUID,
 ) -> dict[str, Any]:
@@ -8473,6 +8541,7 @@ async def convertir_oportunidad_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     oportunidad_id: UUID,
     payload: LeadConversionPayload,
@@ -8512,6 +8581,7 @@ async def list_lead_quotes(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     oportunidad_id: UUID,
 ) -> LeadQuoteListResponse:
     try:
@@ -8537,6 +8607,7 @@ async def create_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     oportunidad_id: UUID,
     payload: LeadQuoteCreatePayload,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -8578,6 +8649,7 @@ async def send_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     oportunidad_id: UUID,
     payload: LeadQuoteSendPayload,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -8759,6 +8831,7 @@ async def get_quote_pdf_signed_url(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     quote_id: UUID,
     expires_in: int = Query(300, ge=30, le=3600),
 ) -> QuoteSignedUrlResponse:
@@ -8795,6 +8868,7 @@ async def mark_lead_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     cotizacion_id: UUID,
     payload: LeadQuoteMarkPayload,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -8830,6 +8904,7 @@ async def mark_lead_quote(
 async def actualizar_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     payload: ClienteFiscalUpdatePayload,
@@ -8852,6 +8927,7 @@ async def registrar_documento_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     payload: ClienteDocumentoPayload,
@@ -8882,6 +8958,7 @@ async def subir_documento_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     tipo: ClienteDocumentoTipo = Form(...),
@@ -8933,6 +9010,7 @@ async def subir_documento_cliente(
 async def actualizar_documento_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     documento_id: UUID,
@@ -8958,6 +9036,7 @@ async def actualizar_documento_cliente(
 async def crear_responsable_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     payload: ClienteResponsablePayload,
@@ -8975,6 +9054,7 @@ async def crear_responsable_cliente(
 async def actualizar_responsable_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     responsable_id: UUID,
@@ -8997,6 +9077,7 @@ async def crear_link_portal_cliente(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("clientes.view")),
     user_token: str = Depends(require_user_token),
     cliente_id: UUID,
     payload: ClientePortalLinkPayload,
@@ -9229,6 +9310,8 @@ async def portal_actualizar_responsable(
 async def crear_busqueda_google(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_google")),
+    __: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: GoogleProspeccionBusquedaPayload,
 ) -> dict[str, Any]:
@@ -9305,6 +9388,8 @@ async def crear_busqueda_google(
 async def crear_busqueda_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_inegi")),
+    __: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: DenueBusquedaPayload,
 ) -> dict[str, Any]:
@@ -9528,6 +9613,7 @@ async def crear_busqueda_denue(
 async def listar_busquedas_google(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_google")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -9562,6 +9648,7 @@ async def listar_busquedas_google(
 async def listar_busquedas_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_inegi")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -9630,6 +9717,7 @@ async def eliminar_busqueda_denue(
 async def listar_resultados_google(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_google")),
     user_token: str = Depends(require_user_token),
     busqueda_id: UUID | None = Query(default=None),
     q: str | None = Query(default=None),
@@ -9688,6 +9776,7 @@ async def listar_resultados_google(
 async def listar_resultados_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_inegi")),
     user_token: str = Depends(require_user_token),
     busqueda_id: UUID | None = Query(default=None),
     q: str | None = Query(default=None),
@@ -9773,6 +9862,7 @@ async def eliminar_resultados_denue(
 async def listar_catalogos_denue(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_inegi")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     """Devuelve los catálogos SCIAN y geográficos necesarios para la búsqueda avanzada."""
@@ -9793,6 +9883,7 @@ async def listar_catalogos_denue(
 async def listar_scian_clase_indice(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ver_busquedas_inegi")),
     user_token: str = Depends(require_user_token),
     codigo_clase: Annotated[str, Query(..., min_length=2)],
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
@@ -9815,6 +9906,7 @@ async def listar_scian_clase_indice(
 async def listar_prospectos(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     params: ProspectoListQuery = Depends(),
     metadata_query: Annotated[list[str] | None, Query(alias="metadata_query")] = None,
@@ -9861,6 +9953,7 @@ async def listar_prospectos(
 async def listar_prospectos_query_metadata(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     query: Annotated[list[str] | None, Query(alias="query")] = None,
     fuente: Annotated[Literal["google_places", "denue", "usuario", ""] | None, Query(alias="fuente")] = None,
@@ -9890,6 +9983,7 @@ async def listar_prospectos_query_metadata(
 async def listar_prospecto_contact_indicadores(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     prospecto_ids: Annotated[list[UUID] | None, Query(alias="prospecto_id")] = None,
 ) -> dict[str, Any]:
@@ -9913,6 +10007,7 @@ async def listar_prospecto_contact_indicadores(
 async def listar_contacto_batches(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     params: ContactBatchQuery = Depends(),
 ) -> dict[str, Any]:
@@ -9942,6 +10037,7 @@ async def listar_contacto_batches(
 async def listar_contacto_envios(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     params: ContactEnvioQuery = Depends(),
 ) -> dict[str, Any]:
@@ -9974,6 +10070,7 @@ async def listar_contacto_envios(
 async def listar_contacto_logs(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     params: ContactLogQuery = Depends(),
 ) -> dict[str, Any]:
@@ -10007,6 +10104,7 @@ async def listar_contacto_logs(
 async def listar_contacto_templates(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     params: ContactTemplateQuery = Depends(),
 ) -> dict[str, Any]:
@@ -10026,6 +10124,7 @@ async def listar_contacto_templates(
 async def crear_contacto_template(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: ContactoTemplatePayload,
 ) -> dict[str, Any]:
@@ -10041,6 +10140,7 @@ async def crear_contacto_template(
 async def actualizar_contacto_template(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     template_id: UUID,
     payload: ContactoTemplateUpdatePayload,
@@ -10066,6 +10166,7 @@ async def actualizar_contacto_template(
 async def eliminar_contacto_template(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     template_id: UUID,
 ) -> Response:
@@ -10082,6 +10183,7 @@ async def eliminar_contacto_template(
 async def listar_contacto_listas(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     params: ProspeccionListaQuery = Depends(),
 ) -> dict[str, Any]:
@@ -10109,6 +10211,7 @@ async def listar_contacto_listas(
 async def crear_contacto_lista(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: ProspeccionListaPayload,
 ) -> dict[str, Any]:
@@ -10124,6 +10227,7 @@ async def crear_contacto_lista(
 async def actualizar_contacto_lista(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     lista_id: UUID,
     payload: ProspeccionListaUpdatePayload,
@@ -10148,6 +10252,7 @@ async def actualizar_contacto_lista(
 async def eliminar_contacto_lista(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     lista_id: UUID,
 ) -> Response:
@@ -10164,6 +10269,7 @@ async def eliminar_contacto_lista(
 async def prospeccion_campanas_dashboard(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
     params: ProspeccionCampanaQuery = Depends(),
@@ -10260,6 +10366,7 @@ async def prospeccion_campanas_dashboard(
 async def prospeccion_campana_duplicar_defaults(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
     campana_id: UUID,
@@ -10329,6 +10436,7 @@ async def prospeccion_campana_duplicar_defaults(
 async def listar_contactos_por_prospecto(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     prospecto_id: UUID,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
@@ -10359,6 +10467,7 @@ async def listar_contactos_por_prospecto(
 async def listar_audit_por_prospecto(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     prospecto_id: UUID,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -10402,6 +10511,7 @@ async def listar_audit_por_prospecto(
 async def convertir_prospecto_contacto(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -10559,6 +10669,7 @@ async def convertir_prospecto_contacto(
 async def guardar_prospectos(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: ProspectoSeleccionPayload,
 ) -> dict[str, Any]:
@@ -10602,6 +10713,7 @@ async def guardar_prospectos(
 async def crear_prospecto_manual(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: ProspectoManualPayload,
 ) -> dict[str, Any]:
@@ -10631,6 +10743,7 @@ async def crear_prospecto_manual(
 async def actualizar_prospecto(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     prospecto_id: UUID,
     payload: ProspectoUpdatePayload,
@@ -10659,6 +10772,7 @@ async def actualizar_prospecto(
 async def eliminar_prospecto(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     prospecto_id: UUID,
 ) -> dict[str, Any]:
@@ -10684,6 +10798,7 @@ async def eliminar_prospecto(
 async def verificar_prospectos(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: ProspectoLookupPayload,
 ) -> dict[str, Any]:
@@ -10717,6 +10832,7 @@ async def verificar_prospectos(
 async def prospeccion_checklist_lookup(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     payload: ProspectoChecklistLookupPayload,
 ) -> dict[str, Any]:
@@ -10756,6 +10872,7 @@ async def prospeccion_checklist_lookup(
 async def prospeccion_checklist_scraper(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: ProspectoChecklistScraperPayload,
@@ -10836,6 +10953,7 @@ async def prospeccion_checklist_scraper(
 async def contactar_prospectos(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: ProspectoContactarPayload,
@@ -10984,6 +11102,7 @@ async def contactar_prospectos(
 async def obtener_contacto_batch(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     batch_id: UUID,
 ) -> dict[str, Any]:
@@ -11018,6 +11137,7 @@ async def obtener_contacto_batch(
 async def reintentar_contacto_envio(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     envio_id: UUID,
 ) -> dict[str, Any]:
@@ -11076,6 +11196,7 @@ async def reintentar_contacto_envio(
 async def stream_contacto_batch(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     batch_id: UUID,
 ) -> StreamingResponse:
@@ -11112,6 +11233,7 @@ async def stream_contacto_batch(
 async def cancelar_contacto_batch(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     batch_id: UUID,
 ) -> dict[str, Any]:
@@ -11180,7 +11302,9 @@ async def cancelar_contacto_batch(
 
 
 @router.get("/prospeccion/contacto/metrics")
-async def obtener_metrics_contacto() -> dict[str, Any]:
+async def obtener_metrics_contacto(
+    _: str = Depends(require_permission("reports.view")),
+) -> dict[str, Any]:
     """Snapshot simple de envíos por canal y estado."""
 
     snapshot = contact_metrics.snapshot()
@@ -11214,6 +11338,7 @@ async def prospeccion_contacto_brevo_webhook(
 async def get_visits_kpis(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     try:
@@ -11227,6 +11352,7 @@ async def get_visits_kpis(
 async def get_visits_states(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     try:
@@ -11240,6 +11366,7 @@ async def get_visits_states(
 async def get_visits_detail(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -11268,6 +11395,7 @@ async def get_visits_detail(
 async def get_visits_whatsapp_total(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, int]:
     try:
@@ -11281,6 +11409,7 @@ async def get_visits_whatsapp_total(
 async def get_visits_whatsapp_conversations(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> list[dict[str, Any]]:
@@ -11299,6 +11428,7 @@ async def list_activities(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("activities.view")),
     oportunidad_id: UUID | None = Query(default=None),
     cuenta_id: UUID | None = Query(default=None),
     contacto_id: UUID | None = Query(default=None),
@@ -11325,6 +11455,7 @@ async def create_activity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("activities.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMActivityCreate,
 ) -> CRMActivity:
@@ -11346,6 +11477,7 @@ async def get_activity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("activities.view")),
     actividad_id: UUID,
 ) -> CRMActivity:
     try:
@@ -11362,6 +11494,7 @@ async def list_tickets(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("tickets.view")),
     estado: str | None = Query(default=None),
     prioridad: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -11386,6 +11519,7 @@ async def create_ticket(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("tickets.view")),
     payload: CRMTicketCreate,
 ) -> CRMTicket:
     body = payload.model_dump(mode="json", exclude_unset=True)
@@ -11404,6 +11538,7 @@ async def get_ticket(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("tickets.view")),
     ticket_id: UUID,
 ) -> CRMTicket:
     try:
@@ -11423,6 +11558,7 @@ async def list_ticket_comments(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("tickets.view")),
     ticket_id: UUID,
 ) -> list[CRMTicketComment]:
     try:
@@ -11444,6 +11580,7 @@ async def create_ticket_comment(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("tickets.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     ticket_id: UUID,
     payload: CRMTicketCommentCreate,
@@ -11468,6 +11605,7 @@ async def list_files(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("files.view")),
     relacion_tipo: str | None = Query(default=None),
     relacion_id: UUID | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -11489,6 +11627,7 @@ async def create_file(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("files.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMFileCreate,
 ) -> CRMFile:
@@ -11510,6 +11649,7 @@ async def list_tags(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("messages.read")),
 ) -> list[CRMTag]:
     try:
         rows = await repo.list_tags(organizacion_id=organizacion_id)
@@ -11523,6 +11663,7 @@ async def create_tag(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("messages.write")),
     payload: CRMTagCreate,
 ) -> CRMTag:
     try:
@@ -11540,6 +11681,7 @@ async def create_tagging(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("messages.write")),
     payload: CRMTaggingCreate,
 ) -> CRMTagging:
     try:
@@ -11560,6 +11702,7 @@ async def delete_tagging(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("messages.write")),
     tagging_id: UUID,
 ) -> Response:
     try:
@@ -11574,6 +11717,7 @@ async def list_products(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
     activos: bool | None = Query(default=None),
 ) -> list[CRMProduct]:
     try:
@@ -11588,6 +11732,7 @@ async def create_product(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
     payload: CRMProductCreate,
 ) -> CRMProduct:
     try:
@@ -11605,6 +11750,7 @@ async def list_quotes(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     oportunidad_id: UUID | None = Query(default=None),
 ) -> list[CRMQuote]:
     try:
@@ -11622,6 +11768,7 @@ async def create_quote(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMQuoteCreate,
 ) -> CRMQuote:
@@ -11643,6 +11790,7 @@ async def list_quote_items(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     cotizacion_id: UUID,
 ) -> list[CRMQuoteItem]:
     try:
@@ -11664,6 +11812,7 @@ async def create_quote_item(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
     cotizacion_id: UUID,
     payload: CRMQuoteItemCreate,
 ) -> CRMQuoteItem:
@@ -11684,6 +11833,7 @@ async def list_campaigns(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("campaigns.view")),
 ) -> list[CRMCampaign]:
     try:
         rows = await repo.list_campaigns(organizacion_id=organizacion_id)
@@ -11697,6 +11847,7 @@ async def create_campaign(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("campaigns.view")),
     payload: CRMCampaignCreate,
 ) -> CRMCampaign:
     try:
@@ -11714,6 +11865,7 @@ async def list_leads(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("leads.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     estado: str | None = Query(default=None),
     etapas: str | None = Query(default=None, description="Lista separada por comas de etapas del pipeline"),
@@ -11742,6 +11894,7 @@ async def create_lead(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("leads.view")),
     payload: CRMLeadCreate,
 ) -> CRMLead:
     try:
@@ -11759,6 +11912,7 @@ async def list_lead_events(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("leads.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     lead_id: UUID,
 ) -> list[CRMLeadEvent]:
@@ -11781,6 +11935,7 @@ async def create_lead_event(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("leads.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     lead_id: UUID,
     payload: CRMLeadEventCreate,
@@ -11802,6 +11957,7 @@ async def list_lead_restart_stats(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("leads.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     min_restart_sequence: Annotated[int, Query(ge=1, le=100)] = 1,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
@@ -11822,6 +11978,7 @@ async def list_notes(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("notes.view")),
     relacion_tipo: str | None = Query(default=None),
     relacion_id: UUID | None = Query(default=None),
 ) -> list[CRMNote]:
@@ -11841,6 +11998,7 @@ async def create_note(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("notes.view")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     payload: CRMNoteCreate,
 ) -> CRMNote:
@@ -11862,6 +12020,7 @@ async def list_audit_logs(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("audit.view")),
 ) -> list[CRMAuditLog]:
     try:
         rows = await repo.list_audit_logs(organizacion_id=organizacion_id)
@@ -11878,6 +12037,7 @@ async def list_whatsapp_sales_assignments(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("conv.read")),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> WhatsAppSalesAssignmentsResponse:
@@ -11898,6 +12058,7 @@ async def pipeline_overview(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     limit: Annotated[int, Query(ge=10, le=500)] = 200,
     days: Annotated[int, Query(ge=7, le=90)] = 30,
@@ -11921,6 +12082,7 @@ async def pipeline_board(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=50, le=1000)] = 400,
     tablero_id: UUID | None = Query(default=None),
@@ -11960,6 +12122,7 @@ async def pipeline_board(
 async def analytics_catalog_sales(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     mes_desde: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
     mes_hasta: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
@@ -11981,6 +12144,7 @@ async def analytics_catalog_sales(
 async def analytics_catalog_pipeline(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     tablero_id: UUID | None = Query(default=None),
     etapa_id: UUID | None = Query(default=None),
@@ -12000,6 +12164,7 @@ async def analytics_catalog_pipeline(
 async def analytics_catalog_sales_export(
     *,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("reports.view")),
     user_token: str = Depends(require_user_token),
     mes_desde: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
     mes_hasta: Annotated[str | None, Query(description="YYYY-MM-01")] = None,
@@ -14953,6 +15118,7 @@ class GuardarBuscadorProspectosPayload(BaseModel):
 async def prospeccion_buscador_run(
     payload: BuscadorRunPayload,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
 ) -> BuscadorJobResponse:
@@ -14994,6 +15160,7 @@ async def prospeccion_buscador_jobs(
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0, le=10_000),
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> BuscadorJobsListResponse:
     try:
@@ -15019,6 +15186,7 @@ async def prospeccion_buscador_jobs(
 async def prospeccion_buscador_job_detail(
     job_id: UUID,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> BuscadorJobResponse:
     try:
@@ -15039,6 +15207,7 @@ async def prospeccion_buscador_job_detail(
 async def prospeccion_buscador_job_delete(
     job_id: UUID,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> Response:
     try:
@@ -15057,6 +15226,7 @@ async def prospeccion_buscador_job_delete(
 async def prospeccion_buscador_job_pause(
     job_id: UUID,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> BuscadorJobResponse:
     try:
@@ -15100,6 +15270,7 @@ async def prospeccion_buscador_job_pause(
 async def prospeccion_buscador_job_cancel(
     job_id: UUID,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> BuscadorJobResponse:
     try:
@@ -15141,6 +15312,7 @@ async def prospeccion_buscador_job_cancel(
 async def prospeccion_buscador_job_results(
     job_id: UUID,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(gt=0, le=2000)] = 1000,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -15187,6 +15359,7 @@ async def prospeccion_buscador_guardar_prospectos(
     job_id: UUID,
     payload: GuardarBuscadorProspectosPayload,
     repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
     user_token: str = Depends(require_user_token),
 ) -> dict[str, Any]:
     BATCH_SIZE = 200

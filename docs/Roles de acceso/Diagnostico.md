@@ -57,3 +57,10 @@ Notas recientes
 - Embudo/leads/agenda usan token de usuario y respetan RLS.
 - panel_calendar_bookings usa security_invoker para respetar RLS.
 - Asignacion de oportunidades ahora prioriza propietario del contacto.
+- Fix critico permisos (2026-02-11):
+  - Hallazgo: current_user_has_perm siempre devolvia true por sombra de parametro (codigo) con columna p.codigo.
+  - Impacto: usuarios sin permiso podian ejecutar busquedas (ejecutar_busquedas) y otras acciones protegidas.
+  - Correccion:
+    - DB: recrear funcion public.current_user_has_perm con parametro perm_code y comparar lower(p.codigo)=lower(perm_code).
+    - Backend: RPC ahora envia {perm_code} en lugar de {codigo}.
+    - Verificacion: current_user_has_perm('ejecutar_busquedas') devuelve false para rol Agente y el endpoint /api/crm/prospeccion/denue/busquedas responde 403.

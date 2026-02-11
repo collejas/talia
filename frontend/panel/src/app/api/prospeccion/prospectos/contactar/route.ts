@@ -10,10 +10,7 @@ import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
 export async function POST(request: Request) {
   const store = await cookies()
   const token =
-    store.get(ACCESS_TOKEN_COOKIE)?.value ||
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_SERVICE_API_KEY
+    store.get(ACCESS_TOKEN_COOKIE)?.value
 
   if (!token || !token.trim().length) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 })
