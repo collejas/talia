@@ -2446,10 +2446,20 @@ def require_user_token(
     if x_user_token:
         token = x_user_token.strip()
         if token:
+            if _jwt_role(token) == "service_role":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="authorization_invalid",
+                )
             return token
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
         if token:
+            if _jwt_role(token) == "service_role":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="authorization_invalid",
+                )
             return token
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -2689,6 +2699,20 @@ def _jwt_verify_and_sub(jwt_token: str | None) -> str | None:
 
     sub = payload.get("sub")
     return str(sub) if sub else None
+
+
+def _jwt_role(jwt_token: str | None) -> str | None:
+    if not jwt_token:
+        return None
+    try:
+        import base64
+        _, payload_b64, _ = jwt_token.split(".")
+        padded = payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        role = payload.get("role")
+        return str(role) if isinstance(role, str) else None
+    except Exception:
+        return None
 
 
 def _resolve_portal_email_recipients(
@@ -5754,6 +5778,7 @@ async def list_opportunities(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     contacto_id: UUID | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -5776,6 +5801,7 @@ async def list_sale_ready_opportunities(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     contacto_captura_estado: str | None = Query(default="completo"),
 ) -> list[CRMSaleReadyOpportunity]:
@@ -11688,9 +11714,18 @@ async def list_leads(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     estado: str | None = Query(default=None),
     etapas: str | None = Query(default=None, description="Lista separada por comas de etapas del pipeline"),
 ) -> list[CRMLead]:
+    logger.info(
+        "leads.list.auth",
+        extra={
+            "user_id": _jwt_verify_and_sub(user_token),
+            "token_role": _jwt_role(user_token),
+            "has_repo_user_token": bool(getattr(repo, "_user_token", None)),
+        },
+    )
     try:
         stage_codes = None
         if etapas:
@@ -11732,6 +11767,7 @@ async def list_lead_events(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     lead_id: UUID,
 ) -> list[CRMLeadEvent]:
     try:
@@ -11753,6 +11789,7 @@ async def create_lead_event(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     lead_id: UUID,
     payload: CRMLeadEventCreate,
 ) -> CRMLeadEvent:
@@ -11773,6 +11810,7 @@ async def list_lead_restart_stats(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     min_restart_sequence: Annotated[int, Query(ge=1, le=100)] = 1,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> list[CRMContactRestartStat]:
@@ -11868,9 +11906,18 @@ async def pipeline_overview(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
     limit: Annotated[int, Query(ge=10, le=500)] = 200,
     days: Annotated[int, Query(ge=7, le=90)] = 30,
 ) -> CRMPipelineOverview:
+    logger.info(
+        "pipeline.overview.auth",
+        extra={
+            "user_id": _jwt_verify_and_sub(user_token),
+            "token_role": _jwt_role(user_token),
+            "has_repo_user_token": bool(getattr(repo, "_user_token", None)),
+        },
+    )
     created_from = datetime.now(timezone.utc) - timedelta(days=days)
     fetch_limit = max(limit, 500)
     try:
@@ -11895,6 +11942,14 @@ async def pipeline_board(
     tablero_id: UUID | None = Query(default=None),
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
+    logger.info(
+        "pipeline.board.auth",
+        extra={
+            "user_id": _jwt_verify_and_sub(user_token),
+            "token_role": _jwt_role(user_token),
+            "has_repo_user_token": bool(getattr(repo, "_user_token", None)),
+        },
+    )
 
     try:
         try:
@@ -14544,24 +14599,30 @@ def _build_pipeline_board(
     if tablero_filter is None:
         tablero_filter = _infer_tablero_id(stage_rows, opportunity_rows)
     stage_map: dict[UUID, CRMPipelineBoardStage] = {}
-    for stage_row in stage_rows:
-        stage = _stage_from_row(stage_row)
-        if not stage:
-            continue
-        if (
-            tablero_filter
-            and not stage.tablero_id
-            and (stage.codigo or "").lower() == "prospeccion_primer_contacto"
-        ):
-            stage = CRMPipelineBoardStage(
-                **{
-                    **stage.model_dump(),
-                    "tablero_id": tablero_filter,
-                }
-            )
-        if tablero_filter and stage.tablero_id != tablero_filter:
-            continue
-        stage_map[stage.id] = stage
+    def add_stage_rows() -> None:
+        for stage_row in stage_rows:
+            stage = _stage_from_row(stage_row)
+            if not stage:
+                continue
+            if (
+                tablero_filter
+                and not stage.tablero_id
+                and (stage.codigo or "").lower() == "prospeccion_primer_contacto"
+            ):
+                stage = CRMPipelineBoardStage(
+                    **{
+                        **stage.model_dump(),
+                        "tablero_id": tablero_filter,
+                    }
+                )
+            if tablero_filter and stage.tablero_id != tablero_filter:
+                continue
+            stage_map[stage.id] = stage
+
+    add_stage_rows()
+    if not stage_map and stage_rows and tablero_filter:
+        tablero_filter = None
+        add_stage_rows()
 
     sin_conversacion: list[CRMPipelineBoardCard] = []
 

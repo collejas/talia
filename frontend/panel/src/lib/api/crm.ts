@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies";
-import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt";
+import { decodeJwtOrganizacionId, decodeJwtPayload, decodeJwtUserId } from "@/lib/auth/jwt";
 import { resolvePanelApiToken } from "@/lib/auth/panel-token";
 
 type CrmFetchOptions = {
@@ -39,7 +39,7 @@ export async function callCrmApi<T = unknown>(
 ): Promise<CrmResult<T>> {
   let baseUrl: string;
   let token: string;
-  const userAccessToken = await resolveCurrentAccessToken();
+  let userAccessToken = await resolveCurrentAccessToken();
   try {
     baseUrl = getPanelApiBaseUrl();
     token = await resolvePanelApiToken();
@@ -79,6 +79,13 @@ export async function callCrmApi<T = unknown>(
   }
   if (usuarioId) {
     headers["X-Usuario-Id"] = usuarioId;
+  }
+  if (!userAccessToken) {
+    const panelPayload = decodeJwtPayload(token);
+    const panelRole = typeof panelPayload?.role === "string" ? panelPayload.role : null;
+    if (panelRole && panelRole !== "service_role") {
+      userAccessToken = token;
+    }
   }
   const shouldSendUserToken = options.withUserToken ?? true;
   if (shouldSendUserToken && userAccessToken) {

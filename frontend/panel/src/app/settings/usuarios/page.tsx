@@ -85,7 +85,9 @@ function UsersDirectoryCard({ data }: { data: HrUsersDirectory }) {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  data.items.map((user) => <UserInlineRow key={user.id} user={user} />)
+                  data.items.map((user) => (
+                    <UserInlineRow key={user.id} user={user} rolesCatalog={data.rolesCatalog} />
+                  ))
                 )}
               </TableBody>
             </Table>

@@ -2128,6 +2128,55 @@ class CRMRepository:
                 },
             )
             return None
+        if contact_id:
+            try:
+                contact_uuid = _coerce_uuid(contact_id, field="contact_id")
+            except ValueError:
+                contact_uuid = None
+            if contact_uuid:
+                params = {
+                    "id": f"eq.{contact_uuid}",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "select": "propietario_usuario_id",
+                    "limit": "1",
+                }
+                resp = await self._request("GET", "/rest/v1/contactos", params=params)
+                rows = resp.json() or []
+                if isinstance(rows, list) and rows:
+                    owner_value = rows[0].get("propietario_usuario_id")
+                    if owner_value:
+                        owner_uuid = _coerce_uuid(
+                            owner_value, field="propietario_usuario_id"
+                        )
+                        await self._request(
+                            "PATCH",
+                            "/rest/v1/oportunidades",
+                            params={
+                                "id": f"eq.{oportunidad_id}",
+                                "organizacion_id": f"eq.{organizacion_id}",
+                                "limit": "1",
+                            },
+                            json={"asignado_a_usuario_id": str(owner_uuid)},
+                            prefer="return=minimal",
+                        )
+                        logger.info(
+                            "crm.sales_assignment.completed_contact_owner",
+                            extra={
+                                "oportunidad_id": str(oportunidad_id),
+                                "organizacion_id": str(organizacion_id),
+                                "usuario_id": str(owner_uuid),
+                            },
+                        )
+                        assignment_channel = (channel or "").strip() or "assistant"
+                        await self._insert_assignment_audit(
+                            organizacion_id=organizacion_id,
+                            oportunidad_id=oportunidad_id,
+                            vendedor_id=owner_uuid,
+                            conversacion_id=conversation_id,
+                            contact_id=contact_id,
+                            channel=assignment_channel,
+                        )
+                        return owner_uuid
         candidate = await self.assign_next_sales_rep(organizacion_id=organizacion_id)
         if not candidate:
             logger.info(

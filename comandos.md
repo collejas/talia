@@ -90,7 +90,7 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
 
-npm install -g npm@11.9.0
+codex resume 019c4999-cfa0-7100-ae74-7d5ce4ca9dba
 
 codex resume 019c4454-833a-7c71-954d-ea813e5e21c1
 codex resume 019c43d8-9511-74a3-ab0d-b70e640a9089

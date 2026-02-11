@@ -14,6 +14,7 @@ import {
   HrRoleItem,
   HrRolePermissionMatrix,
   HrRolesDirectory,
+  HrRoleOption,
   HrUserItem,
   HrUsersDirectory,
 } from "@/lib/settings/hr-types"
@@ -34,6 +35,7 @@ export type {
   HrRoleItem,
   HrRolePermissionMatrix,
   HrRolesDirectory,
+  HrRoleOption,
   HrUserItem,
   HrUsersDirectory,
 } from "@/lib/settings/hr-types"
@@ -447,9 +449,16 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
   }
 
   const roles = new Map<string, string>()
+  const rolesCatalog: HrRoleOption[] = []
   if (rolesRes.ok && Array.isArray(rolesRes.data)) {
     rolesRes.data.forEach((rol) => {
-      roles.set(rol.id, sanitizeText(rol.nombre) || sanitizeText(rol.codigo) || rol.id)
+      const nombre = sanitizeText(rol.nombre) || sanitizeText(rol.codigo) || rol.id
+      roles.set(rol.id, nombre)
+      rolesCatalog.push({
+        id: rol.id,
+        codigo: sanitizeText(rol.codigo) || rol.id,
+        nombre,
+      })
     })
   } else if (!rolesRes.ok) {
     errors.push(rolesRes.error)
@@ -486,6 +495,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
       correo: sanitizeText(usuario.correo).toLowerCase(),
       estado: normalizeEstado(usuario.estado),
       telefono: sanitizeText(usuario.telefono_e164) || "—",
+      roleIds,
       roles: roleNames,
       departamento: departamentoNombre,
       departamentoId: empleado?.departamento_id ?? null,
@@ -510,6 +520,7 @@ export async function fetchUsersDirectory(limit = LARGE_LIMIT): Promise<HrUsersD
     items,
     total,
     stats,
+    rolesCatalog,
     errors,
   }
 }

@@ -423,6 +423,76 @@ export const updateUserAction: CrudActionHandler = async (_, formData) => {
   }
 }
 
+export const updateUserRolesAction: CrudActionHandler = async (_, formData) => {
+  try {
+    await requirePermission("user.manage")
+    const orgId = await requireOrgId()
+    const userId = getText(formData, "usuario_id")
+    const selectedRoles = formData
+      .getAll("role_ids")
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+
+    const currentRes = await callSupabaseRest<{ rol_id: string }[]>("/rest/v1/usuarios_roles", {
+      searchParams: {
+        select: "rol_id",
+        usuario_id: `eq.${userId}`,
+      },
+      enforceOrganization: true,
+      forceServiceToken: true,
+    })
+    if (!currentRes.ok) {
+      throw new Error(currentRes.error || "No se pudo leer los roles actuales.")
+    }
+
+    const currentRoles = new Set(
+      (currentRes.data || [])
+        .map((row) => row?.rol_id)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    )
+
+    const desiredRoles = new Set(selectedRoles)
+    const toAdd = selectedRoles.filter((roleId) => !currentRoles.has(roleId))
+    const toRemove = Array.from(currentRoles).filter((roleId) => !desiredRoles.has(roleId))
+
+    if (toAdd.length) {
+      const body = toAdd.map((roleId) => ({
+        usuario_id: userId,
+        rol_id: roleId,
+        organizacion_id: orgId,
+      }))
+      const addRes = await callSupabaseRest("/rest/v1/usuarios_roles", {
+        method: "POST",
+        body,
+        prefer: "return=representation",
+        forceServiceToken: true,
+      })
+      if (!addRes.ok) {
+        throw new Error(addRes.error || "No se pudo asignar roles.")
+      }
+    }
+
+    if (toRemove.length) {
+      const inClause = `in.(${toRemove.join(",")})`
+      const removeRes = await callSupabaseRest("/rest/v1/usuarios_roles", {
+        method: "DELETE",
+        searchParams: {
+          usuario_id: `eq.${userId}`,
+          rol_id: inClause,
+        },
+        forceServiceToken: true,
+      })
+      if (!removeRes.ok) {
+        throw new Error(removeRes.error || "No se pudo remover roles.")
+      }
+    }
+
+    revalidatePath(PATHS.usuarios)
+    return success("Roles actualizados.")
+  } catch (error) {
+    return failure(error)
+  }
+}
+
 export const deleteUserAction: CrudActionHandler = async (_, formData) => {
   try {
     const userId = getText(formData, "id")

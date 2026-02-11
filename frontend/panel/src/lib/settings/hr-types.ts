@@ -77,6 +77,7 @@ export type HrUserItem = {
   correo: string
   estado: string
   telefono: string
+  roleIds: string[]
   roles: string[]
   departamento: string
   departamentoId: string | null
@@ -86,10 +87,17 @@ export type HrUserItem = {
   ultimoAcceso: string | null
 }
 
+export type HrRoleOption = {
+  id: string
+  codigo: string
+  nombre: string
+}
+
 export type HrUsersDirectory = {
   items: HrUserItem[]
   total: number
   stats: { activos: number; bloqueados: number; sinRoles: number }
+  rolesCatalog: HrRoleOption[]
   errors: string[]
 }
 
