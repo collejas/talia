@@ -83,6 +83,7 @@ const NAVIGATION: {
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
+    { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "conv.read" },
     { title: "Leads", url: "/leads", icon: IconUsers, permission: "leads.view" },
     { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },
     { title: "Contactos", url: "/contactos", icon: IconAddressBook, permission: "contacts.read" },

@@ -53,6 +53,7 @@ const PERMISSION_RULES: PermissionRule[] = [
   { prefix: "/inbox", permission: "ver_inbox" },
   { prefix: "/embudo", permission: "pipeline.view" },
   { prefix: "/oportunidades", permission: "pipeline.view" },
+  { prefix: "/propiedades", permission: "conv.read" },
   { prefix: "/leads", permission: "leads.view" },
   { prefix: "/contactos", permission: "contacts.read" },
   { prefix: "/clientes", permission: "clientes.view" },
