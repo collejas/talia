@@ -21,6 +21,24 @@ Entregables
 - Lista de vistas y permisos requeridos.
 - Prototipo de vista "Roles y permisos" para asignar permisos a roles.
 
+Matriz rol-permisos (propuesta inicial)
+Nota: usar solo permisos existentes; si falta uno, se crea antes de asignar.
+
+| Rol | Permisos clave |
+| --- | --- |
+| Admin | ver_panel, ver_inbox, ver_busquedas_google, ver_busquedas_inegi, ejecutar_busquedas, conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, role.manage, user.manage, settings.view, settings.manage |
+| Supervisor | ver_panel, ver_inbox, ejecutar_busquedas, conv.read, conv.write, conv.assign, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, reports.view, leads.view, pipeline.view, agenda.view, propuesta.view |
+| Agente | ver_panel, ver_inbox, ejecutar_busquedas, conv.read, conv.write, contacts.read, contacts.write, messages.read, messages.write, calls.read, calls.write, leads.view, pipeline.view, agenda.view, propuesta.view |
+| Invitado | ver_panel, conv.read, contacts.read, messages.read |
+
+Reglas de visibilidad por entidad (jerarquia por arbol)
+- Contactos: admin ve todo; usuario ve sus contactos; supervisor ve contactos de su equipo.
+- Conversaciones: admin ve todo; usuario ve conversaciones propias o de contactos propios; supervisor ve las del equipo.
+- Oportunidades: admin ve todo; usuario ve asignadas o propias; supervisor ve las del equipo.
+- Leads: admin ve todo; usuario ve leads ligados a sus contactos; supervisor ve leads del equipo.
+- Agenda: admin ve todo; usuario ve citas propias o ligadas a sus contactos; supervisor ve citas del equipo.
+- Clientes: admin ve todo; usuario ve clientes ligados a oportunidades o contactos propios; supervisor ve clientes del equipo.
+
 Lista inicial de vistas y permisos sugeridos
 Nota: se usan permisos ya existentes cuando aplican. Si falta alguno, se propone uno nuevo.
 
@@ -110,6 +128,9 @@ Tablas objetivo (minimo)
 - public.clientes
 - public.empleados
 - public.usuarios
+- public.calendar_bookings
+- public.leads
+- public.actividades
 
 Reglas base
 - admin ve todo.
@@ -118,6 +139,8 @@ Reglas base
 
 Entregables
 - [check] Migracion con nuevas policies o actualizacion de policies existentes (contactos/conversaciones via funciones, oportunidades, clientes, empleados, usuarios).
+- [check] Ajuste de policies para leads, agenda y actividades con scope por usuario/arbol.
+- [check] Ajuste de views para respetar RLS (panel_calendar_bookings security_invoker).
 - Lista de policies aplicadas por tabla.
 
 Fase 5: Backend
@@ -125,9 +148,10 @@ Objetivo
 - Asegurar que endpoints del panel respeten permisos y RLS.
 
 Cambios
-- Reemplazar llamadas con service role por llamadas con token de usuario en rutas user-facing.
+- [check] Reemplazar llamadas con service role por llamadas con token de usuario en rutas user-facing.
 - Agregar validacion de permisos por endpoint critico.
 - Crear helper require_perm en backend para centralizar checks.
+- [check] Requerir user token en endpoints de embudo/leads/agenda y evitar service_role en headers.
 
 Archivos candidatos
 - backend/app/repositories/crm.py
@@ -156,6 +180,7 @@ Entregables
 - Hook y guardias implementados.
 - UI con menu y accesos filtrados.
 - Pantalla de asignacion rol-permisos operativa.
+- [check] Roles asignables desde /settings/usuarios con persistencia en usuarios_roles.
 
 Fase 7: Pruebas
 DB
@@ -172,6 +197,15 @@ Frontend
 Entregables
 - Checklist de pruebas.
 - Datos de prueba de jerarquia.
+- [check] Correccion de asignacion: oportunidad sigue propietario del contacto cuando existe.
+
+Checklist de pruebas (minimo)
+- Vendedor solo ve: contactos propios, conversaciones propias, oportunidades asignadas, agenda propia.
+- Vendedor no ve: oportunidades de otros, leads de otros, agenda de otros.
+- Supervisor ve: datos propios + equipo completo.
+- Admin ve: todo.
+- Acceso por URL a vistas restringidas retorna /unauthorized.
+- Cambios de rol en /settings/usuarios se reflejan en permisos y menu.
 
 Riesgos y mitigaciones
 - Riesgo: service role bypassa RLS.

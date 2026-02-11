@@ -11718,14 +11718,6 @@ async def list_leads(
     estado: str | None = Query(default=None),
     etapas: str | None = Query(default=None, description="Lista separada por comas de etapas del pipeline"),
 ) -> list[CRMLead]:
-    logger.info(
-        "leads.list.auth",
-        extra={
-            "user_id": _jwt_verify_and_sub(user_token),
-            "token_role": _jwt_role(user_token),
-            "has_repo_user_token": bool(getattr(repo, "_user_token", None)),
-        },
-    )
     try:
         stage_codes = None
         if etapas:
@@ -11910,14 +11902,6 @@ async def pipeline_overview(
     limit: Annotated[int, Query(ge=10, le=500)] = 200,
     days: Annotated[int, Query(ge=7, le=90)] = 30,
 ) -> CRMPipelineOverview:
-    logger.info(
-        "pipeline.overview.auth",
-        extra={
-            "user_id": _jwt_verify_and_sub(user_token),
-            "token_role": _jwt_role(user_token),
-            "has_repo_user_token": bool(getattr(repo, "_user_token", None)),
-        },
-    )
     created_from = datetime.now(timezone.utc) - timedelta(days=days)
     fetch_limit = max(limit, 500)
     try:
@@ -11942,15 +11926,6 @@ async def pipeline_board(
     tablero_id: UUID | None = Query(default=None),
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
-    logger.info(
-        "pipeline.board.auth",
-        extra={
-            "user_id": _jwt_verify_and_sub(user_token),
-            "token_role": _jwt_role(user_token),
-            "has_repo_user_token": bool(getattr(repo, "_user_token", None)),
-        },
-    )
-
     try:
         try:
             await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)

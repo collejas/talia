@@ -40,3 +40,20 @@ Riesgos actuales
 - Fugas de datos si endpoints usan service role sin checks.
 - Acceso transversal entre vendedores (no hay jerarquia de equipo).
 - UI muestra vistas que el usuario no deberia ver.
+
+Policies RLS aplicadas (resumen)
+- contactos: contactos_admin_all, contactos_miembro_acceso, contactos_rpc_access
+- conversaciones: conversaciones_admin_all, conversaciones_miembro_select, conversaciones_miembro_insert, conversaciones_miembro_update, conversaciones_miembro_delete, conversaciones_rpc_access
+- mensajes: mensajes_select, mensajes_insert, mensajes_update, mensajes_delete, mensajes_rpc_access
+- oportunidades: oportunidades_admin_all, oportunidades_miembro_acceso
+- leads: leads_admin_all, leads_member_org
+- calendar_bookings: calendar_bookings_admin_all, calendar_bookings_member_org
+- actividades: actividades_admin_all, actividades_member_org
+- clientes: clientes_admin_all, clientes_miembro_acceso
+- empleados: empleados_select_authenticated, empleados_insert_admin, empleados_update_admin, empleados_delete_admin
+- usuarios: usuarios_select, usuarios_insert_admin, usuarios_update, usuarios_delete_admin
+
+Notas recientes
+- Embudo/leads/agenda usan token de usuario y respetan RLS.
+- panel_calendar_bookings usa security_invoker para respetar RLS.
+- Asignacion de oportunidades ahora prioriza propietario del contacto.
