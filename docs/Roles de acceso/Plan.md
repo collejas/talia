@@ -41,6 +41,7 @@ Reglas de visibilidad por entidad (jerarquia por arbol)
 
 Lista final de vistas y permisos
 Nota: lista definitiva para integrar en la matriz.
+Nota: los KPIs de reconversión en `/oportunidades` consumen `/crm/leads/restarts` y deben permitir `pipeline.view`.
 
 | Vista (ruta) | Permiso sugerido |
 | --- | --- |
@@ -55,9 +56,11 @@ Nota: lista definitiva para integrar en la matriz.
 | /prospeccion/campanas | reports.view (o proponer campaigns.view) |
 | /embudo | conv.read (o proponer pipeline.view) |
 | /leads | conv.read (o proponer leads.view) |
+| /oportunidades | pipeline.view |
+| /propiedades | propiedades.view |
 | /contactos | contacts.read |
 | /clientes | contacts.read (o proponer clientes.view) |
-| /crm/oportunidades | conv.read |
+| /crm/oportunidades | conv.read (redirige a /oportunidades) |
 | /crm/actividades | reports.view (o proponer activities.view) |
 | /crm/campanas | reports.view (o proponer campaigns.view) |
 | /crm/leads | conv.read |

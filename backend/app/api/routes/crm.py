@@ -4267,6 +4267,30 @@ def require_permission(permission_code: str):
     return _dependency
 
 
+def require_any_permission(permission_codes: list[str]):
+    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+        repo = CRMRepository(user_token=user_token)
+        user_id = _jwt_verify_and_sub(user_token)
+        allowed = False
+        for code in permission_codes:
+            if await repo.current_user_has_perm(codigo=code):
+                allowed = True
+                break
+        logger.info(
+            "permission.check.any",
+            extra={
+                "user_id": user_id,
+                "permissions": permission_codes,
+                "allowed": allowed,
+            },
+        )
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+        return user_token
+
+    return _dependency
+
+
 @router.post("/catalog/item-details")
 async def fetch_catalog_item_details(
     payload: CatalogItemDetailsRequest,
@@ -11961,7 +11985,7 @@ async def list_lead_restart_stats(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("leads.view")),
+    _: str = Depends(require_any_permission(["leads.view", "pipeline.view"])),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     min_restart_sequence: Annotated[int, Query(ge=1, le=100)] = 1,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,

@@ -10,6 +10,7 @@ Notas
 - Si falta un permiso sugerido, se debe crear antes de asignar.
 - Los permisos marcados como "nuevo" requieren alta en `public.permisos`.
 - Los permisos legacy de busquedas (ver_busquedas_google, ver_busquedas_inegi, ejecutar_busquedas) se conservan, pero la UI y endpoints usan busquedas.view/run/delete.
+- Los KPIs de reconversión en `/oportunidades` usan `/crm/leads/restarts` y requieren `pipeline.view` (además de `leads.view` si aplica).
 
 ## Roles
 - Admin
@@ -38,6 +39,8 @@ Nota
 | /inbox | ver_inbox |
 | /embudo | pipeline.view (nuevo) |
 | /leads | leads.view (nuevo) |
+| /oportunidades | pipeline.view (nuevo) |
+| /propiedades | propiedades.view (nuevo) |
 | /contactos | contacts.read |
 | /clientes | contacts.read (o clientes.view nuevo) |
 | /agenda | agenda.view (nuevo) |
@@ -51,7 +54,7 @@ Nota
 | /prospeccion/contactos | contacts.read |
 | /prospeccion/mensajes | messages.read |
 | /prospeccion/campanas | reports.view (o campaigns.view nuevo) |
-| /crm/oportunidades | conv.read |
+| /crm/oportunidades | conv.read (redirige a /oportunidades) |
 | /crm/actividades | reports.view (o activities.view nuevo) |
 | /crm/campanas | reports.view (o campaigns.view nuevo) |
 | /crm/leads | leads.view (nuevo) |
@@ -93,3 +96,4 @@ Nota
 - files.view (opcional)
 - audit.view (opcional)
 - tickets.view (opcional)
+- propiedades.view
