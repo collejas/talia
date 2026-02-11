@@ -12443,7 +12443,7 @@ async def propiedades_geojson(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("settings.view")),
+    _: str = Depends(require_permission("propiedades.view")),
     nivel: Annotated[int | None, Query(gt=0)] = None,
     tipo_id: UUID | None = Query(default=None),
 ) -> GeoJSONFeatureCollection:
@@ -12537,7 +12537,7 @@ async def propiedades_tipos(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("settings.view")),
+    _: str = Depends(require_permission("propiedades.view")),
 ) -> list[dict[str, Any]]:
     try:
         return await repo.list_propiedad_tipos(organizacion_id=organizacion_id)
@@ -12550,7 +12550,7 @@ async def propiedades_hierarquia(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("settings.view")),
+    _: str = Depends(require_permission("propiedades.view")),
 ) -> dict[str, Any]:
     try:
         return await repo.get_propiedad_hierarquia(organizacion_id=organizacion_id)
@@ -13397,7 +13397,7 @@ async def propiedades_ventas_vendedores(
     payload: CRMPropertySalesVendorRequest,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("reports.view")),
+    _: str = Depends(require_permission("propiedades.view")),
 ) -> CRMPropertySalesVendorResponse:
     try:
         rows = await repo.list_propiedades_ventas_vendedores(

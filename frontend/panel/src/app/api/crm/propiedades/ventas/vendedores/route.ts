@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ unidad_ids: unidadIds }),
+    withUserToken: true,
   });
 
   if (!response.ok) {

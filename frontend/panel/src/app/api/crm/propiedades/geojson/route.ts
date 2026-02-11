@@ -52,6 +52,7 @@ export async function GET(request: Request) {
   const response = await callCrmApi("/crm/propiedades/geojson", {
     searchParams: params,
     headers: { "Content-Type": "application/json" },
+    withUserToken: true,
   });
   if (!response.ok) {
     return buildError(response.error, response.status ?? 500);
