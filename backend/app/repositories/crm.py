@@ -817,6 +817,19 @@ class CRMRepository:
         limit: int = 50,
         offset: int = 0,
         contacto_id: UUID | None = None,
+        etapa_id: UUID | None = None,
+        estado: str | None = None,
+        asignado_id: UUID | None = None,
+        cuenta_id: UUID | None = None,
+        canal: str | None = None,
+        q: str | None = None,
+        monto_min: float | None = None,
+        monto_max: float | None = None,
+        cierre_desde: str | None = None,
+        cierre_hasta: str | None = None,
+        creado_desde: str | None = None,
+        creado_hasta: str | None = None,
+        reinicio_min: int | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -827,10 +840,58 @@ class CRMRepository:
         }
         if contacto_id:
             params["contacto_principal_id"] = f"eq.{contacto_id}"
+        if etapa_id:
+            params["etapa_id"] = f"eq.{etapa_id}"
+        if estado:
+            params["estado"] = f"eq.{estado}"
+        if asignado_id:
+            params["asignado_a_usuario_id"] = f"eq.{asignado_id}"
+        if cuenta_id:
+            params["cuenta_id"] = f"eq.{cuenta_id}"
+        if canal:
+            params["metadata->>canal"] = f"eq.{canal}"
+        if q:
+            safe = q.replace("%", "").replace(",", " ").strip()
+            if safe:
+                params["or"] = (
+                    f"(titulo.ilike.*{safe}*,metadata->>contacto_nombre.ilike.*{safe}*)"
+                )
+        if monto_min is not None:
+            params["monto_estimado"] = f"gte.{monto_min}"
+        if monto_max is not None:
+            params["monto_estimado"] = f"lte.{monto_max}"
+        if cierre_desde:
+            params["fecha_cierre_probable"] = f"gte.{cierre_desde}"
+        if cierre_hasta:
+            params["fecha_cierre_probable"] = f"lte.{cierre_hasta}"
+        if creado_desde:
+            params["creado_en"] = f"gte.{creado_desde}"
+        if creado_hasta:
+            params["creado_en"] = f"lte.{creado_hasta}"
+        if reinicio_min is not None:
+            params["metadata->>restart_sequence"] = f"gte.{reinicio_min}"
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar oportunidades: {data!r}")
+        return data
+
+    async def list_users(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,nombre_completo,correo,telefono_e164",
+            "order": "nombre_completo.asc",
+            "limit": str(limit),
+        }
+        resp = await self._request("GET", "/rest/v1/usuarios", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar usuarios: {data!r}")
         return data
 
     async def list_sale_ready_opportunities(

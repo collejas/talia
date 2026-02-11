@@ -73,15 +73,43 @@ export type CrmOpportunitiesPayload = {
 
 type LoadCrmOpportunitiesOptions = {
   contactId?: string;
+  contactoId?: string;
+  etapaId?: string;
+  estado?: string;
+  asignadoId?: string;
+  cuentaId?: string;
+  canal?: string;
+  q?: string;
+  montoMin?: string;
+  montoMax?: string;
+  cierreDesde?: string;
+  cierreHasta?: string;
+  creadoDesde?: string;
+  creadoHasta?: string;
+  reinicioMin?: string;
 };
 
 export async function loadCrmOpportunities(
   options: LoadCrmOpportunitiesOptions = {},
 ): Promise<CrmOpportunitiesPayload> {
   const searchParams: Record<string, string> = { limit: "100", offset: "0" };
-  if (options.contactId && options.contactId.trim().length) {
-    searchParams.contacto_id = options.contactId.trim();
+  const contactId = options.contactId ?? options.contactoId;
+  if (contactId && contactId.trim().length && contactId !== "all") {
+    searchParams.contacto_id = contactId.trim();
   }
+  if (options.etapaId && options.etapaId !== "all") searchParams.etapa_id = options.etapaId;
+  if (options.estado && options.estado !== "all") searchParams.estado = options.estado;
+  if (options.asignadoId && options.asignadoId !== "all") searchParams.asignado_id = options.asignadoId;
+  if (options.cuentaId && options.cuentaId !== "all") searchParams.cuenta_id = options.cuentaId;
+  if (options.canal && options.canal !== "all") searchParams.canal = options.canal;
+  if (options.q) searchParams.q = options.q;
+  if (options.montoMin) searchParams.monto_min = options.montoMin;
+  if (options.montoMax) searchParams.monto_max = options.montoMax;
+  if (options.cierreDesde) searchParams.cierre_desde = options.cierreDesde;
+  if (options.cierreHasta) searchParams.cierre_hasta = options.cierreHasta;
+  if (options.creadoDesde) searchParams.creado_desde = options.creadoDesde;
+  if (options.creadoHasta) searchParams.creado_hasta = options.creadoHasta;
+  if (options.reinicioMin) searchParams.reinicio_min = options.reinicioMin;
 
   const response = await callCrmApi<CRMOpportunitiesResponse>("/crm/oportunidades", {
     searchParams,

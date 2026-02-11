@@ -11,14 +11,24 @@ type Props = {
   rows: DataTableRow[];
   columnLabels?: DataTableColumnLabels;
   extraColumns?: ColumnDef<DataTableRow>[];
+  initialVisibility?: Record<string, boolean>;
+  storageKey?: string;
 };
 
-export function ClientDataTable({ rows, columnLabels, extraColumns }: Props) {
+export function ClientDataTable({
+  rows,
+  columnLabels,
+  extraColumns,
+  initialVisibility,
+  storageKey,
+}: Props) {
   return (
     <DataTable
       data={rows}
       columnLabels={columnLabels}
       extraColumns={extraColumns}
+      initialVisibility={initialVisibility}
+      storageKey={storageKey}
     />
   );
 }

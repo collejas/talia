@@ -5856,6 +5856,21 @@ async def list_pipeline_stages(
     return [CRMPipelineStage.model_validate(row) for row in rows]
 
 
+@router.get("/usuarios", response_model=list[CRMUserSummary])
+async def list_users(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMUserSummary]:
+    try:
+        rows = await repo.list_users(organizacion_id=organizacion_id, limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMUserSummary.model_validate(row) for row in rows]
+
+
 @router.get("/oportunidades", response_model=CRMOpportunitiesResponse)
 async def list_opportunities(
     *,
@@ -5864,6 +5879,19 @@ async def list_opportunities(
     _: str = Depends(require_permission("pipeline.view")),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     contacto_id: UUID | None = Query(default=None),
+    etapa_id: UUID | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    asignado_id: UUID | None = Query(default=None),
+    cuenta_id: UUID | None = Query(default=None),
+    canal: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    monto_min: float | None = Query(default=None),
+    monto_max: float | None = Query(default=None),
+    cierre_desde: str | None = Query(default=None),
+    cierre_hasta: str | None = Query(default=None),
+    creado_desde: str | None = Query(default=None),
+    creado_hasta: str | None = Query(default=None),
+    reinicio_min: int | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CRMOpportunitiesResponse:
@@ -5873,6 +5901,19 @@ async def list_opportunities(
             limit=limit,
             offset=offset,
             contacto_id=contacto_id,
+            etapa_id=etapa_id,
+            estado=estado,
+            asignado_id=asignado_id,
+            cuenta_id=cuenta_id,
+            canal=canal,
+            q=q,
+            monto_min=monto_min,
+            monto_max=monto_max,
+            cierre_desde=cierre_desde,
+            cierre_hasta=cierre_hasta,
+            creado_desde=creado_desde,
+            creado_hasta=creado_hasta,
+            reinicio_min=reinicio_min,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

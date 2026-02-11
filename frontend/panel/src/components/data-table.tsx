@@ -133,6 +133,7 @@ type ColumnLabels = {
   type?: string
   status?: string
   target?: string
+  limit?: string
   reviewer?: string
 }
 export type DataTableColumnLabels = ColumnLabels
@@ -551,6 +552,10 @@ export function DataTable({
     useSensor(TouchSensor, {}),
     useSensor(KeyboardSensor, {})
   )
+
+  React.useEffect(() => {
+    setData(initialData)
+  }, [initialData])
 
 
   const dataIds = React.useMemo<UniqueIdentifier[]>(
