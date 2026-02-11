@@ -162,6 +162,33 @@ export async function loadLeadsData(): Promise<LeadsPayload> {
   };
 }
 
+export async function loadRestartKpis(
+  options: { minRestartSequence?: number; limit?: number } = {},
+): Promise<{ kpis: RestartKpis; errors: string[] }> {
+  const minRestartSequence = Math.max(1, options.minRestartSequence ?? DEFAULT_RESTART_MIN_SEQUENCE);
+  const limit = Math.max(1, options.limit ?? DEFAULT_RESTART_LIMIT);
+
+  const response = await callCrmApi<CRMLeadRestartStat[]>("/crm/leads/restarts", {
+    searchParams: {
+      min_restart_sequence: String(minRestartSequence),
+      limit: String(limit),
+    },
+  });
+
+  if (!response.ok) {
+    return { kpis: { reconversionRate: 0, avgDaysBetweenCycles: 0, avgAmountPerCycle: 0 }, errors: [response.error] };
+  }
+
+  if (!Array.isArray(response.data)) {
+    return { kpis: { reconversionRate: 0, avgDaysBetweenCycles: 0, avgAmountPerCycle: 0 }, errors: ["Respuesta inválida del CRM (reinicios)."] };
+  }
+
+  return {
+    kpis: calculateRestartKpis(response.data),
+    errors: [],
+  };
+}
+
 function normalizeCards(payload?: Partial<LeadCards> & { monto_total?: number; top_vendedor?: LeadCards["topVendedor"] }): LeadCards {
   if (!payload) return EMPTY_CARDS;
   return {

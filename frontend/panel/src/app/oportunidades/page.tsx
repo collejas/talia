@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { ClientDataTable } from "@/components/client-data-table";
+import { RestartKpiCards } from "@/components/leads/restart-kpi-cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadCrmOpportunities } from "@/lib/crm/opportunities";
+import { loadRestartKpis } from "@/lib/leads/data";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +21,22 @@ export default async function OportunidadesPage({
   const contactIdParam = typeof resolvedParams.contactId === "string" ? resolvedParams.contactId.trim() : "";
   const contactId = contactIdParam.length ? contactIdParam : undefined;
 
-  const payload = await loadCrmOpportunities({ contactId });
+  const [payload, restartKpis] = await Promise.all([
+    loadCrmOpportunities({ contactId }),
+    loadRestartKpis(),
+  ]);
 
   return (
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
+        <RestartKpiCards kpis={restartKpis.kpis} />
+        {restartKpis.errors.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            {restartKpis.errors.map((error) => (
+              <p key={error}>{error}</p>
+            ))}
+          </div>
+        ) : null}
         <OpportunitiesFilterBar contactId={contactId} />
         {contactId ? (
           <p className="text-sm text-muted-foreground">

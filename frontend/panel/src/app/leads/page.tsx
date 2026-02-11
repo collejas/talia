@@ -3,7 +3,8 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { SectionCards } from "@/components/section-cards"
 import { SessionRecovery } from "@/components/session-recovery"
 import { LeadsRestartTableClient } from "@/components/leads/restart-table.client"
-import { loadLeadsData, type RestartKpis } from "@/lib/leads/data"
+import { RestartKpiCards } from "@/components/leads/restart-kpi-cards"
+import { loadLeadsData } from "@/lib/leads/data"
 import { loadSalesRepOptions } from "@/lib/leads/sales-reps"
 
 export const dynamic = "force-dynamic"
@@ -52,45 +53,6 @@ export default async function Page() {
         )}
       </div>
     </AppViewLayout>
-  )
-}
-
-function RestartKpiCards({ kpis }: { kpis: RestartKpis }) {
-  const cards = [
-    {
-      label: "Tasa de reconversión",
-      value: `${kpis.reconversionRate.toFixed(1)}%`,
-      helper: "Ciclos que llegaron a demo o ganados.",
-    },
-    {
-      label: "Días promedio entre ciclos",
-      value: `${kpis.avgDaysBetweenCycles.toFixed(1)} días`,
-      helper: "Tiempo que tarda un contacto en regresar.",
-    },
-    {
-      label: "Monto promedio por ciclo",
-      value: new Intl.NumberFormat("es-MX", {
-        style: "currency",
-        currency: "MXN",
-        maximumFractionDigits: 0,
-      }).format(kpis.avgAmountPerCycle || 0),
-      helper: "Valor generado cada vez que el contacto vuelve.",
-    },
-  ]
-
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      {cards.map((card) => (
-        <div
-          key={card.label}
-          className="rounded-xl border bg-white p-4 shadow-sm"
-        >
-          <p className="text-xs uppercase text-muted-foreground">{card.label}</p>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{card.value}</p>
-          <p className="text-xs text-muted-foreground mt-1">{card.helper}</p>
-        </div>
-      ))}
-    </div>
   )
 }
 
