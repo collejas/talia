@@ -44,14 +44,16 @@ export default async function OportunidadesPage({
       <div className="flex flex-col gap-4">
         <details open className="group px-4 lg:px-6">
           <summary className="list-none">
-            <div className="flex cursor-pointer items-center justify-between rounded-xl border bg-white px-3 py-3">
-              <div>
-                <p className="text-xs uppercase text-muted-foreground">Resumen</p>
-                <p className="text-sm font-medium text-slate-900">
+            <div className="flex cursor-pointer items-center justify-between rounded-xl border bg-muted/50 px-3 py-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Resumen
+                </span>
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   KPIs y gráfica de oportunidades
-                </p>
+                </span>
               </div>
-              <span className="flex items-center gap-2 text-sm text-slate-700">
+              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Mostrar/Ocultar
                 <IconChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
               </span>
