@@ -39,7 +39,9 @@ export default async function OportunidadesPage({
   return (
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
-        <RestartKpiCards kpis={restartKpis.kpis} />
+        <div className="px-4 lg:px-6">
+          <RestartKpiCards kpis={restartKpis.kpis} />
+        </div>
         {restartKpis.errors.length > 0 ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             {restartKpis.errors.map((error) => (
