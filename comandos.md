@@ -89,9 +89,6 @@ sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
-
- agrege esta vista: talia.mx/propiedades  a los permisos de roles, los aplique al vendedor, pero en la vista del vendedor me sale esto: Tu sesión caducó o no
-  tienes permisos. Vuelve a iniciar sesión.   y no se vel mapa  ni el listado de propedades
   
 codex resume 019c4e1d-b93e-72f1-aba1-b73722cf3358
 codex resume 019c4999-cfa0-7100-ae74-7d5ce4ca9dba

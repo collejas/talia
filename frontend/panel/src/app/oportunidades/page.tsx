@@ -42,7 +42,7 @@ export default async function OportunidadesPage({
   return (
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
-        <details open className="group px-4 lg:px-6">
+        <details className="group px-4 lg:px-6">
           <summary className="list-none">
             <div className="flex cursor-pointer items-center justify-between rounded-xl border bg-muted/50 px-3 py-3">
               <div className="flex flex-col gap-1">
