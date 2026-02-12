@@ -57,7 +57,7 @@ export default async function OportunidadesPage({
               </span>
             </div>
           </summary>
-          <div className="mt-0 space-y-4 rounded-b-xl border border-t-0 bg-white pb-4 pt-4">
+          <div className="mt-0 space-y-4 rounded-b-xl border border-t-0 bg-transparent pb-4 pt-4">
             <SectionCards data={leadsOverview.cards} />
             <div className="px-4 lg:px-6">
               <ChartAreaInteractive data={leadsOverview.chart} />
