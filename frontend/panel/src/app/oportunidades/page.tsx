@@ -43,19 +43,21 @@ export default async function OportunidadesPage({
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
         <details open className="group px-4 lg:px-6">
-          <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border bg-white px-3 py-3">
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">Resumen</p>
-              <p className="text-sm font-medium text-slate-900">
-                KPIs y gráfica de oportunidades
-              </p>
+          <summary className="list-none">
+            <div className="flex cursor-pointer items-center justify-between rounded-xl border bg-white px-3 py-3">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Resumen</p>
+                <p className="text-sm font-medium text-slate-900">
+                  KPIs y gráfica de oportunidades
+                </p>
+              </div>
+              <span className="flex items-center gap-2 text-sm text-slate-700">
+                Mostrar/Ocultar
+                <IconChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+              </span>
             </div>
-            <span className="flex items-center gap-2 text-sm text-slate-700">
-              Mostrar/Ocultar
-              <IconChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            </span>
           </summary>
-          <div className="mt-4 space-y-4">
+          <div className="mt-0 space-y-4 rounded-b-xl border border-t-0 bg-white pb-4 pt-4">
             <SectionCards data={leadsOverview.cards} />
             <div className="px-4 lg:px-6">
               <ChartAreaInteractive data={leadsOverview.chart} />
