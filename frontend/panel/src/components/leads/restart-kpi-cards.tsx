@@ -26,12 +26,14 @@ export function RestartKpiCards({ kpis }: { kpis: RestartKpis }) {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-3 *:bg-gradient-to-t *:from-primary/5 *:to-card *:shadow-xs">
       {cards.map((card) => (
-        <div key={card.label} className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs uppercase text-muted-foreground">{card.label}</p>
-          <p className="text-2xl font-semibold text-slate-900 mt-1">{card.value}</p>
-          <p className="text-xs text-muted-foreground mt-1">{card.helper}</p>
+        <div key={card.label} className="rounded-xl border p-4 @container/card">
+          <p className="text-sm text-muted-foreground">{card.label}</p>
+          <p className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl mt-1">
+            {card.value}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">{card.helper}</p>
         </div>
       ))}
     </div>
