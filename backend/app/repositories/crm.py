@@ -2272,6 +2272,11 @@ class CRMRepository:
     ) -> UUID | None:
         """Asigna un vendedor round-robin cuando la oportunidad aún no tiene dueño."""
         if current_assignee:
+            await self._set_contact_owner_if_missing(
+                organizacion_id=organizacion_id,
+                contact_id=contact_id,
+                owner_id=current_assignee,
+            )
             return current_assignee
         if require_contact_ready and not bool(contact_ready):
             logger.info(
@@ -2313,6 +2318,11 @@ class CRMRepository:
                             },
                             json={"asignado_a_usuario_id": str(owner_uuid)},
                             prefer="return=minimal",
+                        )
+                        await self._set_contact_owner_if_missing(
+                            organizacion_id=organizacion_id,
+                            contact_id=contact_id,
+                            owner_id=owner_uuid,
                         )
                         logger.info(
                             "crm.sales_assignment.completed_contact_owner",
@@ -2356,6 +2366,11 @@ class CRMRepository:
             json={"asignado_a_usuario_id": str(candidate["usuario_id"])},
             prefer="return=minimal",
         )
+        await self._set_contact_owner_if_missing(
+            organizacion_id=organizacion_id,
+            contact_id=contact_id,
+            owner_id=candidate["usuario_id"],
+        )
         logger.info(
             "crm.sales_assignment.completed",
             extra={
@@ -2376,6 +2391,32 @@ class CRMRepository:
             canal=assignment_channel,
         )
         return candidate["usuario_id"]
+
+    async def _set_contact_owner_if_missing(
+        self,
+        *,
+        organizacion_id: UUID,
+        contact_id: str | None,
+        owner_id: UUID,
+    ) -> None:
+        if not contact_id:
+            return
+        try:
+            contact_uuid = _coerce_uuid(contact_id, field="contact_id")
+        except ValueError:
+            return
+        await self._request(
+            "PATCH",
+            "/rest/v1/contactos",
+            params={
+                "id": f"eq.{contact_uuid}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "propietario_usuario_id": "is.null",
+                "limit": "1",
+            },
+            json={"propietario_usuario_id": str(owner_id)},
+            prefer="return=minimal",
+        )
 
     async def _set_conversation_restart_sequence(
         self,
