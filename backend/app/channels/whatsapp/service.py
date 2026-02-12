@@ -161,7 +161,6 @@ async def handle_incoming_message(
             conversation_id=conversation_id,
             contact_id=contact_id,
             channel="whatsapp",
-            force_new_opportunity_on_restart=True,
             include_restart_metadata=True,
         )
     except StorageError as exc:

@@ -1848,6 +1848,37 @@ class CRMRepository:
                 metadata[key] = value
             return metadata
 
+        def _is_closed_opportunity(row: dict[str, Any]) -> bool:
+            estado = str(row.get("estado") or "").strip().lower()
+            if estado in {
+                "cerrada",
+                "ganada",
+                "perdida",
+                "closed",
+                "won",
+                "lost",
+                "cerrado_ganado",
+                "cerrado_perdido",
+            }:
+                return True
+
+            etapa = row.get("etapa")
+            etapa_categoria = ""
+            etapa_codigo = ""
+            if isinstance(etapa, dict):
+                etapa_categoria = str(etapa.get("categoria") or "").strip().lower()
+                etapa_codigo = str(etapa.get("codigo") or "").strip().lower()
+            elif isinstance(etapa, list) and etapa and isinstance(etapa[0], dict):
+                etapa_categoria = str(etapa[0].get("categoria") or "").strip().lower()
+                etapa_codigo = str(etapa[0].get("codigo") or "").strip().lower()
+
+            return etapa_categoria in {"ganada", "perdida", "cerrada"} or etapa_codigo in {
+                "cerrado_ganado",
+                "cerrado_perdido",
+                "ganada",
+                "perdida",
+            }
+
         async def _patch_metadata(opportunity_id: UUID, metadata: dict[str, Any]) -> UUID:
             params = {
                 "id": f"eq.{opportunity_id}",
@@ -1864,8 +1895,9 @@ class CRMRepository:
             return opportunity_id
 
         select_columns = (
-            "id,metadata,asignado_a_usuario_id,etapa_id,titulo,descripcion,"
-            "monto_estimado,moneda,probabilidad"
+            "id,metadata,asignado_a_usuario_id,etapa_id,estado,titulo,descripcion,"
+            "monto_estimado,moneda,probabilidad,"
+            "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(codigo,categoria)"
         )
 
         # Buscar por metadata->>conversation_id
@@ -1887,6 +1919,22 @@ class CRMRepository:
                 if current_assignee
                 else None
             )
+            if _is_closed_opportunity(row):
+                return await self._create_opportunity_from_contact(
+                    organizacion_id=organizacion_id,
+                    contacto_id=contacto_id,
+                    conversation_id=conversation_key,
+                    canal=canal,
+                    contacto_nombre=contacto_nombre,
+                    contacto_empresa=contacto_empresa,
+                    base_metadata=base_metadata,
+                    parent_row=row,
+                    parent_metadata=metadata,
+                    parent_assignee=assignee_uuid,
+                    is_restart=True,
+                    contact_ready=contact_ready,
+                    require_contact_ready=require_contact_ready,
+                )
             result_id = await _patch_metadata(opportunity_id, metadata)
             restart_sequence = _coerce_positive_int(metadata.get("restart_sequence"), default=1)
             await self._set_conversation_restart_sequence(
@@ -1911,12 +1959,20 @@ class CRMRepository:
             "contacto_principal_id": f"eq.{contacto_id}",
             "select": select_columns,
             "order": "creado_en.desc",
-            "limit": "1",
+            "limit": "25",
         }
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
         rows = resp.json() or []
         if isinstance(rows, list) and rows:
-            row = rows[0]
+            active_row: dict[str, Any] | None = None
+            for candidate in rows:
+                if isinstance(candidate, dict) and not _is_closed_opportunity(candidate):
+                    active_row = candidate
+                    break
+
+            row = active_row or rows[0]
+            if not isinstance(row, dict):
+                raise CRMRepositoryError(f"opportunity_row_invalid:{row!r}")
             opportunity_id = _coerce_uuid(row.get("id"), field="opportunity_id")
             metadata = _merged_metadata(row.get("metadata"))
             current_assignee = row.get("asignado_a_usuario_id")
@@ -1929,6 +1985,22 @@ class CRMRepository:
             metadata_conversation = metadata.get("conversation_id")
             if isinstance(metadata_conversation, str):
                 existing_conversation = metadata_conversation.strip()
+            if _is_closed_opportunity(row):
+                return await self._create_opportunity_from_contact(
+                    organizacion_id=organizacion_id,
+                    contacto_id=contacto_id,
+                    conversation_id=conversation_key,
+                    canal=canal,
+                    contacto_nombre=contacto_nombre,
+                    contacto_empresa=contacto_empresa,
+                    base_metadata=base_metadata,
+                    parent_row=row,
+                    parent_metadata=metadata,
+                    parent_assignee=assignee_uuid,
+                    is_restart=True,
+                    contact_ready=contact_ready,
+                    require_contact_ready=require_contact_ready,
+                )
             should_restart = (
                 force_new_opportunity_on_restart
                 and existing_conversation

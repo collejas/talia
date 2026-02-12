@@ -174,6 +174,15 @@ async def _process_conversation(
         return
     if not opportunity:
         return
+    if _should_skip_reengage_for_business_rules(opportunity):
+        logger.info(
+            "whatsapp.followup.skip_business_rule",
+            extra={
+                "conversation_id": convo_id,
+                "contact_id": contact_id,
+            },
+        )
+        return
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     followup_meta = _ensure_dict(metadata.get("whatsapp_followup"))
@@ -359,7 +368,6 @@ async def _send_reengage_message(
                 conversation_id=conversation_id,
                 contact_id=contact_id_value,
                 channel="whatsapp",
-                force_new_opportunity_on_restart=True,
             )
         except StorageError as exc:
             logger.warning(
@@ -471,3 +479,34 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {}
     return {}
+
+
+def _should_skip_reengage_for_business_rules(opportunity: dict[str, Any]) -> bool:
+    """Reglas de negocio inmobiliaria para no reenganchar leads ya resueltos."""
+    stage = opportunity.get("etapa")
+    stage_category = ""
+    stage_code = ""
+    if isinstance(stage, dict):
+        stage_category = str(stage.get("categoria") or "").strip().lower()
+        stage_code = str(stage.get("codigo") or "").strip().lower()
+    elif isinstance(stage, list) and stage and isinstance(stage[0], dict):
+        stage_category = str(stage[0].get("categoria") or "").strip().lower()
+        stage_code = str(stage[0].get("codigo") or "").strip().lower()
+
+    estado = str(opportunity.get("estado") or "").strip().lower()
+    is_closed = (
+        estado in {"ganada", "perdida", "cerrada"}
+        or stage_category in {"ganada", "perdida", "cerrada"}
+        or stage_code in {"cerrado_ganado", "cerrado_perdido", "ganada", "perdida"}
+    )
+    if is_closed:
+        return True
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    sales_notifications = _ensure_dict(metadata.get("sales_notifications"))
+    booking_confirmed_at = (
+        sales_notifications.get("booking_confirmed_at")
+        or sales_notifications.get("booking_confirmed")
+        or sales_notifications.get("booking_confirmed_en")
+    )
+    return bool(booking_confirmed_at)
