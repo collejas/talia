@@ -7,11 +7,12 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from email_validator import EmailNotValidError, validate_email
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.config import settings
 from app.core.secrets_crypto import SecretsCryptoError, encrypt_secret
+from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing
 from app.services.role_permissions_sync import (
@@ -22,6 +23,11 @@ from app.services.role_permissions_sync import (
 from app.services.supabase_admin import SupabaseAdminError, create_supabase_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+class AdminDebugRowsResponse(BaseModel):
+    ok: bool = True
+    items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _resolve_matrix_path(value: str) -> Path:
@@ -35,6 +41,13 @@ def get_platform_repo() -> PlatformRepository:
     try:
         return PlatformRepository()
     except PlatformRepositoryError as exc:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def get_crm_repo() -> CRMRepository:
+    try:
+        return CRMRepository()
+    except CRMRepositoryError as exc:  # pragma: no cover
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
@@ -96,6 +109,52 @@ async def get_my_platform_admin_status(
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"is_platform_admin": bool(allowed)}
+
+
+@router.get("/debug/inbox/threads", response_model=AdminDebugRowsResponse)
+async def debug_inbox_threads_as_actor(
+    actor_user_id: UUID = Query(..., description="auth.uid a emular en el RPC"),
+    estado: str | None = Query(default=None),
+    asignado_id: UUID | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=5000),
+    message_limit: int = Query(default=20, ge=1, le=50),
+    _: UUID = Depends(require_platform_admin),
+    repo: CRMRepository = Depends(get_crm_repo),
+) -> AdminDebugRowsResponse:
+    try:
+        rows = await repo.inbox_threads_debug(
+            actor_user_id=actor_user_id,
+            estado=estado,
+            asignado_id=asignado_id,
+            limit=limit,
+            offset=offset,
+            message_limit=message_limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return AdminDebugRowsResponse(items=rows)
+
+
+@router.get("/debug/leads/restarts", response_model=AdminDebugRowsResponse)
+async def debug_restart_stats_as_actor(
+    actor_user_id: UUID = Query(..., description="auth.uid a emular en el RPC"),
+    organizacion_id: UUID = Query(...),
+    min_restart_sequence: int = Query(default=1, ge=1, le=100),
+    limit: int = Query(default=200, ge=1, le=500),
+    _: UUID = Depends(require_platform_admin),
+    repo: CRMRepository = Depends(get_crm_repo),
+) -> AdminDebugRowsResponse:
+    try:
+        rows = await repo.contact_restart_stats_debug(
+            actor_user_id=actor_user_id,
+            organizacion_id=organizacion_id,
+            min_restart_sequence=min_restart_sequence,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return AdminDebugRowsResponse(items=rows)
 
 
 class TenantSummary(BaseModel):

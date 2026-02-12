@@ -1791,6 +1791,27 @@ class CRMRepository:
             f"Respuesta inesperada al obtener reinicios de contactos: {data!r}"
         )
 
+    async def contact_restart_stats_debug(
+        self,
+        *,
+        actor_user_id: UUID,
+        organizacion_id: UUID,
+        min_restart_sequence: int = 1,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "p_actor_user_id": str(actor_user_id),
+            "p_organizacion_id": str(organizacion_id),
+            "p_min_restart_sequence": max(1, min_restart_sequence),
+            "p_limit": max(1, min(limit, 500)),
+        }
+        data = await self._rpc("crm_contact_restart_stats_debug", payload)
+        if isinstance(data, list):
+            return data
+        raise CRMRepositoryError(
+            f"Respuesta inesperada al obtener reinicios (debug): {data!r}"
+        )
+
     async def ensure_conversation_opportunity(
         self,
         *,
@@ -4718,6 +4739,31 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en panel_inbox_threads: {data!r}")
+        return data
+
+    async def inbox_threads_debug(
+        self,
+        *,
+        actor_user_id: UUID,
+        estado: str | None = None,
+        asignado_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        message_limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "p_actor_user_id": str(actor_user_id),
+            "p_estado": estado,
+            "p_asignado": str(asignado_id) if asignado_id else None,
+            "p_limit": max(1, min(limit, 200)),
+            "p_offset": max(0, offset),
+            "p_message_limit": max(1, min(message_limit, 50)),
+        }
+        data = await self._rpc("panel_inbox_threads_debug", payload)
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada en panel_inbox_threads_debug: {data!r}"
+            )
         return data
 
     async def inbox_messages(
