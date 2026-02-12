@@ -1,8 +1,11 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
+import { ChartAreaInteractive } from "@/components/chart-area-interactive";
+import { SectionCards } from "@/components/section-cards";
 import { RestartKpiCards } from "@/components/leads/restart-kpi-cards";
+import { IconChevronDown } from "@tabler/icons-react";
 import { callCrmApi } from "@/lib/api/crm";
 import { loadCrmOpportunities } from "@/lib/crm/opportunities";
-import { loadRestartKpis } from "@/lib/leads/data";
+import { loadLeadsData } from "@/lib/leads/data";
 import {
   type OportunidadesFilterOptions,
   type OportunidadesFiltersState,
@@ -21,9 +24,9 @@ export default async function OportunidadesPage({
   const resolvedParams = searchParams ? await searchParams : {};
   const filters = resolveFilters(resolvedParams);
 
-  const [payload, restartKpis, filterOptions] = await Promise.all([
+  const [payload, leadsOverview, filterOptions] = await Promise.all([
     loadCrmOpportunities(filters),
-    loadRestartKpis(),
+    loadLeadsData(),
     loadFilterOptions(),
   ]);
 
@@ -39,12 +42,32 @@ export default async function OportunidadesPage({
   return (
     <AppViewLayout title="Oportunidades">
       <div className="flex flex-col gap-4">
-        <div className="px-4 lg:px-6">
-          <RestartKpiCards kpis={restartKpis.kpis} />
-        </div>
-        {restartKpis.errors.length > 0 ? (
+        <details open className="group px-4 lg:px-6">
+          <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border bg-white px-3 py-3">
+            <div>
+              <p className="text-xs uppercase text-muted-foreground">Resumen</p>
+              <p className="text-sm font-medium text-slate-900">
+                KPIs y gráfica de oportunidades
+              </p>
+            </div>
+            <span className="flex items-center gap-2 text-sm text-slate-700">
+              Mostrar/Ocultar
+              <IconChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </span>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <SectionCards data={leadsOverview.cards} />
+            <div className="px-4 lg:px-6">
+              <ChartAreaInteractive data={leadsOverview.chart} />
+            </div>
+            <div className="px-4 lg:px-6">
+              <RestartKpiCards kpis={leadsOverview.restartKpis} />
+            </div>
+          </div>
+        </details>
+        {leadsOverview.errors.length > 0 ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            {restartKpis.errors.map((error) => (
+            {leadsOverview.errors.map((error) => (
               <p key={error}>{error}</p>
             ))}
           </div>
