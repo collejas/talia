@@ -2327,9 +2327,11 @@ class CRMRepository:
                             organizacion_id=organizacion_id,
                             oportunidad_id=oportunidad_id,
                             vendedor_id=owner_uuid,
-                            conversacion_id=conversation_id,
+                            conversation_id=conversation_id,
                             contact_id=contact_id,
-                            channel=assignment_channel,
+                            trigger="auto_assign",
+                            metadata={"source": "contact_owner"},
+                            canal=assignment_channel,
                         )
                         return owner_uuid
         candidate = await self.assign_next_sales_rep(organizacion_id=organizacion_id)
@@ -2974,7 +2976,24 @@ class CRMRepository:
         if not isinstance(row, dict):
             return None
         contact_id = row.get("contacto_id")
-        return str(contact_id) if contact_id else None
+        if not contact_id:
+            return None
+        contact_key = str(contact_id).strip()
+        if not contact_key:
+            return None
+
+        # Evita retornar referencias huérfanas desde identidades_canal.
+        contact_resp = await self._request(
+            "GET",
+            "/rest/v1/contactos",
+            params={"id": f"eq.{contact_key}", "select": "id", "limit": "1"},
+        )
+        contact_rows = contact_resp.json() or []
+        if isinstance(contact_rows, list) and contact_rows:
+            return contact_key
+        if isinstance(contact_rows, dict) and contact_rows.get("id"):
+            return str(contact_rows.get("id"))
+        return None
 
     async def get_webchat_session_by_contact(self, *, contact_id: str) -> str | None:
         contact_key = contact_id.strip()
@@ -3247,12 +3266,18 @@ class CRMRepository:
             "payload_crudo": raw_payload or {},
         }
         if not message_id:
-            logger.warning(
+            logger.info(
                 "crm.delivery_event_missing_message_id",
                 extra={"message_sid": message_sid, "event": event, "provider": provider},
             )
-        if message_id:
-            payload["mensaje_id"] = message_id
+            return {
+                "skipped": True,
+                "reason": "message_id_not_found",
+                "message_sid": message_sid,
+                "event": event,
+                "provider": provider,
+            }
+        payload["mensaje_id"] = message_id
         if provider_timestamp:
             payload["proveedor_ts"] = provider_timestamp
 

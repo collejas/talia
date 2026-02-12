@@ -1682,10 +1682,17 @@ async def _maybe_enrich_contact_metadata(
         try:
             contact = await storage.fetch_contact(contact_id)
         except storage.StorageError as exc:
-            logger.exception(
-                "webchat.contact_fetch_failed",
-                extra={"contact_id": contact_id, "error": str(exc)},
-            )
+            error_text = str(exc).lower()
+            if "contacto no encontrado" in error_text:
+                logger.warning(
+                    "webchat.contact_enrich_skipped_missing_contact",
+                    extra={"contact_id": contact_id, "error": str(exc)},
+                )
+            else:
+                logger.exception(
+                    "webchat.contact_fetch_failed",
+                    extra={"contact_id": contact_id, "error": str(exc)},
+                )
             return
 
     contacto_datos = _safe_dict(contact.get("contacto_datos"))
@@ -1929,7 +1936,7 @@ async def _register_webchat_visit(
             extra={"session_id": session_id, "error": str(exc)},
         )
 
-    if contact_id:
+    if contact_id and resolved_contact is not None:
         try:
             await _maybe_enrich_contact_metadata(
                 contact_id,
@@ -1950,6 +1957,11 @@ async def _register_webchat_visit(
                 "webchat.contact_enrich_failed",
                 extra={"contact_id": contact_id},
             )
+    elif contact_id:
+        logger.warning(
+            "webchat.contact_enrich_skipped_missing_contact",
+            extra={"contact_id": contact_id},
+        )
 
     return contact_id
 

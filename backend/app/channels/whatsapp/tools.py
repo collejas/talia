@@ -602,7 +602,9 @@ async def _handle_close_lead(
                 },
             )
     try:
-        await storage.update_conversation(context.conversation_id, {"estado": "cerrada"})
+        # Mantener hilo único en inbox: en WhatsApp el cierre operativo del lead
+        # no debe forzar una nueva conversación técnica al siguiente mensaje.
+        await storage.update_conversation(context.conversation_id, {"estado": "pendiente"})
     except StorageError as exc:
         logger.warning(
             "whatsapp.close_lead.conversation_update_failed",
@@ -876,21 +878,32 @@ async def _handle_reschedule_demo(
     new_slot_raw = arguments.get("start_at") or arguments.get("slot_start")
     new_slot_datetime = webchat_service._parse_calendar_datetime(new_slot_raw)
     notes = (arguments.get("notes") or "").strip() or None
+    contact = await _resolve_contact(context.contact_id)
+    org_hint = webchat_service._extract_contact_org(contact) if contact else None
+    if not org_hint:
+        try:
+            conversation_meta = await storage.fetch_conversation(context.conversation_id)
+        except StorageError:
+            conversation_meta = {}
+        org_hint = str(conversation_meta.get("organizacion_id") or "").strip() or None
+    resolved_org = webchat_service._resolve_org_uuid(org_hint)
+    metadata_payload: dict[str, Any] = {
+        "conversation_id": context.conversation_id,
+        "contact_id": context.contact_id,
+        "session_id": context.session_id,
+    }
+    if resolved_org:
+        metadata_payload["organizacion_id"] = resolved_org
     try:
         booking = await webchat_service.calendar_service.reschedule_booking(
             booking_id=booking_id,
             new_slot_start=new_slot_datetime,
             notes=notes,
-            metadata={
-                "conversation_id": context.conversation_id,
-                "contact_id": context.contact_id,
-                "session_id": context.session_id,
-            },
+            metadata=metadata_payload,
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
     booking_response = webchat_service._build_booking_response(booking)
-    contact = await _resolve_contact(context.contact_id)
     await webchat_service._sync_booking_with_opportunity(
         booking=booking_response,
         tarjeta_id=booking_response.tarjeta_id,
