@@ -20,9 +20,26 @@ class TableRowPayload(BaseModel):
         extra = Extra.forbid
 
 
+class HeroCardPayload(BaseModel):
+    caption: str
+    title: str
+    description: str
+
+    class Config:
+        extra = Extra.forbid
+
+
 class ProposalTablePayload(BaseModel):
     proposal_title: str | None = Field(default=None, alias="proposalTitle")
     proposal_subtitle: str | None = Field(default=None, alias="proposalSubtitle")
+    hero_cards: list[HeroCardPayload] | None = Field(default=None, alias="heroCards")
+    hero_intro_one: str | None = Field(default=None, alias="heroIntroOne")
+    hero_intro_two: str | None = Field(default=None, alias="heroIntroTwo")
+    mvp_title: str | None = Field(default=None, alias="mvpTitle")
+    mvp_intro: str | None = Field(default=None, alias="mvpIntro")
+    mvp_items: list[str] | None = Field(default=None, alias="mvpItems")
+    mvp_timeline: str | None = Field(default=None, alias="mvpTimeline")
+    mvp_validity: str | None = Field(default=None, alias="mvpValidity")
     column_headers: list[str] | None = Field(default=None, alias="columnHeaders")
     renta_rows: list[TableRowPayload] | None = Field(default=None, alias="rentaRows")
     configuracion_rows: list[TableRowPayload] | None = Field(
@@ -45,6 +62,14 @@ def _normalize_proposal_payload(payload: ProposalTablePayload | None) -> dict:
         return {
             "proposal_title": None,
             "proposal_subtitle": None,
+            "hero_cards": None,
+            "hero_intro_one": None,
+            "hero_intro_two": None,
+            "mvp_title": None,
+            "mvp_intro": None,
+            "mvp_items": None,
+            "mvp_timeline": None,
+            "mvp_validity": None,
             "column_headers": None,
             "renta_rows": None,
             "configuracion_rows": None,
@@ -52,6 +77,14 @@ def _normalize_proposal_payload(payload: ProposalTablePayload | None) -> dict:
     return {
         "proposal_title": payload.proposal_title,
         "proposal_subtitle": payload.proposal_subtitle,
+        "hero_cards": [card.dict() for card in payload.hero_cards] if payload.hero_cards else None,
+        "hero_intro_one": payload.hero_intro_one,
+        "hero_intro_two": payload.hero_intro_two,
+        "mvp_title": payload.mvp_title,
+        "mvp_intro": payload.mvp_intro,
+        "mvp_items": payload.mvp_items,
+        "mvp_timeline": payload.mvp_timeline,
+        "mvp_validity": payload.mvp_validity,
         "column_headers": payload.column_headers,
         "renta_rows": _extract_payload_rows(payload.renta_rows),
         "configuracion_rows": _extract_payload_rows(payload.configuracion_rows),

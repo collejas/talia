@@ -170,9 +170,15 @@ async def test_handle_information_email_triggers_notification(
     async def fake_ensure(*_, **__):
         return "00000000-0000-0000-0000-0000000000cc"
 
+    auto_name_calls: list[dict[str, Any]] = []
+
+    async def fake_auto_name(**kwargs: Any) -> None:
+        auto_name_calls.append(kwargs)
+
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_upsert)
     monkeypatch.setattr(tools.storage, "ensure_conversation_opportunity", fake_ensure)
     monkeypatch.setattr(tools.storage, "update_contact", fake_upsert)
+    monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
 
     notified: list[str] = []
 
@@ -198,6 +204,8 @@ async def test_handle_information_email_triggers_notification(
     result = await tools._handle_information_email(arguments, context)
     assert result["status"] == "sent"
     assert notified == ["information_email"]
+    assert auto_name_calls
+    assert auto_name_calls[0]["intent"] is None
 
 
 @pytest.mark.asyncio
@@ -219,10 +227,16 @@ async def test_handle_close_lead_triggers_notification(
     async def fake_update_contact(*_, **__):
         return None
 
+    auto_name_calls: list[dict[str, Any]] = []
+
+    async def fake_auto_name(**kwargs: Any) -> None:
+        auto_name_calls.append(kwargs)
+
     monkeypatch.setattr(tools.storage, "ensure_conversation_opportunity", fake_ensure)
     monkeypatch.setattr(tools.storage, "update_contact", fake_update_contact)
     monkeypatch.setattr(tools.storage, "update_conversation", fake_update_contact)
     monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_update_contact)
+    monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
     promoted: dict[str, Any] = {}
 
     async def fake_promote_opportunity_stage(**kwargs: object) -> None:
@@ -258,3 +272,5 @@ async def test_handle_close_lead_triggers_notification(
     assert notified == ["close_lead"]
     assert promoted.get("called") is True
     assert promoted["payload"]["stage_code"] == "precalificado"
+    assert auto_name_calls
+    assert auto_name_calls[0]["intent"] == "Automatización"

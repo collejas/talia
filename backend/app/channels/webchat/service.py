@@ -2878,6 +2878,20 @@ async def _execute_function_call(
             email=contact_email or None,
             extra={"siguiente_accion": siguiente_accion},
         )
+        try:
+            await storage.maybe_auto_name_opportunity(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(opportunity_id) if opportunity_id else None,
+                intent=necesidad,
+                summary=notes,
+                channel="webchat",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "webchat.close_lead.auto_name_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
         return {
             "status": "ok",
             "notes": notes,

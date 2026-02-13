@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +78,116 @@ def _contact_has_minimum_info(contact: dict[str, Any]) -> bool:
     phone = str(contact.get("telefono_e164") or "").strip()
     email = str(contact.get("correo") or "").strip()
     return bool(phone or email)
+
+
+def _clean_text(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    return " ".join(text.split())
+
+
+def _normalize_title_fragment(value: Any, *, max_len: int = 96) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    # Prioriza la primera idea concreta para mantener títulos cortos y legibles.
+    parts = re.split(r"[.?!;\n]+", text)
+    fragment = next((part.strip(" -:\t") for part in parts if part and part.strip()), "")
+    if not fragment:
+        return None
+    lowered = fragment.lower()
+    prefixes = (
+        "quiero ",
+        "quisiera ",
+        "necesito ",
+        "necesitamos ",
+        "me interesa ",
+        "nos interesa ",
+        "busco ",
+        "buscamos ",
+        "informacion sobre ",
+        "información sobre ",
+    )
+    for prefix in prefixes:
+        if lowered.startswith(prefix):
+            fragment = fragment[len(prefix) :].strip()
+            break
+    if len(fragment) < 4:
+        return None
+    if len(fragment) > max_len:
+        fragment = fragment[: max_len - 1].rstrip() + "…"
+    return fragment
+
+
+def _looks_like_placeholder_name(value: str) -> bool:
+    lowered = value.strip().lower()
+    if not lowered:
+        return True
+    return lowered in {
+        "visitante webchat",
+        "visitante whatsapp",
+        "visitante",
+        "lead webchat",
+        "lead whatsapp",
+    }
+
+
+def _build_opportunity_title(
+    *,
+    contact: dict[str, Any],
+    intent: str | None = None,
+    summary: str | None = None,
+) -> str | None:
+    fragment = (
+        _normalize_title_fragment(intent)
+        or _normalize_title_fragment(summary)
+        or _normalize_title_fragment(contact.get("necesidad_proposito"))
+        or _normalize_title_fragment(contact.get("notes"))
+    )
+    if not fragment:
+        return None
+
+    contact_name = _clean_text(contact.get("nombre_completo"))
+    company_name = _clean_text(contact.get("company_name"))
+    suffix = ""
+    if contact_name and not _looks_like_placeholder_name(contact_name):
+        suffix = contact_name
+    elif company_name:
+        suffix = company_name
+
+    title = fragment
+    if suffix:
+        title = f"{fragment} - {suffix}"
+    if len(title) > 140:
+        title = title[:139].rstrip() + "…"
+    return title
+
+
+def _is_generic_opportunity_title(
+    *,
+    current_title: str,
+    contact: dict[str, Any],
+    auto_generated: bool,
+) -> bool:
+    if auto_generated:
+        return True
+    normalized = current_title.strip().lower()
+    if not normalized:
+        return True
+    if normalized.startswith("conversación ") or normalized.startswith("conversation "):
+        return True
+    if _looks_like_placeholder_name(normalized):
+        return True
+    contact_name = _clean_text(contact.get("nombre_completo")).lower()
+    company_name = _clean_text(contact.get("company_name")).lower()
+    if contact_name and normalized == contact_name:
+        return True
+    if company_name and normalized == company_name:
+        return True
+    return False
 
 
 async def register_webchat_message(
@@ -1206,6 +1317,117 @@ async def ensure_lead_tarjeta(
         contact_id=contact_id,
         channel=channel,
     )
+
+
+async def maybe_auto_name_opportunity(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    summary: str | None = None,
+    intent: str | None = None,
+    channel: str | None = None,
+    opportunity_id: str | None = None,
+) -> str | None:
+    """Renombra la oportunidad con base en insights cuando el título actual es genérico."""
+
+    try:
+        contact = await fetch_contact(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "storage.auto_name_opportunity.contact_lookup_failed",
+            extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+
+    proposed_title = _build_opportunity_title(contact=contact, intent=intent, summary=summary)
+    if not proposed_title:
+        return None
+
+    opportunity_value = (opportunity_id or "").strip()
+    if not opportunity_value:
+        try:
+            resolved = await ensure_conversation_opportunity(
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                channel=channel,
+            )
+            opportunity_value = str(resolved)
+        except StorageError as exc:
+            logger.warning(
+                "storage.auto_name_opportunity.ensure_failed",
+                extra={
+                    "contact_id": contact_id,
+                    "conversation_id": conversation_id,
+                    "error": str(exc),
+                },
+            )
+            return None
+
+    try:
+        opportunity_uuid = UUID(opportunity_value)
+    except (TypeError, ValueError):
+        return None
+
+    org_value = contact.get("organizacion_id")
+    if not org_value:
+        return None
+    try:
+        org_uuid = UUID(str(org_value))
+    except (TypeError, ValueError):
+        return None
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opportunity_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.auto_name_opportunity.lookup_failed",
+            extra={
+                "opportunity_id": opportunity_value,
+                "conversation_id": conversation_id,
+                "error": str(exc),
+            },
+        )
+        return None
+    if not opportunity:
+        return None
+
+    current_title = _clean_text(opportunity.get("titulo"))
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    auto_generated = _normalize_manual_override(metadata.get("title_auto_generated"))
+    if not _is_generic_opportunity_title(
+        current_title=current_title,
+        contact=contact,
+        auto_generated=auto_generated,
+    ):
+        return None
+    if current_title == proposed_title:
+        return current_title
+
+    metadata["title_auto_generated"] = True
+    metadata["title_auto_source"] = "conversation_insights"
+    metadata["title_auto_updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opportunity_uuid,
+            payload={"titulo": proposed_title, "metadata": metadata},
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.auto_name_opportunity.update_failed",
+            extra={
+                "opportunity_id": opportunity_value,
+                "conversation_id": conversation_id,
+                "error": str(exc),
+            },
+        )
+        return None
+    return proposed_title
 
 
 async def promote_opportunity_stage(

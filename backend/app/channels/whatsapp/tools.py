@@ -545,6 +545,21 @@ async def _handle_information_email(
             "whatsapp.info_email.ensure_opportunity_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
+    if oportunidad_id:
+        try:
+            await storage.maybe_auto_name_opportunity(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=oportunidad_id,
+                intent=contact_need,
+                summary=summary or contact_notes,
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.info_email.auto_name_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
 
     await _notify_sales_rep(
         context=context,
@@ -622,6 +637,21 @@ async def _handle_close_lead(
             "whatsapp.close_lead.insights_failed",
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
+    if tarjeta_id:
+        try:
+            await storage.maybe_auto_name_opportunity(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(tarjeta_id),
+                intent=necesidad,
+                summary=notes,
+                channel=context.channel or "whatsapp",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.close_lead.auto_name_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
 
     await _notify_sales_rep(
         context=context,
