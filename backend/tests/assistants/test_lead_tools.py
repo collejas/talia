@@ -24,6 +24,10 @@ async def test_mark_contact_ready_success(monkeypatch):
         "capture_opportunity_if_ready",
         fake_capture,
     )
+    async def fake_noop(*_, **__):
+        return None
+
+    monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
 
     context = ToolRuntimeContext(
         conversation_id="conv-1",
@@ -52,6 +56,10 @@ async def test_mark_contact_ready_requires_contact(monkeypatch):
         "ensure_contact_ready_for_assignment",
         fake_ensure,
     )
+    async def fake_noop(*_, **__):
+        return None
+
+    monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
 
     context = ToolRuntimeContext(
         conversation_id="conv-2",
@@ -65,3 +73,62 @@ async def test_mark_contact_ready_requires_contact(monkeypatch):
             arguments={},
             context=context,
         )
+
+
+@pytest.mark.asyncio
+async def test_close_lead_triggers_auto_name(monkeypatch):
+    async def fake_ensure_contact_ready_for_assignment(**__):
+        return True
+
+    async def fake_ensure_conversation_opportunity(**__):
+        return "opp-123"
+
+    async def fake_noop(*_, **__):
+        return None
+
+    async def fake_fetch_contact(*_, **__):
+        return {"id": "contact-3", "organizacion_id": "00000000-0000-0000-0000-000000000001"}
+
+    auto_name_calls = []
+
+    async def fake_auto_name(**kwargs):
+        auto_name_calls.append(kwargs)
+        return "Titulo IA"
+
+    monkeypatch.setattr(
+        lead_tools.webchat_followups,
+        "ensure_contact_ready_for_assignment",
+        fake_ensure_contact_ready_for_assignment,
+    )
+    monkeypatch.setattr(
+        lead_tools.storage,
+        "ensure_conversation_opportunity",
+        fake_ensure_conversation_opportunity,
+    )
+    monkeypatch.setattr(lead_tools.storage, "update_contact", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "update_conversation", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "upsert_conversation_insights", fake_noop)
+    monkeypatch.setattr(lead_tools.storage, "fetch_contact", fake_fetch_contact)
+    monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
+    monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
+    monkeypatch.setattr(lead_tools.webchat_notifications, "notify_sales_rep", fake_noop)
+
+    context = ToolRuntimeContext(
+        conversation_id="conv-3",
+        contact_id="contact-3",
+        channel="webchat",
+    )
+
+    result = await lead_tools.try_execute_lead_tool(
+        name="close_lead",
+        arguments={
+            "notes": "Quiere invertir en casas",
+            "necesidad_proposito": "Agendar cita para conocer casas",
+        },
+        context=context,
+    )
+
+    assert result is not None
+    assert result["status"] == "ok"
+    assert auto_name_calls
+    assert auto_name_calls[0]["opportunity_id"] == "opp-123"

@@ -202,6 +202,21 @@ async def try_execute_lead_tool(
                 "lead_tools.notify_sales_failed",
                 extra={"conversation_id": context.conversation_id, "contact_id": context.contact_id},
             )
+        if tarjeta_id:
+            try:
+                await storage.maybe_auto_name_opportunity(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    intent=necesidad,
+                    summary=notes,
+                    channel=context.channel or "webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.auto_name_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
         return {
             "status": "ok",
             "notes": notes,
