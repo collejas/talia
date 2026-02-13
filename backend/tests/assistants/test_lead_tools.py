@@ -90,10 +90,20 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
         return {"id": "contact-3", "organizacion_id": "00000000-0000-0000-0000-000000000001"}
 
     auto_name_calls = []
+    scoring_calls = []
+    prequalified_calls = []
 
     async def fake_auto_name(**kwargs):
         auto_name_calls.append(kwargs)
         return "Titulo IA"
+
+    async def fake_apply_scoring(**kwargs):
+        scoring_calls.append(kwargs)
+        return {"score_total": 65, "grade": "interesado", "confidence": "medium"}
+
+    async def fake_prequalified(**kwargs):
+        prequalified_calls.append(kwargs)
+        return False
 
     monkeypatch.setattr(
         lead_tools.webchat_followups,
@@ -110,6 +120,12 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
     monkeypatch.setattr(lead_tools.storage, "upsert_conversation_insights", fake_noop)
     monkeypatch.setattr(lead_tools.storage, "fetch_contact", fake_fetch_contact)
     monkeypatch.setattr(lead_tools.storage, "maybe_auto_name_opportunity", fake_auto_name)
+    monkeypatch.setattr(lead_tools.storage, "apply_lead_scoring", fake_apply_scoring)
+    monkeypatch.setattr(
+        lead_tools.storage,
+        "maybe_promote_prequalified_from_scoring",
+        fake_prequalified,
+    )
     monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
     monkeypatch.setattr(lead_tools.webchat_notifications, "notify_sales_rep", fake_noop)
 
@@ -131,4 +147,6 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
     assert result is not None
     assert result["status"] == "ok"
     assert auto_name_calls
+    assert scoring_calls
+    assert prequalified_calls
     assert auto_name_calls[0]["opportunity_id"] == "opp-123"

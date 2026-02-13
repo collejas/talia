@@ -209,6 +209,256 @@ def _is_generic_opportunity_title(
     return False
 
 
+_SCORE_VALUE_MAP: dict[str, dict[str, int]] = {
+    "financing_type": {
+        "contado": 100,
+        "mixto": 90,
+        "credito": 80,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "credit_preapproved": {
+        "yes": 100,
+        "in_process": 70,
+        "no": 30,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "down_payment_ready": {
+        "yes": 100,
+        "partial": 70,
+        "no": 30,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "purchase_timeline": {
+        "<3m": 100,
+        "3-6m": 80,
+        "6-12m": 60,
+        ">12m": 30,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "hard_deadline": {
+        "yes": 100,
+        "no": 50,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "requirements_defined": {
+        "high": 100,
+        "medium": 70,
+        "low": 40,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "comparison_mode": {
+        "shortlist": 100,
+        "comparing": 75,
+        "exploring": 45,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "visited_properties": {
+        "yes": 100,
+        "no": 50,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "decision_authority": {
+        "full": 100,
+        "shared": 75,
+        "advisor": 40,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "buyer_type": {
+        "individual": 80,
+        "couple": 80,
+        "family": 80,
+        "company": 90,
+        "investor": 90,
+        "unknown": 40,
+        "refused": 20,
+    },
+    "response_time_bucket": {
+        "fast": 100,
+        "medium": 70,
+        "slow": 40,
+    },
+}
+
+_CRITICAL_SCORING_FIELDS: tuple[str, ...] = (
+    "financing_type",
+    "budget_range",
+    "purchase_timeline",
+    "decision_authority",
+)
+
+
+def _as_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "si", "sí"}:
+            return True
+        if normalized in {"false", "0", "no"}:
+            return False
+    return None
+
+
+def _as_ratio(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(number, 1.0))
+
+
+def _normalize_answer_value(field: str, value: Any) -> Any:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+    else:
+        normalized = value
+    if field in _SCORE_VALUE_MAP and isinstance(normalized, str):
+        if normalized in _SCORE_VALUE_MAP[field]:
+            return normalized
+    if field == "budget_range":
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return "unknown"
+    return normalized
+
+
+def _field_score(field: str, value: Any) -> int:
+    score_map = _SCORE_VALUE_MAP.get(field)
+    if score_map is None:
+        return 50
+    if isinstance(value, str):
+        return score_map.get(value.strip().lower(), 50)
+    return 50
+
+
+def _mean_score(values: list[int], default: int = 40) -> int:
+    if not values:
+        return default
+    return int(round(sum(values) / len(values)))
+
+
+def _compute_lead_scoring(answers: dict[str, Any], events: dict[str, Any]) -> dict[str, Any]:
+    finanzas_values = [
+        _field_score("financing_type", answers.get("financing_type")),
+        _field_score("credit_preapproved", answers.get("credit_preapproved")),
+        _field_score("down_payment_ready", answers.get("down_payment_ready")),
+    ]
+    budget_value = answers.get("budget_range")
+    if isinstance(budget_value, str) and budget_value.strip() and budget_value not in {"unknown", "refused"}:
+        finanzas_values.append(100)
+    else:
+        finanzas_values.append(40)
+    financiera = _mean_score(finanzas_values)
+
+    urgencia = _mean_score(
+        [
+            _field_score("purchase_timeline", answers.get("purchase_timeline")),
+            _field_score("hard_deadline", answers.get("hard_deadline")),
+        ]
+    )
+
+    decision = _mean_score(
+        [
+            _field_score("requirements_defined", answers.get("requirements_defined")),
+            _field_score("comparison_mode", answers.get("comparison_mode")),
+            _field_score("visited_properties", answers.get("visited_properties")),
+        ]
+    )
+
+    autoridad = _mean_score(
+        [
+            _field_score("decision_authority", answers.get("decision_authority")),
+            _field_score("buyer_type", answers.get("buyer_type")),
+        ]
+    )
+
+    interaction_values: list[int] = []
+    accepted_questions = _as_bool(events.get("accepted_answering_questions"))
+    if accepted_questions is not None:
+        interaction_values.append(100 if accepted_questions else 30)
+    ratio = _as_ratio(events.get("answered_fields_ratio"))
+    if ratio is not None:
+        interaction_values.append(int(round(ratio * 100)))
+    for event_key, positive_score, negative_score in (
+        ("appointment_requested", 80, 30),
+        ("appointment_scheduled", 100, 30),
+        ("appointment_confirmed", 100, 40),
+        ("appointment_attended", 100, 50),
+    ):
+        event_value = _as_bool(events.get(event_key))
+        if event_value is not None:
+            interaction_values.append(positive_score if event_value else negative_score)
+    evasive_count_raw = events.get("evasive_answers_count")
+    try:
+        evasive_count = max(0, int(evasive_count_raw))
+    except (TypeError, ValueError):
+        evasive_count = 0
+    interaction_values.append(max(20, 100 - min(evasive_count, 8) * 10))
+    interaction_values.append(_field_score("response_time_bucket", events.get("response_time_bucket")))
+    interaccion = _mean_score(interaction_values)
+
+    score_total = round(
+        financiera * 0.30
+        + urgencia * 0.20
+        + decision * 0.20
+        + autoridad * 0.15
+        + interaccion * 0.15,
+        2,
+    )
+    if score_total <= 50:
+        grade = "explorando"
+    elif score_total <= 75:
+        grade = "interesado"
+    else:
+        grade = "listo"
+
+    missing_fields: list[str] = []
+    refused_fields: list[str] = []
+    for field in _CRITICAL_SCORING_FIELDS:
+        value = answers.get(field)
+        if value in (None, "", "unknown"):
+            missing_fields.append(field)
+        if value == "refused":
+            refused_fields.append(field)
+
+    completed_critical = len([field for field in _CRITICAL_SCORING_FIELDS if field not in missing_fields])
+    completion_ratio = completed_critical / max(1, len(_CRITICAL_SCORING_FIELDS))
+    if completion_ratio >= 0.8:
+        confidence = "high"
+    elif completion_ratio >= 0.5:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    return {
+        "score_total": score_total,
+        "grade": grade,
+        "confidence": confidence,
+        "factors": {
+            "capacidad_financiera": financiera,
+            "urgencia": urgencia,
+            "nivel_decision": decision,
+            "autoridad": autoridad,
+            "interaccion_compromiso": interaccion,
+        },
+        "missing_fields": missing_fields,
+        "refused_fields": refused_fields,
+    }
+
+
 async def register_webchat_message(
     *,
     session_id: str,
@@ -509,6 +759,7 @@ async def upsert_conversation_insights(
     resumen: str | None = None,
     intencion: str | None = None,
     siguiente_accion: str | None = None,
+    lead_score: int | None = None,
 ) -> None:
     """Actualiza o inserta insights de conversación."""
     repo = CRMRepository()
@@ -518,6 +769,7 @@ async def upsert_conversation_insights(
             resumen=resumen,
             intencion=intencion,
             siguiente_accion=siguiente_accion,
+            lead_score=lead_score,
         )
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
@@ -1474,6 +1726,238 @@ async def maybe_auto_name_opportunity(
         )
         return None
     return proposed_title or current_title or None
+
+
+async def apply_lead_scoring(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    opportunity_id: str | None = None,
+    answers: dict[str, Any] | None = None,
+    events: dict[str, Any] | None = None,
+    source: str = "ai_progressive_scoring",
+) -> dict[str, Any] | None:
+    """Calcula y persiste scoring en oportunidad, contacto, insights e historial."""
+
+    try:
+        contact = await fetch_contact(contact_id)
+    except StorageError as exc:
+        logger.warning(
+            "storage.lead_scoring.contact_lookup_failed",
+            extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+
+    opportunity_value = (opportunity_id or "").strip()
+    if not opportunity_value:
+        try:
+            opportunity_value = await ensure_conversation_opportunity(
+                conversation_id=conversation_id,
+                contact_id=contact_id,
+                channel=str((events or {}).get("channel") or "").strip() or None,
+            )
+        except StorageError as exc:
+            logger.warning(
+                "storage.lead_scoring.ensure_opportunity_failed",
+                extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+            )
+            return None
+
+    try:
+        opp_uuid = UUID(str(opportunity_value))
+    except (TypeError, ValueError):
+        return None
+
+    org_value = contact.get("organizacion_id")
+    if not org_value:
+        return None
+    try:
+        org_uuid = UUID(str(org_value))
+    except (TypeError, ValueError):
+        return None
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.lead_scoring.opportunity_lookup_failed",
+            extra={"opportunity_id": str(opp_uuid), "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+    if not opportunity:
+        return None
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    previous_scoring = _ensure_dict(metadata.get("lead_scoring"))
+    previous_answers = _ensure_dict(previous_scoring.get("answers"))
+    previous_events = _ensure_dict(previous_scoring.get("events"))
+
+    normalized_answers = dict(previous_answers)
+    for key, value in (answers or {}).items():
+        normalized_answers[key] = _normalize_answer_value(key, value)
+
+    merged_events = dict(previous_events)
+    merged_events.update(_ensure_dict(events))
+
+    scoring = _compute_lead_scoring(normalized_answers, merged_events)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    scoring_payload = {
+        **scoring,
+        "answers": normalized_answers,
+        "events": merged_events,
+        "version": "v1",
+        "source": source,
+        "last_scored_at": now_iso,
+    }
+
+    metadata["lead_scoring"] = scoring_payload
+    metadata["lead_score"] = int(round(scoring_payload["score_total"]))
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload={"metadata": metadata},
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.lead_scoring.opportunity_update_failed",
+            extra={"opportunity_id": str(opp_uuid), "conversation_id": conversation_id, "error": str(exc)},
+        )
+        return None
+
+    contact_data = _ensure_dict(contact.get("contacto_datos"))
+    contact_data["lead_scoring"] = {
+        "answers": normalized_answers,
+        "missing_fields": scoring_payload["missing_fields"],
+        "refused_fields": scoring_payload["refused_fields"],
+        "last_scored_at": now_iso,
+    }
+    try:
+        await update_contact(contact_id, {"contacto_datos": contact_data})
+    except StorageError as exc:
+        logger.warning(
+            "storage.lead_scoring.contact_update_failed",
+            extra={"contact_id": contact_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    try:
+        await upsert_conversation_insights(
+            conversation_id=conversation_id,
+            lead_score=int(round(scoring_payload["score_total"])),
+        )
+    except StorageError as exc:
+        logger.warning(
+            "storage.lead_scoring.insights_update_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    event_payload = {
+        "organizacion_id": str(org_uuid),
+        "oportunidad_id": str(opp_uuid),
+        "conversacion_id": conversation_id,
+        "score_total": scoring_payload["score_total"],
+        "grade": scoring_payload["grade"],
+        "confidence": scoring_payload["confidence"],
+        "factors": scoring_payload["factors"],
+        "missing_fields": scoring_payload["missing_fields"],
+        "refused_fields": scoring_payload["refused_fields"],
+        "events": merged_events,
+    }
+    try:
+        await repo.create_opportunity_scoring_event(payload=event_payload)
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.lead_scoring.event_insert_failed",
+            extra={"opportunity_id": str(opp_uuid), "conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    return {
+        "oportunidad_id": str(opp_uuid),
+        "score_total": scoring_payload["score_total"],
+        "grade": scoring_payload["grade"],
+        "confidence": scoring_payload["confidence"],
+        "missing_fields": scoring_payload["missing_fields"],
+    }
+
+
+async def maybe_promote_prequalified_from_scoring(
+    *,
+    conversation_id: str,
+    contact_id: str,
+    opportunity_id: str,
+    channel: str,
+) -> bool:
+    """Promueve a precalificado cuando se cumplen condiciones minimas de scoring."""
+    try:
+        contact = await fetch_contact(contact_id)
+    except StorageError:
+        return False
+    org_id = contact.get("organizacion_id")
+    if not org_id:
+        return False
+
+    try:
+        org_uuid = UUID(str(org_id))
+        opp_uuid = UUID(str(opportunity_id))
+    except (TypeError, ValueError):
+        return False
+
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError:
+        return False
+    if not opportunity:
+        return False
+
+    metadata = _ensure_dict(opportunity.get("metadata"))
+    scoring = _ensure_dict(metadata.get("lead_scoring"))
+    events = _ensure_dict(scoring.get("events"))
+    answers = _ensure_dict(scoring.get("answers"))
+
+    appointment_scheduled = _as_bool(events.get("appointment_scheduled"))
+    has_financial = bool(
+        (answers.get("financing_type") and answers.get("financing_type") not in {"unknown", "refused"})
+        or (answers.get("budget_range") and answers.get("budget_range") not in {"unknown", "refused"})
+    )
+    has_timeline = bool(
+        answers.get("purchase_timeline")
+        and answers.get("purchase_timeline") not in {"unknown", "refused"}
+    )
+    has_authority = bool(
+        answers.get("decision_authority")
+        and answers.get("decision_authority") not in {"unknown", "refused"}
+    )
+
+    if not (appointment_scheduled and has_financial and has_timeline and has_authority):
+        metadata["precalificacion_incompleta"] = True
+        try:
+            await repo.update_opportunity(
+                organizacion_id=org_uuid,
+                oportunidad_id=opp_uuid,
+                payload={"metadata": metadata},
+            )
+        except CRMRepositoryError:
+            pass
+        return False
+
+    try:
+        return await promote_opportunity_stage(
+            oportunidad_id=str(opp_uuid),
+            organizacion_id=str(org_uuid),
+            stage_code="precalificado",
+            source="lead_scoring_rules",
+            channel=channel,
+        )
+    except StorageError:
+        return False
 
 
 async def promote_opportunity_stage(

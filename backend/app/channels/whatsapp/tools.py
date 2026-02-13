@@ -598,23 +598,55 @@ async def _handle_close_lead(
         context.contact_id,
         {"notes": notes, "necesidad_proposito": necesidad},
     )
-    if tarjeta_id and contact and contact.get("organizacion_id"):
+    if tarjeta_id:
+        scoring_answers = {
+            key: arguments.get(key)
+            for key in (
+                "financing_type",
+                "credit_preapproved",
+                "budget_range",
+                "down_payment_ready",
+                "purchase_timeline",
+                "hard_deadline",
+                "requirements_defined",
+                "comparison_mode",
+                "visited_properties",
+                "decision_authority",
+                "buyer_type",
+            )
+            if key in arguments
+        }
+        action_text = (siguiente_accion or "").lower()
+        requested = any(token in action_text for token in ("cita", "agendar", "demo", "visita"))
         try:
-            await storage.promote_opportunity_stage(
-                oportunidad_id=str(tarjeta_id),
-                organizacion_id=str(contact["organizacion_id"]),
-                stage_code="precalificado",
-                source="whatsapp_close_lead",
+            await storage.apply_lead_scoring(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(tarjeta_id),
+                answers=scoring_answers,
+                events={
+                    "channel": context.channel or "whatsapp",
+                    "appointment_requested": requested,
+                    "accepted_answering_questions": True,
+                },
+                source="close_lead",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.close_lead.scoring_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        try:
+            await storage.maybe_promote_prequalified_from_scoring(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(tarjeta_id),
                 channel=context.channel or "whatsapp",
             )
         except StorageError as exc:
             logger.warning(
-                "whatsapp.close_lead.promote_failed",
-                extra={
-                    "conversation_id": context.conversation_id,
-                    "opportunity_id": str(tarjeta_id),
-                    "error": str(exc),
-                },
+                "whatsapp.close_lead.prequalified_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
     try:
         # Mantener hilo único en inbox: en WhatsApp el cierre operativo del lead
@@ -856,6 +888,36 @@ async def _handle_schedule_demo(
         tarjeta_id=tarjeta_id,
         contact=contact_record,
     )
+    try:
+        await storage.apply_lead_scoring(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            opportunity_id=str(tarjeta_id),
+            events={
+                "channel": "whatsapp",
+                "appointment_requested": True,
+                "appointment_scheduled": True,
+                "appointment_confirmed": True,
+            },
+            source="booking_confirmed",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.schedule_demo.scoring_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+    try:
+        await storage.maybe_promote_prequalified_from_scoring(
+            conversation_id=context.conversation_id,
+            contact_id=context.contact_id,
+            opportunity_id=str(tarjeta_id),
+            channel=context.channel or "whatsapp",
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.schedule_demo.prequalified_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
     try:
         await _notify_sales_rep(
             context=context,

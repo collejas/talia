@@ -3118,6 +3118,7 @@ class CRMRepository:
         resumen: str | None = None,
         intencion: str | None = None,
         siguiente_accion: str | None = None,
+        lead_score: int | None = None,
     ) -> None:
         conversation_key = conversation_id.strip()
         if not conversation_key:
@@ -3129,6 +3130,8 @@ class CRMRepository:
             payload["intencion"] = intencion
         if siguiente_accion is not None:
             payload["siguiente_accion"] = siguiente_accion
+        if lead_score is not None:
+            payload["lead_score"] = max(0, min(int(lead_score), 100))
         await self._request(
             "POST",
             "/rest/v1/conversaciones_insights",
@@ -3136,6 +3139,25 @@ class CRMRepository:
             params={"on_conflict": "conversacion_id"},
             prefer="resolution=merge-duplicates",
         )
+
+    async def create_opportunity_scoring_event(
+        self,
+        *,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "POST",
+            "/rest/v1/oportunidad_scoring_eventos",
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("Supabase no devolvió el evento de scoring")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear evento de scoring: {row!r}")
+        return row
 
     async def get_manual_override(self, *, conversation_id: str) -> bool:
         conversation_key = conversation_id.strip()

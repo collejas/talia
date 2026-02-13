@@ -187,13 +187,19 @@ Rollback:
 - feature flag para desactivar scoring avanzado
 - conservar solo Fase 1 + agenda.
 
-## 12. Implementacion tecnica pendiente
-1. Migracion BD `oportunidad_scoring_eventos`.
-2. Servicio backend `lead_scoring.py` (calculo y confidence).
-3. Integracion en tools de ambos canales.
+## 12. Estado de implementacion
+Completado:
+1. Migracion BD `oportunidad_scoring_eventos` creada y aplicada.
+2. Calculo de score + `grade` + `confidence` implementado en backend.
+3. Integracion en `whatsapp` y `webchat` para guardar score al cierre/agenda.
 4. Upsert sincronizado en:
-   - `contacto_datos`
-   - `oportunidades.metadata`
+   - `contactos.contacto_datos.lead_scoring`
+   - `oportunidades.metadata.lead_scoring`
    - `conversaciones_insights.lead_score`
-5. Reglas de etapa unificadas en helper comun.
-6. UI embudo con score/grade/confidence/faltantes.
+5. Regla unificada para promover a `precalificado` con validacion minima.
+
+Pendiente (siguiente fase):
+1. UI de embudo: mostrar `score/grade/confidence` y faltantes.
+2. Telemetria operativa: dashboard de KPIs y alertas.
+3. Ajuste fino de pesos/umbrales por tenant (feature flag).
+4. Tests E2E multi-canal con casos evasivos (`unknown/refused`).

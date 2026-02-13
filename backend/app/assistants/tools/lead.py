@@ -179,6 +179,56 @@ async def try_execute_lead_tool(
                 "lead_tools.insights_failed",
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
+        if tarjeta_id:
+            scoring_answers = {
+                key: arguments.get(key)
+                for key in (
+                    "financing_type",
+                    "credit_preapproved",
+                    "budget_range",
+                    "down_payment_ready",
+                    "purchase_timeline",
+                    "hard_deadline",
+                    "requirements_defined",
+                    "comparison_mode",
+                    "visited_properties",
+                    "decision_authority",
+                    "buyer_type",
+                )
+                if key in arguments
+            }
+            action_text = (siguiente_accion or "").lower()
+            requested = any(token in action_text for token in ("cita", "agendar", "demo", "visita"))
+            try:
+                await storage.apply_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    answers=scoring_answers,
+                    events={
+                        "channel": context.channel or "webchat",
+                        "appointment_requested": requested,
+                        "accepted_answering_questions": True,
+                    },
+                    source="close_lead",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.maybe_promote_prequalified_from_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    channel=context.channel or "webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "lead_tools.prequalified_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
         await _refresh_webchat_followup_state(context)
         contact_record = None
         if context.contact_id:

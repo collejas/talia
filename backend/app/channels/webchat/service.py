@@ -2878,6 +2878,58 @@ async def _execute_function_call(
             email=contact_email or None,
             extra={"siguiente_accion": siguiente_accion},
         )
+        if opportunity_id:
+            scoring_answers = {
+                key: arguments.get(key)
+                for key in (
+                    "financing_type",
+                    "credit_preapproved",
+                    "budget_range",
+                    "down_payment_ready",
+                    "purchase_timeline",
+                    "hard_deadline",
+                    "requirements_defined",
+                    "comparison_mode",
+                    "visited_properties",
+                    "decision_authority",
+                    "buyer_type",
+                )
+                if key in arguments
+            }
+            action_text = (siguiente_accion or "").lower()
+            requested = any(
+                token in action_text for token in ("cita", "agendar", "demo", "visita")
+            )
+            try:
+                await storage.apply_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(opportunity_id),
+                    answers=scoring_answers,
+                    events={
+                        "channel": "webchat",
+                        "appointment_requested": requested,
+                        "accepted_answering_questions": True,
+                    },
+                    source="close_lead",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.close_lead.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+            try:
+                await storage.maybe_promote_prequalified_from_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(opportunity_id),
+                    channel="webchat",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.close_lead.prequalified_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
         try:
             await storage.maybe_auto_name_opportunity(
                 conversation_id=context.conversation_id,
@@ -3033,6 +3085,36 @@ async def _execute_function_call(
             tarjeta_id=tarjeta_id,
             contact=contact,
         )
+        try:
+            await storage.apply_lead_scoring(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(tarjeta_id),
+                events={
+                    "channel": "webchat",
+                    "appointment_requested": True,
+                    "appointment_scheduled": True,
+                    "appointment_confirmed": True,
+                },
+                source="booking_confirmed",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "webchat.schedule_demo.scoring_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+        try:
+            await storage.maybe_promote_prequalified_from_scoring(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(tarjeta_id),
+                channel="webchat",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "webchat.schedule_demo.prequalified_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
         try:
             await webchat_notifications.notify_sales_rep(
                 context=context,
