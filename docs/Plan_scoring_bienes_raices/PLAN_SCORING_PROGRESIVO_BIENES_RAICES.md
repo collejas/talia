@@ -189,17 +189,19 @@ Rollback:
 
 ## 12. Estado de implementacion
 Completado:
-1. Migracion BD `oportunidad_scoring_eventos` creada y aplicada.
-2. Calculo de score + `grade` + `confidence` implementado en backend.
-3. Integracion en `whatsapp` y `webchat` para guardar score al cierre/agenda.
-4. Upsert sincronizado en:
+1. [Check] Migracion BD `oportunidad_scoring_eventos` creada y aplicada.
+2. [Check] Calculo de score + `grade` + `confidence` implementado en backend.
+3. [Check] Integracion en `whatsapp` y `webchat` para guardar score al cierre/agenda.
+4. [Check] Upsert sincronizado en:
    - `contactos.contacto_datos.lead_scoring`
    - `oportunidades.metadata.lead_scoring`
    - `conversaciones_insights.lead_score`
-5. Regla unificada para promover a `precalificado` con validacion minima.
+5. [Check] Regla unificada para promover a `precalificado` con validacion minima.
+6. [Check] Embudo UI: tarjeta muestra `Score`, `Grade`, `Confidence` y `Faltan`.
+7. [Check] Telemetria base: endpoint `/crm/pipeline/scoring/kpis` + bloque KPI en vista de embudo.
+8. [Check] Correccion de permisos para lectura de `oportunidad_scoring_eventos` en embudo.
 
 Pendiente (siguiente fase):
-1. UI de embudo: mostrar `score/grade/confidence` y faltantes.
-2. Telemetria operativa: dashboard de KPIs y alertas.
-3. Ajuste fino de pesos/umbrales por tenant (feature flag).
-4. Tests E2E multi-canal con casos evasivos (`unknown/refused`).
+1. Ajuste fino de pesos/umbrales por tenant (feature flag).
+2. Tests E2E multi-canal con casos evasivos (`unknown/refused`).
+3. KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
