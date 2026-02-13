@@ -166,6 +166,21 @@ def _build_opportunity_title(
     return title
 
 
+def _build_opportunity_description(
+    *,
+    contact: dict[str, Any],
+    intent: str | None = None,
+    summary: str | None = None,
+) -> str | None:
+    description = (
+        _normalize_title_fragment(summary, max_len=280)
+        or _normalize_title_fragment(intent, max_len=280)
+        or _normalize_title_fragment(contact.get("notes"), max_len=280)
+        or _normalize_title_fragment(contact.get("necesidad_proposito"), max_len=280)
+    )
+    return description
+
+
 def _is_generic_opportunity_title(
     *,
     current_title: str,
@@ -180,6 +195,10 @@ def _is_generic_opportunity_title(
     if normalized.startswith("conversación ") or normalized.startswith("conversation "):
         return True
     if _looks_like_placeholder_name(normalized):
+        return True
+    contact_data = _ensure_dict(contact.get("contacto_datos"))
+    profile_name = _clean_text(contact_data.get("profile_name")).lower()
+    if profile_name and normalized == profile_name:
         return True
     contact_name = _clean_text(contact.get("nombre_completo")).lower()
     company_name = _clean_text(contact.get("company_name")).lower()
@@ -1340,7 +1359,12 @@ async def maybe_auto_name_opportunity(
         return None
 
     proposed_title = _build_opportunity_title(contact=contact, intent=intent, summary=summary)
-    if not proposed_title:
+    proposed_description = _build_opportunity_description(
+        contact=contact,
+        intent=intent,
+        summary=summary,
+    )
+    if not proposed_title and not proposed_description:
         return None
 
     opportunity_value = (opportunity_id or "").strip()
@@ -1396,26 +1420,48 @@ async def maybe_auto_name_opportunity(
         return None
 
     current_title = _clean_text(opportunity.get("titulo"))
+    current_description = _clean_text(opportunity.get("descripcion"))
     metadata = _ensure_dict(opportunity.get("metadata"))
-    auto_generated = _normalize_manual_override(metadata.get("title_auto_generated"))
-    if not _is_generic_opportunity_title(
+    title_auto_generated = _normalize_manual_override(metadata.get("title_auto_generated"))
+    description_auto_generated = _normalize_manual_override(
+        metadata.get("description_auto_generated")
+    )
+
+    should_update_title = bool(proposed_title) and _is_generic_opportunity_title(
         current_title=current_title,
         contact=contact,
-        auto_generated=auto_generated,
-    ):
-        return None
-    if current_title == proposed_title:
-        return current_title
+        auto_generated=title_auto_generated,
+    )
+    if should_update_title and proposed_title == current_title:
+        should_update_title = False
 
-    metadata["title_auto_generated"] = True
-    metadata["title_auto_source"] = "conversation_insights"
-    metadata["title_auto_updated_at"] = datetime.now(timezone.utc).isoformat()
+    should_update_description = bool(proposed_description) and (
+        not current_description or description_auto_generated
+    )
+    if should_update_description and proposed_description == current_description:
+        should_update_description = False
+
+    if not should_update_title and not should_update_description:
+        return current_title or None
+
+    payload: dict[str, Any] = {}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if should_update_title and proposed_title:
+        payload["titulo"] = proposed_title
+        metadata["title_auto_generated"] = True
+        metadata["title_auto_source"] = "conversation_insights"
+        metadata["title_auto_updated_at"] = now_iso
+    if should_update_description and proposed_description:
+        payload["descripcion"] = proposed_description
+        metadata["description_auto_generated"] = True
+        metadata["description_auto_source"] = "conversation_insights"
+        metadata["description_auto_updated_at"] = now_iso
 
     try:
         await repo.update_opportunity(
             organizacion_id=org_uuid,
             oportunidad_id=opportunity_uuid,
-            payload={"titulo": proposed_title, "metadata": metadata},
+            payload={**payload, "metadata": metadata},
         )
     except CRMRepositoryError as exc:
         logger.warning(
@@ -1427,7 +1473,7 @@ async def maybe_auto_name_opportunity(
             },
         )
         return None
-    return proposed_title
+    return proposed_title or current_title or None
 
 
 async def promote_opportunity_stage(
