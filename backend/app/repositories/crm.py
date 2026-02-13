@@ -3159,6 +3159,35 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al crear evento de scoring: {row!r}")
         return row
 
+    async def list_opportunity_scoring_events(
+        self,
+        *,
+        organizacion_id: UUID,
+        created_from: datetime | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,oportunidad_id,score_total,grade,confidence,events,created_at",
+            "order": "created_at.desc",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if created_from:
+            params["created_at"] = f"gte.{created_from.isoformat()}"
+        # Este histórico es telemetría interna del backend; se consulta con service role
+        # para no depender de políticas RLS del JWT de usuario final.
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/oportunidad_scoring_eventos",
+            params=params,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar eventos de scoring: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_manual_override(self, *, conversation_id: str) -> bool:
         conversation_key = conversation_id.strip()
         if not conversation_key:
@@ -7971,6 +8000,25 @@ class CRMRepository:
                 prefer=prefer,
                 organizacion_id=organizacion_id,
             )
+        return await self._request_service_role(
+            method,
+            path,
+            params=params,
+            json=json,
+            prefer=prefer,
+            organizacion_id=organizacion_id,
+        )
+
+    async def _request_service_role(
+        self,
+        method: Literal["GET", "POST", "PATCH", "DELETE"],
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: Any = None,
+        prefer: str | None = None,
+        organizacion_id: UUID | None = None,
+    ) -> httpx.Response:
         url = f"{self._base_url}{path}"
         headers = {
             "Accept": "application/json",

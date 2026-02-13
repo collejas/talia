@@ -43,6 +43,12 @@ export type EmbudoCard = {
   actualizadoEn: string | null;
   etiquetas: string[];
   metadata: Record<string, unknown>;
+  leadScoring: {
+    scoreTotal: number | null;
+    grade: string | null;
+    confidence: string | null;
+    missingFields: number;
+  } | null;
   autoStage: AutoStageInfo | null;
   restartSequence: number;
 };
@@ -51,7 +57,23 @@ export type EmbudoData = {
   stages: EmbudoStage[];
   sinConversacion: EmbudoCard[];
   visitantesSinChat: number;
+  scoringKpis: EmbudoScoringKpis | null;
   errors: string[];
+};
+
+export type EmbudoScoringKpis = {
+  window_days: number;
+  total_eventos: number;
+  oportunidades_unicas: number;
+  score_promedio: number | null;
+  distribucion_grade: Record<string, number>;
+  distribucion_confidence: Record<string, number>;
+  acepta_preguntas_pct: number | null;
+  agenda_cita_pct: number | null;
+  confirma_cita_pct: number | null;
+  asiste_cita_pct: number | null;
+  evasivas_promedio: number | null;
+  respuesta_bucket: Record<string, number>;
 };
 
 export type PipelineBoardCard = {
@@ -115,15 +137,24 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
 }
 
 export async function loadEmbudoData(): Promise<EmbudoData> {
-  const boardResponse = await callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
-    searchParams: {
-      limit: String(DEFAULT_LIMIT),
-    },
-    withUserToken: true,
-  });
+  const [boardResponse, scoringResponse] = await Promise.all([
+    callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
+      searchParams: {
+        limit: String(DEFAULT_LIMIT),
+      },
+      withUserToken: true,
+    }),
+    callCrmApi<EmbudoScoringKpis>("/crm/pipeline/scoring/kpis", {
+      searchParams: {
+        days: "7",
+      },
+      withUserToken: true,
+    }),
+  ]);
 
   const errors: string[] = [];
   if (!boardResponse.ok) errors.push(boardResponse.error);
+  if (!scoringResponse.ok) errors.push(scoringResponse.error);
 
   const { stages, sinConversacion } = boardResponse.ok
     ? adaptPipelineBoard(boardResponse.data)
@@ -138,6 +169,7 @@ export async function loadEmbudoData(): Promise<EmbudoData> {
     stages,
     sinConversacion,
     visitantesSinChat,
+    scoringKpis: scoringResponse.ok ? scoringResponse.data : null,
     errors: Array.from(new Set(errors)),
   };
 }

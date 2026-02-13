@@ -35,6 +35,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
         ? metadata.estado
         : null;
   const restartSequence = extractRestartSequence(metadata);
+  const leadScoring = extractLeadScoring(metadata);
   return {
     oportunidadId,
     contactoId: card.contacto_id ?? "",
@@ -62,8 +63,36 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     actualizadoEn: typeof card.actualizado_en === "string" ? card.actualizado_en : null,
     etiquetas: Array.isArray(card.etiquetas) ? card.etiquetas : [],
     metadata,
+    leadScoring,
     autoStage: resolveAutoStage(metadata, etapaCodigo),
     restartSequence,
+  };
+}
+
+function extractLeadScoring(metadata: Record<string, unknown>): EmbudoCard["leadScoring"] {
+  const raw = metadata.lead_scoring;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const payload = raw as Record<string, unknown>;
+  const scoreRaw = payload.score_total;
+  const scoreTotal =
+    typeof scoreRaw === "number"
+      ? scoreRaw
+      : typeof scoreRaw === "string"
+        ? Number(scoreRaw)
+        : null;
+  const grade = typeof payload.grade === "string" && payload.grade.trim().length ? payload.grade.trim() : null;
+  const confidence =
+    typeof payload.confidence === "string" && payload.confidence.trim().length
+      ? payload.confidence.trim()
+      : null;
+  const missing = Array.isArray(payload.missing_fields) ? payload.missing_fields.length : 0;
+  return {
+    scoreTotal: typeof scoreTotal === "number" && Number.isFinite(scoreTotal) ? scoreTotal : null,
+    grade,
+    confidence,
+    missingFields: missing,
   };
 }
 

@@ -102,6 +102,20 @@ export function EmbudoCardItem({
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded bg-muted px-2 py-0.5 uppercase">{card.canal || "Sin canal"}</span>
+          {card.leadScoring?.scoreTotal != null ? (
+            <span className="rounded bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+              Score {Math.round(card.leadScoring.scoreTotal)}
+            </span>
+          ) : null}
+          {card.leadScoring?.grade ? (
+            <span className="rounded bg-muted px-2 py-0.5 uppercase">{card.leadScoring.grade}</span>
+          ) : null}
+          {card.leadScoring?.confidence ? (
+            <span className="rounded bg-muted px-2 py-0.5 uppercase">{card.leadScoring.confidence}</span>
+          ) : null}
+          {typeof card.leadScoring?.missingFields === "number" && card.leadScoring.missingFields > 0 ? (
+            <span>Faltan {card.leadScoring.missingFields}</span>
+          ) : null}
           {typeof card.monto === "number" ? (
             <span className="font-medium text-foreground">
               {new Intl.NumberFormat("es-MX", {
