@@ -21,6 +21,8 @@ class TableRowPayload(BaseModel):
 
 
 class ProposalTablePayload(BaseModel):
+    proposal_title: str | None = Field(default=None, alias="proposalTitle")
+    proposal_subtitle: str | None = Field(default=None, alias="proposalSubtitle")
     column_headers: list[str] | None = Field(default=None, alias="columnHeaders")
     renta_rows: list[TableRowPayload] | None = Field(default=None, alias="rentaRows")
     configuracion_rows: list[TableRowPayload] | None = Field(
@@ -40,8 +42,16 @@ def _extract_payload_rows(rows: list[TableRowPayload] | None) -> list[dict[str, 
 
 def _normalize_proposal_payload(payload: ProposalTablePayload | None) -> dict:
     if not payload:
-        return {"column_headers": None, "renta_rows": None, "configuracion_rows": None}
+        return {
+            "proposal_title": None,
+            "proposal_subtitle": None,
+            "column_headers": None,
+            "renta_rows": None,
+            "configuracion_rows": None,
+        }
     return {
+        "proposal_title": payload.proposal_title,
+        "proposal_subtitle": payload.proposal_subtitle,
         "column_headers": payload.column_headers,
         "renta_rows": _extract_payload_rows(payload.renta_rows),
         "configuracion_rows": _extract_payload_rows(payload.configuracion_rows),

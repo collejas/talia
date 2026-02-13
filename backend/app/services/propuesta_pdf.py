@@ -43,6 +43,8 @@ CARD_BLOCKS = [
     ("CRM personalizado", "Centraliza contactos y oportunidades", "Mantiene historial y métricas para alimentar al asistente y al equipo comercial."),
     ("Prospección", "Generación de contactos y leads", "Búsquedas configuradas actualizan el CRM y al asistente."),
 ]
+DEFAULT_PROPOSAL_TITLE = "Propuesta sistema Tal-IA *SaaS"
+DEFAULT_PROPOSAL_SUBTITLE = "DESARROLLADORA EL PEÑON"
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -92,6 +94,8 @@ def _render_cards() -> str:
 
 
 def _build_html(
+    proposal_title: str,
+    proposal_subtitle: str,
     column_headers: Sequence[str],
     renta_rows: Sequence[tuple[str, Sequence[str]]],
     configuracion_rows: Sequence[tuple[str, Sequence[str]]],
@@ -256,8 +260,8 @@ def _build_html(
 <body>
   <div class="page">
     <div class="header">
-      <p class="subtitle">DESARROLLADORA EL PEÑON</p>
-      <h1>Propuesta sistema Tal-IA *SaaS</h1>
+      <p class="subtitle">{proposal_subtitle}</p>
+      <h1>{proposal_title}</h1>
       <p class="intro">
         El sistema Tal-IA se configura a la medida del flujo de ventas, marketing y operaciones de
         Gran Peñón. Todos los montos indicados son más IVA y pueden combinarse según el nivel de
@@ -347,14 +351,28 @@ def _build_html(
 
 
 async def render_propuesta_pdf(
+    proposal_title: str | None = None,
+    proposal_subtitle: str | None = None,
     column_headers: Sequence[str] | None = None,
     renta_rows: Sequence[Mapping[str, Sequence[str]]] | None = None,
     configuracion_rows: Sequence[Mapping[str, Sequence[str]]] | None = None,
 ) -> PropuestaDocument:
+    title = proposal_title.strip() if proposal_title and proposal_title.strip() else DEFAULT_PROPOSAL_TITLE
+    subtitle = (
+        proposal_subtitle.strip()
+        if proposal_subtitle and proposal_subtitle.strip()
+        else DEFAULT_PROPOSAL_SUBTITLE
+    )
     headers = list(column_headers) if column_headers else list(COLUMN_HEADERS)
     renta_rows_normalized = _normalize_input_rows(renta_rows, RENTA_ROWS)
     configuracion_rows_normalized = _normalize_input_rows(configuracion_rows, CONFIGURACION_ROWS)
-    html = _build_html(headers, renta_rows_normalized, configuracion_rows_normalized)
+    html = _build_html(
+        title,
+        subtitle,
+        headers,
+        renta_rows_normalized,
+        configuracion_rows_normalized,
+    )
     try:
         pdf_bytes = await asyncio.to_thread(lambda: WeasyHTML(string=html).write_pdf())
         filename = f"propuesta-tal-ia-{datetime.now(timezone.utc):%Y%m%d}.pdf"

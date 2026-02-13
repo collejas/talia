@@ -153,6 +153,8 @@ function RowEditor({ title, rows, onRowLabelChange, onCellChange, onReset }: Row
 export default function Page() {
   const [expanded, setExpanded] = useState(false)
   const [mvpOpen, setMvpOpen] = useState(false)
+  const [proposalTitle, setProposalTitle] = useState("Propuesta sistema Tal-IA *SaaS")
+  const [proposalSubtitle, setProposalSubtitle] = useState("DESARROLLADORA EL PEÑON")
   const [recipientEmail, setRecipientEmail] = useState("")
   const [messageBody, setMessageBody] = useState(
     "Adjunto encontrarás la propuesta Tal-IA para Gran Peñón.",
@@ -170,11 +172,13 @@ export default function Page() {
   )
   const proposalPayload = useMemo(
     () => ({
+      proposalTitle,
+      proposalSubtitle,
       columnHeaders,
       rentaRows,
       configuracionRows,
     }),
-    [columnHeaders, rentaRows, configuracionRows],
+    [proposalTitle, proposalSubtitle, columnHeaders, rentaRows, configuracionRows],
   )
   const today = useMemo(
     () =>
@@ -260,11 +264,36 @@ export default function Page() {
     <AppViewLayout title="Propuesta" contentClassName="max-w-full">
       <div className="propuesta-print space-y-8 px-4 pb-8 lg:px-6">
         <section className="rounded-2xl border border-border/60 bg-surface-alt p-6 shadow-sm">
+          <div className="rounded-2xl border border-border/60 bg-white/80 p-4 shadow-sm">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-muted-foreground">
+              Encabezado editable
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+                <span className="text-xs font-semibold text-foreground">Título</span>
+                <input
+                  type="text"
+                  value={proposalTitle}
+                  onChange={(event) => setProposalTitle(event.target.value)}
+                  className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                />
+              </label>
+              <label className="space-y-1 text-[0.65rem] uppercase tracking-[0.3em] text-muted-foreground">
+                <span className="text-xs font-semibold text-foreground">Subtítulo</span>
+                <input
+                  type="text"
+                  value={proposalSubtitle}
+                  onChange={(event) => setProposalSubtitle(event.target.value)}
+                  className="w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                />
+              </label>
+            </div>
+          </div>
           <h1 className="mt-2 text-3xl font-semibold text-foreground">
-            Propuesta sistema Tal-IA *SaaS
+            {proposalTitle}
           </h1>
           <p className="mt-1 text-sm uppercase tracking-[0.3em] font-semibold text-foreground underline">
-            DESARROLLADORA EL PEÑON
+            {proposalSubtitle}
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {[
