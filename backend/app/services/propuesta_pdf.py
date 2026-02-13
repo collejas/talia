@@ -226,6 +226,9 @@ def _build_html(
     mvp_items: Sequence[str],
     mvp_timeline: str,
     mvp_validity: str,
+    secondary_contact_name: str | None,
+    secondary_contact_phone: str | None,
+    secondary_contact_email: str | None,
     generated_date: str,
     column_headers: Sequence[str],
     renta_rows: Sequence[tuple[str, Sequence[str]]],
@@ -241,6 +244,19 @@ def _build_html(
         if qr_data_url
         else ""
     )
+    secondary_contact_html = ""
+    if secondary_contact_name or secondary_contact_phone or secondary_contact_email:
+        parts = ['<div class="secondary-contact">']
+        if secondary_contact_name:
+            parts.append(
+                f'<p class="secondary-contact-name">{html_escape(secondary_contact_name)}</p>'
+            )
+        if secondary_contact_phone:
+            parts.append(f"<p>Cel: {html_escape(secondary_contact_phone)}</p>")
+        if secondary_contact_email:
+            parts.append(f"<p>Email: {html_escape(secondary_contact_email)}</p>")
+        parts.append("</div>")
+        secondary_contact_html = "".join(parts)
     return f"""
 <!doctype html>
 <html lang="es">
@@ -536,6 +552,14 @@ def _build_html(
       text-decoration: none;
       word-break: break-all;
     }}
+    .secondary-contact {{
+      margin-top: 8px;
+    }}
+    .secondary-contact-name {{
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 2px;
+    }}
     .qr {{
       width: 96px;
       flex-shrink: 0;
@@ -628,6 +652,7 @@ def _build_html(
           <div class="contact">
             <p>Cel: 4441302811</p>
             <p>Email: administracion@geoactiv.mx</p>
+            {secondary_contact_html}
             <p>Web: <a href="https://geoactiv.mx/">https://geoactiv.mx/</a></p>
             <p>Web: <a href="https://talia.mx/">https://talia.mx/</a></p>
           </div>
@@ -655,6 +680,9 @@ async def render_propuesta_pdf(
     mvp_items: Sequence[str] | None = None,
     mvp_timeline: str | None = None,
     mvp_validity: str | None = None,
+    secondary_contact_name: str | None = None,
+    secondary_contact_phone: str | None = None,
+    secondary_contact_email: str | None = None,
     column_headers: Sequence[str] | None = None,
     renta_rows: Sequence[Mapping[str, Sequence[str]]] | None = None,
     configuracion_rows: Sequence[Mapping[str, Sequence[str]]] | None = None,
@@ -687,6 +715,21 @@ async def render_propuesta_pdf(
     mvp_validity_value = (
         mvp_validity.strip() if mvp_validity and mvp_validity.strip() else DEFAULT_MVP_VALIDITY
     )
+    secondary_contact_name_value = (
+        secondary_contact_name.strip()
+        if secondary_contact_name and secondary_contact_name.strip()
+        else None
+    )
+    secondary_contact_phone_value = (
+        secondary_contact_phone.strip()
+        if secondary_contact_phone and secondary_contact_phone.strip()
+        else None
+    )
+    secondary_contact_email_value = (
+        secondary_contact_email.strip()
+        if secondary_contact_email and secondary_contact_email.strip()
+        else None
+    )
     headers = list(column_headers) if column_headers else list(COLUMN_HEADERS)
     renta_rows_normalized = _normalize_input_rows(renta_rows, RENTA_ROWS)
     configuracion_rows_normalized = _normalize_input_rows(configuracion_rows, CONFIGURACION_ROWS)
@@ -702,6 +745,9 @@ async def render_propuesta_pdf(
         mvp_items_value,
         mvp_timeline_value,
         mvp_validity_value,
+        secondary_contact_name_value,
+        secondary_contact_phone_value,
+        secondary_contact_email_value,
         generated_date,
         headers,
         renta_rows_normalized,

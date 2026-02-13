@@ -40,6 +40,9 @@ class ProposalTablePayload(BaseModel):
     mvp_items: list[str] | None = Field(default=None, alias="mvpItems")
     mvp_timeline: str | None = Field(default=None, alias="mvpTimeline")
     mvp_validity: str | None = Field(default=None, alias="mvpValidity")
+    secondary_contact_name: str | None = Field(default=None, alias="secondaryContactName")
+    secondary_contact_phone: str | None = Field(default=None, alias="secondaryContactPhone")
+    secondary_contact_email: str | None = Field(default=None, alias="secondaryContactEmail")
     column_headers: list[str] | None = Field(default=None, alias="columnHeaders")
     renta_rows: list[TableRowPayload] | None = Field(default=None, alias="rentaRows")
     configuracion_rows: list[TableRowPayload] | None = Field(
@@ -70,6 +73,9 @@ def _normalize_proposal_payload(payload: ProposalTablePayload | None) -> dict:
             "mvp_items": None,
             "mvp_timeline": None,
             "mvp_validity": None,
+            "secondary_contact_name": None,
+            "secondary_contact_phone": None,
+            "secondary_contact_email": None,
             "column_headers": None,
             "renta_rows": None,
             "configuracion_rows": None,
@@ -85,6 +91,9 @@ def _normalize_proposal_payload(payload: ProposalTablePayload | None) -> dict:
         "mvp_items": payload.mvp_items,
         "mvp_timeline": payload.mvp_timeline,
         "mvp_validity": payload.mvp_validity,
+        "secondary_contact_name": payload.secondary_contact_name,
+        "secondary_contact_phone": payload.secondary_contact_phone,
+        "secondary_contact_email": payload.secondary_contact_email,
         "column_headers": payload.column_headers,
         "renta_rows": _extract_payload_rows(payload.renta_rows),
         "configuracion_rows": _extract_payload_rows(payload.configuracion_rows),

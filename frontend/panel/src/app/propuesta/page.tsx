@@ -302,6 +302,9 @@ export default function Page() {
   const [mvpItems, setMvpItems] = useState(() => [...defaultMvpItems])
   const [mvpTimeline, setMvpTimeline] = useState(defaultMvpTimeline)
   const [mvpValidity, setMvpValidity] = useState(defaultMvpValidity)
+  const [secondaryContactName, setSecondaryContactName] = useState("")
+  const [secondaryContactPhone, setSecondaryContactPhone] = useState("")
+  const [secondaryContactEmail, setSecondaryContactEmail] = useState("")
   const [recipientEmail, setRecipientEmail] = useState("")
   const [messageBody, setMessageBody] = useState(
     "Adjunto encontrarás la propuesta Tal-IA para Gran Peñón.",
@@ -329,6 +332,9 @@ export default function Page() {
       mvpItems,
       mvpTimeline,
       mvpValidity,
+      secondaryContactName,
+      secondaryContactPhone,
+      secondaryContactEmail,
       columnHeaders,
       rentaRows,
       configuracionRows,
@@ -344,6 +350,9 @@ export default function Page() {
       mvpItems,
       mvpTimeline,
       mvpValidity,
+      secondaryContactName,
+      secondaryContactPhone,
+      secondaryContactEmail,
       columnHeaders,
       rentaRows,
       configuracionRows,
@@ -852,6 +861,11 @@ export default function Page() {
             <div className="space-y-1 text-sm text-muted-foreground">
               <p>Cel: 4441302811</p>
               <p>Email: administracion@geoactiv.mx</p>
+              {secondaryContactName.trim() ? (
+                <p className="pt-2 font-semibold text-foreground">{secondaryContactName.trim()}</p>
+              ) : null}
+              {secondaryContactPhone.trim() ? <p>Cel: {secondaryContactPhone.trim()}</p> : null}
+              {secondaryContactEmail.trim() ? <p>Email: {secondaryContactEmail.trim()}</p> : null}
               <p>
                 Web:{" "}
                 <a
@@ -926,6 +940,34 @@ export default function Page() {
                   {emailFeedback}
                 </p>
               )}
+            </div>
+            <div className="rounded-2xl border border-border/60 bg-surface p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                Contacto adicional (opcional)
+              </p>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <input
+                  type="text"
+                  placeholder="Nombre"
+                  value={secondaryContactName}
+                  onChange={(event) => setSecondaryContactName(event.target.value)}
+                  className="rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Teléfono"
+                  value={secondaryContactPhone}
+                  onChange={(event) => setSecondaryContactPhone(event.target.value)}
+                  className="rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+                <input
+                  type="email"
+                  placeholder="Correo"
+                  value={secondaryContactEmail}
+                  onChange={(event) => setSecondaryContactEmail(event.target.value)}
+                  className="rounded-2xl border border-border/50 bg-white/70 px-4 py-2 text-sm text-foreground outline-none focus:border-emerald-400"
+                />
+              </div>
             </div>
           </div>
           <p className="mt-2 text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground">

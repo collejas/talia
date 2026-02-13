@@ -90,6 +90,7 @@ sudo systemctl restart talia-panel.service
 
 sudo rsync -a landing/src/ /var/www/talia-landing/
   
+Oportunidades codex resume 019c581b-56ef-7472-99b9-7e975ab946b2
  codex resume 019c5274-f35c-70a3-a73e-c32f020b7cfb
 codex resume 019c4e1d-b93e-72f1-aba1-b73722cf3358
 codex resume 019c4999-cfa0-7100-ae74-7d5ce4ca9dba
