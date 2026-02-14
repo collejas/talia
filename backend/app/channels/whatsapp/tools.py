@@ -358,6 +358,47 @@ def _sanitize_scoring_answers_from_user_messages(
     return sanitized
 
 
+def _sanitize_profiling_statuses_from_user_messages(
+    *,
+    profiling_statuses: dict[str, Any] | None,
+    user_signals: Mapping[str, bool],
+) -> dict[str, Any]:
+    if not isinstance(profiling_statuses, dict):
+        return {}
+    sanitized: dict[str, Any] = {}
+    for field, raw_value in profiling_statuses.items():
+        key = str(field or "").strip()
+        if not key:
+            continue
+        status = str(raw_value or "").strip().lower()
+        if status == "answered" and not user_signals.get(key, False):
+            # Evita falsos positivos cuando el modelo marca "answered"
+            # sin evidencia en mensajes del usuario.
+            status = "unknown"
+        if status:
+            sanitized[key] = status
+    return sanitized
+
+
+def _sanitize_profiling_reprompt_counts(
+    *,
+    profiling_counts: dict[str, Any] | None,
+    profiling_statuses: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(profiling_counts, dict):
+        return {}
+    sanitized: dict[str, Any] = {}
+    for field, raw_value in profiling_counts.items():
+        key = str(field or "").strip()
+        if not key or key not in profiling_statuses:
+            continue
+        try:
+            sanitized[key] = max(0, int(raw_value))
+        except (TypeError, ValueError):
+            continue
+    return sanitized
+
+
 async def _has_prefilter_for_schedule(
     *,
     contact: Mapping[str, Any] | None,
@@ -949,6 +990,7 @@ async def _handle_close_lead(
             )
             if key in arguments
         }
+        user_signals: Mapping[str, bool] = {}
         try:
             recent_messages = await storage.fetch_recent_messages(
                 conversation_id=context.conversation_id,
@@ -1007,6 +1049,14 @@ async def _handle_close_lead(
             profiling_reprompt_counts_raw
             if isinstance(profiling_reprompt_counts_raw, dict)
             else None
+        )
+        profiling_statuses = _sanitize_profiling_statuses_from_user_messages(
+            profiling_statuses=profiling_statuses,
+            user_signals=user_signals,
+        )
+        profiling_reprompt_counts = _sanitize_profiling_reprompt_counts(
+            profiling_counts=profiling_reprompt_counts,
+            profiling_statuses=profiling_statuses,
         )
         try:
             await storage.apply_lead_scoring(

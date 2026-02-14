@@ -214,6 +214,26 @@ def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback() -> None
     )
 
 
+def test_sanitize_profiling_statuses_demotes_answered_without_user_signal() -> None:
+    statuses = {
+        "financing_type": "answered",
+        "budget_range": "answered",
+        "decision_authority": "answered",
+    }
+    user_signals = {
+        "financing_type": True,
+        "budget_range": True,
+        "decision_authority": False,
+    }
+    sanitized = tools._sanitize_profiling_statuses_from_user_messages(
+        profiling_statuses=statuses,
+        user_signals=user_signals,
+    )
+    assert sanitized["financing_type"] == "answered"
+    assert sanitized["budget_range"] == "answered"
+    assert sanitized["decision_authority"] == "unknown"
+
+
 @pytest.mark.asyncio
 async def test_handle_information_email_triggers_notification(
     monkeypatch: pytest.MonkeyPatch,
