@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 import pytest
 
@@ -185,7 +186,10 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     assert called is False
 
 
-def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback() -> None:
+@pytest.mark.asyncio
+async def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     metadata = {
         "lead_scoring": {
             "answers": {
@@ -205,10 +209,29 @@ def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback() -> None
             },
         }
     }
+    async def fake_load_required_case_a_questions(**_: object):
+        return (
+            [
+                "financing_type",
+                "budget_range",
+                "purchase_timeline",
+                "decision_authority",
+            ],
+            {},
+        )
+
+    monkeypatch.setattr(
+        tools,
+        "_load_required_case_a_questions",
+        fake_load_required_case_a_questions,
+    )
     assert (
-        tools._has_minimum_profile_for_case_a(
+        await tools._has_minimum_profile_for_case_a(
             contact={},
             opportunity_metadata=metadata,
+            repo=DummySalesRepo(),
+            organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+            channel="whatsapp",
         )
         is True
     )

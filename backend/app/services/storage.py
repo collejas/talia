@@ -614,17 +614,18 @@ def _compute_lead_scoring(
     else:
         grade = "listo"
 
+    critical_fields = list(_CRITICAL_SCORING_FIELDS)
     missing_fields: list[str] = []
     refused_fields: list[str] = []
-    for field in _CRITICAL_SCORING_FIELDS:
+    for field in critical_fields:
         value = answers.get(field)
         if value in (None, "", "unknown"):
             missing_fields.append(field)
         if value == "refused":
             refused_fields.append(field)
 
-    completed_critical = len([field for field in _CRITICAL_SCORING_FIELDS if field not in missing_fields])
-    completion_ratio = completed_critical / max(1, len(_CRITICAL_SCORING_FIELDS))
+    completed_critical = len([field for field in critical_fields if field not in missing_fields])
+    completion_ratio = completed_critical / max(1, len(critical_fields))
     if completion_ratio >= runtime_settings.confidence_high_min:
         confidence = "high"
     elif completion_ratio >= runtime_settings.confidence_medium_min:
@@ -643,6 +644,7 @@ def _compute_lead_scoring(
             "autoridad": autoridad,
             "interaccion_compromiso": interaccion,
         },
+        "critical_fields": critical_fields,
         "missing_fields": missing_fields,
         "refused_fields": refused_fields,
     }
@@ -915,16 +917,26 @@ async def _compute_lead_scoring_from_catalog(
     else:
         grade = "listo"
 
+    required_fields: list[str] = []
+    for question in questions:
+        field_key = str(question.get("field_key") or "").strip()
+        if not field_key:
+            continue
+        if bool(question.get("required_for_case_a")) and field_key not in required_fields:
+            required_fields.append(field_key)
+    if not required_fields:
+        required_fields = list(_CRITICAL_SCORING_FIELDS)
+
     missing_fields: list[str] = []
     refused_fields: list[str] = []
-    for field in _CRITICAL_SCORING_FIELDS:
+    for field in required_fields:
         value = answers.get(field)
         if value in (None, "", "unknown"):
             missing_fields.append(field)
         if value == "refused":
             refused_fields.append(field)
-    completed_critical = len([field for field in _CRITICAL_SCORING_FIELDS if field not in missing_fields])
-    completion_ratio = completed_critical / max(1, len(_CRITICAL_SCORING_FIELDS))
+    completed_critical = len([field for field in required_fields if field not in missing_fields])
+    completion_ratio = completed_critical / max(1, len(required_fields))
     high_min, medium_min = _coerce_profile_confidence_thresholds(profile, runtime_settings)
     if completion_ratio >= high_min:
         confidence = "high"
@@ -938,6 +950,7 @@ async def _compute_lead_scoring_from_catalog(
         "grade": grade,
         "confidence": confidence,
         "factors": factor_values,
+        "critical_fields": required_fields,
         "missing_fields": missing_fields,
         "refused_fields": refused_fields,
         "scoring_config_source": "catalog_db",
@@ -2539,20 +2552,22 @@ async def maybe_promote_prequalified_from_scoring(
     answers = _ensure_dict(scoring.get("answers"))
 
     appointment_scheduled = _as_bool(events.get("appointment_scheduled"))
-    has_financial = bool(
-        (answers.get("financing_type") and answers.get("financing_type") not in {"unknown", "refused"})
-        or (answers.get("budget_range") and answers.get("budget_range") not in {"unknown", "refused"})
-    )
-    has_timeline = bool(
-        answers.get("purchase_timeline")
-        and answers.get("purchase_timeline") not in {"unknown", "refused"}
-    )
-    has_authority = bool(
-        answers.get("decision_authority")
-        and answers.get("decision_authority") not in {"unknown", "refused"}
+    critical_fields_raw = scoring.get("critical_fields")
+    critical_fields: list[str] = []
+    if isinstance(critical_fields_raw, list):
+        for item in critical_fields_raw:
+            field = str(item or "").strip()
+            if field and field not in critical_fields:
+                critical_fields.append(field)
+    if not critical_fields:
+        critical_fields = list(_CRITICAL_SCORING_FIELDS)
+
+    has_required_answers = all(
+        (answers.get(field) not in (None, "", "unknown", "refused"))
+        for field in critical_fields
     )
 
-    if not (appointment_scheduled and has_financial and has_timeline and has_authority):
+    if not (appointment_scheduled and has_required_answers):
         metadata["precalificacion_incompleta"] = True
         try:
             await repo.update_opportunity(

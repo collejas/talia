@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos los datos mínimos (nombre, correo, teléfono y empresa) y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita.",
+  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos los datos mínimos (nombre, correo, teléfono y empresa) y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita. Reglas: no inferir respuestas; enviar solo respuestas explícitas del prospecto; para campos no respondidos, omitir la clave o marcar estado en profiling_statuses.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -239,7 +239,7 @@
           "object",
           "null"
         ],
-        "description": "Estado por campo de perfilamiento en esta ejecución de close_lead.",
+        "description": "Estado por campo de perfilamiento en esta ejecución de close_lead. Las llaves deben ser dinámicas según field_key activo en base de datos (scoring_questions) para el canal actual.",
         "additionalProperties": {
           "type": "string",
           "enum": [
@@ -255,7 +255,7 @@
           "object",
           "null"
         ],
-        "description": "Número de repreguntas realizadas por campo durante el perfilamiento.",
+        "description": "Número de repreguntas realizadas por campo durante el perfilamiento. Las llaves deben ser dinámicas según field_key activo en base de datos (scoring_questions).",
         "additionalProperties": {
           "type": "integer",
           "minimum": 0

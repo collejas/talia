@@ -43,7 +43,7 @@ _SCHEDULE_PREFILTER_FIELDS: tuple[str, ...] = (
     "buyer_type",
 )
 
-_SCHEDULE_CRITICAL_FIELDS: tuple[str, ...] = (
+_DEFAULT_REQUIRED_CASE_A_FIELDS: tuple[str, ...] = (
     "financing_type",
     "budget_range",
     "purchase_timeline",
@@ -235,19 +235,71 @@ def _has_base_fields_for_case_b(contact: Mapping[str, Any] | None) -> bool:
     )
 
 
-def _has_minimum_profile_for_case_a(
+def _extract_required_case_a_fields_from_metadata(
+    *,
+    opportunity_metadata: Mapping[str, Any],
+) -> list[str]:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    fields_raw = scoring.get("critical_fields")
+    if not isinstance(fields_raw, list):
+        return []
+    fields: list[str] = []
+    for item in fields_raw:
+        field = str(item or "").strip()
+        if field and field not in fields:
+            fields.append(field)
+    return fields
+
+
+async def _load_required_case_a_questions(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: str,
+) -> tuple[list[str], dict[str, str]]:
+    required_fields: list[str] = []
+    question_by_field: dict[str, str] = {}
+    try:
+        question_rows = await repo.list_scoring_questions(
+            organizacion_id=organizacion_id,
+            canal=channel if channel in {"whatsapp", "webchat"} else "whatsapp",
+            include_inactive=False,
+        )
+    except (CRMRepositoryError, AttributeError):
+        question_rows = []
+    for row in question_rows:
+        field_key = str(row.get("field_key") or "").strip()
+        if not field_key:
+            continue
+        if bool(row.get("required_for_case_a")) and field_key not in required_fields:
+            required_fields.append(field_key)
+        question_text = str(row.get("question_text") or "").strip()
+        if question_text:
+            question_by_field[field_key] = question_text
+    if not required_fields:
+        required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    return required_fields, question_by_field
+
+
+async def _has_minimum_profile_for_case_a(
     *,
     contact: Mapping[str, Any] | None,
     opportunity_metadata: Mapping[str, Any],
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: str,
 ) -> bool:
     answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
     profiling_questions = _extract_profiling_questions(opportunity_metadata=opportunity_metadata)
-    required_fields = (
-        "financing_type",
-        "budget_range",
-        "purchase_timeline",
-        "decision_authority",
+    required_fields = _extract_required_case_a_fields_from_metadata(
+        opportunity_metadata=opportunity_metadata
     )
+    if not required_fields:
+        required_fields, _ = await _load_required_case_a_questions(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            channel=channel,
+        )
     return all(
         _is_profile_field_answered(
             field=field,
@@ -346,10 +398,9 @@ def _sanitize_scoring_answers_from_user_messages(
     user_signals: Mapping[str, bool],
 ) -> dict[str, Any]:
     sanitized = dict(scoring_answers)
-    for field in _SCHEDULE_CRITICAL_FIELDS:
-        if field not in sanitized:
+    for field, value in list(sanitized.items()):
+        if field == "evasive" or field not in user_signals:
             continue
-        value = sanitized.get(field)
         if value is None:
             if not user_signals.get(field, False):
                 sanitized.pop(field, None)
@@ -416,29 +467,42 @@ async def _has_prefilter_for_schedule(
     opportunity_id: str | None,
     conversation_id: str | None = None,
 ) -> dict[str, Any]:
+    channel = str((contact or {}).get("canal") or "whatsapp").strip().lower() or "whatsapp"
+    repo = CRMRepository()
+    required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    question_by_field: dict[str, str] = dict(_DEFAULT_SCHEDULE_QUESTION_BY_FIELD)
     if not contact or not opportunity_id:
-        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     notes = str(contact.get("notes") or "").strip()
     need = str(contact.get("necesidad_proposito") or "").strip()
     if not (notes and need):
-        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     org_value = webchat_service._extract_contact_org(contact)
     org_uuid = webchat_service._resolve_org_uuid(org_value)
     if not org_uuid:
-        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
+    required_fields, question_by_field = await _load_required_case_a_questions(
+        repo=repo,
+        organizacion_id=UUID(org_uuid),
+        channel=channel,
+    )
     try:
         opp_uuid = UUID(str(opportunity_id))
     except (TypeError, ValueError):
-        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
-    repo = CRMRepository()
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     try:
         opportunity = await repo.get_pipeline_opportunity(
             organizacion_id=UUID(org_uuid),
             oportunidad_id=opp_uuid,
         )
     except CRMRepositoryError:
-        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     metadata = _ensure_dict((opportunity or {}).get("metadata"))
+    required_from_metadata = _extract_required_case_a_fields_from_metadata(
+        opportunity_metadata=metadata
+    )
+    if required_from_metadata:
+        required_fields = required_from_metadata
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
     profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata)
@@ -463,38 +527,20 @@ async def _has_prefilter_for_schedule(
 
     completed_fields = {
         field
-        for field in _SCHEDULE_CRITICAL_FIELDS
+        for field in required_fields
         if _is_completed(field, answers.get(field))
     }
-    if len(completed_fields) == len(_SCHEDULE_CRITICAL_FIELDS):
+    if len(completed_fields) == len(required_fields):
         return {"ready": True, "missing_fields": [], "questions": {}}
 
     missing_fields = [
-        field for field in _SCHEDULE_CRITICAL_FIELDS if field not in completed_fields
+        field for field in required_fields if field not in completed_fields
     ]
-
-    questions: dict[str, str] = {}
-    try:
-        question_rows = await repo.list_scoring_questions(
-            organizacion_id=UUID(org_uuid),
-            canal="whatsapp",
-            include_inactive=False,
-        )
-    except CRMRepositoryError:
-        question_rows = []
-    for row in question_rows:
-        field_key = str(row.get("field_key") or "").strip()
-        if not field_key or field_key not in _SCHEDULE_CRITICAL_FIELDS:
-            continue
-        required = bool(row.get("required_for_case_a"))
-        question_text = str(row.get("question_text") or "").strip()
-        if required and question_text:
-            questions[field_key] = question_text
 
     return {
         "ready": False,
         "missing_fields": missing_fields,
-        "questions": questions,
+        "questions": question_by_field,
     }
 
 
@@ -503,7 +549,7 @@ def _build_schedule_prefilter_error_message(
     missing_fields: list[str],
     question_by_field: Mapping[str, str] | None = None,
 ) -> str:
-    missing = [field for field in missing_fields if field in _SCHEDULE_CRITICAL_FIELDS]
+    missing = [str(field).strip() for field in missing_fields if str(field).strip()]
     if not missing:
         return (
             "Antes de agendar la cita necesito completar una precalificación breve "
@@ -1760,9 +1806,12 @@ async def _notify_sales_rep(
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
-        if not _has_minimum_profile_for_case_a(
+        if not await _has_minimum_profile_for_case_a(
             contact=contact_record,
             opportunity_metadata=metadata,
+            repo=repo,
+            organizacion_id=org_uuid,
+            channel=channel_key,
         ):
             logger.info(
                 "whatsapp.notify_sales.skip_case_a_profile_missing",
