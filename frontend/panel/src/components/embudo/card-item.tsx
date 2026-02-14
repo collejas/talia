@@ -84,7 +84,7 @@ export function EmbudoCardItem({
           </div>
           {scoreValue != null ? (
             <div className={cn("shrink-0 rounded-md border px-2 py-1 text-right", scoreTone(scoreValue))}>
-              <p className="text-[10px] uppercase tracking-wide">Score</p>
+              <p className="text-[10px] uppercase tracking-wide">Puntaje</p>
               <p className="text-base font-semibold leading-none">{Math.round(scoreValue)}</p>
             </div>
           ) : null}
@@ -136,7 +136,9 @@ export function EmbudoCardItem({
               </span>
             ) : "Sin asignar"}
           </span>
-          <span className="truncate">Actualizado: {formattedUpdatedAt}</span>
+          <span className="col-span-2 whitespace-nowrap" title={`Actualizado: ${formattedUpdatedAt}`}>
+            Actualizado: {formattedUpdatedAt}
+          </span>
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -211,14 +213,20 @@ function buildAutoStageTooltip(card: EmbudoCard): string {
 function normalizeLabel(value: string): string {
   const trimmed = value.trim().toLowerCase();
   if (!trimmed.length) return value;
+  if (trimmed === "low") return "Baja";
+  if (trimmed === "medium") return "Media";
+  if (trimmed === "high") return "Alta";
+  if (trimmed === "exploring") return "Explorando";
+  if (trimmed === "interested") return "Interesado";
+  if (trimmed === "ready") return "Listo";
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
 }
 
 function gradeTone(grade: string): string {
   const normalized = grade.trim().toLowerCase();
-  if (normalized === "listo") return "bg-emerald-100 text-emerald-800";
-  if (normalized === "interesado") return "bg-amber-100 text-amber-800";
-  if (normalized === "explorando") return "bg-rose-100 text-rose-800";
+  if (normalized === "listo" || normalized === "ready") return "bg-emerald-100 text-emerald-800";
+  if (normalized === "interesado" || normalized === "interested") return "bg-amber-100 text-amber-800";
+  if (normalized === "explorando" || normalized === "exploring") return "bg-rose-100 text-rose-800";
   return "bg-muted text-muted-foreground";
 }
 

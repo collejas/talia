@@ -522,6 +522,56 @@ async def register_whatsapp_message(
     metadata_payload = dict(metadata or {})
     if organizacion_id and "resolved_organizacion_id" not in metadata_payload:
         metadata_payload["resolved_organizacion_id"] = organizacion_id
+    resolved_contact_id = contact_id
+    resolved_conversation_id = conversation_id
+
+    # Reusar conversación activa del mismo contacto para evitar abrir hilos
+    # separados cuando no hay una oportunidad nueva.
+    if not resolved_conversation_id:
+        org_uuid: UUID | None = None
+        if organizacion_id:
+            try:
+                org_uuid = UUID(str(organizacion_id))
+            except (TypeError, ValueError):
+                org_uuid = None
+
+        contact_row: dict[str, Any] | None = None
+        if resolved_contact_id:
+            contact_row = await repo.get_contact_by_id(contact_id=resolved_contact_id)
+        else:
+            if wa_id:
+                contact_row = await repo.get_contact_by_whatsapp_id(
+                    wa_id=wa_id,
+                    organizacion_id=org_uuid,
+                )
+            if not contact_row and phone_e164:
+                contact_row = await repo.get_contact_by_phone_e164(
+                    phone_e164=phone_e164,
+                    organizacion_id=org_uuid,
+                )
+
+        if contact_row:
+            contact_id_value = contact_row.get("id")
+            if contact_id_value:
+                resolved_contact_id = str(contact_id_value)
+                latest_conversation = await repo.get_latest_whatsapp_conversation(
+                    contact_id=resolved_contact_id
+                )
+                if latest_conversation and latest_conversation.get("id"):
+                    resolved_conversation_id = str(latest_conversation.get("id"))
+
+    # Si ya resolvimos una conversación activa, no apliques timeout corto de inactividad:
+    # la RPC corta hilos entrantes cuando excede p_inactivity_minutes.
+    effective_inactivity_minutes = (
+        None
+        if resolved_conversation_id
+        else (
+            inactivity_minutes
+            if inactivity_minutes is not None
+            else (inactivity_hours * 60 if inactivity_hours is not None else None)
+        )
+    )
+
     try:
         result = await repo.register_whatsapp_message(
             direction=direction,
@@ -530,15 +580,11 @@ async def register_whatsapp_message(
             body=body,
             message_sid=message_sid,
             profile_name=profile_name,
-            conversation_id=conversation_id,
-            contact_id=contact_id,
+            conversation_id=resolved_conversation_id,
+            contact_id=resolved_contact_id,
             response_id=response_id,
             metadata=metadata_payload,
-            inactivity_minutes=(
-                inactivity_minutes
-                if inactivity_minutes is not None
-                else (inactivity_hours * 60 if inactivity_hours is not None else None)
-            ),
+            inactivity_minutes=effective_inactivity_minutes,
             attachments=attachments,
             webhook_payload=webhook_payload,
             organizacion_id=organizacion_id,

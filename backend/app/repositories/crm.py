@@ -3959,6 +3959,64 @@ class CRMRepository:
             return None
         return row
 
+    async def get_contact_by_phone_e164(
+        self,
+        *,
+        phone_e164: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        phone_key = str(phone_e164 or "").strip()
+        if not phone_key:
+            return None
+        params: dict[str, str] = {
+            "telefono_e164": f"eq.{phone_key}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
+                "necesidad_proposito,contacto_datos"
+            ),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        return row if isinstance(row, dict) else None
+
+    async def get_contact_by_whatsapp_id(
+        self,
+        *,
+        wa_id: str,
+        organizacion_id: UUID | None = None,
+    ) -> dict[str, Any] | None:
+        wa_key = str(wa_id or "").strip()
+        if not wa_key:
+            return None
+        params: dict[str, str] = {
+            "contacto_datos->>wa_id": f"eq.{wa_key}",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,nombre_completo,correo,telefono_e164,company_name,notes,"
+                "necesidad_proposito,contacto_datos"
+            ),
+        }
+        if organizacion_id:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
+        resp = await self._request("GET", "/rest/v1/contactos", params=params)
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            row = data[0]
+        elif isinstance(data, dict):
+            row = data
+        else:
+            row = None
+        return row if isinstance(row, dict) else None
+
     async def list_contact_identities(self, *, contact_id: str) -> list[dict[str, Any]]:
         contact_key = contact_id.strip()
         if not contact_key:

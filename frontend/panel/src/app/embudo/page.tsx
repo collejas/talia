@@ -74,7 +74,7 @@ function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
       <Card>
         <CardHeader>
-          <CardTitle>Score promedio (7 días)</CardTitle>
+          <CardTitle>Puntaje promedio (7 días)</CardTitle>
           <CardDescription>Promedio de oportunidades con scoring calculado.</CardDescription>
         </CardHeader>
         <CardContent className='text-3xl font-semibold'>
@@ -104,11 +104,24 @@ function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
           <CardTitle>Calidad de captura</CardTitle>
           <CardDescription>Acepta preguntas y evasivas</CardDescription>
         </CardHeader>
-        <CardContent className='text-sm'>
-          <div>Acepta: {formatPct(kpis.acepta_preguntas_pct)}</div>
-          <div>Evasivas prom.: {kpis.evasivas_promedio == null ? "—" : kpis.evasivas_promedio.toFixed(2)}</div>
-          <div>
-            Grade top: {topBreakdownLabel(kpis.distribucion_grade)}
+        <CardContent className='text-[11px] leading-tight tracking-tight'>
+          <div className='grid grid-cols-2 gap-x-3'>
+            <div className='space-y-1 text-foreground'>
+              <div title='Porcentaje de eventos donde el prospecto aceptó responder preguntas.'>
+                Acepta: {formatPct(kpis.acepta_preguntas_pct)}
+              </div>
+              <div title='Promedio de respuestas evasivas durante la calificación.'>
+                Evasivas prom.: {kpis.evasivas_promedio == null ? "—" : kpis.evasivas_promedio.toFixed(2)}
+              </div>
+            </div>
+            <div className='space-y-1 text-muted-foreground'>
+              {formatGradeDistribution(kpis.distribucion_grade).map((item) => (
+                <div key={item.label} className='flex items-center justify-between gap-2 whitespace-nowrap'>
+                  <span title={item.fullLabel}>{item.label}</span>
+                  <span>{item.count} ({item.pct})</span>
+                </div>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -121,10 +134,38 @@ function formatPct(value: number | null) {
   return `${value.toFixed(1)}%`
 }
 
-function topBreakdownLabel(values: Record<string, number>) {
-  const entries = Object.entries(values)
-  if (!entries.length) return "—"
-  entries.sort((a, b) => b[1] - a[1])
-  const [label, count] = entries[0]
-  return `${label}: ${count}`
+function normalizeGradeKey(value: string) {
+  const normalized = value.trim().toLowerCase()
+  if (normalized === "exploring" || normalized === "explorando") return "explorando"
+  if (normalized === "interested" || normalized === "interesado") return "interesado"
+  if (normalized === "ready" || normalized === "listo") return "listo"
+  return normalized
+}
+
+function formatGradeDistribution(values: Record<string, number>) {
+  const totals: Record<string, number> = {
+    explorando: 0,
+    interesado: 0,
+    listo: 0,
+  }
+
+  for (const [rawLabel, rawCount] of Object.entries(values)) {
+    const key = normalizeGradeKey(rawLabel)
+    if (!(key in totals)) continue
+    const count = Number.isFinite(rawCount) ? Math.max(0, rawCount) : 0
+    totals[key] += count
+  }
+
+  const totalEvents = totals.explorando + totals.interesado + totals.listo
+  const rows: Array<{ key: string; label: string }> = [
+    { key: "explorando", label: "Explorando" },
+    { key: "interesado", label: "Interesado" },
+    { key: "listo", label: "Listo" },
+  ]
+
+  return rows.map((row) => {
+    const count = totals[row.key] ?? 0
+    const pct = totalEvents > 0 ? `${Math.round((count / totalEvents) * 100)}%` : "0%"
+    return { label: row.label.slice(0, 3), fullLabel: row.label, count, pct }
+  })
 }

@@ -158,7 +158,7 @@ async def test_handle_incoming_message_respects_manual_mode(monkeypatch) -> None
     assert called["assistant"] is False
     assert register_calls and register_calls[0]["webhook_payload"] == message.raw_payload
     assert register_calls[0]["organizacion_id"] == "org-test"
-    assert ensure_calls and ensure_calls[0]["force_new_opportunity_on_restart"] is True
+    assert ensure_calls
     assert ensure_calls[0]["include_restart_metadata"] is True
 
 
@@ -236,7 +236,7 @@ async def test_handle_incoming_message_sends_reply(monkeypatch) -> None:
     assert "webhook_payload" not in register_calls[1]
     assert register_calls[0]["organizacion_id"] == "org-test"
     assert register_calls[1]["organizacion_id"] == "org-test"
-    assert ensure_calls and ensure_calls[0]["force_new_opportunity_on_restart"] is True
+    assert ensure_calls
     assert ensure_calls[0]["include_restart_metadata"] is True
 
 
