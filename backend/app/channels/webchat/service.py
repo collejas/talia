@@ -3043,6 +3043,26 @@ async def _execute_function_call(
                 scoring_events["evasive_answers_count"] = evasive_count
             if response_time_bucket is not None:
                 scoring_events["response_time_bucket"] = response_time_bucket
+            profiling_statuses_raw = (
+                arguments.get("profiling_statuses")
+                if isinstance(arguments.get("profiling_statuses"), dict)
+                else arguments.get("perfilamiento_estados")
+            )
+            profiling_reprompt_counts_raw = (
+                arguments.get("profiling_reprompt_counts")
+                if isinstance(arguments.get("profiling_reprompt_counts"), dict)
+                else arguments.get("perfilamiento_repregunta_counts")
+            )
+            profiling_statuses = (
+                profiling_statuses_raw
+                if isinstance(profiling_statuses_raw, dict)
+                else None
+            )
+            profiling_reprompt_counts = (
+                profiling_reprompt_counts_raw
+                if isinstance(profiling_reprompt_counts_raw, dict)
+                else None
+            )
             try:
                 await storage.apply_lead_scoring(
                     conversation_id=context.conversation_id,
@@ -3050,6 +3070,8 @@ async def _execute_function_call(
                     opportunity_id=str(opportunity_id),
                     answers=scoring_answers,
                     events=scoring_events,
+                    profiling_statuses=profiling_statuses,
+                    profiling_reprompt_counts=profiling_reprompt_counts,
                     source="close_lead",
                 )
             except StorageError as exc:

@@ -297,6 +297,13 @@ _CRITICAL_SCORING_FIELDS: tuple[str, ...] = (
     "decision_authority",
 )
 
+_PROFILING_STATUS_VALUES: set[str] = {
+    "answered",
+    "unknown",
+    "refused",
+    "skipped_max_retries",
+}
+
 _FIELD_FACTOR_MAP: dict[str, str] = {
     "financing_type": "capacidad_financiera",
     "credit_preapproved": "capacidad_financiera",
@@ -434,6 +441,91 @@ def _field_score(field: str, value: Any) -> int:
     if isinstance(value, str):
         return score_map.get(value.strip().lower(), 50)
     return 50
+
+
+def _normalize_profiling_status(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return None
+    aliases = {
+        "answer": "answered",
+        "answered": "answered",
+        "ok": "answered",
+        "unknown": "unknown",
+        "desconocido": "unknown",
+        "refused": "refused",
+        "rechazado": "refused",
+        "skipped_max_retries": "skipped_max_retries",
+        "skipped": "skipped_max_retries",
+        "max_retries": "skipped_max_retries",
+        "max_reprompts": "skipped_max_retries",
+    }
+    mapped = aliases.get(normalized, normalized)
+    return mapped if mapped in _PROFILING_STATUS_VALUES else None
+
+
+def _coerce_non_negative_int(value: Any, *, default: int = 0) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _derive_profiling_status_from_answer(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        if normalized in {"unknown", "refused"}:
+            return normalized
+        return "answered"
+    return "answered"
+
+
+def _extract_profiling_statuses(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, str] = {}
+    for field, payload in raw.items():
+        key = str(field or "").strip()
+        if not key:
+            continue
+        status_value = payload
+        if isinstance(payload, dict):
+            status_value = (
+                payload.get("estado_respuesta")
+                or payload.get("status")
+                or payload.get("state")
+            )
+        status = _normalize_profiling_status(status_value)
+        if status:
+            result[key] = status
+    return result
+
+
+def _extract_reprompt_counts(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, int] = {}
+    for field, payload in raw.items():
+        key = str(field or "").strip()
+        if not key:
+            continue
+        value = payload
+        if isinstance(payload, dict):
+            value = (
+                payload.get("repregunta_count")
+                or payload.get("retry_count")
+                or payload.get("attempts")
+            )
+        if value is None:
+            continue
+        result[key] = _coerce_non_negative_int(value)
+    return result
 
 
 def _mean_score(values: list[int], default: int = 40) -> int:
@@ -2177,6 +2269,8 @@ async def apply_lead_scoring(
     opportunity_id: str | None = None,
     answers: dict[str, Any] | None = None,
     events: dict[str, Any] | None = None,
+    profiling_statuses: dict[str, Any] | None = None,
+    profiling_reprompt_counts: dict[str, Any] | None = None,
     source: str = "ai_progressive_scoring",
 ) -> dict[str, Any] | None:
     """Calcula y persiste scoring en oportunidad, contacto, insights e historial."""
@@ -2250,9 +2344,52 @@ async def apply_lead_scoring(
 
     merged_events = dict(previous_events)
     merged_events.update(_ensure_dict(events))
+    now_iso = datetime.now(timezone.utc).isoformat()
+    channel_value = str(merged_events.get("channel") or "").strip().lower()
+    channel_key = channel_value if channel_value in {"whatsapp", "webchat"} else "unknown"
+
+    previous_profiling_by_channel = _ensure_dict(previous_scoring.get("profiling_by_channel"))
+    previous_channel_payload = _ensure_dict(previous_profiling_by_channel.get(channel_key))
+    previous_channel_questions = _ensure_dict(previous_channel_payload.get("questions"))
+
+    merged_statuses = _extract_profiling_statuses(profiling_statuses)
+    merged_counts = _extract_reprompt_counts(profiling_reprompt_counts)
+
+    all_question_keys = set(previous_channel_questions.keys())
+    all_question_keys.update(str(key).strip() for key in normalized_answers.keys())
+    all_question_keys.update(merged_statuses.keys())
+    all_question_keys.update(merged_counts.keys())
+
+    channel_questions: dict[str, dict[str, Any]] = {}
+    for field in sorted(key for key in all_question_keys if key):
+        previous_question = _ensure_dict(previous_channel_questions.get(field))
+        status = merged_statuses.get(field)
+        if not status:
+            status = _normalize_profiling_status(previous_question.get("estado_respuesta"))
+        if not status:
+            status = _derive_profiling_status_from_answer(normalized_answers.get(field))
+        reprompt_count = merged_counts.get(field)
+        if reprompt_count is None:
+            reprompt_count = _coerce_non_negative_int(
+                previous_question.get("repregunta_count"),
+                default=0,
+            )
+        if status is None and reprompt_count == 0:
+            continue
+        channel_questions[field] = {
+            "estado_respuesta": status or "unknown",
+            "repregunta_count": reprompt_count,
+        }
+
+    profiling_by_channel = dict(previous_profiling_by_channel)
+    profiling_by_channel[channel_key] = {
+        **previous_channel_payload,
+        "channel": channel_key,
+        "updated_at": now_iso,
+        "questions": channel_questions,
+    }
 
     scoring = _compute_lead_scoring(normalized_answers, merged_events, scoring_runtime)
-    channel_value = str(merged_events.get("channel") or "").strip().lower()
     if channel_value in {"whatsapp", "webchat"}:
         try:
             dynamic_scoring = await _compute_lead_scoring_from_catalog(
@@ -2277,11 +2414,12 @@ async def apply_lead_scoring(
         if dynamic_scoring:
             scoring = dynamic_scoring
 
-    now_iso = datetime.now(timezone.utc).isoformat()
     scoring_payload = {
         **scoring,
         "answers": normalized_answers,
         "events": merged_events,
+        "profiling_by_channel": profiling_by_channel,
+        "profiling": profiling_by_channel.get(channel_key, {}),
         "version": "v1",
         "source": source,
         "last_scored_at": now_iso,
@@ -2305,6 +2443,8 @@ async def apply_lead_scoring(
     contact_data = _ensure_dict(contact.get("contacto_datos"))
     contact_data["lead_scoring"] = {
         "answers": normalized_answers,
+        "profiling_by_channel": profiling_by_channel,
+        "profiling": profiling_by_channel.get(channel_key, {}),
         "missing_fields": scoring_payload["missing_fields"],
         "refused_fields": scoring_payload["refused_fields"],
         "last_scored_at": now_iso,

@@ -215,6 +215,14 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
             "budget_range": "unknown",
             "purchase_timeline": "unknown",
             "decision_authority": "refused",
+            "profiling_statuses": {
+                "financing_type": "refused",
+                "purchase_timeline": "unknown",
+                "decision_authority": "skipped_max_retries",
+            },
+            "profiling_reprompt_counts": {
+                "decision_authority": 2,
+            },
         },
         context=context,
     )
@@ -228,4 +236,6 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
     assert payload["answers"]["budget_range"] == "unknown"
     assert payload["answers"]["purchase_timeline"] == "unknown"
     assert payload["answers"]["decision_authority"] == "refused"
+    assert payload["profiling_statuses"]["decision_authority"] == "skipped_max_retries"
+    assert payload["profiling_reprompt_counts"]["decision_authority"] == 2
     assert payload["events"]["appointment_requested"] is True

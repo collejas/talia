@@ -215,7 +215,7 @@ Pendiente (siguiente fase):
 2. [Check] Cobertura multi-canal en backend con casos evasivos (`unknown/refused`) implementada.
 3. [Check] KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
 4. [Check] Politica comercial A/B de notificacion a vendedor separada por canal.
-5. Contador de repreguntas y estado por pregunta persistido en scoring.
+5. [Check] Contador de repreguntas y estado por pregunta persistido en scoring (`lead_scoring.profiling_by_channel`), con captura por `close_lead` en WhatsApp/Webchat.
 6. [Check] Configuracion de preguntas/pesos desde BD: migracion + API backend + motor dinamico con fallback + vista frontend (`/settings/scoring`) operativos.
 7. [Check] Panel frontend con flujo CRUD completo (alta/edicion/eliminacion) para preguntas, repreguntas y reglas por canal.
 

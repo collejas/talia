@@ -332,12 +332,22 @@ async def test_handle_close_lead_triggers_notification(
         "notes": "Listo para demo",
         "necesidad_proposito": "Automatización",
         "siguiente_accion": "Agendar demo",
+        "profiling_statuses": {
+            "financing_type": "answered",
+            "purchase_timeline": "unknown",
+        },
+        "profiling_reprompt_counts": {
+            "financing_type": 1,
+            "purchase_timeline": 2,
+        },
     }
 
     result = await tools._handle_close_lead(arguments, context)
     assert result["status"] == "ok"
     assert notified == []
     assert scored.get("called") is True
+    assert scored["payload"]["profiling_statuses"]["purchase_timeline"] == "unknown"
+    assert scored["payload"]["profiling_reprompt_counts"]["financing_type"] == 1
     assert promoted.get("called") is True
     assert auto_name_calls
     assert auto_name_calls[0]["intent"] == "Automatización"

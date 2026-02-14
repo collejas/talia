@@ -103,3 +103,4 @@ Estado actual:
 - [Check] Motor de scoring dinamico conectado a catalogo BD con fallback seguro a logica legacy.
 - [Check] Pantalla frontend de administracion del catalogo por tenant/canal en `/settings/scoring`.
 - [Check] Edicion inline en frontend para preguntas, repreguntas y reglas (sin necesidad de SQL manual).
+- [Check] Persistencia de `estado_respuesta` y `repregunta_count` por pregunta/canal en `lead_scoring.profiling_by_channel`.
