@@ -319,7 +319,7 @@ def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str,
     )
     has_authority = bool(
         re.search(
-            r"\b(yo decido|decido yo|solo yo|yo solo|con mi esposa|con mi esposo|con mi pareja|con mi familia|con mi socio|lo consulto)\b",
+            r"\b(yo decido|decido yo|solo yo|yo solo|con mi esposa|con mi esposo|con mi pareja|con mi familia|con mi socio|mi esposa y yo|mi esposo y yo|entre mi esposa y yo|entre mi esposo y yo|lo consulto)\b",
             joined,
         )
     )
@@ -403,6 +403,7 @@ async def _has_prefilter_for_schedule(
     *,
     contact: Mapping[str, Any] | None,
     opportunity_id: str | None,
+    conversation_id: str | None = None,
 ) -> bool:
     if not contact or not opportunity_id:
         return False
@@ -430,8 +431,6 @@ async def _has_prefilter_for_schedule(
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
     profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata)
-    if not any(field in answers for field in _SCHEDULE_PREFILTER_FIELDS):
-        return False
 
     def _is_completed(field: str, value: Any) -> bool:
         if value is None:
@@ -451,7 +450,30 @@ async def _has_prefilter_for_schedule(
             return True
         return True
 
-    return all(_is_completed(field, answers.get(field)) for field in _SCHEDULE_CRITICAL_FIELDS)
+    completed_fields = {
+        field
+        for field in _SCHEDULE_CRITICAL_FIELDS
+        if _is_completed(field, answers.get(field))
+    }
+    if len(completed_fields) == len(_SCHEDULE_CRITICAL_FIELDS):
+        return True
+
+    # Respaldo: si la persistencia de scoring aún no ocurre, usa evidencia
+    # reciente de mensajes entrantes para evitar bloqueo artificial de agenda.
+    try:
+        recent_messages = await storage.fetch_recent_messages(
+            conversation_id=str(conversation_id or metadata.get("conversation_id") or ""),
+            limit=24,
+        )
+    except StorageError:
+        return False
+    user_signals = _extract_user_prefilter_signals(recent_messages)
+    for field in _SCHEDULE_CRITICAL_FIELDS:
+        if field in completed_fields:
+            continue
+        if not user_signals.get(field, False):
+            return False
+    return True
 
 
 async def _resolve_org_for_catalog(
@@ -1256,7 +1278,11 @@ async def _handle_schedule_demo(
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
         raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
-    if not await _has_prefilter_for_schedule(contact=contact, opportunity_id=tarjeta_id):
+    if not await _has_prefilter_for_schedule(
+        contact=contact,
+        opportunity_id=tarjeta_id,
+        conversation_id=context.conversation_id,
+    ):
         raise ValueError(
             "Antes de agendar la cita necesito completar una precalificación breve "
             "(necesidad principal y preguntas clave)."

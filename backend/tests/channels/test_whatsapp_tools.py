@@ -234,6 +234,19 @@ def test_sanitize_profiling_statuses_demotes_answered_without_user_signal() -> N
     assert sanitized["decision_authority"] == "unknown"
 
 
+def test_extract_user_prefilter_signals_detects_spousal_authority_phrase() -> None:
+    signals = tools._extract_user_prefilter_signals(
+        [
+            {"direccion": "entrante", "texto": "entre mi esposa y yo sera credito mancomunado"},
+            {"direccion": "entrante", "texto": "presupuesto de 1 a 1.3 millones y en 6 meses"},
+        ]
+    )
+    assert signals["financing_type"] is True
+    assert signals["budget_range"] is True
+    assert signals["purchase_timeline"] is True
+    assert signals["decision_authority"] is True
+
+
 @pytest.mark.asyncio
 async def test_handle_information_email_triggers_notification(
     monkeypatch: pytest.MonkeyPatch,
