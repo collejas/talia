@@ -185,6 +185,35 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     assert called is False
 
 
+def test_has_minimum_profile_for_case_a_uses_profiling_status_fallback() -> None:
+    metadata = {
+        "lead_scoring": {
+            "answers": {
+                "financing_type": "credito",
+                "budget_range": "3m-4m",
+                "purchase_timeline": "1_3_months",
+            },
+            "profiling_by_channel": {
+                "whatsapp": {
+                    "questions": {
+                        "decision_authority": {
+                            "estado_respuesta": "answered",
+                            "repregunta_count": 0,
+                        }
+                    }
+                }
+            },
+        }
+    }
+    assert (
+        tools._has_minimum_profile_for_case_a(
+            contact={},
+            opportunity_metadata=metadata,
+        )
+        is True
+    )
+
+
 @pytest.mark.asyncio
 async def test_handle_information_email_triggers_notification(
     monkeypatch: pytest.MonkeyPatch,

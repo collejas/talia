@@ -178,6 +178,33 @@ def _extract_scoring_answers(
     return _ensure_dict(contact_scoring.get("answers"))
 
 
+def _extract_profiling_questions(
+    *,
+    opportunity_metadata: Mapping[str, Any],
+    channel: str = "whatsapp",
+) -> dict[str, Any]:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    profiling_by_channel = _ensure_dict(scoring.get("profiling_by_channel"))
+    channel_payload = _ensure_dict(profiling_by_channel.get(channel))
+    if not channel_payload:
+        channel_payload = _ensure_dict(scoring.get("profiling"))
+    return _ensure_dict(channel_payload.get("questions"))
+
+
+def _is_profile_field_answered(
+    *,
+    field: str,
+    answers: Mapping[str, Any],
+    profiling_questions: Mapping[str, Any] | None = None,
+) -> bool:
+    if _is_answered_scoring_value(answers.get(field)):
+        return True
+    profiling_questions = profiling_questions or {}
+    field_payload = _ensure_dict(profiling_questions.get(field))
+    status_value = str(field_payload.get("estado_respuesta") or "").strip().lower()
+    return status_value == "answered"
+
+
 def _has_base_fields_for_case_a(contact: Mapping[str, Any] | None) -> bool:
     if not contact:
         return False
@@ -207,13 +234,21 @@ def _has_minimum_profile_for_case_a(
     opportunity_metadata: Mapping[str, Any],
 ) -> bool:
     answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
+    profiling_questions = _extract_profiling_questions(opportunity_metadata=opportunity_metadata)
     required_fields = (
         "financing_type",
         "budget_range",
         "purchase_timeline",
         "decision_authority",
     )
-    return all(_is_answered_scoring_value(answers.get(field)) for field in required_fields)
+    return all(
+        _is_profile_field_answered(
+            field=field,
+            answers=answers,
+            profiling_questions=profiling_questions,
+        )
+        for field in required_fields
+    )
 
 
 def _is_whatsapp_reengage_exhausted(
@@ -353,18 +388,29 @@ async def _has_prefilter_for_schedule(
     metadata = _ensure_dict((opportunity or {}).get("metadata"))
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
+    profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata)
     if not any(field in answers for field in _SCHEDULE_PREFILTER_FIELDS):
         return False
 
-    def _is_completed(value: Any) -> bool:
+    def _is_completed(field: str, value: Any) -> bool:
         if value is None:
-            return False
+            return _is_profile_field_answered(
+                field=field,
+                answers=answers,
+                profiling_questions=profiling_questions,
+            )
         if isinstance(value, str):
             normalized = value.strip().lower()
-            return normalized not in {"", "unknown"}
+            if normalized in {"", "unknown"}:
+                return _is_profile_field_answered(
+                    field=field,
+                    answers=answers,
+                    profiling_questions=profiling_questions,
+                )
+            return True
         return True
 
-    return all(_is_completed(answers.get(field)) for field in _SCHEDULE_CRITICAL_FIELDS)
+    return all(_is_completed(field, answers.get(field)) for field in _SCHEDULE_CRITICAL_FIELDS)
 
 
 async def _resolve_org_for_catalog(

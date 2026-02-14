@@ -42,6 +42,9 @@ DEFAULT_FALLBACK = (
 )
 
 _BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
+    "confirmo tu cita",
+    "confirmarte tu cita",
+    "te confirmo tu cita",
     "cita confirmada",
     "visita confirmada",
     "tu visita está agendada",
