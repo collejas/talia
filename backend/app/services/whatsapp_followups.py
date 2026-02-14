@@ -24,11 +24,16 @@ REENGAGE_TEMPLATE = (
     "a atender leads 24/7 sin cargar a tu equipo. ¿Te interesa que sigamos?"
 )
 
+# El query inicial no puede usar configuración por tenant.
+# Usamos una ventana corta para no excluir tenants con reengage_minutes bajos
+# y aplicamos la regla exacta por tenant dentro de _process_conversation.
+WHATSAPP_FOLLOWUP_PREFILTER_MINUTES = 3
+
 
 async def run_followups(*, now: datetime | None = None, limit: int | None = None) -> None:
     """Ejecuta el flujo de reenganche y escalación para conversaciones inactivas."""
     current_ts = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    reengage_delta = timedelta(minutes=settings.whatsapp_reengage_minutes)
+    reengage_delta = timedelta(minutes=WHATSAPP_FOLLOWUP_PREFILTER_MINUTES)
     cutoff = current_ts - reengage_delta
     batch_limit = limit or 50
     repo = CRMRepository()
