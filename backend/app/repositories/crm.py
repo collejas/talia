@@ -3523,14 +3523,18 @@ class CRMRepository:
             "select": "id,direccion,texto,creado_en,datos,"
             "attachments:adjuntos(id,url,mime,tamano_bytes,size_bytes,proveedor_id,nombre,path)",
             "conversacion_id": f"eq.{conversation_key}",
-            "order": "creado_en.asc",
+            # Obtener realmente los mensajes más recientes y devolverlos
+            # en orden cronológico para consumo aguas arriba.
+            "order": "creado_en.desc",
             "limit": str(max(1, limit)),
         }
         resp = await self._request("GET", "/rest/v1/mensajes", params=params)
         data = resp.json() or []
         if not isinstance(data, list):
             return []
-        return data  # type: ignore[return-value]
+        rows = [row for row in data if isinstance(row, dict)]
+        rows.reverse()
+        return rows  # type: ignore[return-value]
 
     async def create_conversation_summary(
         self,

@@ -50,6 +50,13 @@ _SCHEDULE_CRITICAL_FIELDS: tuple[str, ...] = (
     "decision_authority",
 )
 
+_DEFAULT_SCHEDULE_QUESTION_BY_FIELD: dict[str, str] = {
+    "financing_type": "¿Comprarías de contado, con crédito o mixto?",
+    "budget_range": "¿Cuál es tu rango de presupuesto aproximado?",
+    "purchase_timeline": "¿En qué plazo planeas comprar?",
+    "decision_authority": "¿Quién toma la decisión final de compra?",
+}
+
 _EVASIVE_TOKENS: tuple[str, ...] = (
     "no se",
     "no sé",
@@ -344,9 +351,13 @@ def _sanitize_scoring_answers_from_user_messages(
             continue
         value = sanitized.get(field)
         if value is None:
+            if not user_signals.get(field, False):
+                sanitized.pop(field, None)
             continue
         normalized = str(value).strip().lower() if isinstance(value, str) else value
         if isinstance(normalized, str) and normalized in {"", "unknown"}:
+            if not user_signals.get(field, False):
+                sanitized.pop(field, None)
             continue
         if isinstance(normalized, str) and normalized == "refused":
             if user_signals.get("evasive"):
@@ -404,21 +415,21 @@ async def _has_prefilter_for_schedule(
     contact: Mapping[str, Any] | None,
     opportunity_id: str | None,
     conversation_id: str | None = None,
-) -> bool:
+) -> dict[str, Any]:
     if not contact or not opportunity_id:
-        return False
+        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
     notes = str(contact.get("notes") or "").strip()
     need = str(contact.get("necesidad_proposito") or "").strip()
     if not (notes and need):
-        return False
+        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
     org_value = webchat_service._extract_contact_org(contact)
     org_uuid = webchat_service._resolve_org_uuid(org_value)
     if not org_uuid:
-        return False
+        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
     try:
         opp_uuid = UUID(str(opportunity_id))
     except (TypeError, ValueError):
-        return False
+        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
     repo = CRMRepository()
     try:
         opportunity = await repo.get_pipeline_opportunity(
@@ -426,7 +437,7 @@ async def _has_prefilter_for_schedule(
             oportunidad_id=opp_uuid,
         )
     except CRMRepositoryError:
-        return False
+        return {"ready": False, "missing_fields": list(_SCHEDULE_CRITICAL_FIELDS), "questions": {}}
     metadata = _ensure_dict((opportunity or {}).get("metadata"))
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
@@ -456,24 +467,61 @@ async def _has_prefilter_for_schedule(
         if _is_completed(field, answers.get(field))
     }
     if len(completed_fields) == len(_SCHEDULE_CRITICAL_FIELDS):
-        return True
+        return {"ready": True, "missing_fields": [], "questions": {}}
 
-    # Respaldo: si la persistencia de scoring aún no ocurre, usa evidencia
-    # reciente de mensajes entrantes para evitar bloqueo artificial de agenda.
+    missing_fields = [
+        field for field in _SCHEDULE_CRITICAL_FIELDS if field not in completed_fields
+    ]
+
+    questions: dict[str, str] = {}
     try:
-        recent_messages = await storage.fetch_recent_messages(
-            conversation_id=str(conversation_id or metadata.get("conversation_id") or ""),
-            limit=24,
+        question_rows = await repo.list_scoring_questions(
+            organizacion_id=UUID(org_uuid),
+            canal="whatsapp",
+            include_inactive=False,
         )
-    except StorageError:
-        return False
-    user_signals = _extract_user_prefilter_signals(recent_messages)
-    for field in _SCHEDULE_CRITICAL_FIELDS:
-        if field in completed_fields:
+    except CRMRepositoryError:
+        question_rows = []
+    for row in question_rows:
+        field_key = str(row.get("field_key") or "").strip()
+        if not field_key or field_key not in _SCHEDULE_CRITICAL_FIELDS:
             continue
-        if not user_signals.get(field, False):
-            return False
-    return True
+        required = bool(row.get("required_for_case_a"))
+        question_text = str(row.get("question_text") or "").strip()
+        if required and question_text:
+            questions[field_key] = question_text
+
+    return {
+        "ready": False,
+        "missing_fields": missing_fields,
+        "questions": questions,
+    }
+
+
+def _build_schedule_prefilter_error_message(
+    *,
+    missing_fields: list[str],
+    question_by_field: Mapping[str, str] | None = None,
+) -> str:
+    missing = [field for field in missing_fields if field in _SCHEDULE_CRITICAL_FIELDS]
+    if not missing:
+        return (
+            "Antes de agendar la cita necesito completar una precalificación breve "
+            "(necesidad principal y preguntas clave)."
+        )
+    field = missing[0]
+    question_by_field = question_by_field or {}
+    question_text = str(
+        question_by_field.get(field)
+        or _DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(field)
+        or "¿Me ayudas con un dato clave para continuar?"
+    ).strip()
+    return (
+        "Antes de agendar la cita falta completar la precalificación. "
+        f"Campo faltante: {field}. "
+        f"Haz una sola pregunta exacta al prospecto: {question_text} "
+        "Cuando responda, vuelve a ejecutar schedule_demo con el mismo horario solicitado."
+    )
 
 
 async def _resolve_org_for_catalog(
@@ -1278,14 +1326,30 @@ async def _handle_schedule_demo(
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
         raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
-    if not await _has_prefilter_for_schedule(
+    prefilter_status = await _has_prefilter_for_schedule(
         contact=contact,
         opportunity_id=tarjeta_id,
         conversation_id=context.conversation_id,
-    ):
+    )
+    if not bool(prefilter_status.get("ready")):
+        missing_fields = [
+            str(item)
+            for item in (prefilter_status.get("missing_fields") or [])
+            if str(item).strip()
+        ]
+        logger.info(
+            "whatsapp.schedule_demo.prefilter_missing",
+            extra={
+                "conversation_id": context.conversation_id,
+                "opportunity_id": str(tarjeta_id),
+                "missing_fields": missing_fields,
+            },
+        )
         raise ValueError(
-            "Antes de agendar la cita necesito completar una precalificación breve "
-            "(necesidad principal y preguntas clave)."
+            _build_schedule_prefilter_error_message(
+                missing_fields=missing_fields,
+                question_by_field=_ensure_dict(prefilter_status.get("questions")),
+            )
         )
 
     metadata_payload: dict[str, Any] = {

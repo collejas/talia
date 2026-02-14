@@ -24,6 +24,16 @@ def _build_sample_message() -> schemas.WhatsAppIncomingMessage:
     )
 
 
+def test_booking_confirmation_hint_detects_te_esperamos() -> None:
+    text = "Perfecto, Juan. Queda todo listo, te esperamos el lunes a las 9 am."
+    assert service._looks_like_booking_confirmation(text) is True
+
+
+def test_booking_confirmation_hint_ignores_non_booking_text() -> None:
+    text = "Te comparto informacion general del fraccionamiento y modelos."
+    assert service._looks_like_booking_confirmation(text) is False
+
+
 @pytest.mark.asyncio
 async def test_handle_incoming_message_records_sales_ack(monkeypatch) -> None:
     """Los acuses del botón de vendedor no deben disparar al asistente."""

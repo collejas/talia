@@ -54,6 +54,12 @@ _BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
     "quedó agendada",
     "quedo agendada",
     "te espero el",
+    "te esperamos el",
+    "ya tengo todo preparado para tu cita",
+    "queda todo listo",
+    "quedo todo listo",
+    "tu cita esta lista",
+    "tu cita está lista",
 )
 
 

@@ -247,6 +247,34 @@ def test_extract_user_prefilter_signals_detects_spousal_authority_phrase() -> No
     assert signals["decision_authority"] is True
 
 
+def test_build_schedule_prefilter_error_message_includes_missing_field_and_question() -> None:
+    message = tools._build_schedule_prefilter_error_message(
+        missing_fields=["decision_authority"],
+        question_by_field={"decision_authority": "¿Quién toma la decisión final de compra?"},
+    )
+    assert "decision_authority" in message
+    assert "¿Quién toma la decisión final de compra?" in message
+    assert "vuelve a ejecutar schedule_demo" in message
+
+
+def test_sanitize_scoring_answers_removes_unknown_without_signal() -> None:
+    sanitized = tools._sanitize_scoring_answers_from_user_messages(
+        scoring_answers={
+            "financing_type": None,
+            "budget_range": "unknown",
+            "decision_authority": "unknown",
+        },
+        user_signals={
+            "financing_type": False,
+            "budget_range": False,
+            "decision_authority": False,
+        },
+    )
+    assert "financing_type" not in sanitized
+    assert "budget_range" not in sanitized
+    assert "decision_authority" not in sanitized
+
+
 @pytest.mark.asyncio
 async def test_handle_information_email_triggers_notification(
     monkeypatch: pytest.MonkeyPatch,

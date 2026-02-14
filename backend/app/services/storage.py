@@ -2366,8 +2366,11 @@ async def apply_lead_scoring(
         status = merged_statuses.get(field)
         if not status:
             status = _normalize_profiling_status(previous_question.get("estado_respuesta"))
-        if not status:
-            status = _derive_profiling_status_from_answer(normalized_answers.get(field))
+        derived_status = _derive_profiling_status_from_answer(normalized_answers.get(field))
+        if status in {None, "unknown"} and derived_status in {"answered", "refused"}:
+            status = derived_status
+        elif not status:
+            status = derived_status
         reprompt_count = merged_counts.get(field)
         if reprompt_count is None:
             reprompt_count = _coerce_non_negative_int(
@@ -2560,6 +2563,16 @@ async def maybe_promote_prequalified_from_scoring(
         except CRMRepositoryError:
             pass
         return False
+
+    metadata["precalificacion_incompleta"] = False
+    try:
+        await repo.update_opportunity(
+            organizacion_id=org_uuid,
+            oportunidad_id=opp_uuid,
+            payload={"metadata": metadata},
+        )
+    except CRMRepositoryError:
+        pass
 
     try:
         return await promote_opportunity_stage(
