@@ -54,6 +54,7 @@ export function EmbudoCardItem({
   const gradeValue = card.leadScoring?.grade;
   const confidenceValue = card.leadScoring?.confidence;
   const missingFieldsCount = card.leadScoring?.missingFields ?? 0;
+  const evasiveAnswersCount = card.leadScoring?.evasiveAnswersCount;
   const inboxHref = card.contactoId ? `/inbox?contactId=${encodeURIComponent(card.contactoId)}` : "/inbox";
 
   return (
@@ -109,6 +110,14 @@ export function EmbudoCardItem({
           {missingFieldsCount > 0 ? (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
               Faltan {missingFieldsCount}
+            </span>
+          ) : null}
+          {evasiveAnswersCount != null ? (
+            <span
+              className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
+              title="Respuestas evasivas detectadas durante la calificación"
+            >
+              {`Evasivas: ${evasiveAnswersCount}`}
             </span>
           ) : null}
           {card.autoStage ? (

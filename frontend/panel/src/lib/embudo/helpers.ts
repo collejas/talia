@@ -88,11 +88,26 @@ function extractLeadScoring(metadata: Record<string, unknown>): EmbudoCard["lead
       ? payload.confidence.trim()
       : null;
   const missing = Array.isArray(payload.missing_fields) ? payload.missing_fields.length : 0;
+  const events =
+    payload.events && typeof payload.events === "object" && !Array.isArray(payload.events)
+      ? (payload.events as Record<string, unknown>)
+      : {};
+  const evasiveRaw = events.evasive_answers_count;
+  const evasiveAnswersCount =
+    typeof evasiveRaw === "number"
+      ? evasiveRaw
+      : typeof evasiveRaw === "string"
+        ? Number(evasiveRaw)
+        : null;
   return {
     scoreTotal: typeof scoreTotal === "number" && Number.isFinite(scoreTotal) ? scoreTotal : null,
     grade,
     confidence,
     missingFields: missing,
+    evasiveAnswersCount:
+      typeof evasiveAnswersCount === "number" && Number.isFinite(evasiveAnswersCount)
+        ? Math.max(0, Math.round(evasiveAnswersCount))
+        : null,
   };
 }
 

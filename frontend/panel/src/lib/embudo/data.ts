@@ -48,6 +48,7 @@ export type EmbudoCard = {
     grade: string | null;
     confidence: string | null;
     missingFields: number;
+    evasiveAnswersCount: number | null;
   } | null;
   autoStage: AutoStageInfo | null;
   restartSequence: number;
