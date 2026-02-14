@@ -112,7 +112,7 @@ export function EmbudoCardItem({
               Faltan {missingFieldsCount}
             </span>
           ) : null}
-          {evasiveAnswersCount != null ? (
+          {typeof evasiveAnswersCount === "number" && evasiveAnswersCount > 0 ? (
             <span
               className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700"
               title="Respuestas evasivas detectadas durante la calificación"

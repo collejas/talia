@@ -70,15 +70,17 @@ type ScoringKpisOverviewProps = {
 }
 
 function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
+  const view = selectOperationalView(kpis)
+  const sourceLabel = view.source === "opportunity_latest_based" ? "Último evento por oportunidad" : "Eventos"
   return (
     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
       <Card>
         <CardHeader>
           <CardTitle>Puntaje promedio (7 días)</CardTitle>
-          <CardDescription>Promedio de oportunidades con scoring calculado.</CardDescription>
+          <CardDescription>{sourceLabel}</CardDescription>
         </CardHeader>
         <CardContent className='text-3xl font-semibold'>
-          {kpis.score_promedio == null ? "—" : kpis.score_promedio.toFixed(1)}
+          {view.kpis.score_promedio == null ? "—" : view.kpis.score_promedio.toFixed(1)}
         </CardContent>
       </Card>
       <Card>
@@ -86,7 +88,7 @@ function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
           <CardTitle>Oportunidades calificadas</CardTitle>
           <CardDescription>Eventos: {kpis.total_eventos}</CardDescription>
         </CardHeader>
-        <CardContent className='text-3xl font-semibold'>{kpis.oportunidades_unicas}</CardContent>
+        <CardContent className='text-3xl font-semibold'>{view.kpis.oportunidades_unicas}</CardContent>
       </Card>
       <Card>
         <CardHeader>
@@ -94,9 +96,9 @@ function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
           <CardDescription>Agenda / confirma / asiste</CardDescription>
         </CardHeader>
         <CardContent className='text-sm'>
-          <div>Agenda: {formatPct(kpis.agenda_cita_pct)}</div>
-          <div>Confirma: {formatPct(kpis.confirma_cita_pct)}</div>
-          <div>Asiste: {formatPct(kpis.asiste_cita_pct)}</div>
+          <div>Agenda: {formatPct(view.kpis.agenda_cita_pct)}</div>
+          <div>Confirma: {formatPct(view.kpis.confirma_cita_pct)}</div>
+          <div>Asiste: {formatPct(view.kpis.asiste_cita_pct)}</div>
         </CardContent>
       </Card>
       <Card>
@@ -108,14 +110,14 @@ function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
           <div className='grid grid-cols-2 gap-x-3'>
             <div className='space-y-1 text-foreground'>
               <div title='Porcentaje de eventos donde el prospecto aceptó responder preguntas.'>
-                Acepta: {formatPct(kpis.acepta_preguntas_pct)}
+                Acepta: {formatPct(view.kpis.acepta_preguntas_pct)}
               </div>
               <div title='Promedio de respuestas evasivas durante la calificación.'>
-                Evasivas prom.: {kpis.evasivas_promedio == null ? "—" : kpis.evasivas_promedio.toFixed(2)}
+                Evasivas prom.: {view.kpis.evasivas_promedio == null ? "—" : view.kpis.evasivas_promedio.toFixed(2)}
               </div>
             </div>
             <div className='space-y-1 text-muted-foreground'>
-              {formatGradeDistribution(kpis.distribucion_grade).map((item) => (
+              {formatGradeDistribution(view.kpis.distribucion_grade).map((item) => (
                 <div key={item.label} className='flex items-center justify-between gap-2 whitespace-nowrap'>
                   <span title={item.fullLabel}>{item.label}</span>
                   <span>{item.count} ({item.pct})</span>
@@ -127,6 +129,16 @@ function ScoringKpisOverview({ kpis }: ScoringKpisOverviewProps) {
       </Card>
     </div>
   )
+}
+
+function selectOperationalView(kpis: NonNullable<Awaited<ReturnType<typeof loadEmbudoData>>["scoringKpis"]>) {
+  if (kpis.opportunity_latest_based) {
+    return { source: "opportunity_latest_based" as const, kpis: kpis.opportunity_latest_based }
+  }
+  if (kpis.event_based) {
+    return { source: "event_based" as const, kpis: kpis.event_based }
+  }
+  return { source: "event_based" as const, kpis }
 }
 
 function formatPct(value: number | null) {

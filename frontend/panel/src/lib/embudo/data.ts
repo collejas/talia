@@ -75,6 +75,22 @@ export type EmbudoScoringKpis = {
   asiste_cita_pct: number | null;
   evasivas_promedio: number | null;
   respuesta_bucket: Record<string, number>;
+  event_based?: EmbudoScoringKpisSlice | null;
+  opportunity_latest_based?: EmbudoScoringKpisSlice | null;
+};
+
+export type EmbudoScoringKpisSlice = {
+  total_eventos: number;
+  oportunidades_unicas: number;
+  score_promedio: number | null;
+  distribucion_grade: Record<string, number>;
+  distribucion_confidence: Record<string, number>;
+  acepta_preguntas_pct: number | null;
+  agenda_cita_pct: number | null;
+  confirma_cita_pct: number | null;
+  asiste_cita_pct: number | null;
+  evasivas_promedio: number | null;
+  respuesta_bucket: Record<string, number>;
 };
 
 export type PipelineBoardCard = {

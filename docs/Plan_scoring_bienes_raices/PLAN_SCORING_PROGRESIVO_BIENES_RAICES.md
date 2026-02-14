@@ -260,7 +260,7 @@ Criterio de aceptacion:
 3. Tests E2E (13.2) sobre comportamiento final.
 
 ## 15. Checklist de cierre de fase
-- [ ] Config por tenant disponible y validada en backend.
-- [ ] KPI dual (eventos vs oportunidad unica) visible en embudo.
+- [Check] Config por tenant disponible y validada en backend.
+- [Check] KPI dual (eventos vs oportunidad unica) visible en embudo.
 - [ ] E2E multi-canal en CI.
-- [ ] Documentacion de pesos/umbrales por tenant para operacion.
+- [Check] Documentacion de pesos/umbrales por tenant para operacion.
