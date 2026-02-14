@@ -205,3 +205,62 @@ Pendiente (siguiente fase):
 1. Ajuste fino de pesos/umbrales por tenant (feature flag).
 2. Tests E2E multi-canal con casos evasivos (`unknown/refused`).
 3. KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
+
+## 13. Ejecucion inmediata (Sprint siguiente)
+### 13.1 Ajuste por tenant (feature flag)
+Objetivo:
+- Permitir pesos y umbrales por organizacion sin romper defaults globales.
+
+Entregables:
+- `organizaciones.config.scoring_bienes_raices`:
+  - `enabled`
+  - `weights` (`capacidad_financiera`, `urgencia`, `nivel_decision`, `autoridad`, `interaccion_compromiso`)
+  - `thresholds` (`explorando_max`, `interesado_max`, `listo_min`)
+  - `confidence_thresholds` (`high_min`, `medium_min`)
+- Fallback seguro a valores por defecto si faltan claves.
+- Validacion backend: suma de pesos = 100.
+
+Criterio de aceptacion:
+- Mismo prospecto con configuracion distinta por tenant produce score/grade distinto de forma consistente.
+
+### 13.2 Tests E2E multi-canal (whatsapp + webchat)
+Objetivo:
+- Blindar comportamiento en casos reales y evasivos.
+
+Casos minimos:
+- Flujo completo con respuestas completas.
+- Flujo con evasivas (`no se`, `prefiero no decir`) y repregunta unica.
+- Flujo con datos faltantes pero cita agendada.
+- Confirmar que no se bloquea la cita por campos faltantes.
+- Confirmar transicion correcta a `captado`/`precalificado`.
+
+Criterio de aceptacion:
+- Suite E2E verde y estable en CI.
+
+### 13.3 KPI por oportunidad unica (ultimo evento)
+Objetivo:
+- Complementar metricas por eventos con una vista operacional por oportunidad.
+
+Definicion:
+- Para cada `oportunidad_id`, tomar el evento mas reciente de `oportunidad_scoring_eventos`.
+- Calcular:
+  - distribucion de `grade`
+  - promedio de `score_total`
+  - distribucion de `confidence`
+  - promedio de `missing_fields` por oportunidad
+
+Criterio de aceptacion:
+- Endpoint KPI expone ambas vistas:
+  - `event_based`
+  - `opportunity_latest_based`
+
+## 14. Orden de implementacion recomendado
+1. Configuracion por tenant (13.1).
+2. KPI por oportunidad unica (13.3).
+3. Tests E2E (13.2) sobre comportamiento final.
+
+## 15. Checklist de cierre de fase
+- [ ] Config por tenant disponible y validada en backend.
+- [ ] KPI dual (eventos vs oportunidad unica) visible en embudo.
+- [ ] E2E multi-canal en CI.
+- [ ] Documentacion de pesos/umbrales por tenant para operacion.
