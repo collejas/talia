@@ -120,6 +120,14 @@ async def test_run_followups_escalates_after_reengage(monkeypatch):
     monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)
     monkeypatch.setattr(whatsapp_followups.settings, "whatsapp_reengage_minutes", 30)
     monkeypatch.setattr(whatsapp_followups.settings, "whatsapp_escalate_minutes", 60)
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return whatsapp_followups.tenant_runtime.WhatsappRuntimeSettings.from_settings()
+
+    monkeypatch.setattr(
+        whatsapp_followups.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        fake_get_whatsapp_runtime_settings,
+    )
 
     async def fake_fetch_contact(contact_id):
         return {

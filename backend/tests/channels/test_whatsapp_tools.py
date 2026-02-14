@@ -33,7 +33,18 @@ class DummySalesRepo:
 
 @pytest.mark.asyncio
 async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    dummy_repo = DummySalesRepo()
+    dummy_repo = DummySalesRepo(
+        metadata={
+            "lead_scoring": {
+                "answers": {
+                    "financing_type": "credito",
+                    "budget_range": "3m-4m",
+                    "purchase_timeline": "1_3_months",
+                    "decision_authority": "sole",
+                }
+            }
+        }
+    )
     monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
     monkeypatch.setattr(tools.settings, "whatsapp_sales_template_sid", "HXexample")
     async def fake_get_whatsapp_runtime_settings(**_: object):
@@ -70,6 +81,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
         "nombre_completo": "Lead Demo",
         "company_name": "Demo SA",
+        "necesidad_proposito": "Automatizar atención",
         "correo": "lead@example.com",
         "telefono_e164": "+529991112233",
     }
@@ -81,7 +93,7 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
 
     await tools._notify_sales_rep(
         context=context,
-        trigger="information_email",
+        trigger="booking_confirmed",
         contact=contact,
         opportunity_id="00000000-0000-0000-0000-0000000000cc",
         resumen="Automatizar atención",
@@ -99,15 +111,27 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
     assert sent["template_vars"]["5"] == "+529991112233"
     assert sent["template_vars"]["6"] == "lead@example.com"
     assert sent["template_vars"]["7"] == "Demo SA"
-    assert "information_email" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
+    assert "booking_confirmed" in dummy_repo.updated_payload["metadata"]["sales_notifications"]
+    assert (
+        dummy_repo.updated_payload["metadata"]["sales_primary_notifications"]["whatsapp"]["reason"]
+        == "case_a_booking_profile"
+    )
     assert dummy_repo.audit_calls[-1]["canal"] == "whatsapp"
 
 
 @pytest.mark.asyncio
 async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.MonkeyPatch) -> None:
     metadata = {
-        "sales_notifications": {
-            "information_email": {"sent_at": "2024-01-01T00:00:00Z"},
+        "sales_primary_notifications": {
+            "whatsapp": {"sent_at": "2024-01-01T00:00:00Z"},
+        },
+        "lead_scoring": {
+            "answers": {
+                "financing_type": "credito",
+                "budget_range": "3m-4m",
+                "purchase_timeline": "1_3_months",
+                "decision_authority": "sole",
+            }
         }
     }
     dummy_repo = DummySalesRepo(metadata=metadata)
@@ -135,6 +159,11 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
 
     contact = {
         "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
+        "nombre_completo": "Lead Demo",
+        "company_name": "Demo SA",
+        "necesidad_proposito": "Automatizar atención",
+        "correo": "lead@example.com",
+        "telefono_e164": "+529991112233",
     }
     context = ToolRuntimeContext(
         conversation_id="conv-test",
@@ -144,7 +173,7 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
 
     await tools._notify_sales_rep(
         context=context,
-        trigger="information_email",
+        trigger="booking_confirmed",
         contact=contact,
         opportunity_id="00000000-0000-0000-0000-0000000000cc",
         resumen=None,
@@ -229,7 +258,7 @@ async def test_handle_information_email_triggers_notification(
 
     result = await tools._handle_information_email(arguments, context)
     assert result["status"] == "sent"
-    assert notified == ["information_email"]
+    assert notified == []
     assert auto_name_calls
     assert auto_name_calls[0]["intent"] is None
 
@@ -307,7 +336,7 @@ async def test_handle_close_lead_triggers_notification(
 
     result = await tools._handle_close_lead(arguments, context)
     assert result["status"] == "ok"
-    assert notified == ["close_lead"]
+    assert notified == []
     assert scored.get("called") is True
     assert promoted.get("called") is True
     assert auto_name_calls

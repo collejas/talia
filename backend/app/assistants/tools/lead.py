@@ -8,7 +8,6 @@ from typing import Any
 from uuid import UUID
 
 from app.assistants.tool_runtime import ToolRuntimeContext
-from app.channels.webchat import notifications as webchat_notifications
 from app.channels.webchat import service as webchat_service
 from app.core.logging import get_logger
 from app.services import send_email, storage, tenant_runtime, webchat_followups
@@ -297,22 +296,6 @@ async def try_execute_lead_tool(
                 contact_record = await storage.fetch_contact(context.contact_id)
             except StorageError:
                 contact_record = None
-        try:
-            await webchat_notifications.notify_sales_rep(
-                context=context,
-                trigger="close_lead",
-                contact=contact_record,
-                opportunity_id=str(tarjeta_id) if tarjeta_id else None,
-                resumen=necesidad,
-                notes=notes,
-                email=None,
-                extra={"siguiente_accion": siguiente_accion},
-            )
-        except Exception:
-            logger.warning(
-                "lead_tools.notify_sales_failed",
-                extra={"conversation_id": context.conversation_id, "contact_id": context.contact_id},
-            )
         if tarjeta_id:
             try:
                 await storage.maybe_auto_name_opportunity(

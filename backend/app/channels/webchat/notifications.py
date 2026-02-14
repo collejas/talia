@@ -25,6 +25,97 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _has_text(value: Any) -> bool:
+    return bool(str(value or "").strip())
+
+
+def _is_answered_scoring_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized not in {"", "unknown", "refused"}
+    return True
+
+
+def _extract_scoring_answers(
+    *,
+    contact: dict[str, Any] | None,
+    opportunity_metadata: dict[str, Any],
+) -> dict[str, Any]:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    answers = _ensure_dict(scoring.get("answers"))
+    if answers:
+        return answers
+    if not contact:
+        return {}
+    contact_data = _ensure_dict(contact.get("contacto_datos"))
+    contact_scoring = _ensure_dict(contact_data.get("lead_scoring"))
+    return _ensure_dict(contact_scoring.get("answers"))
+
+
+def _has_base_fields_for_case_a(contact: dict[str, Any] | None) -> bool:
+    if not contact:
+        return False
+    return (
+        _has_text(contact.get("nombre_completo"))
+        and _has_text(contact.get("correo"))
+        and _has_text(contact.get("telefono_e164") or contact.get("telefono"))
+        and _has_text(contact.get("company_name"))
+        and _has_text(contact.get("necesidad_proposito"))
+    )
+
+
+def _has_base_fields_for_case_b(contact: dict[str, Any] | None) -> bool:
+    if not contact:
+        return False
+    return (
+        _has_text(contact.get("nombre_completo"))
+        and _has_text(contact.get("correo"))
+        and _has_text(contact.get("telefono_e164") or contact.get("telefono"))
+        and _has_text(contact.get("necesidad_proposito"))
+    )
+
+
+def _has_minimum_profile_for_case_a(
+    *,
+    contact: dict[str, Any] | None,
+    opportunity_metadata: dict[str, Any],
+) -> bool:
+    answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
+    required_fields = (
+        "financing_type",
+        "budget_range",
+        "purchase_timeline",
+        "decision_authority",
+    )
+    return all(_is_answered_scoring_value(answers.get(field)) for field in required_fields)
+
+
+def _is_webchat_reengage_exhausted(contact: dict[str, Any] | None) -> bool:
+    if not contact:
+        return False
+    contact_data = _ensure_dict(contact.get("contacto_datos"))
+    webchat_followup = _ensure_dict(contact_data.get("webchat_followup"))
+    state = _ensure_dict(webchat_followup.get("state"))
+    reengage = _ensure_dict(state.get("reengage"))
+    try:
+        attempts = max(0, int(reengage.get("attempts") or 0))
+    except (TypeError, ValueError):
+        attempts = 0
+    return attempts >= max(1, int(settings.webchat_reengage_max_attempts))
+
+
+def _get_primary_notification_by_channel(
+    metadata: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    value = _ensure_dict(metadata.get("sales_primary_notifications"))
+    out: dict[str, dict[str, Any]] = {}
+    for channel, payload in value.items():
+        out[str(channel)] = _ensure_dict(payload)
+    return out
+
+
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
     if not contact:
         return None
@@ -275,6 +366,59 @@ async def notify_sales_rep(
 
     metadata = _ensure_dict(opportunity.get("metadata"))
     notifications = _ensure_dict(metadata.get("sales_notifications"))
+    if trigger in {"information_email", "close_lead"}:
+        logger.info(
+            "webchat.notify_sales.skip_legacy_trigger",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger},
+        )
+        return
+
+    channel_key = str(context.channel or "webchat").strip().lower() or "webchat"
+    primary_reason: str | None = None
+    if trigger == "booking_confirmed":
+        if not _has_base_fields_for_case_a(contact_record):
+            logger.info(
+                "webchat.notify_sales.skip_case_a_base_missing",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+        if not _has_minimum_profile_for_case_a(
+            contact=contact_record,
+            opportunity_metadata=metadata,
+        ):
+            logger.info(
+                "webchat.notify_sales.skip_case_a_profile_missing",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+        primary_reason = "case_a_booking_profile"
+    elif trigger == "webchat_escalate":
+        if not _has_base_fields_for_case_b(contact_record):
+            logger.info(
+                "webchat.notify_sales.skip_case_b_base_missing",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+        if not _is_webchat_reengage_exhausted(contact_record):
+            logger.info(
+                "webchat.notify_sales.skip_case_b_reengage_not_exhausted",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+        primary_reason = "case_b_reengage_exhausted"
+
+    primary_by_channel = _get_primary_notification_by_channel(metadata)
+    if primary_reason and primary_by_channel.get(channel_key):
+        logger.info(
+            "webchat.notify_sales.primary_already_sent",
+            extra={
+                "conversation_id": context.conversation_id,
+                "trigger": trigger,
+                "channel": channel_key,
+            },
+        )
+        return
+
     if notifications.get(trigger):
         logger.info(
             "webchat.notify_sales.already_sent",
@@ -371,6 +515,15 @@ async def notify_sales_rep(
         "contact_id": context.contact_id,
     }
     metadata["sales_notifications"] = notifications
+    if primary_reason:
+        primary_by_channel[channel_key] = {
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "conversation_id": context.conversation_id,
+            "contact_id": context.contact_id,
+            "trigger": trigger,
+            "reason": primary_reason,
+        }
+        metadata["sales_primary_notifications"] = primary_by_channel
     try:
         await repo.update_opportunity(
             organizacion_id=org_uuid,

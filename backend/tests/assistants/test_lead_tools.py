@@ -127,7 +127,6 @@ async def test_close_lead_triggers_auto_name(monkeypatch):
         fake_prequalified,
     )
     monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
-    monkeypatch.setattr(lead_tools.webchat_notifications, "notify_sales_rep", fake_noop)
 
     context = ToolRuntimeContext(
         conversation_id="conv-3",
@@ -199,7 +198,6 @@ async def test_close_lead_webchat_with_evasive_answers_keeps_flow_ok(monkeypatch
         fake_prequalified,
     )
     monkeypatch.setattr(lead_tools, "_refresh_webchat_followup_state", fake_noop)
-    monkeypatch.setattr(lead_tools.webchat_notifications, "notify_sales_rep", fake_noop)
 
     context = ToolRuntimeContext(
         conversation_id="conv-9",
