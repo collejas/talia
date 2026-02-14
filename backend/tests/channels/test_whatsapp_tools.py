@@ -112,6 +112,14 @@ async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.Monk
     }
     dummy_repo = DummySalesRepo(metadata=metadata)
     monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return tools.tenant_runtime.WhatsappRuntimeSettings.from_settings()
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        fake_get_whatsapp_runtime_settings,
+    )
 
     called = False
 
@@ -163,6 +171,24 @@ async def test_handle_information_email_triggers_notification(
 
     monkeypatch.setattr(tools, "_resolve_contact", fake_resolve_contact)
     monkeypatch.setattr(tools, "send_email", lambda **_: "msg-email")
+    async def fake_get_mail_runtime_settings(**_: object):
+        return tools.tenant_runtime.MailRuntimeSettings.from_settings()
+    async def fake_get_brevo_runtime_settings(**_: object):
+        return tools.tenant_runtime.BrevoRuntimeSettings(
+            api_key=None,
+            base_url="https://api.brevo.com/v3",
+        )
+
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "get_mail_runtime_settings",
+        fake_get_mail_runtime_settings,
+    )
+    monkeypatch.setattr(
+        tools.tenant_runtime,
+        "get_brevo_runtime_settings",
+        fake_get_brevo_runtime_settings,
+    )
 
     async def fake_upsert(*_, **__):
         return None
@@ -286,3 +312,65 @@ async def test_handle_close_lead_triggers_notification(
     assert promoted.get("called") is True
     assert auto_name_calls
     assert auto_name_calls[0]["intent"] == "Automatización"
+
+
+@pytest.mark.asyncio
+async def test_handle_close_lead_with_evasive_answers_keeps_flow_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contact = {"organizacion_id": "00000000-0000-0000-0000-0000000000bb"}
+
+    async def fake_resolve_contact(_: str) -> dict:
+        return contact
+
+    async def fake_ensure(*_, **__):
+        return "00000000-0000-0000-0000-0000000000dd"
+
+    async def fake_noop(*_, **__):
+        return None
+
+    scored: dict[str, Any] = {}
+    promoted: dict[str, Any] = {}
+
+    async def fake_apply_lead_scoring(**kwargs: Any) -> dict[str, Any]:
+        scored["payload"] = kwargs
+        return {"score_total": 52, "grade": "interesado", "confidence": "low"}
+
+    async def fake_promote_prequalified(**kwargs: Any) -> bool:
+        promoted["payload"] = kwargs
+        return False
+
+    monkeypatch.setattr(tools, "_resolve_contact", fake_resolve_contact)
+    monkeypatch.setattr(tools.storage, "ensure_conversation_opportunity", fake_ensure)
+    monkeypatch.setattr(tools.storage, "update_contact", fake_noop)
+    monkeypatch.setattr(tools.storage, "update_conversation", fake_noop)
+    monkeypatch.setattr(tools.storage, "upsert_conversation_insights", fake_noop)
+    monkeypatch.setattr(tools.storage, "maybe_auto_name_opportunity", fake_noop)
+    monkeypatch.setattr(tools.storage, "apply_lead_scoring", fake_apply_lead_scoring)
+    monkeypatch.setattr(tools.storage, "maybe_promote_prequalified_from_scoring", fake_promote_prequalified)
+    monkeypatch.setattr(tools, "_notify_sales_rep", fake_noop)
+
+    context = ToolRuntimeContext(
+        conversation_id="conv-evasive",
+        contact_id="contact-evasive",
+        channel="whatsapp",
+    )
+    arguments = {
+        "notes": "Prospecto con respuestas evasivas iniciales",
+        "necesidad_proposito": "Quiere informacion y posible cita",
+        "siguiente_accion": "Agendar cita",
+        "financing_type": "refused",
+        "budget_range": "unknown",
+        "purchase_timeline": "unknown",
+        "decision_authority": "refused",
+    }
+
+    result = await tools._handle_close_lead(arguments, context)
+
+    assert result["status"] == "ok"
+    assert scored["payload"]["answers"]["financing_type"] == "refused"
+    assert scored["payload"]["answers"]["budget_range"] == "unknown"
+    assert scored["payload"]["answers"]["purchase_timeline"] == "unknown"
+    assert scored["payload"]["answers"]["decision_authority"] == "refused"
+    assert scored["payload"]["events"]["appointment_requested"] is True
+    assert promoted["payload"]["channel"] == "whatsapp"
