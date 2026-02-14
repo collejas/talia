@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Mapping
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -27,6 +28,38 @@ from app.services.email import EmailSendError
 from app.services.storage import StorageError
 
 logger = get_logger("app.channels.whatsapp.tools")
+
+_SCHEDULE_PREFILTER_FIELDS: tuple[str, ...] = (
+    "financing_type",
+    "credit_preapproved",
+    "budget_range",
+    "down_payment_ready",
+    "purchase_timeline",
+    "hard_deadline",
+    "requirements_defined",
+    "comparison_mode",
+    "visited_properties",
+    "decision_authority",
+    "buyer_type",
+)
+
+_SCHEDULE_CRITICAL_FIELDS: tuple[str, ...] = (
+    "financing_type",
+    "budget_range",
+    "purchase_timeline",
+    "decision_authority",
+)
+
+_EVASIVE_TOKENS: tuple[str, ...] = (
+    "no se",
+    "no sé",
+    "prefiero no",
+    "no quiero decir",
+    "no te puedo decir",
+    "luego te digo",
+    "despues te digo",
+    "después te digo",
+)
 
 INFORMATION_EMAIL_TEMPLATE: dict[str, Any] = {
     "intro": "Gracias por tu interés en Tal-IA. Te comparto un resumen con la información que platicamos:",
@@ -100,6 +133,133 @@ def _ensure_dict(value: Any) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {}
     return {}
+
+
+def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
+    if not contact:
+        return False
+    contact_data = _ensure_dict(contact.get("contacto_datos"))
+    scoring_data = _ensure_dict(contact_data.get("lead_scoring"))
+    answers = _ensure_dict(scoring_data.get("answers"))
+    if not answers:
+        return False
+    for value in answers.values():
+        if value not in (None, "", "unknown", "refused"):
+            return True
+    return False
+
+
+def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str, bool]:
+    inbound_texts: list[str] = []
+    for row in messages:
+        direction = str(row.get("direccion") or "").strip().lower()
+        if direction != "entrante":
+            continue
+        text = str(row.get("texto") or "").strip().lower()
+        if text:
+            inbound_texts.append(text)
+
+    joined = " \n ".join(inbound_texts)
+    has_budget = bool(
+        re.search(r"\$\s*\d", joined)
+        or re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", joined)
+        or re.search(r"\b(presupuesto|presup|hasta|maximo|máximo)\b", joined)
+    )
+    has_financing = bool(
+        re.search(
+            r"\b(contado|credito|crédito|hipotecario|hipoteca|infonavit|fovissste|ambas)\b",
+            joined,
+        )
+    )
+    has_timeline = bool(
+        re.search(
+            r"\b(inmediat|urgent|pronto|este mes|proximo mes|pr[oó]xim[oa] mes|semanas?|mes(es)?|a[ñn]o|explorando|explorar|a futuro|futuro)\b",
+            joined,
+        )
+    )
+    has_authority = bool(
+        re.search(
+            r"\b(yo decido|decido yo|solo yo|yo solo|con mi esposa|con mi esposo|con mi pareja|con mi familia|con mi socio|lo consulto)\b",
+            joined,
+        )
+    )
+    has_evasive = any(token in joined for token in _EVASIVE_TOKENS)
+    return {
+        "financing_type": has_financing,
+        "budget_range": has_budget,
+        "purchase_timeline": has_timeline,
+        "decision_authority": has_authority,
+        "evasive": has_evasive,
+    }
+
+
+def _sanitize_scoring_answers_from_user_messages(
+    *,
+    scoring_answers: dict[str, Any],
+    user_signals: Mapping[str, bool],
+) -> dict[str, Any]:
+    sanitized = dict(scoring_answers)
+    for field in _SCHEDULE_CRITICAL_FIELDS:
+        if field not in sanitized:
+            continue
+        value = sanitized.get(field)
+        if value is None:
+            continue
+        normalized = str(value).strip().lower() if isinstance(value, str) else value
+        if isinstance(normalized, str) and normalized in {"", "unknown"}:
+            continue
+        if isinstance(normalized, str) and normalized == "refused":
+            if user_signals.get("evasive"):
+                continue
+            sanitized.pop(field, None)
+            continue
+        if not user_signals.get(field, False):
+            sanitized.pop(field, None)
+    return sanitized
+
+
+async def _has_prefilter_for_schedule(
+    *,
+    contact: Mapping[str, Any] | None,
+    opportunity_id: str | None,
+) -> bool:
+    if not contact or not opportunity_id:
+        return False
+    notes = str(contact.get("notes") or "").strip()
+    need = str(contact.get("necesidad_proposito") or "").strip()
+    if not (notes and need):
+        return False
+    org_value = webchat_service._extract_contact_org(contact)
+    org_uuid = webchat_service._resolve_org_uuid(org_value)
+    if not org_uuid:
+        return False
+    try:
+        opp_uuid = UUID(str(opportunity_id))
+    except (TypeError, ValueError):
+        return False
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=UUID(org_uuid),
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError:
+        return False
+    metadata = _ensure_dict((opportunity or {}).get("metadata"))
+    scoring = _ensure_dict(metadata.get("lead_scoring"))
+    answers = _ensure_dict(scoring.get("answers"))
+    if not any(field in answers for field in _SCHEDULE_PREFILTER_FIELDS):
+        return False
+
+    def _is_completed(value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized not in {"", "unknown"}
+        return True
+
+    return all(_is_completed(answers.get(field)) for field in _SCHEDULE_CRITICAL_FIELDS)
 
 
 async def _resolve_org_for_catalog(
@@ -649,6 +809,19 @@ async def _handle_close_lead(
             )
             if key in arguments
         }
+        try:
+            recent_messages = await storage.fetch_recent_messages(
+                conversation_id=context.conversation_id,
+                limit=24,
+            )
+            user_signals = _extract_user_prefilter_signals(recent_messages)
+            scoring_answers = _sanitize_scoring_answers_from_user_messages(
+                scoring_answers=scoring_answers,
+                user_signals=user_signals,
+            )
+        except StorageError:
+            # Si no se pudo leer historial, se conserva el payload recibido.
+            pass
         action_text = (siguiente_accion or "").lower()
         requested = any(token in action_text for token in ("cita", "agendar", "demo", "visita"))
         appointment_requested = _optional_bool_argument(arguments, "appointment_requested")
@@ -668,7 +841,9 @@ async def _handle_close_lead(
                 appointment_requested if appointment_requested is not None else requested
             ),
             "accepted_answering_questions": (
-                accepted_questions if accepted_questions is not None else True
+                accepted_questions
+                if accepted_questions is not None
+                else bool(scoring_answers)
             ),
         }
         if evasive_count is not None:
@@ -882,6 +1057,11 @@ async def _handle_schedule_demo(
             extra={"conversation_id": context.conversation_id, "error": str(exc)},
         )
         raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
+    if not await _has_prefilter_for_schedule(contact=contact, opportunity_id=tarjeta_id):
+        raise ValueError(
+            "Antes de agendar la cita necesito completar una precalificación breve "
+            "(necesidad principal y preguntas clave)."
+        )
 
     metadata_payload: dict[str, Any] = {
         "slot_id": slot_identifier,
@@ -941,23 +1121,29 @@ async def _handle_schedule_demo(
         tarjeta_id=tarjeta_id,
         contact=contact_record,
     )
-    try:
-        await storage.apply_lead_scoring(
-            conversation_id=context.conversation_id,
-            contact_id=context.contact_id,
-            opportunity_id=str(tarjeta_id),
-            events={
-                "channel": "whatsapp",
-                "appointment_requested": True,
-                "appointment_scheduled": True,
-                "appointment_confirmed": True,
-            },
-            source="booking_confirmed",
-        )
-    except StorageError as exc:
-        logger.warning(
-            "whatsapp.schedule_demo.scoring_failed",
-            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+    if _has_meaningful_scoring_answers(contact_record):
+        try:
+            await storage.apply_lead_scoring(
+                conversation_id=context.conversation_id,
+                contact_id=context.contact_id,
+                opportunity_id=str(tarjeta_id),
+                events={
+                    "channel": "whatsapp",
+                    "appointment_requested": True,
+                    "appointment_scheduled": True,
+                    "appointment_confirmed": True,
+                },
+                source="booking_confirmed",
+            )
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.schedule_demo.scoring_failed",
+                extra={"conversation_id": context.conversation_id, "error": str(exc)},
+            )
+    else:
+        logger.info(
+            "whatsapp.schedule_demo.skip_scoring_without_answers",
+            extra={"conversation_id": context.conversation_id, "opportunity_id": str(tarjeta_id)},
         )
     try:
         await storage.maybe_promote_prequalified_from_scoring(
@@ -1270,11 +1456,11 @@ async def _notify_sales_rep(
     metadata = _ensure_dict(opportunity.get("metadata"))
     notifications = _ensure_dict(metadata.get("sales_notifications"))
     primary_triggers = {"close_lead", "information_email"}
-    if trigger == "information_email":
+    if trigger in primary_triggers:
         if any(
             notifications.get(existing)
             for existing in primary_triggers
-            if existing != "information_email"
+            if existing != trigger
         ):
             logger.info(
                 "whatsapp.notify_sales.primary_already_sent",

@@ -255,7 +255,9 @@ async def try_execute_lead_tool(
                     else requested
                 ),
                 "accepted_answering_questions": (
-                    accepted_questions if accepted_questions is not None else True
+                    accepted_questions
+                    if accepted_questions is not None
+                    else bool(scoring_answers)
                 ),
             }
             if evasive_count is not None:

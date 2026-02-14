@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -296,6 +297,67 @@ _CRITICAL_SCORING_FIELDS: tuple[str, ...] = (
     "decision_authority",
 )
 
+_SCORING_FIELD_ALIASES: dict[str, dict[str, str]] = {
+    "financing_type": {
+        "credito": "credito",
+        "con credito": "credito",
+        "con credito hipotecario": "credito",
+        "contado": "contado",
+        "cash": "contado",
+        "mixto": "mixto",
+        "ambas": "mixto",
+        "both": "mixto",
+    },
+    "credit_preapproved": {
+        "preapproved": "yes",
+        "preaprobado": "yes",
+        "preaprobada": "yes",
+        "yes": "yes",
+        "si": "yes",
+        "in_process": "in_process",
+        "en proceso": "in_process",
+        "proceso": "in_process",
+        "none": "no",
+        "no": "no",
+    },
+    "purchase_timeline": {
+        "immediate": "<3m",
+        "short_term": "3-6m",
+        "medium_term": "6-12m",
+        "long_term": ">12m",
+    },
+    "requirements_defined": {
+        "clear": "high",
+        "high": "high",
+        "partial": "medium",
+        "medium": "medium",
+        "exploring": "low",
+        "low": "low",
+    },
+    "comparison_mode": {
+        "active": "shortlist",
+        "shortlist": "shortlist",
+        "light": "comparing",
+        "comparing": "comparing",
+        "none": "exploring",
+        "exploring": "exploring",
+    },
+    "decision_authority": {
+        "self": "full",
+        "full": "full",
+        "shared": "shared",
+        "advisor": "advisor",
+    },
+    "buyer_type": {
+        "end_user": "individual",
+        "individual": "individual",
+        "couple": "couple",
+        "family": "family",
+        "company": "company",
+        "investor": "investor",
+    },
+}
+
 
 def _as_bool(value: Any) -> bool | None:
     if isinstance(value, bool):
@@ -323,9 +385,17 @@ def _as_ratio(value: Any) -> float | None:
 
 def _normalize_answer_value(field: str, value: Any) -> Any:
     if isinstance(value, str):
-        normalized = value.strip().lower()
+        normalized = (
+            unicodedata.normalize("NFKD", value.strip())
+            .encode("ascii", "ignore")
+            .decode("ascii")
+            .lower()
+        )
     else:
         normalized = value
+    if field in _SCORE_VALUE_MAP and isinstance(normalized, str):
+        alias_map = _SCORING_FIELD_ALIASES.get(field, {})
+        normalized = alias_map.get(normalized, normalized)
     if field in _SCORE_VALUE_MAP and isinstance(normalized, str):
         if normalized in _SCORE_VALUE_MAP[field]:
             return normalized
@@ -1829,6 +1899,12 @@ async def apply_lead_scoring(
     try:
         org_uuid = UUID(str(org_value))
     except (TypeError, ValueError):
+        return None
+
+    scoring_runtime = await tenant_runtime.get_lead_scoring_runtime_settings(
+        organizacion_id=org_uuid
+    )
+    if not scoring_runtime.enabled:
         return None
 
     repo = CRMRepository()

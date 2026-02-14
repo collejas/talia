@@ -41,6 +41,18 @@ DEFAULT_FALLBACK = (
     "Intentemos nuevamente en unos instantes."
 )
 
+_BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
+    "cita confirmada",
+    "visita confirmada",
+    "tu visita está agendada",
+    "tu visita esta agendada",
+    "cita agendada",
+    "visita agendada",
+    "quedó agendada",
+    "quedo agendada",
+    "te espero el",
+)
+
 
 @dataclass(slots=True)
 class AssistantReply:
@@ -59,6 +71,45 @@ class TwilioSendResult:
     status: str | None
     error: str | None = None
     from_number: str | None = None
+
+
+def _looks_like_booking_confirmation(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    return any(hint in normalized for hint in _BOOKING_CONFIRMATION_HINTS)
+
+
+async def _guard_booking_confirmation_claim(
+    *,
+    conversation_id: str,
+    reply_text: str,
+) -> str:
+    if not _looks_like_booking_confirmation(reply_text):
+        return reply_text
+    try:
+        booking = await storage.fetch_calendar_booking_by_conversation(conversation_id)
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.booking_guard_lookup_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return reply_text
+    status = str((booking or {}).get("status") or "").strip().lower()
+    if booking and status in {"confirmed", "reprogrammed"}:
+        return reply_text
+    log_event(
+        logger,
+        "whatsapp.booking_guard_blocked_false_confirmation",
+        conversation_id=conversation_id,
+        booking_status=status or None,
+    )
+    return (
+        "Aun no pude confirmar tu cita en el calendario. "
+        "Para agendarla correctamente necesito terminar la precalificacion breve "
+        "(forma de compra, presupuesto, plazo y decision). "
+        "Si quieres, lo cerramos ahora mismo y te confirmo en cuanto quede registrada."
+    )
 
 
 async def handle_incoming_message(
@@ -298,6 +349,10 @@ async def handle_incoming_message(
     final_reply_text = assistant_reply.text
     if not final_reply_text:
         final_reply_text = DEFAULT_FALLBACK
+    final_reply_text = await _guard_booking_confirmation_claim(
+        conversation_id=conversation_id,
+        reply_text=final_reply_text,
+    )
 
     send_result = await _send_whatsapp_reply(
         to_number=message.from_number,

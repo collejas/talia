@@ -69,6 +69,27 @@ from . import schemas
 logger = get_logger("app.channels.webchat")
 visit_logger = get_logger("app.analytics.visitas")
 
+_SCHEDULE_PREFILTER_FIELDS: tuple[str, ...] = (
+    "financing_type",
+    "credit_preapproved",
+    "budget_range",
+    "down_payment_ready",
+    "purchase_timeline",
+    "hard_deadline",
+    "requirements_defined",
+    "comparison_mode",
+    "visited_properties",
+    "decision_authority",
+    "buyer_type",
+)
+
+_SCHEDULE_CRITICAL_FIELDS: tuple[str, ...] = (
+    "financing_type",
+    "budget_range",
+    "purchase_timeline",
+    "decision_authority",
+)
+
 MAX_ATTACHMENTS_PER_MESSAGE = 3
 MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024  # 8 MB
 MAX_TEXT_ATTACHMENT_CHARS = 4000
@@ -1252,6 +1273,80 @@ async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
             extra={"contact_id": contact_id, "error": str(exc)},
         )
         return None
+
+
+def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
+    if not contact:
+        return False
+    contact_data_raw = contact.get("contacto_datos")
+    contact_data = contact_data_raw if isinstance(contact_data_raw, dict) else {}
+    scoring_raw = contact_data.get("lead_scoring")
+    scoring_data = scoring_raw if isinstance(scoring_raw, dict) else {}
+    answers_raw = scoring_data.get("answers")
+    answers = answers_raw if isinstance(answers_raw, dict) else {}
+    if not answers:
+        return False
+    for value in answers.values():
+        if value not in (None, "", "unknown", "refused"):
+            return True
+    return False
+
+
+def _has_minimum_prefilter_data(contact: Mapping[str, Any] | None) -> bool:
+    if not contact:
+        return False
+    notes = str(contact.get("notes") or "").strip()
+    need = str(contact.get("necesidad_proposito") or "").strip()
+    if notes and need:
+        return True
+    return _has_meaningful_scoring_answers(contact)
+
+
+async def _has_prefilter_for_schedule(
+    *,
+    contact: Mapping[str, Any] | None,
+    opportunity_id: str | None,
+) -> bool:
+    if not contact or not opportunity_id:
+        return False
+    notes = str(contact.get("notes") or "").strip()
+    need = str(contact.get("necesidad_proposito") or "").strip()
+    if not (notes and need):
+        return False
+    org_value = _extract_contact_org(contact)
+    org_uuid = _resolve_org_uuid(org_value)
+    if not org_uuid:
+        return False
+    try:
+        opp_uuid = UUID(str(opportunity_id))
+    except (TypeError, ValueError):
+        return False
+    repo = CRMRepository()
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=UUID(org_uuid),
+            oportunidad_id=opp_uuid,
+        )
+    except CRMRepositoryError:
+        return False
+    metadata = opportunity.get("metadata") if isinstance(opportunity, dict) else {}
+    metadata_dict = metadata if isinstance(metadata, dict) else {}
+    scoring = metadata_dict.get("lead_scoring")
+    scoring_dict = scoring if isinstance(scoring, dict) else {}
+    answers = scoring_dict.get("answers")
+    answers_dict = answers if isinstance(answers, dict) else {}
+    if not any(field in answers_dict for field in _SCHEDULE_PREFILTER_FIELDS):
+        return False
+
+    def _is_completed(value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized not in {"", "unknown"}
+        return True
+
+    return all(_is_completed(answers_dict.get(field)) for field in _SCHEDULE_CRITICAL_FIELDS)
 
 
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
@@ -2952,7 +3047,9 @@ async def _execute_function_call(
                     else requested
                 ),
                 "accepted_answering_questions": (
-                    accepted_questions if accepted_questions is not None else True
+                    accepted_questions
+                    if accepted_questions is not None
+                    else bool(scoring_answers)
                 ),
             }
             if evasive_count is not None:
@@ -3064,6 +3161,11 @@ async def _execute_function_call(
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
             raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
+        if not await _has_prefilter_for_schedule(contact=contact, opportunity_id=tarjeta_id):
+            raise ValueError(
+                "Antes de agendar la cita necesito completar una precalificación breve "
+                "(necesidad principal y preguntas clave)."
+            )
 
         organizacion_hint = _extract_contact_org(contact) if contact else None
         if not organizacion_hint:
@@ -3140,23 +3242,32 @@ async def _execute_function_call(
             tarjeta_id=tarjeta_id,
             contact=contact,
         )
-        try:
-            await storage.apply_lead_scoring(
-                conversation_id=context.conversation_id,
-                contact_id=context.contact_id,
-                opportunity_id=str(tarjeta_id),
-                events={
-                    "channel": "webchat",
-                    "appointment_requested": True,
-                    "appointment_scheduled": True,
-                    "appointment_confirmed": True,
+        if _has_meaningful_scoring_answers(contact):
+            try:
+                await storage.apply_lead_scoring(
+                    conversation_id=context.conversation_id,
+                    contact_id=context.contact_id,
+                    opportunity_id=str(tarjeta_id),
+                    events={
+                        "channel": "webchat",
+                        "appointment_requested": True,
+                        "appointment_scheduled": True,
+                        "appointment_confirmed": True,
+                    },
+                    source="booking_confirmed",
+                )
+            except StorageError as exc:
+                logger.warning(
+                    "webchat.schedule_demo.scoring_failed",
+                    extra={"conversation_id": context.conversation_id, "error": str(exc)},
+                )
+        else:
+            logger.info(
+                "webchat.schedule_demo.skip_scoring_without_answers",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
                 },
-                source="booking_confirmed",
-            )
-        except StorageError as exc:
-            logger.warning(
-                "webchat.schedule_demo.scoring_failed",
-                extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
         try:
             await storage.maybe_promote_prequalified_from_scoring(
