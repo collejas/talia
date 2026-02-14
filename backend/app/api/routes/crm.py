@@ -5736,6 +5736,126 @@ class CRMPipelineScoringKpis(BaseModel):
     opportunity_latest_based: dict[str, Any] | None = None
 
 
+class CRMScoringProfile(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    nombre: str
+    activo: bool = True
+    weights: dict[str, Any] = Field(default_factory=dict)
+    thresholds: dict[str, Any] = Field(default_factory=dict)
+    confidence_thresholds: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class CRMScoringProfileUpsert(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    nombre: str = Field(default="default", min_length=1, max_length=120)
+    activo: bool = True
+    weights: dict[str, Any] = Field(default_factory=dict)
+    thresholds: dict[str, Any] = Field(default_factory=dict)
+    confidence_thresholds: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CRMScoringQuestion(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    field_key: str
+    question_text: str
+    question_type: str = "single_choice"
+    orden: int = 100
+    activa: bool = True
+    required_for_case_a: bool = False
+    repregunta_max: int = 1
+    allow_unknown: bool = True
+    allow_refused: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class CRMScoringQuestionUpsert(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    field_key: str = Field(..., min_length=1, max_length=120)
+    question_text: str = Field(..., min_length=1, max_length=500)
+    question_type: str = Field(default="single_choice", min_length=1, max_length=50)
+    orden: int = Field(default=100, ge=0, le=10000)
+    activa: bool = True
+    required_for_case_a: bool = False
+    repregunta_max: int = Field(default=1, ge=0, le=5)
+    allow_unknown: bool = True
+    allow_refused: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CRMScoringQuestionReprompt(BaseModel):
+    id: UUID
+    question_id: UUID
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    intento: int
+    prompt_text: str
+    activa: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class CRMScoringQuestionRepromptUpsert(BaseModel):
+    id: UUID | None = None
+    question_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    intento: int = Field(..., ge=1, le=5)
+    prompt_text: str = Field(..., min_length=1, max_length=500)
+    activa: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CRMScoringRule(BaseModel):
+    id: UUID
+    question_id: UUID
+    organizacion_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    rule_type: str
+    match_value: str | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    score: int
+    normalized_value: str | None = None
+    priority: int = 100
+    activa: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class CRMScoringRuleUpsert(BaseModel):
+    id: UUID | None = None
+    question_id: UUID
+    canal: Literal["whatsapp", "webchat"]
+    rule_type: str = Field(default="equals", min_length=1, max_length=50)
+    match_value: str | None = Field(default=None, max_length=240)
+    min_value: float | None = None
+    max_value: float | None = None
+    score: int = Field(..., ge=0, le=100)
+    normalized_value: str | None = Field(default=None, max_length=120)
+    priority: int = Field(default=100, ge=0, le=1000)
+    activa: bool = True
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CRMScoringConfigBundle(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    profiles: list[CRMScoringProfile] = Field(default_factory=list)
+    questions: list[CRMScoringQuestion] = Field(default_factory=list)
+    reprompts: list[CRMScoringQuestionReprompt] = Field(default_factory=list)
+    rules: list[CRMScoringRule] = Field(default_factory=list)
+
+
 class CRMPipelineCardResponse(BaseModel):
     stage: CRMPipelineBoardStage
     card: CRMPipelineBoardCard
@@ -12286,6 +12406,182 @@ async def pipeline_scoring_kpis(
     return _build_scoring_kpis(rows=rows, window_days=days)
 
 
+@router.get("/pipeline/scoring/config", response_model=CRMScoringConfigBundle)
+async def get_pipeline_scoring_config(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    canal: Literal["whatsapp", "webchat"] = Query(...),
+    include_inactive: bool = Query(default=False),
+) -> CRMScoringConfigBundle:
+    try:
+        profiles = await repo.list_scoring_profiles(
+            organizacion_id=organizacion_id,
+            canal=canal,
+            only_active=not include_inactive,
+        )
+        questions = await repo.list_scoring_questions(
+            organizacion_id=organizacion_id,
+            canal=canal,
+            include_inactive=include_inactive,
+        )
+        reprompts = await repo.list_scoring_question_reprompts(
+            organizacion_id=organizacion_id,
+            canal=canal,
+            include_inactive=include_inactive,
+        )
+        rules = await repo.list_scoring_rules(
+            organizacion_id=organizacion_id,
+            canal=canal,
+            include_inactive=include_inactive,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return _build_scoring_config_bundle(
+        canal=canal,
+        profile_rows=profiles,
+        question_rows=questions,
+        reprompt_rows=reprompts,
+        rule_rows=rules,
+    )
+
+
+@router.put("/pipeline/scoring/config/profile", response_model=CRMScoringProfile)
+async def upsert_pipeline_scoring_profile(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMScoringProfileUpsert,
+) -> CRMScoringProfile:
+    body = payload.model_dump(mode="json")
+    body["organizacion_id"] = str(organizacion_id)
+    try:
+        row = await repo.upsert_scoring_profile(payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMScoringProfile.model_validate(row)
+
+
+@router.delete("/pipeline/scoring/config/profile/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pipeline_scoring_profile(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    profile_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_scoring_profile(organizacion_id=organizacion_id, profile_id=profile_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/pipeline/scoring/config/question", response_model=CRMScoringQuestion)
+async def upsert_pipeline_scoring_question(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMScoringQuestionUpsert,
+) -> CRMScoringQuestion:
+    body = payload.model_dump(mode="json")
+    body["organizacion_id"] = str(organizacion_id)
+    try:
+        row = await repo.upsert_scoring_question(payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMScoringQuestion.model_validate(row)
+
+
+@router.delete("/pipeline/scoring/config/question/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pipeline_scoring_question(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    question_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_scoring_question(organizacion_id=organizacion_id, question_id=question_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/pipeline/scoring/config/question-reprompt", response_model=CRMScoringQuestionReprompt)
+async def upsert_pipeline_scoring_question_reprompt(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMScoringQuestionRepromptUpsert,
+) -> CRMScoringQuestionReprompt:
+    body = payload.model_dump(mode="json", exclude_none=True)
+    body["organizacion_id"] = str(organizacion_id)
+    try:
+        row = await repo.upsert_scoring_question_reprompt(payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMScoringQuestionReprompt.model_validate(row)
+
+
+@router.delete(
+    "/pipeline/scoring/config/question-reprompt/{reprompt_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_pipeline_scoring_question_reprompt(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    reprompt_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_scoring_question_reprompt(
+            organizacion_id=organizacion_id,
+            reprompt_id=reprompt_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/pipeline/scoring/config/rule", response_model=CRMScoringRule)
+async def upsert_pipeline_scoring_rule(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMScoringRuleUpsert,
+) -> CRMScoringRule:
+    body = payload.model_dump(mode="json", exclude_none=True)
+    body["organizacion_id"] = str(organizacion_id)
+    try:
+        row = await repo.upsert_scoring_rule(payload=body)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return CRMScoringRule.model_validate(row)
+
+
+@router.delete("/pipeline/scoring/config/rule/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pipeline_scoring_rule(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    rule_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_scoring_rule(organizacion_id=organizacion_id, rule_id=rule_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/analytics/catalog/ventas")
 async def analytics_catalog_sales(
     *,
@@ -15181,6 +15477,23 @@ def _build_scoring_kpis(*, rows: list[dict[str, Any]], window_days: int) -> CRMP
         respuesta_bucket=event_based["respuesta_bucket"],
         event_based=event_based,
         opportunity_latest_based=opportunity_latest_based,
+    )
+
+
+def _build_scoring_config_bundle(
+    *,
+    canal: Literal["whatsapp", "webchat"],
+    profile_rows: list[dict[str, Any]],
+    question_rows: list[dict[str, Any]],
+    reprompt_rows: list[dict[str, Any]],
+    rule_rows: list[dict[str, Any]],
+) -> CRMScoringConfigBundle:
+    return CRMScoringConfigBundle(
+        canal=canal,
+        profiles=[CRMScoringProfile.model_validate(row) for row in profile_rows],
+        questions=[CRMScoringQuestion.model_validate(row) for row in question_rows],
+        reprompts=[CRMScoringQuestionReprompt.model_validate(row) for row in reprompt_rows],
+        rules=[CRMScoringRule.model_validate(row) for row in rule_rows],
     )
 
 

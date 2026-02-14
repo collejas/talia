@@ -214,9 +214,9 @@ Pendiente (siguiente fase):
 1. [Check] Ajuste fino de pesos/umbrales por tenant (feature flag) implementado en backend.
 2. [Check] Cobertura multi-canal en backend con casos evasivos (`unknown/refused`) implementada.
 3. [Check] KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
-4. Politica comercial A/B de notificacion a vendedor separada por canal.
+4. [Check] Politica comercial A/B de notificacion a vendedor separada por canal.
 5. Contador de repreguntas y estado por pregunta persistido en scoring.
-6. Configuracion de preguntas/pesos desde BD administrable en frontend.
+6. [Partial] Configuracion de preguntas/pesos desde BD: estructura y API backend listas; falta integrar motor de scoring y vista frontend.
 
 ## 13. Ejecucion inmediata (Sprint siguiente)
 ### 13.1 Ajuste por tenant (feature flag)
@@ -297,6 +297,11 @@ Regla anti-duplicados:
 - mantener notificacion de `booking_confirmed` como evento final de cita.
 - persistir `ventas_notificado_en` y `ventas_notificacion_motivo` en metadata por canal.
 
+Estado actual:
+- [Check] Implementado en backend para `whatsapp` y `webchat`.
+- [Check] Se removio notificacion temprana desde `information_email` y `close_lead`.
+- [Check] Se agrego guardado anti-duplicado por canal en metadata (`sales_primary_notifications`).
+
 ## 17. Preguntas y scoring configurables desde BD (frontend-admin)
 Objetivo:
 - sacar reglas de perfilamiento/puntaje del codigo backend para operar sin deploy.
@@ -313,3 +318,10 @@ Alcance:
 Compatibilidad OpenAI:
 - actualizar prompt, funciones y tools para usar el mismo contrato dinamico.
 - mantener guardas de backend para no confirmar cita sin booking real.
+
+Estado actual:
+- [Check] Migracion creada: `20280416_120000_scoring_config_catalog.sql`.
+- [Check] Tablas creadas: `scoring_questions`, `scoring_question_reprompts`, `scoring_rules`, `scoring_profiles`.
+- [Check] API CRM para CRUD de configuracion de scoring por tenant/canal.
+- [Pending] Conectar motor de scoring runtime (`storage.apply_lead_scoring`) para leer este catalogo dinamico.
+- [Pending] Vista frontend para administrar preguntas/repreguntas/reglas/perfiles.

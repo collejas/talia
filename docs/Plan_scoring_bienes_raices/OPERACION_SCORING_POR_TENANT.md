@@ -78,6 +78,11 @@ Guardas:
 - evitar duplicado de notificacion primaria (`information_email`/`close_lead`) en la misma conversacion.
 - permitir `booking_confirmed` como notificacion final de cita.
 
+Estado actual:
+- [Check] Politica A/B activa en backend para ambos canales.
+- [Check] Notificacion temprana removida de `information_email` y `close_lead`.
+- [Check] Anti-duplicado primario por canal persistido en metadata de oportunidad (`sales_primary_notifications`).
+
 ## 8. Proxima evolucion: configuracion desde BD (frontend)
 Objetivo:
 - administrar preguntas, repreguntas, pesos y umbrales sin despliegue backend.
@@ -91,3 +96,9 @@ Catalogo propuesto:
 Impacto:
 - prompt OpenAI y funciones deben respetar el contrato dinamico.
 - tools backend validan y persisten resultados con guardas de cita real.
+
+Estado actual:
+- [Check] Estructura BD creada con migracion `20280416_120000_scoring_config_catalog.sql`.
+- [Check] CRUD backend disponible via `/crm/pipeline/scoring/config*`.
+- [Pending] Motor de scoring dinamico conectado a catalogo BD.
+- [Pending] Pantalla frontend de administracion del catalogo por tenant/canal.

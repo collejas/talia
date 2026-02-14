@@ -3188,6 +3188,237 @@ class CRMRepository:
             )
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_scoring_profiles(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: Literal["whatsapp", "webchat"] | None = None,
+        only_active: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "*",
+            "order": "canal.asc,nombre.asc,updated_at.desc",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if only_active:
+            params["activo"] = "eq.true"
+        resp = await self._request_service_role("GET", "/rest/v1/scoring_profiles", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar scoring_profiles: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
+    async def upsert_scoring_profile(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/scoring_profiles",
+            json=payload,
+            params={"on_conflict": "organizacion_id,canal,nombre"},
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al upsert scoring_profile: {data!r}"
+            )
+        return data[0]
+
+    async def delete_scoring_profile(
+        self,
+        *,
+        organizacion_id: UUID,
+        profile_id: UUID,
+    ) -> None:
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/scoring_profiles",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{profile_id}",
+            },
+        )
+
+    async def list_scoring_questions(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: Literal["whatsapp", "webchat"] | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "*",
+            "order": "canal.asc,orden.asc,field_key.asc",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if not include_inactive:
+            params["activa"] = "eq.true"
+        resp = await self._request_service_role("GET", "/rest/v1/scoring_questions", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar scoring_questions: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
+    async def upsert_scoring_question(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/scoring_questions",
+            json=payload,
+            params={"on_conflict": "organizacion_id,canal,field_key"},
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al upsert scoring_question: {data!r}"
+            )
+        return data[0]
+
+    async def delete_scoring_question(
+        self,
+        *,
+        organizacion_id: UUID,
+        question_id: UUID,
+    ) -> None:
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/scoring_questions",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{question_id}",
+            },
+        )
+
+    async def list_scoring_question_reprompts(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: Literal["whatsapp", "webchat"] | None = None,
+        question_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "*",
+            "order": "question_id.asc,intento.asc",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if question_id:
+            params["question_id"] = f"eq.{question_id}"
+        if not include_inactive:
+            params["activa"] = "eq.true"
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/scoring_question_reprompts",
+            params=params,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar scoring_question_reprompts: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
+    async def upsert_scoring_question_reprompt(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/scoring_question_reprompts",
+            json=payload,
+            params={"on_conflict": "question_id,intento"},
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al upsert scoring_question_reprompt: {data!r}"
+            )
+        return data[0]
+
+    async def delete_scoring_question_reprompt(
+        self,
+        *,
+        organizacion_id: UUID,
+        reprompt_id: UUID,
+    ) -> None:
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/scoring_question_reprompts",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{reprompt_id}",
+            },
+        )
+
+    async def list_scoring_rules(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: Literal["whatsapp", "webchat"] | None = None,
+        question_id: UUID | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "*",
+            "order": "question_id.asc,priority.asc,id.asc",
+        }
+        if canal:
+            params["canal"] = f"eq.{canal}"
+        if question_id:
+            params["question_id"] = f"eq.{question_id}"
+        if not include_inactive:
+            params["activa"] = "eq.true"
+        resp = await self._request_service_role("GET", "/rest/v1/scoring_rules", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar scoring_rules: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def upsert_scoring_rule(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        rule_id = payload.get("id")
+        if rule_id:
+            resp = await self._request_service_role(
+                "PATCH",
+                "/rest/v1/scoring_rules",
+                params={"id": f"eq.{rule_id}"},
+                json=payload,
+                prefer="return=representation",
+            )
+        else:
+            resp = await self._request_service_role(
+                "POST",
+                "/rest/v1/scoring_rules",
+                json=payload,
+                prefer="return=representation",
+            )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"Respuesta inesperada al upsert scoring_rule: {data!r}")
+        return data[0]
+
+    async def delete_scoring_rule(
+        self,
+        *,
+        organizacion_id: UUID,
+        rule_id: UUID,
+    ) -> None:
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/scoring_rules",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{rule_id}",
+            },
+        )
+
     async def get_manual_override(self, *, conversation_id: str) -> bool:
         conversation_key = conversation_id.strip()
         if not conversation_key:
