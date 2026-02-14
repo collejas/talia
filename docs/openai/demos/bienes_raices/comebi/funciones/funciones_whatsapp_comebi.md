@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos los datos mínimos (nombre, correo, teléfono y empresa) y, si aplica, para registrar respuestas de preguntas de contexto cuando el prospecto quiere agendar cita. Reglas: no inferir respuestas; enviar solo respuestas explícitas del prospecto; para campos no respondidos, omitir la clave o marcar estado en profiling_statuses.",
+  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos los datos mínimos (nombre, correo, teléfono y empresa) y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita. Reglas: no inferir respuestas; enviar solo respuestas explícitas del prospecto; para campos no respondidos, omitir la clave o marcar estado en profiling_statuses.",
   "strict": false,
   "parameters": {
     "type": "object",
@@ -217,14 +217,14 @@
           "boolean",
           "null"
         ],
-        "description": "Marca si aceptó responder preguntas rápidas de contexto antes de agendar."
+        "description": "Marca si aceptó responder preguntas de precalificación antes de agendar."
       },
       "evasive_answers_count": {
         "type": [
           "integer",
           "null"
         ],
-        "description": "Número de respuestas evasivas o negativas explícitas durante las preguntas de contexto.",
+        "description": "Número de respuestas evasivas o negativas explícitas durante la precalificación.",
         "minimum": 0
       },
       "response_time_bucket": {
