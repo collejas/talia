@@ -68,3 +68,26 @@ Checklist rapido:
 ## 6. Notas de interpretacion KPI
 - `event_based`: actividad total de recalculos (telemetria).
 - `opportunity_latest_based`: estado actual por oportunidad (operacion comercial).
+
+## 7. Politica comercial de notificaciones (por canal)
+La politica operativa recomendada queda separada por canal (`whatsapp` y `webchat`):
+- Caso A: notificar vendedor cuando hay cita confirmada + perfilamiento minimo.
+- Caso B: notificar vendedor al agotar reenganches con datos base completos.
+
+Guardas:
+- evitar duplicado de notificacion primaria (`information_email`/`close_lead`) en la misma conversacion.
+- permitir `booking_confirmed` como notificacion final de cita.
+
+## 8. Proxima evolucion: configuracion desde BD (frontend)
+Objetivo:
+- administrar preguntas, repreguntas, pesos y umbrales sin despliegue backend.
+
+Catalogo propuesto:
+- `scoring_questions` (tenant, canal, campo, texto, orden, activa, `repregunta_max`)
+- `scoring_question_reprompts` (pregunta, intento, texto)
+- `scoring_rules` (pregunta/campo, condicion, puntos)
+- `scoring_profiles` (pesos/umbrales por tenant y canal)
+
+Impacto:
+- prompt OpenAI y funciones deben respetar el contrato dinamico.
+- tools backend validan y persisten resultados con guardas de cita real.

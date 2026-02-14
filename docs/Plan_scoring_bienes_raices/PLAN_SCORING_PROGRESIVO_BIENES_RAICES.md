@@ -34,9 +34,12 @@ Regla:
 
 ### Fase 3: Calificacion avanzada (solo si acepta cita)
 - Una pregunta por turno.
-- Una repregunta maxima por campo.
+- Una repregunta maxima por campo (configurable por canal).
 - Si evade dos veces: guardar `unknown/refused` y continuar.
 - No bloquear cita por datos faltantes.
+- Registrar por pregunta:
+  - `repregunta_count`
+  - `estado_respuesta` (`answered|unknown|refused|skipped_max_retries`)
 
 Factores:
 - Capacidad financiera (`30%`)
@@ -155,9 +158,11 @@ Si no cumple:
 - Si respuesta evasiva:
   - 1 repregunta breve
   - luego `unknown` o `refused`.
+- Respetar `repregunta_max_por_pregunta` y no forzar despues del maximo.
 - Al agendar cita:
   - disparar recalculo de score
   - evaluar transicion a `precalificado`.
+- No confirmar cita en texto si `schedule_demo` no creo booking real.
 
 ## 10. Telemetria y KPIs
 KPIs minimos:
@@ -169,11 +174,15 @@ KPIs minimos:
 - `tiempo promedio de respuesta`
 - `tasa de evasivas`
 - `tiempo de captado a precalificado`
+- `% notificados por cita confirmada`
+- `% notificados por reenganche agotado`
+- `promedio de repreguntas por campo`
 
 ## 11. Rollout y control de riesgo
 ### Semana 1 (piloto)
 - 1 tenant, 2 canales.
 - Objetivo: validar captura, score y etapa.
+- Validar politica de notificacion separada por canal (`whatsapp` y `webchat`).
 
 ### Semana 2 (expansion)
 - ampliar a mas tenants.
@@ -205,6 +214,9 @@ Pendiente (siguiente fase):
 1. [Check] Ajuste fino de pesos/umbrales por tenant (feature flag) implementado en backend.
 2. [Check] Cobertura multi-canal en backend con casos evasivos (`unknown/refused`) implementada.
 3. [Check] KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
+4. Politica comercial A/B de notificacion a vendedor separada por canal.
+5. Contador de repreguntas y estado por pregunta persistido en scoring.
+6. Configuracion de preguntas/pesos desde BD administrable en frontend.
 
 ## 13. Ejecucion inmediata (Sprint siguiente)
 ### 13.1 Ajuste por tenant (feature flag)
@@ -255,12 +267,49 @@ Criterio de aceptacion:
   - `opportunity_latest_based`
 
 ## 14. Orden de implementacion recomendado
-1. Configuracion por tenant (13.1).
-2. KPI por oportunidad unica (13.3).
-3. Tests E2E (13.2) sobre comportamiento final.
+1. Politica de notificacion A/B separada por canal (seccion 16).
+2. Contador de repreguntas por pregunta/canal (seccion 16).
+3. Configuracion de banco de preguntas y reglas en BD (seccion 17).
+4. Tests E2E (13.2) sobre comportamiento final.
 
 ## 15. Checklist de cierre de fase
 - [Check] Config por tenant disponible y validada en backend.
 - [Check] KPI dual (eventos vs oportunidad unica) visible en embudo.
 - [Check] E2E multi-canal en CI (workflow GitHub Actions `backend_scoring_ci.yml`).
 - [Check] Documentacion de pesos/umbrales por tenant para operacion.
+
+## 16. Nueva politica comercial de notificacion (whatsapp y webchat)
+Objetivo:
+- Evitar bombardeo a vendedor y mantener calidad de leads asignados.
+
+Regla por canal (separada):
+- Caso A: enviar a vendedor cuando exista:
+  - datos base completos (`nombre`, `correo`, `telefono`, `empresa`, `necesidad_proposito`)
+  - perfilamiento minimo completo
+  - cita confirmada (`booking_confirmed`)
+- Caso B: enviar a vendedor cuando:
+  - se agotaron reenganches configurados
+  - datos base completos
+  - aunque no exista cita
+
+Regla anti-duplicados:
+- maximo 1 notificacion primaria por conversacion (`information_email` o `close_lead`).
+- mantener notificacion de `booking_confirmed` como evento final de cita.
+- persistir `ventas_notificado_en` y `ventas_notificacion_motivo` en metadata por canal.
+
+## 17. Preguntas y scoring configurables desde BD (frontend-admin)
+Objetivo:
+- sacar reglas de perfilamiento/puntaje del codigo backend para operar sin deploy.
+
+Alcance:
+- tablas configurables por tenant y canal:
+  - `scoring_questions` (texto, campo, tipo, orden, activa, repregunta_max)
+  - `scoring_question_reprompts` (variantes por intento)
+  - `scoring_rules` (respuesta/rango -> puntos)
+  - `scoring_profiles` (pesos y umbrales por tenant/canal)
+- backend ejecuta motor generico con esa configuracion.
+- frontend administra catalogo de preguntas, pesos y umbrales.
+
+Compatibilidad OpenAI:
+- actualizar prompt, funciones y tools para usar el mismo contrato dinamico.
+- mantener guardas de backend para no confirmar cita sin booking real.
