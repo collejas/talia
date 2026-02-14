@@ -204,7 +204,7 @@ Completado:
 Pendiente (siguiente fase):
 1. [Check] Ajuste fino de pesos/umbrales por tenant (feature flag) implementado en backend.
 2. Tests E2E multi-canal con casos evasivos (`unknown/refused`).
-3. KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
+3. [Check] KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
 
 ## 13. Ejecucion inmediata (Sprint siguiente)
 ### 13.1 Ajuste por tenant (feature flag)

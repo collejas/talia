@@ -5732,6 +5732,8 @@ class CRMPipelineScoringKpis(BaseModel):
     asiste_cita_pct: float | None = None
     evasivas_promedio: float | None = None
     respuesta_bucket: dict[str, int] = Field(default_factory=dict)
+    event_based: dict[str, Any] | None = None
+    opportunity_latest_based: dict[str, Any] | None = None
 
 
 class CRMPipelineCardResponse(BaseModel):
@@ -15059,7 +15061,7 @@ def _safe_pct(numerator: int, denominator: int) -> float | None:
     return round((numerator / denominator) * 100, 1)
 
 
-def _build_scoring_kpis(*, rows: list[dict[str, Any]], window_days: int) -> CRMPipelineScoringKpis:
+def _build_scoring_kpis_slice(*, rows: list[dict[str, Any]]) -> dict[str, Any]:
     score_values: list[float] = []
     grades: Counter[str] = Counter()
     confidences: Counter[str] = Counter()
@@ -15133,19 +15135,52 @@ def _build_scoring_kpis(*, rows: list[dict[str, Any]], window_days: int) -> CRMP
     avg_score = round(sum(score_values) / len(score_values), 1) if score_values else None
     avg_evasive = round(sum(evasive_values) / len(evasive_values), 2) if evasive_values else None
 
+    return {
+        "total_eventos": len(rows),
+        "oportunidades_unicas": len(unique_opportunities),
+        "score_promedio": avg_score,
+        "distribucion_grade": dict(grades),
+        "distribucion_confidence": dict(confidences),
+        "acepta_preguntas_pct": _safe_pct(accepts_true, accepts_total),
+        "agenda_cita_pct": _safe_pct(scheduled_true, scheduled_total or requested_total),
+        "confirma_cita_pct": _safe_pct(confirmed_true, confirmed_total),
+        "asiste_cita_pct": _safe_pct(attended_true, attended_total),
+        "evasivas_promedio": avg_evasive,
+        "respuesta_bucket": dict(response_bucket),
+    }
+
+
+def _latest_rows_by_opportunity(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    latest_by_opportunity: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        opportunity_id = row.get("oportunidad_id")
+        if not opportunity_id:
+            continue
+        key = str(opportunity_id)
+        if key not in latest_by_opportunity:
+            # rows ya llegan en created_at DESC desde repositorio
+            latest_by_opportunity[key] = row
+    return list(latest_by_opportunity.values())
+
+
+def _build_scoring_kpis(*, rows: list[dict[str, Any]], window_days: int) -> CRMPipelineScoringKpis:
+    event_based = _build_scoring_kpis_slice(rows=rows)
+    opportunity_latest_based = _build_scoring_kpis_slice(rows=_latest_rows_by_opportunity(rows))
     return CRMPipelineScoringKpis(
         window_days=window_days,
-        total_eventos=len(rows),
-        oportunidades_unicas=len(unique_opportunities),
-        score_promedio=avg_score,
-        distribucion_grade=dict(grades),
-        distribucion_confidence=dict(confidences),
-        acepta_preguntas_pct=_safe_pct(accepts_true, accepts_total),
-        agenda_cita_pct=_safe_pct(scheduled_true, scheduled_total or requested_total),
-        confirma_cita_pct=_safe_pct(confirmed_true, confirmed_total),
-        asiste_cita_pct=_safe_pct(attended_true, attended_total),
-        evasivas_promedio=avg_evasive,
-        respuesta_bucket=dict(response_bucket),
+        total_eventos=event_based["total_eventos"],
+        oportunidades_unicas=event_based["oportunidades_unicas"],
+        score_promedio=event_based["score_promedio"],
+        distribucion_grade=event_based["distribucion_grade"],
+        distribucion_confidence=event_based["distribucion_confidence"],
+        acepta_preguntas_pct=event_based["acepta_preguntas_pct"],
+        agenda_cita_pct=event_based["agenda_cita_pct"],
+        confirma_cita_pct=event_based["confirma_cita_pct"],
+        asiste_cita_pct=event_based["asiste_cita_pct"],
+        evasivas_promedio=event_based["evasivas_promedio"],
+        respuesta_bucket=event_based["respuesta_bucket"],
+        event_based=event_based,
+        opportunity_latest_based=opportunity_latest_based,
     )
 
 
