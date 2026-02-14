@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, log_event
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.phone_utils import normalize_phone
+from app.services import tenant_runtime
 
 logger = get_logger(__name__)
 
@@ -350,7 +351,12 @@ def _mean_score(values: list[int], default: int = 40) -> int:
     return int(round(sum(values) / len(values)))
 
 
-def _compute_lead_scoring(answers: dict[str, Any], events: dict[str, Any]) -> dict[str, Any]:
+def _compute_lead_scoring(
+    answers: dict[str, Any],
+    events: dict[str, Any],
+    scoring_settings: tenant_runtime.LeadScoringRuntimeSettings | None = None,
+) -> dict[str, Any]:
+    runtime_settings = scoring_settings or tenant_runtime.LeadScoringRuntimeSettings.from_defaults()
     finanzas_values = [
         _field_score("financing_type", answers.get("financing_type")),
         _field_score("credit_preapproved", answers.get("credit_preapproved")),
@@ -411,16 +417,16 @@ def _compute_lead_scoring(answers: dict[str, Any], events: dict[str, Any]) -> di
     interaccion = _mean_score(interaction_values)
 
     score_total = round(
-        financiera * 0.30
-        + urgencia * 0.20
-        + decision * 0.20
-        + autoridad * 0.15
-        + interaccion * 0.15,
+        financiera * (runtime_settings.capacidad_financiera_weight / 100.0)
+        + urgencia * (runtime_settings.urgencia_weight / 100.0)
+        + decision * (runtime_settings.nivel_decision_weight / 100.0)
+        + autoridad * (runtime_settings.autoridad_weight / 100.0)
+        + interaccion * (runtime_settings.interaccion_compromiso_weight / 100.0),
         2,
     )
-    if score_total <= 50:
+    if score_total <= runtime_settings.explorando_max:
         grade = "explorando"
-    elif score_total <= 75:
+    elif score_total <= runtime_settings.interesado_max:
         grade = "interesado"
     else:
         grade = "listo"
@@ -436,9 +442,9 @@ def _compute_lead_scoring(answers: dict[str, Any], events: dict[str, Any]) -> di
 
     completed_critical = len([field for field in _CRITICAL_SCORING_FIELDS if field not in missing_fields])
     completion_ratio = completed_critical / max(1, len(_CRITICAL_SCORING_FIELDS))
-    if completion_ratio >= 0.8:
+    if completion_ratio >= runtime_settings.confidence_high_min:
         confidence = "high"
-    elif completion_ratio >= 0.5:
+    elif completion_ratio >= runtime_settings.confidence_medium_min:
         confidence = "medium"
     else:
         confidence = "low"
@@ -1699,6 +1705,9 @@ async def maybe_auto_name_opportunity(
         return None
 
     repo = CRMRepository()
+    scoring_runtime = await tenant_runtime.get_lead_scoring_runtime_settings(organizacion_id=org_uuid)
+    if not scoring_runtime.enabled:
+        return None
     try:
         opportunity = await repo.get_pipeline_opportunity(
             organizacion_id=org_uuid,
@@ -1849,7 +1858,7 @@ async def apply_lead_scoring(
     merged_events = dict(previous_events)
     merged_events.update(_ensure_dict(events))
 
-    scoring = _compute_lead_scoring(normalized_answers, merged_events)
+    scoring = _compute_lead_scoring(normalized_answers, merged_events, scoring_runtime)
     now_iso = datetime.now(timezone.utc).isoformat()
     scoring_payload = {
         **scoring,

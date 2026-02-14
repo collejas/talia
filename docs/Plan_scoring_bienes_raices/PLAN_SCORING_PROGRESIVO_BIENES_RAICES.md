@@ -202,7 +202,7 @@ Completado:
 8. [Check] Correccion de permisos para lectura de `oportunidad_scoring_eventos` en embudo.
 
 Pendiente (siguiente fase):
-1. Ajuste fino de pesos/umbrales por tenant (feature flag).
+1. [Check] Ajuste fino de pesos/umbrales por tenant (feature flag) implementado en backend.
 2. Tests E2E multi-canal con casos evasivos (`unknown/refused`).
 3. KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
 

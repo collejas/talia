@@ -845,6 +845,117 @@ async def get_whatsapp_runtime_settings(
 
 
 @dataclass(slots=True)
+class LeadScoringRuntimeSettings:
+    enabled: bool
+    capacidad_financiera_weight: float
+    urgencia_weight: float
+    nivel_decision_weight: float
+    autoridad_weight: float
+    interaccion_compromiso_weight: float
+    explorando_max: float
+    interesado_max: float
+    listo_min: float
+    confidence_high_min: float
+    confidence_medium_min: float
+
+    @staticmethod
+    def from_defaults() -> "LeadScoringRuntimeSettings":
+        return LeadScoringRuntimeSettings(
+            enabled=True,
+            capacidad_financiera_weight=30.0,
+            urgencia_weight=20.0,
+            nivel_decision_weight=20.0,
+            autoridad_weight=15.0,
+            interaccion_compromiso_weight=15.0,
+            explorando_max=50.0,
+            interesado_max=75.0,
+            listo_min=76.0,
+            confidence_high_min=0.80,
+            confidence_medium_min=0.50,
+        )
+
+
+def _coerce_ratio(value: Any, default: float) -> float:
+    candidate = _coerce_float(value, default)
+    if candidate > 1:
+        candidate = candidate / 100.0
+    return max(0.0, min(candidate, 1.0))
+
+
+async def get_lead_scoring_runtime_settings(
+    *,
+    organizacion_id: UUID | None = None,
+) -> LeadScoringRuntimeSettings:
+    payload = LeadScoringRuntimeSettings.from_defaults()
+    if organizacion_id is None:
+        return payload
+
+    config = await get_org_config(organizacion_id=organizacion_id)
+    scoring_cfg = _as_dict(config.get("scoring_bienes_raices")) or {}
+    payload.enabled = _coerce_bool(scoring_cfg.get("enabled"), payload.enabled)
+
+    weights_cfg = _as_dict(scoring_cfg.get("weights")) or {}
+    candidate_weights = {
+        "capacidad_financiera_weight": max(
+            0.0, _coerce_float(weights_cfg.get("capacidad_financiera"), payload.capacidad_financiera_weight)
+        ),
+        "urgencia_weight": max(0.0, _coerce_float(weights_cfg.get("urgencia"), payload.urgencia_weight)),
+        "nivel_decision_weight": max(
+            0.0, _coerce_float(weights_cfg.get("nivel_decision"), payload.nivel_decision_weight)
+        ),
+        "autoridad_weight": max(0.0, _coerce_float(weights_cfg.get("autoridad"), payload.autoridad_weight)),
+        "interaccion_compromiso_weight": max(
+            0.0,
+            _coerce_float(weights_cfg.get("interaccion_compromiso"), payload.interaccion_compromiso_weight),
+        ),
+    }
+    total_weight = round(sum(candidate_weights.values()), 4)
+    if abs(total_weight - 100.0) < 0.0001:
+        payload.capacidad_financiera_weight = candidate_weights["capacidad_financiera_weight"]
+        payload.urgencia_weight = candidate_weights["urgencia_weight"]
+        payload.nivel_decision_weight = candidate_weights["nivel_decision_weight"]
+        payload.autoridad_weight = candidate_weights["autoridad_weight"]
+        payload.interaccion_compromiso_weight = candidate_weights["interaccion_compromiso_weight"]
+    elif weights_cfg:
+        logger.warning(
+            "tenant_runtime.lead_scoring_invalid_weights",
+            extra={"organizacion_id": str(organizacion_id), "weights_total": total_weight},
+        )
+
+    thresholds_cfg = _as_dict(scoring_cfg.get("thresholds")) or {}
+    candidate_explorando = _coerce_float(thresholds_cfg.get("explorando_max"), payload.explorando_max)
+    candidate_interesado = _coerce_float(thresholds_cfg.get("interesado_max"), payload.interesado_max)
+    candidate_listo = _coerce_float(thresholds_cfg.get("listo_min"), payload.listo_min)
+    if (
+        0.0 <= candidate_explorando <= candidate_interesado <= 100.0
+        and 0.0 <= candidate_listo <= 100.0
+        and candidate_listo >= candidate_interesado
+    ):
+        payload.explorando_max = candidate_explorando
+        payload.interesado_max = candidate_interesado
+        payload.listo_min = candidate_listo
+    elif thresholds_cfg:
+        logger.warning(
+            "tenant_runtime.lead_scoring_invalid_thresholds",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
+
+    confidence_cfg = _as_dict(scoring_cfg.get("confidence_thresholds")) or {}
+    candidate_high = _coerce_ratio(confidence_cfg.get("high_min"), payload.confidence_high_min)
+    candidate_medium = _coerce_ratio(confidence_cfg.get("medium_min"), payload.confidence_medium_min)
+    if 0.0 <= candidate_medium <= candidate_high <= 1.0:
+        payload.confidence_high_min = candidate_high
+        payload.confidence_medium_min = candidate_medium
+    elif confidence_cfg:
+        logger.warning(
+            "tenant_runtime.lead_scoring_invalid_confidence_thresholds",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
+
+    return payload
+
+
+@dataclass(slots=True)
 class MessengerRuntimeSettings:
     page_access_token: str | None
     verify_token: str | None
