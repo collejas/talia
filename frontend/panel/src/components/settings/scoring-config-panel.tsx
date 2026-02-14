@@ -66,6 +66,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
     prettyJson(activeProfile?.confidence_thresholds ?? {}),
   );
 
+  const [questionEditingId, setQuestionEditingId] = useState<string | null>(null);
   const [questionField, setQuestionField] = useState("");
   const [questionText, setQuestionText] = useState("");
   const [questionOrder, setQuestionOrder] = useState("100");
@@ -73,20 +74,29 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
   const [questionRequiredCaseA, setQuestionRequiredCaseA] = useState(false);
   const [questionActive, setQuestionActive] = useState(true);
 
+  const [repromptEditingId, setRepromptEditingId] = useState<string | null>(null);
   const [repromptQuestionId, setRepromptQuestionId] = useState("");
   const [repromptIntento, setRepromptIntento] = useState("1");
   const [repromptText, setRepromptText] = useState("");
+  const [repromptActive, setRepromptActive] = useState(true);
 
+  const [ruleEditingId, setRuleEditingId] = useState<string | null>(null);
   const [ruleQuestionId, setRuleQuestionId] = useState("");
   const [ruleType, setRuleType] = useState("equals");
   const [ruleMatchValue, setRuleMatchValue] = useState("");
+  const [ruleMinValue, setRuleMinValue] = useState("");
+  const [ruleMaxValue, setRuleMaxValue] = useState("");
   const [ruleScore, setRuleScore] = useState("80");
   const [rulePriority, setRulePriority] = useState("100");
+  const [ruleActive, setRuleActive] = useState(true);
 
-  const questions = useMemo(() => activeBundle.questions ?? [], [activeBundle.questions]);
+  const questions = useMemo(
+    () => [...(activeBundle.questions ?? [])].sort((a, b) => a.orden - b.orden),
+    [activeBundle.questions],
+  );
   const questionOptions = useMemo(
     () =>
-      [...questions].sort((a, b) => a.orden - b.orden).map((question) => ({
+      questions.map((question) => ({
         id: question.id,
         label: `${question.field_key} · ${question.question_text}`,
       })),
@@ -98,6 +108,41 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
     setWeightsText(prettyJson(profile?.weights ?? {}));
     setThresholdsText(prettyJson(profile?.thresholds ?? {}));
     setConfidenceText(prettyJson(profile?.confidence_thresholds ?? {}));
+  };
+
+  const resetQuestionForm = () => {
+    setQuestionEditingId(null);
+    setQuestionField("");
+    setQuestionText("");
+    setQuestionOrder("100");
+    setQuestionRepreguntaMax("1");
+    setQuestionRequiredCaseA(false);
+    setQuestionActive(true);
+  };
+
+  const resetRepromptForm = () => {
+    setRepromptEditingId(null);
+    setRepromptQuestionId("");
+    setRepromptIntento("1");
+    setRepromptText("");
+    setRepromptActive(true);
+  };
+
+  const resetRuleForm = () => {
+    setRuleEditingId(null);
+    setRuleQuestionId("");
+    setRuleType("equals");
+    setRuleMatchValue("");
+    setRuleMinValue("");
+    setRuleMaxValue("");
+    setRuleScore("80");
+    setRulePriority("100");
+    setRuleActive(true);
+  };
+
+  const findQuestionLabel = (questionId: string): string => {
+    const option = questionOptions.find((item) => item.id === questionId);
+    return option ? option.label : questionId;
   };
 
   const setStatus = (message: string | null, error: string | null = null) => {
@@ -123,6 +168,9 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
           onClick={() => {
             setChannel("whatsapp");
             syncProfileEditors("whatsapp");
+            resetQuestionForm();
+            resetRepromptForm();
+            resetRuleForm();
             setStatus(null, null);
           }}
         >
@@ -180,6 +228,9 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
           onClick={() => {
             setChannel("webchat");
             syncProfileEditors("webchat");
+            resetQuestionForm();
+            resetRepromptForm();
+            resetRuleForm();
             setStatus(null, null);
           }}
         >
@@ -274,71 +325,97 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
             Requerida para Caso A
           </Label>
           <Label className="flex items-center gap-2 text-sm font-normal">
-            <Checkbox
-              checked={questionActive}
-              onCheckedChange={(value) => setQuestionActive(Boolean(value))}
-            />
+            <Checkbox checked={questionActive} onCheckedChange={(value) => setQuestionActive(Boolean(value))} />
             Activa
           </Label>
         </div>
-        <Button
-          type="button"
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              setStatus(null, null);
-              try {
-                const saved = await upsertScoringQuestion({
-                  canal: channel,
-                  field_key: questionField.trim(),
-                  question_text: questionText.trim(),
-                  orden: Number(questionOrder || "100"),
-                  repregunta_max: Number(questionRepreguntaMax || "1"),
-                  required_for_case_a: questionRequiredCaseA,
-                  activa: questionActive,
-                });
-                patchBundle({ questions: [...questions.filter((item) => item.id !== saved.id), saved] });
-                setQuestionField("");
-                setQuestionText("");
-                setQuestionRequiredCaseA(false);
-                setQuestionActive(true);
-                setStatus("Pregunta guardada.");
-              } catch (error) {
-                setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la pregunta.");
-              }
-            })
-          }
-        >
-          Agregar pregunta
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              startTransition(async () => {
+                setStatus(null, null);
+                try {
+                  const saved = await upsertScoringQuestion({
+                    id: questionEditingId ?? undefined,
+                    canal: channel,
+                    field_key: questionField.trim(),
+                    question_text: questionText.trim(),
+                    orden: Number(questionOrder || "100"),
+                    repregunta_max: Number(questionRepreguntaMax || "1"),
+                    required_for_case_a: questionRequiredCaseA,
+                    activa: questionActive,
+                  });
+                  patchBundle({ questions: [...questions.filter((item) => item.id !== saved.id), saved] });
+                  resetQuestionForm();
+                  setStatus(questionEditingId ? "Pregunta actualizada." : "Pregunta guardada.");
+                } catch (error) {
+                  setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la pregunta.");
+                }
+              })
+            }
+          >
+            {questionEditingId ? "Guardar cambios" : "Agregar pregunta"}
+          </Button>
+          {questionEditingId ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={resetQuestionForm}>
+              Cancelar
+            </Button>
+          ) : null}
+        </div>
         <div className="space-y-2">
           {questions.map((item) => (
             <div key={item.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
               <span>
-                <strong>{item.field_key}</strong> · {item.question_text} (orden {item.orden})
+                <strong>{item.field_key}</strong> · {item.question_text} (orden {item.orden}) · repregunta_max {" "}
+                {item.repregunta_max} · {item.required_for_case_a ? "Case A" : "Opcional"} · {item.activa ? "Activa" : "Inactiva"}
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      await deleteScoringQuestion(item.id);
-                      patchBundle({ questions: questions.filter((question) => question.id !== item.id) });
-                      setStatus("Pregunta eliminada.");
-                    } catch (error) {
-                      setStatus(
-                        null,
-                        error instanceof Error ? error.message : "No se pudo eliminar la pregunta.",
-                      );
-                    }
-                  })
-                }
-              >
-                Eliminar
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => {
+                    setQuestionEditingId(item.id);
+                    setQuestionField(item.field_key);
+                    setQuestionText(item.question_text);
+                    setQuestionOrder(String(item.orden));
+                    setQuestionRepreguntaMax(String(item.repregunta_max));
+                    setQuestionRequiredCaseA(Boolean(item.required_for_case_a));
+                    setQuestionActive(Boolean(item.activa));
+                    setStatus(null, null);
+                  }}
+                >
+                  Editar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      try {
+                        await deleteScoringQuestion(item.id);
+                        patchBundle({ questions: questions.filter((question) => question.id !== item.id) });
+                        setStatus("Pregunta eliminada.");
+                        if (questionEditingId === item.id) {
+                          resetQuestionForm();
+                        }
+                      } catch (error) {
+                        setStatus(
+                          null,
+                          error instanceof Error ? error.message : "No se pudo eliminar la pregunta.",
+                        );
+                      }
+                    })
+                  }
+                >
+                  Eliminar
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -370,65 +447,97 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
             onChange={(event) => setRepromptText(event.target.value)}
           />
         </div>
-        <Button
-          type="button"
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              setStatus(null, null);
-              try {
-                const saved = await upsertScoringReprompt({
-                  canal: channel,
-                  question_id: repromptQuestionId.trim(),
-                  intento: Number(repromptIntento || "1"),
-                  prompt_text: repromptText.trim(),
-                });
-                patchBundle({
-                  reprompts: [
-                    ...activeBundle.reprompts.filter((item) => item.id !== saved.id),
-                    saved,
-                  ],
-                });
-                setRepromptText("");
-                setStatus("Repregunta guardada.");
-              } catch (error) {
-                setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la repregunta.");
-              }
-            })
-          }
-        >
-          Agregar repregunta
-        </Button>
+        <Label className="flex items-center gap-2 text-sm font-normal">
+          <Checkbox checked={repromptActive} onCheckedChange={(value) => setRepromptActive(Boolean(value))} />
+          Activa
+        </Label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              startTransition(async () => {
+                setStatus(null, null);
+                try {
+                  const saved = await upsertScoringReprompt({
+                    id: repromptEditingId ?? undefined,
+                    canal: channel,
+                    question_id: repromptQuestionId.trim(),
+                    intento: Number(repromptIntento || "1"),
+                    prompt_text: repromptText.trim(),
+                    activa: repromptActive,
+                  });
+                  patchBundle({
+                    reprompts: [...activeBundle.reprompts.filter((item) => item.id !== saved.id), saved],
+                  });
+                  resetRepromptForm();
+                  setStatus(repromptEditingId ? "Repregunta actualizada." : "Repregunta guardada.");
+                } catch (error) {
+                  setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la repregunta.");
+                }
+              })
+            }
+          >
+            {repromptEditingId ? "Guardar cambios" : "Agregar repregunta"}
+          </Button>
+          {repromptEditingId ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={resetRepromptForm}>
+              Cancelar
+            </Button>
+          ) : null}
+        </div>
         <div className="space-y-2">
           {activeBundle.reprompts.map((item) => (
             <div key={item.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
               <span>
-                <strong>{item.question_id}</strong> · intento {item.intento} · {item.prompt_text}
+                <strong>{findQuestionLabel(item.question_id)}</strong> · intento {item.intento} · {item.prompt_text} · {" "}
+                {item.activa ? "Activa" : "Inactiva"}
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      await deleteScoringReprompt(item.id);
-                      patchBundle({
-                        reprompts: activeBundle.reprompts.filter((reprompt) => reprompt.id !== item.id),
-                      });
-                      setStatus("Repregunta eliminada.");
-                    } catch (error) {
-                      setStatus(
-                        null,
-                        error instanceof Error ? error.message : "No se pudo eliminar la repregunta.",
-                      );
-                    }
-                  })
-                }
-              >
-                Eliminar
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => {
+                    setRepromptEditingId(item.id);
+                    setRepromptQuestionId(item.question_id);
+                    setRepromptIntento(String(item.intento));
+                    setRepromptText(item.prompt_text);
+                    setRepromptActive(Boolean(item.activa));
+                    setStatus(null, null);
+                  }}
+                >
+                  Editar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      try {
+                        await deleteScoringReprompt(item.id);
+                        patchBundle({
+                          reprompts: activeBundle.reprompts.filter((reprompt) => reprompt.id !== item.id),
+                        });
+                        setStatus("Repregunta eliminada.");
+                        if (repromptEditingId === item.id) {
+                          resetRepromptForm();
+                        }
+                      } catch (error) {
+                        setStatus(
+                          null,
+                          error instanceof Error ? error.message : "No se pudo eliminar la repregunta.",
+                        );
+                      }
+                    })
+                  }
+                >
+                  Eliminar
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -436,7 +545,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
 
       <section className="space-y-3 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Reglas</h2>
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-7">
           <select
             className="h-10 rounded-md border bg-background px-3 text-sm"
             value={ruleQuestionId}
@@ -466,6 +575,16 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
             onChange={(event) => setRuleMatchValue(event.target.value)}
           />
           <Input
+            placeholder="min_value"
+            value={ruleMinValue}
+            onChange={(event) => setRuleMinValue(event.target.value)}
+          />
+          <Input
+            placeholder="max_value"
+            value={ruleMaxValue}
+            onChange={(event) => setRuleMaxValue(event.target.value)}
+          />
+          <Input
             placeholder="score"
             value={ruleScore}
             onChange={(event) => setRuleScore(event.target.value)}
@@ -476,57 +595,99 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
             onChange={(event) => setRulePriority(event.target.value)}
           />
         </div>
-        <Button
-          type="button"
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              setStatus(null, null);
-              try {
-                const saved = await upsertScoringRule({
-                  canal: channel,
-                  question_id: ruleQuestionId.trim(),
-                  rule_type: ruleType.trim() || "equals",
-                  match_value: ruleMatchValue.trim() || null,
-                  score: Number(ruleScore || "80"),
-                  priority: Number(rulePriority || "100"),
-                });
-                patchBundle({ rules: [...activeBundle.rules.filter((item) => item.id !== saved.id), saved] });
-                setStatus("Regla guardada.");
-              } catch (error) {
-                setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la regla.");
-              }
-            })
-          }
-        >
-          Agregar regla
-        </Button>
+        <Label className="flex items-center gap-2 text-sm font-normal">
+          <Checkbox checked={ruleActive} onCheckedChange={(value) => setRuleActive(Boolean(value))} />
+          Activa
+        </Label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() =>
+              startTransition(async () => {
+                setStatus(null, null);
+                try {
+                  const saved = await upsertScoringRule({
+                    id: ruleEditingId ?? undefined,
+                    canal: channel,
+                    question_id: ruleQuestionId.trim(),
+                    rule_type: ruleType.trim() || "equals",
+                    match_value: ruleMatchValue.trim() || null,
+                    min_value: ruleMinValue.trim() ? Number(ruleMinValue) : null,
+                    max_value: ruleMaxValue.trim() ? Number(ruleMaxValue) : null,
+                    score: Number(ruleScore || "80"),
+                    priority: Number(rulePriority || "100"),
+                    activa: ruleActive,
+                  });
+                  patchBundle({ rules: [...activeBundle.rules.filter((item) => item.id !== saved.id), saved] });
+                  resetRuleForm();
+                  setStatus(ruleEditingId ? "Regla actualizada." : "Regla guardada.");
+                } catch (error) {
+                  setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la regla.");
+                }
+              })
+            }
+          >
+            {ruleEditingId ? "Guardar cambios" : "Agregar regla"}
+          </Button>
+          {ruleEditingId ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={resetRuleForm}>
+              Cancelar
+            </Button>
+          ) : null}
+        </div>
         <div className="space-y-2">
           {activeBundle.rules.map((item) => (
             <div key={item.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
               <span>
-                <strong>{item.question_id}</strong> · {item.rule_type} · {item.match_value || "(sin match)"} ·
-                score {item.score}
+                <strong>{findQuestionLabel(item.question_id)}</strong> · {item.rule_type} · {item.match_value || "(sin match)"} ·
+                min {item.min_value ?? "-"} · max {item.max_value ?? "-"} · score {item.score} · priority {item.priority} · {" "}
+                {item.activa ? "Activa" : "Inactiva"}
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      await deleteScoringRule(item.id);
-                      patchBundle({ rules: activeBundle.rules.filter((rule) => rule.id !== item.id) });
-                      setStatus("Regla eliminada.");
-                    } catch (error) {
-                      setStatus(null, error instanceof Error ? error.message : "No se pudo eliminar la regla.");
-                    }
-                  })
-                }
-              >
-                Eliminar
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => {
+                    setRuleEditingId(item.id);
+                    setRuleQuestionId(item.question_id);
+                    setRuleType(item.rule_type);
+                    setRuleMatchValue(item.match_value ?? "");
+                    setRuleMinValue(item.min_value == null ? "" : String(item.min_value));
+                    setRuleMaxValue(item.max_value == null ? "" : String(item.max_value));
+                    setRuleScore(String(item.score));
+                    setRulePriority(String(item.priority));
+                    setRuleActive(Boolean(item.activa));
+                    setStatus(null, null);
+                  }}
+                >
+                  Editar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      try {
+                        await deleteScoringRule(item.id);
+                        patchBundle({ rules: activeBundle.rules.filter((rule) => rule.id !== item.id) });
+                        setStatus("Regla eliminada.");
+                        if (ruleEditingId === item.id) {
+                          resetRuleForm();
+                        }
+                      } catch (error) {
+                        setStatus(null, error instanceof Error ? error.message : "No se pudo eliminar la regla.");
+                      }
+                    })
+                  }
+                >
+                  Eliminar
+                </Button>
+              </div>
             </div>
           ))}
         </div>

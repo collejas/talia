@@ -3267,13 +3267,29 @@ class CRMRepository:
         return [row for row in data if isinstance(row, dict)]
 
     async def upsert_scoring_question(self, *, payload: dict[str, Any]) -> dict[str, Any]:
-        resp = await self._request_service_role(
-            "POST",
-            "/rest/v1/scoring_questions",
-            json=payload,
-            params={"on_conflict": "organizacion_id,canal,field_key"},
-            prefer="resolution=merge-duplicates,return=representation",
-        )
+        question_id = payload.get("id")
+        if question_id:
+            update_payload = dict(payload)
+            update_payload.pop("id", None)
+            organizacion_id = str(payload.get("organizacion_id") or "").strip()
+            params: dict[str, str] = {"id": f"eq.{question_id}"}
+            if organizacion_id:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
+            resp = await self._request_service_role(
+                "PATCH",
+                "/rest/v1/scoring_questions",
+                params=params,
+                json=update_payload,
+                prefer="return=representation",
+            )
+        else:
+            resp = await self._request_service_role(
+                "POST",
+                "/rest/v1/scoring_questions",
+                json=payload,
+                params={"on_conflict": "organizacion_id,canal,field_key"},
+                prefer="resolution=merge-duplicates,return=representation",
+            )
         data = resp.json()
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise CRMRepositoryError(

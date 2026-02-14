@@ -216,7 +216,8 @@ Pendiente (siguiente fase):
 3. [Check] KPI adicional por oportunidad unica (ultimo evento), en paralelo al KPI por eventos.
 4. [Check] Politica comercial A/B de notificacion a vendedor separada por canal.
 5. Contador de repreguntas y estado por pregunta persistido en scoring.
-6. [Partial] Configuracion de preguntas/pesos desde BD: estructura y API backend listas; falta integrar motor de scoring y vista frontend.
+6. [Check] Configuracion de preguntas/pesos desde BD: migracion + API backend + motor dinamico con fallback + vista frontend (`/settings/scoring`) operativos.
+7. [Check] Panel frontend con flujo CRUD completo (alta/edicion/eliminacion) para preguntas, repreguntas y reglas por canal.
 
 ## 13. Ejecucion inmediata (Sprint siguiente)
 ### 13.1 Ajuste por tenant (feature flag)

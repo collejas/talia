@@ -100,5 +100,6 @@ Impacto:
 Estado actual:
 - [Check] Estructura BD creada con migracion `20280416_120000_scoring_config_catalog.sql`.
 - [Check] CRUD backend disponible via `/crm/pipeline/scoring/config*`.
-- [Pending] Motor de scoring dinamico conectado a catalogo BD.
-- [Pending] Pantalla frontend de administracion del catalogo por tenant/canal.
+- [Check] Motor de scoring dinamico conectado a catalogo BD con fallback seguro a logica legacy.
+- [Check] Pantalla frontend de administracion del catalogo por tenant/canal en `/settings/scoring`.
+- [Check] Edicion inline en frontend para preguntas, repreguntas y reglas (sin necesidad de SQL manual).

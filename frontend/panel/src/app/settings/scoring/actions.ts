@@ -89,6 +89,7 @@ export async function upsertScoringProfile(input: {
 }
 
 export async function upsertScoringQuestion(input: {
+  id?: string;
   canal: ScoringChannel;
   field_key: string;
   question_text: string;
@@ -119,6 +120,7 @@ export async function deleteScoringQuestion(questionId: string): Promise<void> {
 }
 
 export async function upsertScoringReprompt(input: {
+  id?: string;
   question_id: string;
   canal: ScoringChannel;
   intento: number;
@@ -150,6 +152,7 @@ export async function deleteScoringReprompt(repromptId: string): Promise<void> {
 }
 
 export async function upsertScoringRule(input: {
+  id?: string;
   question_id: string;
   canal: ScoringChannel;
   rule_type: string;

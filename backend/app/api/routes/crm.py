@@ -5779,6 +5779,7 @@ class CRMScoringQuestion(BaseModel):
 
 
 class CRMScoringQuestionUpsert(BaseModel):
+    id: UUID | None = None
     canal: Literal["whatsapp", "webchat"]
     field_key: str = Field(..., min_length=1, max_length=120)
     question_text: str = Field(..., min_length=1, max_length=500)
@@ -12503,7 +12504,7 @@ async def upsert_pipeline_scoring_question(
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMScoringQuestionUpsert,
 ) -> CRMScoringQuestion:
-    body = payload.model_dump(mode="json")
+    body = payload.model_dump(mode="json", exclude_none=True)
     body["organizacion_id"] = str(organizacion_id)
     try:
         row = await repo.upsert_scoring_question(payload=body)
