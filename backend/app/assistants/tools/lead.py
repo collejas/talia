@@ -45,6 +45,39 @@ def _require_argument(arguments: dict[str, Any], key: str) -> str:
     return text
 
 
+def _optional_bool_argument(arguments: dict[str, Any], key: str) -> bool | None:
+    if key not in arguments:
+        return None
+    value = arguments.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "si", "sí"}:
+        return True
+    if text in {"0", "false", "no"}:
+        return False
+    return None
+
+
+def _optional_int_argument(arguments: dict[str, Any], key: str) -> int | None:
+    if key not in arguments:
+        return None
+    value = arguments.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return max(0, parsed)
+
+
 def _is_webchat_context(context: ToolRuntimeContext) -> bool:
     channel = (context.channel or "").strip().lower()
     return not channel or channel == "webchat"
@@ -198,18 +231,44 @@ async def try_execute_lead_tool(
                 if key in arguments
             }
             action_text = (siguiente_accion or "").lower()
-            requested = any(token in action_text for token in ("cita", "agendar", "demo", "visita"))
+            requested = any(
+                token in action_text for token in ("cita", "agendar", "demo", "visita")
+            )
+            appointment_requested = _optional_bool_argument(arguments, "appointment_requested")
+            accepted_questions = _optional_bool_argument(
+                arguments, "accepted_answering_questions"
+            )
+            evasive_count = _optional_int_argument(arguments, "evasive_answers_count")
+            response_time_bucket_raw = (
+                str(arguments.get("response_time_bucket") or "").strip().lower()
+            )
+            response_time_bucket = (
+                response_time_bucket_raw
+                if response_time_bucket_raw in {"fast", "medium", "slow"}
+                else None
+            )
+            scoring_events: dict[str, Any] = {
+                "channel": context.channel or "webchat",
+                "appointment_requested": (
+                    appointment_requested
+                    if appointment_requested is not None
+                    else requested
+                ),
+                "accepted_answering_questions": (
+                    accepted_questions if accepted_questions is not None else True
+                ),
+            }
+            if evasive_count is not None:
+                scoring_events["evasive_answers_count"] = evasive_count
+            if response_time_bucket is not None:
+                scoring_events["response_time_bucket"] = response_time_bucket
             try:
                 await storage.apply_lead_scoring(
                     conversation_id=context.conversation_id,
                     contact_id=context.contact_id,
                     opportunity_id=str(tarjeta_id),
                     answers=scoring_answers,
-                    events={
-                        "channel": context.channel or "webchat",
-                        "appointment_requested": requested,
-                        "accepted_answering_questions": True,
-                    },
+                    events=scoring_events,
                     source="close_lead",
                 )
             except StorageError as exc:

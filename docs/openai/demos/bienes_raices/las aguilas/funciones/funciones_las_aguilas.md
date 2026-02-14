@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead al final de la calificación. Se usa cuando ya tenemos nombre, correo, teléfono y empresa confirmados. También incluye el resumen de la necesidad para el equipo comercial.",
+  "description": "Cerrar y consolidar el lead. Se usa cuando ya tenemos los datos mínimos (nombre, correo, teléfono y empresa) y, si aplica, para registrar respuestas de precalificación cuando el prospecto quiere agendar cita.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -120,6 +120,71 @@
       "necesidad_proposito": {
         "type": "string",
         "description": "Intención principal del lead en una sola frase clara tipo titular. Ej: 'Automatizar gestión de incidencias y comunicación con residentes usando WhatsApp y panel centralizado.'"
+      },
+      "siguiente_accion": {
+        "type": "string",
+        "description": "Siguiente paso acordado con el prospecto. Ej: 'Quiere agendar cita presencial para conocer opciones este fin de semana'."
+      },
+      "financing_type": {
+        "type": "string",
+        "description": "Cómo planea comprar: contado, crédito, mixto o unknown/refused."
+      },
+      "credit_preapproved": {
+        "type": "string",
+        "description": "Estatus del crédito: preapproved, in_process, none, unknown o refused."
+      },
+      "budget_range": {
+        "type": "string",
+        "description": "Rango de presupuesto expresado por el prospecto (texto corto)."
+      },
+      "down_payment_ready": {
+        "type": "string",
+        "description": "Si tiene enganche listo: yes, partial, no, unknown o refused."
+      },
+      "purchase_timeline": {
+        "type": "string",
+        "description": "Horizonte de compra: immediate, short_term, medium_term, long_term, unknown o refused."
+      },
+      "hard_deadline": {
+        "type": "string",
+        "description": "Si existe fecha límite real para comprar/mudarse: yes, no, unknown o refused."
+      },
+      "requirements_defined": {
+        "type": "string",
+        "description": "Nivel de definición de lo que busca: clear, partial, exploring, unknown o refused."
+      },
+      "comparison_mode": {
+        "type": "string",
+        "description": "Si está comparando opciones activamente: active, light, none, unknown o refused."
+      },
+      "visited_properties": {
+        "type": "string",
+        "description": "Si ya visitó propiedades: yes, no, unknown o refused."
+      },
+      "decision_authority": {
+        "type": "string",
+        "description": "Autoridad de decisión: self, shared, advisor, unknown o refused."
+      },
+      "buyer_type": {
+        "type": "string",
+        "description": "Tipo de comprador: end_user, investor, company, unknown o refused."
+      },
+      "appointment_requested": {
+        "type": "boolean",
+        "description": "Marca true cuando el prospecto pidió/aceptó cita; false si no."
+      },
+      "accepted_answering_questions": {
+        "type": "boolean",
+        "description": "Marca si aceptó responder preguntas de precalificación antes de agendar."
+      },
+      "evasive_answers_count": {
+        "type": "integer",
+        "description": "Número de respuestas evasivas o negativas explícitas durante la precalificación.",
+        "minimum": 0
+      },
+      "response_time_bucket": {
+        "type": "string",
+        "description": "Velocidad de respuesta observada: fast, medium o slow."
       }
     },
     "required": [
@@ -462,4 +527,3 @@
     "additionalProperties": false
   }
 }
-

@@ -2900,17 +2900,72 @@ async def _execute_function_call(
             requested = any(
                 token in action_text for token in ("cita", "agendar", "demo", "visita")
             )
+            appointment_requested = arguments.get("appointment_requested")
+            if isinstance(appointment_requested, str):
+                lowered = appointment_requested.strip().lower()
+                if lowered in {"1", "true", "yes", "si", "sí"}:
+                    appointment_requested = True
+                elif lowered in {"0", "false", "no"}:
+                    appointment_requested = False
+                else:
+                    appointment_requested = None
+            elif isinstance(appointment_requested, (int, float)):
+                appointment_requested = bool(appointment_requested)
+            elif not isinstance(appointment_requested, bool):
+                appointment_requested = None
+
+            accepted_questions = arguments.get("accepted_answering_questions")
+            if isinstance(accepted_questions, str):
+                lowered = accepted_questions.strip().lower()
+                if lowered in {"1", "true", "yes", "si", "sí"}:
+                    accepted_questions = True
+                elif lowered in {"0", "false", "no"}:
+                    accepted_questions = False
+                else:
+                    accepted_questions = None
+            elif isinstance(accepted_questions, (int, float)):
+                accepted_questions = bool(accepted_questions)
+            elif not isinstance(accepted_questions, bool):
+                accepted_questions = None
+
+            evasive_count = arguments.get("evasive_answers_count")
+            try:
+                evasive_count = (
+                    max(0, int(str(evasive_count).strip()))
+                    if evasive_count is not None
+                    else None
+                )
+            except (TypeError, ValueError):
+                evasive_count = None
+
+            response_time_bucket_raw = str(arguments.get("response_time_bucket") or "").strip().lower()
+            response_time_bucket = (
+                response_time_bucket_raw
+                if response_time_bucket_raw in {"fast", "medium", "slow"}
+                else None
+            )
+            scoring_events: dict[str, Any] = {
+                "channel": "webchat",
+                "appointment_requested": (
+                    appointment_requested
+                    if appointment_requested is not None
+                    else requested
+                ),
+                "accepted_answering_questions": (
+                    accepted_questions if accepted_questions is not None else True
+                ),
+            }
+            if evasive_count is not None:
+                scoring_events["evasive_answers_count"] = evasive_count
+            if response_time_bucket is not None:
+                scoring_events["response_time_bucket"] = response_time_bucket
             try:
                 await storage.apply_lead_scoring(
                     conversation_id=context.conversation_id,
                     contact_id=context.contact_id,
                     opportunity_id=str(opportunity_id),
                     answers=scoring_answers,
-                    events={
-                        "channel": "webchat",
-                        "appointment_requested": requested,
-                        "accepted_answering_questions": True,
-                    },
+                    events=scoring_events,
                     source="close_lead",
                 )
             except StorageError as exc:
