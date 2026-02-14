@@ -122,6 +122,7 @@ const NAVIGATION: {
       children: [
         { title: "Formato de correos", url: "/settings/email", icon: IconMail, permission: "settings.manage" },
         { title: "Recordatorios de demos", url: "/settings/reminders", icon: IconBell, permission: "settings.manage" },
+        { title: "Scoring IA", url: "/settings/scoring", icon: IconListDetails, permission: "settings.manage" },
         {
           title: "Formato de cotización",
           url: "/settings/formato-cotizacion",

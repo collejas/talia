@@ -297,6 +297,20 @@ _CRITICAL_SCORING_FIELDS: tuple[str, ...] = (
     "decision_authority",
 )
 
+_FIELD_FACTOR_MAP: dict[str, str] = {
+    "financing_type": "capacidad_financiera",
+    "credit_preapproved": "capacidad_financiera",
+    "budget_range": "capacidad_financiera",
+    "down_payment_ready": "capacidad_financiera",
+    "purchase_timeline": "urgencia",
+    "hard_deadline": "urgencia",
+    "requirements_defined": "nivel_decision",
+    "comparison_mode": "nivel_decision",
+    "visited_properties": "nivel_decision",
+    "decision_authority": "autoridad",
+    "buyer_type": "autoridad",
+}
+
 _SCORING_FIELD_ALIASES: dict[str, dict[str, str]] = {
     "financing_type": {
         "credito": "credito",
@@ -381,6 +395,13 @@ def _as_ratio(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return max(0.0, min(number, 1.0))
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _normalize_answer_value(field: str, value: Any) -> Any:
@@ -532,6 +553,302 @@ def _compute_lead_scoring(
         },
         "missing_fields": missing_fields,
         "refused_fields": refused_fields,
+    }
+
+
+def _evaluate_interaction_score_from_events(events: dict[str, Any]) -> int:
+    interaction_values: list[int] = []
+    accepted_questions = _as_bool(events.get("accepted_answering_questions"))
+    if accepted_questions is not None:
+        interaction_values.append(100 if accepted_questions else 30)
+    ratio = _as_ratio(events.get("answered_fields_ratio"))
+    if ratio is not None:
+        interaction_values.append(int(round(ratio * 100)))
+    for event_key, positive_score, negative_score in (
+        ("appointment_requested", 80, 30),
+        ("appointment_scheduled", 100, 30),
+        ("appointment_confirmed", 100, 40),
+        ("appointment_attended", 100, 50),
+    ):
+        event_value = _as_bool(events.get(event_key))
+        if event_value is not None:
+            interaction_values.append(positive_score if event_value else negative_score)
+    evasive_count_raw = events.get("evasive_answers_count")
+    try:
+        evasive_count = max(0, int(evasive_count_raw))
+    except (TypeError, ValueError):
+        evasive_count = 0
+    interaction_values.append(max(20, 100 - min(evasive_count, 8) * 10))
+    interaction_values.append(_field_score("response_time_bucket", events.get("response_time_bucket")))
+    return _mean_score(interaction_values)
+
+
+def _coerce_profile_weights(
+    profile: dict[str, Any],
+    runtime_settings: tenant_runtime.LeadScoringRuntimeSettings,
+) -> dict[str, float]:
+    weights_raw = _ensure_dict(profile.get("weights"))
+    candidates = {
+        "capacidad_financiera": _as_float(
+            weights_raw.get("capacidad_financiera_weight")
+            if "capacidad_financiera_weight" in weights_raw
+            else weights_raw.get("capacidad_financiera")
+        ),
+        "urgencia": _as_float(
+            weights_raw.get("urgencia_weight")
+            if "urgencia_weight" in weights_raw
+            else weights_raw.get("urgencia")
+        ),
+        "nivel_decision": _as_float(
+            weights_raw.get("nivel_decision_weight")
+            if "nivel_decision_weight" in weights_raw
+            else weights_raw.get("nivel_decision")
+        ),
+        "autoridad": _as_float(
+            weights_raw.get("autoridad_weight")
+            if "autoridad_weight" in weights_raw
+            else weights_raw.get("autoridad")
+        ),
+        "interaccion_compromiso": _as_float(
+            weights_raw.get("interaccion_compromiso_weight")
+            if "interaccion_compromiso_weight" in weights_raw
+            else weights_raw.get("interaccion_compromiso")
+        ),
+    }
+    if all(value is not None for value in candidates.values()):
+        total = round(sum(float(value) for value in candidates.values()), 4)
+        if abs(total - 100.0) < 0.0001:
+            return {key: float(value) for key, value in candidates.items() if value is not None}
+    return {
+        "capacidad_financiera": runtime_settings.capacidad_financiera_weight,
+        "urgencia": runtime_settings.urgencia_weight,
+        "nivel_decision": runtime_settings.nivel_decision_weight,
+        "autoridad": runtime_settings.autoridad_weight,
+        "interaccion_compromiso": runtime_settings.interaccion_compromiso_weight,
+    }
+
+
+def _coerce_profile_thresholds(
+    profile: dict[str, Any],
+    runtime_settings: tenant_runtime.LeadScoringRuntimeSettings,
+) -> tuple[float, float, float]:
+    thresholds = _ensure_dict(profile.get("thresholds"))
+    explorando = _as_float(thresholds.get("explorando_max"))
+    interesado = _as_float(thresholds.get("interesado_max"))
+    listo = _as_float(thresholds.get("listo_min"))
+    if (
+        explorando is not None
+        and interesado is not None
+        and listo is not None
+        and 0.0 <= explorando <= interesado <= 100.0
+        and 0.0 <= listo <= 100.0
+        and listo >= interesado
+    ):
+        return explorando, interesado, listo
+    return (
+        runtime_settings.explorando_max,
+        runtime_settings.interesado_max,
+        runtime_settings.listo_min,
+    )
+
+
+def _coerce_profile_confidence_thresholds(
+    profile: dict[str, Any],
+    runtime_settings: tenant_runtime.LeadScoringRuntimeSettings,
+) -> tuple[float, float]:
+    confidence = _ensure_dict(profile.get("confidence_thresholds"))
+    high = _as_ratio(confidence.get("high_min"))
+    medium = _as_ratio(confidence.get("medium_min"))
+    if high is not None and medium is not None and 0.0 <= medium <= high <= 1.0:
+        return high, medium
+    return runtime_settings.confidence_high_min, runtime_settings.confidence_medium_min
+
+
+def _rule_matches_answer(rule: dict[str, Any], value: Any) -> bool:
+    rule_type = str(rule.get("rule_type") or "equals").strip().lower()
+    match_value = rule.get("match_value")
+
+    if rule_type == "any":
+        return True
+    if value is None:
+        return False
+
+    if rule_type == "range":
+        numeric = _as_float(value)
+        if numeric is None:
+            return False
+        min_value = _as_float(rule.get("min_value"))
+        max_value = _as_float(rule.get("max_value"))
+        if min_value is not None and numeric < min_value:
+            return False
+        if max_value is not None and numeric > max_value:
+            return False
+        return True
+
+    value_text = str(value).strip().lower()
+    if not value_text:
+        return False
+    match_text = str(match_value or "").strip().lower()
+    if rule_type == "contains":
+        return bool(match_text) and match_text in value_text
+    if rule_type == "in_set":
+        options = {item.strip().lower() for item in match_text.split(",") if item.strip()}
+        return value_text in options
+    return bool(match_text) and value_text == match_text
+
+
+def _score_answer_from_rules(
+    *,
+    field_key: str,
+    answer_value: Any,
+    question: dict[str, Any],
+    rules: list[dict[str, Any]],
+) -> int:
+    for rule in rules:
+        if _rule_matches_answer(rule, answer_value):
+            score = rule.get("score")
+            try:
+                return max(0, min(int(score), 100))
+            except (TypeError, ValueError):
+                continue
+    metadata = _ensure_dict(question.get("metadata"))
+    if isinstance(answer_value, str):
+        normalized = answer_value.strip().lower()
+        if normalized in {"unknown", "refused"}:
+            key = "unknown_score" if normalized == "unknown" else "refused_score"
+            fallback = _as_float(metadata.get(key))
+            if fallback is not None:
+                return max(0, min(int(round(fallback)), 100))
+    if answer_value in (None, ""):
+        missing_score = _as_float(metadata.get("missing_score"))
+        if missing_score is not None:
+            return max(0, min(int(round(missing_score)), 100))
+    return _field_score(field_key, answer_value)
+
+
+async def _compute_lead_scoring_from_catalog(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: Literal["whatsapp", "webchat"],
+    answers: dict[str, Any],
+    events: dict[str, Any],
+    runtime_settings: tenant_runtime.LeadScoringRuntimeSettings,
+) -> dict[str, Any] | None:
+    profiles = await repo.list_scoring_profiles(
+        organizacion_id=organizacion_id,
+        canal=channel,
+        only_active=True,
+    )
+    questions = await repo.list_scoring_questions(
+        organizacion_id=organizacion_id,
+        canal=channel,
+        include_inactive=False,
+    )
+    rules = await repo.list_scoring_rules(
+        organizacion_id=organizacion_id,
+        canal=channel,
+        include_inactive=False,
+    )
+    if not questions or not rules:
+        return None
+
+    profile = profiles[0] if profiles else {}
+    question_rules: dict[str, list[dict[str, Any]]] = {}
+    for row in rules:
+        question_id = str(row.get("question_id") or "").strip()
+        if not question_id:
+            continue
+        question_rules.setdefault(question_id, []).append(row)
+    for bucket in question_rules.values():
+        bucket.sort(
+            key=lambda item: (
+                int(item.get("priority") or 100),
+                str(item.get("id") or ""),
+            )
+        )
+
+    factor_scores: dict[str, list[int]] = {
+        "capacidad_financiera": [],
+        "urgencia": [],
+        "nivel_decision": [],
+        "autoridad": [],
+        "interaccion_compromiso": [],
+    }
+    for question in questions:
+        field_key = str(question.get("field_key") or "").strip()
+        question_id = str(question.get("id") or "").strip()
+        if not field_key or not question_id:
+            continue
+        metadata = _ensure_dict(question.get("metadata"))
+        factor_name = str(metadata.get("factor") or _FIELD_FACTOR_MAP.get(field_key) or "").strip()
+        if factor_name not in factor_scores:
+            continue
+        answer_value = answers.get(field_key)
+        score_value = _score_answer_from_rules(
+            field_key=field_key,
+            answer_value=answer_value,
+            question=question,
+            rules=question_rules.get(question_id, []),
+        )
+        factor_scores[factor_name].append(score_value)
+
+    factor_values = {
+        "capacidad_financiera": _mean_score(factor_scores["capacidad_financiera"]),
+        "urgencia": _mean_score(factor_scores["urgencia"]),
+        "nivel_decision": _mean_score(factor_scores["nivel_decision"]),
+        "autoridad": _mean_score(factor_scores["autoridad"]),
+        "interaccion_compromiso": _mean_score(factor_scores["interaccion_compromiso"]),
+    }
+    event_interaction = _evaluate_interaction_score_from_events(events)
+    factor_values["interaccion_compromiso"] = int(
+        round((factor_values["interaccion_compromiso"] + event_interaction) / 2)
+    )
+
+    weights = _coerce_profile_weights(profile, runtime_settings)
+    score_total = round(
+        factor_values["capacidad_financiera"] * (weights["capacidad_financiera"] / 100.0)
+        + factor_values["urgencia"] * (weights["urgencia"] / 100.0)
+        + factor_values["nivel_decision"] * (weights["nivel_decision"] / 100.0)
+        + factor_values["autoridad"] * (weights["autoridad"] / 100.0)
+        + factor_values["interaccion_compromiso"] * (weights["interaccion_compromiso"] / 100.0),
+        2,
+    )
+
+    explorando_max, interesado_max, _ = _coerce_profile_thresholds(profile, runtime_settings)
+    if score_total <= explorando_max:
+        grade = "explorando"
+    elif score_total <= interesado_max:
+        grade = "interesado"
+    else:
+        grade = "listo"
+
+    missing_fields: list[str] = []
+    refused_fields: list[str] = []
+    for field in _CRITICAL_SCORING_FIELDS:
+        value = answers.get(field)
+        if value in (None, "", "unknown"):
+            missing_fields.append(field)
+        if value == "refused":
+            refused_fields.append(field)
+    completed_critical = len([field for field in _CRITICAL_SCORING_FIELDS if field not in missing_fields])
+    completion_ratio = completed_critical / max(1, len(_CRITICAL_SCORING_FIELDS))
+    high_min, medium_min = _coerce_profile_confidence_thresholds(profile, runtime_settings)
+    if completion_ratio >= high_min:
+        confidence = "high"
+    elif completion_ratio >= medium_min:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    return {
+        "score_total": score_total,
+        "grade": grade,
+        "confidence": confidence,
+        "factors": factor_values,
+        "missing_fields": missing_fields,
+        "refused_fields": refused_fields,
+        "scoring_config_source": "catalog_db",
     }
 
 
@@ -1935,6 +2252,31 @@ async def apply_lead_scoring(
     merged_events.update(_ensure_dict(events))
 
     scoring = _compute_lead_scoring(normalized_answers, merged_events, scoring_runtime)
+    channel_value = str(merged_events.get("channel") or "").strip().lower()
+    if channel_value in {"whatsapp", "webchat"}:
+        try:
+            dynamic_scoring = await _compute_lead_scoring_from_catalog(
+                repo=repo,
+                organizacion_id=org_uuid,
+                channel=channel_value,
+                answers=normalized_answers,
+                events=merged_events,
+                runtime_settings=scoring_runtime,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "storage.lead_scoring.catalog_lookup_failed",
+                extra={
+                    "opportunity_id": str(opp_uuid),
+                    "conversation_id": conversation_id,
+                    "channel": channel_value,
+                    "error": str(exc),
+                },
+            )
+            dynamic_scoring = None
+        if dynamic_scoring:
+            scoring = dynamic_scoring
+
     now_iso = datetime.now(timezone.utc).isoformat()
     scoring_payload = {
         **scoring,
