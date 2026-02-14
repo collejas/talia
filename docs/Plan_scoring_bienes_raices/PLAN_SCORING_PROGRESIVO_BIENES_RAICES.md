@@ -262,5 +262,5 @@ Criterio de aceptacion:
 ## 15. Checklist de cierre de fase
 - [Check] Config por tenant disponible y validada en backend.
 - [Check] KPI dual (eventos vs oportunidad unica) visible en embudo.
-- [ ] E2E multi-canal en CI.
+- [Check] E2E multi-canal en CI (workflow GitHub Actions `backend_scoring_ci.yml`).
 - [Check] Documentacion de pesos/umbrales por tenant para operacion.
