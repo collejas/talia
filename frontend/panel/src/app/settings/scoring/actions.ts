@@ -180,3 +180,31 @@ export async function deleteScoringRule(ruleId: string): Promise<void> {
   }
   revalidatePath("/settings/scoring");
 }
+
+export type ScoringSeedResult = {
+  canal: ScoringChannel;
+  seeded: boolean;
+  profile_id: string | null;
+  questions_upserted: number;
+  reprompts_upserted: number;
+  rules_inserted: number;
+  message?: string | null;
+};
+
+export async function seedScoringDefaults(input: {
+  canal: ScoringChannel;
+  force?: boolean;
+}): Promise<ScoringSeedResult> {
+  const response = await callCrmApi<ScoringSeedResult>("/crm/pipeline/scoring/config/seed", {
+    method: "POST",
+    body: {
+      canal: input.canal,
+      force: Boolean(input.force),
+    },
+  });
+  if (!response.ok || !response.data) {
+    throw new Error(response.ok ? "No se pudo sembrar la configuración base." : response.error);
+  }
+  revalidatePath("/settings/scoring");
+  return response.data;
+}

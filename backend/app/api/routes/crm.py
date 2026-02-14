@@ -5856,6 +5856,21 @@ class CRMScoringConfigBundle(BaseModel):
     rules: list[CRMScoringRule] = Field(default_factory=list)
 
 
+class CRMScoringSeedRequest(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    force: bool = False
+
+
+class CRMScoringSeedResponse(BaseModel):
+    canal: Literal["whatsapp", "webchat"]
+    seeded: bool
+    profile_id: UUID | None = None
+    questions_upserted: int = 0
+    reprompts_upserted: int = 0
+    rules_inserted: int = 0
+    message: str | None = None
+
+
 class CRMPipelineCardResponse(BaseModel):
     stage: CRMPipelineBoardStage
     card: CRMPipelineBoardCard
@@ -12582,6 +12597,25 @@ async def delete_pipeline_scoring_rule(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/pipeline/scoring/config/seed", response_model=CRMScoringSeedResponse)
+async def seed_pipeline_scoring_config(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMScoringSeedRequest,
+) -> CRMScoringSeedResponse:
+    try:
+        return await _seed_scoring_defaults(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            canal=payload.canal,
+            force=payload.force,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.get("/analytics/catalog/ventas")
 async def analytics_catalog_sales(
     *,
@@ -15494,6 +15528,236 @@ def _build_scoring_config_bundle(
         questions=[CRMScoringQuestion.model_validate(row) for row in question_rows],
         reprompts=[CRMScoringQuestionReprompt.model_validate(row) for row in reprompt_rows],
         rules=[CRMScoringRule.model_validate(row) for row in rule_rows],
+    )
+
+
+def _default_scoring_question_specs(canal: Literal["whatsapp", "webchat"]) -> list[dict[str, Any]]:
+    _ = canal
+    return [
+        {
+            "field_key": "financing_type",
+            "question_text": "¿Comprarías de contado, crédito o mixto?",
+            "orden": 10,
+            "required_for_case_a": True,
+            "repregunta_max": 1,
+            "metadata": {"factor": "capacidad_financiera"},
+        },
+        {
+            "field_key": "budget_range",
+            "question_text": "¿Cuál es tu rango de presupuesto aproximado?",
+            "orden": 20,
+            "required_for_case_a": True,
+            "repregunta_max": 1,
+            "metadata": {"factor": "capacidad_financiera", "missing_score": 40, "unknown_score": 40, "refused_score": 20},
+        },
+        {
+            "field_key": "purchase_timeline",
+            "question_text": "¿En qué plazo planeas comprar?",
+            "orden": 30,
+            "required_for_case_a": True,
+            "repregunta_max": 1,
+            "metadata": {"factor": "urgencia"},
+        },
+        {
+            "field_key": "decision_authority",
+            "question_text": "¿Quién toma la decisión final de compra?",
+            "orden": 40,
+            "required_for_case_a": True,
+            "repregunta_max": 1,
+            "metadata": {"factor": "autoridad"},
+        },
+        {
+            "field_key": "credit_preapproved",
+            "question_text": "¿Ya tienes preaprobación de crédito?",
+            "orden": 50,
+            "required_for_case_a": False,
+            "repregunta_max": 1,
+            "metadata": {"factor": "capacidad_financiera"},
+        },
+        {
+            "field_key": "visited_properties",
+            "question_text": "¿Ya visitaste propiedades similares?",
+            "orden": 60,
+            "required_for_case_a": False,
+            "repregunta_max": 1,
+            "metadata": {"factor": "nivel_decision"},
+        },
+    ]
+
+
+def _default_scoring_rules_by_field() -> dict[str, list[dict[str, Any]]]:
+    return {
+        "financing_type": [
+            {"rule_type": "equals", "match_value": "contado", "score": 100, "priority": 10},
+            {"rule_type": "equals", "match_value": "mixto", "score": 90, "priority": 20},
+            {"rule_type": "equals", "match_value": "credito", "score": 80, "priority": 30},
+            {"rule_type": "equals", "match_value": "unknown", "score": 40, "priority": 40},
+            {"rule_type": "equals", "match_value": "refused", "score": 20, "priority": 50},
+        ],
+        "budget_range": [
+            {"rule_type": "equals", "match_value": "unknown", "score": 40, "priority": 10},
+            {"rule_type": "equals", "match_value": "refused", "score": 20, "priority": 20},
+            {"rule_type": "any", "match_value": None, "score": 100, "priority": 200},
+        ],
+        "purchase_timeline": [
+            {"rule_type": "equals", "match_value": "<3m", "score": 100, "priority": 10},
+            {"rule_type": "equals", "match_value": "3-6m", "score": 80, "priority": 20},
+            {"rule_type": "equals", "match_value": "6-12m", "score": 60, "priority": 30},
+            {"rule_type": "equals", "match_value": ">12m", "score": 30, "priority": 40},
+            {"rule_type": "equals", "match_value": "unknown", "score": 40, "priority": 50},
+            {"rule_type": "equals", "match_value": "refused", "score": 20, "priority": 60},
+        ],
+        "decision_authority": [
+            {"rule_type": "equals", "match_value": "full", "score": 100, "priority": 10},
+            {"rule_type": "equals", "match_value": "shared", "score": 75, "priority": 20},
+            {"rule_type": "equals", "match_value": "advisor", "score": 40, "priority": 30},
+            {"rule_type": "equals", "match_value": "unknown", "score": 40, "priority": 40},
+            {"rule_type": "equals", "match_value": "refused", "score": 20, "priority": 50},
+        ],
+        "credit_preapproved": [
+            {"rule_type": "equals", "match_value": "yes", "score": 100, "priority": 10},
+            {"rule_type": "equals", "match_value": "in_process", "score": 70, "priority": 20},
+            {"rule_type": "equals", "match_value": "no", "score": 30, "priority": 30},
+            {"rule_type": "equals", "match_value": "unknown", "score": 40, "priority": 40},
+            {"rule_type": "equals", "match_value": "refused", "score": 20, "priority": 50},
+        ],
+        "visited_properties": [
+            {"rule_type": "equals", "match_value": "yes", "score": 100, "priority": 10},
+            {"rule_type": "equals", "match_value": "no", "score": 50, "priority": 20},
+            {"rule_type": "equals", "match_value": "unknown", "score": 40, "priority": 30},
+            {"rule_type": "equals", "match_value": "refused", "score": 20, "priority": 40},
+        ],
+    }
+
+
+async def _seed_scoring_defaults(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    canal: Literal["whatsapp", "webchat"],
+    force: bool,
+) -> CRMScoringSeedResponse:
+    existing_questions = await repo.list_scoring_questions(
+        organizacion_id=organizacion_id,
+        canal=canal,
+        include_inactive=True,
+    )
+    if existing_questions and not force:
+        return CRMScoringSeedResponse(
+            canal=canal,
+            seeded=False,
+            message="Ya existe configuración para este canal. Usa force=true para volver a sembrar.",
+        )
+
+    profile = await repo.upsert_scoring_profile(
+        payload={
+            "organizacion_id": str(organizacion_id),
+            "canal": canal,
+            "nombre": "default",
+            "activo": True,
+            "weights": {
+                "capacidad_financiera": 30,
+                "urgencia": 20,
+                "nivel_decision": 20,
+                "autoridad": 15,
+                "interaccion_compromiso": 15,
+            },
+            "thresholds": {"explorando_max": 50, "interesado_max": 75, "listo_min": 76},
+            "confidence_thresholds": {"high_min": 0.8, "medium_min": 0.5},
+            "metadata": {"source": "seed_defaults_v1"},
+        }
+    )
+
+    question_specs = _default_scoring_question_specs(canal)
+    rules_by_field = _default_scoring_rules_by_field()
+    questions_upserted = 0
+    reprompts_upserted = 0
+    rules_inserted = 0
+
+    for spec in question_specs:
+        question_row = await repo.upsert_scoring_question(
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "canal": canal,
+                "field_key": spec["field_key"],
+                "question_text": spec["question_text"],
+                "question_type": "single_choice",
+                "orden": spec["orden"],
+                "activa": True,
+                "required_for_case_a": spec["required_for_case_a"],
+                "repregunta_max": spec["repregunta_max"],
+                "allow_unknown": True,
+                "allow_refused": True,
+                "metadata": spec.get("metadata") or {},
+            }
+        )
+        questions_upserted += 1
+
+        question_id = str(question_row.get("id") or "").strip()
+        if not question_id:
+            continue
+
+        await repo.upsert_scoring_question_reprompt(
+            payload={
+                "question_id": question_id,
+                "organizacion_id": str(organizacion_id),
+                "canal": canal,
+                "intento": 1,
+                "prompt_text": "¿Me ayudas con este dato para recomendarte mejor?",
+                "activa": True,
+                "metadata": {"source": "seed_defaults_v1"},
+            }
+        )
+        reprompts_upserted += 1
+
+        existing_rules = await repo.list_scoring_rules(
+            organizacion_id=organizacion_id,
+            canal=canal,
+            question_id=UUID(question_id),
+            include_inactive=True,
+        )
+        existing_rule_keys = {
+            (
+                str(row.get("rule_type") or "").strip().lower(),
+                str(row.get("match_value") or "").strip().lower(),
+                str(row.get("score") or ""),
+                str(row.get("priority") or ""),
+            )
+            for row in existing_rules
+        }
+        for rule in rules_by_field.get(spec["field_key"], []):
+            rule_key = (
+                str(rule.get("rule_type") or "").strip().lower(),
+                str(rule.get("match_value") or "").strip().lower(),
+                str(rule.get("score") or ""),
+                str(rule.get("priority") or ""),
+            )
+            if rule_key in existing_rule_keys:
+                continue
+            await repo.upsert_scoring_rule(
+                payload={
+                    "organizacion_id": str(organizacion_id),
+                    "question_id": question_id,
+                    "canal": canal,
+                    "rule_type": rule["rule_type"],
+                    "match_value": rule.get("match_value"),
+                    "score": rule["score"],
+                    "priority": rule.get("priority", 100),
+                    "activa": True,
+                    "metadata": {"source": "seed_defaults_v1"},
+                }
+            )
+            rules_inserted += 1
+
+    profile_id = profile.get("id")
+    return CRMScoringSeedResponse(
+        canal=canal,
+        seeded=True,
+        profile_id=UUID(str(profile_id)) if profile_id else None,
+        questions_upserted=questions_upserted,
+        reprompts_upserted=reprompts_upserted,
+        rules_inserted=rules_inserted,
+        message="Seed completado.",
     )
 
 

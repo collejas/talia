@@ -6,6 +6,8 @@ import {
   deleteScoringQuestion,
   deleteScoringReprompt,
   deleteScoringRule,
+  fetchScoringConfig,
+  seedScoringDefaults,
   type ScoringChannel,
   type ScoringConfigBundle,
   upsertScoringProfile,
@@ -14,6 +16,7 @@ import {
   upsertScoringRule,
 } from "@/app/settings/scoring/actions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,6 +70,8 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
   const [questionText, setQuestionText] = useState("");
   const [questionOrder, setQuestionOrder] = useState("100");
   const [questionRepreguntaMax, setQuestionRepreguntaMax] = useState("1");
+  const [questionRequiredCaseA, setQuestionRequiredCaseA] = useState(false);
+  const [questionActive, setQuestionActive] = useState(true);
 
   const [repromptQuestionId, setRepromptQuestionId] = useState("");
   const [repromptIntento, setRepromptIntento] = useState("1");
@@ -79,6 +84,14 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
   const [rulePriority, setRulePriority] = useState("100");
 
   const questions = useMemo(() => activeBundle.questions ?? [], [activeBundle.questions]);
+  const questionOptions = useMemo(
+    () =>
+      [...questions].sort((a, b) => a.orden - b.orden).map((question) => ({
+        id: question.id,
+        label: `${question.field_key} · ${question.question_text}`,
+      })),
+    [questions],
+  );
 
   const syncProfileEditors = (nextChannel: ScoringChannel) => {
     const profile = bundles[nextChannel]?.profiles?.[0];
@@ -114,6 +127,52 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
           }}
         >
           WhatsApp
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              setStatus(null, null);
+              try {
+                const result = await seedScoringDefaults({ canal: channel, force: false });
+                const fresh = await fetchScoringConfig(channel);
+                refreshBundle(fresh);
+                setStatus(
+                  result.message ||
+                    `Seed ${result.seeded ? "completado" : "omitido"} · preguntas ${result.questions_upserted} · reglas ${result.rules_inserted}.`,
+                );
+              } catch (error) {
+                setStatus(null, error instanceof Error ? error.message : "No se pudo ejecutar seed.");
+              }
+            })
+          }
+        >
+          Seed defaults
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              setStatus(null, null);
+              try {
+                const result = await seedScoringDefaults({ canal: channel, force: true });
+                const fresh = await fetchScoringConfig(channel);
+                refreshBundle(fresh);
+                setStatus(
+                  result.message ||
+                    `Seed forzado ${result.seeded ? "completado" : "omitido"} · preguntas ${result.questions_upserted} · reglas ${result.rules_inserted}.`,
+                );
+              } catch (error) {
+                setStatus(null, error instanceof Error ? error.message : "No se pudo ejecutar seed forzado.");
+              }
+            })
+          }
+        >
+          Seed force
         </Button>
         <Button
           type="button"
@@ -206,6 +265,22 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
             onChange={(event) => setQuestionRepreguntaMax(event.target.value)}
           />
         </div>
+        <div className="flex flex-wrap gap-4">
+          <Label className="flex items-center gap-2 text-sm font-normal">
+            <Checkbox
+              checked={questionRequiredCaseA}
+              onCheckedChange={(value) => setQuestionRequiredCaseA(Boolean(value))}
+            />
+            Requerida para Caso A
+          </Label>
+          <Label className="flex items-center gap-2 text-sm font-normal">
+            <Checkbox
+              checked={questionActive}
+              onCheckedChange={(value) => setQuestionActive(Boolean(value))}
+            />
+            Activa
+          </Label>
+        </div>
         <Button
           type="button"
           disabled={isPending}
@@ -219,10 +294,14 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
                   question_text: questionText.trim(),
                   orden: Number(questionOrder || "100"),
                   repregunta_max: Number(questionRepreguntaMax || "1"),
+                  required_for_case_a: questionRequiredCaseA,
+                  activa: questionActive,
                 });
                 patchBundle({ questions: [...questions.filter((item) => item.id !== saved.id), saved] });
                 setQuestionField("");
                 setQuestionText("");
+                setQuestionRequiredCaseA(false);
+                setQuestionActive(true);
                 setStatus("Pregunta guardada.");
               } catch (error) {
                 setStatus(null, error instanceof Error ? error.message : "No se pudo guardar la pregunta.");
@@ -268,11 +347,18 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
       <section className="space-y-3 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Repreguntas</h2>
         <div className="grid gap-2 md:grid-cols-3">
-          <Input
-            placeholder="question_id"
+          <select
+            className="h-10 rounded-md border bg-background px-3 text-sm"
             value={repromptQuestionId}
             onChange={(event) => setRepromptQuestionId(event.target.value)}
-          />
+          >
+            <option value="">Selecciona una pregunta</option>
+            {questionOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <Input
             placeholder="intento"
             value={repromptIntento}
@@ -351,16 +437,29 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
       <section className="space-y-3 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Reglas</h2>
         <div className="grid gap-2 md:grid-cols-5">
-          <Input
-            placeholder="question_id"
+          <select
+            className="h-10 rounded-md border bg-background px-3 text-sm"
             value={ruleQuestionId}
             onChange={(event) => setRuleQuestionId(event.target.value)}
-          />
-          <Input
-            placeholder="rule_type"
+          >
+            <option value="">Selecciona una pregunta</option>
+            {questionOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="h-10 rounded-md border bg-background px-3 text-sm"
             value={ruleType}
             onChange={(event) => setRuleType(event.target.value)}
-          />
+          >
+            <option value="equals">equals</option>
+            <option value="contains">contains</option>
+            <option value="in_set">in_set</option>
+            <option value="range">range</option>
+            <option value="any">any</option>
+          </select>
           <Input
             placeholder="match_value"
             value={ruleMatchValue}
