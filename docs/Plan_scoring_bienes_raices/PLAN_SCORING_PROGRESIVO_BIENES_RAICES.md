@@ -218,6 +218,7 @@ Pendiente (siguiente fase):
 5. [Check] Contador de repreguntas y estado por pregunta persistido en scoring (`lead_scoring.profiling_by_channel`), con captura por `close_lead` en WhatsApp/Webchat.
 6. [Check] Configuracion de preguntas/pesos desde BD: migracion + API backend + motor dinamico con fallback + vista frontend (`/settings/scoring`) operativos.
 7. [Check] Panel frontend con flujo CRUD completo (alta/edicion/eliminacion) para preguntas, repreguntas y reglas por canal.
+8. [Partial] Prompt/funciones OpenAI alineados desde backend con instruccion `developer` para contrato `close_lead` (estados + contadores); pendiente sincronizar definicion remota del prompt/tools en OpenAI para dejarlo permanente en consola.
 
 ## 13. Ejecucion inmediata (Sprint siguiente)
 ### 13.1 Ajuste por tenant (feature flag)

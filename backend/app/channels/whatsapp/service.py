@@ -727,9 +727,27 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    initial_input.insert(
+        1,
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Contrato operativo para close_lead: cuando captures perfilamiento, incluye "
+                        "profiling_statuses y profiling_reprompt_counts por campo. "
+                        "profiling_statuses debe usar solo: answered, unknown, refused, skipped_max_retries. "
+                        "Si un campo no se obtuvo tras la repregunta máxima, marca skipped_max_retries y continua. "
+                        "No forces al usuario con repreguntas adicionales."
+                    ),
+                }
+            ],
+        },
+    )
     if booking_context:
         initial_input.insert(
-            1,
+            2,
             {
                 "role": "developer",
                 "content": [

@@ -2693,6 +2693,23 @@ async def _run_assistant_turn(
             ],
         }
     )
+    base_input.append(
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Contrato operativo para close_lead: cuando captures perfilamiento, incluye "
+                        "profiling_statuses y profiling_reprompt_counts por campo. "
+                        "profiling_statuses debe usar solo: answered, unknown, refused, skipped_max_retries. "
+                        "Si un campo no se obtiene tras la repregunta máxima, marca skipped_max_retries y continua. "
+                        "No fuerces repreguntas adicionales."
+                    ),
+                }
+            ],
+        }
+    )
     if not has_attachments:
         base_input.append(
             {
