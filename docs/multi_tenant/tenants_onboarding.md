@@ -61,9 +61,13 @@ Con esto evitas `.env` gigantes y puedes agregar tenants desde UI.
 
 ### Próximo paso: endpoints de configuración por tenant
 
-Para poder reemplazar `.env` por BD, se agregan endpoints *platform-admin-only*:
+Para poder reemplazar `.env` por BD, se agregan endpoints:
 - `GET/PUT /api/admin/tenants/{org}/config` (lee/escribe `organizaciones.config`)
 - `GET/POST/DELETE /api/admin/tenants/{org}/secrets` (lee lista de claves / crea o rota secretos)
+
+Acceso (decisión 2026-02-15)
+- `super_admin` (plataforma): puede operar cualquier tenant (cross-tenant).
+- `owner` (tenant): puede operar *solo su propio tenant* (misma `organizacion_id`), incluyendo rutas y secretos.
 
 Luego el runtime migra a leer “settings por org” desde BD.
 
@@ -95,6 +99,10 @@ insert into public.platform_admins (user_id)
 values ('<TU_AUTH_USER_ID_UUID>')
 on conflict (user_id) do nothing;
 ```
+
+Estado actual (GeoActiv / TalIA)
+- El usuario de plataforma ya registrado como `platform_admins` es:
+  - `b6cc6385-3741-4742-ae83-bcb0d99bc5c5` (`administracion@geoactiv.mx`, Jorge Torre Collejas)
 
 3. Entra al panel y abre `/settings/tenants`.
 

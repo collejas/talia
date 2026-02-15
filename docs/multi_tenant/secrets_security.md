@@ -62,7 +62,8 @@ No es seguro si:
 
 ### Nivel B (seguridad extendida)
 - Cifra con `TALIA_SECRETS_MASTER_KEY_HIGH` (segunda master key).
-- Solo platform admin puede rotarlos.
+- Acceso recomendado: solo platform admin (super_admin).
+- Decisión actual (2026-02-15): el rol tenant `owner` puede rotar secretos de su propio tenant (incluyendo nivel B).
 - Para: `twilio.auth_token`, `openai.api_key` (si es por tenant), `mail.password`, `meta.messenger.app_secret`, etc.
 
 ## Reglas de implementación (mínimas)

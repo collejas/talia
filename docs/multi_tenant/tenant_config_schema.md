@@ -46,7 +46,8 @@ Definición práctica (para implementar ya):
 
 ### Nivel B (seguridad extendida)
 - Cifrado con `TALIA_SECRETS_MASTER_KEY_HIGH` (segundo master key global).
-- Acceso: solo platform admin.
+- Acceso recomendado: solo platform admin.
+- Decisión actual (2026-02-15): el rol tenant `owner` puede rotar secretos de su propio tenant (incluyendo nivel B).
 - Recomendado para: credenciales de correo, tokens con permisos amplios, llaves de OpenAI si las vas a separar por cliente, etc.
 
 Nota: esto da separación criptográfica (si se filtra una master key, no se filtra todo).

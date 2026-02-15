@@ -4,13 +4,17 @@ Objetivo: que un **platform admin** pueda crear/editar/eliminar tenants y config
 
 ## Checklist
 
-- [ ] Confirmar roles: `platform_admin` vs `tenant_admin` (por ahora solo platform admin)
+- [ ] Confirmar roles: `platform_admin` (cross-tenant) vs `owner` (solo su tenant)
 - [ ] Definir tabs y campos de la UI (General/Routing/Config/Secretos/Validación)
 - [ ] Conectar UI → endpoints `/api/admin/*`
 - [ ] Implementar “no mostrar secretos” (solo set/rotate)
 - [ ] Agregar validaciones por campo (regex + required)
 - [ ] Agregar botón “Probar configuración” por canal
 - [ ] Registrar auditoría (quién cambió qué)
+
+Decisión tomada (2026-02-15)
+- El rol tenant `owner` puede editar `organizaciones.config`, `organizacion_rutas_canal` y `secretos` de su propio tenant.
+- `super_admin` (plataforma) mantiene acceso cross-tenant a las mismas operaciones.
 
 ## Observaciones
 
@@ -93,7 +97,11 @@ Tab **Validación**
 
 ## 2) Contratos API (backend)
 
-Base: `/api/admin` (platform-admin-only)
+Base: `/api/admin`
+
+Acceso (decisión 2026-02-15)
+- `super_admin` (plataforma): puede operar cualquier tenant (cross-tenant).
+- `owner` (tenant): puede operar *solo su propio tenant* (misma `organizacion_id`), incluyendo rutas y secretos.
 
 - [ ] `GET /tenants` (lista)
 - [ ] `POST /tenants` (crear)
