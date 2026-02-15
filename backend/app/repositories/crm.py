@@ -4069,6 +4069,7 @@ class CRMRepository:
         limit: int = 500,
         created_from: datetime | None = None,
         tablero_id: UUID | None = None,
+        asignado_id: UUID | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Listar oportunidades de pipeline con filtros opcionales y conteo total."""
 
@@ -4088,6 +4089,8 @@ class CRMRepository:
                 f"etapa.metadata->>tablero_id.eq.{tablero_filter})"
             )
             params["order"] = "etapa.orden.asc,creado_en.desc"
+        if asignado_id:
+            params["asignado_a_usuario_id"] = f"eq.{asignado_id}"
         resp = await self._request(
             "GET",
             "/rest/v1/oportunidades",
@@ -4101,6 +4104,65 @@ class CRMRepository:
             )
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
         return data, total
+
+    async def list_supervised_sales_reps(
+        self,
+        *,
+        organizacion_id: UUID,
+        supervisor_id: UUID,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "supervisor_id": f"eq.{supervisor_id}",
+            "select": "empleado_id",
+            "limit": str(limit),
+        }
+        resp = await self._request("GET", "/rest/v1/empleados_supervisores", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar supervisados: {data!r}"
+            )
+        empleado_ids: list[str] = []
+        for row in data:
+            if isinstance(row, dict):
+                empleado_id = row.get("empleado_id")
+                if isinstance(empleado_id, str) and empleado_id.strip():
+                    empleado_ids.append(empleado_id.strip())
+        if not empleado_ids:
+            return []
+        id_list = ",".join(empleado_ids)
+        empleados_params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "usuario_id": f"in.({id_list})",
+            "es_vendedor": "is.true",
+            "select": "usuario:usuarios!empleados_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
+            "limit": str(limit),
+        }
+        empleados_resp = await self._request("GET", "/rest/v1/empleados", params=empleados_params)
+        empleados_data = empleados_resp.json() or []
+        if not isinstance(empleados_data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar empleados supervisados: {empleados_data!r}"
+            )
+        results: list[dict[str, Any]] = []
+        for item in empleados_data:
+            if not isinstance(item, dict):
+                continue
+            usuario = item.get("usuario")
+            if isinstance(usuario, dict):
+                user_id = usuario.get("id")
+                if not isinstance(user_id, str):
+                    continue
+                entry: dict[str, Any] = {
+                    "id": user_id,
+                    "nombre_completo": usuario.get("nombre_completo"),
+                    "correo": usuario.get("correo"),
+                    "telefono_e164": usuario.get("telefono_e164"),
+                }
+                results.append(entry)
+        return results
 
     async def search_contacts(
         self,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
-import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
+import type { EmbudoCard, EmbudoData, EmbudoScoringKpis, EmbudoStage } from "@/lib/embudo/data";
 import { EmbudoStageColumn } from "@/components/embudo/stage-column";
 import { EmbudoCardItem } from "@/components/embudo/card-item";
 import {
@@ -35,16 +35,29 @@ import {
   type StagePrepState,
 } from "@/components/embudo/lead-drawer";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from "@/lib/datetime";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { ScoringKpisOverview } from "@/components/embudo/scoring-kpis";
+import { SessionRecovery } from "@/components/session-recovery";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
+import { usePermissions } from "@/hooks/use-permissions";
 
-type EmbudoBoardClientProps = {
+export type EmbudoBoardClientProps = {
   etapas: EmbudoStage[];
   sinConversacion: EmbudoCard[];
   visitantesSinChat: number;
+  scoringKpis: EmbudoScoringKpis | null;
+  errors: string[];
 };
 
 type StageCardPair = {
@@ -56,6 +69,11 @@ type ScheduleContext = {
   card: EmbudoCard;
   originStage: EmbudoStage;
   destinationStage: EmbudoStage;
+};
+
+type SalesRepOption = {
+  id: string;
+  label: string;
 };
 
 const PRECALIFICADO_STAGE_CODE = "precalificado";
@@ -100,16 +118,26 @@ export function EmbudoBoardClient({
   etapas,
   sinConversacion,
   visitantesSinChat,
+  scoringKpis,
+  errors,
 }: EmbudoBoardClientProps) {
+  const [boardState, setBoardState] = useState<EmbudoData>({
+    stages: etapas,
+    sinConversacion,
+    visitantesSinChat,
+    scoringKpis,
+    errors: errors ?? [],
+  });
+
   const initialStages = useMemo(
     () =>
       sortStages(
-        etapas.map((stage) => ({
+        boardState.stages.map((stage) => ({
           ...stage,
           tarjetas: sortCards(stage.tarjetas ?? []),
         })),
       ),
-    [etapas],
+    [boardState.stages],
   );
 
   const [stages, setStages] = useState<EmbudoStage[]>(initialStages);
@@ -129,6 +157,19 @@ export function EmbudoBoardClient({
   const [schedulePending, setSchedulePending] = useState(false);
   const [scheduleFormat, setScheduleFormat] = useState("");
   const [scheduleLink, setScheduleLink] = useState("");
+
+  const { context: permissionContext, loading: permissionsLoading } = usePermissions();
+  const isVendedorRole = permissionContext.roles
+    .map((role) => (role ?? "").toString().trim().toLowerCase())
+    .some((value) => value === "vendedor" || value.includes("vendedor"));
+  const showVendorFilter = !permissionsLoading && !isVendedorRole;
+  const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [vendorError, setVendorError] = useState<string | null>(null);
+  const [selectedVendedorId, setSelectedVendedorId] = useState("");
+  const [boardLoading, setBoardLoading] = useState(false);
+  const [boardFetchError, setBoardFetchError] = useState<string | null>(null);
+  const hasMountedRef = useRef(false);
 
   const scheduleMinValue = useMemo(() => toDateTimeLocalInput(new Date().toISOString()), []);
 
@@ -165,9 +206,85 @@ export function EmbudoBoardClient({
 
   const visitantesDisplay = useMemo(() => {
     const formatter = new Intl.NumberFormat("es-MX");
-    const safeValue = Number.isFinite(visitantesSinChat) ? Math.max(visitantesSinChat, 0) : 0;
+    const safeValue = Number.isFinite(boardState.visitantesSinChat)
+      ? Math.max(boardState.visitantesSinChat, 0)
+      : 0;
     return formatter.format(safeValue);
-  }, [visitantesSinChat]);
+  }, [boardState.visitantesSinChat]);
+
+  const fetchBoardData = useCallback(async (asignadoId?: string | null) => {
+    setBoardLoading(true);
+    setBoardFetchError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "400");
+      if (asignadoId) {
+        params.set("asignado_id", asignadoId);
+      }
+      const response = await fetch(`/api/embudo/board?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) {
+        const message = await response.text().catch(() => `Error ${response.status}`);
+        throw new Error(message || `Error ${response.status}`);
+      }
+      const data: EmbudoData = await response.json();
+      setBoardState({
+        ...data,
+        errors: Array.isArray(data.errors) ? data.errors : [],
+      });
+    } catch (error) {
+      setBoardFetchError(
+        error instanceof Error ? error.message : "No se pudo actualizar el embudo.",
+      );
+    } finally {
+      setBoardLoading(false);
+    }
+  }, []);
+
+  const fetchSupervisedVendors = useCallback(async () => {
+    if (!showVendorFilter) return;
+    setVendorLoading(true);
+    setVendorError(null);
+    try {
+      const response = await fetch("/api/embudo/supervised?limit=200", { cache: "no-store" });
+      if (!response.ok) {
+        const message = await response.text().catch(() => `Error ${response.status}`);
+        throw new Error(message || `Error ${response.status}`);
+      }
+      const payload = await response.json().catch(() => ({}));
+      const vendedores = Array.isArray(payload?.vendedores) ? payload.vendedores : [];
+      const vendorCandidates: Array<SalesRepOption | null> = vendedores.map(
+        (user: { id?: string; nombre_completo?: string; correo?: string }) => {
+          if (!user.id) return null;
+          const label =
+            user.nombre_completo?.trim() || user.correo?.trim() || "Sin vendedor asignado";
+          return { id: user.id, label };
+        },
+      );
+      setVendorOptions(
+        vendorCandidates.filter((entry): entry is SalesRepOption => entry != null),
+      );
+    } catch (error) {
+      setVendorError(
+        error instanceof Error ? error.message : "No se pudo cargar los vendedores supervisados.",
+      );
+    } finally {
+      setVendorLoading(false);
+    }
+  }, [showVendorFilter]);
+
+  useEffect(() => {
+    if (showVendorFilter && !vendorOptions.length) {
+      void fetchSupervisedVendors();
+    }
+  }, [showVendorFilter, vendorOptions.length, fetchSupervisedVendors]);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    void fetchBoardData(selectedVendedorId || undefined);
+  }, [selectedVendedorId, fetchBoardData]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -771,11 +888,71 @@ export function EmbudoBoardClient({
 
   const hasContent =
     stages.some((stage) => stage.tarjetas.length > 0) ||
-    sinConversacion.length > 0 ||
-    visitantesSinChat > 0;
+    boardState.sinConversacion.length > 0 ||
+    boardState.visitantesSinChat > 0;
+
+  const sanitizedBoardErrors = (boardState.errors ?? []).map(sanitizeBoardMessage).filter(Boolean);
+  const errorMessages = boardFetchError ? [boardFetchError] : sanitizedBoardErrors;
 
   return (
     <>
+      <SessionRecovery errors={boardState.errors} />
+      {errorMessages.length ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <p className="font-medium">Se detectaron errores al cargar el embudo:</p>
+          <ul className="list-disc pl-5">
+            {errorMessages.map((message, index) => (
+              <li key={index}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="space-y-4">
+        {boardState.scoringKpis ? <ScoringKpisOverview kpis={boardState.scoringKpis} /> : null}
+        {showVendorFilter ? (
+          <div className="rounded-lg border border-border/60 bg-background/50 p-4 text-sm text-foreground">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-[220px] flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Vendedor
+                </p>
+                <Select value={selectedVendedorId} onValueChange={(value) => setSelectedVendedorId(value)}>
+                  <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="Todos los vendedores" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                    {vendorOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedVendedorId("")}
+                disabled={!selectedVendedorId}
+              >
+                Limpiar filtro
+              </Button>
+              {boardLoading ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-muted-foreground/60 px-3 py-1 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Actualizando
+                </span>
+              ) : null}
+            </div>
+            {vendorLoading ? (
+              <p className="mt-2 text-xs text-muted-foreground">Cargando vendedores supervisados…</p>
+            ) : null}
+            {vendorError ? (
+              <p className="mt-2 text-xs text-destructive">{vendorError}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -1002,6 +1179,21 @@ function matchesStageCode(value: string, expected: string): boolean {
   const normalized = value.toLowerCase();
   const target = expected.toLowerCase();
   return normalized === target || normalized.endsWith(`_${target}`);
+}
+
+function sanitizeBoardMessage(message: string | null | undefined) {
+  const trimmed = typeof message === "string" ? message.trim() : "";
+  if (!trimmed) return "";
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
+    return "El endpoint devolvió HTML en lugar de JSON (verifica la ruta o el proxy).";
+  }
+  if (/jwt\s+expired/i.test(trimmed)) {
+    return "Tu sesión en Supabase caducó; estamos renovando el token automáticamente.";
+  }
+  if (/invalid\s+jwt/i.test(trimmed)) {
+    return "El token de autenticación es inválido. Vuelve a iniciar sesión.";
+  }
+  return trimmed;
 }
 
 function resolveStagePrepEntry(stagePrep: StagePrepMetadata, ...codes: Array<string | null | undefined>): StagePrepEntry | null {

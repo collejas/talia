@@ -6094,6 +6094,28 @@ async def list_opportunities(
     return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset)
 
 
+@router.get("/usuarios/supervisados", response_model=list[CRMUserSummary])
+async def list_supervised_users(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMUserSummary]:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="usuario_id_required")
+    try:
+        rows = await repo.list_supervised_sales_reps(
+            organizacion_id=organizacion_id,
+            supervisor_id=usuario_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [CRMUserSummary.model_validate(row) for row in rows]
+
+
 @router.get("/oportunidades/ventas/lista", response_model=list[CRMSaleReadyOpportunity])
 async def list_sale_ready_opportunities(
     *,
@@ -12369,6 +12391,7 @@ async def pipeline_board(
     user_token: str = Depends(require_user_token),
     limit: Annotated[int, Query(ge=50, le=1000)] = 400,
     tablero_id: UUID | None = Query(default=None),
+    asignado_id: UUID | None = Query(default=None),
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
     try:
@@ -12382,6 +12405,7 @@ async def pipeline_board(
             organizacion_id=organizacion_id,
             limit=limit,
             tablero_id=tablero_id,
+            asignado_id=asignado_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

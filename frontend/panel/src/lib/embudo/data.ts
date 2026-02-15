@@ -3,6 +3,11 @@
 import { callCrmApi } from "@/lib/api/crm";
 import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 
+export type LoadEmbudoOptions = {
+  limit?: number;
+  asignadoId?: string | null;
+};
+
 const DEFAULT_LIMIT = 200;
 
 export type EmbudoStage = {
@@ -153,11 +158,13 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
   return value === true || value === "true";
 }
 
-export async function loadEmbudoData(): Promise<EmbudoData> {
+export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<EmbudoData> {
+  const limit = options.limit ?? DEFAULT_LIMIT;
   const [boardResponse, scoringResponse] = await Promise.all([
     callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
       searchParams: {
-        limit: String(DEFAULT_LIMIT),
+        limit: String(limit),
+        ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
       },
       withUserToken: true,
     }),

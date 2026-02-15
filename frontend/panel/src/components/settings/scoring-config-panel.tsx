@@ -51,8 +51,18 @@ const FIELD_KEY_PRESETS = [
   { key: "buyer_type", label: "Tipo de comprador (individual/empresa/inversionista)" },
 ] as const;
 
+type FieldKey = (typeof FIELD_KEY_PRESETS)[number]["key"];
+const FIELD_KEY_LABEL_BY_KEY = new Map<FieldKey, string>(
+  FIELD_KEY_PRESETS.map((item) => [item.key, item.label]),
+);
+
+function resolveFieldLabel(fieldKey: string | null | undefined) {
+  if (!fieldKey) return undefined;
+  const normalized = fieldKey.trim() as FieldKey;
+  return FIELD_KEY_LABEL_BY_KEY.get(normalized);
+}
+
 const CUSTOM_FIELD_KEY = "__custom__";
-const FIELD_KEY_LABEL_BY_KEY = new Map(FIELD_KEY_PRESETS.map((item) => [item.key, item.label]));
 
 type WeightKey = (typeof WEIGHT_KEYS)[number];
 
@@ -185,7 +195,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
     () =>
       questions.map((question) => ({
         id: question.id,
-        label: `${FIELD_KEY_LABEL_BY_KEY.get(question.field_key) ?? "Dato personalizado"} · ${question.question_text}`,
+        label: `${resolveFieldLabel(question.field_key) ?? "Dato personalizado"} · ${question.question_text}`,
       })),
     [questions],
   );
@@ -198,10 +208,10 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
           .filter(Boolean),
       ),
     );
-    return uniqByChannel.map((fieldKey) => ({
-      value: fieldKey,
-      label: FIELD_KEY_LABEL_BY_KEY.get(fieldKey) ?? "Dato personalizado (existente)",
-    }));
+      return uniqByChannel.map((fieldKey) => ({
+        value: fieldKey,
+        label: resolveFieldLabel(fieldKey) ?? "Dato personalizado (existente)",
+      }));
   }, [questions]);
 
   const syncProfileEditors = (nextChannel: ScoringChannel) => {
@@ -249,7 +259,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
   };
 
   const findFieldKeyLabel = (fieldKey: string): string => {
-    return FIELD_KEY_LABEL_BY_KEY.get(fieldKey) ?? fieldKey;
+    return resolveFieldLabel(fieldKey) ?? fieldKey;
   };
 
   const setStatus = (message: string | null, error: string | null = null) => {
