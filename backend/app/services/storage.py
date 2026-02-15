@@ -2361,12 +2361,48 @@ async def apply_lead_scoring(
     channel_value = str(merged_events.get("channel") or "").strip().lower()
     channel_key = channel_value if channel_value in {"whatsapp", "webchat"} else "unknown"
 
+    allowed_catalog_fields: set[str] | None = None
+    if channel_value in {"whatsapp", "webchat"}:
+        try:
+            catalog_questions = await repo.list_scoring_questions(
+                organizacion_id=org_uuid,
+                canal=channel_value,
+                include_inactive=False,
+            )
+        except CRMRepositoryError:
+            catalog_questions = []
+        extracted_fields = {
+            str(row.get("field_key") or "").strip()
+            for row in catalog_questions
+            if str(row.get("field_key") or "").strip()
+        }
+        if extracted_fields:
+            allowed_catalog_fields = extracted_fields
+            normalized_answers = {
+                key: value
+                for key, value in normalized_answers.items()
+                if key in allowed_catalog_fields
+            }
+
     previous_profiling_by_channel = _ensure_dict(previous_scoring.get("profiling_by_channel"))
     previous_channel_payload = _ensure_dict(previous_profiling_by_channel.get(channel_key))
     previous_channel_questions = _ensure_dict(previous_channel_payload.get("questions"))
+    if allowed_catalog_fields is not None:
+        previous_channel_questions = {
+            key: value
+            for key, value in previous_channel_questions.items()
+            if str(key).strip() in allowed_catalog_fields
+        }
 
     merged_statuses = _extract_profiling_statuses(profiling_statuses)
     merged_counts = _extract_reprompt_counts(profiling_reprompt_counts)
+    if allowed_catalog_fields is not None:
+        merged_statuses = {
+            key: value for key, value in merged_statuses.items() if key in allowed_catalog_fields
+        }
+        merged_counts = {
+            key: value for key, value in merged_counts.items() if key in allowed_catalog_fields
+        }
 
     all_question_keys = set(previous_channel_questions.keys())
     all_question_keys.update(str(key).strip() for key in normalized_answers.keys())

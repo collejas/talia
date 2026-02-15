@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -17,6 +17,13 @@ from app.services import storage, tenant_runtime
 from app.services.storage import StorageError
 
 logger = get_logger("app.channels.webchat.notify_sales")
+
+_DEFAULT_REQUIRED_CASE_A_FIELDS: tuple[str, ...] = (
+    "financing_type",
+    "budget_range",
+    "purchase_timeline",
+    "decision_authority",
+)
 
 
 def _ensure_dict(value: Any) -> dict[str, Any]:
@@ -54,6 +61,77 @@ def _extract_scoring_answers(
     return _ensure_dict(contact_scoring.get("answers"))
 
 
+def _extract_profiling_questions(
+    *,
+    opportunity_metadata: Mapping[str, Any],
+    channel: str = "webchat",
+) -> dict[str, Any]:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    profiling_by_channel = _ensure_dict(scoring.get("profiling_by_channel"))
+    channel_payload = _ensure_dict(profiling_by_channel.get(channel))
+    if not channel_payload:
+        channel_payload = _ensure_dict(scoring.get("profiling"))
+    return _ensure_dict(channel_payload.get("questions"))
+
+
+def _is_profile_field_answered(
+    *,
+    field: str,
+    answers: Mapping[str, Any],
+    profiling_questions: Mapping[str, Any] | None = None,
+) -> bool:
+    if _is_answered_scoring_value(answers.get(field)):
+        return True
+    profiling_questions = profiling_questions or {}
+    field_payload = _ensure_dict(profiling_questions.get(field))
+    status_value = str(field_payload.get("estado_respuesta") or "").strip().lower()
+    return status_value == "answered"
+
+
+def _extract_required_case_a_fields_from_metadata(
+    *,
+    opportunity_metadata: Mapping[str, Any],
+) -> list[str]:
+    scoring = _ensure_dict(opportunity_metadata.get("lead_scoring"))
+    fields_raw = scoring.get("critical_fields")
+    if not isinstance(fields_raw, list):
+        return []
+    fields: list[str] = []
+    for item in fields_raw:
+        field = str(item or "").strip()
+        if field and field not in fields:
+            fields.append(field)
+    return fields
+
+
+async def _load_required_case_a_questions(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: str,
+) -> list[str]:
+    required_fields: list[str] = []
+    try:
+        question_rows = await repo.list_scoring_questions(
+            organizacion_id=organizacion_id,
+            canal=channel if channel in {"whatsapp", "webchat"} else "webchat",
+            include_inactive=False,
+        )
+    except (CRMRepositoryError, AttributeError):
+        question_rows = []
+
+    for row in question_rows:
+        field_key = str(row.get("field_key") or "").strip()
+        if not field_key:
+            continue
+        if bool(row.get("required_for_case_a")) and field_key not in required_fields:
+            required_fields.append(field_key)
+
+    if not required_fields:
+        required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    return required_fields
+
+
 def _has_base_fields_for_case_a(contact: dict[str, Any] | None) -> bool:
     if not contact:
         return False
@@ -77,19 +155,36 @@ def _has_base_fields_for_case_b(contact: dict[str, Any] | None) -> bool:
     )
 
 
-def _has_minimum_profile_for_case_a(
+async def _has_minimum_profile_for_case_a(
     *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: str,
     contact: dict[str, Any] | None,
     opportunity_metadata: dict[str, Any],
 ) -> bool:
     answers = _extract_scoring_answers(contact=contact, opportunity_metadata=opportunity_metadata)
-    required_fields = (
-        "financing_type",
-        "budget_range",
-        "purchase_timeline",
-        "decision_authority",
+    profiling_questions = _extract_profiling_questions(
+        opportunity_metadata=opportunity_metadata,
+        channel=channel,
     )
-    return all(_is_answered_scoring_value(answers.get(field)) for field in required_fields)
+    required_fields = _extract_required_case_a_fields_from_metadata(
+        opportunity_metadata=opportunity_metadata
+    )
+    if not required_fields:
+        required_fields = await _load_required_case_a_questions(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            channel=channel,
+        )
+    return all(
+        _is_profile_field_answered(
+            field=field,
+            answers=answers,
+            profiling_questions=profiling_questions,
+        )
+        for field in required_fields
+    )
 
 
 def _is_webchat_reengage_exhausted(contact: dict[str, Any] | None) -> bool:
@@ -284,6 +379,7 @@ async def notify_sales_rep(
     email: str | None,
     extra: dict[str, Any] | None = None,
 ) -> None:
+    channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
     contact_record = contact or await storage.fetch_contact(context.contact_id)
     if not contact_record:
         logger.warning(
@@ -306,7 +402,7 @@ async def notify_sales_rep(
             opp_id = await storage.ensure_conversation_opportunity(
                 conversation_id=context.conversation_id,
                 contact_id=context.contact_id,
-                channel=context.channel or "webchat",
+                channel=channel_value,
             )
         except StorageError as exc:
             logger.warning(
@@ -373,7 +469,7 @@ async def notify_sales_rep(
         )
         return
 
-    channel_key = str(context.channel or "webchat").strip().lower() or "webchat"
+    channel_key = channel_value
     primary_reason: str | None = None
     if trigger == "booking_confirmed":
         if not _has_base_fields_for_case_a(contact_record):
@@ -382,7 +478,10 @@ async def notify_sales_rep(
                 extra={"conversation_id": context.conversation_id, "trigger": trigger},
             )
             return
-        if not _has_minimum_profile_for_case_a(
+        if not await _has_minimum_profile_for_case_a(
+            repo=repo,
+            organizacion_id=org_uuid,
+            channel=channel_key,
             contact=contact_record,
             opportunity_metadata=metadata,
         ):
@@ -479,6 +578,19 @@ async def notify_sales_rep(
                 extra=extra,
             )
 
+    logger.info(
+        "webchat.notify_sales.pre_send",
+        extra={
+            "conversation_id": context.conversation_id,
+            "trigger": trigger,
+            "seller_id": seller_id,
+            "seller_phone": seller_phone,
+            "template_sid": template_sid,
+            "template_vars": template_vars,
+        },
+    )
+
+    send_result = None
     try:
         send_result = await whatsapp_service.send_manual_message(
             to_number=seller_phone,
@@ -498,16 +610,31 @@ async def notify_sales_rep(
         )
         return
 
-    if send_result.error:
+    send_error = getattr(send_result, "error", None) if send_result else None
+    if send_error:
         logger.warning(
             "webchat.notify_sales.send_failed",
             extra={
                 "conversation_id": context.conversation_id,
                 "trigger": trigger,
-                "error": send_result.error,
+                "error": send_error,
             },
         )
         return
+
+    message_sid = getattr(send_result, "sid", None) if send_result else None
+    status_value = getattr(send_result, "status", None) if send_result else None
+    logger.info(
+        "webchat.notify_sales.result",
+        extra={
+            "conversation_id": context.conversation_id,
+            "trigger": trigger,
+            "template_sid": template_sid,
+            "message_sid": message_sid,
+            "status": status_value,
+            "seller_id": seller_id,
+        },
+    )
 
     notifications[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
@@ -545,10 +672,10 @@ async def notify_sales_rep(
                 contact_id=context.contact_id,
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
-                notification_sid=send_result.sid,
+                notification_sid=message_sid,
                 canal="webchat",
             )
-    except (CRMRepositoryError, ValueError) as exc:
+    except (CRMRepositoryError, ValueError, TypeError, AttributeError) as exc:
         logger.warning(
             "webchat.notify_sales.metadata_failed",
             extra={

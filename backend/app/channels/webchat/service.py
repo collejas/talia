@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import re
 import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -88,6 +89,44 @@ _SCHEDULE_CRITICAL_FIELDS: tuple[str, ...] = (
     "budget_range",
     "purchase_timeline",
     "decision_authority",
+)
+
+_DEFAULT_REQUIRED_CASE_A_FIELDS: tuple[str, ...] = _SCHEDULE_CRITICAL_FIELDS
+
+_DEFAULT_SCHEDULE_QUESTION_BY_FIELD: dict[str, str] = {
+    "financing_type": "¿Comprarías de contado, crédito o mixto?",
+    "budget_range": "¿Cuál es tu rango de presupuesto aproximado?",
+    "purchase_timeline": "¿En qué plazo planeas comprar?",
+    "decision_authority": "¿Quién toma la decisión final de compra?",
+}
+
+_EVASIVE_TOKENS: tuple[str, ...] = (
+    "no se",
+    "no sé",
+    "prefiero no",
+    "no quiero decir",
+    "no te puedo decir",
+    "luego te digo",
+    "despues te digo",
+    "después te digo",
+)
+
+_BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
+    "confirmo tu cita",
+    "confirmarte tu cita",
+    "te confirmo tu cita",
+    "cita confirmada",
+    "visita confirmada",
+    "tu visita está agendada",
+    "tu visita esta agendada",
+    "cita agendada",
+    "visita agendada",
+    "quedó agendada",
+    "quedo agendada",
+    "te espero el",
+    "te esperamos el",
+    "tu cita esta lista",
+    "tu cita está lista",
 )
 
 MAX_ATTACHMENTS_PER_MESSAGE = 3
@@ -1244,6 +1283,44 @@ def _safe_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _looks_like_booking_confirmation(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    return any(hint in normalized for hint in _BOOKING_CONFIRMATION_HINTS)
+
+
+async def _guard_booking_confirmation_claim(
+    *,
+    conversation_id: str,
+    reply_text: str,
+) -> str:
+    if not _looks_like_booking_confirmation(reply_text):
+        return reply_text
+    try:
+        booking = await storage.fetch_calendar_booking_by_conversation(conversation_id)
+    except StorageError as exc:
+        logger.warning(
+            "webchat.booking_guard_lookup_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+        return reply_text
+    status = str((booking or {}).get("status") or "").strip().lower()
+    if booking and status in {"confirmed", "reprogrammed"}:
+        return reply_text
+    log_event(
+        logger,
+        "webchat.booking_guard_blocked_false_confirmation",
+        conversation_id=conversation_id,
+        booking_status=status or None,
+    )
+    return (
+        "Para confirmar tu cita, primero necesito completar unas preguntas rápidas "
+        "(forma de compra, presupuesto, plazo y decisión). "
+        "Si quieres, lo cerramos ahora y te confirmo enseguida."
+    )
+
+
 def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     """Compone la respuesta textual desde el payload de Responses API."""
     fragments: list[str] = []
@@ -1275,6 +1352,88 @@ async def _resolve_contact(contact_id: str | None) -> dict[str, Any] | None:
         return None
 
 
+def _is_answered_scoring_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized not in {"", "unknown", "refused"}
+    return True
+
+
+def _extract_profiling_questions(
+    *,
+    opportunity_metadata: Mapping[str, Any],
+    channel: str = "webchat",
+) -> dict[str, Any]:
+    scoring = _safe_dict(opportunity_metadata.get("lead_scoring"))
+    profiling_by_channel = _safe_dict(scoring.get("profiling_by_channel"))
+    channel_payload = _safe_dict(profiling_by_channel.get(channel))
+    if not channel_payload:
+        channel_payload = _safe_dict(scoring.get("profiling"))
+    return _safe_dict(channel_payload.get("questions"))
+
+
+def _is_profile_field_answered(
+    *,
+    field: str,
+    answers: Mapping[str, Any],
+    profiling_questions: Mapping[str, Any] | None = None,
+) -> bool:
+    if _is_answered_scoring_value(answers.get(field)):
+        return True
+    profiling_questions = profiling_questions or {}
+    field_payload = _safe_dict(profiling_questions.get(field))
+    status_value = str(field_payload.get("estado_respuesta") or "").strip().lower()
+    return status_value == "answered"
+
+
+def _extract_required_case_a_fields_from_metadata(
+    *,
+    opportunity_metadata: Mapping[str, Any],
+) -> list[str]:
+    scoring = _safe_dict(opportunity_metadata.get("lead_scoring"))
+    fields_raw = scoring.get("critical_fields")
+    if not isinstance(fields_raw, list):
+        return []
+    fields: list[str] = []
+    for item in fields_raw:
+        field = str(item or "").strip()
+        if field and field not in fields:
+            fields.append(field)
+    return fields
+
+
+async def _load_required_case_a_questions(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    channel: str,
+) -> tuple[list[str], dict[str, str]]:
+    required_fields: list[str] = []
+    question_by_field: dict[str, str] = {}
+    try:
+        question_rows = await repo.list_scoring_questions(
+            organizacion_id=organizacion_id,
+            canal=channel if channel in {"whatsapp", "webchat"} else "webchat",
+            include_inactive=False,
+        )
+    except (CRMRepositoryError, AttributeError):
+        question_rows = []
+    for row in question_rows:
+        field_key = str(row.get("field_key") or "").strip()
+        if not field_key:
+            continue
+        if bool(row.get("required_for_case_a")) and field_key not in required_fields:
+            required_fields.append(field_key)
+        question_text = str(row.get("question_text") or "").strip()
+        if question_text:
+            question_by_field[field_key] = question_text
+    if not required_fields:
+        required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    return required_fields, question_by_field
+
+
 def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
     if not contact:
         return False
@@ -1292,6 +1451,119 @@ def _has_meaningful_scoring_answers(contact: Mapping[str, Any] | None) -> bool:
     return False
 
 
+def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str, bool]:
+    inbound_texts: list[str] = []
+    for row in messages:
+        direction = str(row.get("direccion") or "").strip().lower()
+        if direction != "entrante":
+            continue
+        text = str(row.get("texto") or "").strip().lower()
+        if text:
+            inbound_texts.append(text)
+
+    # Solo evaluamos el ultimo mensaje del prospecto para evitar "arrastrar"
+    # inferencias desde turnos anteriores.
+    joined = inbound_texts[-1] if inbound_texts else ""
+    has_budget = bool(
+        re.search(r"\$\s*\d", joined)
+        or re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", joined)
+        or re.search(r"\b(presupuesto|presup|hasta|maximo|máximo)\b", joined)
+    )
+    has_financing = bool(
+        re.search(
+            r"\b(contado|credito|crédito|hipotecario|hipoteca|infonavit|fovissste|ambas)\b",
+            joined,
+        )
+    )
+    has_timeline = bool(
+        re.search(
+            r"\b(inmediat|urgent|pronto|este mes|proximo mes|pr[oó]xim[oa] mes|semanas?|mes(es)?|a[ñn]o|explorando|explorar|a futuro|futuro)\b",
+            joined,
+        )
+    )
+    has_authority = bool(
+        re.search(
+            r"\b(yo decido|decido yo|solo yo|yo solo|con mi esposa|con mi esposo|con mi pareja|con mi familia|con mi socio|mi esposa y yo|mi esposo y yo|entre mi esposa y yo|entre mi esposo y yo|lo consulto)\b",
+            joined,
+        )
+    )
+    has_evasive = any(token in joined for token in _EVASIVE_TOKENS)
+    return {
+        "financing_type": has_financing,
+        "budget_range": has_budget,
+        "purchase_timeline": has_timeline,
+        "decision_authority": has_authority,
+        "evasive": has_evasive,
+    }
+
+
+def _sanitize_scoring_answers_from_user_messages(
+    *,
+    scoring_answers: dict[str, Any],
+    user_signals: Mapping[str, bool],
+) -> dict[str, Any]:
+    sanitized = dict(scoring_answers)
+    for field, value in list(sanitized.items()):
+        if field == "evasive" or field not in user_signals:
+            continue
+        if value is None:
+            if not user_signals.get(field, False):
+                sanitized.pop(field, None)
+            continue
+        normalized = str(value).strip().lower() if isinstance(value, str) else value
+        if isinstance(normalized, str) and normalized in {"", "unknown"}:
+            if not user_signals.get(field, False):
+                sanitized.pop(field, None)
+            continue
+        if isinstance(normalized, str) and normalized == "refused":
+            if user_signals.get("evasive"):
+                continue
+            sanitized.pop(field, None)
+            continue
+        if not user_signals.get(field, False):
+            sanitized.pop(field, None)
+    return sanitized
+
+
+def _sanitize_profiling_statuses_from_user_messages(
+    *,
+    profiling_statuses: dict[str, Any] | None,
+    user_signals: Mapping[str, bool],
+) -> dict[str, Any]:
+    if not isinstance(profiling_statuses, dict):
+        return {}
+    sanitized: dict[str, Any] = {}
+    for field, raw_value in profiling_statuses.items():
+        key = str(field or "").strip()
+        if not key:
+            continue
+        status = str(raw_value or "").strip().lower()
+        if status == "answered" and not user_signals.get(key, False):
+            status = "unknown"
+        if status:
+            sanitized[key] = status
+    return sanitized
+
+
+def _sanitize_profiling_reprompt_counts(
+    *,
+    profiling_counts: dict[str, Any] | None,
+    profiling_statuses: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(profiling_counts, dict):
+        return {}
+    sanitized: dict[str, Any] = {}
+    for field, raw_value in profiling_counts.items():
+        key = str(field or "").strip()
+        if not key or key not in profiling_statuses:
+            continue
+        try:
+            sanitized[key] = max(0, int(raw_value))
+        except (TypeError, ValueError):
+            continue
+    return sanitized
+
+
 def _has_minimum_prefilter_data(contact: Mapping[str, Any] | None) -> bool:
     if not contact:
         return False
@@ -1306,47 +1578,94 @@ async def _has_prefilter_for_schedule(
     *,
     contact: Mapping[str, Any] | None,
     opportunity_id: str | None,
-) -> bool:
+) -> dict[str, Any]:
+    repo = CRMRepository()
+    required_fields: list[str] = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
+    question_by_field: dict[str, str] = dict(_DEFAULT_SCHEDULE_QUESTION_BY_FIELD)
+    channel = str((contact or {}).get("canal") or "webchat").strip().lower() or "webchat"
     if not contact or not opportunity_id:
-        return False
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     notes = str(contact.get("notes") or "").strip()
     need = str(contact.get("necesidad_proposito") or "").strip()
     if not (notes and need):
-        return False
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     org_value = _extract_contact_org(contact)
     org_uuid = _resolve_org_uuid(org_value)
     if not org_uuid:
-        return False
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
+    required_fields, question_by_field = await _load_required_case_a_questions(
+        repo=repo,
+        organizacion_id=UUID(org_uuid),
+        channel=channel,
+    )
     try:
         opp_uuid = UUID(str(opportunity_id))
     except (TypeError, ValueError):
-        return False
-    repo = CRMRepository()
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     try:
         opportunity = await repo.get_pipeline_opportunity(
             organizacion_id=UUID(org_uuid),
             oportunidad_id=opp_uuid,
         )
     except CRMRepositoryError:
-        return False
+        return {"ready": False, "missing_fields": required_fields, "questions": question_by_field}
     metadata = opportunity.get("metadata") if isinstance(opportunity, dict) else {}
     metadata_dict = metadata if isinstance(metadata, dict) else {}
+    required_from_metadata = _extract_required_case_a_fields_from_metadata(
+        opportunity_metadata=metadata_dict
+    )
+    if required_from_metadata:
+        required_fields = required_from_metadata
     scoring = metadata_dict.get("lead_scoring")
     scoring_dict = scoring if isinstance(scoring, dict) else {}
     answers = scoring_dict.get("answers")
     answers_dict = answers if isinstance(answers, dict) else {}
-    if not any(field in answers_dict for field in _SCHEDULE_PREFILTER_FIELDS):
-        return False
+    profiling_questions = _extract_profiling_questions(opportunity_metadata=metadata_dict)
 
-    def _is_completed(value: Any) -> bool:
-        if value is None:
-            return False
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            return normalized not in {"", "unknown"}
-        return True
+    completed_fields = {
+        field
+        for field in required_fields
+        if _is_profile_field_answered(
+            field=field,
+            answers=answers_dict,
+            profiling_questions=profiling_questions,
+        )
+    }
+    if len(completed_fields) == len(required_fields):
+        return {"ready": True, "missing_fields": [], "questions": {}}
 
-    return all(_is_completed(answers_dict.get(field)) for field in _SCHEDULE_CRITICAL_FIELDS)
+    missing_fields = [field for field in required_fields if field not in completed_fields]
+    return {
+        "ready": False,
+        "missing_fields": missing_fields,
+        "questions": question_by_field,
+    }
+
+
+def _build_schedule_prefilter_error_message(
+    *,
+    missing_fields: list[str],
+    question_by_field: Mapping[str, str] | None = None,
+) -> str:
+    missing = [str(field).strip() for field in missing_fields if str(field).strip()]
+    if not missing:
+        return (
+            "Antes de agendar la cita necesito completar unas preguntas breves "
+            "para preparar tu visita."
+        )
+    field = missing[0]
+    question_by_field = question_by_field or {}
+    question_text = str(
+        question_by_field.get(field)
+        or _DEFAULT_SCHEDULE_QUESTION_BY_FIELD.get(field)
+        or "¿Me ayudas con un dato clave para continuar?"
+    ).strip()
+    return (
+        "Antes de agendar la cita falta completar la información de agenda. "
+        f"Campo faltante: {field}. "
+        f"Haz una sola pregunta exacta al prospecto: {question_text} "
+        "Cuando responda, vuelve a ejecutar schedule_demo con el mismo horario solicitado."
+    )
 
 
 def _extract_contact_email(contact: dict[str, Any] | None) -> str | None:
@@ -2316,6 +2635,12 @@ async def handle_message(
         metadata.booking = side_effects["booking"]
 
     if assistant_reply:
+        assistant_reply = await _guard_booking_confirmation_claim(
+            conversation_id=str(conversation_id),
+            reply_text=assistant_reply,
+        )
+
+    if assistant_reply:
         try:
             message_metadata = {
                 "openai_conversation_id": metadata.openai_conversation_id,
@@ -2727,8 +3052,6 @@ async def _run_assistant_turn(
             }
         )
     if booking_context:
-        context_payload = context_payload or {}
-        context_payload["booking_context"] = booking_context
         base_input.append(
             {
                 "role": "developer",
@@ -2995,6 +3318,20 @@ async def _execute_function_call(
                 )
                 if key in arguments
             }
+            user_signals: Mapping[str, bool] = {}
+            try:
+                recent_messages = await storage.fetch_recent_messages(
+                    conversation_id=context.conversation_id,
+                    limit=24,
+                )
+                user_signals = _extract_user_prefilter_signals(recent_messages)
+                scoring_answers = _sanitize_scoring_answers_from_user_messages(
+                    scoring_answers=scoring_answers,
+                    user_signals=user_signals,
+                )
+            except StorageError:
+                # Si no se pudo leer historial, se conserva el payload recibido.
+                pass
             action_text = (siguiente_accion or "").lower()
             requested = any(
                 token in action_text for token in ("cita", "agendar", "demo", "visita")
@@ -3079,6 +3416,14 @@ async def _execute_function_call(
                 profiling_reprompt_counts_raw
                 if isinstance(profiling_reprompt_counts_raw, dict)
                 else None
+            )
+            profiling_statuses = _sanitize_profiling_statuses_from_user_messages(
+                profiling_statuses=profiling_statuses,
+                user_signals=user_signals,
+            )
+            profiling_reprompt_counts = _sanitize_profiling_reprompt_counts(
+                profiling_counts=profiling_reprompt_counts,
+                profiling_statuses=profiling_statuses,
             )
             try:
                 await storage.apply_lead_scoring(
@@ -3187,10 +3532,29 @@ async def _execute_function_call(
                 extra={"conversation_id": context.conversation_id, "error": str(exc)},
             )
             raise ValueError("No pude asociar la oportunidad para agendar la demo.") from exc
-        if not await _has_prefilter_for_schedule(contact=contact, opportunity_id=tarjeta_id):
+        prefilter_status = await _has_prefilter_for_schedule(
+            contact=contact,
+            opportunity_id=tarjeta_id,
+        )
+        if not bool(prefilter_status.get("ready")):
+            missing_fields = [
+                str(item)
+                for item in (prefilter_status.get("missing_fields") or [])
+                if str(item).strip()
+            ]
+            logger.info(
+                "webchat.schedule_demo.prefilter_missing",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "opportunity_id": str(tarjeta_id),
+                    "missing_fields": missing_fields,
+                },
+            )
             raise ValueError(
-                "Antes de agendar la cita necesito completar una precalificación breve "
-                "(necesidad principal y preguntas clave)."
+                _build_schedule_prefilter_error_message(
+                    missing_fields=missing_fields,
+                    question_by_field=_safe_dict(prefilter_status.get("questions")),
+                )
             )
 
         organizacion_hint = _extract_contact_org(contact) if contact else None
@@ -3318,7 +3682,7 @@ async def _execute_function_call(
                     f"Cita confirmada para {booking_response.start_at.isoformat()} "
                     f"(booking {booking_response.booking_id})."
                 ),
-                email=contact.get("correo"),
+                email=(contact or {}).get("correo"),
                 extra={
                     "booking_id": booking_response.booking_id,
                     "slot_start": booking_response.start_at.isoformat(),
@@ -3327,12 +3691,13 @@ async def _execute_function_call(
                     else None,
                 },
             )
-        except Exception:
+        except Exception as exc:
             logger.warning(
                 "webchat.booking_notify_failed",
                 extra={
                     "conversation_id": context.conversation_id,
                     "tarjeta_id": tarjeta_id,
+                    "error": str(exc),
                 },
             )
 
