@@ -1315,9 +1315,8 @@ async def _guard_booking_confirmation_claim(
         booking_status=status or None,
     )
     return (
-        "Para confirmar tu cita, primero necesito completar unas preguntas rápidas "
-        "(forma de compra, presupuesto, plazo y decisión). "
-        "Si quieres, lo cerramos ahora y te confirmo enseguida."
+        "Para dejar tu cita confirmada, solo me falta un dato breve. "
+        "Te hago una pregunta rápida y, en cuanto me respondas, la dejo lista."
     )
 
 

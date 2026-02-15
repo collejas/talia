@@ -114,10 +114,8 @@ async def _guard_booking_confirmation_claim(
         booking_status=status or None,
     )
     return (
-        "Aun no pude confirmar tu cita en el calendario. "
-        "Para agendarla correctamente necesito terminar la precalificacion breve "
-        "(forma de compra, presupuesto, plazo y decision). "
-        "Si quieres, lo cerramos ahora mismo y te confirmo en cuanto quede registrada."
+        "Para dejar tu cita confirmada, solo me falta un dato breve. "
+        "Te hago una pregunta rápida y, en cuanto me respondas, la dejo lista."
     )
 
 
