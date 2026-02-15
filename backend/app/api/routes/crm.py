@@ -12393,6 +12393,11 @@ async def pipeline_board(
     limit: Annotated[int, Query(ge=50, le=1000)] = 400,
     tablero_id: UUID | None = Query(default=None),
     asignado_id: UUID | None = Query(default=None),
+    canal: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    etapa_ids: str | None = Query(default=None),
+    tiene_cita: str | None = Query(default=None),
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
     try:
@@ -12407,6 +12412,11 @@ async def pipeline_board(
             limit=limit,
             tablero_id=tablero_id,
             asignado_id=asignado_id,
+            canal=canal,
+            estado=estado,
+            q=q,
+            etapa_ids=etapa_ids,
+            tiene_cita=tiene_cita,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -12435,6 +12445,11 @@ async def pipeline_scoring_kpis(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     limit: Annotated[int, Query(ge=100, le=5000)] = 2000,
     asignado_id: UUID | None = Query(default=None),
+    canal: str | None = Query(default=None),
+    estado: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    etapa_ids: str | None = Query(default=None),
+    tiene_cita: str | None = Query(default=None),
 ) -> CRMPipelineScoringKpis:
     created_from = datetime.now(timezone.utc) - timedelta(days=days)
     # Si no se pasa asignado_id explícitamente, y el usuario es vendedor (no admin),
@@ -12504,6 +12519,11 @@ async def pipeline_scoring_kpis(
             created_from=created_from,
             limit=limit,
             asignado_id=asignado_id,
+            canal=canal,
+            estado=estado,
+            q=q,
+            etapa_ids=etapa_ids,
+            tiene_cita=tiene_cita,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

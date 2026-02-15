@@ -34,6 +34,14 @@ import {
   type LeadDrawerSubmitPayload,
   type StagePrepState,
 } from "@/components/embudo/lead-drawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +57,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, SlidersHorizontal } from "lucide-react";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export type EmbudoBoardClientProps = {
@@ -157,6 +165,19 @@ export function EmbudoBoardClient({
   const [schedulePending, setSchedulePending] = useState(false);
   const [scheduleFormat, setScheduleFormat] = useState("");
   const [scheduleLink, setScheduleLink] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [appliedDays, setAppliedDays] = useState(7);
+  const [appliedCanal, setAppliedCanal] = useState("");
+  const [appliedEstado, setAppliedEstado] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedTieneCita, setAppliedTieneCita] = useState("");
+  const [appliedEtapaIds, setAppliedEtapaIds] = useState<string[]>([]);
+  const [draftDays, setDraftDays] = useState(7);
+  const [draftCanal, setDraftCanal] = useState("");
+  const [draftEstado, setDraftEstado] = useState("");
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftTieneCita, setDraftTieneCita] = useState("");
+  const [draftEtapaIds, setDraftEtapaIds] = useState<string[]>([]);
 
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
   const normalizedRoles = permissionContext.roles
@@ -242,6 +263,24 @@ export function EmbudoBoardClient({
       if (asignadoId) {
         params.set("asignado_id", asignadoId);
       }
+      if (appliedDays) {
+        params.set("days", String(appliedDays));
+      }
+      if (appliedCanal) {
+        params.set("canal", appliedCanal);
+      }
+      if (appliedEstado) {
+        params.set("estado", appliedEstado);
+      }
+      if (appliedQuery.trim()) {
+        params.set("q", appliedQuery.trim());
+      }
+      if (appliedTieneCita) {
+        params.set("tiene_cita", appliedTieneCita);
+      }
+      if (appliedEtapaIds.length) {
+        params.set("etapa_ids", appliedEtapaIds.join(","));
+      }
       const response = await fetch(`/api/embudo/board?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) {
         const message = await response.text().catch(() => `Error ${response.status}`);
@@ -259,7 +298,7 @@ export function EmbudoBoardClient({
     } finally {
       setBoardLoading(false);
     }
-  }, []);
+  }, [appliedDays, appliedCanal, appliedEstado, appliedQuery, appliedTieneCita, appliedEtapaIds]);
 
   const fetchSupervisedVendors = useCallback(async () => {
     if (!showVendorFilter) return;
@@ -305,7 +344,7 @@ export function EmbudoBoardClient({
       return;
     }
     void fetchBoardData(selectedVendedorId || undefined);
-  }, [selectedVendedorId, fetchBoardData]);
+  }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedQuery, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -914,6 +953,15 @@ export function EmbudoBoardClient({
 
   const sanitizedBoardErrors = (boardState.errors ?? []).map(sanitizeBoardMessage).filter(Boolean);
   const errorMessages = boardFetchError ? [boardFetchError] : sanitizedBoardErrors;
+  const showFiltersButton = true;
+  const activeFiltersCount =
+    (selectedVendedorId ? 1 : 0) +
+    (appliedCanal ? 1 : 0) +
+    (appliedEstado ? 1 : 0) +
+    (appliedQuery.trim() ? 1 : 0) +
+    (appliedTieneCita ? 1 : 0) +
+    (appliedEtapaIds.length ? 1 : 0) +
+    (appliedDays !== 7 ? 1 : 0);
 
   return (
     <>
@@ -930,18 +978,159 @@ export function EmbudoBoardClient({
       ) : null}
       <div className="space-y-4">
         {boardState.scoringKpis ? <ScoringKpisOverview kpis={boardState.scoringKpis} /> : null}
-        {showVendorFilter ? (
-          <div className="rounded-lg border border-border/60 bg-background/50 p-4 text-sm text-foreground">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="min-w-[220px] flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Vendedor
-                </p>
-                <Select value={selectedVendedorId} onValueChange={(value) => setSelectedVendedorId(value)}>
-                  <SelectTrigger className="h-10 w-full">
-                  <SelectValue placeholder="Todos los vendedores" />
+        {showFiltersButton ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDraftDays(appliedDays);
+                setDraftCanal(appliedCanal);
+                setDraftEstado(appliedEstado);
+                setDraftQuery(appliedQuery);
+                setDraftTieneCita(appliedTieneCita);
+                setDraftEtapaIds(appliedEtapaIds);
+                setFiltersOpen(true);
+              }}
+              className="gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtros{activeFiltersCount ? ` (${activeFiltersCount})` : ""}
+            </Button>
+            {boardLoading ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-muted-foreground/60 px-3 py-1 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Actualizando
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Filtros</DialogTitle>
+            <DialogDescription>
+              Ajusta la vista del embudo. Los filtros aplican a oportunidades y KPIs.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 max-h-[70vh] space-y-4 overflow-auto pr-1">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Ventana KPIs
+              </Label>
+              <Select value={String(draftDays)} onValueChange={(value) => setDraftDays(Number(value) || 7)}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="7 días" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
+                  <SelectItem value="7">7 días</SelectItem>
+                  <SelectItem value="30">30 días</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Canal
+              </Label>
+              <Select value={draftCanal} onValueChange={(value) => setDraftCanal(value)}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="Todos los canales" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="webchat">Webchat</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Tiene cita
+              </Label>
+              <Select value={draftTieneCita} onValueChange={(value) => setDraftTieneCita(value)}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="con_cita">Con cita</SelectItem>
+                  <SelectItem value="sin_cita">Sin cita</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Estado
+              </Label>
+              <Select value={draftEstado} onValueChange={(value) => setDraftEstado(value)}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="Todos los estados" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="abierta">Abierta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Buscar
+              </Label>
+              <Input
+                value={draftQuery}
+                onChange={(event) => setDraftQuery(event.target.value)}
+                placeholder="Nombre, correo, teléfono o título…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Etapas
+              </Label>
+              <div className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border/60 bg-background/50 p-3">
+                {boardState.stages.map((stage) => {
+                  const checked = draftEtapaIds.includes(stage.id);
+                  return (
+                    <label key={stage.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={checked}
+                        onChange={(event) => {
+                          const nextChecked = event.target.checked;
+                          setDraftEtapaIds((prev) => {
+                            if (nextChecked) {
+                              return prev.includes(stage.id) ? prev : [...prev, stage.id];
+                            }
+                            return prev.filter((value) => value !== stage.id);
+                          });
+                        }}
+                      />
+                      <span className="truncate">{stage.nombre}</span>
+                    </label>
+                  );
+                })}
+                {!boardState.stages.length ? (
+                  <p className="text-xs text-muted-foreground">No hay etapas disponibles.</p>
+                ) : null}
+              </div>
+              {draftEtapaIds.length ? (
+                <p className="text-xs text-muted-foreground">
+                  Seleccionadas: {draftEtapaIds.length}
+                </p>
+              ) : null}
+            </div>
+            {showVendorFilter ? (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Vendedor
+                </Label>
+                <Select value={selectedVendedorId} onValueChange={(value) => setSelectedVendedorId(value)}>
+                  <SelectTrigger className="h-10 w-full">
+                    <SelectValue placeholder="Todos los vendedores" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
                     {vendorOptions.map((option) => (
                       <SelectItem key={option.id} value={option.id}>
                         {option.label}
@@ -949,31 +1138,66 @@ export function EmbudoBoardClient({
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedVendedorId("")}
+                    disabled={!selectedVendedorId}
+                  >
+                    Limpiar filtro
+                  </Button>
+                  {vendorLoading ? (
+                    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Cargando…
+                    </span>
+                  ) : null}
+                </div>
+                {vendorError ? <p className="text-xs text-destructive">{vendorError}</p> : null}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedVendedorId("")}
-                disabled={!selectedVendedorId}
-              >
-                Limpiar filtro
-              </Button>
-              {boardLoading ? (
-                <span className="inline-flex items-center gap-2 rounded-full border border-muted-foreground/60 px-3 py-1 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Actualizando
-                </span>
-              ) : null}
-            </div>
-            {vendorLoading ? (
-              <p className="mt-2 text-xs text-muted-foreground">Cargando vendedores supervisados…</p>
-            ) : null}
-            {vendorError ? (
-              <p className="mt-2 text-xs text-destructive">{vendorError}</p>
             ) : null}
           </div>
-        ) : null}
-      </div>
+          <DialogFooter className="mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDraftDays(7);
+                setDraftCanal("");
+                setDraftEstado("");
+                setDraftQuery("");
+                setDraftTieneCita("");
+                setDraftEtapaIds([]);
+                setAppliedDays(7);
+                setAppliedCanal("");
+                setAppliedEstado("");
+                setAppliedQuery("");
+                setAppliedTieneCita("");
+                setAppliedEtapaIds([]);
+                if (showVendorFilter) setSelectedVendedorId("");
+              }}
+            >
+              Limpiar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setAppliedDays(draftDays);
+                setAppliedCanal(draftCanal === "all" ? "" : draftCanal);
+                setAppliedEstado(draftEstado === "all" ? "" : draftEstado);
+                setAppliedQuery(draftQuery);
+                setAppliedTieneCita(draftTieneCita === "all" ? "" : draftTieneCita);
+                setAppliedEtapaIds(draftEtapaIds);
+                setFiltersOpen(false);
+              }}
+            >
+              Aplicar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

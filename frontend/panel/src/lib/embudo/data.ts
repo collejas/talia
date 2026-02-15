@@ -6,6 +6,12 @@ import { adaptCard, adaptStage, parseMetadatos } from "@/lib/embudo/helpers";
 export type LoadEmbudoOptions = {
   limit?: number;
   asignadoId?: string | null;
+  days?: number;
+  canal?: string | null;
+  estado?: string | null;
+  q?: string | null;
+  etapaIds?: string[] | null;
+  tieneCita?: string | null;
 };
 
 const DEFAULT_LIMIT = 200;
@@ -160,18 +166,32 @@ function isCounterOnlyStage(metadatos: Record<string, unknown>): boolean {
 
 export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<EmbudoData> {
   const limit = options.limit ?? DEFAULT_LIMIT;
+  const days = options.days ?? 7;
+  const etapaIds = Array.isArray(options.etapaIds)
+    ? options.etapaIds.map((value) => value.trim()).filter(Boolean)
+    : [];
   const [boardResponse, scoringResponse] = await Promise.all([
     callCrmApi<PipelineBoardResponse>("/crm/pipeline/board", {
       searchParams: {
         limit: String(limit),
         ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
+        ...(options.canal ? { canal: options.canal } : {}),
+        ...(options.estado ? { estado: options.estado } : {}),
+        ...(options.q ? { q: options.q } : {}),
+        ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
+        ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
       },
       withUserToken: true,
     }),
     callCrmApi<EmbudoScoringKpis>("/crm/pipeline/scoring/kpis", {
       searchParams: {
-        days: "7",
+        days: String(days),
         ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
+        ...(options.canal ? { canal: options.canal } : {}),
+        ...(options.estado ? { estado: options.estado } : {}),
+        ...(options.q ? { q: options.q } : {}),
+        ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
+        ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
       },
       withUserToken: true,
     }),

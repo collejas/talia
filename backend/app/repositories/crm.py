@@ -3166,6 +3166,11 @@ class CRMRepository:
         created_from: datetime | None = None,
         limit: int = 1000,
         asignado_id: UUID | None = None,
+        canal: str | None = None,
+        estado: str | None = None,
+        q: str | None = None,
+        etapa_ids: str | None = None,
+        tiene_cita: str | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -3176,18 +3181,27 @@ class CRMRepository:
         if created_from:
             params["created_at"] = f"gte.{created_from.isoformat()}"
         opportunity_ids: list[str] | None = None
-        if asignado_id:
+        should_filter_by_opportunity = any([asignado_id, canal, estado, q, etapa_ids, tiene_cita])
+        if should_filter_by_opportunity:
             assigned_rows, _ = await self.list_pipeline_opportunities(
                 organizacion_id=organizacion_id,
                 limit=5000,
                 asignado_id=asignado_id,
+                canal=canal,
+                estado=estado,
+                q=q,
+                etapa_ids=etapa_ids,
+                tiene_cita=tiene_cita,
             )
             if not assigned_rows:
                 logger.info(
                     "crm.scoring_events.filtered_empty",
                     extra={
                         "organizacion_id": str(organizacion_id),
-                        "asignado_id": str(asignado_id),
+                        "asignado_id": str(asignado_id) if asignado_id else None,
+                        "canal": canal,
+                        "estado": estado,
+                        "q": q,
                         "created_from": created_from.isoformat() if created_from else None,
                     },
                 )
@@ -3199,7 +3213,10 @@ class CRMRepository:
                 "crm.scoring_events.filtered",
                 extra={
                     "organizacion_id": str(organizacion_id),
-                    "asignado_id": str(asignado_id),
+                    "asignado_id": str(asignado_id) if asignado_id else None,
+                    "canal": canal,
+                    "estado": estado,
+                    "q": q,
                     "opportunities": len(opportunity_ids),
                     "created_from": created_from.isoformat() if created_from else None,
                 },
@@ -4100,6 +4117,11 @@ class CRMRepository:
         created_from: datetime | None = None,
         tablero_id: UUID | None = None,
         asignado_id: UUID | None = None,
+        canal: str | None = None,
+        estado: str | None = None,
+        q: str | None = None,
+        etapa_ids: str | None = None,
+        tiene_cita: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Listar oportunidades de pipeline con filtros opcionales y conteo total."""
 
@@ -4109,18 +4131,50 @@ class CRMRepository:
             "limit": str(limit),
             "select": self._PIPELINE_SELECT,
         }
+        and_filters: list[str] = []
         if created_from:
             params["creado_en"] = f"gte.{created_from.isoformat()}"
         if tablero_id:
             tablero_filter = str(tablero_id)
-            params["or"] = (
-                f"(tablero_id.eq.{tablero_filter},"
+            and_filters.append(
+                "or("
+                f"tablero_id.eq.{tablero_filter},"
                 f"metadata->>tablero_id.eq.{tablero_filter},"
-                f"etapa.metadata->>tablero_id.eq.{tablero_filter})"
+                f"etapa.metadata->>tablero_id.eq.{tablero_filter}"
+                ")"
             )
             params["order"] = "etapa.orden.asc,creado_en.desc"
         if asignado_id:
             params["asignado_a_usuario_id"] = f"eq.{asignado_id}"
+        if etapa_ids:
+            raw_values = [value.strip() for value in str(etapa_ids).split(",") if value.strip()]
+            if raw_values:
+                params["etapa_id"] = _postgrest_in_clause(raw_values)
+        if estado:
+            params["estado"] = f"eq.{_postgrest_eq_literal(estado)}"
+        if canal:
+            literal = _postgrest_eq_literal(canal)
+            and_filters.append(
+                "or("
+                f"metadata->>canal.eq.{literal},"
+                f"metadata->>channel.eq.{literal}"
+                ")"
+            )
+        sanitized_query = _sanitize_search_pattern(q)
+        if sanitized_query:
+            pattern = _postgrest_ilike_literal(sanitized_query)
+            and_filters.append(
+                "or("
+                f"titulo.ilike.{pattern},"
+                f"descripcion.ilike.{pattern},"
+                f"contacto.nombre_completo.ilike.{pattern},"
+                f"contacto.correo.ilike.{pattern},"
+                f"contacto.telefono_e164.ilike.{pattern},"
+                f"contacto.company_name.ilike.{pattern}"
+                ")"
+            )
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
         resp = await self._request(
             "GET",
             "/rest/v1/oportunidades",
@@ -4132,8 +4186,45 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
             )
+        results = [row for row in data if isinstance(row, dict)]
+        if tiene_cita:
+            target = str(tiene_cita).strip().lower()
+            if target in ("con_cita", "sin_cita"):
+                def _has_booking(metadata: dict[str, Any]) -> bool:
+                    if not metadata:
+                        return False
+                    stage_prep = metadata.get("stage_prep")
+                    if isinstance(stage_prep, dict):
+                        for value in stage_prep.values():
+                            if not isinstance(value, dict):
+                                continue
+                            for key, inner in value.items():
+                                normalized_key = str(key).lower()
+                                if "booking" in normalized_key and inner:
+                                    return True
+                                if normalized_key.endswith("_scheduled_at") and isinstance(inner, str) and inner.strip():
+                                    return True
+                                if normalized_key.endswith("_confirmed_at") and isinstance(inner, str) and inner.strip():
+                                    return True
+                    sales_notifications = metadata.get("sales_notifications")
+                    if isinstance(sales_notifications, dict) and sales_notifications:
+                        return True
+                    sales_primary = metadata.get("sales_primary_notifications")
+                    if isinstance(sales_primary, dict) and sales_primary:
+                        return True
+                    return False
+
+                filtered: list[dict[str, Any]] = []
+                for row in results:
+                    meta = _ensure_metadata(row.get("metadata"))
+                    booking = _has_booking(meta)
+                    if target == "con_cita" and booking:
+                        filtered.append(row)
+                    elif target == "sin_cita" and not booking:
+                        filtered.append(row)
+                results = filtered
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
-        return data, total
+        return results, total
 
     async def list_supervised_sales_reps(
         self,
