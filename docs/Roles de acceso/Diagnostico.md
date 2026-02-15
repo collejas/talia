@@ -2,6 +2,12 @@
 
 Fecha: 2026-02-10
 
+Actualización (2026-02-15)
+- Este diagnóstico se complementa con la evolución a roles v2 y la separación plataforma vs tenant:
+  - `docs/multi_tenant/rbac_and_scope.md`
+  - `docs/multi_tenant/rbac_roadmap.md`
+  - `docs/Roles de acceso/Matriz-permisos-v2.md`
+
 Resumen ejecutivo
 - El modelo RBAC existe (roles, permisos, roles_permisos, usuarios_roles, puestos, empleados), pero no contempla jerarquia de jefes.
 - El backend usa service role en muchas llamadas, lo que puede bypassar RLS si no se controla.

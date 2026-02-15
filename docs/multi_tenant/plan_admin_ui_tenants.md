@@ -2,6 +2,12 @@
 
 Objetivo: que un **platform admin** pueda crear/editar/eliminar tenants y configurar routing, config y secretos desde UI, sin tocar `.env` por cliente.
 
+Documentos relacionados (RBAC / roles v2)
+- `docs/multi_tenant/rbac_and_scope.md`
+- `docs/multi_tenant/rbac_roadmap.md`
+- `docs/multi_tenant/rbac_permissions_and_endpoints.md`
+- `docs/multi_tenant/rbac_acceptance_tests.md`
+
 ## Checklist
 
 - [ ] Confirmar roles: `platform_admin` (cross-tenant) vs `owner` (solo su tenant)

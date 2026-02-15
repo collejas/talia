@@ -2,6 +2,10 @@
 
 Fecha: 2026-02-11
 
+Actualización (2026-02-15)
+- Se creó una propuesta de roles v2 + permisos nuevos (reasignación, auditoría ampliada, etc.) en `docs/Roles de acceso/Matriz-permisos-v2.md`.
+- El plan multi-tenant y la separación plataforma vs tenant se amplían en `docs/multi_tenant/*` (ver `docs/multi_tenant/rbac_and_scope.md`).
+
 Objetivo
 Definir permisos mínimos por rol y las vistas habilitadas en el panel.
 

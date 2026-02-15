@@ -1,6 +1,11 @@
 # Plan detallado: roles, permisos y jerarquia por arbol
 
 Fecha: 2026-02-10
+
+Actualización (2026-02-15)
+- Este plan continúa y se amplía con roles v2 y permisos v2 en `docs/Roles de acceso/Matriz-permisos-v2.md`.
+- El contexto multi-tenant y la separación plataforma vs tenant se documentan en `docs/multi_tenant/rbac_and_scope.md` y `docs/multi_tenant/rbac_roadmap.md`.
+
 Objetivo
 - Mostrar solo informacion autorizada segun rol y jerarquia de cada empleado.
 - Restringir vistas segun permisos del rol.

@@ -13,6 +13,13 @@
 - [ ] Hardening (auditoría, logs, masking, mínimos permisos)
 - [ ] Documentar UI admin (ver `docs/multi_tenant/plan_admin_ui_tenants.md`)
 
+Documentos de RBAC relacionados (2026-02-15)
+- `docs/multi_tenant/rbac_and_scope.md`
+- `docs/multi_tenant/rbac_roadmap.md`
+- `docs/multi_tenant/rbac_migration_map.md`
+- `docs/multi_tenant/rbac_permissions_and_endpoints.md`
+- `docs/multi_tenant/rbac_acceptance_tests.md`
+
 ## Observaciones
 
 - [ ] (pendiente) Primer arranque / notas de implementación.
