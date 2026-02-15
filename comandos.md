@@ -92,25 +92,11 @@ sudo rsync -a landing/src/ /var/www/talia-landing/
   
 con esta app que tengo que indicadores podria mejorar una empresa de bienes raices al usar mi app?
 
-Oportunidades codex resume 019c581b-56ef-7472-99b9-7e975ab946b2
+Oportunidades codex resume 019c5d7c-59e7-7f01-b700-8d473efe8c49
  codex resume 019c5274-f35c-70a3-a73e-c32f020b7cfb
-codex resume 019c4e1d-b93e-72f1-aba1-b73722cf3358
-codex resume 019c4999-cfa0-7100-ae74-7d5ce4ca9dba
 
-codex resume 019c4454-833a-7c71-954d-ea813e5e21c1
-codex resume 019c43d8-9511-74a3-ab0d-b70e640a9089
-codex resume 019c4029-a7aa-7343-b397-00864b465103
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305
-codex resume 019c34d7-2fe3-7710-b932-a72d5807b72b
-codex resume 019c293a-b36e-7923-9121-7978fdceb363
-codex resume 019c29fa-047b-7ec2-8d30-ce4a6c8bbe76
-
-* Variables
-codex resume 019c293a-b36e-7923-9121-7978fdceb363
-* Instructivo creacion Tenants:
-codex resume 019c290c-c0c6-7983-bbf0-e281b8027004
-
 
 sudo cat /proc/$(pgrep -f "next start")/environ | tr '\0' '\n' | grep -E 'SUPABASE|PANEL'
 
