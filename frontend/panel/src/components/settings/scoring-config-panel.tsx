@@ -185,7 +185,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
     () =>
       questions.map((question) => ({
         id: question.id,
-        label: `${question.field_key} · ${question.question_text}`,
+        label: `${FIELD_KEY_LABEL_BY_KEY.get(question.field_key) ?? "Dato personalizado"} · ${question.question_text}`,
       })),
     [questions],
   );
@@ -200,7 +200,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
     );
     return uniqByChannel.map((fieldKey) => ({
       value: fieldKey,
-      label: FIELD_KEY_LABEL_BY_KEY.get(fieldKey) ?? `${fieldKey} (existente)`,
+      label: FIELD_KEY_LABEL_BY_KEY.get(fieldKey) ?? "Dato personalizado (existente)",
     }));
   }, [questions]);
 
@@ -594,7 +594,7 @@ export function ScoringConfigPanel({ initialWebchat, initialWhatsapp }: Props) {
               <div>
                 <p className="font-medium">{item.question_text}</p>
                 <p className="text-muted-foreground">
-                  Dato: {findFieldKeyLabel(item.field_key)} ({item.field_key}) · Orden: {item.orden} · Repreguntas: {item.repregunta_max} ·{" "}
+                  Dato: {findFieldKeyLabel(item.field_key)} · Orden: {item.orden} · Repreguntas: {item.repregunta_max} ·{" "}
                   {item.required_for_case_a ? "Obligatoria" : "Opcional"} · {item.activa ? "Activa" : "Inactiva"}
                 </p>
               </div>
