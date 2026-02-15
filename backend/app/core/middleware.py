@@ -32,6 +32,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request_id = uuid4().hex
         start = time.perf_counter()
         path = request.url.path
+        query = request.url.query
         skip_transitions = any(path.startswith(prefix) for prefix in _REQUEST_SKIP_PREFIXES)
 
         client_ip = request.headers.get("x-forwarded-for")
@@ -50,6 +51,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "request_id": request_id,
                     "method": request.method,
                     "path": path,
+                    "query": query or None,
                     "client_ip": client_ip,
                     "user_agent": user_agent,
                 },
@@ -65,6 +67,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "request_id": request_id,
                     "method": request.method,
                     "path": path,
+                    "query": query or None,
                     "duration_ms": round(duration_ms, 2),
                     "client_ip": client_ip,
                 },
@@ -82,6 +85,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "request_id": request_id,
                     "method": request.method,
                     "path": path,
+                    "query": query or None,
                     "status_code": response.status_code,
                     "duration_ms": round(duration_ms, 2),
                     "client_ip": client_ip,

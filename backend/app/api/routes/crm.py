@@ -2288,6 +2288,7 @@ def require_organizacion_id(
         extra={
             "organizacion_id": str(organizacion_id),
             "path": request.url.path,
+            "query": request.url.query or None,
             "method": request.method,
             "user_id": request.headers.get("X-Usuario-Id"),
         },
@@ -12433,16 +12434,88 @@ async def pipeline_scoring_kpis(
     _: str = Depends(require_permission("pipeline.view")),
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     limit: Annotated[int, Query(ge=100, le=5000)] = 2000,
+    asignado_id: UUID | None = Query(default=None),
 ) -> CRMPipelineScoringKpis:
     created_from = datetime.now(timezone.utc) - timedelta(days=days)
+    # Si no se pasa asignado_id explícitamente, y el usuario es vendedor (no admin),
+    # forzamos KPIs a su propio alcance para evitar que vea métricas globales
+    # (los KPIs se calculan con service role para telemetría).
+    if asignado_id is None:
+        try:
+            ctx = await repo.get_permission_context()
+        except CRMRepositoryError:
+            ctx = {}
+        roles = ctx.get("roles")
+        es_admin_value = ctx.get("es_admin")
+        is_admin_ctx = bool(es_admin_value) if isinstance(es_admin_value, (bool, int)) else False
+        role_values = roles if isinstance(roles, list) else []
+        is_privileged_ctx = is_admin_ctx or any(
+            isinstance(item, str)
+            and (
+                item.strip().lower() in ("admin", "0002", "supervisor")
+                or "admin" in item.strip().lower()
+                or "supervisor" in item.strip().lower()
+            )
+            for item in role_values
+        )
+        is_vendedor_ctx = any(
+            isinstance(item, str)
+            and (
+                item.strip().lower() in ("0003", "agente", "vendedor")
+                or "agente" in item.strip().lower()
+                or "vendedor" in item.strip().lower()
+            )
+            for item in role_values
+        )
+        usuario_ctx = ctx.get("usuario_id")
+        if is_vendedor_ctx and not is_privileged_ctx and usuario_ctx:
+            try:
+                asignado_id = UUID(str(usuario_ctx))
+            except (TypeError, ValueError):
+                asignado_id = None
+        logger.info(
+            "crm.pipeline_scoring_kpis.effective_scope",
+            extra={
+                "has_user_token": bool(getattr(repo, "_user_token", None)),
+                "ctx_usuario_id": str(usuario_ctx) if usuario_ctx else None,
+                "ctx_roles": role_values,
+                "ctx_es_admin": is_admin_ctx,
+                "ctx_privileged": is_privileged_ctx,
+                "incoming_asignado_id": None,
+                "effective_asignado_id": str(asignado_id) if asignado_id else None,
+                "days": days,
+                "limit": limit,
+            },
+        )
+    else:
+        logger.info(
+            "crm.pipeline_scoring_kpis.effective_scope",
+            extra={
+                "has_user_token": bool(getattr(repo, "_user_token", None)),
+                "incoming_asignado_id": str(asignado_id),
+                "effective_asignado_id": str(asignado_id),
+                "days": days,
+                "limit": limit,
+            },
+        )
     try:
         rows = await repo.list_opportunity_scoring_events(
             organizacion_id=organizacion_id,
             created_from=created_from,
             limit=limit,
+            asignado_id=asignado_id,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    logger.info(
+        "crm.pipeline_scoring_kpis.rows_loaded",
+        extra={
+            "effective_asignado_id": str(asignado_id) if asignado_id else None,
+            "rows": len(rows),
+            "unique_opportunities": len({str(r.get("oportunidad_id")) for r in rows if r.get("oportunidad_id")}),
+            "days": days,
+        },
+    )
     return _build_scoring_kpis(rows=rows, window_days=days)
 
 

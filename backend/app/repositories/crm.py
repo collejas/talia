@@ -3165,6 +3165,7 @@ class CRMRepository:
         organizacion_id: UUID,
         created_from: datetime | None = None,
         limit: int = 1000,
+        asignado_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -3174,6 +3175,35 @@ class CRMRepository:
         }
         if created_from:
             params["created_at"] = f"gte.{created_from.isoformat()}"
+        opportunity_ids: list[str] | None = None
+        if asignado_id:
+            assigned_rows, _ = await self.list_pipeline_opportunities(
+                organizacion_id=organizacion_id,
+                limit=5000,
+                asignado_id=asignado_id,
+            )
+            if not assigned_rows:
+                logger.info(
+                    "crm.scoring_events.filtered_empty",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "asignado_id": str(asignado_id),
+                        "created_from": created_from.isoformat() if created_from else None,
+                    },
+                )
+                return []
+            opportunity_ids = [str(row.get("id")) for row in assigned_rows if row.get("id")]
+        if opportunity_ids:
+            params["oportunidad_id"] = _postgrest_in_clause(opportunity_ids)
+            logger.info(
+                "crm.scoring_events.filtered",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "asignado_id": str(asignado_id),
+                    "opportunities": len(opportunity_ids),
+                    "created_from": created_from.isoformat() if created_from else None,
+                },
+            )
         # Este histórico es telemetría interna del backend; se consulta con service role
         # para no depender de políticas RLS del JWT de usuario final.
         resp = await self._request_service_role(

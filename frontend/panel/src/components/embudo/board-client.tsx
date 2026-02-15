@@ -159,14 +159,35 @@ export function EmbudoBoardClient({
   const [scheduleLink, setScheduleLink] = useState("");
 
   const { context: permissionContext, loading: permissionsLoading } = usePermissions();
-  const isVendedorRole = permissionContext.roles
+  const normalizedRoles = permissionContext.roles
     .map((role) => (role ?? "").toString().trim().toLowerCase())
-    .some((value) => value === "vendedor" || value.includes("vendedor"));
-  const showVendorFilter = !permissionsLoading && !isVendedorRole;
+    .filter(Boolean);
+  const isAdminRole =
+    Boolean(permissionContext.es_admin) ||
+    normalizedRoles.some((value) => value === "admin" || value.includes("admin"));
+  const isSupervisorRole = normalizedRoles.some(
+    (value) => value === "0002" || value === "supervisor" || value.includes("supervisor"),
+  );
+  const isPrivilegedRole = isAdminRole || isSupervisorRole;
+  const isAgenteRole = normalizedRoles.some(
+    (value) =>
+      value === "0003" ||
+      value === "agente" ||
+      value === "vendedor" ||
+      value.includes("agente") ||
+      value.includes("vendedor"),
+  );
+  const showVendorFilter = !permissionsLoading && isPrivilegedRole;
   const [vendorOptions, setVendorOptions] = useState<SalesRepOption[]>([]);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [vendorError, setVendorError] = useState<string | null>(null);
   const [selectedVendedorId, setSelectedVendedorId] = useState("");
+
+  useEffect(() => {
+    if (!permissionsLoading && isAgenteRole && !isPrivilegedRole && permissionContext.usuario_id) {
+      setSelectedVendedorId((current) => (current || permissionContext.usuario_id || ""));
+    }
+  }, [permissionsLoading, isAgenteRole, isPrivilegedRole, permissionContext.usuario_id]);
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardFetchError, setBoardFetchError] = useState<string | null>(null);
   const hasMountedRef = useRef(false);

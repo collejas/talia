@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/cookies"
+import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt"
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -22,6 +23,9 @@ export async function GET() {
   if (!accessToken) {
     return NextResponse.json({ error: "auth_required" }, { status: 401 })
   }
+
+  const usuarioId = decodeJwtUserId(accessToken)
+  const organizacionId = decodeJwtOrganizacionId(accessToken)
 
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/mi_contexto_permisos`, {
     method: "POST",
@@ -47,5 +51,9 @@ export async function GET() {
     | Array<{ permisos?: string[]; es_admin?: boolean }>
 
   const data = Array.isArray(payload) ? payload[0] ?? {} : payload ?? {}
-  return NextResponse.json(data)
+  return NextResponse.json({
+    ...data,
+    usuario_id: usuarioId ?? undefined,
+    organizacion_id: organizacionId ?? undefined,
+  })
 }

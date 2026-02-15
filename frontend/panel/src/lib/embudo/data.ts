@@ -171,6 +171,7 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
     callCrmApi<EmbudoScoringKpis>("/crm/pipeline/scoring/kpis", {
       searchParams: {
         days: "7",
+        ...(options.asignadoId ? { asignado_id: options.asignadoId } : {}),
       },
       withUserToken: true,
     }),
