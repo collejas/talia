@@ -845,6 +845,15 @@ async def _compute_lead_scoring_from_catalog(
         include_inactive=False,
     )
     if not questions or not rules:
+        logger.warning(
+            "storage.lead_scoring.catalog_fallback_missing_config",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "channel": channel,
+                "questions_count": len(questions or []),
+                "rules_count": len(rules or []),
+            },
+        )
         return None
 
     profile = profiles[0] if profiles else {}
@@ -925,6 +934,14 @@ async def _compute_lead_scoring_from_catalog(
         if bool(question.get("required_for_case_a")) and field_key not in required_fields:
             required_fields.append(field_key)
     if not required_fields:
+        logger.warning(
+            "storage.lead_scoring.catalog_fallback_required_fields_default",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "channel": channel,
+                "default_required_fields": list(_CRITICAL_SCORING_FIELDS),
+            },
+        )
         required_fields = list(_CRITICAL_SCORING_FIELDS)
 
     missing_fields: list[str] = []
@@ -2465,6 +2482,15 @@ async def apply_lead_scoring(
             dynamic_scoring = None
         if dynamic_scoring:
             scoring = dynamic_scoring
+        else:
+            logger.warning(
+                "storage.lead_scoring.catalog_fallback_legacy",
+                extra={
+                    "opportunity_id": str(opp_uuid),
+                    "conversation_id": conversation_id,
+                    "channel": channel_value,
+                },
+            )
 
     scoring_payload = {
         **scoring,

@@ -1429,6 +1429,14 @@ async def _load_required_case_a_questions(
         if question_text:
             question_by_field[field_key] = question_text
     if not required_fields:
+        logger.warning(
+            "webchat.prefilter.required_fields_fallback_default",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "channel": channel,
+                "default_required_fields": list(_DEFAULT_REQUIRED_CASE_A_FIELDS),
+            },
+        )
         required_fields = list(_DEFAULT_REQUIRED_CASE_A_FIELDS)
     return required_fields, question_by_field
 
