@@ -59,6 +59,7 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
 }: GoogleResultsMapProps) {
   const zoom = radiusToZoom(radius);
   const mapCenter: LatLngExpression = [center.lat, center.lng];
+  const [currentZoom, setCurrentZoom] = useState<number>(zoom);
   const validResults = useMemo(
     () =>
       results.filter((item) => typeof item.lat === "number" && typeof item.lng === "number") as Array<
@@ -79,6 +80,7 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
         <MapViewUpdater center={mapCenter} zoom={zoom} />
       )}
       {fitBounds ? <MapFitBounds bounds={fitBounds} fitKey={fitBoundsKey} /> : null}
+      <MapZoomReporter onZoomChange={setCurrentZoom} />
       {onViewportChange ? <MapViewportReporter onViewportChange={onViewportChange} /> : null}
       {enableCenterControls ? <MapClickHandler onCenterChange={onCenterChange} /> : null}
       {showSearchCircle ? (
@@ -95,6 +97,7 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
               key={`cluster:${(item as unknown as { id?: unknown }).id ?? item.resultado_id ?? `${item.lat},${item.lng}`}`}
               position={[item.lat, item.lng]}
               count={Number.isFinite(countValue) ? countValue : 0}
+              zoom={currentZoom}
             />
           );
         }
@@ -122,9 +125,9 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
   );
 });
 
-function ClusterCircleMarker({ position, count }: { position: LatLngExpression; count: number }) {
+function ClusterCircleMarker({ position, count, zoom }: { position: LatLngExpression; count: number; zoom: number }) {
   const map = useMap();
-  const clusterIcon = useClusterIcon(count);
+  const clusterIcon = useClusterIcon(count, zoom);
 
   if (!clusterIcon) {
     return null;
@@ -395,6 +398,27 @@ function MapViewportReporter({
   return null;
 }
 
+function MapZoomReporter({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const lastZoom = useRef<number>(-1);
+  const map = useMapEvents({
+    zoomend() {
+      const next = map.getZoom();
+      if (next === lastZoom.current) return;
+      lastZoom.current = next;
+      onZoomChange(next);
+    },
+  });
+
+  useEffect(() => {
+    const next = map.getZoom();
+    if (next === lastZoom.current) return;
+    lastZoom.current = next;
+    onZoomChange(next);
+  }, [map, onZoomChange]);
+
+  return null;
+}
+
 type LeafletMarker = {
   getLatLng: () => { lat: number; lng: number };
 };
@@ -474,23 +498,44 @@ function useCenterIcon() {
 
 const clusterIconCache = new Map<string, unknown>();
 
-function useClusterIcon(count: number) {
+function useClusterIcon(count: number, zoom: number) {
   const [icon, setIcon] = useState<unknown>(null);
   const label = useMemo(() => {
     if (!Number.isFinite(count) || count <= 0) return "0";
     return count.toLocaleString("es-MX");
   }, [count]);
+  const style = useMemo(() => {
+    const safeCount = Number.isFinite(count) ? Math.max(0, count) : 0;
+    const tier =
+      safeCount >= 1000 ? "xl" : safeCount >= 100 ? "lg" : safeCount >= 10 ? "md" : "sm";
+    const palette: Record<
+      string,
+      { fill: string; border: string; text: string; shadow: string }
+    > = {
+      sm: { fill: "rgba(37, 99, 235, 0.30)", border: "rgba(37, 99, 235, 0.95)", text: "rgba(30, 41, 59, 0.95)", shadow: "rgba(37, 99, 235, 0.18)" },
+      md: { fill: "rgba(22, 163, 74, 0.30)", border: "rgba(22, 163, 74, 0.95)", text: "rgba(30, 41, 59, 0.95)", shadow: "rgba(22, 163, 74, 0.18)" },
+      lg: { fill: "rgba(249, 115, 22, 0.30)", border: "rgba(249, 115, 22, 0.95)", text: "rgba(30, 41, 59, 0.95)", shadow: "rgba(249, 115, 22, 0.18)" },
+      xl: { fill: "rgba(220, 38, 38, 0.30)", border: "rgba(220, 38, 38, 0.95)", text: "rgba(30, 41, 59, 0.95)", shadow: "rgba(220, 38, 38, 0.18)" },
+    };
+    const zoomBucket = zoom <= 9 ? "far" : zoom <= 13 ? "mid" : "near";
+    const borderWidth = zoomBucket === "far" ? 3 : zoomBucket === "mid" ? 2.5 : 2;
+    return { ...palette[tier], zoomBucket, borderWidth };
+  }, [count, zoom]);
+
   const size = useMemo(() => {
     if (!Number.isFinite(count) || count <= 1) return 30;
     const extra = Math.min(22, Math.log10(Math.max(10, count)) * 12);
-    return Math.round(34 + extra);
-  }, [count]);
+    const base = Math.round(34 + extra);
+    if (zoom <= 9) return Math.round(base * 1.12);
+    if (zoom >= 15) return Math.round(base * 0.96);
+    return base;
+  }, [count, zoom]);
   const fontSize = useMemo(() => {
     if (label.length >= 7) return 11;
     if (label.length >= 5) return 12;
     return 13;
   }, [label.length]);
-  const cacheKey = `${size}:${fontSize}:${label}`;
+  const cacheKey = `${style.zoomBucket}:${style.borderWidth}:${style.fill}:${style.border}:${size}:${fontSize}:${label}`;
 
   useEffect(() => {
     const cached = clusterIconCache.get(cacheKey);
@@ -516,15 +561,16 @@ function useClusterIcon(count: number) {
         <div style="
           width:${size}px;height:${size}px;
           border-radius:9999px;
-          background:rgba(15,23,42,0.28);
-          border:2px solid rgba(15,23,42,0.95);
-          box-shadow:0 0 10px rgba(15,23,42,0.18);
+          background:${style.fill};
+          border:${style.borderWidth}px solid ${style.border};
+          box-shadow:0 0 12px ${style.shadow};
           display:flex;align-items:center;justify-content:center;
-          color:rgba(15,23,42,0.95);
+          color:${style.text};
           font-weight:700;
           font-size:${fontSize}px;
           line-height:1;
           user-select:none;
+          backdrop-filter:saturate(120%);
         ">${label}</div>
       `.trim();
 
@@ -540,7 +586,7 @@ function useClusterIcon(count: number) {
     return () => {
       isMounted = false;
     };
-  }, [cacheKey, fontSize, label, size]);
+  }, [cacheKey, fontSize, label, size, style.border, style.borderWidth, style.fill, style.shadow, style.text]);
 
   return icon as unknown | null;
 }
