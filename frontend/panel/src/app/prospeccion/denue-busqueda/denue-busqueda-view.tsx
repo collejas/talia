@@ -29,10 +29,12 @@ import {
   deleteDenueBusqueda,
   deleteDenueResultados,
   listDenueBusquedas,
+  listDenueCatalogos,
   listDenueResultados,
   type CreateDenueSearchPayload,
   type CreateDenueSearchResponse,
   type DenueBusquedaItem,
+  type DenueCatalogosResponse,
   type DenueResultadoItem,
 } from "@/lib/prospeccion/denue-client";
 import type { GoogleResultadoItem } from "@/lib/prospeccion/google-client";
@@ -117,6 +119,11 @@ type BusquedaMetaFilters = {
   geo_municipios?: string[];
 };
 
+type GeoLookups = {
+  states: Map<string, string>;
+  municipalities: Map<string, string>;
+};
+
 function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?: string; filters?: BusquedaMetaFilters } {
   const meta = item.meta;
   if (!meta || typeof meta !== "object") {
@@ -139,21 +146,74 @@ function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?:
   return { source, modo, filters };
 }
 
-function formatGeoLabel(filters?: BusquedaMetaFilters): string {
+function buildGeoLookups(states: DenueCatalogosResponse["geo"]["states"]): GeoLookups {
+  const stateMap = new Map<string, string>();
+  const municipalityMap = new Map<string, string>();
+  for (const state of states) {
+    const stateCode = String(state.code ?? "").trim().padStart(2, "0");
+    if (stateCode && state.name) {
+      stateMap.set(stateCode, String(state.name).trim());
+    }
+    for (const municipio of state.municipalities ?? []) {
+      const municipioCode = String(municipio.code ?? "").trim().padStart(3, "0");
+      if (stateCode && municipioCode && municipio.name) {
+        municipalityMap.set(`${stateCode}::${municipioCode}`, String(municipio.name).trim());
+      }
+    }
+  }
+  return { states: stateMap, municipalities: municipalityMap };
+}
+
+function buildGeoDisplay(
+  filters?: BusquedaMetaFilters,
+  lookups?: GeoLookups | null,
+): { label: string; tooltip?: string } {
   if (!filters) {
-    return "—";
+    return { label: "—" };
   }
   const municipios = (filters.geo_municipios ?? []).filter(Boolean);
   if (municipios.length) {
-    const normalized = municipios.map((value) => value.replace("::", "-"));
-    return normalized.length > 1 ? `${normalized[0]} +${normalized.length - 1}` : normalized[0]!;
+    const normalized = municipios.map((value) => {
+      const [rawState, rawMun] = String(value).split("::");
+      const state = rawState ? String(rawState).padStart(2, "0") : "";
+      const mun = rawMun ? String(rawMun).padStart(3, "0") : "";
+      const stateName = state ? lookups?.states.get(state) : undefined;
+      const munName = state && mun ? lookups?.municipalities.get(`${state}::${mun}`) : undefined;
+      if (stateName && munName) {
+        return `${stateName} / ${munName}`;
+      }
+      return String(value).replace("::", "-");
+    });
+    const base = normalized[0] ?? "—";
+    if (municipios.length <= 1) {
+      return { label: base };
+    }
+    const maxTooltipItems = 30;
+    const tooltipItems = normalized.slice(0, maxTooltipItems);
+    const tooltipExtra = normalized.length > maxTooltipItems ? `\n+${normalized.length - maxTooltipItems} más…` : "";
+    return {
+      label: `${base} +${municipios.length - 1}`,
+      tooltip: `Municipios (${normalized.length}):\n${tooltipItems.join("\n")}${tooltipExtra}`,
+    };
   }
   const estados = (filters.geo_estados ?? []).filter(Boolean);
   if (estados.length) {
     const normalized = estados.map((value) => String(value).padStart(2, "0"));
-    return normalized.length > 1 ? `${normalized[0]} +${normalized.length - 1}` : normalized[0]!;
+    const first = normalized[0]!;
+    const base = lookups?.states.get(first) ?? first;
+    if (normalized.length <= 1) {
+      return { label: base };
+    }
+    const names = normalized.map((code) => lookups?.states.get(code) ?? code);
+    const maxTooltipItems = 30;
+    const tooltipItems = names.slice(0, maxTooltipItems);
+    const tooltipExtra = names.length > maxTooltipItems ? `\n+${names.length - maxTooltipItems} más…` : "";
+    return {
+      label: `${base} +${normalized.length - 1}`,
+      tooltip: `Estados (${names.length}):\n${tooltipItems.join("\n")}${tooltipExtra}`,
+    };
   }
-  return "—";
+  return { label: "—" };
 }
 
 export function DenueBusquedaView() {
@@ -190,6 +250,7 @@ export function DenueBusquedaView() {
   const [isSavingProspectos, setIsSavingProspectos] = useState(false);
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
+  const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -242,6 +303,27 @@ export function DenueBusquedaView() {
   useEffect(() => {
     busquedasRef.current = busquedas;
   }, [busquedas]);
+
+  useEffect(() => {
+    if (geoLookups || isLoadingBusquedas || !busquedas.length) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await listDenueCatalogos();
+        if (cancelled) return;
+        setGeoLookups(buildGeoLookups(response.geo.states ?? []));
+      } catch {
+        // Sin catálogos: mostrar códigos como fallback.
+        if (cancelled) return;
+        setGeoLookups(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [busquedas.length, geoLookups, isLoadingBusquedas]);
 
   const fetchResultadosPage = useCallback(
     async ({
@@ -1540,7 +1622,7 @@ export function DenueBusquedaView() {
                   <TableBody>
                     {busquedas.map((item) => {
                       const meta = extractBusquedaMeta(item);
-                      const geoLabel = formatGeoLabel(meta.filters);
+                      const geo = buildGeoDisplay(meta.filters, geoLookups);
                       const createdLabel = new Date(item.creado_en).toLocaleString("es-MX", {
                         dateStyle: "short",
                         timeStyle: "short",
@@ -1572,7 +1654,24 @@ export function DenueBusquedaView() {
                               : "—"}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{radioLabel}</TableCell>
-                          <TableCell className="font-mono text-xs">{geoLabel}</TableCell>
+                          <TableCell className="text-xs">
+                            {geo.tooltip ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="cursor-help underline decoration-dotted underline-offset-2">
+                                      {geo.label}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" align="start" className="max-w-sm whitespace-pre-wrap text-sm leading-snug">
+                                    {geo.tooltip}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              geo.label
+                            )}
+                          </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{createdLabel}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex flex-wrap justify-end gap-2">
