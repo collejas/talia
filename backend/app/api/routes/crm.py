@@ -9715,7 +9715,7 @@ async def crear_busqueda_denue(
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
     advanced_meta = _build_advanced_meta(payload)
     modo = payload.modo or "radio"
-    text_query = (payload.texto_busqueda or payload.query).strip()
+    text_query = (payload.texto_busqueda or "").strip()
     search_logger.info(
         "denue.search_requested",
         extra={
@@ -9835,10 +9835,12 @@ async def crear_busqueda_denue(
                 entidad = _first_state_from_payload(payload)
                 if not entidad:
                     raise HTTPException(status_code=400, detail="entidad_required")
+                if not text_query:
+                    raise HTTPException(status_code=400, detail="texto_busqueda_required")
 
                 async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
                     return await client.search_by_entidad(
-                        condicion=text_query or payload.query,
+                        condicion=text_query,
                         entidad=entidad,
                         registro_inicial=registro_inicial,
                         registro_final=registro_final,
@@ -9859,7 +9861,7 @@ async def crear_busqueda_denue(
                             entidad=entidad,
                             municipio=municipio,
                             actividad_codigo=actividad_codigo,
-                            texto=text_query or payload.query,
+                            texto=text_query or None,
                             registro_inicial=registro_inicial,
                             registro_final=registro_final,
                             estrato=estrato,
@@ -9870,7 +9872,7 @@ async def crear_busqueda_denue(
                             entidad=entidad,
                             municipio=municipio,
                             actividad_codigo=actividad_codigo,
-                            texto=text_query or payload.query,
+                            texto=text_query or None,
                             registro_inicial=registro_inicial,
                             registro_final=registro_final,
                         )

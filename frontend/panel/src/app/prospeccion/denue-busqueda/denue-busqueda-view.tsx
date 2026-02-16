@@ -66,6 +66,14 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -101,6 +109,50 @@ type AdvancedSearchPayload = Pick<
   CreateDenueSearchPayload,
   "modo" | "texto_busqueda" | "actividad_codigos" | "estrato_ids" | "geo_estados" | "geo_municipios"
 >;
+
+type BusquedaMetaFilters = {
+  geo_estados?: string[];
+  geo_municipios?: string[];
+};
+
+function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?: string; filters?: BusquedaMetaFilters } {
+  const meta = item.meta;
+  if (!meta || typeof meta !== "object") {
+    return {};
+  }
+  const source = typeof (meta as Record<string, unknown>).source === "string" ? String((meta as Record<string, unknown>).source) : undefined;
+  const modo = typeof (meta as Record<string, unknown>).modo === "string" ? String((meta as Record<string, unknown>).modo) : undefined;
+  const advanced = (meta as Record<string, unknown>).advanced_filters;
+  const filters =
+    advanced && typeof advanced === "object"
+      ? {
+        geo_estados: Array.isArray((advanced as Record<string, unknown>).geo_estados)
+          ? ((advanced as Record<string, unknown>).geo_estados as unknown[]).map(String)
+          : undefined,
+        geo_municipios: Array.isArray((advanced as Record<string, unknown>).geo_municipios)
+          ? ((advanced as Record<string, unknown>).geo_municipios as unknown[]).map(String)
+          : undefined,
+      }
+      : undefined;
+  return { source, modo, filters };
+}
+
+function formatGeoLabel(filters?: BusquedaMetaFilters): string {
+  if (!filters) {
+    return "—";
+  }
+  const municipios = (filters.geo_municipios ?? []).filter(Boolean);
+  if (municipios.length) {
+    const normalized = municipios.map((value) => value.replace("::", "-"));
+    return normalized.length > 1 ? `${normalized[0]} +${normalized.length - 1}` : normalized[0]!;
+  }
+  const estados = (filters.geo_estados ?? []).filter(Boolean);
+  if (estados.length) {
+    const normalized = estados.map((value) => String(value).padStart(2, "0"));
+    return normalized.length > 1 ? `${normalized[0]} +${normalized.length - 1}` : normalized[0]!;
+  }
+  return "—";
+}
 
 export function DenueBusquedaView() {
   const { context } = usePermissions();
@@ -639,6 +691,33 @@ export function DenueBusquedaView() {
     updateFormValue("lng", Number(coords.lng.toFixed(6)));
   }, [updateFormValue]);
 
+  const buildAdvancedQueryLabel = useCallback((filters: DenueAdvancedFilters, payload: AdvancedSearchPayload) => {
+    const parts: string[] = [];
+    parts.push(`Avanzada:${payload.modo}`);
+    const texto = (payload.texto_busqueda ?? "").trim();
+    if (texto) {
+      parts.push(texto);
+    }
+    if (filters.allActivitiesSelected) {
+      parts.push("act:todas");
+    } else if (payload.actividad_codigos?.length) {
+      parts.push(`act:${payload.actividad_codigos.length}`);
+    }
+    if (payload.estrato_ids?.length) {
+      parts.push(`tam:${payload.estrato_ids.join(",")}`);
+    }
+    if (payload.geo_municipios?.length) {
+      parts.push(`mun:${payload.geo_municipios.length}`);
+    } else if (payload.geo_estados?.length) {
+      parts.push(`edo:${payload.geo_estados.length}`);
+    }
+    const label = parts.filter(Boolean).join(" · ").trim() || "Búsqueda avanzada";
+    if (label.length <= 200) {
+      return label;
+    }
+    return `${label.slice(0, 197).trimEnd()}...`;
+  }, []);
+
   const buildAdvancedPayload = useCallback((filters: DenueAdvancedFilters | null): AdvancedSearchPayload | undefined => {
     if (!filters) {
       return undefined;
@@ -654,11 +733,19 @@ export function DenueBusquedaView() {
     const texto = textParts.join(" ").trim();
     const actividadCodes = filters.allActivitiesSelected
       ? ["0"]
-      : filters.actividad.map((value) => value.trim()).filter((value) => value.length >= 6);
+      : Array.from(
+        new Set(
+          filters.actividad
+            .map((value) => value.trim())
+            .filter((value) => value.length >= 2),
+        ),
+      );
     const estrato = filters.estrato.filter((value) => value !== "0");
     const geoEstados = filters.geografia.estados.length ? filters.geografia.estados : undefined;
     const geoMunicipios = filters.geografia.municipios.length ? filters.geografia.municipios : undefined;
-    const hasActivitySelection = actividadCodes.some((value) => Boolean(value) && value !== "0");
+    const hasActivitySelection =
+      filters.allActivitiesSelected ||
+      actividadCodes.some((value) => Boolean(value) && value !== "0");
     const hasGeo = Boolean(geoEstados?.length || geoMunicipios?.length);
     const hasEstrato = Boolean(estrato.length);
     let modo: AdvancedSearchPayload["modo"] = "radio";
@@ -678,6 +765,9 @@ export function DenueBusquedaView() {
         texto_busqueda: texto,
       };
     }
+    if (modo === "entidad" && !texto) {
+      return undefined;
+    }
     return {
       modo,
       texto_busqueda: texto || undefined,
@@ -694,12 +784,20 @@ export function DenueBusquedaView() {
       const activeAdvanced = overrideFilters ?? advancedFilters;
       const advancedPayload = buildAdvancedPayload(activeAdvanced);
       const isAdvanced = Boolean(activeAdvanced && advancedPayload);
+      if (activeAdvanced && !advancedPayload) {
+        setFeedback({
+          type: "error",
+          message: "La búsqueda avanzada requiere texto (nombre/calle/colonia/CP) o una actividad económica seleccionada.",
+        });
+        return;
+      }
       if (!isAdvanced && !formValues.query.trim().length) {
         setFeedback({ type: "error", message: "Captura el texto o palabra clave a buscar." });
         return;
       }
-      const advancedText = advancedPayload?.texto_busqueda?.trim() || "";
-      const queryValue = isAdvanced ? advancedText || "todos" : formValues.query.trim();
+      const queryValue = isAdvanced && advancedPayload && activeAdvanced
+        ? buildAdvancedQueryLabel(activeAdvanced, advancedPayload)
+        : formValues.query.trim();
       const payload: CreateDenueSearchPayload = {
         query: queryValue,
         lat: formValues.lat,
@@ -728,7 +826,7 @@ export function DenueBusquedaView() {
         setIsSearching(false);
       }
     },
-    [formValues, loadBusquedas, loadResultadosForBusqueda, buildAdvancedPayload, advancedFilters],
+    [formValues, loadBusquedas, loadResultadosForBusqueda, buildAdvancedPayload, advancedFilters, buildAdvancedQueryLabel],
   );
 
   const handleStandardSearch = useCallback(() => {
@@ -1407,58 +1505,89 @@ export function DenueBusquedaView() {
           {isLoadingBusquedas ? (
             <p className="text-sm text-muted-foreground">Cargando historial…</p>
           ) : busquedas.length ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {busquedas.map((item) => (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-sm",
-                    activeBusquedaId === item.id && "border-primary bg-primary/5",
-                  )}
-                >
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{item.query || "(Sin texto)"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(item.creado_en).toLocaleString("es-MX", {
+            <ScrollArea className="h-[360px] rounded-lg border border-border/60">
+              <div className="min-w-[860px]">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      <TableHead>Búsqueda / App</TableHead>
+                      <TableHead className="w-36 text-right">Registros</TableHead>
+                      <TableHead className="w-28 text-right">Radio</TableHead>
+                      <TableHead className="w-44">Estado / Municipio</TableHead>
+                      <TableHead className="w-44">Fecha</TableHead>
+                      <TableHead className="w-44 text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {busquedas.map((item) => {
+                      const meta = extractBusquedaMeta(item);
+                      const geoLabel = formatGeoLabel(meta.filters);
+                      const createdLabel = new Date(item.creado_en).toLocaleString("es-MX", {
                         dateStyle: "short",
                         timeStyle: "short",
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant={activeBusquedaId === item.id ? "secondary" : "outline"}
-                      onClick={() => loadResultadosForBusqueda(item.id)}
-                    >
-                      Ver
-                    </Button>
-                    {canDeleteBusquedas ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        aria-label="Eliminar búsqueda"
-                        onClick={() => handleDeleteBusqueda(item.id)}
-                        disabled={deletingBusquedaId === item.id}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        {deletingBusquedaId === item.id ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Radio {typeof item.radio_m === "number" ? numberFormatter.format(item.radio_m) : "-"} m · {item.total_encontrados ?? 0} registros
-                </p>
-                </div>
-              ))}
-            </div>
+                      });
+                      const modo = meta.modo || "radio";
+                      const radioLabel =
+                        modo === "radio" && typeof item.radio_m === "number"
+                          ? `${numberFormatter.format(item.radio_m)} m`
+                          : "—";
+                      const sourceLabel = meta.source ? String(meta.source) : item.fuente;
+                      return (
+                        <TableRow
+                          key={item.id}
+                          className={cn(
+                            activeBusquedaId === item.id && "bg-primary/5",
+                          )}
+                        >
+                          <TableCell className="max-w-[380px] whitespace-normal">
+                            <div className="space-y-0.5">
+                              <div className="font-medium">{item.query || "(Sin texto)"}</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {sourceLabel} · {modo}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {numberFormatter.format(item.total_encontrados ?? 0)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{radioLabel}</TableCell>
+                          <TableCell className="font-mono text-xs">{geoLabel}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{createdLabel}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant={activeBusquedaId === item.id ? "secondary" : "outline"}
+                                onClick={() => loadResultadosForBusqueda(item.id)}
+                              >
+                                Ver
+                              </Button>
+                              {canDeleteBusquedas ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="destructive"
+                                  aria-label="Eliminar búsqueda"
+                                  onClick={() => handleDeleteBusqueda(item.id)}
+                                  disabled={deletingBusquedaId === item.id}
+                                >
+                                  {deletingBusquedaId === item.id ? (
+                                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                  )}
+                                  Eliminar
+                                </Button>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </ScrollArea>
           ) : (
             <p className="text-sm text-muted-foreground">Aún no hay capturas registradas.</p>
           )}

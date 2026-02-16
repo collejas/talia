@@ -59,7 +59,7 @@ class DenueClient:
         lng = f"{float(longitude):.6f}"
         url = (
             f"{self.base_url}/consulta/Buscar/{encoded_query}/"
-            f"{lat},{lng}/{radius}/{self.token}/?type=json"
+            f"{lat},{lng}/{radius}/{self.token}"
         )
         search_logger.info(
             "denue.request_path",
@@ -194,7 +194,7 @@ class DenueClient:
         return await self._request_list("BuscarAreaActEstr", segments)
 
     async def _request_list(self, method: str, segments: list[str]) -> list[dict[str, Any]]:
-        path = f"{self.base_url}/consulta/{method}/{'/'.join(segments)}/{self.token}/?type=json"
+        path = f"{self.base_url}/consulta/{method}/{'/'.join(segments)}/{self.token}"
         search_logger.info(
             "denue.request_path",
             extra={"method": method, "segments": segments, "url": path},
@@ -255,16 +255,28 @@ class DenueClient:
         return normalized.zfill(length)[:length]
 
     @staticmethod
-    def _build_activity_segments(codigo: str | None) -> tuple[str, str, str, str, str]:
+    def _build_activity_segments(codigo: str | None) -> tuple[str, str, str, str]:
+        """
+        DENUE (BuscarAreaAct*) usa 4 segmentos de actividad económica.
+
+        Ejemplos:
+        - "46"      -> ("46", "0", "0", "0")
+        - "464"     -> ("46", "464", "0", "0")
+        - "4641"    -> ("46", "464", "4641", "0")
+        - "464112"  -> ("46", "464", "4641", "464112")
+        - None/"0"  -> ("0", "0", "0", "0")  (todas las actividades)
+        """
+
         if not codigo:
-            return ("00", "000", "0000", "00000", "000000")
-        only_digits = "".join(ch for ch in codigo if ch.isdigit())
+            return ("0", "0", "0", "0")
+        only_digits = "".join(ch for ch in codigo if ch.isdigit()).strip()
+        if not only_digits or only_digits == "0":
+            return ("0", "0", "0", "0")
         return (
-            only_digits[:2].ljust(2, "0"),
-            only_digits[:3].ljust(3, "0"),
-            only_digits[:4].ljust(4, "0"),
-            only_digits[:5].ljust(5, "0"),
-            only_digits[:6].ljust(6, "0"),
+            only_digits[:2] if len(only_digits) >= 2 else "0",
+            only_digits[:3] if len(only_digits) >= 3 else "0",
+            only_digits[:4] if len(only_digits) >= 4 else "0",
+            only_digits[:6] if len(only_digits) >= 6 else "0",
         )
 
     def _build_area_segments(
@@ -283,11 +295,11 @@ class DenueClient:
         estrato: str | None = None,
     ) -> list[str]:
         entidad_code = self._normalize_geo_segment(entidad, 2, default="00")
-        municipio_code = self._normalize_geo_segment(municipio, 3, default="000")
-        localidad_code = self._normalize_geo_segment(localidad, 4, default="0000")
-        ageb_code = self._normalize_geo_segment(ageb, 4, default="0000")
-        manzana_code = self._normalize_geo_segment(manzana, 3, default="000")
-        segmento_sector, segmento_subsector, segmento_rama, segmento_subrama, segmento_clase = self._build_activity_segments(
+        municipio_code = self._normalize_geo_segment(municipio, 3, default="0")
+        localidad_code = self._normalize_geo_segment(localidad, 4, default="0")
+        ageb_code = self._normalize_geo_segment(ageb, 4, default="0")
+        manzana_code = self._normalize_geo_segment(manzana, 3, default="0")
+        segmento_sector, segmento_subsector, segmento_rama, segmento_clase = self._build_activity_segments(
             actividad_codigo,
         )
         nombre = (texto or "").strip() or "0"
@@ -300,7 +312,6 @@ class DenueClient:
             segmento_sector,
             segmento_subsector,
             segmento_rama,
-            segmento_subrama,
             segmento_clase,
             quote(nombre, safe=""),
             str(registro_inicial),

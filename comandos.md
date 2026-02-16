@@ -76,8 +76,8 @@ sudo micro /etc/systemd/system/talia-api.service
 
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 8004 --env-file .env
 
-sudo systemctl stop talia-panel.service
 sudo systemctl stop talia-api.service
+sudo systemctl stop talia-panel.service
 
 sudo systemctl daemon-reload
 
