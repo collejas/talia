@@ -339,6 +339,9 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
       extractStringField(data, "message") ||
       (typeof rawText === "string" && rawText.trim().length ? rawText : null) ||
       `Error ${response.status}`
+    if (detail === "twilio_not_configured" || detail.includes("Twilio credentials are not configured")) {
+      throw new Error("Twilio no está configurado (faltan credenciales). Configura `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` en el backend.")
+    }
     throw new Error(detail)
   }
 

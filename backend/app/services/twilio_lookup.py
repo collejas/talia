@@ -6,7 +6,7 @@ from typing import Any
 
 from twilio.base.exceptions import TwilioException
 
-from app.services.twilio import get_twilio_client
+from app.services.twilio import get_twilio_client, get_twilio_client_for_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,8 @@ async def lookup_phone_number(
     phone_number: str,
     *,
     country_code: str | None = None,
+    account_sid: str | None = None,
+    auth_token: str | None = None,
 ) -> dict[str, Any]:
     """Consulta Twilio Lookup y retorna metadatos del número.
 
@@ -35,7 +37,13 @@ async def lookup_phone_number(
         Datos normalizados incluyendo formatos E.164 y nacional, además de carrier.
     """
 
-    client = get_twilio_client()
+    try:
+        if account_sid or auth_token:
+            client = get_twilio_client_for_credentials(account_sid or "", auth_token or "")
+        else:
+            client = get_twilio_client()
+    except RuntimeError as exc:
+        raise TwilioLookupError(str(exc) or "twilio_not_configured") from exc
     fetch_kwargs: dict[str, Any] = {"fields": "line_type_intelligence"}
     if country_code:
         fetch_kwargs["country_code"] = country_code

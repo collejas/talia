@@ -34,6 +34,10 @@ type GoogleResultsMapProps = {
   results: GoogleResultadoItem[];
   highlightIds?: Set<string>;
   onCenterChange?: (coords: { lat: number; lng: number }) => void;
+  autoFitBounds?: boolean;
+  autoFitKey?: string;
+  showSearchCircle?: boolean;
+  enableCenterControls?: boolean;
 };
 
 export const GoogleResultsMap = memo(function GoogleResultsMap({
@@ -42,6 +46,10 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
   results,
   highlightIds,
   onCenterChange,
+  autoFitBounds = false,
+  autoFitKey,
+  showSearchCircle = true,
+  enableCenterControls = true,
 }: GoogleResultsMapProps) {
   const zoom = radiusToZoom(radius);
   const mapCenter: LatLngExpression = [center.lat, center.lng];
@@ -59,10 +67,16 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <MapViewUpdater center={mapCenter} zoom={zoom} />
-      <MapClickHandler onCenterChange={onCenterChange} />
-      <Circle center={mapCenter} radius={radius} pathOptions={{ color: "#2563eb", weight: 1.5, fillOpacity: 0.08 }} />
-      <DraggableCenterMarker position={mapCenter} onChange={onCenterChange} />
+      {autoFitBounds ? (
+        <MapAutoFit results={validResults} fallbackCenter={mapCenter} fallbackZoom={zoom} fitKey={autoFitKey} />
+      ) : (
+        <MapViewUpdater center={mapCenter} zoom={zoom} />
+      )}
+      {enableCenterControls ? <MapClickHandler onCenterChange={onCenterChange} /> : null}
+      {showSearchCircle ? (
+        <Circle center={mapCenter} radius={radius} pathOptions={{ color: "#2563eb", weight: 1.5, fillOpacity: 0.08 }} />
+      ) : null}
+      {enableCenterControls ? <DraggableCenterMarker position={mapCenter} onChange={onCenterChange} /> : null}
       {validResults.map((item) => {
         const position: LatLngExpression = [item.lat, item.lng];
         const isHighlighted = highlightIds?.has(item.resultado_id ?? "");
@@ -79,12 +93,7 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
             }}
           >
             <Tooltip direction="top">
-              <div className="space-y-1">
-                <p className="font-medium">{item.display_name ?? "Sin nombre"}</p>
-                {item.actividad ? <p className="text-xs">{item.actividad}</p> : null}
-                {item.phone ? <p className="text-xs">Tel: {item.phone}</p> : null}
-                {typeof item.rating === "number" ? <p className="text-xs">Rating: {item.rating.toFixed(1)}</p> : null}
-              </div>
+              <ResultTooltipContent item={item} />
             </Tooltip>
           </CircleMarker>
         );
@@ -92,6 +101,73 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
     </MapContainer>
   );
 });
+
+function ResultTooltipContent({ item }: { item: GoogleResultadoItem & Record<string, unknown> }) {
+  const entries = useMemo(() => {
+    const rows: Array<{ label: string; value: string; href?: string }> = [];
+    const push = (label: string, value: unknown, href?: string) => {
+      if (value === null || value === undefined) return;
+      if (typeof value === "string" && !value.trim()) return;
+      if (Array.isArray(value) && value.length === 0) return;
+      const text = Array.isArray(value) ? value.map(String).filter(Boolean).join(", ") : String(value);
+      if (!text.trim()) return;
+      rows.push({ label, value: text, href });
+    };
+
+    push("Nombre", item.display_name ?? "Sin nombre");
+    push("Actividad", item.actividad);
+    push("Tipo", item.google_primary_type_display_name ?? item.google_primary_type);
+    push("Tipos", item.google_types);
+    push("Dirección", item.address);
+    push("Teléfono", item.phone);
+    push("Email", item.email);
+    push("Sitio web", item.website, typeof item.website === "string" ? formatWebsiteUrl(item.website) : undefined);
+    push("Tamaño", (item as Record<string, unknown>).estrato);
+    if (typeof item.rating === "number") {
+      push("Rating", item.rating.toFixed(1));
+    }
+    if (typeof item.reviews === "number") {
+      push("Reseñas", item.reviews);
+    }
+    if (typeof item.lat === "number" && typeof item.lng === "number") {
+      push("Coordenadas", `${item.lat.toFixed(6)}, ${item.lng.toFixed(6)}`);
+    }
+    return rows;
+  }, [item]);
+
+  return (
+    <div className="max-w-[340px] space-y-1 text-xs">
+      {entries.map((entry) => (
+        <div key={entry.label} className="grid grid-cols-[92px_1fr] gap-2">
+          <span className="text-muted-foreground">{entry.label}</span>
+          {entry.href ? (
+            <a
+              href={entry.href}
+              target="_blank"
+              rel="noreferrer"
+              className="break-words whitespace-normal text-primary underline underline-offset-2"
+            >
+              {entry.value}
+            </a>
+          ) : (
+            <span className="break-words whitespace-normal">{entry.value}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatWebsiteUrl(raw: string): string {
+  const value = raw.trim();
+  if (!value) {
+    return raw;
+  }
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+  return `https://${value}`;
+}
 
 function MapViewUpdater({ center, zoom }: { center: LatLngExpression; zoom: number }) {
   const map = useMap();
@@ -108,6 +184,66 @@ function MapViewUpdater({ center, zoom }: { center: LatLngExpression; zoom: numb
     lastCenterKey.current = nextCenterKey;
     lastZoom.current = zoom;
   }, [center, map, nextCenterKey, zoom]);
+
+  return null;
+}
+
+function MapAutoFit({
+  results,
+  fallbackCenter,
+  fallbackZoom,
+  fitKey,
+}: {
+  results: Array<GoogleResultadoItem & { lat: number; lng: number }>;
+  fallbackCenter: LatLngExpression;
+  fallbackZoom: number;
+  fitKey?: string;
+}) {
+  const map = useMap();
+  const lastFitKey = useRef<string>("");
+
+  const bounds = useMemo(() => {
+    if (!results.length) {
+      return null;
+    }
+    let minLat = results[0]!.lat;
+    let maxLat = results[0]!.lat;
+    let minLng = results[0]!.lng;
+    let maxLng = results[0]!.lng;
+    for (const item of results) {
+      minLat = Math.min(minLat, item.lat);
+      maxLat = Math.max(maxLat, item.lat);
+      minLng = Math.min(minLng, item.lng);
+      maxLng = Math.max(maxLng, item.lng);
+    }
+    return { minLat, maxLat, minLng, maxLng };
+  }, [results]);
+
+  useEffect(() => {
+    if (!map) return;
+    const nextKey = fitKey ?? `${results.length}`;
+    if (lastFitKey.current === nextKey) {
+      return;
+    }
+    if (!bounds) {
+      map.setView(fallbackCenter, fallbackZoom);
+      lastFitKey.current = nextKey;
+      return;
+    }
+    if (results.length === 1) {
+      map.setView([bounds.minLat, bounds.minLng], 14);
+      lastFitKey.current = nextKey;
+      return;
+    }
+    map.fitBounds(
+      [
+        [bounds.minLat, bounds.minLng],
+        [bounds.maxLat, bounds.maxLng],
+      ],
+      { padding: [28, 28], maxZoom: 14 },
+    );
+    lastFitKey.current = nextKey;
+  }, [bounds, fallbackCenter, fallbackZoom, fitKey, map, results.length]);
 
   return null;
 }

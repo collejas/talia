@@ -317,6 +317,15 @@ export function DenueBusquedaView() {
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
     [busquedas, activeBusquedaId],
   );
+  const activeModo = useMemo(() => {
+    const meta = activeBusqueda?.meta;
+    if (!meta || typeof meta !== "object") {
+      return "radio";
+    }
+    const maybe = (meta as Record<string, unknown>).modo;
+    return typeof maybe === "string" && maybe.trim().length ? maybe.trim() : "radio";
+  }, [activeBusqueda?.meta]);
+  const mapIsAdvanced = activeModo !== "radio";
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -1629,36 +1638,49 @@ export function DenueBusquedaView() {
               </div>
           </CardContent>
         </Card>
-        <Card className="flex flex-col overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base">Mapa de resultados</CardTitle>
-              <CardDescription>Mueve el marcador para actualizar el centro.</CardDescription>
-            </div>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={() => {
-                setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
-              }}
-            >
-              <MapPin className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex-1 p-0">
-            <div className="h-full min-h-[460px]">
-              <ProspeccionResultsMap
-                center={{ lat: formValues.lat, lng: formValues.lng }}
-                radius={formValues.radio_m}
-                results={mapResults}
-                highlightIds={selectedIds}
-                onCenterChange={handleCenterChange}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+	        <Card className="flex flex-col overflow-hidden">
+	          <CardHeader className="flex flex-row items-center justify-between gap-4">
+	            <div>
+	              <CardTitle className="text-base">Mapa de resultados</CardTitle>
+	              <CardDescription>
+	                {mapIsAdvanced
+	                  ? "Se centra automáticamente en los resultados encontrados."
+	                  : "Mueve el marcador para actualizar el centro."}
+	              </CardDescription>
+	            </div>
+	            <Button
+	              type="button"
+	              size="icon"
+	              variant="ghost"
+	              onClick={() => {
+	                setFeedback({
+	                  type: "info",
+	                  message: mapIsAdvanced
+	                    ? "El mapa se ajusta automáticamente a los resultados de la búsqueda avanzada."
+	                    : "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda.",
+	                });
+	              }}
+	            >
+	              <MapPin className="h-4 w-4" />
+	            </Button>
+	          </CardHeader>
+	          <CardContent className="flex-1 p-0">
+	            <div className="h-full min-h-[460px]">
+	              <ProspeccionResultsMap
+	                center={{ lat: formValues.lat, lng: formValues.lng }}
+	                radius={formValues.radio_m}
+	                results={mapResults}
+	                highlightIds={selectedIds}
+	                onCenterChange={mapIsAdvanced ? undefined : handleCenterChange}
+	                autoFitBounds={mapIsAdvanced}
+	                autoFitKey={`${activeBusquedaId ?? ""}:${mapResults.length}`}
+	                showSearchCircle={!mapIsAdvanced}
+	                enableCenterControls={!mapIsAdvanced}
+	              />
+	            </div>
+	          </CardContent>
+	        </Card>
+	      </div>
 
       <Card>
         <CardHeader>
