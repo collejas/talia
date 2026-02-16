@@ -287,7 +287,7 @@ export function DenueBusquedaView() {
       setActividadSearch("");
       setActiveBusquedaId(busquedaId);
       try {
-        const { totalRecords } = await fetchResultadosPage({
+        await fetchResultadosPage({
           busquedaId,
           limit: LIST_PAGE_SIZE,
           offset: 0,
@@ -302,11 +302,6 @@ export function DenueBusquedaView() {
             radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
           }));
         }
-        setBusquedas((prev) =>
-          prev.map((item) =>
-            item.id === busquedaId ? { ...item, total_encontrados: totalRecords } : item,
-          ),
-        );
       } catch (error) {
         setFeedback({
           type: "error",
@@ -1572,7 +1567,9 @@ export function DenueBusquedaView() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {numberFormatter.format(item.total_encontrados ?? 0)}
+                            {typeof item.total_encontrados === "number"
+                              ? numberFormatter.format(item.total_encontrados)
+                              : "—"}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{radioLabel}</TableCell>
                           <TableCell className="font-mono text-xs">{geoLabel}</TableCell>
