@@ -28,12 +28,16 @@ import {
   createDenueBusqueda,
   deleteDenueBusqueda,
   deleteDenueResultados,
+  getDenueResultadosBounds,
+  listDenueActividades,
   listDenueBusquedas,
   listDenueCatalogos,
   listDenueResultados,
+  listDenueResultadosMap,
   type CreateDenueSearchPayload,
   type CreateDenueSearchResponse,
   type DenueBusquedaItem,
+  type DenueResultadosMapItem,
   type DenueCatalogosResponse,
   type DenueResultadoItem,
 } from "@/lib/prospeccion/denue-client";
@@ -297,6 +301,7 @@ export function DenueBusquedaView() {
   const [resultadosPagination, setResultadosPagination] = useState({ limit: LIST_PAGE_SIZE, offset: 0 });
   const [resultadosTotal, setResultadosTotal] = useState(0);
   const [filterText, setFilterText] = useState("");
+  const [debouncedFilterText, setDebouncedFilterText] = useState("");
   const [phoneFilter, setPhoneFilter] = useState<ContactFilterValue>("any");
   const [emailFilter, setEmailFilter] = useState<ContactFilterValue>("any");
   const [websiteFilter, setWebsiteFilter] = useState<ContactFilterValue>("any");
@@ -304,6 +309,8 @@ export function DenueBusquedaView() {
   const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
   const [actividadSearch, setActividadSearch] = useState("");
   const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
+  const [actividadOptions, setActividadOptions] = useState<string[]>([]);
+  const [isLoadingActividadOptions, setIsLoadingActividadOptions] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBusquedaId, setDeletingBusquedaId] = useState<string | null>(null);
   const [isDeletingResultados, setIsDeletingResultados] = useState(false);
@@ -312,6 +319,12 @@ export function DenueBusquedaView() {
   const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
+  const [mapViewport, setMapViewport] = useState<{ bounds: { west: number; south: number; east: number; north: number }; zoom: number } | null>(
+    null,
+  );
+  const [mapItems, setMapItems] = useState<DenueResultadosMapItem[]>([]);
+  const [mapTruncated, setMapTruncated] = useState(false);
+  const [mapFitBounds, setMapFitBounds] = useState<{ west: number; south: number; east: number; north: number } | null>(null);
   const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -326,6 +339,37 @@ export function DenueBusquedaView() {
     return typeof maybe === "string" && maybe.trim().length ? maybe.trim() : "radio";
   }, [activeBusqueda?.meta]);
   const mapIsAdvanced = activeModo !== "radio";
+
+  const selectedActividadesList = useMemo(
+    () => Array.from(selectedActividades).sort((a, b) => a.localeCompare(b, "es")),
+    [selectedActividades],
+  );
+
+  const currentResultFilters = useMemo(() => {
+    const phonePresent = phoneFilter === "any" ? undefined : phoneFilter === "with";
+    const emailPresent = emailFilter === "any" ? undefined : emailFilter === "with";
+    const websitePresent = websiteFilter === "any" ? undefined : websiteFilter === "with";
+    const estratoGroup = estratoFilter === "any" ? undefined : estratoFilter;
+    const actividades = selectedActividadesList.length ? selectedActividadesList : undefined;
+    const q = debouncedFilterText.trim().length ? debouncedFilterText.trim() : undefined;
+    return {
+      q,
+      phonePresent,
+      emailPresent,
+      websitePresent,
+      estratoGroup,
+      actividades,
+    };
+  }, [debouncedFilterText, emailFilter, estratoFilter, phoneFilter, selectedActividadesList, websiteFilter]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedFilterText(filterText.trim());
+    }, 350);
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [filterText]);
 
   const updateFormValue = useCallback(<K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
@@ -397,33 +441,71 @@ export function DenueBusquedaView() {
     };
   }, [busquedas.length, geoLookups, isLoadingBusquedas]);
 
+  useEffect(() => {
+    if (!activeBusquedaId || !actividadDrawerOpen) {
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingActividadOptions(true);
+    void (async () => {
+      try {
+        const response = await listDenueActividades({
+          busquedaId: activeBusquedaId,
+          search: actividadSearch,
+          limit: 500,
+        });
+        if (cancelled) return;
+        setActividadOptions(response.items ?? []);
+      } catch {
+        if (cancelled) return;
+        setActividadOptions([]);
+      } finally {
+        if (cancelled) return;
+        setIsLoadingActividadOptions(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBusquedaId, actividadDrawerOpen, actividadSearch]);
+
   const fetchResultadosPage = useCallback(
     async ({
       busquedaId,
       limit,
       offset,
+      filters,
     }: {
       busquedaId: string;
       limit: number;
       offset: number;
+      filters: {
+        q?: string;
+        phonePresent?: boolean;
+        emailPresent?: boolean;
+        websitePresent?: boolean;
+        estratoGroup?: string;
+        actividades?: string[];
+      };
     }) => {
       setIsLoadingResultados(true);
       try {
         const response = await listDenueResultados({
           busquedaId,
+          q: filters.q,
           limit,
           offset,
           order: "recientes",
+          phonePresent: filters.phonePresent,
+          emailPresent: filters.emailPresent,
+          websitePresent: filters.websitePresent,
+          estratoGroup: filters.estratoGroup,
+          actividades: filters.actividades,
         });
         const rows = response.items ?? [];
         setResultados(rows);
-        setResultadosPagination({ limit, offset });
         const totalRecords = response.total ?? rows.length;
         setResultadosTotal(totalRecords);
-        return {
-          totalRecords,
-          response,
-        };
       } finally {
         setIsLoadingResultados(false);
       }
@@ -439,13 +521,18 @@ export function DenueBusquedaView() {
       setSelectedIds(new Set());
       setSelectedActividades(new Set());
       setActividadSearch("");
+      setActividadOptions([]);
+      setFilterText("");
+      setDebouncedFilterText("");
+      setPhoneFilter("any");
+      setEmailFilter("any");
+      setWebsiteFilter("any");
+      setEstratoFilter("any");
       setActiveBusquedaId(busquedaId);
+      setResultados([]);
+      setResultadosTotal(0);
+      setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
       try {
-        await fetchResultadosPage({
-          busquedaId,
-          limit: LIST_PAGE_SIZE,
-          offset: 0,
-        });
         const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
         if (selectedBusqueda) {
           setFormValues((prev) => ({
@@ -463,7 +550,7 @@ export function DenueBusquedaView() {
         });
       }
     },
-    [fetchResultadosPage],
+    [],
   );
 
   useEffect(() => {
@@ -518,73 +605,7 @@ export function DenueBusquedaView() {
     return null;
   }, [activeBusqueda]);
 
-  const generalFilteredResults = useMemo(() => {
-    const text = filterText.trim().toLowerCase();
-    return resultados.filter((item) => {
-      if (text.length) {
-        const haystack = [
-          item.display_name,
-          item.actividad,
-          item.address,
-          item.phone,
-          item.email,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(text)) {
-          return false;
-        }
-      }
-      if (phoneFilter === "with" && !item.phone) return false;
-      if (phoneFilter === "without" && item.phone) return false;
-      if (emailFilter === "with" && !item.email) return false;
-      if (emailFilter === "without" && item.email) return false;
-      if (websiteFilter === "with" && !item.website) return false;
-      if (websiteFilter === "without" && item.website) return false;
-      if (estratoFilter !== "any") {
-        const label = (item.estrato ?? "").toLowerCase();
-        if (estratoFilter === "micro" && !label.includes("micro")) return false;
-        if (estratoFilter === "pequena" && !label.includes("peque")) return false;
-        if (estratoFilter === "mediana" && !label.includes("mediana")) return false;
-        if (estratoFilter === "grande" && !label.includes("grande")) return false;
-      }
-      return true;
-    });
-  }, [
-    filterText,
-    phoneFilter,
-    emailFilter,
-    websiteFilter,
-    estratoFilter,
-    resultados,
-  ]);
-
-  const filteredResults = useMemo(() => {
-    const hasSelected = selectedActividades.size > 0;
-    const searchText = actividadSearch.trim().toLowerCase();
-    const hasSearch = Boolean(searchText);
-    if (!hasSelected && !hasSearch) {
-      return generalFilteredResults;
-    }
-    return generalFilteredResults.filter((item) => {
-      const actividadTexto =
-        typeof item.actividad === "string"
-          ? item.actividad.trim()
-          : item.actividad && typeof item.actividad === "object" && "text" in item.actividad
-            ? String((item.actividad as { text?: unknown }).text ?? "").trim()
-            : "";
-      if (!actividadTexto) {
-        return false;
-      }
-      const matchesSearch = !hasSearch || actividadTexto.toLowerCase().includes(searchText);
-      const matchesSelected = !hasSelected || selectedActividades.has(actividadTexto);
-      return matchesSearch && matchesSelected;
-    });
-  }, [actividadSearch, generalFilteredResults, selectedActividades]);
-
-  const totalFiltered = filteredResults.length;
-  const effectiveTotal = Math.max(resultadosTotal || 0, totalFiltered);
+  const effectiveTotal = resultadosTotal || 0;
   const totalPages = Math.max(
     1,
     Math.ceil(effectiveTotal / resultadosPagination.limit),
@@ -602,7 +623,7 @@ export function DenueBusquedaView() {
     }
   }, [resultadosPagination.offset, resultadosPagination.limit, maxPageOffset]);
 
-  const paginatedResults = filteredResults;
+  const paginatedResults = resultados;
   const pageStart = effectiveTotal === 0 ? 0 : pageOffset + 1;
   const pageEnd =
     effectiveTotal === 0
@@ -610,18 +631,172 @@ export function DenueBusquedaView() {
       : Math.min(pageOffset + paginatedResults.length, effectiveTotal);
   const hasPrevPage = resultadosPagination.offset > 0;
   const hasNextPage = resultadosPagination.offset < maxPageOffset;
-  const mapResults = useMemo<GoogleResultadoItem[]>(
-    () =>
-      filteredResults.map((item) => ({
-        ...item,
+  type MapRenderItem = GoogleResultadoItem & { kind?: "point" | "cluster"; count?: number; id?: string };
+  const mapResults = useMemo<MapRenderItem[]>(() => {
+    if (!activeBusquedaId) return [];
+    const items: MapRenderItem[] = [];
+    for (const row of mapItems) {
+      if (typeof row.lat !== "number" || typeof row.lng !== "number") continue;
+      if (row.kind === "cluster") {
+        items.push({
+          resultado_id: `cluster:${row.id}`,
+          busqueda_id: activeBusquedaId,
+          display_name: null,
+          actividad: null,
+          phone: null,
+          email: null,
+          website: null,
+          address: null,
+          lat: row.lat,
+          lng: row.lng,
+          rating: null,
+          reviews: null,
+          distancia_m: null,
+          maps_url: null,
+          google_primary_type: null,
+          google_primary_type_display_name: null,
+          google_types: null,
+          kind: "cluster",
+          count: typeof row.count === "number" ? row.count : undefined,
+          id: row.id,
+        });
+        continue;
+      }
+      items.push({
+        resultado_id: row.resultado_id ?? row.id,
+        busqueda_id: activeBusquedaId,
+        display_name: row.display_name,
+        actividad: row.actividad,
+        phone: row.phone,
+        email: row.email,
+        website: row.website,
+        address: row.address,
+        lat: row.lat,
+        lng: row.lng,
         rating: null,
         reviews: null,
+        distancia_m: null,
+        maps_url: null,
         google_primary_type: null,
         google_primary_type_display_name: null,
-        google_types: [],
-      })),
-    [filteredResults],
-  );
+        google_types: null,
+        kind: "point",
+        id: row.id,
+      });
+    }
+    return items;
+  }, [activeBusquedaId, mapItems]);
+
+  const filtersKey = useMemo(() => {
+    const actividadesKey = selectedActividadesList.join("\u0001");
+    return [
+      debouncedFilterText,
+      phoneFilter,
+      emailFilter,
+      websiteFilter,
+      estratoFilter,
+      actividadesKey,
+    ].join("|");
+  }, [debouncedFilterText, emailFilter, estratoFilter, phoneFilter, selectedActividadesList, websiteFilter]);
+
+  useEffect(() => {
+    if (!activeBusquedaId) return;
+    void fetchResultadosPage({
+      busquedaId: activeBusquedaId,
+      limit: resultadosPagination.limit,
+      offset: resultadosPagination.offset,
+      filters: currentResultFilters,
+    }).catch((error) => {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "No fue posible consultar los resultados.",
+      });
+    });
+  }, [
+    activeBusquedaId,
+    currentResultFilters,
+    fetchResultadosPage,
+    filtersKey,
+    resultadosPagination.limit,
+    resultadosPagination.offset,
+    setFeedback,
+  ]);
+
+  useEffect(() => {
+    if (!activeBusquedaId || !mapViewport) {
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      void listDenueResultadosMap({
+        busquedaId: activeBusquedaId,
+        bbox: mapViewport.bounds,
+        zoom: mapViewport.zoom,
+        q: currentResultFilters.q,
+        phonePresent: currentResultFilters.phonePresent,
+        emailPresent: currentResultFilters.emailPresent,
+        websitePresent: currentResultFilters.websitePresent,
+        estratoGroup: currentResultFilters.estratoGroup,
+        actividades: currentResultFilters.actividades,
+        limit: 5000,
+      })
+        .then((response) => {
+          if (cancelled) return;
+          setMapItems(response.items ?? []);
+          setMapTruncated(Boolean(response.truncated));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMapItems([]);
+          setMapTruncated(false);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [
+    activeBusquedaId,
+    currentResultFilters,
+    filtersKey,
+    mapViewport,
+  ]);
+
+  useEffect(() => {
+    if (!activeBusquedaId || !mapIsAdvanced) {
+      setMapFitBounds(null);
+      return;
+    }
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      void getDenueResultadosBounds({
+        busquedaId: activeBusquedaId,
+        q: currentResultFilters.q,
+        phonePresent: currentResultFilters.phonePresent,
+        emailPresent: currentResultFilters.emailPresent,
+        websitePresent: currentResultFilters.websitePresent,
+        estratoGroup: currentResultFilters.estratoGroup,
+        actividades: currentResultFilters.actividades,
+      })
+        .then((response) => {
+          if (cancelled) return;
+          setMapFitBounds(response.bounds ?? null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setMapFitBounds(null);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [
+    activeBusquedaId,
+    currentResultFilters,
+    filtersKey,
+    mapIsAdvanced,
+  ]);
 
 
   const selectedVisibleCount = useMemo(() => {
@@ -665,30 +840,7 @@ export function DenueBusquedaView() {
     [paginatedResults],
   );
 
-  const actividadOptions = useMemo(() => {
-    const unique = new Set<string>();
-    for (const item of generalFilteredResults) {
-      if (typeof item.actividad === "string" && item.actividad.trim()) {
-        unique.add(item.actividad.trim());
-      } else if (
-        item.actividad &&
-        typeof item.actividad === "object" &&
-        "text" in item.actividad &&
-        typeof (item.actividad as { text?: unknown }).text === "string"
-      ) {
-        const value = String((item.actividad as { text?: string }).text ?? "").trim();
-        if (value) unique.add(value);
-      }
-    }
-    return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
-  }, [generalFilteredResults]);
-  const filteredActividadOptions = useMemo(() => {
-    if (!actividadSearch.trim()) {
-      return actividadOptions;
-    }
-    const query = actividadSearch.trim().toLowerCase();
-    return actividadOptions.filter((actividad) => actividad.toLowerCase().includes(query));
-  }, [actividadOptions, actividadSearch]);
+  const filteredActividadOptions = actividadOptions;
 
   const handleActividadToggle = useCallback((value: string, checked: boolean) => {
     setSelectedActividades((current) => {
@@ -716,28 +868,47 @@ export function DenueBusquedaView() {
     setEmailFilter("any");
     setWebsiteFilter("any");
     setFilterText("");
+    setDebouncedFilterText("");
     setActividadSearch("");
     handleClearActividades();
     setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
   }, [handleClearActividades]);
+
+  const refreshResultados = useCallback(
+    async (options?: { resetOffset?: boolean }) => {
+      if (!activeBusquedaId) return;
+      const nextOffset = options?.resetOffset ? 0 : resultadosPagination.offset;
+      try {
+        await fetchResultadosPage({
+          busquedaId: activeBusquedaId,
+          limit: resultadosPagination.limit,
+          offset: nextOffset,
+          filters: currentResultFilters,
+        });
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "No fue posible consultar los resultados.",
+        });
+      }
+    },
+    [
+      activeBusquedaId,
+      currentResultFilters,
+      fetchResultadosPage,
+      resultadosPagination.limit,
+      resultadosPagination.offset,
+      setFeedback,
+    ],
+  );
 
   const handleLimitChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const value = Number(event.target.value) || 50;
       const limit = Math.min(500, Math.max(50, value));
       setResultadosPagination((prev) => ({ ...prev, limit, offset: 0 }));
-      if (!activeBusquedaId) {
-        return;
-      }
-      void fetchResultadosPage({ busquedaId: activeBusquedaId, limit, offset: 0 }).catch((error) => {
-        setFeedback({
-          type: "error",
-          message:
-            error instanceof Error ? error.message : "No fue posible actualizar el número de resultados por página.",
-        });
-      });
     },
-    [activeBusquedaId, fetchResultadosPage, setFeedback],
+    [],
   );
 
   const handleDeleteBusqueda = useCallback(
@@ -817,7 +988,7 @@ export function DenueBusquedaView() {
       });
       if (activeBusquedaId) {
         await Promise.all([
-          loadResultadosForBusqueda(activeBusquedaId),
+          refreshResultados({ resetOffset: true }),
           loadBusquedas(),
         ]);
       } else {
@@ -833,7 +1004,7 @@ export function DenueBusquedaView() {
     } finally {
       setIsDeletingResultados(false);
     }
-  }, [activeBusquedaId, loadBusquedas, loadResultadosForBusqueda, selectedIds, setFeedback]);
+  }, [activeBusquedaId, loadBusquedas, refreshResultados, selectedIds, setFeedback]);
 
   const goToPage = useCallback(
     (pageIndex: number) => {
@@ -842,18 +1013,9 @@ export function DenueBusquedaView() {
       }
       const clamped = Math.min(Math.max(pageIndex, 0), Math.max(0, totalPages - 1));
       const nextOffset = clamped * resultadosPagination.limit;
-      void fetchResultadosPage({
-        busquedaId: activeBusquedaId,
-        limit: resultadosPagination.limit,
-        offset: nextOffset,
-      }).catch((error) => {
-        setFeedback({
-          type: "error",
-          message: error instanceof Error ? error.message : "No fue posible cambiar la página.",
-        });
-      });
+      setResultadosPagination((prev) => ({ ...prev, offset: nextOffset }));
     },
-    [activeBusquedaId, fetchResultadosPage, resultadosPagination.limit, setFeedback, totalPages],
+    [activeBusquedaId, resultadosPagination.limit, totalPages],
   );
 
   const handlePrevPage = useCallback(() => goToPage(currentPage - 1), [currentPage, goToPage]);
@@ -1224,9 +1386,11 @@ export function DenueBusquedaView() {
                     <span>
                       {isLoadingResultados
                         ? "Descargando datos…"
-                        : `${numberFormatter.format(totalFiltered)} de ${numberFormatter.format(
-                            effectiveTotal,
-                          )} coincidencias`}
+                        : effectiveTotal
+                          ? `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(pageEnd)} de ${numberFormatter.format(
+                              effectiveTotal,
+                            )} coincidencias`
+                          : "0 coincidencias"}
                     </span>
                     {busquedaDescriptor ? (
                       <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
@@ -1236,7 +1400,7 @@ export function DenueBusquedaView() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  onClick={() => activeBusquedaId && loadResultadosForBusqueda(activeBusquedaId)}
+                  onClick={() => void refreshResultados({ resetOffset: true })}
                   disabled={!activeBusquedaId || isLoadingResultados}
                 >
                   <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
@@ -1325,7 +1489,7 @@ export function DenueBusquedaView() {
                       variant="outline"
                       size="sm"
                       className="flex items-center gap-2"
-                      disabled={!actividadOptions.length}
+                      disabled={!activeBusquedaId}
                     >
                       Seleccionar
                     </Button>
@@ -1370,37 +1534,30 @@ export function DenueBusquedaView() {
                           Limpiar selección
                         </Button>
                       </div>
-                      {actividadOptions.length ? (
-                        filteredActividadOptions.length ? (
-                          <ScrollArea className="h-[60vh] rounded-lg border border-border/60">
-                            <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
-                              {filteredActividadOptions.map((actividad) => {
-                                const checked = selectedActividades.has(actividad);
-                                return (
-                                  <label
-                                    key={actividad}
-                                    className={cn(
-                                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-                                      checked ? "border-primary bg-primary/5" : "border-border/60",
-                                    )}
-                                  >
-                                    <Checkbox
-                                      checked={checked}
-                                      onCheckedChange={(value) => handleActividadToggle(actividad, Boolean(value))}
-                                    />
-                                    <span className="line-clamp-2">{actividad}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </ScrollArea>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            No hay clases que coincidan con &quot;{actividadSearch.trim()}&quot;.
-                          </p>
-                        )
+                      {isLoadingActividadOptions ? (
+                        <p className="text-sm text-muted-foreground">Cargando actividades…</p>
+                      ) : actividadOptions.length ? (
+                        <ScrollArea className="h-[60vh] rounded-lg border border-border/60">
+                          <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+                            {actividadOptions.map((actividad) => {
+                              const checked = selectedActividades.has(actividad);
+                              return (
+                                <label
+                                  key={actividad}
+                                  className={cn(
+                                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                                    checked ? "border-primary bg-primary/5" : "border-border/60",
+                                  )}
+                                >
+                                  <Checkbox checked={checked} onCheckedChange={(value) => handleActividadToggle(actividad, Boolean(value))} />
+                                  <span className="line-clamp-2">{actividad}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
                       ) : (
-                        <p className="text-sm text-muted-foreground">Aún no hay clases disponibles para esta búsqueda.</p>
+                        <p className="text-sm text-muted-foreground">No hay clases disponibles con ese filtro.</p>
                       )}
                     </div>
                     <DrawerFooter className="border-t border-border/40 bg-muted/30">
@@ -1468,7 +1625,7 @@ export function DenueBusquedaView() {
                 </Button>
               </div>
               <p>
-                {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
+                {numberFormatter.format(effectiveTotal)} registros · página {currentPage + 1} de {totalPages}
               </p>
             </div>
           </CardHeader>
@@ -1522,7 +1679,7 @@ export function DenueBusquedaView() {
                 ))}
               </div>
               <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
-                {!filteredResults.length ? (
+                {!paginatedResults.length ? (
                   <p className="text-sm text-muted-foreground">
                     {isLoadingResultados
                       ? "Cargando resultados…"
@@ -1643,9 +1800,8 @@ export function DenueBusquedaView() {
 	            <div>
 	              <CardTitle className="text-base">Mapa de resultados</CardTitle>
 	              <CardDescription>
-	                {mapIsAdvanced
-	                  ? "Se centra automáticamente en los resultados encontrados."
-	                  : "Mueve el marcador para actualizar el centro."}
+	                {mapIsAdvanced ? "Se centra automáticamente en los resultados encontrados." : "Mueve el marcador para actualizar el centro."}
+	                {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
 	              </CardDescription>
 	            </div>
 	            <Button
@@ -1672,8 +1828,9 @@ export function DenueBusquedaView() {
 	                results={mapResults}
 	                highlightIds={selectedIds}
 	                onCenterChange={mapIsAdvanced ? undefined : handleCenterChange}
-	                autoFitBounds={mapIsAdvanced}
-	                autoFitKey={`${activeBusquedaId ?? ""}:${mapResults.length}`}
+	                onViewportChange={setMapViewport}
+	                fitBounds={mapIsAdvanced ? mapFitBounds : null}
+	                fitBoundsKey={`${activeBusquedaId ?? ""}:${filtersKey}`}
 	                showSearchCircle={!mapIsAdvanced}
 	                enableCenterControls={!mapIsAdvanced}
 	              />

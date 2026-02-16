@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LatLngExpression } from "leaflet";
 import { Circle } from "react-leaflet/Circle";
 import { CircleMarker } from "react-leaflet/CircleMarker";
@@ -34,6 +34,9 @@ type GoogleResultsMapProps = {
   results: GoogleResultadoItem[];
   highlightIds?: Set<string>;
   onCenterChange?: (coords: { lat: number; lng: number }) => void;
+  onViewportChange?: (viewport: { bounds: { west: number; south: number; east: number; north: number }; zoom: number }) => void;
+  fitBounds?: { west: number; south: number; east: number; north: number } | null;
+  fitBoundsKey?: string;
   autoFitBounds?: boolean;
   autoFitKey?: string;
   showSearchCircle?: boolean;
@@ -46,6 +49,9 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
   results,
   highlightIds,
   onCenterChange,
+  onViewportChange,
+  fitBounds = null,
+  fitBoundsKey,
   autoFitBounds = false,
   autoFitKey,
   showSearchCircle = true,
@@ -72,12 +78,26 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
       ) : (
         <MapViewUpdater center={mapCenter} zoom={zoom} />
       )}
+      {fitBounds ? <MapFitBounds bounds={fitBounds} fitKey={fitBoundsKey} /> : null}
+      {onViewportChange ? <MapViewportReporter onViewportChange={onViewportChange} /> : null}
       {enableCenterControls ? <MapClickHandler onCenterChange={onCenterChange} /> : null}
       {showSearchCircle ? (
         <Circle center={mapCenter} radius={radius} pathOptions={{ color: "#2563eb", weight: 1.5, fillOpacity: 0.08 }} />
       ) : null}
       {enableCenterControls ? <DraggableCenterMarker position={mapCenter} onChange={onCenterChange} /> : null}
       {validResults.map((item) => {
+        const kind = (item as unknown as { kind?: unknown }).kind;
+        const clusterCount = (item as unknown as { cluster_count?: unknown; count?: unknown }).cluster_count ?? (item as unknown as { count?: unknown }).count;
+        if (kind === "cluster" || (typeof clusterCount === "number" && clusterCount > 0)) {
+          const countValue = typeof clusterCount === "number" ? clusterCount : Number(clusterCount);
+          return (
+            <ClusterCircleMarker
+              key={`cluster:${(item as unknown as { id?: unknown }).id ?? item.resultado_id ?? `${item.lat},${item.lng}`}`}
+              position={[item.lat, item.lng]}
+              count={Number.isFinite(countValue) ? countValue : 0}
+            />
+          );
+        }
         const position: LatLngExpression = [item.lat, item.lng];
         const isHighlighted = highlightIds?.has(item.resultado_id ?? "");
         return (
@@ -101,6 +121,31 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
     </MapContainer>
   );
 });
+
+function ClusterCircleMarker({ position, count }: { position: LatLngExpression; count: number }) {
+  const map = useMap();
+  const radius = useMemo(() => {
+    if (!Number.isFinite(count) || count <= 1) return 10;
+    const extra = Math.min(18, Math.log10(Math.max(10, count)) * 10);
+    return 12 + extra;
+  }, [count]);
+
+  return (
+    <CircleMarker
+      center={position}
+      radius={radius}
+      pathOptions={{ color: "#0f172a", weight: 2, fillOpacity: 0.25, fillColor: "#0f172a" }}
+      eventHandlers={{
+        click() {
+          const nextZoom = Math.min(22, map.getZoom() + 2);
+          map.setView(position, nextZoom);
+        },
+      }}
+    >
+      <Tooltip direction="top">{count.toLocaleString("es-MX")} resultados (clic para acercar)</Tooltip>
+    </CircleMarker>
+  );
+}
 
 function ResultTooltipContent({ item }: { item: GoogleResultadoItem & Record<string, unknown> }) {
   const entries = useMemo(() => {
@@ -248,6 +293,37 @@ function MapAutoFit({
   return null;
 }
 
+function MapFitBounds({
+  bounds,
+  fitKey,
+}: {
+  bounds: { west: number; south: number; east: number; north: number };
+  fitKey?: string;
+}) {
+  const map = useMap();
+  const lastFitKey = useRef<string>("");
+
+  useEffect(() => {
+    if (!map) return;
+    const nextKey =
+      fitKey ??
+      `${bounds.west.toFixed(5)},${bounds.south.toFixed(5)},${bounds.east.toFixed(5)},${bounds.north.toFixed(5)}`;
+    if (lastFitKey.current === nextKey) {
+      return;
+    }
+    map.fitBounds(
+      [
+        [bounds.south, bounds.west],
+        [bounds.north, bounds.east],
+      ],
+      { padding: [28, 28], maxZoom: 14 },
+    );
+    lastFitKey.current = nextKey;
+  }, [bounds.east, bounds.north, bounds.south, bounds.west, fitKey, map]);
+
+  return null;
+}
+
 function latLngToKey(value: LatLngExpression): string {
   if (Array.isArray(value)) {
     return value.map((coord) => Number(coord).toFixed(6)).join(",");
@@ -273,6 +349,52 @@ function MapClickHandler({
       onCenterChange({ lat: event.latlng.lat, lng: event.latlng.lng });
     },
   });
+  return null;
+}
+
+function MapViewportReporter({
+  onViewportChange,
+}: {
+  onViewportChange: (viewport: { bounds: { west: number; south: number; east: number; north: number }; zoom: number }) => void;
+}) {
+  const lastKey = useRef<string>("");
+
+  const emit = useCallback(
+    (mapInstance: unknown) => {
+      if (!mapInstance || typeof mapInstance !== "object") return;
+      const map = mapInstance as {
+        getZoom: () => number;
+        getBounds: () => { getWest: () => number; getSouth: () => number; getEast: () => number; getNorth: () => number };
+      };
+      const zoom = map.getZoom();
+      const bounds = map.getBounds();
+      const payload = {
+        bounds: { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth() },
+        zoom,
+      };
+      const key = `${payload.zoom}:${payload.bounds.west.toFixed(5)},${payload.bounds.south.toFixed(5)},${payload.bounds.east.toFixed(
+        5,
+      )},${payload.bounds.north.toFixed(5)}`;
+      if (key === lastKey.current) return;
+      lastKey.current = key;
+      onViewportChange(payload);
+    },
+    [onViewportChange],
+  );
+
+  const map = useMapEvents({
+    moveend() {
+      emit(map);
+    },
+    zoomend() {
+      emit(map);
+    },
+  });
+
+  useEffect(() => {
+    emit(map);
+  }, [emit, map]);
+
   return null;
 }
 

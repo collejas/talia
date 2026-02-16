@@ -6532,6 +6532,103 @@ class CRMRepository:
         total = self._extract_total_count(resp.headers.get("content-range"))
         return data, total
 
+    async def denue_resultados_list(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista resultados DENUE con filtros globales (RPC) y devuelve total exacto."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/denue_resultados_list",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            data = resp.json() or []
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("denue_resultados_list_invalid_response") from exc
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"denue_resultados_list_invalid:{data!r}")
+        if not data:
+            return [], 0
+        first = data[0]
+        total = int(first.get("total_count") or 0) if isinstance(first, dict) else 0
+        for row in data:
+            if isinstance(row, dict):
+                row.pop("total_count", None)
+        return data, total
+
+    async def denue_resultados_map(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/denue_resultados_map",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            data = resp.json() or []
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("denue_resultados_map_invalid_response") from exc
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"denue_resultados_map_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def denue_resultados_bounds(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/denue_resultados_bounds",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            data = resp.json() or []
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("denue_resultados_bounds_invalid_response") from exc
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"denue_resultados_bounds_invalid:{data!r}")
+        row = data[0] if data else None
+        return row if isinstance(row, dict) else None
+
+    async def denue_resultados_actividades(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> list[str]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/denue_resultados_actividades",
+            token=usuario_token,
+            json=payload,
+        )
+        try:
+            data = resp.json() or []
+        except ValueError as exc:  # pragma: no cover
+            raise CRMRepositoryError("denue_resultados_actividades_invalid_response") from exc
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"denue_resultados_actividades_invalid:{data!r}")
+        items: list[str] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            value = row.get("actividad")
+            if isinstance(value, str) and value.strip():
+                items.append(value.strip())
+        return items
+
     async def delete_prospeccion_resultados(
         self,
         *,

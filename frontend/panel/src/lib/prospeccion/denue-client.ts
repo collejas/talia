@@ -62,6 +62,41 @@ export type DenueResultadosResponse = {
   offset: number;
 };
 
+export type DenueResultadosMapItem = {
+  kind: "point" | "cluster";
+  id: string;
+  lat: number | null;
+  lng: number | null;
+  count: number | null;
+  resultado_id: string | null;
+  display_name: string | null;
+  actividad: string | null;
+  estrato: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+};
+
+export type DenueResultadosMapResponse = {
+  ok: boolean;
+  items: DenueResultadosMapItem[];
+  limit: number;
+  truncated: boolean;
+};
+
+export type DenueResultadosBoundsResponse = {
+  ok: boolean;
+  bounds: { west: number; south: number; east: number; north: number } | null;
+  total: number;
+};
+
+export type DenueActividadesResponse = {
+  ok: boolean;
+  items: string[];
+  limit: number;
+};
+
 export type DenueScianNode = {
   codigo: string;
   titulo: string | null;
@@ -204,14 +239,22 @@ export async function listDenueBusquedas(params: { limit?: number; offset?: numb
 
 export async function listDenueResultados(params: {
   busquedaId?: string;
+  q?: string;
   limit?: number;
   offset?: number;
   order?: "recientes" | "distancia";
-  estrato?: string;
+  estratoGroup?: string;
+  phonePresent?: boolean;
+  emailPresent?: boolean;
+  websitePresent?: boolean;
+  actividades?: string[];
 } = {}) {
   const url = buildClientUrl("/api/prospeccion/denue/resultados");
   if (params.busquedaId) {
     url.searchParams.set("busqueda_id", params.busquedaId);
+  }
+  if (params.q && params.q.trim().length) {
+    url.searchParams.set("q", params.q.trim());
   }
   if (typeof params.limit === "number") {
     url.searchParams.set("limit", String(params.limit));
@@ -222,10 +265,125 @@ export async function listDenueResultados(params: {
   if (params.order) {
     url.searchParams.set("order", params.order);
   }
-  if (params.estrato) {
-    url.searchParams.set("estrato", params.estrato);
+  if (params.estratoGroup) {
+    url.searchParams.set("estrato_group", params.estratoGroup);
+  }
+  if (typeof params.phonePresent === "boolean") {
+    url.searchParams.set("phone_present", String(params.phonePresent));
+  }
+  if (typeof params.emailPresent === "boolean") {
+    url.searchParams.set("email_present", String(params.emailPresent));
+  }
+  if (typeof params.websitePresent === "boolean") {
+    url.searchParams.set("website_present", String(params.websitePresent));
+  }
+  if (params.actividades?.length) {
+    for (const actividad of params.actividades) {
+      if (actividad && actividad.trim().length) {
+        url.searchParams.append("actividades", actividad.trim());
+      }
+    }
   }
   return requestJson<DenueResultadosResponse>(url.toString());
+}
+
+export async function listDenueResultadosMap(params: {
+  busquedaId: string;
+  bbox: { west: number; south: number; east: number; north: number };
+  zoom: number;
+  q?: string;
+  estratoGroup?: string;
+  phonePresent?: boolean;
+  emailPresent?: boolean;
+  websitePresent?: boolean;
+  actividades?: string[];
+  limit?: number;
+}): Promise<DenueResultadosMapResponse> {
+  const url = buildClientUrl("/api/prospeccion/denue/resultados/map");
+  url.searchParams.set("busqueda_id", params.busquedaId);
+  url.searchParams.set("bbox_w", String(params.bbox.west));
+  url.searchParams.set("bbox_s", String(params.bbox.south));
+  url.searchParams.set("bbox_e", String(params.bbox.east));
+  url.searchParams.set("bbox_n", String(params.bbox.north));
+  url.searchParams.set("zoom", String(params.zoom));
+  if (params.q && params.q.trim().length) {
+    url.searchParams.set("q", params.q.trim());
+  }
+  if (params.estratoGroup) {
+    url.searchParams.set("estrato_group", params.estratoGroup);
+  }
+  if (typeof params.phonePresent === "boolean") {
+    url.searchParams.set("phone_present", String(params.phonePresent));
+  }
+  if (typeof params.emailPresent === "boolean") {
+    url.searchParams.set("email_present", String(params.emailPresent));
+  }
+  if (typeof params.websitePresent === "boolean") {
+    url.searchParams.set("website_present", String(params.websitePresent));
+  }
+  if (params.actividades?.length) {
+    for (const actividad of params.actividades) {
+      if (actividad && actividad.trim().length) {
+        url.searchParams.append("actividades", actividad.trim());
+      }
+    }
+  }
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit));
+  }
+  return requestJson<DenueResultadosMapResponse>(url.toString());
+}
+
+export async function getDenueResultadosBounds(params: {
+  busquedaId: string;
+  q?: string;
+  estratoGroup?: string;
+  phonePresent?: boolean;
+  emailPresent?: boolean;
+  websitePresent?: boolean;
+  actividades?: string[];
+}): Promise<DenueResultadosBoundsResponse> {
+  const url = buildClientUrl("/api/prospeccion/denue/resultados/bounds");
+  url.searchParams.set("busqueda_id", params.busquedaId);
+  if (params.q && params.q.trim().length) {
+    url.searchParams.set("q", params.q.trim());
+  }
+  if (params.estratoGroup) {
+    url.searchParams.set("estrato_group", params.estratoGroup);
+  }
+  if (typeof params.phonePresent === "boolean") {
+    url.searchParams.set("phone_present", String(params.phonePresent));
+  }
+  if (typeof params.emailPresent === "boolean") {
+    url.searchParams.set("email_present", String(params.emailPresent));
+  }
+  if (typeof params.websitePresent === "boolean") {
+    url.searchParams.set("website_present", String(params.websitePresent));
+  }
+  if (params.actividades?.length) {
+    for (const actividad of params.actividades) {
+      if (actividad && actividad.trim().length) {
+        url.searchParams.append("actividades", actividad.trim());
+      }
+    }
+  }
+  return requestJson<DenueResultadosBoundsResponse>(url.toString());
+}
+
+export async function listDenueActividades(params: {
+  busquedaId: string;
+  search?: string;
+  limit?: number;
+}): Promise<DenueActividadesResponse> {
+  const url = buildClientUrl("/api/prospeccion/denue/actividades");
+  url.searchParams.set("busqueda_id", params.busquedaId);
+  if (params.search && params.search.trim().length) {
+    url.searchParams.set("search", params.search.trim());
+  }
+  if (typeof params.limit === "number") {
+    url.searchParams.set("limit", String(params.limit));
+  }
+  return requestJson<DenueActividadesResponse>(url.toString());
 }
 
 export async function deleteDenueBusqueda(busquedaId: string) {

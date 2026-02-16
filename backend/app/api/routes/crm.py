@@ -10212,37 +10212,34 @@ async def listar_resultados_denue(
     busqueda_id: UUID | None = Query(default=None),
     q: str | None = Query(default=None),
     estrato: str | None = Query(default=None),
+    estrato_group: str | None = Query(default=None),
+    phone_present: bool | None = Query(default=None),
+    email_present: bool | None = Query(default=None),
+    website_present: bool | None = Query(default=None),
+    actividades: list[str] | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=5000)] = 250,
     offset: Annotated[int, Query(ge=0)] = 0,
     order: Literal["recientes", "distancia"] = Query(default="recientes"),
 ) -> dict[str, Any]:
-    order_map = {
-        "recientes": "resultado_creado_en.desc",
-        "distancia": "distancia_m.asc.nullslast",
-    }
-    params: dict[str, str] = {
-        "select": "*",
-        "order": order_map.get(order, "resultado_creado_en.desc"),
-    }
-    if busqueda_id:
-        params["busqueda_id"] = f"eq.{busqueda_id}"
-    if estrato:
-        params["estrato"] = f"eq.{estrato}"
-    if q:
-        sanitized = q.replace("*", "").replace("%", "")
-        params["or"] = (
-            f"(display_name.ilike.*{sanitized}*,"
-            f"actividad.ilike.*{sanitized}*,"
-            f"address.ilike.*{sanitized}*)"
-        )
-    effective_limit = min(limit, 500)
-    params["limit"] = str(effective_limit)
-    params["offset"] = str(offset)
     try:
-        rows, total = await repo.list_prospeccion_resultados(
+        if not busqueda_id:
+            raise HTTPException(status_code=400, detail="busqueda_id_required")
+        effective_limit = min(limit, 500)
+        payload: dict[str, Any] = {
+            "p_busqueda_id": str(busqueda_id),
+            "p_q": q,
+            "p_phone_present": phone_present,
+            "p_email_present": email_present,
+            "p_website_present": website_present,
+            "p_estrato_group": (estrato_group or estrato),
+            "p_actividades": actividades,
+            "p_limit": effective_limit,
+            "p_offset": offset,
+            "p_order": order,
+        }
+        rows, total = await repo.denue_resultados_list(
             usuario_token=user_token,
-            path="/rest/v1/v_denue_contactables",
-            params=params,
+            payload=payload,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -10251,8 +10248,117 @@ async def listar_resultados_denue(
         "items": rows,
         "limit": effective_limit,
         "offset": offset,
-        "total": total or len(rows),
+        "total": total,
     }
+
+
+@router.get("/prospeccion/denue/resultados/map")
+async def listar_resultados_denue_map(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID = Query(...),
+    bbox_w: float = Query(...),
+    bbox_s: float = Query(...),
+    bbox_e: float = Query(...),
+    bbox_n: float = Query(...),
+    zoom: Annotated[int, Query(ge=0, le=22)] = 12,
+    q: str | None = Query(default=None),
+    estrato_group: str | None = Query(default=None),
+    phone_present: bool | None = Query(default=None),
+    email_present: bool | None = Query(default=None),
+    website_present: bool | None = Query(default=None),
+    actividades: list[str] | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=10000)] = 5000,
+) -> dict[str, Any]:
+    effective_limit = min(limit, 5000)
+    payload: dict[str, Any] = {
+        "p_busqueda_id": str(busqueda_id),
+        "p_bbox_w": bbox_w,
+        "p_bbox_s": bbox_s,
+        "p_bbox_e": bbox_e,
+        "p_bbox_n": bbox_n,
+        "p_zoom": zoom,
+        "p_q": q,
+        "p_phone_present": phone_present,
+        "p_email_present": email_present,
+        "p_website_present": website_present,
+        "p_estrato_group": estrato_group,
+        "p_actividades": actividades,
+        # Pedimos +1 para detectar truncado en modo points (sin contar exacto en cada pan/zoom).
+        "p_limit": effective_limit + 1,
+    }
+    try:
+        rows = await repo.denue_resultados_map(usuario_token=user_token, payload=payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    truncated = len(rows) > effective_limit
+    items = rows[:effective_limit]
+    return {"ok": True, "items": items, "limit": effective_limit, "truncated": truncated}
+
+
+@router.get("/prospeccion/denue/resultados/bounds")
+async def obtener_bounds_denue(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID = Query(...),
+    q: str | None = Query(default=None),
+    estrato_group: str | None = Query(default=None),
+    phone_present: bool | None = Query(default=None),
+    email_present: bool | None = Query(default=None),
+    website_present: bool | None = Query(default=None),
+    actividades: list[str] | None = Query(default=None),
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "p_busqueda_id": str(busqueda_id),
+        "p_q": q,
+        "p_phone_present": phone_present,
+        "p_email_present": email_present,
+        "p_website_present": website_present,
+        "p_estrato_group": estrato_group,
+        "p_actividades": actividades,
+    }
+    try:
+        row = await repo.denue_resultados_bounds(usuario_token=user_token, payload=payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        return {"ok": True, "bounds": None, "total": 0}
+    return {
+        "ok": True,
+        "bounds": {
+            "west": row.get("west"),
+            "south": row.get("south"),
+            "east": row.get("east"),
+            "north": row.get("north"),
+        },
+        "total": int(row.get("total_count") or 0),
+    }
+
+
+@router.get("/prospeccion/denue/actividades")
+async def listar_denue_actividades(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    user_token: str = Depends(require_user_token),
+    busqueda_id: UUID = Query(...),
+    search: str | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "p_busqueda_id": str(busqueda_id),
+        "p_search": search,
+        "p_limit": limit,
+    }
+    try:
+        items = await repo.denue_resultados_actividades(usuario_token=user_token, payload=payload)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "items": items, "limit": limit}
 
 
 @router.delete("/prospeccion/google/resultados")
