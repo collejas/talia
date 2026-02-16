@@ -117,11 +117,18 @@ type AdvancedSearchPayload = Pick<
 type BusquedaMetaFilters = {
   geo_estados?: string[];
   geo_municipios?: string[];
+  actividad_codigos?: string[];
+  estrato_ids?: string[];
+  texto_busqueda?: string;
 };
 
 type GeoLookups = {
   states: Map<string, string>;
   municipalities: Map<string, string>;
+};
+
+type ScianLookups = {
+  titles: Map<string, string>;
 };
 
 function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?: string; filters?: BusquedaMetaFilters } {
@@ -140,6 +147,15 @@ function extractBusquedaMeta(item: DenueBusquedaItem): { source?: string; modo?:
           : undefined,
         geo_municipios: Array.isArray((advanced as Record<string, unknown>).geo_municipios)
           ? ((advanced as Record<string, unknown>).geo_municipios as unknown[]).map(String)
+          : undefined,
+        actividad_codigos: Array.isArray((advanced as Record<string, unknown>).actividad_codigos)
+          ? ((advanced as Record<string, unknown>).actividad_codigos as unknown[]).map(String)
+          : undefined,
+        estrato_ids: Array.isArray((advanced as Record<string, unknown>).estrato_ids)
+          ? ((advanced as Record<string, unknown>).estrato_ids as unknown[]).map(String)
+          : undefined,
+        texto_busqueda: typeof (advanced as Record<string, unknown>).texto_busqueda === "string"
+          ? String((advanced as Record<string, unknown>).texto_busqueda).trim()
           : undefined,
       }
       : undefined;
@@ -162,6 +178,24 @@ function buildGeoLookups(states: DenueCatalogosResponse["geo"]["states"]): GeoLo
     }
   }
   return { states: stateMap, municipalities: municipalityMap };
+}
+
+function buildScianLookups(scian: DenueCatalogosResponse["scian"]): ScianLookups {
+  const titles = new Map<string, string>();
+  const addRows = (rows: DenueCatalogosResponse["scian"][keyof DenueCatalogosResponse["scian"]]) => {
+    for (const row of rows) {
+      const code = String(row.codigo ?? "").trim();
+      const title = typeof row.titulo === "string" ? row.titulo.trim() : "";
+      if (!code || !title) continue;
+      titles.set(code, title);
+    }
+  };
+  addRows(scian.sector);
+  addRows(scian.subsector);
+  addRows(scian.rama);
+  addRows(scian.subrama);
+  addRows(scian.clase);
+  return { titles };
 }
 
 function buildGeoDisplay(
@@ -216,6 +250,32 @@ function buildGeoDisplay(
   return { label: "—" };
 }
 
+function buildActividadDisplay(
+  filters?: BusquedaMetaFilters,
+  scian?: ScianLookups | null,
+): { label: string; tooltip?: string } {
+  const codes = (filters?.actividad_codigos ?? []).filter(Boolean);
+  if (!codes.length) {
+    return { label: "" };
+  }
+  if (codes.includes("0")) {
+    return { label: "Todas las actividades", tooltip: "Actividades: Todas las actividades" };
+  }
+  const names = codes.map((code) => scian?.titles.get(code) ?? code);
+  const base = names[0] ?? "";
+  if (!base) {
+    return { label: "" };
+  }
+  const maxTooltipItems = 30;
+  const tooltipItems = names.slice(0, maxTooltipItems);
+  const tooltipExtra = names.length > maxTooltipItems ? `\n+${names.length - maxTooltipItems} más…` : "";
+  const tooltip = `Actividades (${names.length}):\n${tooltipItems.join("\n")}${tooltipExtra}`;
+  if (names.length <= 1) {
+    return { label: base, tooltip };
+  }
+  return { label: `${base} +${names.length - 1}`, tooltip };
+}
+
 export function DenueBusquedaView() {
   const { context } = usePermissions();
   const canRunBusquedas = context.es_admin || context.permisos.includes("busquedas.run");
@@ -251,6 +311,7 @@ export function DenueBusquedaView() {
   const [advancedModalOpen, setAdvancedModalOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
+  const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
   const busquedasRef = useRef<DenueBusquedaItem[]>([]);
   const activeBusqueda = useMemo(
     () => busquedas.find((item) => item.id === activeBusquedaId) ?? null,
@@ -314,10 +375,12 @@ export function DenueBusquedaView() {
         const response = await listDenueCatalogos();
         if (cancelled) return;
         setGeoLookups(buildGeoLookups(response.geo.states ?? []));
+        setScianLookups(buildScianLookups(response.scian));
       } catch {
         // Sin catálogos: mostrar códigos como fallback.
         if (cancelled) return;
         setGeoLookups(null);
+        setScianLookups(null);
       }
     })();
     return () => {
@@ -1623,6 +1686,7 @@ export function DenueBusquedaView() {
                     {busquedas.map((item) => {
                       const meta = extractBusquedaMeta(item);
                       const geo = buildGeoDisplay(meta.filters, geoLookups);
+                      const actividad = buildActividadDisplay(meta.filters, scianLookups);
                       const createdLabel = new Date(item.creado_en).toLocaleString("es-MX", {
                         dateStyle: "short",
                         timeStyle: "short",
@@ -1633,6 +1697,25 @@ export function DenueBusquedaView() {
                           ? `${numberFormatter.format(item.radio_m)} m`
                           : "—";
                       const sourceLabel = meta.source ? String(meta.source) : item.fuente;
+                      const textoBusqueda = meta.filters?.texto_busqueda?.trim();
+                      const busquedaTitulo =
+                        modo === "radio"
+                          ? (item.query || "(Sin texto)")
+                          : textoBusqueda
+                            ? textoBusqueda
+                            : actividad.label
+                              ? `Avanzada · ${actividad.label}`
+                              : (item.query || "Búsqueda avanzada");
+                      const tooltipParts: string[] = [];
+                      if (modo !== "radio") {
+                        if (textoBusqueda) {
+                          tooltipParts.push(`Texto:\n${textoBusqueda}`);
+                        }
+                        if (actividad.tooltip) {
+                          tooltipParts.push(actividad.tooltip);
+                        }
+                      }
+                      const busquedaTooltip = tooltipParts.filter(Boolean).join("\n\n") || undefined;
                       return (
                         <TableRow
                           key={item.id}
@@ -1642,7 +1725,24 @@ export function DenueBusquedaView() {
                         >
                           <TableCell className="max-w-[380px] whitespace-normal">
                             <div className="space-y-0.5">
-                              <div className="font-medium">{item.query || "(Sin texto)"}</div>
+                              <div className="font-medium">
+                                {busquedaTooltip ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="cursor-help underline decoration-dotted underline-offset-2">
+                                          {busquedaTitulo}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" align="start" className="max-w-sm whitespace-pre-wrap text-sm leading-snug">
+                                        {busquedaTooltip}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  busquedaTitulo
+                                )}
+                              </div>
                               <div className="text-[11px] text-muted-foreground">
                                 {sourceLabel} · {modo}
                               </div>
