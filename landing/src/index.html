@@ -1,954 +1,90 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="TalIA convierte automatizaciones básicas en agentes IA que comprenden contexto, califican leads y apoyan ventas y soporte 24/7." />
-  <title>TalIA · agente IA que conversa, decide y actúa por ti</title>
-  <meta name="theme-color" content="#05060f" />
-  <link rel="icon" href="/favicon.ico" sizes="any" type="image/x-icon" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./assets/css/styles.css" />
-  <style>
-    :root {
-    --surface: rgba(255, 255, 255, 0.95);
-    --surface-soft: rgba(247, 250, 255, 0.7);
-    --accent: linear-gradient(135deg, #2563eb, #7c3aed);
-    --glass-border: rgba(15, 23, 42, 0.12);
-    --header-h: 74px;
-    --text-main: #0f172a;
-    --text-muted: #1f2937;
-    --text-muted-strong: #0f172a;
-    --blend-shadow: 0 30px 80px rgba(15, 23, 42, 0.05);
-    --problem-solution-height: 560px;
-    }
 
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--text-main);
-      background: #f8fafc;
-      overflow-y: auto;
-      overflow-x: hidden;
-      display: block;
-      height: auto;
-    }
-
-    html {
-      width: 100%;
-      overflow-x: hidden;
-      background: #f8fafc;
-    }
-
-    header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: var(--header-h);
-      display: flex;
-      align-items: center;
-      padding: 0 1.25rem;
-      justify-content: space-between;
-      z-index: 20;
-      backdrop-filter: blur(18px);
-      background: rgba(255, 255, 255, 0.95);
-      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-      box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
-    }
-
-
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-weight: 700;
-      letter-spacing: 0.2px;
-      color: var(--text-main);
-    }
-
-    .brand-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
-    }
-
-    .hero-cta,
-    .header-panel,
-    .header-link {
-      border-radius: 999px;
-      padding: 0.65rem 1.25rem;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border: none;
-      background: var(--accent);
-      color: #ffffff;
-      text-decoration: none;
-      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .hero-cta:hover,
-    .header-panel:hover,
-    .header-link:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 20px 55px rgba(99, 102, 241, 0.45);
-    }
-
-    .header-whatsapp {
-      border-radius: 999px;
-      padding: 0.65rem 1.4rem;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border: none;
-      background: linear-gradient(135deg, #25d366, #1db954);
-      color: #fff;
-      text-decoration: none;
-      box-shadow: 0 18px 45px rgba(37, 211, 102, 0.35);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .header-whatsapp:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 20px 55px rgba(37, 211, 102, 0.45);
-    }
-
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    main {
-      min-height: calc(100vh - var(--header-h));
-      padding: 1.75rem clamp(1rem, 3vw, 3rem) 2.5rem;
-      margin-top: var(--header-h);
-      width: 100%;
-      display: block;
-    }
-
-    .hero-wrapper {
-      width: min(87.5vw, 1200px);
-      margin: 0 auto;
-    }
-
-    .hero-section {
-      width: 100%;
-      background: #f8fafc;
-      padding: clamp(2rem, 3vw, 3rem) 0 clamp(3rem, 4vw, 4rem);
-      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-    }
-
-    .hero-card {
-      background: transparent;
-      border-radius: 32px;
-      border: none;
-      padding: clamp(2.25rem, 3vw, 3rem);
-      box-shadow: none;
-      width: 100%;
-    }
-
-    .hero-card-pair {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: clamp(1.5rem, 2vw, 2.5rem);
-      align-items: center;
-    }
-
-    .hero-card-copy {
-      max-width: 640px;
-    }
-
-    .hero-card-banner {
-      min-height: 220px;
-    }
-
-    .hero-card-banner .marquee {
-      height: 100%;
-      min-height: 260px;
-    }
-
-    .hero-label {
-      letter-spacing: 0.4em;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-
-    .hero-card h1 {
-      margin: 0;
-      font-size: clamp(2.8rem, 4vw, 3.8rem);
-      line-height: 1.2;
-      color: var(--text-main);
-    }
-
-    .hero-card p {
-      margin: 0;
-      color: var(--text-muted-strong);
-      font-size: 1.05rem;
-      line-height: 1.75;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.9rem;
-    }
-
-    .hero-actions button,
-    .hero-actions a {
-      border-radius: 999px;
-      padding: 0.9rem 1.95rem;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border: none;
-      cursor: pointer;
-      text-decoration: none;
-    }
-
-    .hero-actions button {
-      background: var(--accent);
-      color: #ffffff;
-      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
-    }
-
-    .hero-actions a {
-      border: 1px solid rgba(15, 23, 42, 0.2);
-      color: var(--text-main);
-      background: transparent;
-    }
-
-    .marquee {
-      overflow: hidden;
-      border-radius: 26px;
-      border: 1px solid rgba(15, 23, 42, 0.12);
-      background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 60%);
-      padding: 1rem 0;
-    }
-
-    .marquee-track {
-      display: flex;
-      gap: 1.4rem;
-      padding: 0 1rem;
-      will-change: transform;
-    }
-
-    .marquee-item {
-      min-width: 260px;
-      background: #ffffff;
-      border-radius: 18px;
-      padding: 1.1rem 1.3rem;
-      box-shadow: 0 15px 40px rgba(15, 23, 42, 0.15);
-      border: 1px solid rgba(15, 23, 42, 0.08);
-    }
-
-    .marquee-item h3 {
-      margin: 0;
-      font-size: 1rem;
-      line-height: 1.35;
-      color: var(--text-main);
-    }
-
-    .marquee-item p {
-      margin: 0.4rem 0 0;
-      color: var(--text-muted-strong);
-      font-size: 0.92rem;
-      line-height: 1.5;
-    }
-
-    .content-wrapper {
-      width: min(87.5vw, 1200px);
-      margin: 0 auto;
-      margin-top: clamp(2rem, 3vw, 3rem);
-      display: flex;
-      flex-direction: column;
-      gap: clamp(2rem, 2vw, 2.75rem);
-    }
-
-    .story-section {
-      background: transparent;
-      border-radius: 32px;
-      padding: clamp(2rem, 3vw, 3rem);
-    }
-
-    .problem-solution-section {
-      width: 100%;
-      border-radius: 32px;
-      border: 1px solid rgba(15, 23, 42, 0.06);
-      background: #ffffff;
-      box-shadow: var(--blend-shadow);
-      padding: clamp(1.5rem, 2vw, 2.5rem);
-    }
-
-    .column-header {
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-    }
-
-    .column-header h4 {
-      margin: 0;
-      font-size: 1.1rem;
-      color: #0f172a;
-    }
-
-    .column-header p {
-      margin: 0;
-      color: var(--text-muted-strong);
-      font-size: 0.95rem;
-    }
-
-    .problem-solution-inner {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 2rem;
-      align-items: stretch;
-    }
-
-    .problem-column {
-      border-radius: 28px;
-      border: 1px solid rgba(15, 23, 42, 0.15);
-      background: #ffffff;
-      padding: clamp(1.25rem, 1.8vw, 1.75rem);
-      box-shadow: var(--blend-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-      min-height: var(--problem-solution-height);
-    }
-
-    .problem-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      flex: 1;
-      overflow-y: auto;
-      padding-right: 0.25rem;
-    }
-
-    .problem-tab {
-      --problem-accent: rgba(37, 99, 235, 0.85);
-      position: relative;
-      overflow: hidden;
-      text-align: left;
-      border: 1px solid rgba(15, 23, 42, 0.1);
-      border-radius: 16px;
-      border-left-width: 6px;
-      border-left-color: var(--problem-accent, rgba(15, 23, 42, 0.15));
-      border-left-style: solid;
-      background: #f8fafc;
-      padding: 0.85rem 1rem 0.85rem 1.1rem;
-      font-size: 0.95rem;
-      color: var(--text-main);
-      cursor: pointer;
-      transition: border 0.2s ease, background 0.2s ease, box-shadow 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    .problem-tab::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 15px;
-      background: linear-gradient(135deg, var(--problem-accent, rgba(37, 99, 235, 0.35)) 0%, transparent 70%);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-    }
-
-    .problem-tab:hover::after,
-    .problem-tab.active::after {
-      opacity: 0.2;
-    }
-
-    .problem-tab span,
-    .problem-tab ul {
-      position: relative;
-      z-index: 1;
-    }
-
-    .problem-tab span {
-      font-weight: 600;
-      display: inline-flex;
-      align-items: flex-start;
-      gap: 0.35rem;
-    }
-
-    .problem-tab span::before {
-      content: '•';
-      font-size: 1.2rem;
-      color: var(--problem-accent, rgba(15, 23, 42, 0.7));
-    }
-
-    .problem-tab ul {
-      margin: 0;
-      padding-left: 1.15rem;
-      display: none;
-      flex-direction: column;
-      gap: 0.25rem;
-      color: var(--text-muted-strong);
-      font-size: 0.9rem;
-      line-height: 1.4;
-      font-family: 'Space Grotesk', 'Inter', sans-serif;
-      font-weight: 400;
-    }
-
-    .problem-tab.active {
-      border-color: rgba(15, 23, 42, 0.3);
-      border-left-color: var(--problem-accent, rgba(37, 99, 235, 0.6));
-      background: #ffffff;
-      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
-    }
-
-    .problem-tab.active ul {
-      display: flex;
-    }
-
-    .solution-panel {
-      --solution-accent: #2563eb;
-      --solution-accent-soft: rgba(37, 99, 235, 0.15);
-      border-radius: 20px;
-      border: 1px solid rgba(15, 23, 42, 0.15);
-      padding: 1.5rem;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), var(--solution-accent-soft));
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      min-height: var(--problem-solution-height);
-      position: relative;
-    }
-
-    .solution-placeholder {
-      margin: 0;
-      color: var(--text-muted-strong);
-      font-size: 1rem;
-      line-height: 1.4;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.6rem;
-      padding: 1rem 1.6rem;
-      border-radius: 20px;
-      background: rgba(59, 130, 246, 0.12);
-      border: 1px dashed rgba(37, 99, 235, 0.45);
-      width: min(92%, 460px);
-      min-height: 120px;
-      text-align: center;
-      position: absolute;
-      inset: 50%;
-      transform: translate(-50%, -50%);
-      white-space: normal;
-    }
-
-    .solution-placeholder.hidden {
-      display: none;
-    }
-
-    .solution-placeholder .solution-arrow {
-      font-size: 1.5rem;
-      color: rgba(37, 99, 235, 0.85);
-    }
-
-    .solution-content {
-      display: none;
-      flex-direction: column;
-      gap: 1rem;
-      flex: 1;
-    }
-
-    .solution-content.visible {
-      display: flex;
-    }
-
-    .solution-label {
-      font-size: 0.8rem;
-      letter-spacing: 0.35em;
-      text-transform: uppercase;
-      color: var(--solution-accent, rgba(15, 23, 42, 0.6));
-    }
-
-    .solution-label::before {
-      content: "•";
-      margin-right: 0.35rem;
-      color: var(--solution-accent, #2563eb);
-    }
-
-    .solution-title {
-      margin: 0;
-      font-size: clamp(1.5rem, 2vw, 2rem);
-      color: var(--solution-accent, #0f172a);
-    }
-
-    .solution-bullets {
-      margin: 0;
-      padding-left: 1.1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      flex: 1;
-    }
-
-    .solution-bullets li {
-      font-size: 0.95rem;
-      color: var(--text-muted-strong);
-      line-height: 1.5;
-    }
-
-    .solution-how {
-      background: rgba(99, 102, 241, 0.1);
-      border-radius: 16px;
-      padding: 0.9rem 1rem;
-      border: 1px solid rgba(99, 102, 241, 0.3);
-    }
-
-    .solution-how h4 {
-      margin: 0;
-      font-size: 1rem;
-      color: var(--solution-accent, #0f172a);
-    }
-
-    .solution-how p {
-      margin: 0.4rem 0 0;
-      color: var(--text-muted-strong);
-      font-size: 0.95rem;
-      line-height: 1.4;
-    }
-
-    .solution-cta {
-      margin-top: auto;
-      border-radius: 999px;
-      border: none;
-      padding: 0.95rem 2rem;
-      font-weight: 600;
-      font-size: 1rem;
-      background: linear-gradient(135deg, var(--solution-accent, var(--accent)), #a855f7);
-      color: #ffffff;
-      cursor: pointer;
-      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .solution-cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 20px 55px rgba(99, 102, 241, 0.45);
-    }
-
-    .problem-solution {
-      color: #2563eb;
-      font-weight: 600;
-    }
-
-    .products-section {
-      border-radius: 32px;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      background: linear-gradient(160deg, rgba(37, 99, 235, 0.04), rgba(255, 255, 255, 0.92));
-      padding: clamp(2rem, 3vw, 3rem);
-      box-shadow: var(--blend-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-
-    .products-header h2 {
-      margin: 0;
-      font-size: clamp(1.7rem, 2.6vw, 2.35rem);
-      line-height: 1.2;
-      color: var(--text-main);
-    }
-
-    .products-header p {
-      margin: 0;
-      color: var(--text-muted-strong);
-      line-height: 1.6;
-      max-width: 70ch;
-    }
-
-    .products-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: clamp(1rem, 2vw, 1.5rem);
-    }
-
-    .product-card {
-      border-radius: 24px;
-      padding: 1.4rem;
-      background: rgba(255, 255, 255, 0.08);
-      display: flex;
-      flex-direction: column;
-      gap: 0.65rem;
-      min-height: 190px;
-      box-shadow: 0 25px 45px rgba(12, 12, 25, 0.55);
-      position: relative;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(18px);
-      background-image: radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.2), transparent 45%),
-        radial-gradient(circle at 85% 80%, rgba(99, 102, 241, 0.25), transparent 35%);
-    }
-
-    .product-card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      border: 1px solid transparent;
-      pointer-events: none;
-      transition: border-color 0.3s ease;
-    }
-
-    .product-card:hover::after,
-    .product-card:focus-within::after {
-      border-color: rgba(255, 255, 255, 0.35);
-    }
-
-    .product-card > h3 {
-      font-size: 1.15rem;
-      margin: 0;
-      color: var(--text-main);
-    }
-
-    .product-card__icon {
-      font-size: 1.8rem;
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
-      background: rgba(15, 23, 42, 0.6);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 12px 25px rgba(15, 23, 42, 0.45);
-    }
-
-    .product-card p {
-      margin: 0;
-      color: #475569;
-      line-height: 1.5;
-    }
-
-    .final-cta-panel {
-      border: 1px solid rgba(37, 99, 235, 0.45);
-      background: rgba(255, 255, 255, 0.95);
-      text-align: center;
-      position: relative;
-      border-radius: 28px;
-      padding: clamp(1.5rem, 2vw, 2.2rem);
-      box-shadow: var(--blend-shadow);
-    }
-
-    .final-cta-panel h3 {
-      margin-bottom: 0.3rem;
-      color: var(--text-main);
-    }
-
-    .final-cta-panel p {
-      color: var(--text-muted-strong);
-      margin: 0;
-    }
-
-    .final-cta-panel button {
-      border-radius: 999px;
-      border: none;
-      padding: 1rem 2.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      background: var(--accent);
-      color: #ffffff;
-      box-shadow: 0 20px 60px rgba(99, 102, 241, 0.25);
-      margin-top: 0.8rem;
-    }
-
-
-    @media (max-width: 900px) {
-      .products-grid {
-        grid-template-columns: 1fr;
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Talia | Asistente de IA Multi-canal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="./assets/css/webchat.css">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#7f13ec",
+              "background-light": "#f7f6f8",
+              "background-dark": "#191022",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
       }
-    }
-
-    @media (min-width: 1100px) {
-      .products-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 768px) {
-      header {
-        padding: 0 1rem;
-      }
-      .hero-card {
-        padding: 1.8rem;
-      }
-      .marquee-item {
-        min-width: 220px;
-      }
-    }
-
-    /* --- Enhancements: make sections after hero more punchy (no layout change) --- */
-    .story-section {
-      background: linear-gradient(180deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04));
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      box-shadow: var(--blend-shadow);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .story-section::before {
-      content: "";
-      position: absolute;
-      inset: -40% -20% auto -20%;
-      height: 220px;
-      background: radial-gradient(circle at 20% 40%, rgba(37,99,235,0.22), transparent 55%),
-                  radial-gradient(circle at 80% 20%, rgba(124,58,237,0.18), transparent 52%);
-      pointer-events: none;
-    }
-
-    .story-section > * {
-      position: relative;
-    }
-
-    .story-section h2 {
-      margin: 0.55rem 0 0.75rem;
-      font-size: clamp(1.9rem, 2.6vw, 2.5rem);
-      line-height: 1.18;
-      color: var(--text-main);
-      letter-spacing: -0.02em;
-    }
-
-    .story-section p {
-      margin: 0;
-      max-width: 62ch;
-      color: var(--text-muted-strong);
-      font-size: 1.05rem;
-      line-height: 1.65;
-    }
-
-    .problem-solution-section {
-      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.7));
-    }
-
-    .problem-column,
-    .solution-panel {
-      box-shadow: 0 18px 55px rgba(15, 23, 42, 0.08);
-    }
-
-    .problem-tab {
-      background: linear-gradient(180deg, #f8fafc, #f1f5f9);
-      transition: transform 0.18s ease, box-shadow 0.18s ease, border 0.2s ease, background 0.2s ease;
-    }
-
-    .problem-tab:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-      border-color: rgba(37, 99, 235, 0.25);
-    }
-
-    .problem-tab.active {
-      background: linear-gradient(135deg, #ffffff, #eef2ff);
-      box-shadow: 0 14px 34px rgba(37, 99, 235, 0.14);
-    }
-
-    .problem-solution-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
-    }
-
-    .problem-solution-header h2 {
-      margin: 0;
-      font-size: clamp(1.5rem, 2vw, 2rem);
-      color: var(--text-main);
-    }
-
-    .problem-solution-header__cta {
-      border-radius: 999px;
-      padding: 0.65rem 1.4rem;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border: none;
-      background: var(--accent);
-      color: #fff;
-      box-shadow: 0 18px 45px rgba(99, 102, 241, 0.35);
-      cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .problem-solution-header__cta:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 24px 60px rgba(99, 102, 241, 0.45);
-    }
-
-    .solution-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-weight: 700;
-    }
-
-    .solution-label::before {
-      content: "●";
-      color: rgba(37, 99, 235, 0.9);
-      font-size: 0.9rem;
-    }
-
-    .solution-panel {
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-
-    .solution-content.visible {
-      animation: solutionPop 0.25s ease both;
-    }
-
-    @keyframes solutionPop {
-      from { transform: translateY(6px); opacity: 0; }
-      to   { transform: translateY(0); opacity: 1; }
-    }
-
-    .future-section {
-      border-radius: 32px;
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      background: radial-gradient(circle at 20% 0%, rgba(37,99,235,0.12), transparent 45%),
-                  radial-gradient(circle at 90% 20%, rgba(124,58,237,0.10), transparent 55%),
-                  rgba(255,255,255,0.85);
-      box-shadow: var(--blend-shadow);
-      padding: clamp(2rem, 3vw, 3rem);
-      text-align: left;
-    }
-
-    .future-section h2 {
-      margin: 0;
-      font-size: clamp(1.85rem, 2.8vw, 2.6rem);
-      line-height: 1.12;
-      letter-spacing: -0.02em;
-      color: var(--text-main);
-    }
-
-    .future-section p {
-      margin-top: 0.85rem;
-      font-size: 1.05rem;
-      line-height: 1.55;
-      color: var(--text-muted-strong);
-      max-width: 70ch;
-    }
-
-    .final-cta-panel {
-      overflow: hidden;
-    }
-
-    .final-cta-panel::before {
-      content: "";
-      position: absolute;
-      inset: -35% -10% -12% -10%;
-      background: radial-gradient(circle at 25% 30%, rgba(37,99,235,0.20), transparent 55%),
-                  radial-gradient(circle at 75% 10%, rgba(124,58,237,0.16), transparent 50%);
-      pointer-events: none;
-    }
-
-    .final-cta-panel > * {
-      position: relative;
-    }
-
-    .floating-whatsapp {
-      position: fixed;
-      bottom: clamp(1rem, 2vw, 1.8rem);
-      right: clamp(1rem, 2vw, 1.8rem);
-      width: clamp(52px, 6vw, 70px);
-      height: clamp(52px, 6vw, 70px);
-      border-radius: 20px;
-      background: linear-gradient(135deg, #25d366, #1bb954, #15803d);
-      box-shadow: 0 18px 40px rgba(37, 211, 102, 0.45);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-      z-index: 40;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .floating-whatsapp:hover,
-    .floating-whatsapp:focus-visible {
-      transform: translateY(-2px);
-      box-shadow: 0 22px 45px rgba(37, 211, 102, 0.55);
-    }
-
-    .floating-whatsapp__icon {
-      width: 60%;
-      height: 60%;
-      display: inline-flex;
-    }
-
-    .floating-whatsapp__icon svg {
-      width: 100%;
-      height: 100%;
-      fill: #ffffff;
-    }
-
-  </style>
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
 </head>
-<body>
-  <header>
-    <a class="brand" href="/">
-      <img src="/assets/logos/Logo8.png" alt="TalIA" class="brand-icon" />
-      <span>Tal-IA</span>
-    </a>
-    <div class="header-controls">
-      <a class="header-link" href="#problemas">Soluciones</a>
-      <a class="header-link" href="#productos">Productos</a>
-      <a
-        class="header-whatsapp"
-        href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio"
-        aria-label="Escribir al WhatsApp de Tal-IA"
-        >Contacta Tal-IA</a
-      >
-      <a class="header-panel" href="https://talia.mx/auth/login">Panel</a>
-    </div>
-  </header>
-
-  <main class="landing-stage">
-    <section class="hero-section">
-      <div class="hero-wrapper">
-        <section class="hero-card">
-          <div class="hero-card-pair">
-            <div class="hero-card-copy">
-              <p class="hero-label">Talia · Agente de IA multicanal</p>
-
-              <h1>
-                Asistente de IA que atiende, decide y actúa por tu negocio 24/7
-              </h1>
-
-              <h2 class="hero-subtitle">
-                Con CRM integrado o conectado al que ya usas
-              </h2>
-
-              <ul class="hero-description-list">
-                <li>Responde automáticamente mientras tu equipo duerme</li>
-                <li>Asigna vandedores humanos y notifica acciones</li>
-                <li>Agenda citas y da seguimiento hasta cerrar</li>
-                <li>Califica clientes y oportunidades</li>
-                <li>Entiende contexto y recuerda</li>
-                <li>Sin bots tontos</li>
-              </ul>
-
-              <div class="hero-actions">
-                <button type="button" data-open-webchat>
-                  Ver a Tal-IA en acción
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 selection:bg-primary/30">
+<!-- Navigation -->
+<nav class="fixed top-0 w-full z-50 border-b border-primary/10 glass">
+<div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+<a class="flex items-center gap-2" href="/">
+<img src="/assets/logos/Logo8.png" alt="TalIA" class="size-9 object-contain" />
+<span class="text-xl font-bold tracking-tight text-slate-900">Tal-IA</span>
+</a>
+<div class="hidden md:flex items-center gap-10">
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#problemas">Soluciones</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#agentes">Agentes</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio">Contacto</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="https://talia.mx/auth/login">Panel</a>
+</div>
+<div class="flex items-center gap-4">
+<a href="https://talia.mx/auth/login" class="hidden sm:block text-sm font-semibold px-4 py-2 hover:bg-slate-100 rounded-lg transition-all">Log in</a>
+<button class="bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2.5 px-6 rounded-lg shadow-lg shadow-primary/20 transition-all" data-open-webchat>
+                    Ver en acción
                 </button>
-              </div>
-            </div>
-            <div class="hero-card-banner">
-              <div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
+</div>
+</div>
+</nav>
+<!-- Hero Section -->
+<section class="relative pt-40 pb-24 overflow-hidden">
+<div class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+<div class="relative z-10">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-6">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+<span class="text-xs font-bold text-primary uppercase tracking-wider italic">Nueva Era: Agentes Autónomos</span>
+</div>
+<h1 class="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] mb-8 tracking-tight">
+                    Asistente de IA que atiende, decide y actúa <span class="text-primary">24/7</span>
+</h1>
+<p class="text-lg text-slate-600 mb-10 max-w-xl leading-relaxed">
+                    La primera IA multi-canal con integración nativa a tu CRM. Automatiza ventas, soporte y operaciones de forma inteligente y humana.
+                </p>
+<div class="flex flex-col sm:flex-row gap-4">
+<button class="bg-primary hover:bg-primary/90 text-white font-bold py-4 px-8 rounded-xl shadow-xl shadow-primary/30 transition-all text-lg flex items-center justify-center gap-2" data-open-webchat>
+                        Ver a Tal-IA en acción
+                        <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<button class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2">
+                        Explorar Agentes
+                    </button>
+</div>
+</div>
+<div class="relative lg:h-[600px] flex items-center justify-center">
+<!-- Abstract UI Representation -->
+<!-- Marquesina original (comentada)
+<div class="marquee" aria-label="Mensajes que avanzan de derecha a izquierda">
                 <div class="marquee-track" aria-hidden="true" data-speed="0.8">
                   <article class="marquee-item">
                     <h3>🧠 La automatización tradicional 'Bot' se transforma en IA agente humano.</h3>
@@ -969,228 +105,336 @@
                       Recuerda histórico, preferencias y tono para dar respuestas personalizadas y naturales en cada hilo.
                     </p>
                   </article>
-                  <article class="marquee-item">
-                    <h3>🙌 Soporte inteligente y proactivo 24/7.</h3>
-                    <p>
-                      Detecta señales de compra, riesgos y oportunidades antes de que el cliente pregunte y actúa con aprendizaje continuo.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>🏆 No pruebas botones. Ves ventas ocurriendo.</h3>
-                    <p>
-                      TalIA responde clientes reales, detecta interés de compra
-                      y ejecuta seguimientos sin simulaciones.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>🧠 La automatización tradicional se transforma en IA agente humano.</h3>
-                    <p>
-                      Ni reglas ni respuestas automáticas sin contexto: tu IA califica, prioriza y negocia como si fuera parte de tu equipo.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>📈 Menos seguimiento manual. Más decisiones automáticas.</h3>
-                    <p>
-                      El agente detecta interés real, prioriza oportunidades y ejecuta acciones
-                      sin que tu equipo tenga que intervenir.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>🗣️ Conversaciones inteligentes con contexto y memoria.</h3>
-                    <p>
-                      Recuerda histórico, preferencias y tono para dar respuestas personalizadas y naturales en cada hilo.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>🙌 Soporte inteligente y proactivo 24/7.</h3>
-                    <p>
-                      Detecta señales de compra, riesgos y oportunidades antes de que el cliente pregunte y actúa con aprendizaje continuo.
-                    </p>
-                  </article>
-                  <article class="marquee-item">
-                    <h3>🏆 No pruebas botones. Ves ventas ocurriendo.</h3>
-                    <p>
-                      TalIA responde clientes reales, detecta interés de compra
-                      y ejecuta seguimientos sin simulaciones.
-                    </p>
-                  </article>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    </section>
-    <div class="content-wrapper">
-
-      <section class="story-section" aria-label="Contexto antes de problema-solución">
-        <p class="hero-label">La realidad hoy</p>
-        <h2>
-          Tu negocio ya habla con clientes.<br>
-          El problema es que nadie piensa mientras conversa,<br>
-          y muchas veces se responde tarde… o nunca.
-        </h2>
-        <p>
-          Los mensajes llegan, las oportunidades existen,
-          pero sin contexto, sin prioridad y sin acción rápida y automática, se pierden.
-        </p>
-      </section>
-
-      <section class="problem-solution-section" id="problemas" aria-label="Problema-Solución interactiva">
-        <div class="problem-solution-header">
-          <div>
-            <p class="hero-label">¿Qué duele?</p>
-            <h2>Solución inmediata, para problemas reales.</h2>
-          </div>
-        </div>
-        <div class="problem-solution-inner">
-          <div class="problem-column">
-            <div class="column-header">
-              <h2>Problemas</h2>
-              <p>Que hacen perder ventas todos los días.</p>
-            </div>
-          <div class="problem-list" role="listbox" aria-label="Lista de problemas">
-            <button type="button" class="problem-tab" data-problem-index="0" aria-label="Seleccionar problema 1">
-              <span>Los clientes se comunican y nadie atiende a tiempo.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-            <button type="button" class="problem-tab" data-problem-index="1" aria-label="Seleccionar problema 2">
-              <span>El seguimiento falla porque no hay un sistema que piense y actúe.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-            <button type="button" class="problem-tab" data-problem-index="2" aria-label="Seleccionar problema 3">
-              <span>Las decisiones se toman sin datos claros ni alertas oportunas.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-            <button type="button" class="problem-tab" data-problem-index="3" aria-label="Seleccionar problema 4">
-              <span>La operación se sostiene con parches, hojas de cálculo y memoria humana.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-            <button type="button" class="problem-tab" data-problem-index="4" aria-label="Seleccionar problema 5">
-              <span>Escalar implica añadir usuarios extra con licencias caras y procesos nuevos.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-            <button type="button" class="problem-tab" data-problem-index="5" aria-label="Seleccionar problema 6">
-              <span>No puedes enviar mensajes o correos masivos.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-            <button type="button" class="problem-tab" data-problem-index="6" aria-label="Seleccionar problema 7">
-              <span>No tienes como conseguir más prospectos.</span>
-              <ul class="problem-bullets"></ul>
-            </button>
-          </div>
-          </div>
-          <div class="solution-panel">
-            <div class="column-header">
-              <h2>Soluciones de IA</h2>
-              <p>Acciones reales, automáticas y con contexto.</p>
-            </div>
-            <p class="solution-placeholder"><span class="solution-arrow">←</span>Da clic en un problema para ver la solución del agente IA.</p>
-            <div class="solution-content">
-              <span class="solution-label">AGENTE EN ACCIÓN</span>
-              <h3 class="solution-title"></h3>
-              <div class="solution-how">
-                <h4>Cómo funciona</h4>
-                <p class="solution-how-copy"></p>
-              </div>
-              <ul class="solution-bullets" role="list"></ul>
-              <button type="button" class="solution-cta" data-open-webchat>Ver a Tal-IA en acción</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      
-      <section class="future-section" aria-label="Future-proof">
-        <h2>
-          En 2026 no competirán las empresas con más vendedores.<br>
-          <span class="problem-solution">Competirán las que tengan mejores agentes de IA.</span>
-        </h2>
-          <p>
-            La pregunta no es si lo vas a usar.<br>
-            <strong>¿Es cuándo vas a empezar?</strong>
-          </p>
-      </section>
-
-
-      <section class="final-cta-panel" aria-label="Demuestra el agente IA">
-        <h3>No te explicamos cómo funciona.</h3>
-        <p>Te lo mostramos conversando.</p>
-        <button type="button" data-open-webchat>Deja que Tal-IA te lo demuestre</button>
-      </section>
-
-      <section class="products-section" id="productos" aria-label="Productos de TalIA">
-        <div class="products-header">
-          <p class="hero-label">TalIA · Productos</p>
-          <h2>Agentes y herramientas de IA que puedes activar.</h2>
-        </div>
-        <div class="products-grid">
-          <article class="product-card">
-            <span class="product-card__icon">🧭</span>
-            <h3>Tal-IA para ventas</h3>
-            <p>
-              Organiza clientes y oportunidades en un embudo de ventas inteligente.
-              Tal-IA prioriza contactos, da seguimiento automático y mantiene el
-              contexto de cada conversación para no perder oportunidades.
+</div>
+-->
+<div class="relative w-full aspect-square max-w-[500px] bg-gradient-to-tr from-primary/20 to-transparent rounded-[3rem] p-8">
+<div class="w-full h-full bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden relative group">
+<div class="p-4 border-b border-slate-50 flex items-center gap-2">
+<div class="size-3 rounded-full bg-red-400"></div>
+<div class="size-3 rounded-full bg-amber-400"></div>
+<div class="size-3 rounded-full bg-emerald-400"></div>
+</div>
+<div class="p-6 space-y-4">
+<div class="flex justify-end">
+<div class="bg-slate-100 rounded-2xl rounded-tr-none px-4 py-3 max-w-[80%] text-sm text-slate-600">¿Cómo va mi reserva para el tour de mañana?</div>
+</div>
+<div class="flex items-start gap-3">
+<div class="size-8 rounded-full bg-primary flex-shrink-0 flex items-center justify-center text-white text-xs">T</div>
+<div class="bg-primary/5 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%] text-sm text-slate-800 font-medium">
+                                    Hola Juan, tu reserva para el "City Tour Premium" está confirmada para las 09:00 AM. He actualizado tu calendario y enviado el ticket a tu correo. ¿Necesitas transporte?
+                                </div>
+</div>
+<div class="mt-8 pt-6 border-t border-slate-50">
+<div class="flex items-center justify-between mb-4">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">CRM Status</span>
+<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">UPDATED</span>
+</div>
+<div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full w-3/4 bg-primary rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Background decoration -->
+<div class="absolute -top-10 -right-10 size-64 bg-primary/10 rounded-full blur-3xl -z-10"></div>
+<div class="absolute -bottom-10 -left-10 size-80 bg-primary/5 rounded-full blur-3xl -z-10"></div>
+</div>
+</div>
+</section>
+<!-- Problems vs Solutions Section -->
+<section class="py-24 bg-white" id="problemas">
+<div class="max-w-7xl mx-auto px-6">
+<div class="text-center max-w-3xl mx-auto mb-20">
+<h2 class="text-primary font-bold tracking-widest uppercase text-sm mb-4">Desafíos vs Soluciones</h2>
+<h3 class="text-4xl font-black text-slate-900 mb-6 tracking-tight">La realidad hoy: Transformamos cuellos de botella</h3>
+<p class="text-slate-500 text-lg leading-relaxed">Las limitaciones humanas frenan el crecimiento. Talia elimina las barreras operativas con agentes autónomos.</p>
+</div>
+<div class="grid md:grid-cols-3 gap-8">
+<!-- Problem Card 1 -->
+<div class="group p-8 rounded-2xl bg-background-light border border-slate-100 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500">
+<div class="size-14 rounded-xl bg-white flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">person_remove</span>
+</div>
+<h4 class="text-xl font-bold mb-4 text-slate-900">Atención Manual</h4>
+<p class="text-slate-600 text-sm leading-relaxed mb-6">Dependencia total de equipos humanos para tareas repetitivas, limitando la escalabilidad de tu negocio.</p>
+<div class="pt-6 border-t border-slate-200">
+<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
+<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
+                        </div>
+<p class="mt-2 text-slate-800 text-sm font-semibold italic">Automatización total del 80% de consultas comunes.</p>
+</div>
+</div>
+<!-- Problem Card 2 -->
+<div class="group p-8 rounded-2xl bg-background-light border border-slate-100 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500">
+<div class="size-14 rounded-xl bg-white flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">schedule</span>
+</div>
+<h4 class="text-xl font-bold mb-4 text-slate-900">Respuesta Lenta</h4>
+<p class="text-slate-600 text-sm leading-relaxed mb-6">Clientes que esperan horas por una respuesta pierden el interés. El 50% compra al que responde primero.</p>
+<div class="pt-6 border-t border-slate-200">
+<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
+<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
+                        </div>
+<p class="mt-2 text-slate-800 text-sm font-semibold italic">Tiempo de respuesta inferior a 2 segundos 24/7.</p>
+</div>
+</div>
+<!-- Problem Card 3 -->
+<div class="group p-8 rounded-2xl bg-background-light border border-slate-100 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500">
+<div class="size-14 rounded-xl bg-white flex items-center justify-center mb-6 shadow-sm group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">cloud_off</span>
+</div>
+<h4 class="text-xl font-bold mb-4 text-slate-900">Datos Fragmentados</h4>
+<p class="text-slate-600 text-sm leading-relaxed mb-6">Información perdida entre chats, correos y hojas de cálculo. Falta de visión clara del cliente.</p>
+<div class="pt-6 border-t border-slate-200">
+<div class="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
+<span class="material-symbols-outlined text-sm">bolt</span> Solución Talia
+                        </div>
+<p class="mt-2 text-slate-800 text-sm font-semibold italic">Integración nativa bidireccional con tu CRM actual.</p>
+</div>
+</div>
+</div>
+</div>
+</section><section class="py-24 bg-slate-50">
+<div class="max-w-7xl mx-auto px-6">
+<div class="text-center max-w-3xl mx-auto mb-16">
+<h2 class="text-3xl md:text-4xl font-black text-slate-900 mb-6 tracking-tight">Solución inmediata, para problemas reales</h2>
+<p class="text-slate-500 text-lg">Diseñamos respuestas tecnológicas para los obstáculos operativos más comunes del mercado actual.</p>
+</div>
+<div class="grid gap-6">
+<!-- Problem/Solution Card 1 -->
+<div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Problema</span>
+<h4 class="text-xl font-bold text-slate-900">Saturación en horas pico</h4>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary/30 text-4xl">trending_flat</span>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Solución Talia</span>
+<p class="text-lg font-medium text-slate-700">Escalabilidad infinita con agentes que no duermen y gestionan miles de chats simultáneos.</p>
+</div>
+</div>
+<!-- Problem/Solution Card 2 -->
+<div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Problema</span>
+<h4 class="text-xl font-bold text-slate-900">Falta de personalización</h4>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary/30 text-4xl">trending_flat</span>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Solución Talia</span>
+<p class="text-lg font-medium text-slate-700">Memoria contextual avanzada para recordar cada detalle y preferencia de tus clientes recurrentes.</p>
+</div>
+</div>
+<!-- Problem/Solution Card 3 -->
+<div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Problema</span>
+<h4 class="text-xl font-bold text-slate-900">Procesos manuales lentos</h4>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary/30 text-4xl">trending_flat</span>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Solución Talia</span>
+<p class="text-lg font-medium text-slate-700">Automatización de flujos de trabajo en tiempo real, desde el registro hasta la resolución final.</p>
+</div>
+</div>
+<!-- Problem/Solution Card 4 -->
+<div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Problema</span>
+<h4 class="text-xl font-bold text-slate-900">Licencias caras para escalar</h4>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary/30 text-4xl">trending_flat</span>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Solución Talia</span>
+<p class="text-lg font-medium text-slate-700">Usuarios ilimitados sin cargos adicionales. Crece sin que tu software sea un lastre financiero.</p>
+</div>
+</div>
+<!-- Problem/Solution Card 5 -->
+<div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Problema</span>
+<h4 class="text-xl font-bold text-slate-900">Falta de alcance multicanal</h4>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary/30 text-4xl">trending_flat</span>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Solución Talia</span>
+<p class="text-lg font-medium text-slate-700">Mensajería masiva y proactiva que se siente humana, manteniendo el interés de tus prospectos.</p>
+</div>
+</div>
+<!-- Problem/Solution Card 6 -->
+<div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Problema</span>
+<h4 class="text-xl font-bold text-slate-900">Dificultad para prospectar</h4>
+</div>
+<div class="hidden md:block">
+<span class="material-symbols-outlined text-primary/30 text-4xl">trending_flat</span>
+</div>
+<div class="flex-1 flex flex-col gap-2">
+<span class="text-xs font-bold text-primary uppercase tracking-widest">Solución Talia</span>
+<p class="text-lg font-medium text-slate-700">Búsquedas inteligentes que generan prospectos listos, extrayendo datos de Google y fuentes oficiales.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Specialized Agents Section -->
+<section class="py-24 bg-background-light" id="agentes">
+<div class="max-w-7xl mx-auto px-6">
+<div class="flex flex-col md:flex-row justify-between items-end gap-6 mb-16">
+<div class="max-w-2xl">
+<h2 class="text-4xl font-black text-slate-900 mb-6 tracking-tight italic uppercase">Agentes &amp; Herramientas Especializados</h2>
+<p class="text-slate-500 text-lg leading-relaxed">Cada industria tiene reglas diferentes. Entrenamos modelos específicos para que Talia hable el idioma de tu negocio.</p>
+</div>
+<button class="flex items-center gap-2 text-primary font-bold hover:gap-4 transition-all">
+                    Ver todos los módulos <span class="material-symbols-outlined">trending_flat</span>
+</button>
+</div>
+<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Industry 1 -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group">
+<div class="w-full aspect-video rounded-lg overflow-hidden relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Modern business team meeting with laptops" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKJajibHguEuiKbrGZqnbvl03WwX0Dxinb4GPjer9bG2PKUMtNt-4iLAEH7vdgUuY1URFdMeFIIqxqwQCrXrO_mIPm6ysXSX_Ef-R12tyFbLKxTHDKX5casxOKJI8e7v8UO_Trx3-qjQ-SdDa1ho5BeJImpii9DQ-hGlYQs-Zr3HqbyNYVmIF577XUldXm-ijAo7EdaOtPJKB3J3lh7R68dtlMOu2Mcl9XTrqXLr7wEC7d1pcw4IukhY3yhmOqIfDPQ1QuN-T0wJkU"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">insights</span> Ventas &amp; CRM
+                        </h5>
+<p class="text-sm text-slate-500 leading-relaxed">Calificación automática de leads, agendamiento de citas y seguimiento proactivo en CRM.</p>
+</div>
+</div>
+<!-- Industry 2 -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group">
+<div class="w-full aspect-video rounded-lg overflow-hidden relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Luxury real estate modern architecture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAP2yem8tZjvbOVqtPoWnTut5KRsNIHCIzYsIkt27jFU9nHh7MafCGqgTD5gGgdFcmbQOVesFF_2zTAN8FZrGgJdiTpkZdaI2MacHssvZWHpqmNWxw7OMNA_tf2IRq44W76rieSR-emlh3iK4aEYXww3EYxtrKj8_5kHV-Ab3Uvt55gSWSicBHHqo3b96tNtBpEpiG1kcaCZF5J0I9sHkR5dl6tWHwp3KuFwT87Zf2gtZsCiNhti2_Aok3rQtA7iZrfOYvWUZ6PMXML"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">home_work</span> Inmobiliaria
+                        </h5>
+<p class="text-sm text-slate-500 leading-relaxed">Gestión inteligente de inventario, tours virtuales guiados y perfilamiento de compradores.</p>
+</div>
+</div>
+<!-- Industry 3 -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group">
+<div class="w-full aspect-video rounded-lg overflow-hidden relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" data-alt="Person planning a travel itinerary" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPWlEYrflcalRqvtoTPsww3kRRNqgOLUCMH0W1iCKRq-C6ZRdgdSGD6mJ7EA8xulQIrRA45kTp_-H4HUbXJWhuH0AFXZUg_4Nte4Yo_aPtTgOehIxSl6PrsMnQIPTymtQ8beBPBDAPitnBH28aFQrQqCKMy0eFZf7WjbmhWd2_3QMoefsguSH989Q055Ml20Wz5KVII9p5JYhzqXm7ka6erwlTexjsE0OvbLAYG6j8mxsbJwbQ5dsDON9_jqfHK6Q7IjQ2q_Ra6yKL"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">luggage</span> Turismo &amp; Viajes
+                        </h5>
+<p class="text-sm text-slate-500 leading-relaxed">Reservas inmediatas, gestión de itinerarios personalizados y soporte post-venta multilingüe.</p>
+</div>
+</div>
+<!-- Industry 4 -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group">
+<div class="w-full aspect-video rounded-lg overflow-hidden relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&q=80&w=400"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">support_agent</span> Soporte & FAQ
+                        </h5>
+<p class="text-sm text-slate-500 leading-relaxed">Resolución instantánea de dudas frecuentes, consulta de estados de pedido y escalación inteligente a humanos.</p>
+</div>
+</div>
+<!-- Industry 5 -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group">
+<div class="w-full aspect-video rounded-lg overflow-hidden relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=400"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">person_search</span> Búsqueda de Prospectos
+                        </h5>
+<p class="text-sm text-slate-500 leading-relaxed">Convierte información de Google y DENUE en listas de clientes potenciales automáticamente.</p>
+</div>
+</div>
+<!-- Industry 6 -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 hover:border-primary/30 transition-all flex flex-col gap-6 group">
+<div class="w-full aspect-video rounded-lg overflow-hidden relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=400"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<h5 class="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">location_city</span> Fraccionamientos
+                        </h5>
+<p class="text-sm text-slate-500 leading-relaxed">Atiende reportes, solicitudes y mantenimiento con respuestas automáticas y paneles para residentes.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Prediction Section -->
+<section class="py-24 relative overflow-hidden bg-slate-900 text-white">
+<!-- Decoration -->
+<div class="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-primary/20 to-transparent"></div>
+<div class="absolute -bottom-24 -left-24 size-96 bg-primary/30 rounded-full blur-[100px] opacity-20"></div>
+<div class="max-w-5xl mx-auto px-6 relative z-10 text-center">
+<div class="size-16 rounded-full bg-primary flex items-center justify-center mx-auto mb-10 shadow-2xl shadow-primary/40">
+<span class="material-symbols-outlined text-3xl">auto_awesome</span>
+</div>
+<h2 class="text-3xl md:text-5xl font-black leading-tight mb-8">
+                "En <span class="text-primary italic">2026</span> no competirán las empresas con más vendedores, sino las que tengan mejores agentes de IA"
+            </h2>
+<p class="text-slate-400 text-lg mb-12 max-w-2xl mx-auto uppercase tracking-widest font-bold">
+                Prepárate para la revolución de la eficiencia autónoma.
             </p>
-          </article>
-
-          <article class="product-card">
-            <span class="product-card__icon">🧑‍💻</span>
-            <h3>Tal-IA para bienes raíces</h3>
-            <p>
-              Controla preventas, inventario, contratos y comunicación con compradores
-              desde Tal-IA que coordina asesores, cobranza y seguimiento de
-              documentos en un solo lugar.
-            </p>
-          </article>
-
-          <article class="product-card">
-            <span class="product-card__icon">🌎</span>
-            <h3>Tal-IA para turismo</h3>
-            <p>
-              Gestiona reservas, campañas y atención al cliente en todos tus canales.
-              Tal-IA envía recordatorios, ofrece servicios adicionales y da seguimiento
-              según el interés real de cada viajero.
-            </p>
-          </article>
-
-          <article class="product-card">
-            <span class="product-card__icon">🤝</span>
-            <h3>Tal-IA Recursos Humanos</h3>
-            <p>
-              Automatiza la atención de candidatos y colaboradores por WhatsApp,
-              correo y teléfono. Tal-IA clasifica perfiles, agenda entrevistas y
-              notifica a Recursos Humanos en tiempo real.
-            </p>
-          </article>
-
-          <article class="product-card">
-            <span class="product-card__icon">🔍</span>
-            <h3>Búsqueda inteligente de prospectos</h3>
-            <p>
-              Convierte información pública de Google y DENUE en listas de posibles
-              clientes. Filtra por giro y ubicación, evita duplicados y activa el
-              contacto automático sin trabajo manual.
-            </p>
-          </article>
-
-          <article class="product-card">
-            <span class="product-card__icon">🏙️</span>
-            <h3>Sistema de gestión para fraccionamientos</h3>
-            <p>
-              Tal-IA  Atiende reportes, solicitudes y mantenimiento con respuestas
-              automáticas, recordatorios y paneles de seguimiento para
-              administradores y residentes.
-            </p>
-          </article>
-
-        </div>
-      </section>
-    </div>
-  </main>
-
-  <div class="webchat-widget" id="open-webchat" aria-live="polite" data-open="false">
+<div class="flex flex-wrap justify-center gap-12">
+<div class="text-center">
+<div class="text-4xl font-black text-white mb-1">98%</div>
+<div class="text-slate-500 text-sm font-bold uppercase">Precisión</div>
+</div>
+<div class="text-center">
+<div class="text-4xl font-black text-white mb-1">24/7</div>
+<div class="text-slate-500 text-sm font-bold uppercase">Operativo</div>
+</div>
+<div class="text-center">
+<div class="text-4xl font-black text-white mb-1">-65%</div>
+<div class="text-slate-500 text-sm font-bold uppercase">Coste Op.</div>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="py-24">
+<div class="max-w-7xl mx-auto px-6">
+<div class="bg-primary rounded-[2.5rem] p-12 lg:p-20 text-center relative overflow-hidden shadow-2xl shadow-primary/40">
+<div class="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+<h2 class="text-4xl lg:text-6xl font-black text-white mb-8 relative z-10">¿Listo para evolucionar?</h2>
+<p class="text-primary/10 bg-white inline-block px-4 py-1 rounded-full text-xs font-black uppercase mb-10 relative z-10">COMIENZA TU PRUEBA GRATIS DE 14 DÍAS</p>
+<div class="flex flex-col sm:flex-row justify-center gap-6 relative z-10">
+<button class="bg-white text-primary hover:bg-slate-50 font-black py-5 px-10 rounded-2xl shadow-xl transition-all text-xl" data-open-webchat>
+                        Ver a Tal-IA en acción
+                    </button>
+<button class="bg-primary/20 hover:bg-primary/30 text-white border border-white/30 font-bold py-5 px-10 rounded-2xl transition-all text-xl">
+                        Hablar con un experto
+                    </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer -->
+<div class="webchat-widget" id="open-webchat" aria-live="polite" data-open="false">
     <button
       type="button"
       class="webchat-widget__toggle"
@@ -1228,324 +472,110 @@
     </div>
   </div>
 
-  <footer class="site-footer" aria-label="Enlaces legales y contacto">
-    <div class="container footer-content">
-      <div class="footer-left">
-        <span class="logo">TalIA</span>
-        <span class="footer-copy">© <span id="current-year"></span> talia.mx · Todos los derechos reservados.</span>
-      </div>
-      <div class="footer-links">
-        <a href="#">Privacidad</a>
-        <a href="#">Términos</a>
-        <a href="mailto:hola@talia.mx">hola@talia.mx</a>
-      </div>
-    </div>
-    </footer>
-
-    <a
-      class="floating-whatsapp"
-      href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio"
-      target="_blank"
-      rel="noopener"
-      aria-label="Abrir chat de WhatsApp con TalIA"
-      title="Chatear por WhatsApp"
-    >
-      <span class="floating-whatsapp__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="presentation">
-          <path
-            fill="#ffffff"
-            d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"
-          />
-        </svg>
-      </span>
-      <span class="sr-only">Contactar por WhatsApp al +52 1 444 335 4450</span>
-    </a>
+<footer class="bg-white py-16 border-t border-slate-100">
+<div class="max-w-7xl mx-auto px-6">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+<div class="col-span-1 md:col-span-1">
+<div class="flex items-center gap-2 mb-6">
+<img src="/assets/logos/Logo8.png" alt="TalIA" class="size-8 object-contain" />
+<span class="text-xl font-bold tracking-tight text-slate-900">Tal-IA</span>
+</div>
+<p class="text-slate-500 text-sm leading-relaxed">
+                        Redefiniendo el futuro de la atención al cliente con agentes autónomos inteligentes.
+                    </p>
+</div>
+<div>
+<h6 class="font-bold text-slate-900 mb-6 uppercase text-xs tracking-widest">Plataforma</h6>
+<ul class="space-y-4">
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Agentes IA</a></li>
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Integraciones CRM</a></li>
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Omnicanalidad</a></li>
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Seguridad</a></li>
+</ul>
+</div>
+<div>
+<h6 class="font-bold text-slate-900 mb-6 uppercase text-xs tracking-widest">Empresa</h6>
+<ul class="space-y-4">
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Sobre nosotros</a></li>
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Blog</a></li>
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Carreras</a></li>
+<li><a class="text-slate-500 text-sm hover:text-primary" href="#">Contacto</a></li>
+</ul>
+</div>
+<div>
+<h6 class="font-bold text-slate-900 mb-6 uppercase text-xs tracking-widest">Boletín</h6>
+<p class="text-slate-500 text-sm mb-4">Recibe las últimas novedades sobre IA aplicada.</p>
+<div class="flex gap-2">
+<input class="bg-slate-50 border-slate-200 rounded-lg text-sm w-full focus:ring-primary focus:border-primary" placeholder="Email" type="email"/>
+<button class="bg-primary text-white p-2 rounded-lg hover:bg-primary/90">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+</div>
+<div class="pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+<p class="text-slate-400 text-xs">© <span id="current-year"></span> Talia AI. Todos los derechos reservados.</p>
+<div class="flex gap-8">
+<a class="text-slate-400 text-xs hover:text-primary transition-colors" href="#">Privacidad</a>
+<a class="text-slate-400 text-xs hover:text-primary transition-colors" href="#">Términos</a>
+<a class="text-slate-400 text-xs hover:text-primary transition-colors" href="#">Cookies</a>
+</div>
+</div>
+</div>
+</footer>
 
     <script>
-      function hexToRgb(hex) {
-        if (!hex || typeof hex !== 'string') return null;
-        const cleaned = hex.trim().replace(/^#/, '');
-        if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return null;
-        const value = parseInt(cleaned, 16);
-        return {
-          r: (value >> 16) & 255,
-          g: (value >> 8) & 255,
-          b: value & 255,
-        };
-      }
-
-      function rgbaFromHex(hex, alpha = 1) {
-        const rgb = hexToRgb(hex);
-        if (!rgb) return null;
-        return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
-      }
-
-      const landingStage = document.querySelector('.landing-stage');
       const webchatWidget = document.querySelector('.webchat-widget');
       const toggleButton = document.querySelector('.webchat-widget__toggle');
       const closeButton = document.querySelector('[data-close-webchat]');
       const openWebchatTriggers = document.querySelectorAll('[data-open-webchat]');
+
       const setWebchatState = (open) => {
         if (!webchatWidget) return;
         webchatWidget.setAttribute('data-open', open ? 'true' : 'false');
         toggleButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
-        landingStage?.classList.toggle('landing-stage-dimmed', open);
       };
+
       const handleOpenWebchat = (event) => {
         event?.preventDefault?.();
         setWebchatState(true);
       };
+
       const handleCloseWebchat = () => setWebchatState(false);
+
       openWebchatTriggers.forEach((trigger) => {
         trigger.addEventListener('click', handleOpenWebchat);
       });
+
       closeButton?.addEventListener('click', handleCloseWebchat);
+
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && webchatWidget?.getAttribute('data-open') === 'true') {
           handleCloseWebchat();
         }
       });
+
       const currentYearEl = document.getElementById('current-year');
       if (currentYearEl) {
         currentYearEl.textContent = new Date().getFullYear();
       }
 
-      const problemData = [
-        {
-          title: 'Los clientes se comunican y nadie atiende a tiempo.',
-          bullets: [
-            'Mensajes que se acumulan sin dueño.',
-            'Clientes que se sienten ignorados antes de recibir respuesta.'
-          ]
-        },
-        {
-          title: 'El seguimiento falla porque no hay un sistema que piense y actúe.',
-          bullets: [
-            'Recordatorios manuales que se borran o se olvidan.',
-            'Falta de continuidad entre pasos humanos y automáticos.'
-          ]
-        },
-        {
-          title: 'Las decisiones se toman sin datos claros ni alertas oportunas.',
-          bullets: [
-            'No hay quién detecte cuándo un contacto cambia de intención.',
-            'Los equipos reaccionan tarde porque nadie avisó.'
-          ]
-        },
-        {
-          title: 'La operación se sostiene con parches, hojas de cálculo y memoria humana.',
-          bullets: [
-            'Procesos manuales que se rompen con cada cambio de equipo.',
-            'No hay un repositorio central de qué y cuándo se hizo.'
-          ]
-        },
-        {
-          title: 'Escalar implica añadir usuarios extra con licencias caras y procesos nuevos.',
-          bullets: [
-            'Cada nuevo rol requiere permisos y cargos adicionales que paralizan el crecimiento.',
-            'Los equipos esperan semanas para que TI configure cada licencia extra.'
-          ]
-        },
-        {
-          title: 'No puedes enviar mensajes o correos masivos.',
-          bullets: [
-            'Los clientes pierden seguimiento porque no se automatiza outreach.',
-            'La personalización se queda en la imaginación del equipo.'
-          ]
-        },
-        {
-          title: 'No tienes como conseguir más prospectos.',
-          bullets: [
-            'Falta un radar que detecte señales de compra en frío.',
-            'El equipo depende de referencias esporádicas.'
-          ]
+      /* Lógica de marquesina comentada
+      (function animateMarquee() {
+        const track = document.querySelector('.marquee-track');
+        if (!track) return;
+        const speedAttr = Number(track.dataset.speed);
+        const speedValue = Number.isFinite(speedAttr) ? Math.max(0.1, speedAttr) : 0.35;
+        let offset = 0;
+        function step() {
+          offset -= speedValue;
+          track.style.transform = `translateX(${offset}px)`;
+          requestAnimationFrame(step);
         }
-      ];
-
-      const problemAccentColors = [
-        '#7c3aed',
-        '#0ea5e9',
-        '#16a34a',
-        '#fb923c',
-        '#f472b6',
-        '#a3e635',
-        '#2563eb'
-      ];
-      const solutionData = [
-        {
-          title: 'Atención inmediata en cualquier canal',
-          bullets: [
-            'Rutas automáticas que detectan nuevos mensajes y los ponen en cola inmediata.',
-            'Alertas proactivas al equipo cuando un hilo requiere atención humana.',
-            'Prioriza respuestas de alto valor usando scoring inteligente.'
-          ],
-          how: 'TalIA escucha cada canal, entiende el mensaje y dispara la acción correcta sin que tú tengas que tocar una nota.'
-        },
-        {
-          title: 'Seguimiento sin caídas ni excusas',
-          bullets: [
-            'Pipeline vivo que se actualiza con cada interacción del agente.',
-            'Pasos automáticos que calientan prospectos sin dejar tareas colgadas.',
-            'Reglas dinámicas que ejecutan follow-ups cuando el cliente responde.'
-          ],
-          how: 'El agente se encarga de mover leads, agendar citas y pedir confirmaciones sin depender de hojas de cálculo.'
-        },
-        {
-          title: 'Decisiones con contexto y datos reales',
-          bullets: [
-            'Panel de insights que muestra riesgos y oportunidades en tiempo real.',
-            'Alertas configurables para cuando un cliente queda en silencio o cambia de intención.',
-            'Recomendaciones de acción respaldadas por el contexto completo de la conversación.'
-          ],
-          how: 'TalIA convierte cada interacción en datos accionables y avisos inteligentes para que tú decidas con información limpia.'
-        },
-        {
-          title: 'Operación sin parches ni múltiples herramientas',
-          bullets: [
-            'Un solo agente que reemplaza chips, hojas de cálculo y disparadores manuales.',
-            'Integraciones que se viven como parte del flujo y no como trabajo extra.',
-            'Audit trail y registros automáticos para nunca depender de memoria humana.'
-          ],
-          how: 'La operación se reconstruye sobre TalIA: una sola vista y un solo agente que mantiene todo sincronizado.'
-        },
-        {
-          title: 'Usuarios ilimitados sin cargos adicionales',
-          bullets: [
-            'No cobramos por usuarios extra: agrega todos los miembros que necesites.',
-            'Roles y permisos se configuran con un clic, sin desplegar infraestructura nueva.',
-            'Crecimiento se mide por uso real, no por licencias por persona.'
-          ],
-          how: 'La misma cuenta se comparte entre equipos, y TalIA escala canales sin cobrar por cada voz nueva.'
-        },
-        {
-          title: 'Mensajería masiva que se siente humana',
-          bullets: [
-            'Plantillas inteligentes que combinan contexto y personalización.',
-            'Segmentación dinámica para enviar sólo a prospectos listos.',
-            'Seguimiento automático para cada envío.'
-          ],
-          how: 'TalIA coordina cada campaña y responde con el mismo tono que tus equipos.'
-        },
-        {
-          title: 'Búsquedas que generan prospectos listos',
-          bullets: [
-            'Convierte búsquedas de Google Places y DENUE en prospectos seccionados.',
-            'Las búsquedas se guardan automáticamente como prospectos enriquecidos y la IA coordina el contacto basado en esos datos',
-            'Conserva filtros, fuentes y metadatos para campañas posteriores.',
-            'Dispara outreach multicanal con seguimiento sin duplicar datos.'
-          ],
-          how: 'Realiza busquedas personalizadas en INEGI y Google con datos enriquecidos.'
-        }
-      ];
-
-      const solutionContent = document.querySelector('.solution-content');
-      const solutionPanel = document.querySelector('.solution-panel');
-      const solutionPlaceholder = document.querySelector('.solution-placeholder');
-      const showSolutionDetail = () => {
-        solutionPlaceholder?.classList.add('hidden');
-        solutionContent?.classList.add('visible');
-      };
-
-      const renderSolution = (index) => {
-        const target = solutionData[index] || solutionData[0];
-        const titleEl = document.querySelector('.solution-title');
-        const bulletsEl = document.querySelector('.solution-bullets');
-        const howCopy = document.querySelector('.solution-how-copy');
-        if (!titleEl || !bulletsEl || !howCopy) return;
-        const accent = problemAccentColors[index] ?? '#2563eb';
-        solutionPanel?.style.setProperty('--solution-accent', accent);
-        const accentSoft = rgbaFromHex(accent, 0.12) || 'rgba(37, 99, 235, 0.15)';
-        solutionPanel?.style.setProperty('--solution-accent-soft', accentSoft);
-        titleEl.textContent = target.title;
-        bulletsEl.innerHTML = '';
-        target.bullets.forEach((item) => {
-          const li = document.createElement('li');
-          li.textContent = item;
-          bulletsEl.appendChild(li);
-        });
-        howCopy.textContent = target.how;
-        showSolutionDetail();
-      };
-
-      const tabs = document.querySelectorAll('.problem-tab');
-      const populateProblemBullets = () => {
-        tabs.forEach((tab, index) => {
-          const accent = problemAccentColors[index] ?? '#2563eb';
-          tab.style.setProperty('--problem-accent', accent);
-          const list = tab.querySelector('.problem-bullets');
-          const info = problemData[index];
-          if (!list || !info?.bullets?.length) return;
-          list.innerHTML = '';
-          info.bullets.forEach((item) => {
-            const li = document.createElement('li');
-            li.textContent = item;
-            list.appendChild(li);
-          });
-        });
-      };
-      populateProblemBullets();
-      tabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
-          tabs.forEach((btn) => btn.classList.remove('active'));
-          tab.classList.add('active');
-          const index = Number(tab.dataset.problemIndex ?? 0);
-          renderSolution(index);
-        });
-      });
-
-    (function animateMarquee() {
-      const track = document.querySelector('.marquee-track');
-      if (!track) return;
-
-      const parseGap = () => {
-        const computedGap = getComputedStyle(track).gap;
-        const gapValue = Number.parseFloat(computedGap);
-        return Number.isFinite(gapValue) ? gapValue : 0;
-      };
-      const speedAttr = Number(track.dataset.speed);
-      const speedValue = Number.isFinite(speedAttr) ? Math.max(0.1, speedAttr) : 0.35;
-
-      const originals = Array.from(track.children);
-      originals.forEach((item) => {
-        track.appendChild(item.cloneNode(true));
-      });
-
-      let offset = 0;
-      let animationFrame;
-      let nextShift = getNextShift();
-
-      function getNextShift() {
-        const first = track.firstElementChild;
-        if (!first) return 0;
-        return first.getBoundingClientRect().width + parseGap();
-      }
-
-      function step() {
-        offset -= speedValue;
-        while (nextShift > 0 && -offset >= nextShift) {
-          offset += nextShift;
-          const first = track.firstElementChild;
-          if (first) {
-            track.appendChild(first);
-          }
-          nextShift = getNextShift();
-        }
-        track.style.transform = `translateX(${offset}px)`;
-        animationFrame = requestAnimationFrame(step);
-      }
-
-      step();
-
-      window.addEventListener('resize', () => {
-        cancelAnimationFrame(animationFrame);
-        offset = 0;
-        track.style.transform = 'translateX(0)';
-        nextShift = getNextShift();
         step();
-      });
-    })();
-  </script>
+      })();
+      */
+    </script>
 
-  <script type="module" src="./assets/js/main.js"></script>
-</body>
-</html>
+    <script type="module" src="./assets/js/main.js"></script>
+</body></html>
