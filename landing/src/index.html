@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="light" lang="es"><head>
+<html class="light scroll-smooth" lang="es"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Talia | Asistente de IA Multi-canal</title>
@@ -43,7 +43,7 @@
 <div class="hidden md:flex items-center gap-10">
 <a class="text-sm font-medium hover:text-primary transition-colors" href="#problemas">Soluciones</a>
 <a class="text-sm font-medium hover:text-primary transition-colors" href="#agentes">Agentes</a>
-<a class="text-sm font-medium hover:text-primary transition-colors" href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio">Contacto</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="https://wa.me/5214443354450?text=Hola,%20quiero%20saber%20qué%20puedes%20hacer%20por%20mi%20negocio" target="_blank" rel="noopener noreferrer">Contacto</a>
 <a class="text-sm font-medium hover:text-primary transition-colors" href="https://talia.mx/auth/login">Panel</a>
 </div>
 <div class="flex items-center gap-4">
@@ -76,9 +76,9 @@
                         Ver a Tal-IA en acción
                         <span class="material-symbols-outlined">arrow_forward</span>
 </button>
-<button class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2">
+<a href="#agentes" class="bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-4 px-8 rounded-xl transition-all text-lg flex items-center justify-center gap-2">
                         Explorar Agentes
-                    </button>
+                    </a>
 </div>
 </div>
 <div class="relative lg:h-[600px] flex items-center justify-center">
@@ -196,13 +196,20 @@
 </div>
 </div>
 </div>
-</section><section class="py-24 bg-slate-50">
+</section>
+<section class="py-24 bg-slate-50">
 <div class="max-w-7xl mx-auto px-6">
 <div class="text-center max-w-3xl mx-auto mb-16">
 <h2 class="text-3xl md:text-4xl font-black text-slate-900 mb-6 tracking-tight">Solución inmediata, para problemas reales</h2>
 <p class="text-slate-500 text-lg">Diseñamos respuestas tecnológicas para los obstáculos operativos más comunes del mercado actual.</p>
+<div class="mt-8 flex justify-center">
+<button id="solucion-inmediata-toggle" class="inline-flex items-center gap-2 bg-white border border-slate-200 hover:border-primary text-slate-700 font-bold py-3 px-6 rounded-xl transition-all text-sm" type="button" aria-expanded="false" aria-controls="solucion-inmediata-content">
+<span id="solucion-inmediata-label">Ver soluciones</span>
+<span id="solucion-inmediata-icon" class="material-symbols-outlined inline-block transition-transform">expand_more</span>
+</button>
 </div>
-<div class="grid gap-6">
+</div>
+<div id="solucion-inmediata-content" class="grid gap-6 hidden">
 <!-- Problem/Solution Card 1 -->
 <div class="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-8 hover:border-primary/20 transition-all">
 <div class="flex-1 flex flex-col gap-2">
@@ -558,6 +565,27 @@
       if (currentYearEl) {
         currentYearEl.textContent = new Date().getFullYear();
       }
+
+      const solucionToggle = document.getElementById('solucion-inmediata-toggle');
+      const solucionContent = document.getElementById('solucion-inmediata-content');
+      const solucionIcon = document.getElementById('solucion-inmediata-icon');
+      const solucionLabel = document.getElementById('solucion-inmediata-label');
+
+      const setSolucionInmediataOpen = (open) => {
+        if (!solucionToggle || !solucionContent) return;
+        solucionToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        solucionContent.classList.toggle('hidden', !open);
+        solucionIcon?.classList.toggle('rotate-180', open);
+        if (solucionLabel) {
+          solucionLabel.textContent = open ? 'Ocultar soluciones' : 'Ver soluciones';
+        }
+      };
+
+      setSolucionInmediataOpen(false);
+      solucionToggle?.addEventListener('click', () => {
+        const isOpen = solucionToggle.getAttribute('aria-expanded') === 'true';
+        setSolucionInmediataOpen(!isOpen);
+      });
 
       /* Lógica de marquesina comentada
       (function animateMarquee() {
