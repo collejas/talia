@@ -1703,6 +1703,36 @@ def _most_specific_activity(payload: DenueBusquedaPayload) -> str | None:
     return sorted(codes, key=lambda value: len(value), reverse=True)[0]
 
 
+def _unique_preserve_order(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+
+def _activity_codes_from_payload(payload: DenueBusquedaPayload) -> list[str]:
+    codes = [str(value).strip() for value in (payload.actividad_codigos or []) if value and str(value).strip()]
+    if not codes:
+        return []
+    if any(code == "0" for code in codes):
+        return ["0"]
+    return _unique_preserve_order(codes)
+
+
+def _geo_targets_from_payload(payload: DenueBusquedaPayload) -> list[tuple[str | None, str | None]]:
+    targets: list[tuple[str | None, str | None]] = []
+    if payload.geo_municipios:
+        for raw in payload.geo_municipios:
+            parts = str(raw).split("::")
+            estado = parts[0].zfill(2) if parts and parts[0] else None
+            municipio = parts[1].zfill(3) if len(parts) >= 2 and parts[1] else None
+            targets.append((estado, municipio))
+    elif payload.geo_estados:
+        for raw in payload.geo_estados:
+            estado = str(raw).zfill(2) if raw is not None else None
+            targets.append((estado, None))
+    if not targets:
+        targets.append((None, None))
+    return targets
+
+
 def _build_advanced_meta(payload: DenueBusquedaPayload) -> dict[str, Any]:
     meta: dict[str, Any] = {"modo": payload.modo}
     if payload.texto_busqueda:
@@ -9794,9 +9824,10 @@ async def crear_busqueda_denue(
             return len(items)
 
     async def _iterate_batches(
-        search_fn: Callable[[int, int], Awaitable[list[dict[str, Any]]]]
+        search_fn: Callable[[int, int], Awaitable[list[dict[str, Any]]]],
+        *,
+        start: int,
     ):
-        start = payload.registro_inicial
         batch_index = 0
         while True:
             registro_final = start + batch_size - 1
@@ -9817,6 +9848,48 @@ async def crear_busqueda_denue(
                 break
             start += batch_size
 
+    seen_external_ids: set[str] = set()
+
+    async def _process_batches(
+        search_fn: Callable[[int, int], Awaitable[list[dict[str, Any]]]],
+        *,
+        extra: dict[str, Any],
+    ) -> None:
+        nonlocal total_records, upserted, preview_items
+        async for batch_records, start, end, batch_index in _iterate_batches(
+            search_fn,
+            start=payload.registro_inicial,
+        ):
+            normalized_batch = [normalize_denue_place(item) for item in batch_records]
+            unique_batch: list[dict[str, Any]] = []
+            for item in normalized_batch:
+                external_id = item.get("external_id")
+                if not external_id:
+                    unique_batch.append(item)
+                    continue
+                if external_id in seen_external_ids:
+                    continue
+                seen_external_ids.add(str(external_id))
+                unique_batch.append(item)
+
+            total_records += len(unique_batch)
+            if len(preview_items) < 10 and unique_batch:
+                preview_items.extend(unique_batch[: max(0, 10 - len(preview_items))])
+            if unique_batch:
+                upserted += await _upsert_normals(unique_batch)
+            search_logger.info(
+                "denue.batch_processed",
+                extra={
+                    "modo": modo,
+                    "batch_index": batch_index,
+                    "start": start,
+                    "end": end,
+                    "batch_size": len(batch_records),
+                    "unique": len(unique_batch),
+                    **extra,
+                },
+            )
+
     try:
         if modo == "radio":
             records = await client.search(
@@ -9831,71 +9904,117 @@ async def crear_busqueda_denue(
                 upserted += await _upsert_normals(normalized_items)
             preview_items = normalized_items[:10]
         else:
+            combo_limit = 20
             if modo == "entidad":
-                entidad = _first_state_from_payload(payload)
-                if not entidad:
-                    raise HTTPException(status_code=400, detail="entidad_required")
                 if not text_query:
                     raise HTTPException(status_code=400, detail="texto_busqueda_required")
-
-                async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
-                    return await client.search_by_entidad(
-                        condicion=text_query,
-                        entidad=entidad,
-                        registro_inicial=registro_inicial,
-                        registro_final=registro_final,
+                geo_targets = _geo_targets_from_payload(payload)
+                entidades = _unique_preserve_order([estado for estado, _ in geo_targets if estado])
+                if not entidades:
+                    raise HTTPException(status_code=400, detail="entidad_required")
+                if len(entidades) > combo_limit:
+                    search_logger.warning(
+                        "denue.combo_limit_reached",
+                        extra={"modo": modo, "limit": combo_limit, "combos": len(entidades)},
                     )
-            elif modo == "area_act" or modo == "area_act_estr":
-                actividad_codigo = _most_specific_activity(payload)
-                if not actividad_codigo:
-                    raise HTTPException(status_code=400, detail="actividad_required")
-                entidad = _first_state_from_payload(payload)
-                municipio = _first_municipality_from_payload(payload)
-                if modo == "area_act_estr":
-                    estrato = payload.estrato_ids and payload.estrato_ids[0]
-                    if not estrato:
-                        raise HTTPException(status_code=400, detail="estrato_required")
+                    entidades = entidades[:combo_limit]
 
-                    async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
-                        return await client.search_area_act_estr(
-                            entidad=entidad,
-                            municipio=municipio,
-                            actividad_codigo=actividad_codigo,
-                            texto=text_query or None,
+                for entidad in entidades:
+                    async def search_batch(
+                        registro_inicial: int,
+                        registro_final: int,
+                        *,
+                        _entidad: str = entidad,
+                    ) -> list[dict[str, Any]]:
+                        return await client.search_by_entidad(
+                            condicion=text_query,
+                            entidad=_entidad,
                             registro_inicial=registro_inicial,
                             registro_final=registro_final,
-                            estrato=estrato,
                         )
+
+                    await _process_batches(search_batch, extra={"entidad": entidad})
+            elif modo == "area_act" or modo == "area_act_estr":
+                activity_codes = _activity_codes_from_payload(payload)
+                if not activity_codes:
+                    raise HTTPException(status_code=400, detail="actividad_required")
+                geo_targets = _geo_targets_from_payload(payload)
+                estratos: list[str | None]
+                if modo == "area_act_estr":
+                    if not payload.estrato_ids:
+                        raise HTTPException(status_code=400, detail="estrato_required")
+                    estratos = [
+                        str(value).strip()
+                        for value in payload.estrato_ids
+                        if value and str(value).strip() and str(value).strip() != "0"
+                    ]
+                    if not estratos:
+                        raise HTTPException(status_code=400, detail="estrato_required")
                 else:
-                    async def search_batch(registro_inicial: int, registro_final: int) -> list[dict[str, Any]]:
-                        return await client.search_area_act(
-                            entidad=entidad,
-                            municipio=municipio,
-                            actividad_codigo=actividad_codigo,
-                            texto=text_query or None,
-                            registro_inicial=registro_inicial,
-                            registro_final=registro_final,
-                        )
+                    estratos = [None]
+
+                combos: list[tuple[str, str | None, str | None, str | None]] = []
+                for activity in activity_codes:
+                    for entidad, municipio in geo_targets:
+                        for estrato in estratos:
+                            combos.append((activity, entidad, municipio, estrato))
+
+                if len(combos) > combo_limit:
+                    search_logger.warning(
+                        "denue.combo_limit_reached",
+                        extra={"modo": modo, "limit": combo_limit, "combos": len(combos)},
+                    )
+                    combos = combos[:combo_limit]
+
+                for activity, entidad, municipio, estrato in combos:
+                    if modo == "area_act_estr":
+                        async def search_batch(
+                            registro_inicial: int,
+                            registro_final: int,
+                            *,
+                            _activity: str = activity,
+                            _entidad: str | None = entidad,
+                            _municipio: str | None = municipio,
+                            _estrato: str | None = estrato,
+                        ) -> list[dict[str, Any]]:
+                            return await client.search_area_act_estr(
+                                entidad=_entidad,
+                                municipio=_municipio,
+                                actividad_codigo=_activity,
+                                texto=text_query or None,
+                                registro_inicial=registro_inicial,
+                                registro_final=registro_final,
+                                estrato=_estrato,
+                            )
+                    else:
+                        async def search_batch(
+                            registro_inicial: int,
+                            registro_final: int,
+                            *,
+                            _activity: str = activity,
+                            _entidad: str | None = entidad,
+                            _municipio: str | None = municipio,
+                        ) -> list[dict[str, Any]]:
+                            return await client.search_area_act(
+                                entidad=_entidad,
+                                municipio=_municipio,
+                                actividad_codigo=_activity,
+                                texto=text_query or None,
+                                registro_inicial=registro_inicial,
+                                registro_final=registro_final,
+                            )
+
+                    await _process_batches(
+                        search_batch,
+                        extra={
+                            "entidad": entidad,
+                            "municipio": municipio,
+                            "actividad_codigo": activity,
+                            "estrato": estrato,
+                        },
+                    )
             else:
                 raise HTTPException(status_code=400, detail="modo_desconocido")
-
-            async for batch_records, start, end, batch_index in _iterate_batches(search_batch):
-                normalized_batch = [normalize_denue_place(item) for item in batch_records]
-                total_records += len(normalized_batch)
-                if len(preview_items) < 10:
-                    preview_items.extend(normalized_batch[: max(0, 10 - len(preview_items))])
-                if normalized_batch:
-                    upserted += await _upsert_normals(normalized_batch)
-                search_logger.info(
-                    "denue.batch_processed",
-                    extra={
-                        "modo": modo,
-                        "batch_index": batch_index,
-                        "start": start,
-                        "end": end,
-                        "batch_size": len(batch_records),
-                    },
-                )
     except DenueError as exc:
         detail = str(exc) or "denue_error"
         search_logger.error("denue.search_failed", extra={"modo": modo, "detail": detail})
