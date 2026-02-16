@@ -80,6 +80,8 @@ const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
 const LIST_PAGE_SIZE = 500;
+const BUSQUEDAS_PAGE_SIZE = 100;
+const BUSQUEDAS_MAX_ITEMS = 2000;
 const QUERY_TOOLTIP_ID = "denue-query-tooltip";
 const QUERY_TOOLTIP_TEXT =
   "Palabra(s) a buscar en el nombre del establecimiento, razón social, calle, colonia, clase de la actividad económica, entidad federativa, municipio y localidad. Para buscar más de una palabra se deberán separar con una coma. Para buscar todos los establecimientos se deberá ingresar la palabra \"todos\".";
@@ -201,9 +203,31 @@ export function DenueBusquedaView() {
   const loadBusquedas = useCallback(async () => {
     setIsLoadingBusquedas(true);
     try {
-      const response = await listDenueBusquedas({ limit: 8 });
-      setBusquedas(response.items ?? []);
-      return response.items ?? [];
+      const allItems: DenueBusquedaItem[] = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      while (offset < total && allItems.length < BUSQUEDAS_MAX_ITEMS) {
+        const response = await listDenueBusquedas({ limit: BUSQUEDAS_PAGE_SIZE, offset });
+        const page = response.items ?? [];
+        if (!page.length) {
+          total = 0;
+          break;
+        }
+        allItems.push(...page);
+        total = typeof response.total === "number" ? response.total : allItems.length;
+        offset += BUSQUEDAS_PAGE_SIZE;
+        if (page.length < BUSQUEDAS_PAGE_SIZE) {
+          break;
+        }
+      }
+      if (allItems.length >= BUSQUEDAS_MAX_ITEMS) {
+        setFeedback({
+          type: "info",
+          message: `Se muestran las primeras ${numberFormatter.format(BUSQUEDAS_MAX_ITEMS)} búsquedas. Usa el filtro del backend para acotar si necesitas más.`,
+        });
+      }
+      setBusquedas(allItems);
+      return allItems;
     } catch (error) {
       setFeedback({
         type: "error",
