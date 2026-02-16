@@ -124,26 +124,23 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
 
 function ClusterCircleMarker({ position, count }: { position: LatLngExpression; count: number }) {
   const map = useMap();
-  const radius = useMemo(() => {
-    if (!Number.isFinite(count) || count <= 1) return 10;
-    const extra = Math.min(18, Math.log10(Math.max(10, count)) * 10);
-    return 12 + extra;
-  }, [count]);
+  const clusterIcon = useClusterIcon(count);
+
+  if (!clusterIcon) {
+    return null;
+  }
 
   return (
-    <CircleMarker
-      center={position}
-      radius={radius}
-      pathOptions={{ color: "#0f172a", weight: 2, fillOpacity: 0.25, fillColor: "#0f172a" }}
+    <Marker
+      position={position}
+      icon={clusterIcon}
       eventHandlers={{
         click() {
           const nextZoom = Math.min(22, map.getZoom() + 2);
           map.setView(position, nextZoom);
         },
       }}
-    >
-      <Tooltip direction="top">{count.toLocaleString("es-MX")} resultados (clic para acercar)</Tooltip>
-    </CircleMarker>
+    />
   );
 }
 
@@ -473,4 +470,77 @@ function useCenterIcon() {
     };
   }, []);
   return icon as { html: string } | null;
+}
+
+const clusterIconCache = new Map<string, unknown>();
+
+function useClusterIcon(count: number) {
+  const [icon, setIcon] = useState<unknown>(null);
+  const label = useMemo(() => {
+    if (!Number.isFinite(count) || count <= 0) return "0";
+    return count.toLocaleString("es-MX");
+  }, [count]);
+  const size = useMemo(() => {
+    if (!Number.isFinite(count) || count <= 1) return 30;
+    const extra = Math.min(22, Math.log10(Math.max(10, count)) * 12);
+    return Math.round(34 + extra);
+  }, [count]);
+  const fontSize = useMemo(() => {
+    if (label.length >= 7) return 11;
+    if (label.length >= 5) return 12;
+    return 13;
+  }, [label.length]);
+  const cacheKey = `${size}:${fontSize}:${label}`;
+
+  useEffect(() => {
+    const cached = clusterIconCache.get(cacheKey);
+    if (cached) {
+      setIcon(cached);
+      return;
+    }
+    let isMounted = true;
+    void import("leaflet").then((LeafletModule) => {
+      if (!isMounted) return;
+      type DivIconCtor = new (options: Record<string, unknown>) => unknown;
+      type LeafletModuleType = {
+        DivIcon?: DivIconCtor;
+        default?: {
+          DivIcon?: DivIconCtor;
+        };
+      };
+      const Leaflet = LeafletModule as LeafletModuleType;
+      const DivIconCtor = Leaflet.DivIcon ?? Leaflet.default?.DivIcon;
+      if (!DivIconCtor) return;
+
+      const html = `
+        <div style="
+          width:${size}px;height:${size}px;
+          border-radius:9999px;
+          background:rgba(15,23,42,0.28);
+          border:2px solid rgba(15,23,42,0.95);
+          box-shadow:0 0 10px rgba(15,23,42,0.18);
+          display:flex;align-items:center;justify-content:center;
+          color:rgba(15,23,42,0.95);
+          font-weight:700;
+          font-size:${fontSize}px;
+          line-height:1;
+          user-select:none;
+        ">${label}</div>
+      `.trim();
+
+      const node = new DivIconCtor({
+        html,
+        className: "",
+        iconSize: [size, size],
+        iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
+      });
+      clusterIconCache.set(cacheKey, node);
+      setIcon(node);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [cacheKey, fontSize, label, size]);
+
+  return icon as unknown | null;
 }
