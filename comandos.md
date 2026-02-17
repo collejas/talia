@@ -93,7 +93,7 @@ sudo rsync -a landing/src/ /var/www/talia-landing/
 codex resume 019c63bb-9e0b-7420-92d8-9a6a81f0f386
 
 Oportunidades codex resume 019c5d7c-59e7-7f01-b700-8d473efe8c49
- codex resume 019c5274-f35c-70a3-a73e-c32f020b7cfb
+Roles codex resume 019c5274-f35c-70a3-a73e-c32f020b7cfb
 
 
 # Gilberto Nunez director comercial comebi cel personal +5215530862988   cel trabajo +5214441692305

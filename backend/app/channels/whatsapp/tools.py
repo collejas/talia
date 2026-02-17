@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 from collections.abc import Mapping
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -119,7 +118,44 @@ def _optional_int_argument(arguments: dict[str, Any], key: str) -> int | None:
         return None
     value = arguments.get(key)
     if value is None:
+    return None
+
+
+def _repair_truncated_json(raw: str) -> str | None:
+    text = (raw or "").strip()
+    if not text:
         return None
+    start = text.find("{")
+    if start == -1:
+        return None
+    text = text[start:]
+    in_string = False
+    escape = False
+    brace_count = 0
+    for ch in text:
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+            elif ch == "\"":
+                in_string = False
+            continue
+        if ch == "\"":
+            in_string = True
+        elif ch == "{":
+            brace_count += 1
+        elif ch == "}" and brace_count > 0:
+            brace_count -= 1
+
+    repaired = text
+    if in_string:
+        repaired += "\""
+    if brace_count > 0:
+        repaired += "}" * brace_count
+
+    return repaired if repaired != text else None
     if isinstance(value, bool):
         return int(value)
     try:
@@ -612,7 +648,14 @@ async def execute_tool(
         try:
             arguments = json.loads(arguments)
         except json.JSONDecodeError as exc:  # type: ignore[name-defined]
-            raise ValueError(f"Arguments inválidos: {arguments!r}") from exc
+            repaired = _repair_truncated_json(arguments)
+            if repaired is not None:
+                try:
+                    arguments = json.loads(repaired)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Arguments inválidos: {arguments!r}") from exc
+            else:
+                raise ValueError(f"Arguments inválidos: {arguments!r}") from exc
     elif not isinstance(arguments, dict):
         raise ValueError(f"Tipo de argumentos no soportado: {type(arguments)!r}")
 
