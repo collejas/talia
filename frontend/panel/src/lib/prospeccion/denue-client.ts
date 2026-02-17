@@ -248,6 +248,8 @@ export async function listDenueResultados(params: {
   emailPresent?: boolean;
   websitePresent?: boolean;
   actividades?: string[];
+  geoEstado?: string;
+  geoMunicipio?: string;
 } = {}) {
   const url = buildClientUrl("/api/prospeccion/denue/resultados");
   if (params.busquedaId) {
@@ -284,6 +286,12 @@ export async function listDenueResultados(params: {
       }
     }
   }
+  if (params.geoEstado) {
+    url.searchParams.set("geo_estado", params.geoEstado);
+  }
+  if (params.geoMunicipio) {
+    url.searchParams.set("geo_municipio", params.geoMunicipio);
+  }
   return requestJson<DenueResultadosResponse>(url.toString());
 }
 
@@ -297,6 +305,8 @@ export async function listDenueResultadosMap(params: {
   emailPresent?: boolean;
   websitePresent?: boolean;
   actividades?: string[];
+  geoEstado?: string;
+  geoMunicipio?: string;
   limit?: number;
 }): Promise<DenueResultadosMapResponse> {
   const url = buildClientUrl("/api/prospeccion/denue/resultados/map");
@@ -328,6 +338,12 @@ export async function listDenueResultadosMap(params: {
       }
     }
   }
+  if (params.geoEstado) {
+    url.searchParams.set("geo_estado", params.geoEstado);
+  }
+  if (params.geoMunicipio) {
+    url.searchParams.set("geo_municipio", params.geoMunicipio);
+  }
   if (typeof params.limit === "number") {
     url.searchParams.set("limit", String(params.limit));
   }
@@ -342,6 +358,8 @@ export async function getDenueResultadosBounds(params: {
   emailPresent?: boolean;
   websitePresent?: boolean;
   actividades?: string[];
+  geoEstado?: string;
+  geoMunicipio?: string;
 }): Promise<DenueResultadosBoundsResponse> {
   const url = buildClientUrl("/api/prospeccion/denue/resultados/bounds");
   url.searchParams.set("busqueda_id", params.busquedaId);
@@ -367,18 +385,32 @@ export async function getDenueResultadosBounds(params: {
       }
     }
   }
+  if (params.geoEstado) {
+    url.searchParams.set("geo_estado", params.geoEstado);
+  }
+  if (params.geoMunicipio) {
+    url.searchParams.set("geo_municipio", params.geoMunicipio);
+  }
   return requestJson<DenueResultadosBoundsResponse>(url.toString());
 }
 
 export async function listDenueActividades(params: {
   busquedaId: string;
   search?: string;
+  geoEstado?: string;
+  geoMunicipio?: string;
   limit?: number;
 }): Promise<DenueActividadesResponse> {
   const url = buildClientUrl("/api/prospeccion/denue/actividades");
   url.searchParams.set("busqueda_id", params.busquedaId);
   if (params.search && params.search.trim().length) {
     url.searchParams.set("search", params.search.trim());
+  }
+  if (params.geoEstado) {
+    url.searchParams.set("geo_estado", params.geoEstado);
+  }
+  if (params.geoMunicipio) {
+    url.searchParams.set("geo_municipio", params.geoMunicipio);
   }
   if (typeof params.limit === "number") {
     url.searchParams.set("limit", String(params.limit));

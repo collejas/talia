@@ -319,6 +319,9 @@ export function DenueBusquedaView() {
   const [advancedFilters, setAdvancedFilters] = useState<DenueAdvancedFilters | null>(null);
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
+  const [geoStatesCatalog, setGeoStatesCatalog] = useState<DenueCatalogosResponse["geo"]["states"]>([]);
+  const [geoEstadoFilter, setGeoEstadoFilter] = useState<string>("any");
+  const [geoMunicipioFilter, setGeoMunicipioFilter] = useState<string>("any");
   const [mapViewport, setMapViewport] = useState<{ bounds: { west: number; south: number; east: number; north: number }; zoom: number } | null>(
     null,
   );
@@ -345,6 +348,35 @@ export function DenueBusquedaView() {
     [selectedActividades],
   );
 
+  const selectedEstadoCode = useMemo(() => {
+    if (!geoEstadoFilter || geoEstadoFilter === "any") return undefined;
+    return String(geoEstadoFilter).trim().padStart(2, "0");
+  }, [geoEstadoFilter]);
+
+  const selectedMunicipioCode = useMemo(() => {
+    if (!geoMunicipioFilter || geoMunicipioFilter === "any") return undefined;
+    return String(geoMunicipioFilter).trim().padStart(3, "0");
+  }, [geoMunicipioFilter]);
+
+  const estadoOptions = useMemo(() => {
+    return (geoStatesCatalog ?? [])
+      .map((state) => ({ code: String(state.code ?? "").trim().padStart(2, "0"), name: String(state.name ?? "").trim() }))
+      .filter((state) => state.code && state.name)
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [geoStatesCatalog]);
+
+  const municipioOptions = useMemo(() => {
+    if (!selectedEstadoCode) return [];
+    const match = (geoStatesCatalog ?? []).find(
+      (state) => String(state.code ?? "").trim().padStart(2, "0") === selectedEstadoCode,
+    );
+    const rows = match?.municipalities ?? [];
+    return rows
+      .map((m) => ({ code: String(m.code ?? "").trim().padStart(3, "0"), name: String(m.name ?? "").trim() }))
+      .filter((m) => m.code && m.name)
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [geoStatesCatalog, selectedEstadoCode]);
+
   const currentResultFilters = useMemo(() => {
     const phonePresent = phoneFilter === "any" ? undefined : phoneFilter === "with";
     const emailPresent = emailFilter === "any" ? undefined : emailFilter === "with";
@@ -359,8 +391,19 @@ export function DenueBusquedaView() {
       websitePresent,
       estratoGroup,
       actividades,
+      geoEstado: selectedEstadoCode,
+      geoMunicipio: selectedMunicipioCode,
     };
-  }, [debouncedFilterText, emailFilter, estratoFilter, phoneFilter, selectedActividadesList, websiteFilter]);
+  }, [
+    debouncedFilterText,
+    emailFilter,
+    estratoFilter,
+    phoneFilter,
+    selectedActividadesList,
+    selectedEstadoCode,
+    selectedMunicipioCode,
+    websiteFilter,
+  ]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -429,11 +472,13 @@ export function DenueBusquedaView() {
         if (cancelled) return;
         setGeoLookups(buildGeoLookups(response.geo.states ?? []));
         setScianLookups(buildScianLookups(response.scian));
+        setGeoStatesCatalog(response.geo.states ?? []);
       } catch {
         // Sin catálogos: mostrar códigos como fallback.
         if (cancelled) return;
         setGeoLookups(null);
         setScianLookups(null);
+        setGeoStatesCatalog([]);
       }
     })();
     return () => {
@@ -452,6 +497,8 @@ export function DenueBusquedaView() {
         const response = await listDenueActividades({
           busquedaId: activeBusquedaId,
           search: actividadSearch,
+          geoEstado: selectedEstadoCode,
+          geoMunicipio: selectedMunicipioCode,
           limit: 500,
         });
         if (cancelled) return;
@@ -467,7 +514,7 @@ export function DenueBusquedaView() {
     return () => {
       cancelled = true;
     };
-  }, [activeBusquedaId, actividadDrawerOpen, actividadSearch]);
+  }, [activeBusquedaId, actividadDrawerOpen, actividadSearch, selectedEstadoCode, selectedMunicipioCode]);
 
   const fetchResultadosPage = useCallback(
     async ({
@@ -486,6 +533,8 @@ export function DenueBusquedaView() {
         websitePresent?: boolean;
         estratoGroup?: string;
         actividades?: string[];
+        geoEstado?: string;
+        geoMunicipio?: string;
       };
     }) => {
       setIsLoadingResultados(true);
@@ -501,6 +550,8 @@ export function DenueBusquedaView() {
           websitePresent: filters.websitePresent,
           estratoGroup: filters.estratoGroup,
           actividades: filters.actividades,
+          geoEstado: filters.geoEstado,
+          geoMunicipio: filters.geoMunicipio,
         });
         const rows = response.items ?? [];
         setResultados(rows);
@@ -528,6 +579,8 @@ export function DenueBusquedaView() {
       setEmailFilter("any");
       setWebsiteFilter("any");
       setEstratoFilter("any");
+      setGeoEstadoFilter("any");
+      setGeoMunicipioFilter("any");
       setActiveBusquedaId(busquedaId);
       setResultados([]);
       setResultadosTotal(0);
@@ -699,9 +752,20 @@ export function DenueBusquedaView() {
       emailFilter,
       websiteFilter,
       estratoFilter,
+      selectedEstadoCode ?? "",
+      selectedMunicipioCode ?? "",
       actividadesKey,
     ].join("|");
-  }, [debouncedFilterText, emailFilter, estratoFilter, phoneFilter, selectedActividadesList, websiteFilter]);
+  }, [
+    debouncedFilterText,
+    emailFilter,
+    estratoFilter,
+    phoneFilter,
+    selectedActividadesList,
+    selectedEstadoCode,
+    selectedMunicipioCode,
+    websiteFilter,
+  ]);
 
   useEffect(() => {
     if (!activeBusquedaId) return;
@@ -742,6 +806,8 @@ export function DenueBusquedaView() {
         websitePresent: currentResultFilters.websitePresent,
         estratoGroup: currentResultFilters.estratoGroup,
         actividades: currentResultFilters.actividades,
+        geoEstado: currentResultFilters.geoEstado,
+        geoMunicipio: currentResultFilters.geoMunicipio,
         limit: 5000,
       })
         .then((response) => {
@@ -781,6 +847,8 @@ export function DenueBusquedaView() {
         websitePresent: currentResultFilters.websitePresent,
         estratoGroup: currentResultFilters.estratoGroup,
         actividades: currentResultFilters.actividades,
+        geoEstado: currentResultFilters.geoEstado,
+        geoMunicipio: currentResultFilters.geoMunicipio,
       })
         .then((response) => {
           if (cancelled) return;
@@ -871,6 +939,8 @@ export function DenueBusquedaView() {
     setPhoneFilter("any");
     setEmailFilter("any");
     setWebsiteFilter("any");
+    setGeoEstadoFilter("any");
+    setGeoMunicipioFilter("any");
     setFilterText("");
     setDebouncedFilterText("");
     setActividadSearch("");
@@ -1410,7 +1480,7 @@ export function DenueBusquedaView() {
                   <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
                 </Button>
               </div>
-            <div className="grid gap-2 lg:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
               <div className="space-y-1">
                 <Label className="text-xs font-normal" htmlFor="estrato-filter">
                   Tamaño
@@ -1426,6 +1496,47 @@ export function DenueBusquedaView() {
                   <option value="pequena">Pequeña (11-50)</option>
                   <option value="mediana">Mediana (51-250)</option>
                   <option value="grande">Grande (250+)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="estado-filter">
+                  Estado
+                </Label>
+                <select
+                  id="estado-filter"
+                  value={geoEstadoFilter}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setGeoEstadoFilter(next);
+                    setGeoMunicipioFilter("any");
+                  }}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Todos</option>
+                  {estadoOptions.map((state) => (
+                    <option key={state.code} value={state.code}>
+                      {state.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-normal" htmlFor="municipio-filter">
+                  Municipio
+                </Label>
+                <select
+                  id="municipio-filter"
+                  value={geoMunicipioFilter}
+                  onChange={(event) => setGeoMunicipioFilter(event.target.value)}
+                  disabled={!selectedEstadoCode}
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm disabled:opacity-60"
+                >
+                  <option value="any">Todos</option>
+                  {municipioOptions.map((mun) => (
+                    <option key={mun.code} value={mun.code}>
+                      {mun.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1">

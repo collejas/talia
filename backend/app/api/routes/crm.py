@@ -10217,6 +10217,8 @@ async def listar_resultados_denue(
     email_present: bool | None = Query(default=None),
     website_present: bool | None = Query(default=None),
     actividades: list[str] | None = Query(default=None),
+    geo_estado: str | None = Query(default=None),
+    geo_municipio: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=5000)] = 250,
     offset: Annotated[int, Query(ge=0)] = 0,
     order: Literal["recientes", "distancia"] = Query(default="recientes"),
@@ -10233,6 +10235,8 @@ async def listar_resultados_denue(
             "p_website_present": website_present,
             "p_estrato_group": (estrato_group or estrato),
             "p_actividades": actividades,
+            "p_geo_estado": geo_estado,
+            "p_geo_municipio": geo_municipio,
             "p_limit": effective_limit,
             "p_offset": offset,
             "p_order": order,
@@ -10270,6 +10274,8 @@ async def listar_resultados_denue_map(
     email_present: bool | None = Query(default=None),
     website_present: bool | None = Query(default=None),
     actividades: list[str] | None = Query(default=None),
+    geo_estado: str | None = Query(default=None),
+    geo_municipio: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=10000)] = 5000,
 ) -> dict[str, Any]:
     effective_limit = min(limit, 5000)
@@ -10286,6 +10292,8 @@ async def listar_resultados_denue_map(
         "p_website_present": website_present,
         "p_estrato_group": estrato_group,
         "p_actividades": actividades,
+        "p_geo_estado": geo_estado,
+        "p_geo_municipio": geo_municipio,
         # Pedimos +1 para detectar truncado en modo points (sin contar exacto en cada pan/zoom).
         "p_limit": effective_limit + 1,
     }
@@ -10311,6 +10319,8 @@ async def obtener_bounds_denue(
     email_present: bool | None = Query(default=None),
     website_present: bool | None = Query(default=None),
     actividades: list[str] | None = Query(default=None),
+    geo_estado: str | None = Query(default=None),
+    geo_municipio: str | None = Query(default=None),
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "p_busqueda_id": str(busqueda_id),
@@ -10320,6 +10330,8 @@ async def obtener_bounds_denue(
         "p_website_present": website_present,
         "p_estrato_group": estrato_group,
         "p_actividades": actividades,
+        "p_geo_estado": geo_estado,
+        "p_geo_municipio": geo_municipio,
     }
     try:
         row = await repo.denue_resultados_bounds(usuario_token=user_token, payload=payload)
@@ -10347,11 +10359,15 @@ async def listar_denue_actividades(
     user_token: str = Depends(require_user_token),
     busqueda_id: UUID = Query(...),
     search: str | None = Query(default=None),
+    geo_estado: str | None = Query(default=None),
+    geo_municipio: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "p_busqueda_id": str(busqueda_id),
         "p_search": search,
+        "p_geo_estado": geo_estado,
+        "p_geo_municipio": geo_municipio,
         "p_limit": limit,
     }
     try:
