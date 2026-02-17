@@ -28,6 +28,8 @@ import {
   createDenueBusqueda,
   deleteDenueBusqueda,
   deleteDenueResultados,
+  getDenueJob,
+  cancelDenueJob,
   getDenueResultadosBounds,
   listDenueActividades,
   listDenueBusquedas,
@@ -88,6 +90,11 @@ const RADIUS_MAX = 5_000;
 const LIST_PAGE_SIZE = 500;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const BUSQUEDAS_MAX_ITEMS = 2000;
+const JOB_POLL_INTERVAL_MS = 2000;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 const QUERY_TOOLTIP_ID = "denue-query-tooltip";
 const QUERY_TOOLTIP_TEXT =
   "Palabra(s) a buscar en el nombre del establecimiento, razón social, calle, colonia, clase de la actividad económica, entidad federativa, municipio y localidad. Para buscar más de una palabra se deberán separar con una coma. Para buscar todos los establecimientos se deberá ingresar la palabra \"todos\".";
@@ -293,6 +300,9 @@ export function DenueBusquedaView() {
   });
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [activeDenueJobId, setActiveDenueJobId] = useState<string | null>(null);
+  const [activeDenueJobStatus, setActiveDenueJobStatus] = useState<string | null>(null);
+  const denueJobPollTokenRef = useRef(0);
   const [busquedas, setBusquedas] = useState<DenueBusquedaItem[]>([]);
   const [isLoadingBusquedas, setIsLoadingBusquedas] = useState(true);
   const [activeBusquedaId, setActiveBusquedaId] = useState<string | null>(null);
@@ -1215,14 +1225,63 @@ export function DenueBusquedaView() {
         meta: {
           source: "panel",
         },
+        async_mode: isAdvanced,
         ...(advancedPayload ?? {}),
       };
       setIsSearching(true);
       try {
+        setActiveDenueJobId(null);
+        setActiveDenueJobStatus(null);
+        denueJobPollTokenRef.current += 1;
+
         const response: CreateDenueSearchResponse = await createDenueBusqueda(payload);
+        if (response.status === "queued" && response.job_id) {
+          setActiveDenueJobId(response.job_id);
+          setActiveDenueJobStatus("queued");
+          setFeedback({
+            type: "info",
+            message: "Búsqueda DENUE en cola. Puedes seguir navegando; se actualizará automáticamente al terminar.",
+          });
+          await loadBusquedas();
+          await loadResultadosForBusqueda(response.busqueda_id);
+
+          const pollToken = denueJobPollTokenRef.current;
+          void (async () => {
+            while (denueJobPollTokenRef.current === pollToken) {
+              try {
+                const jobResp = await getDenueJob(response.job_id as string);
+                const status = String(jobResp.job.status || "");
+                setActiveDenueJobStatus(status);
+                if (["completed", "failed", "canceled"].includes(status)) {
+                  setActiveDenueJobId(null);
+                  if (status === "completed") {
+                    const total = typeof jobResp.job.total === "number" ? jobResp.job.total : null;
+                    setFeedback({
+                      type: "success",
+                      message: `Búsqueda DENUE completada${total !== null ? ` (${numberFormatter.format(total)} registros).` : "."}`,
+                    });
+                  } else if (status === "canceled") {
+                    setFeedback({ type: "info", message: "Búsqueda DENUE cancelada." });
+                  } else {
+                    const error = jobResp.job.error ? String(jobResp.job.error) : "denue_job_failed";
+                    setFeedback({ type: "error", message: `Búsqueda DENUE falló: ${error}` });
+                  }
+                  await loadBusquedas();
+                  await loadResultadosForBusqueda(jobResp.job.busqueda_id);
+                  break;
+                }
+              } catch {
+                setActiveDenueJobStatus("unknown");
+              }
+              await sleep(JOB_POLL_INTERVAL_MS);
+            }
+          })();
+          return;
+        }
+
         setFeedback({
           type: "success",
-          message: `Se guardaron ${response.upserted} resultados desde DENUE (${response.denue_results ?? response.upserted} encontrados).`,
+          message: `Se guardaron ${response.upserted ?? 0} resultados desde DENUE (${response.denue_results ?? response.upserted ?? 0} encontrados).`,
         });
         await loadBusquedas();
         await loadResultadosForBusqueda(response.busqueda_id);
@@ -1413,7 +1472,7 @@ export function DenueBusquedaView() {
               <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
             <div className="flex flex-wrap gap-2">
               {canRunBusquedas ? (
-                <Button onClick={handleStandardSearch} disabled={isSearching} className="flex-1 min-w-[140px]">
+                <Button onClick={handleStandardSearch} disabled={isSearching || Boolean(activeDenueJobId)} className="flex-1 min-w-[140px]">
                   {isSearching ? (
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -1428,6 +1487,7 @@ export function DenueBusquedaView() {
                   variant="outline"
                   className="flex-1 min-w-[140px]"
                   onClick={() => setAdvancedModalOpen(true)}
+                  disabled={isSearching || Boolean(activeDenueJobId)}
                 >
                   Búsqueda avanzada
                 </Button>
@@ -1445,6 +1505,36 @@ export function DenueBusquedaView() {
                   Restablecer centro
                 </Button>
               </div>
+              {activeDenueJobId ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>
+                    Procesando búsqueda DENUE{activeDenueJobStatus ? ` (${activeDenueJobStatus})` : ""}…
+                  </span>
+                  {canRunBusquedas ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const jobId = activeDenueJobId;
+                        if (!jobId) return;
+                        setFeedback({ type: "info", message: "Cancelando búsqueda…" });
+                        denueJobPollTokenRef.current += 1;
+                        void cancelDenueJob(jobId)
+                          .then(() => {
+                            setFeedback({ type: "info", message: "Cancelación solicitada." });
+                          })
+                          .catch(() => {
+                            setFeedback({ type: "error", message: "No fue posible cancelar el job." });
+                          });
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </CardContent>

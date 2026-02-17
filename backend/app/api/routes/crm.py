@@ -66,6 +66,7 @@ from app.services import (
 from app.services import calendar as calendar_service
 from app.services import quotes as quotes_service
 from app.services.buscador_jobs import BUSCADOR_JOB_MANAGER
+from app.services.denue_search_jobs import DENUE_SEARCH_JOB_MANAGER, DenueSearchJob
 from app.services.google_search_jobs import GOOGLE_SEARCH_JOB_MANAGER, GoogleSearchJob
 from app.services.buscador_runner import BuscadorParams
 from app.services.calendar import CalendarError
@@ -1650,6 +1651,10 @@ class DenueBusquedaPayload(BaseModel):
         default=3549,
         ge=1,
         description="Registro final para paginación en los endpoints avanzados.",
+    )
+    async_mode: bool = Field(
+        default=False,
+        description="Cuando es true, la búsqueda se encola y se procesa en background (evita timeouts de HTTP).",
     )
 
     model_config = ConfigDict(extra="ignore")
@@ -9802,6 +9807,82 @@ async def crear_busqueda_denue(
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="busqueda_id_invalid") from exc
 
+    if payload.async_mode:
+        if modo == "entidad" and not text_query:
+            raise HTTPException(status_code=400, detail="texto_busqueda_required")
+        if modo in {"area_act", "area_act_estr"} and not _activity_codes_from_payload(payload):
+            raise HTTPException(status_code=400, detail="actividad_required")
+        if modo == "area_act_estr":
+            if not payload.estrato_ids:
+                raise HTTPException(status_code=400, detail="estrato_required")
+            cleaned_estratos = [
+                str(value).strip()
+                for value in payload.estrato_ids
+                if value and str(value).strip() and str(value).strip() != "0"
+            ]
+            if not cleaned_estratos:
+                raise HTTPException(status_code=400, detail="estrato_required")
+
+        busqueda_row = await repo.get_prospeccion_busqueda(busqueda_id=busqueda_uuid, select="organizacion_id,meta")
+        organizacion_id: UUID | None = tenant_organizacion_id
+        if not organizacion_id and isinstance(busqueda_row, dict):
+            org_value = busqueda_row.get("organizacion_id")
+            if org_value:
+                try:
+                    organizacion_id = UUID(str(org_value))
+                except (TypeError, ValueError):
+                    organizacion_id = None
+
+        job_payload: dict[str, Any] = {
+            "status": "pending",
+            "busqueda_id": str(busqueda_uuid),
+            "params": payload.model_dump(exclude_none=True),
+            "metadata": {
+                "source": (payload.meta or {}).get("source"),
+                "modo": modo,
+                "advanced_filters": advanced_meta,
+            },
+        }
+        if organizacion_id:
+            job_payload["organizacion_id"] = str(organizacion_id)
+        try:
+            job_row = await repo.create_denue_job(usuario_token=user_token, payload=job_payload)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        job_id_value = job_row.get("id") if isinstance(job_row, dict) else None
+        try:
+            job_uuid = UUID(str(job_id_value))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="denue_job_id_invalid") from exc
+
+        if isinstance(busqueda_row, dict):
+            meta_value = busqueda_row.get("meta")
+            meta = dict(meta_value) if isinstance(meta_value, dict) else {}
+            meta.update({"status": "queued", "denue_job_id": str(job_uuid)})
+            await repo.worker_update_busqueda(busqueda_id=busqueda_uuid, payload={"meta": meta})
+        else:
+            await repo.worker_update_busqueda(
+                busqueda_id=busqueda_uuid,
+                payload={"meta": {"status": "queued", "denue_job_id": str(job_uuid)}},
+            )
+
+        DENUE_SEARCH_JOB_MANAGER.schedule_job(
+            repo=repo,
+            job=DenueSearchJob(
+                job_id=job_uuid,
+                busqueda_id=busqueda_uuid,
+                organizacion_id=organizacion_id,
+                payload=payload.model_dump(exclude_none=True),
+            ),
+        )
+        return {
+            "ok": True,
+            "busqueda_id": str(busqueda_uuid),
+            "job_id": str(job_uuid),
+            "status": "queued",
+        }
+
     preview_items: list[dict[str, Any]] = []
     total_records = 0
     upserted = 0
@@ -10142,6 +10223,66 @@ async def eliminar_busqueda_denue(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "deleted": deleted}
+
+
+@router.get("/prospeccion/denue/jobs/{job_id}")
+async def obtener_denue_job(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    user_token: str = Depends(require_user_token),
+    job_id: UUID,
+) -> dict[str, Any]:
+    try:
+        row = await repo.get_denue_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="denue_job_not_found")
+    return {"ok": True, "job": row}
+
+
+@router.post("/prospeccion/denue/jobs/{job_id}/cancel")
+async def cancelar_denue_job(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.run")),
+    user_token: str = Depends(require_user_token),
+    job_id: UUID,
+) -> dict[str, Any]:
+    # Validamos que el job exista y pertenezca a la organización del usuario (RLS).
+    try:
+        row = await repo.get_denue_job(job_id=job_id, usuario_token=user_token)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="denue_job_not_found")
+
+    requested = DENUE_SEARCH_JOB_MANAGER.request_cancel(job_id)
+    finished_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        await repo.worker_update_denue_job(
+            job_id=job_id,
+            payload={"status": "canceled", "finished_at": finished_iso},
+            strict=False,
+            extra_filters={"status": "in.(pending,running)"},
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    busqueda_id_value = row.get("busqueda_id")
+    try:
+        busqueda_uuid = UUID(str(busqueda_id_value))
+    except (TypeError, ValueError):
+        busqueda_uuid = None
+    if busqueda_uuid:
+        busqueda_row = await repo.get_prospeccion_busqueda(busqueda_id=busqueda_uuid, select="meta")
+        meta_value = busqueda_row.get("meta") if isinstance(busqueda_row, dict) else None
+        meta = dict(meta_value) if isinstance(meta_value, dict) else {}
+        meta.update({"status": "canceled", "denue_job_id": str(job_id)})
+        await repo.worker_update_busqueda(busqueda_id=busqueda_uuid, payload={"meta": meta})
+
+    return {"ok": True, "requested": requested}
 
 
 @router.get("/prospeccion/google/resultados")

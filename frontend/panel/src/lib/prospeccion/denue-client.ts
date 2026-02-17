@@ -16,6 +16,7 @@ export type CreateDenueSearchPayload = {
   geo_municipios?: string[];
   registro_inicial?: number;
   registro_final?: number;
+  async_mode?: boolean;
 };
 
 export type DenueBusquedaItem = {
@@ -211,8 +212,11 @@ function buildClientUrl(path: string): URL {
 export type CreateDenueSearchResponse = {
   ok: boolean;
   busqueda_id: string;
-  denue_results: number;
-  upserted: number;
+  denue_results?: number;
+  upserted?: number;
+  status?: "queued" | "running" | "completed" | "failed" | "canceled";
+  job_id?: string;
+  preview?: unknown[];
 };
 
 export async function createDenueBusqueda(payload: CreateDenueSearchPayload): Promise<CreateDenueSearchResponse> {
@@ -220,6 +224,33 @@ export async function createDenueBusqueda(payload: CreateDenueSearchPayload): Pr
   return requestJson<CreateDenueSearchResponse>("/api/prospeccion/denue/busquedas", {
     method: "POST",
     body,
+  });
+}
+
+export type DenueJobResponse = {
+  ok: boolean;
+  job: {
+    id: string;
+    busqueda_id: string;
+    status: string;
+    total?: number | null;
+    error?: string | null;
+    progress?: Record<string, unknown> | null;
+    created_at?: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+    duration_ms?: number | null;
+  };
+};
+
+export async function getDenueJob(jobId: string): Promise<DenueJobResponse> {
+  return requestJson<DenueJobResponse>(`/api/prospeccion/denue/jobs/${jobId}`, { method: "GET" });
+}
+
+export async function cancelDenueJob(jobId: string) {
+  return requestJson<{ ok: boolean; requested: boolean }>(`/api/prospeccion/denue/jobs/${jobId}/cancel`, {
+    method: "POST",
+    body: "{}",
   });
 }
 

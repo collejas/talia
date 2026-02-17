@@ -8121,6 +8121,84 @@ class CRMRepository:
             raise CRMRepositoryError(f"buscador_job_delete_invalid:{data!r}")
         return len(data)
 
+    async def create_denue_job(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = [payload]
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_denue_jobs",
+            token=usuario_token,
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("denue_job_create_failed")
+        return row
+
+    async def get_denue_job(
+        self,
+        *,
+        job_id: UUID,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        params = {"id": f"eq.{job_id}", "limit": "1"}
+        request = (
+            self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_denue_jobs",
+                token=usuario_token or "",
+                params=params,
+            )
+            if usuario_token
+            else self._request(
+                "GET",
+                "/rest/v1/prospeccion_denue_jobs",
+                params=params,
+            )
+        )
+        resp = await request
+        data = resp.json() or []
+        row = self._first_row(data)
+        if row is None:
+            return None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"denue_job_get_invalid:{row!r}")
+        return row
+
+    async def worker_update_denue_job(
+        self,
+        *,
+        job_id: UUID,
+        payload: dict[str, Any],
+        strict: bool = True,
+        extra_filters: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {"id": f"eq.{job_id}"}
+        if extra_filters:
+            params.update(extra_filters)
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_denue_jobs",
+            params=params,
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        row = self._first_row(data)
+        if row is None:
+            if strict:
+                raise CRMRepositoryError(f"denue_job_update_invalid:{data!r}")
+            return None
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"denue_job_update_invalid:{row!r}")
+        return row
+
     async def list_buscador_resultados(
         self,
         *,

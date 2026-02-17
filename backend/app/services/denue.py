@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import random
+import asyncio
 from typing import Any, Literal
 from urllib.parse import quote
 
@@ -15,6 +17,25 @@ logger = get_logger(__name__)
 search_logger = get_logger("app.prospeccion.busquedas")
 
 _ALLOWED_DENUE_RADII = [250, 500, 1000, 5000]
+
+_DENUE_HTTP_TIMEOUT = httpx.Timeout(connect=20.0, read=30.0, write=20.0, pool=30.0)
+_DENUE_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=30.0)
+_DENUE_HTTP_CLIENT: httpx.AsyncClient | None = None
+
+
+def _get_denue_http_client(timeout: float) -> httpx.AsyncClient:
+    global _DENUE_HTTP_CLIENT  # noqa: PLW0603
+    if _DENUE_HTTP_CLIENT is None:
+        _DENUE_HTTP_CLIENT = httpx.AsyncClient(
+            timeout=_DENUE_HTTP_TIMEOUT,
+            limits=_DENUE_HTTP_LIMITS,
+            follow_redirects=True,
+            headers={"User-Agent": "talia/denue"},
+        )
+    # Si el caller pide un timeout más estricto, no lo aplicamos al singleton.
+    # El timeout base ya es razonable y evita recrear clientes por request.
+    _ = timeout
+    return _DENUE_HTTP_CLIENT
 
 
 class DenueError(RuntimeError):
@@ -34,6 +55,51 @@ class DenueClient:
         self.base_url = (base_url or settings.denue_base_url).rstrip("/")
         self.timeout = timeout
         self.pause_between_pages = pause_between_pages
+
+    async def _get(self, url: str, *, method: str, segments: list[str] | None = None) -> httpx.Response:
+        client = _get_denue_http_client(self.timeout)
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return await client.get(url)
+            except httpx.ConnectTimeout as exc:
+                search_logger.warning(
+                    "denue.connect_timeout",
+                    extra={
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                        "method": method,
+                        "segments": segments,
+                        "url": url,
+                    },
+                )
+                if attempt >= max_attempts:
+                    raise DenueError("denue_connect_timeout") from exc
+            except httpx.ReadTimeout as exc:
+                search_logger.warning(
+                    "denue.read_timeout",
+                    extra={
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                        "method": method,
+                        "segments": segments,
+                        "url": url,
+                    },
+                )
+                if attempt >= max_attempts:
+                    raise DenueError("denue_read_timeout") from exc
+            except httpx.RequestError as exc:  # pragma: no cover - depende de red
+                logger.exception("denue.request_error", extra={"error": str(exc)})
+                search_logger.exception(
+                    "denue.request_error",
+                    extra={"error": str(exc), "method": method, "segments": segments, "url": url},
+                )
+                if attempt >= max_attempts:
+                    raise DenueError("denue_request_failed") from exc
+            # backoff con jitter
+            delay = min(8.0, 0.7 * (2 ** (attempt - 1)) + random.random() * 0.4)
+            await asyncio.sleep(delay)
+        raise DenueError("denue_request_failed")
 
     @staticmethod
     def _normalize_radius(radius_m: int) -> int:
@@ -72,13 +138,7 @@ class DenueClient:
                 "url": url,
             },
         )
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(url)
-        except httpx.RequestError as exc:  # pragma: no cover - depende de red
-            logger.exception("denue.request_error", extra={"error": str(exc)})
-            search_logger.exception("denue.request_error", extra={"error": str(exc)})
-            raise DenueError("denue_request_failed") from exc
+        resp = await self._get(url, method="Buscar")
         if resp.status_code >= 400:
             detail = await self._safe_text(resp)
             logger.error(
@@ -105,11 +165,11 @@ class DenueClient:
                 logger.exception("denue.invalid_json", extra={"detail": text[:500]})
                 search_logger.exception("denue.invalid_json", extra={"detail": text[:500], "url": url})
                 raise DenueError("denue_invalid_response") from exc
-        if isinstance(data, dict) and data.get("error"):
+        if isinstance(data, dict):
             message = data.get("error") or data.get("message") or "denue_error"
             raise DenueError(message)
         if not isinstance(data, list):
-            return []
+            raise DenueError("denue_invalid_response")
         return data
 
     @staticmethod
@@ -199,13 +259,7 @@ class DenueClient:
             "denue.request_path",
             extra={"method": method, "segments": segments, "url": path},
         )
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(path)
-        except httpx.RequestError as exc:  # pragma: no cover - depende de red
-            logger.exception("denue.request_error", extra={"error": str(exc)})
-            search_logger.exception("denue.request_error", extra={"error": str(exc), "method": method})
-            raise DenueError("denue_request_failed") from exc
+        resp = await self._get(path, method=method, segments=segments)
         if resp.status_code >= 400:
             detail = await self._safe_text(resp)
             logger.error(
@@ -238,11 +292,11 @@ class DenueClient:
                     extra={"detail": text[:500], "method": method, "segments": segments, "url": path},
                 )
                 raise DenueError("denue_invalid_response") from exc
-        if isinstance(data, dict) and data.get("error"):
+        if isinstance(data, dict):
             message = data.get("error") or data.get("message") or "denue_error"
             raise DenueError(message)
         if not isinstance(data, list):
-            return []
+            raise DenueError("denue_invalid_response")
         return data
 
     @staticmethod

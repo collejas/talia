@@ -1,3 +1,13 @@
+# Notas de implementación en Talia
+
+Este archivo es la guía original de la API DENUE (INEGI). Para el estado actual de la implementación en Talia (panel/backend/supabase), ver:
+- `docs/Busqueda_denue/PLAN_DESARROLLO_DENUE.md`
+
+Notas rápidas:
+- En Talia, **“Búsqueda avanzada” no fuerza** el texto `"todos"`; si no se captura texto, la búsqueda se construye con filtros (actividad/estrato/geo) según el modo.
+- Para evitar explosión de combinaciones (múltiples actividades × múltiples geos × múltiples estratos), se aplica un **límite de 20 combinaciones** por búsqueda avanzada.
+- Los filtros de resultados (incl. Estado/Municipio) se aplican **server-side** sobre el total almacenado para que lista, totales, bounds y mapa sean consistentes.
+
 # Guía para desarrolladores
     • Introducción. 
     • Audiencia. 
