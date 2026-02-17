@@ -532,6 +532,10 @@ export function DenueBusquedaView() {
       setResultados([]);
       setResultadosTotal(0);
       setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
+      setMapItems([]);
+      setMapTruncated(false);
+      setMapFitBounds(null);
+      setMapViewport(null);
       try {
         const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
         if (selectedBusqueda) {
