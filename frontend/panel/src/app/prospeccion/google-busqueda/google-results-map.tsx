@@ -74,6 +74,7 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <MapAutoResize />
       {autoFitBounds ? (
         <MapAutoFit results={validResults} fallbackCenter={mapCenter} fallbackZoom={zoom} fitKey={autoFitKey} />
       ) : (
@@ -124,6 +125,44 @@ export const GoogleResultsMap = memo(function GoogleResultsMap({
     </MapContainer>
   );
 });
+
+function MapAutoResize() {
+  const map = useMap();
+
+  useEffect(() => {
+    let raf = window.requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+    });
+
+    const container = map.getContainer?.() as HTMLElement | undefined;
+    if (!container || typeof ResizeObserver === "undefined") {
+      return () => {
+        window.cancelAnimationFrame(raf);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false });
+      });
+    });
+    observer.observe(container);
+
+    const onWindowResize = () => {
+      map.invalidateSize({ pan: false });
+    };
+    window.addEventListener("resize", onWindowResize);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      observer.disconnect();
+      window.removeEventListener("resize", onWindowResize);
+    };
+  }, [map]);
+
+  return null;
+}
 
 function ClusterCircleMarker({ position, count, zoom }: { position: LatLngExpression; count: number; zoom: number }) {
   const map = useMap();
