@@ -62,6 +62,23 @@ _BOOKING_CONFIRMATION_HINTS: tuple[str, ...] = (
     "tu cita está lista",
 )
 
+_DETAILED_REPLY_HINTS: tuple[str, ...] = (
+    "detalles",
+    "ficha",
+    "caracteristicas",
+    "características",
+    "completo",
+    "completa",
+    "toda la info",
+    "toda la información",
+    "todas las opciones",
+    "lista",
+    "comparar",
+    "comparación",
+    "cotización",
+    "cotizacion",
+)
+
 
 @dataclass(slots=True)
 class AssistantReply:
@@ -87,6 +104,13 @@ def _looks_like_booking_confirmation(text: str) -> bool:
     if not normalized:
         return False
     return any(hint in normalized for hint in _BOOKING_CONFIRMATION_HINTS)
+
+
+def _wants_detailed_reply(text: str | None) -> bool:
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    return any(hint in normalized for hint in _DETAILED_REPLY_HINTS)
 
 
 async def _guard_booking_confirmation_claim(
@@ -752,9 +776,25 @@ async def _generate_assistant_reply(
             ],
         },
     )
+    initial_input.insert(
+        2,
+        {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Estilo WhatsApp (regla estricta): responde breve. "
+                        "Por defecto usa 1–3 frases (máx. ~300 caracteres) y termina con 1 pregunta. "
+                        "No des listas largas ni autopromoción; ofrece ampliar solo si el usuario pide detalles."
+                    ),
+                }
+            ],
+        },
+    )
     if booking_context:
         initial_input.insert(
-            2,
+            3,
             {
                 "role": "developer",
                 "content": [
@@ -765,9 +805,13 @@ async def _generate_assistant_reply(
                 ],
             },
         )
+    wants_detail = _wants_detailed_reply(message.body)
+    max_output_tokens = 700 if wants_detail else 120
     request_kwargs: dict[str, Any] = {
         "input": initial_input,
         "store": True,
+        "max_output_tokens": max_output_tokens,
+        "temperature": 0.4,
         "metadata": metadata_payload,
     }
 

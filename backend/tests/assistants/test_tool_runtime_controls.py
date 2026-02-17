@@ -1,0 +1,104 @@
+import json
+
+import pytest
+
+from app.assistants.manager import AssistantConfig
+from app.assistants.tool_runtime import ToolRuntimeContext, run_tool_loop
+
+
+class _DummyResponse:
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def model_dump(self) -> dict:
+        return self._payload
+
+
+class _DummyResponsesClient:
+    def __init__(self, scripted_payloads: list[dict]):
+        self._payloads = list(scripted_payloads)
+        self.calls: list[dict] = []
+
+    async def create(self, **kwargs):
+        self.calls.append(kwargs)
+        if not self._payloads:
+            raise AssertionError("No hay más payloads scripted para el Dummy client.")
+        return _DummyResponse(self._payloads.pop(0))
+
+
+class _DummyClient:
+    def __init__(self, scripted_payloads: list[dict]):
+        self.responses = _DummyResponsesClient(scripted_payloads)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_preserves_controls_between_iterations():
+    client = _DummyClient(
+        scripted_payloads=[
+            {
+                "id": "resp_1",
+                "conversation": {"id": "conv_1"},
+                "output": [
+                    {
+                        "type": "function_call",
+                        "name": "set_full_name",
+                        "call_id": "call_1",
+                        "arguments": json.dumps({"full_name": "Edmundo"}),
+                    }
+                ],
+            },
+            {
+                "id": "resp_2",
+                "conversation": {"id": "conv_1"},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": "ok"}],
+                    }
+                ],
+            },
+        ]
+    )
+
+    assistant = AssistantConfig(assistant_id="asst_test", project_id="proj_test")
+    context = ToolRuntimeContext(conversation_id="crm_conv", contact_id="crm_contact", channel="webchat")
+
+    initial_request = {
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": "hola"}]}],
+        "store": True,
+        "max_output_tokens": 123,
+        "temperature": 0.2,
+        "metadata": {"channel": "webchat"},
+        "model": "gpt-4o",
+    }
+
+    def request_template():
+        return {"model": "gpt-4o"}
+
+    async def execute_tool(name, args, ctx):
+        assert name == "set_full_name"
+        assert ctx.conversation_id == "crm_conv"
+        return {"status": "ok"}
+
+    await run_tool_loop(
+        client=client,
+        assistant=assistant,
+        assistant_spec=None,
+        context=context,
+        initial_request=initial_request,
+        request_template=request_template,
+        execute_tool=execute_tool,
+        openai_conversation_id=None,
+        previous_response_id=None,
+    )
+
+    assert len(client.responses.calls) == 2
+    first_call, second_call = client.responses.calls
+
+    assert first_call["max_output_tokens"] == 123
+    assert first_call["temperature"] == 0.2
+    assert first_call["metadata"] == {"channel": "webchat"}
+
+    assert second_call["max_output_tokens"] == 123
+    assert second_call["temperature"] == 0.2
+    assert second_call["metadata"] == {"channel": "webchat"}

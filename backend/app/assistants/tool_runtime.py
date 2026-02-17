@@ -55,6 +55,13 @@ async def run_tool_loop(
     """Ejecuta Responses API resolviendo function calls hasta obtener texto final."""
 
     request_kwargs = dict(initial_request)
+    # Preserva controles importantes entre iteraciones (después de function_call_output),
+    # porque el loop reemplaza request_kwargs y, por defecto, perdería límites como
+    # max_output_tokens/temperature, provocando respuestas largas o inconsistentes.
+    preserved_controls: dict[str, Any] = {}
+    for key in ("max_output_tokens", "temperature", "top_p", "metadata"):
+        if key in request_kwargs:
+            preserved_controls[key] = request_kwargs[key]
     latest_conversation_id = openai_conversation_id
     latest_response_id = previous_response_id
     side_effects: dict[str, Any] = {}
@@ -122,3 +129,5 @@ async def run_tool_loop(
 
         # Reaplica prompt/model según el asistente configurado.
         request_kwargs.update(request_template())
+        if preserved_controls:
+            request_kwargs.update(preserved_controls)

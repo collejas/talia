@@ -366,9 +366,10 @@ def _extract_user_prefilter_signals(messages: list[dict[str, Any]]) -> dict[str,
         if text:
             inbound_texts.append(text)
 
-    # Solo evaluamos el ultimo mensaje del prospecto para evitar "arrastrar"
-    # inferencias desde turnos anteriores.
-    joined = inbound_texts[-1] if inbound_texts else ""
+    # Evaluamos una ventana corta de mensajes recientes para capturar respuestas
+    # fragmentadas (ej. primero "crédito mancomunado" y luego "1.3 millones en 6 meses")
+    # sin arrastrar inferencias lejanas.
+    joined = " ".join(inbound_texts[-3:]) if inbound_texts else ""
     has_budget = bool(
         re.search(r"\$\s*\d", joined)
         or re.search(r"\b\d+(\.\d+)?\s*(k|mil|miles|millon|millones)\b", joined)

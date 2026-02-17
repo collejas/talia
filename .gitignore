@@ -44,3 +44,5 @@ pip-wheel-metadata/
 
 *.zip
 logs/
+# Backups
+backups/*/*_full.dump

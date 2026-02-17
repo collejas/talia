@@ -167,6 +167,23 @@ PROPERTY_INTENT_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("fraccionamiento", "fraccionamientos o desarrollos"),
 )
 
+_DETAILED_REPLY_HINTS: tuple[str, ...] = (
+    "detalles",
+    "ficha",
+    "caracteristicas",
+    "características",
+    "completo",
+    "completa",
+    "toda la info",
+    "toda la información",
+    "todas las opciones",
+    "lista",
+    "comparar",
+    "comparación",
+    "cotización",
+    "cotizacion",
+)
+
 
 def _detect_property_intent(text: str | None) -> str | None:
     if not text:
@@ -176,6 +193,13 @@ def _detect_property_intent(text: str | None) -> str | None:
         if keyword in normalized:
             return label
     return None
+
+
+def _wants_detailed_reply(text: str | None) -> bool:
+    if not text:
+        return False
+    normalized = text.lower()
+    return any(hint in normalized for hint in _DETAILED_REPLY_HINTS)
 
 CALENDAR_MAX_WINDOW_DAYS = 60
 
@@ -3106,11 +3130,33 @@ async def _run_assistant_turn(
         )
     base_input.append(
         {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Estilo webchat (regla estricta): responde breve y escaneable. "
+                        "Por defecto 2–4 frases, máximo 1 pregunta. "
+                        "Evita párrafos largos y listas extensas; ofrece ampliar solo si el usuario pide detalles."
+                    ),
+                }
+            ],
+        }
+    )
+    base_input.append(
+        {
             "role": "user",
             "content": user_content,
         }
     )
-    request_kwargs: dict[str, Any] = {"input": base_input, "store": True}
+    wants_detail = _wants_detailed_reply(user_message.content)
+    max_output_tokens = 900 if wants_detail else 240
+    request_kwargs: dict[str, Any] = {
+        "input": base_input,
+        "store": True,
+        "max_output_tokens": max_output_tokens,
+        "temperature": 0.4,
+    }
 
     def _build_request_template() -> dict[str, Any]:
         if assistant.is_prompt:

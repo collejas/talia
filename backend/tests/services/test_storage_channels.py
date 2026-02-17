@@ -38,6 +38,12 @@ class FakeWhatsappRepository:
         """Inicializa el registro de actualizaciones."""
         self.update_calls: list[dict[str, Any]] = []
 
+    async def get_contact_by_whatsapp_id(self, **_: Any) -> dict[str, Any] | None:
+        return None
+
+    async def get_contact_by_phone_e164(self, **_: Any) -> dict[str, Any] | None:
+        return None
+
     async def register_whatsapp_message(self, **_: Any) -> dict[str, Any]:
         """Devuelve identificadores de conversación y contacto."""
         return {
